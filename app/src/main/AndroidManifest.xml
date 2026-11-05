@@ -47,6 +47,11 @@
             android:parentActivityName=".ui.MainActivity" />
 
         <activity
+            android:name=".ui.MergePdfActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
             android:name=".ui.PageViewerActivity"
             android:exported="false"
             android:parentActivityName=".ui.DocumentViewerActivity" />

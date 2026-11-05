@@ -209,6 +209,29 @@ class ScanRepository(private val context: Context) {
         loadDocument(dir)!!
     }
 
+    /**
+     * Merges device PDFs (content Uris) in the given order: each is rendered to
+     * page JPEGs and the pages are concatenated into a new scan.
+     */
+    suspend fun mergePdfUris(uris: List<Uri>, suggestedName: String?): ScanDocument =
+        withContext(Dispatchers.IO) {
+            require(uris.size >= 2) { "Pick at least 2 PDFs" }
+            val pages = mutableListOf<ByteArray>()
+            for (uri in uris) {
+                val fd = context.contentResolver.openFileDescriptor(uri, "r")
+                    ?: throw IllegalStateException("Could not open a PDF")
+                fd.use {
+                    pages.addAll(
+                        PdfPageRenderer.renderJpegs(it, dpi = 150f, maxDim = 2048, quality = 85)
+                    )
+                }
+            }
+            if (pages.isEmpty()) throw IllegalStateException("No pages to merge")
+            val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
+                ?: "Merged PDF ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())}"
+            createDocument(name, pages)
+        }
+
     suspend fun deletePage(id: String, pageIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)

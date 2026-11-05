@@ -24,14 +24,8 @@
         app:showAsAction="always" />
 
     <item
-        android:id="@+id/action_open_pdf"
-        android:icon="@drawable/ic_document"
-        android:title="@string/pick_pdf"
+        android:id="@+id/action_settings"
+        android:icon="@drawable/ic_settings"
+        android:title="@string/settings_title"
         app:showAsAction="ifRoom" />
-
-    <item
-        android:id="@+id/action_about"
-        android:icon="@drawable/ic_info"
-        android:title="@string/about_title"
-        app:showAsAction="never" />
 </menu>

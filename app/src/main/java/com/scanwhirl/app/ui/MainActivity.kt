@@ -1,13 +1,10 @@
 package com.scanwhirl.app.ui
 
 import android.content.ActivityNotFoundException
-import android.content.ContentUris
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
-import android.provider.MediaStore
-import android.provider.OpenableColumns
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
@@ -24,7 +21,6 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
@@ -34,7 +30,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.gms.common.api.ApiException
-import com.google.android.material.tabs.TabLayout
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -45,7 +40,6 @@ import com.scanwhirl.app.databinding.DialogCompressBinding
 import com.scanwhirl.app.databinding.DialogResizeBinding
 import com.scanwhirl.app.databinding.ItemScanBinding
 import com.scanwhirl.app.model.ScanDocument
-import com.scanwhirl.app.model.DevicePdf
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
@@ -64,32 +58,18 @@ class MainActivity : BaseActivity() {
     private val adapter by lazy {
         ScanListAdapter(::onDocClick, ::onDocView, ::onDocEdit, ::onDocLongClick)
     }
-    private val deviceAdapter by lazy { DevicePdfAdapter(::openDevicePdf) }
     private val repo by lazy { (application as ScanWhirlApp).repository }
 
     private var selectionMode = false
     private val selectedIds = LinkedHashSet<String>()
 
-    /** Which tab is showing: 0 = my scans, 1 = device PDFs. */
-    private var currentTab = 0
-
-    /** Current search query (applies to both tabs). */
+    /** Current search query (applies to the saved-scans list). */
     private var query = ""
 
-    private var allDevicePdfs: List<DevicePdf> = emptyList()
-
-    private val pickPdfLauncher =
+    /** Edit tool: pick one device PDF and open it as editable pages. */
+    private val pickEditPdf =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri == null) return@registerForActivityResult
-            try {
-                contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: Exception) {
-            }
-            Prefs.addPickedPdf(this, uri.toString())
-            devicePdfFromUri(uri)?.let { openDevicePdf(it) }
-            refreshDeviceList()
+            if (uri != null) startEditPdf(uri)
         }
 
     private val backCallback = object : OnBackPressedCallback(false) {
@@ -116,28 +96,16 @@ class MainActivity : BaseActivity() {
 
         binding.scanList.layoutManager = LinearLayoutManager(this)
         binding.scanList.adapter = adapter
-        binding.deviceList.layoutManager = LinearLayoutManager(this)
-        binding.deviceList.adapter = deviceAdapter
 
         binding.fabScan.setOnClickListener { launchScanner() }
         binding.emptyState.setOnClickListener { launchScanner() }
 
         binding.toolResize.setOnClickListener { pickResizeImage.launch("image/*") }
         binding.toolCompress.setOnClickListener { startCompress() }
-        binding.toolMerge.setOnClickListener { showMergePicker() }
-        binding.toolSettings.setOnClickListener {
-            startActivity(SettingsActivity.intent(this))
+        binding.toolEdit.setOnClickListener {
+            pickEditPdf.launch(arrayOf("application/pdf"))
         }
-
-        binding.tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab) {
-                currentTab = tab.position
-                onTabChanged()
-            }
-
-            override fun onTabUnselected(tab: TabLayout.Tab) = Unit
-            override fun onTabReselected(tab: TabLayout.Tab) = Unit
-        })
+        binding.toolMerge.setOnClickListener { showMergeChooser() }
 
         binding.searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -145,13 +113,9 @@ class MainActivity : BaseActivity() {
             override fun afterTextChanged(s: Editable?) {
                 query = s?.toString()?.trim().orEmpty()
                 refreshList()
-                if (currentTab == 1) refreshDeviceList()
             }
         })
         binding.btnSort.setOnClickListener { showSortMenu() }
-        binding.btnPickPdf.setOnClickListener {
-            pickPdfLauncher.launch(arrayOf("application/pdf"))
-        }
 
         // Staging folders / edit snapshots from an earlier process death are stale.
         cacheDir.listFiles { f ->
@@ -164,22 +128,9 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (currentTab == 1) refreshDeviceList() else refreshList()
+        refreshList()
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
         binding.toolbar.title = selectionTitle()
-    }
-
-    private fun onTabChanged() {
-        if (currentTab == 1 && selectionMode) setSelectionMode(false)
-        val shown = if (currentTab == 0) binding.scanList else binding.deviceList
-        val hidden = if (currentTab == 0) binding.deviceList else binding.scanList
-        hidden.isVisible = false
-        shown.isVisible = true
-        if (currentTab == 1) binding.emptyState.isVisible = false
-        // Subtle fade so switching tabs doesn't snap.
-        shown.alpha = 0f
-        shown.animate().alpha(1f).setDuration(160).start()
-        if (currentTab == 1) refreshDeviceList() else refreshList()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -198,11 +149,10 @@ class MainActivity : BaseActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.action_close -> { setSelectionMode(false); true }
         R.id.action_merge -> { promptMerge(); true }
-        R.id.action_open_pdf -> {
-            pickPdfLauncher.launch(arrayOf("application/pdf"))
+        R.id.action_settings -> {
+            startActivity(SettingsActivity.intent(this))
             true
         }
-        R.id.action_about -> { showAbout(); true }
         R.id.action_delete_selected -> { confirmDeleteSelected(); true }
         else -> super.onOptionsItemSelected(item)
     }
@@ -215,8 +165,8 @@ class MainActivity : BaseActivity() {
         adapter.submitList(sorted) {
             adapter.notifyDataSetChanged()
         }
-        binding.emptyState.isVisible = currentTab == 0 && sorted.isEmpty()
-        binding.scanList.isVisible = currentTab == 0
+        binding.emptyState.isVisible = sorted.isEmpty()
+        binding.scanList.isVisible = true
         if (selectionMode && docs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
@@ -289,94 +239,46 @@ class MainActivity : BaseActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Device PDFs tab
+    // Edit / Merge device PDFs
     // ------------------------------------------------------------------
 
-    private fun refreshDeviceList() {
-        allDevicePdfs = loadDevicePdfs()
-        val filtered = allDevicePdfs.filter {
-            query.isBlank() || it.name.contains(query, true)
-        }
-        val sorted = when (Prefs.sortMode(this)) {
-            Prefs.SORT_NAME -> filtered.sortedBy { it.name.lowercase(Locale.getDefault()) }
-            else -> filtered.sortedByDescending { it.modified }
-        }
-        deviceAdapter.submitList(sorted)
-        binding.deviceEmpty.isVisible = currentTab == 1 && sorted.isEmpty()
-        binding.deviceList.isVisible = currentTab == 1
-    }
-
-    private fun loadDevicePdfs(): List<DevicePdf> {
-        val found = linkedMapOf<String, DevicePdf>()
-        val collection = MediaStore.Files.getContentUri("external")
-        val projection = arrayOf(
-            MediaStore.Files.FileColumns._ID,
-            MediaStore.Files.FileColumns.DISPLAY_NAME,
-            MediaStore.Files.FileColumns.SIZE,
-            MediaStore.Files.FileColumns.DATE_MODIFIED
-        )
-        try {
-            contentResolver.query(
-                collection,
-                projection,
-                "${MediaStore.Files.FileColumns.MIME_TYPE}=?",
-                arrayOf("application/pdf"),
-                null
-            )?.use { c ->
-                val idIdx = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
-                val nameIdx = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
-                val sizeIdx = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
-                val modIdx = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED)
-                while (c.moveToNext()) {
-                    val uri = ContentUris.withAppendedId(collection, c.getLong(idIdx))
-                    found[uri.toString()] = DevicePdf(
-                        uri = uri,
-                        name = c.getString(nameIdx) ?: "PDF",
-                        size = c.getLong(sizeIdx),
-                        modified = c.getLong(modIdx) * 1000L
-                    )
-                }
-            }
-        } catch (_: Exception) {
-            // Some devices restrict MediaStore.Files; the picker still works.
-        }
-        Prefs.pickedPdfs(this).forEach { s ->
-            if (s !in found) {
-                try {
-                    devicePdfFromUri(Uri.parse(s))?.let { found[s] = it }
-                } catch (_: Exception) {
-                }
+    /** Edit tool: import a device PDF as editable pages and open the editor. */
+    private fun startEditPdf(uri: Uri) {
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val name = repo.displayNameOf(uri)
+                    ?.removeSuffix(".pdf")?.removeSuffix(".PDF")
+                    ?.takeIf { it.isNotBlank() } ?: "Imported PDF"
+                val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
+                progress.dismiss()
+                startActivity(DocumentViewerActivity.intent(this@MainActivity, doc.id))
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.edit_pdf_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
-        return found.values.toList()
     }
 
-    private fun devicePdfFromUri(uri: Uri): DevicePdf? = try {
-        var name = "PDF"
-        var size = 0L
-        var modified = System.currentTimeMillis()
-        contentResolver.query(uri, null, null, null, null)?.use { c ->
-            if (c.moveToFirst()) {
-                val n = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (n >= 0) c.getString(n)?.let { name = it }
-                val s = c.getColumnIndex(OpenableColumns.SIZE)
-                if (s >= 0) size = c.getLong(s)
-                val d = c.getColumnIndex("last_modified")
-                if (d >= 0) modified = c.getLong(d)
+    /** Merge tool: choose saved scans or device PDFs. */
+    private fun showMergeChooser() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.merge_chooser_title)
+            .setItems(
+                arrayOf(
+                    getString(R.string.merge_source_scans),
+                    getString(R.string.merge_source_device)
+                )
+            ) { _, which ->
+                if (which == 0) showMergePicker()
+                else startActivity(MergePdfActivity.intent(this))
             }
-        }
-        DevicePdf(uri, name, size, modified)
-    } catch (_: Exception) {
-        null
-    }
-
-    private fun openDevicePdf(pdf: DevicePdf) {
-        if (Prefs.defaultViewer(this) == Prefs.VIEWER_SYSTEM &&
-            tryOpenExternally(pdf.uri)
-        ) {
-            return
-        }
-        startActivity(PdfViewerActivity.uriIntent(this, pdf.uri.toString(), pdf.name))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     // ------------------------------------------------------------------
@@ -396,7 +298,6 @@ class MainActivity : BaseActivity() {
             }
             Prefs.setSortMode(this, mode)
             refreshList()
-            refreshDeviceList()
             true
         }
         popup.show()

@@ -9,6 +9,7 @@
     <color name="sf_background">#0E1116</color>
     <color name="sf_surface">#171B22</color>
     <color name="sf_on_surface">#E4E2E6</color>
+    <color name="sf_title_field">#1E3A5F</color>
     <color name="sf_toolbar">#1565C0</color>
     <color name="sf_ic_camera">#FFFFFF</color>
     <color name="sf_launcher_bg">#1565C0</color>
