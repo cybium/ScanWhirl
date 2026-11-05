@@ -37,6 +37,11 @@
             android:parentActivityName=".ui.MainActivity" />
 
         <activity
+            android:name=".ui.PdfViewerActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
             android:name=".ui.PageViewerActivity"
             android:exported="false"
             android:parentActivityName=".ui.DocumentViewerActivity" />

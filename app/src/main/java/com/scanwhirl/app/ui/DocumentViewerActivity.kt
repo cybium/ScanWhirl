@@ -10,6 +10,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -28,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class DocumentViewerActivity : AppCompatActivity() {
 
@@ -52,6 +54,15 @@ class DocumentViewerActivity : AppCompatActivity() {
     /** Pages whose delete has been triggered but not landed yet (no flash-back). */
     private val committingDeletes = mutableSetOf<String>()
 
+    /** True once this editing session changed anything (drives the Back prompt). */
+    private var dirty = false
+
+    /** Pre-edit copy of the document directory, for "Save as new". */
+    private var snapshotDir: File? = null
+
+    /** File signature at open; a diff on resume means the page view edited files. */
+    private var startSignature: String = ""
+
     /** Not lifecycle-bound: a pending delete must land even during onDestroy. */
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -70,10 +81,20 @@ class DocumentViewerActivity : AppCompatActivity() {
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        binding.toolbar.setNavigationOnClickListener { finish() }
+        binding.toolbar.setNavigationOnClickListener { handleEditorBack() }
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         if (!reloadDocument()) return
+
+        // Editing happens in place; keep a pre-edit copy so Back can offer
+        // "Save as new" (original restored) as well as "Overwrite".
+        docId?.let { id ->
+            startSignature = signature()
+            snapshotDir = takeSnapshot(id)
+        }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = handleEditorBack()
+        })
 
         binding.pageList.onTap = { index ->
             docId?.let { id ->
@@ -93,7 +114,11 @@ class DocumentViewerActivity : AppCompatActivity() {
     override fun onDestroy() {
         // Leaving the screen makes any pending delete permanent (rule: Undo
         // only lives as long as this screen).
-        commitPendingDelete()
+        if (!isChangingConfigurations) {
+            commitPendingDelete()
+            snapshotDir?.deleteRecursively()
+            snapshotDir = null
+        }
         super.onDestroy()
     }
 
@@ -104,7 +129,10 @@ class DocumentViewerActivity : AppCompatActivity() {
         document?.let { binding.toolbar.title = it.name }
         // Returning from the full-screen page view: rotate/filter/delete may
         // have changed the document.
-        if (document != null) reloadDocument()
+        if (document != null) {
+            reloadDocument()
+            if (startSignature.isNotEmpty() && signature() != startSignature) dirty = true
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -200,6 +228,7 @@ class DocumentViewerActivity : AppCompatActivity() {
                         if (idx >= 0) repo.rotatePage(id, idx)
                     }
                 }
+                dirty = true
                 reloadDocument()
             } catch (e: Exception) {
                 Toast.makeText(
@@ -229,6 +258,7 @@ class DocumentViewerActivity : AppCompatActivity() {
         pendingDeletes.addAll(paths)
         selected.clear()
         refreshGrid()
+        dirty = true
 
         val batch = paths.toList()
         Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
@@ -307,6 +337,7 @@ class DocumentViewerActivity : AppCompatActivity() {
                 val doc = repo.listDocuments().find { it.id == id } ?: return@launch
                 val baseFrom = doc.pageFiles.indexOfFirst { it.path == baseFile.path }
                 if (baseFrom >= 0 && baseFrom != to) repo.movePage(id, baseFrom, to)
+                dirty = true
                 reloadDocument()
             } catch (e: Exception) {
                 Toast.makeText(
@@ -366,6 +397,7 @@ class DocumentViewerActivity : AppCompatActivity() {
                 val newName = input.text?.toString()
                 if (!newName.isNullOrBlank()) {
                     repo.renameDocument(doc.id, newName.trim())
+                    dirty = true
                     reloadDocument()
                 }
             }
@@ -440,6 +472,94 @@ class DocumentViewerActivity : AppCompatActivity() {
         } else {
             pendingDownload = action
             permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Leaving the editor: Overwrite / Save as new / Cancel
+    // ------------------------------------------------------------------
+
+    private fun handleEditorBack() {
+        if (!dirty) {
+            finish()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.save_changes_title)
+            .setMessage(R.string.save_changes_msg)
+            .setPositiveButton(R.string.overwrite_pdf) { _, _ -> finish() }
+            .setNeutralButton(R.string.save_as_new) { _, _ -> saveAsNewDocument() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Copies the edited state to a new document, then puts the pre-edit
+     * snapshot back over the original so "Save as new" never touches it.
+     */
+    private fun saveAsNewDocument() {
+        val id = docId ?: return
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    commitPendingDeletesNow()
+                    val currentName = repo.listDocuments().find { it.id == id }?.name ?: "Document"
+                    repo.duplicateDocument(id, "$currentName (edited)")
+                    restoreSnapshot(id)
+                }
+                dirty = false
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    R.string.saved_as_new,
+                    Toast.LENGTH_LONG
+                ).show()
+                finish()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /** Pre-edit copy of the document directory (cache; never listed as a scan). */
+    private fun takeSnapshot(id: String): File? = try {
+        val src = File(filesDir, "documents/$id")
+        val dest = File(cacheDir, "edit_snapshot_$id")
+        dest.deleteRecursively()
+        dest.mkdirs()
+        src.listFiles()?.forEach { f ->
+            if (f.isFile) f.copyTo(File(dest, f.name), overwrite = true)
+        }
+        dest
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Restores the pre-edit files over the original document, then drops them. */
+    private fun restoreSnapshot(id: String) {
+        val snap = snapshotDir ?: return
+        val dest = File(filesDir, "documents/$id")
+        dest.listFiles()?.forEach { if (it.isFile) it.delete() }
+        snap.listFiles()?.forEach { f ->
+            if (f.isFile) f.copyTo(File(dest, f.name), overwrite = true)
+        }
+        snap.deleteRecursively()
+        snapshotDir = null
+    }
+
+    /** Cheap change fingerprint: page names/sizes/timestamps + PDF size. */
+    private fun signature(): String {
+        val doc = document ?: return ""
+        return buildString {
+            append(doc.pageCount).append('|').append(doc.pdfFile.length())
+            doc.pageFiles.forEach { f ->
+                append('|').append(f.name)
+                    .append(':').append(f.length())
+                    .append(':').append(f.lastModified())
+            }
         }
     }
 

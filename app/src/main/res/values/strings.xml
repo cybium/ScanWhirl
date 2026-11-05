@@ -86,6 +86,14 @@
     <string name="select_pages_first">Tick the pages you want first</string>
     <string name="clear_selection">Clear</string>
     <string name="reorder_pages">Drag to reorder</string>
+    <string name="view">View</string>
+    <string name="edit">Edit</string>
+    <string name="pdf_viewer_failed">Could not open this PDF</string>
+    <string name="save_changes_title">Save changes?</string>
+    <string name="save_changes_msg">Your edits are not in the original PDF yet.</string>
+    <string name="overwrite_pdf">Overwrite saved PDF</string>
+    <string name="save_as_new">Save as new document</string>
+    <string name="saved_as_new">Saved as a new document</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>

@@ -53,7 +53,9 @@ import kotlin.math.roundToInt
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val adapter by lazy { ScanListAdapter(::onDocClick, ::onDocLongClick) }
+    private val adapter by lazy {
+        ScanListAdapter(::onDocClick, ::onDocView, ::onDocEdit, ::onDocLongClick)
+    }
     private val repo by lazy { (application as ScanWhirlApp).repository }
 
     private var selectionMode = false
@@ -90,9 +92,11 @@ class MainActivity : AppCompatActivity() {
         binding.toolResize.setOnClickListener { pickResizeImage.launch("image/*") }
         binding.toolCompress.setOnClickListener { startCompress() }
 
-        // Staging folders from an earlier process death are no longer needed.
-        cacheDir.listFiles { f -> f.isDirectory && f.name.startsWith("pending_") }
-            ?.forEach { it.deleteRecursively() }
+        // Staging folders / edit snapshots from an earlier process death are stale.
+        cacheDir.listFiles { f ->
+            f.isDirectory &&
+                (f.name.startsWith("pending_") || f.name.startsWith("edit_snapshot_"))
+        }?.forEach { it.deleteRecursively() }
 
         refreshList()
     }
@@ -168,8 +172,16 @@ class MainActivity : AppCompatActivity() {
         if (selectionMode) {
             toggleSelection(doc.id)
         } else {
-            openDocument(doc)
+            openViewer(doc)
         }
+    }
+
+    private fun onDocView(doc: ScanDocument) {
+        if (!selectionMode) openViewer(doc)
+    }
+
+    private fun onDocEdit(doc: ScanDocument) {
+        if (!selectionMode) openEditor(doc)
     }
 
     private fun onDocLongClick(doc: ScanDocument) {
@@ -206,7 +218,7 @@ class MainActivity : AppCompatActivity() {
                 val merged = repo.mergeDocuments(ids, name)
                 setSelectionMode(false)
                 refreshList()
-                openDocument(merged)
+                openViewer(merged)
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "Merge failed: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -798,7 +810,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun openDocument(doc: ScanDocument) {
+    private fun openViewer(doc: ScanDocument) {
+        startActivity(PdfViewerActivity.intent(this, doc.id, doc.name))
+    }
+
+    private fun openEditor(doc: ScanDocument) {
         startActivity(DocumentViewerActivity.intent(this, doc.id))
     }
 }
@@ -812,6 +828,8 @@ private fun formatBytes(bytes: Long): String = when {
 
 class ScanListAdapter(
     private val onClick: (ScanDocument) -> Unit,
+    private val onView: (ScanDocument) -> Unit,
+    private val onEdit: (ScanDocument) -> Unit,
     private val onLongClick: (ScanDocument) -> Unit
 ) : ListAdapter<ScanDocument, ScanListAdapter.VH>(DIFF) {
 
@@ -855,6 +873,11 @@ class ScanListAdapter(
             val selected = selectionMode && doc.id in selectedIds
             binding.checkSelect.isVisible = selectionMode
             binding.checkSelect.isChecked = selected
+            // View / edit are the two explicit actions while not selecting.
+            binding.btnView.isVisible = !selectionMode
+            binding.btnEdit.isVisible = !selectionMode
+            binding.btnView.setOnClickListener { onView(doc) }
+            binding.btnEdit.setOnClickListener { onEdit(doc) }
             val density = binding.root.resources.displayMetrics.density
             binding.root.strokeWidth = if (selected) (2 * density).toInt() else 0
             binding.root.strokeColor =

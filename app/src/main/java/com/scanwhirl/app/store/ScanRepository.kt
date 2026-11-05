@@ -150,6 +150,22 @@ class ScanRepository(private val context: Context) {
         meta.writeText(lines.joinToString("\n"))
     }
 
+    /** Copies a document (pages + PDF) into a brand-new one. Used by "Save as new". */
+    suspend fun duplicateDocument(id: String, suggestedName: String?): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val src = File(docsDir, id)
+            if (!src.exists()) throw IllegalStateException("Scan not found")
+            val newId = UUID.randomUUID().toString().take(8)
+            val dest = File(docsDir, newId).apply { mkdirs() }
+            src.listFiles()?.forEach { f ->
+                if (f.isFile) f.copyTo(File(dest, f.name), overwrite = true)
+            }
+            val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
+                ?: nextDocumentName()
+            File(dest, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\n")
+            loadDocument(dest) ?: throw IllegalStateException("Copy could not be opened")
+        }
+
     suspend fun mergeDocuments(
         sourceIds: List<String>,
         suggestedName: String?
