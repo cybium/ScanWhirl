@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ScanWhirl.Serif" parent="Theme.ScanWhirl">
+        <item name="android:fontFamily">serif</item>
+    </style>
+    <style name="Theme.ScanWhirl.Mono" parent="Theme.ScanWhirl">
+        <item name="android:fontFamily">monospace</item>
+    </style>
+</resources>

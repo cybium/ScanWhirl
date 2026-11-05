@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class DocumentViewerActivity : AppCompatActivity() {
+class DocumentViewerActivity : BaseActivity() {
 
     private lateinit var binding: ActivityDocumentViewerBinding
     private val repo by lazy { (application as ScanWhirlApp).repository }

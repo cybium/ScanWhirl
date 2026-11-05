@@ -38,7 +38,7 @@ import java.util.concurrent.Executors
  * the grid viewer: the file only goes away when the snackbar times out, is
  * replaced, or this screen closes.
  */
-class PageViewerActivity : AppCompatActivity() {
+class PageViewerActivity : BaseActivity() {
 
     private lateinit var binding: ActivityPageViewerBinding
     private val repo by lazy { (application as ScanWhirlApp).repository }

@@ -100,6 +100,42 @@
 
     <string name="tool_resize">Resize</string>
     <string name="tool_compress">Compress</string>
+    <string name="tool_merge">Merge</string>
+    <string name="tool_settings">Settings</string>
+
+    <string name="search_hint">Search</string>
+    <string name="sort">Sort</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_date">Date created</string>
+    <string name="sort_modified">Last modified</string>
+    <string name="tab_my_scans">My scans</string>
+    <string name="tab_device_pdfs">Device PDFs</string>
+    <string name="device_empty">No PDFs found on this device. Pick one to open it in ScanWhirl.</string>
+    <string name="pick_pdf">Pick a PDF</string>
+    <string name="no_pdf_app">No PDF app installed</string>
+    <string name="view_pdf_named">View %1$s</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_system">Follow system</string>
+    <string name="settings_font">Text &amp; font style</string>
+    <string name="font_default">Default</string>
+    <string name="font_serif">Serif</string>
+    <string name="font_mono">Monospace</string>
+    <string name="settings_language_section">Language</string>
+    <string name="settings_language">App language</string>
+    <string name="language_system">System default</string>
+    <string name="language_more">More languages…</string>
+    <string name="settings_viewing">Viewing</string>
+    <string name="settings_default_viewer">Default PDF viewer</string>
+    <string name="viewer_in_app">ScanWhirl viewer</string>
+    <string name="viewer_system">System PDF app</string>
+    <string name="settings_about_section">About</string>
+    <string name="settings_about">About ScanWhirl</string>
+    <string name="settings_version">Version and details</string>
 
     <string name="resize_title">Resize image</string>
     <string name="resize_width">Width</string>

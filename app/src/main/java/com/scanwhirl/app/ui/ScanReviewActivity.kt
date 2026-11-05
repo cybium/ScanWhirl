@@ -43,7 +43,7 @@ import java.util.Locale
  * Per-page filters default to Enhance and are kept in `filters.txt` so the
  * full-screen view (a separate activity) sees the same choices.
  */
-class ScanReviewActivity : AppCompatActivity() {
+class ScanReviewActivity : BaseActivity() {
 
     private lateinit var binding: ActivityScanReviewBinding
     private val repo by lazy { (application as ScanWhirlApp).repository }

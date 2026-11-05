@@ -33,7 +33,7 @@ import kotlin.math.roundToInt
  *
  * Accepts either an in-app scan id or a content-Uri (for the device PDFs tab).
  */
-class PdfViewerActivity : AppCompatActivity() {
+class PdfViewerActivity : BaseActivity() {
 
     private lateinit var binding: ActivityPdfViewerBinding
     private var pfd: ParcelFileDescriptor? = null
@@ -235,6 +235,12 @@ class PdfViewerActivity : AppCompatActivity() {
         fun fileIntent(context: Context, path: String, title: String): Intent =
             Intent(context, PdfViewerActivity::class.java)
                 .putExtra(EXTRA_PATH, path)
+                .putExtra(EXTRA_TITLE, title)
+
+        /** Opens any content-Uri PDF (device tab / picked file). */
+        fun uriIntent(context: Context, uri: String, title: String): Intent =
+            Intent(context, PdfViewerActivity::class.java)
+                .setData(android.net.Uri.parse(uri))
                 .putExtra(EXTRA_TITLE, title)
     }
 }
