@@ -83,6 +83,9 @@
     <string name="selected_count">%1$d selected</string>
     <string name="crop_action">Crop</string>
     <string name="crop_apply">Apply crop</string>
+    <string name="select_pages_first">Tick the pages you want first</string>
+    <string name="clear_selection">Clear</string>
+    <string name="reorder_pages">Drag to reorder</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>

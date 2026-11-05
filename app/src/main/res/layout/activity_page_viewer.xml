@@ -49,32 +49,64 @@
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="8dp"
             android:text="@string/action_rotate"
-            android:textColor="#FFFFFFFF" />
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_rotate"
+            app:iconPadding="4dp"
+            app:iconTint="#FFFFFFFF" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCrop"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="8dp"
             android:text="@string/crop_action"
-            android:textColor="#FFFFFFFF" />
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_crop"
+            app:iconPadding="4dp"
+            app:iconTint="#FFFFFFFF" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnFilter"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="8dp"
             android:text="@string/filter_action"
-            android:textColor="#FFFFFFFF" />
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_filter"
+            app:iconPadding="4dp"
+            app:iconTint="#FFFFFFFF" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDelete"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/action_delete_page"
-            android:textColor="#FFFFFFFF" />
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="8dp"
+            android:text="@string/delete"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_delete"
+            app:iconPadding="4dp"
+            app:iconTint="#FFFFFFFF" />
     </LinearLayout>
 
     <FrameLayout
@@ -104,13 +136,16 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@android:string/cancel"
-                android:textColor="#FFFFFFFF" />
+                android:textColor="#FFFFFFFF"
+                app:icon="@drawable/ic_close"
+                app:iconTint="#FFFFFFFF" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnApplyCrop"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/crop_apply" />
+                android:text="@string/crop_apply"
+                app:icon="@drawable/ic_crop" />
         </LinearLayout>
     </FrameLayout>
 </FrameLayout>

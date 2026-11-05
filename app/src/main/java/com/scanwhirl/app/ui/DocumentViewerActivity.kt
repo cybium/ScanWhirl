@@ -1,14 +1,19 @@
 package com.scanwhirl.app.ui
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
@@ -23,11 +28,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 
 class DocumentViewerActivity : AppCompatActivity() {
 
@@ -36,15 +36,18 @@ class DocumentViewerActivity : AppCompatActivity() {
     private var document: ScanDocument? = null
     private var docId: String? = null
 
-    /** Pages shown in the grid (document pages minus the one pending Undo). */
+    /** Pages shown in the grid (document pages minus any pending Undo deletes). */
     private var visiblePages: List<java.io.File> = emptyList()
 
+    /** Checked page paths; page actions in the toolbar menu act on these. */
+    private val selected = linkedSetOf<String>()
+
     /**
-     * Path of the page whose Undo snackbar is showing. The file is only
-     * deleted when the snackbar times out, is replaced by another delete,
-     * or this screen closes (leaving = permanent).
+     * Paths whose Undo snackbar is showing. They are hidden from the grid and
+     * only deleted once the snackbar times out, is replaced, or this screen
+     * closes (leaving = permanent).
      */
-    private var pendingDelete: String? = null
+    private val pendingDeletes = linkedSetOf<String>()
 
     /** Pages whose delete has been triggered but not landed yet (no flash-back). */
     private val committingDeletes = mutableSetOf<String>()
@@ -77,7 +80,10 @@ class DocumentViewerActivity : AppCompatActivity() {
                 startActivity(PageViewerActivity.intent(this, id, index))
             }
         }
-        binding.pageList.onLongPressMenu = { index -> showPageActions(index) }
+        binding.pageList.onCheckToggle = { index -> toggleSelected(index) }
+        binding.pageList.checkedAt = { i ->
+            selected.contains(visiblePages.getOrNull(i)?.path)
+        }
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
 
         binding.btnShare.setOnClickListener { document?.let { ShareUtils.share(this, it) } }
@@ -110,6 +116,9 @@ class DocumentViewerActivity : AppCompatActivity() {
         R.id.action_rename -> { promptRename(); true }
         R.id.action_save_device -> { promptDownload(); true }
         R.id.action_save_pdf -> { savePdfToDocuments(); true }
+        R.id.action_rotate_page -> { rotateSelected(); true }
+        R.id.action_delete_page -> { deleteSelectedPages(); true }
+        R.id.action_save_page -> { saveSelectedPages(); true }
         else -> super.onOptionsItemSelected(item)
     }
 
@@ -128,15 +137,26 @@ class DocumentViewerActivity : AppCompatActivity() {
         return true
     }
 
-    /** Pushes the visible page list (minus any Undo-pending page) to the grid. */
+    /** Pushes the visible page list (minus pending deletes) to the grid. */
     private fun refreshGrid() {
         val doc = document ?: return
         visiblePages = doc.pageFiles.filter {
-            it.path != pendingDelete && it.path !in committingDeletes
+            it.path !in pendingDeletes && it.path !in committingDeletes
         }
+        // Pages that vanished (deleted/screen closed) must not stay checked.
+        selected.retainAll(visiblePages.map { it.path }.toSet())
         binding.pageList.submit(visiblePages)
         binding.pageCount.text =
             resources.getQuantityString(R.plurals.pages, visiblePages.size, visiblePages.size)
+        updateSelectionUi()
+    }
+
+    private fun updateSelectionUi() {
+        supportActionBar?.subtitle =
+            if (selected.isEmpty()) null
+            else resources.getQuantityString(
+                R.plurals.selected_count, selected.size, selected.size
+            )
     }
 
     /** Maps a grid (visible) index to the document's on-disk index, or -1. */
@@ -144,6 +164,164 @@ class DocumentViewerActivity : AppCompatActivity() {
         val file = visiblePages.getOrNull(visibleIndex) ?: return -1
         return document?.pageFiles?.indexOfFirst { it.path == file.path } ?: -1
     }
+
+    // ------------------------------------------------------------------
+    // Selection (checkbox) + page actions (toolbar overflow)
+    // ------------------------------------------------------------------
+
+    /** Ticks/untick a page. Called by the grid checkbox. */
+    internal fun toggleSelected(index: Int) {
+        val path = visiblePages.getOrNull(index)?.path ?: return
+        if (!selected.remove(path)) selected.add(path)
+        binding.pageList.refresh()
+        updateSelectionUi()
+    }
+
+    private fun requireSelection(): List<String>? {
+        if (selected.isEmpty()) {
+            Toast.makeText(this, R.string.select_pages_first, Toast.LENGTH_SHORT).show()
+            return null
+        }
+        return selected.toList()
+    }
+
+    /** Rotates every ticked page (a single selection rotates just that page). */
+    internal fun rotateSelected() {
+        val paths = requireSelection() ?: return
+        val id = docId ?: return
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    // Land pending deletes first so disk indices are stable.
+                    commitPendingDeletesNow()
+                    for (path in paths) {
+                        val doc = repo.listDocuments().find { it.id == id } ?: break
+                        val idx = doc.pageFiles.indexOfFirst { it.path == path }
+                        if (idx >= 0) repo.rotatePage(id, idx)
+                    }
+                }
+                reloadDocument()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /**
+     * Deletes every ticked page with one Undo snackbar. Pages stay on disk (and
+     * are only hidden) until the snackbar times out, is replaced, or the screen
+     * closes.
+     */
+    internal fun deleteSelectedPages() {
+        val paths = requireSelection() ?: return
+        document ?: return
+        if (paths.size >= visiblePages.size) {
+            Toast.makeText(this, R.string.last_page_guard, Toast.LENGTH_LONG).show()
+            return
+        }
+        // This snackbar replaces any previous one: the old Undo window is over.
+        commitPendingDelete()
+
+        pendingDeletes.addAll(paths)
+        selected.clear()
+        refreshGrid()
+
+        val batch = paths.toList()
+        Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
+            .setAction(R.string.undo) {
+                pendingDeletes.removeAll(batch.toSet())
+                refreshGrid()
+            }
+            .addCallback(object : Snackbar.Callback() {
+                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    if (event != DISMISS_EVENT_ACTION) commitPendingDeletes(batch)
+                }
+            })
+            .show()
+    }
+
+    private fun saveSelectedPages() {
+        val paths = requireSelection() ?: return
+        val indices = visiblePages.indices.filter { visiblePages[it].path in paths }
+        if (indices.isNotEmpty()) downloadPages(indices)
+    }
+
+    /** Deletes all Undo-pending pages for good. No-op when nothing is pending. */
+    internal fun commitPendingDelete() = commitPendingDeletes(pendingDeletes.toList())
+
+    /** Deletes the given Undo-pending paths (idempotent; recomputes each index). */
+    internal fun commitPendingDeletes(paths: Collection<String>) {
+        val id = docId ?: return
+        val toDelete = paths.filter { pendingDeletes.contains(it) }
+        if (toDelete.isEmpty()) return
+        pendingDeletes.removeAll(toDelete.toSet())
+        committingDeletes.addAll(toDelete)
+        deleteScope.launch {
+            try {
+                for (path in toDelete) {
+                    val doc = repo.listDocuments().find { it.id == id } ?: break
+                    val idx = doc.pageFiles.indexOfFirst { it.path == path }
+                    if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
+                }
+            } catch (_: Exception) {
+                // Best effort; a failed delete leaves the page in place.
+            }
+            committingDeletes.removeAll(toDelete.toSet())
+            // Refresh only now: the pages are gone from disk, so they can't flash back.
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) reloadDocument()
+            }
+        }
+    }
+
+    /** Blocking variant used before index-sensitive work; clears all pending deletes. */
+    private suspend fun commitPendingDeletesNow() {
+        val id = docId ?: return
+        val toDelete = pendingDeletes.toList()
+        if (toDelete.isEmpty()) return
+        pendingDeletes.removeAll(toDelete.toSet())
+        for (path in toDelete) {
+            val doc = repo.listDocuments().find { it.id == id } ?: return
+            val idx = doc.pageFiles.indexOfFirst { it.path == path }
+            if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Reorder
+    // ------------------------------------------------------------------
+
+    /** Persists a finished drag: the grid's new order becomes the disk order. */
+    internal fun reorderPages(from: Int, to: Int) {
+        val id = docId ?: return
+        // The grid's pre-drag base order is exactly `visiblePages` (snapshot).
+        val baseFile = visiblePages.getOrNull(from) ?: return
+        lifecycleScope.launch {
+            try {
+                // Any pending delete must land first so grid indices == disk indices.
+                withContext(Dispatchers.IO) { commitPendingDeletesNow() }
+                val doc = repo.listDocuments().find { it.id == id } ?: return@launch
+                val baseFrom = doc.pageFiles.indexOfFirst { it.path == baseFile.path }
+                if (baseFrom >= 0 && baseFrom != to) repo.movePage(id, baseFrom, to)
+                reloadDocument()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+                reloadDocument()
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Document-level actions
+    // ------------------------------------------------------------------
 
     /** Copies the document PDF into Documents/ScanWhirl so it shows up in the Files app. */
     private fun savePdfToDocuments() {
@@ -175,153 +353,6 @@ class DocumentViewerActivity : AppCompatActivity() {
                     ).show()
                 }
             }
-        }
-    }
-
-    /** Long-press menu: only Save / Rotate / Delete (reorder is drag now). */
-    internal fun showPageActions(index: Int) {
-        val doc = document ?: return
-        if (index !in visiblePages.indices) return
-
-        val actions = buildList {
-            add(getString(R.string.save_this_page) to Action.SAVE_DEVICE)
-            add(getString(R.string.action_rotate) to Action.ROTATE)
-            if (visiblePages.size > 1) add(getString(R.string.action_delete_page) to Action.DELETE)
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.page_actions_title, index + 1))
-            .setItems(actions.map { it.first }.toTypedArray()) { _, which ->
-                performPageAction(actions[which].second, index)
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
-    private enum class Action { SAVE_DEVICE, ROTATE, DELETE }
-
-    private fun performPageAction(action: Action, visibleIndex: Int) {
-        if (action == Action.SAVE_DEVICE) {
-            downloadPages(listOf(visibleIndex))
-            return
-        }
-        if (action == Action.DELETE) {
-            showUndoDelete(visibleIndex)
-            return
-        }
-        val id = docId ?: return
-        val disk = diskIndex(visibleIndex)
-        if (disk < 0) return
-        lifecycleScope.launch {
-            try {
-                when (action) {
-                    Action.SAVE_DEVICE -> Unit // handled before the coroutine
-                    Action.ROTATE -> repo.rotatePage(id, disk)
-                    Action.DELETE -> Unit // handled before the coroutine
-                }
-                reloadDocument()
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    /**
-     * Hides the page immediately and offers Undo. The file is deleted only
-     * when the snackbar times out, is replaced, or the screen closes.
-     */
-    private fun showUndoDelete(visibleIndex: Int) {
-        val file = visiblePages.getOrNull(visibleIndex) ?: return
-        if ((document?.pageFiles?.size ?: 0) <= 1) {
-            Toast.makeText(this, R.string.last_page_guard, Toast.LENGTH_LONG).show()
-            return
-        }
-        // This snackbar replaces any previous one: the old page's Undo window
-        // is over, so its delete commits now.
-        commitPendingDelete()
-
-        pendingDelete = file.path
-        refreshGrid()
-        val path = file.path
-        Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
-            .setAction(R.string.undo) {
-                pendingDelete = null
-                refreshGrid()
-            }
-            .addCallback(object : Snackbar.Callback() {
-                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                    // Only commit this snackbar's own page: a replacement may
-                    // already have moved pendingDelete on to a newer one.
-                    if (event != DISMISS_EVENT_ACTION && pendingDelete == path) {
-                        commitPendingDelete()
-                    }
-                }
-            })
-            .show()
-    }
-
-    /** Deletes the Undo-pending page for good. No-op when nothing is pending. */
-    internal fun commitPendingDelete() {
-        val path = pendingDelete ?: return
-        pendingDelete = null
-        val id = docId ?: return
-        committingDeletes.add(path)
-        deleteScope.launch {
-            try {
-                val doc = repo.listDocuments().find { it.id == id } ?: return@launch
-                val idx = doc.pageFiles.indexOfFirst { it.path == path }
-                if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
-            } catch (_: Exception) {
-                // Best effort; a failed delete leaves the page in place.
-            }
-            committingDeletes.remove(path)
-            // Refresh only now: pendingDelete is cleared, so an earlier refresh
-            // would flash the page back before it is actually gone.
-            runOnUiThread {
-                if (!isFinishing && !isDestroyed) refreshGrid()
-            }
-        }
-    }
-
-    /** Persists a finished drag: the grid's new order becomes the disk order. */
-    internal fun reorderPages(from: Int, to: Int) {
-        val id = docId ?: return
-        // The grid's pre-drag base order is exactly `visiblePages` (snapshot).
-        val baseFile = visiblePages.getOrNull(from) ?: return
-        lifecycleScope.launch {
-            try {
-                // Any pending delete must land first so grid indices == disk indices.
-                withContext(Dispatchers.IO) { commitPendingDeleteNow() }
-                val doc = repo.listDocuments().find { it.id == id } ?: return@launch
-                val baseFrom = doc.pageFiles.indexOfFirst { it.path == baseFile.path }
-                if (baseFrom >= 0 && baseFrom != to) repo.movePage(id, baseFrom, to)
-                reloadDocument()
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-                reloadDocument()
-            }
-        }
-    }
-
-    /** Blocking variant used before index-sensitive work; clears pendingDelete. */
-    private suspend fun commitPendingDeleteNow() {
-        val path = pendingDelete ?: return
-        pendingDelete = null
-        val id = docId ?: return
-        try {
-            val doc = repo.listDocuments().find { it.id == id } ?: return
-            val idx = doc.pageFiles.indexOfFirst { it.path == path }
-            if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
-        } catch (_: Exception) {
-            // Best effort.
         }
     }
 

@@ -2,13 +2,22 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- Page actions: apply to the ticked pages (tap a checkbox first). -->
     <item
-        android:id="@+id/action_select"
-        android:title="@string/select_pages"
+        android:id="@+id/action_rotate_page"
+        android:icon="@drawable/ic_rotate"
+        android:title="@string/action_rotate"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_delete_page"
+        android:icon="@drawable/ic_delete"
+        android:title="@string/action_delete_page"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_add_pages"
+        android:icon="@drawable/ic_camera"
         android:title="@string/add_pages"
         app:showAsAction="never" />
 </menu>

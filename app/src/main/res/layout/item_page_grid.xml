@@ -11,18 +11,17 @@
     app:strokeColor="?attr/colorPrimary"
     app:strokeWidth="0dp">
 
-    <FrameLayout
+    <com.scanwhirl.app.ui.pagegrid.AspectRatioLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
         <ImageView
             android:id="@+id/pageThumb"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:adjustViewBounds="true"
+            android:layout_height="match_parent"
             android:background="?attr/colorSurfaceVariant"
             android:contentDescription="@null"
-            android:scaleType="fitCenter"
+            android:scaleType="centerCrop"
             android:src="@drawable/ic_document" />
 
         <TextView
@@ -36,5 +35,31 @@
             android:paddingVertical="2dp"
             android:textColor="#FFFFFFFF"
             android:textSize="12sp" />
-    </FrameLayout>
+
+        <!-- Selection is a tap on this box; it never starts a drag or a menu. -->
+        <CheckBox
+            android:id="@+id/checkSelect"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="4dp"
+            android:background="@drawable/bg_page_number"
+            android:buttonTint="#FFFFFFFF"
+            android:clickable="true"
+            android:focusable="false"
+            android:padding="4dp" />
+
+        <!-- Reordering starts here only, so long-press stays free. -->
+        <ImageView
+            android:id="@+id/dragHandle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="4dp"
+            android:background="@drawable/bg_page_number"
+            android:contentDescription="@string/reorder_pages"
+            android:padding="4dp"
+            android:src="@drawable/ic_drag_handle"
+            android:tint="#FFFFFFFF" />
+    </com.scanwhirl.app.ui.pagegrid.AspectRatioLayout>
 </com.google.android.material.card.MaterialCardView>

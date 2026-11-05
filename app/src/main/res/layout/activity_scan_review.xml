@@ -25,6 +25,7 @@
                 android:hint="@string/name_hint"
                 android:importantForAutofill="no"
                 android:inputType="textCapWords"
+                android:layout_marginEnd="48dp"
                 android:maxLines="1"
                 android:selectAllOnFocus="true"
                 android:singleLine="true"
@@ -48,7 +49,7 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="12dp"
+        android:paddingHorizontal="16dp"
         android:paddingVertical="4dp"
         android:visibility="gone">
 
@@ -61,25 +62,12 @@
             android:textSize="14sp" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSelRotate"
+            android:id="@+id/btnSelClear"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/action_rotate" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSelDelete"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/action_delete_page" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSelDone"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/select_done" />
+            android:text="@string/clear_selection"
+            app:icon="@drawable/ic_close" />
     </LinearLayout>
 
     <LinearLayout

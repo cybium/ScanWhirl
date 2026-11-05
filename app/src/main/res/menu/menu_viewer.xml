@@ -18,4 +18,23 @@
         android:id="@+id/action_save_pdf"
         android:title="@string/save_pdf_device"
         app:showAsAction="never" />
+
+    <!-- Page actions: apply to the ticked pages (tap a checkbox first). -->
+    <item
+        android:id="@+id/action_rotate_page"
+        android:icon="@drawable/ic_rotate"
+        android:title="@string/action_rotate"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_delete_page"
+        android:icon="@drawable/ic_delete"
+        android:title="@string/action_delete_page"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_save_page"
+        android:icon="@drawable/ic_download"
+        android:title="@string/save_this_page"
+        app:showAsAction="never" />
 </menu>

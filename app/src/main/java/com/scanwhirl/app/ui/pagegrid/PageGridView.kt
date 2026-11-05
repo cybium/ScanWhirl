@@ -3,6 +3,7 @@ package com.scanwhirl.app.ui.pagegrid
 import android.content.Context
 import android.util.AttributeSet
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.ViewGroup
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -12,13 +13,18 @@ import com.scanwhirl.app.util.ScanFilter
 import java.io.File
 
 /**
- * The one page-grid component used by both the saved-document viewer and the
- * scan review screen: a vertical 2-column grid of downsampled, cached thumbs.
+ * The one page-grid component used by the saved-document viewer and the scan
+ * review screen: a vertical 2-column grid of downsampled, cached thumbs in
+ * fixed 3:4 cells.
  *
- * Reordering is long-press-and-drag (ItemTouchHelper provides edge
- * auto-scroll natively). A long-press released without moving fires
- * [onLongPressMenu] instead; a drag that actually moved fires [onDropped]
- * once, with the start and final indices.
+ * Gestures are deliberately separate:
+ *  - tap the cell            -> [onTap] (open the page)
+ *  - tap the checkbox        -> [onCheckToggle] (multi-select; no drag/menu)
+ *  - drag the grip handle    -> reorder, then [onDropped] once with the
+ *                               pre-drag and final indices
+ *
+ * Long-press no longer starts a drag and no longer opens a menu, so a drag can
+ * never be mistaken for a tap. Page actions live in the host's toolbar menu.
  */
 class PageGridView @JvmOverloads constructor(
     context: Context,
@@ -28,8 +34,8 @@ class PageGridView @JvmOverloads constructor(
     /** Called with the page index when a cell is tapped. */
     var onTap: ((Int) -> Unit)? = null
 
-    /** Long-press released without moving: open the page menu at this index. */
-    var onLongPressMenu: ((Int) -> Unit)? = null
+    /** Called when a cell's checkbox is tapped (host owns the selected set). */
+    var onCheckToggle: ((Int) -> Unit)? = null
 
     /** Drag finished after moving: indices are pre-drag positions of the item. */
     var onDropped: ((from: Int, to: Int) -> Unit)? = null
@@ -37,25 +43,11 @@ class PageGridView @JvmOverloads constructor(
     /** Which filter a cell's file should display (file-based so it stays correct mid-drag). */
     var filterFor: (File) -> ScanFilter = { ScanFilter.ORIGINAL }
 
-    /** Multi-select: while true, cells not selected are dimmed and outlined. */
-    var selectionMode: Boolean = false
-        set(value) {
-            if (field != value) {
-                field = value
-                refresh()
-            }
-        }
+    /** Whether the cell at [index] shows a ticked checkbox (host state). */
+    var checkedAt: (Int) -> Boolean = { false }
 
-    /** Whether the cell at [index] is selected (read only while [selectionMode]). */
-    var selectedAt: (Int) -> Boolean = { false }
-
-    /** Set false to disable long-press drag (e.g. while multi-selecting). */
+    /** Set false to disable reordering (the handle simply stops responding). */
     var dragEnabled: Boolean = true
-        set(value) {
-            field = value
-            if (!value) touchHelper.attachToRecyclerView(null)
-            else touchHelper.attachToRecyclerView(this)
-        }
 
     private val gridAdapter = GridAdapter()
     private var dragFrom = NO_POSITION
@@ -67,7 +59,8 @@ class PageGridView @JvmOverloads constructor(
         override fun getMovementFlags(rv: RecyclerView, vh: ViewHolder): Int =
             if (dragEnabled) super.getMovementFlags(rv, vh) else makeFlag(0, 0)
 
-        override fun isLongPressDragEnabled(): Boolean = dragEnabled
+        /** Drag starts only from the grip handle, never from a long-press. */
+        override fun isLongPressDragEnabled(): Boolean = false
 
         override fun onMove(rv: RecyclerView, vh: ViewHolder, target: ViewHolder): Boolean {
             val from = vh.bindingAdapterPosition
@@ -95,15 +88,17 @@ class PageGridView @JvmOverloads constructor(
             dragFrom = NO_POSITION
             val moved = dragMoved
             dragMoved = false
-            if (from == NO_POSITION || to == NO_POSITION) return
-            if (moved && from != to) onDropped?.invoke(from, to)
-            else if (!moved) onLongPressMenu?.invoke(to)
+            // A real move reports the new order; nothing else opens a menu here.
+            if (moved && from != NO_POSITION && to != NO_POSITION && from != to) {
+                onDropped?.invoke(from, to)
+            }
         }
     })
 
     init {
         layoutManager = GridLayoutManager(context, 2)
         adapter = gridAdapter
+        // Keep ItemTouchHelper's own drag animation authoritative.
         itemAnimator = null
         touchHelper.attachToRecyclerView(this)
     }
@@ -114,7 +109,7 @@ class PageGridView @JvmOverloads constructor(
         gridAdapter.notifyDataSetChanged()
     }
 
-    /** Re-binds every cell (filter or file content changed in place). */
+    /** Re-binds every cell (selection, filter or file content changed in place). */
     fun refresh() {
         gridAdapter.notifyDataSetChanged()
     }
@@ -139,7 +134,8 @@ class PageGridView @JvmOverloads constructor(
     private fun thumbTargetPx(): Int {
         val usable = if (width > 0) width else resources.displayMetrics.widthPixels
         val cell = (usable - paddingLeft - paddingRight) / 2
-        // Longest thumb side ~1.5x cell width keeps A4 pages crisp at cell size.
+        // Cell height is 4/3 of its width; decode a little larger so the
+        // centerCrop fill stays crisp.
         return (cell * 3 / 2).coerceAtLeast(160)
     }
 
@@ -173,16 +169,34 @@ class PageGridView @JvmOverloads constructor(
                 filterFor(file),
                 binding.pageThumb
             )
-            val selected = selectionMode && selectedAt(index)
-            binding.root.alpha = if (selectionMode && !selected) 0.45f else 1f
-            binding.root.strokeWidth =
-                if (selected) (3 * resources.displayMetrics.density).toInt() else 0
+
+            // Checkbox = selection only. It consumes its own tap, so it never
+            // opens the page and never starts the drag.
+            binding.checkSelect.isChecked = checkedAt(index)
+            binding.checkSelect.setOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos != NO_POSITION) onCheckToggle?.invoke(pos)
+            }
+
+            // Reordering is started from the grip only.
+            binding.dragHandle.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN && dragEnabled) {
+                    val pos = bindingAdapterPosition
+                    if (pos != NO_POSITION) touchHelper.startDrag(this)
+                }
+                // Don't consume: the touch helper needs the follow-up events.
+                false
+            }
+            // Consume taps on the grip so they can't fall through to the cell.
+            binding.dragHandle.setOnClickListener { }
+
             binding.root.setOnClickListener {
                 val pos = bindingAdapterPosition
                 if (pos != NO_POSITION) onTap?.invoke(pos)
             }
-            // Long-press is owned by ItemTouchHelper (drag); a stationary
-            // long-press comes back through clearView -> onLongPressMenu.
+            // Outline the cell while it is checked.
+            binding.root.strokeWidth =
+                if (checkedAt(index)) (3 * resources.displayMetrics.density).toInt() else 0
         }
     }
 }

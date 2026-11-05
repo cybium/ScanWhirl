@@ -34,9 +34,10 @@ import java.util.Locale
 
 /**
  * Shown after the scanner finishes: the captured pages in the shared page grid
- * (tap = full-screen page view, long-press = multi-select, drag = reorder), an
+ * (tap = full-screen page view, checkbox = multi-select, grip = reorder), an
  * editable title, "Add pages" for another scanner batch, and one primary
- * "Save as PDF" action. Back/discard asks for confirmation while pages exist.
+ * "Save as PDF" action. Rotate/Delete for the ticked pages live in the toolbar
+ * overflow. Back/discard asks for confirmation while pages exist.
  *
  * Pages live in a staging directory that is cleaned up on save or discard.
  * Per-page filters default to Enhance and are kept in `filters.txt` so the
@@ -69,7 +70,6 @@ class ScanReviewActivity : AppCompatActivity() {
     /** name -> lastModified at load; a diff on resume means the pager edited files. */
     private var initialSnapshot: Map<String, Long> = emptyMap()
 
-    private var selecting = false
     private val selected = linkedSetOf<String>()
 
     private var pendingDownload: (() -> Unit)? = null
@@ -96,9 +96,9 @@ class ScanReviewActivity : AppCompatActivity() {
     private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
             if (saving) return
-            // Leaving select mode first is friendlier than discarding the scan.
-            if (selecting) {
-                setSelecting(false)
+            // Clearing the selection first is friendlier than discarding the scan.
+            if (selected.isNotEmpty()) {
+                clearSelection()
                 return
             }
             confirmDiscard()
@@ -128,26 +128,20 @@ class ScanReviewActivity : AppCompatActivity() {
         initialSnapshot = snapshot()
 
         binding.pageGrid.filterFor = { f -> filters[f.path] ?: ScanFilter.ENHANCE }
-        binding.pageGrid.selectedAt = { i -> selected.contains(pages.getOrNull(i)?.path) }
-        binding.pageGrid.onTap = { i ->
-            if (selecting) toggleSelect(i) else openPageViewer(i)
-        }
-        binding.pageGrid.onLongPressMenu = { i ->
-            // Deferred so we don't detach ItemTouchHelper inside its own callback.
-            binding.pageGrid.post {
-                if (!selecting) {
-                    setSelecting(true)
-                    toggleSelect(i)
-                }
-            }
-        }
+        binding.pageGrid.checkedAt = { i -> selected.contains(pages.getOrNull(i)?.path) }
+        binding.pageGrid.onTap = { i -> openPageViewer(i) }
+        binding.pageGrid.onCheckToggle = { i -> toggleSelect(i) }
         binding.pageGrid.onDropped = { from, to -> reorderStaging(from, to) }
 
         binding.toolbar.inflateMenu(R.menu.menu_review)
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.action_select -> {
-                    setSelecting(!selecting)
+                R.id.action_rotate_page -> {
+                    rotateSelected()
+                    true
+                }
+                R.id.action_delete_page -> {
+                    deleteSelected()
                     true
                 }
                 R.id.action_add_pages -> {
@@ -158,9 +152,7 @@ class ScanReviewActivity : AppCompatActivity() {
             }
         }
 
-        binding.btnSelRotate.setOnClickListener { rotateSelected() }
-        binding.btnSelDelete.setOnClickListener { deleteSelected() }
-        binding.btnSelDone.setOnClickListener { setSelecting(false) }
+        binding.btnSelClear.setOnClickListener { clearSelection() }
         binding.btnSavePdf.setOnClickListener { saveAndFinish() }
     }
 
@@ -206,8 +198,9 @@ class ScanReviewActivity : AppCompatActivity() {
         }
         if (snapshot() != initialSnapshot) structureChanged = true
         loadFilters()
+        selected.retainAll(pages.map { it.path }.toSet())
         binding.pageGrid.submit(pages)
-        updateSelCount()
+        updateSelectionUi()
     }
 
     /** Rebuilds the filter map: file entries win, missing pages default to Enhance. */
@@ -231,27 +224,22 @@ class ScanReviewActivity : AppCompatActivity() {
         startActivity(PageViewerActivity.stagingIntent(this, stagingDir.path, index))
     }
 
-    internal fun setSelecting(on: Boolean) {
-        if (selecting == on) return
-        selecting = on
-        if (!on) selected.clear()
-        binding.pageGrid.selectionMode = on
-        binding.pageGrid.dragEnabled = !on
-        binding.selectBar.isVisible = on
-        binding.toolbar.menu.findItem(R.id.action_select)
-            ?.setTitle(if (on) R.string.select_done else R.string.select_pages)
-        updateSelCount()
-        binding.pageGrid.refresh()
-    }
-
-    private fun toggleSelect(index: Int) {
+    /** Ticks/untick a page. Called by the grid checkbox. */
+    internal fun toggleSelect(index: Int) {
         val path = pages.getOrNull(index)?.path ?: return
         if (!selected.remove(path)) selected.add(path)
-        updateSelCount()
+        updateSelectionUi()
         binding.pageGrid.refresh()
     }
 
-    private fun updateSelCount() {
+    internal fun clearSelection() {
+        selected.clear()
+        updateSelectionUi()
+        binding.pageGrid.refresh()
+    }
+
+    private fun updateSelectionUi() {
+        binding.selectBar.isVisible = selected.isNotEmpty()
         binding.selCount.text = getString(R.string.selected_count, selected.size)
     }
 
@@ -304,7 +292,10 @@ class ScanReviewActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
 
     private fun rotateSelected() {
-        if (selected.isEmpty()) return
+        if (selected.isEmpty()) {
+            Toast.makeText(this, R.string.select_pages_first, Toast.LENGTH_SHORT).show()
+            return
+        }
         val targets = pages.filter { it.path in selected }
         lifecycleScope.launch {
             try {
@@ -328,7 +319,10 @@ class ScanReviewActivity : AppCompatActivity() {
      * page means discarding the scan — confirmed first.
      */
     internal fun deleteSelected() {
-        if (selected.isEmpty()) return
+        if (selected.isEmpty()) {
+            Toast.makeText(this, R.string.select_pages_first, Toast.LENGTH_SHORT).show()
+            return
+        }
         if (selected.size >= pages.size) {
             confirmDiscard()
             return
@@ -338,7 +332,7 @@ class ScanReviewActivity : AppCompatActivity() {
         val victims = pages.filter { it.path in selected }
         pendingDeletes.addAll(victims.map { it.path })
         victims.forEach { it.renameTo(File(it.path + DEL_SUFFIX)) }
-        setSelecting(false)
+        selected.clear()
         reloadFromDisk()
 
         val batch = victims.map { it.path }
