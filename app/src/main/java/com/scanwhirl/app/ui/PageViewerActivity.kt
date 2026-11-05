@@ -40,6 +40,13 @@ class PageViewerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityPageViewerBinding
     private val repo by lazy { (application as ScanWhirlApp).repository }
     private var docId: String? = null
+
+    /** Non-null = reviewing an unsaved scan: no repository, files live here. */
+    private var stagingDir: File? = null
+
+    /** Staging filters by absolute path (persisted to filters.txt for review). */
+    private val stagingFilters = mutableMapOf<String, ScanFilter>()
+
     private var document: ScanDocument? = null
     private var pages: List<File> = emptyList()
 
@@ -76,6 +83,7 @@ class PageViewerActivity : AppCompatActivity() {
         })
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        intent.getStringExtra(EXTRA_STAGING)?.let { stagingDir = File(it) }
         if (!reload()) return
 
         val start = intent.getIntExtra(EXTRA_PAGE, 0)
@@ -96,8 +104,13 @@ class PageViewerActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    /** Re-reads the document (minus pending/committing deletes) into the pager. */
+    /** Re-reads the current page list (minus pending deletes) into the pager. */
     private fun reload(): Boolean {
+        val dir = stagingDir
+        return if (dir != null) reloadStaging(dir) else reloadSaved()
+    }
+
+    private fun reloadSaved(): Boolean {
         val id = docId ?: run { finish(); return false }
         val doc = repo.listDocuments().find { it.id == id }
         if (doc == null) {
@@ -111,6 +124,47 @@ class PageViewerActivity : AppCompatActivity() {
         }
         pagerAdapter.submit(pages)
         return true
+    }
+
+    private fun reloadStaging(dir: File): Boolean {
+        if (!dir.exists()) {
+            // The review screen discarded the scan while we were open.
+            finish()
+            return false
+        }
+        pages = dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
+            ?.sortedBy { it.nameWithoutExtension }
+            .orEmpty()
+        if (pages.isEmpty()) {
+            Toast.makeText(this, R.string.doc_not_found, Toast.LENGTH_SHORT).show()
+            finish()
+            return false
+        }
+        loadStagingFilters(dir)
+        pagerAdapter.submit(pages)
+        return true
+    }
+
+    /** Reads filters.txt; pages without an entry default to Enhance (review's default). */
+    private fun loadStagingFilters(dir: File) {
+        val fromFile = File(dir, FILTERS_FILE).takeIf { it.exists() }
+            ?.readText()?.lineSequence()
+            ?.mapNotNull { line ->
+                val parts = line.split('=', limit = 2)
+                if (parts.size == 2) parts[0] to ScanFilter.fromId(parts[1]) else null
+            }?.toMap()
+            ?: emptyMap()
+        stagingFilters.clear()
+        pages.forEach { stagingFilters[it.path] = fromFile[it.name] ?: ScanFilter.ENHANCE }
+    }
+
+    /** Writes the whole staging filter map so the review screen sees the choice. */
+    private fun writeStagingFilters(dir: File) {
+        File(dir, FILTERS_FILE).writeText(
+            pages.joinToString("\n") {
+                "${it.name}=${stagingFilters[it.path]?.id ?: ScanFilter.ENHANCE.id}"
+            }
+        )
     }
 
     /** Index of the page currently snapped on screen, or -1. */
@@ -127,13 +181,18 @@ class PageViewerActivity : AppCompatActivity() {
     }
 
     private fun rotateCurrent() {
-        val id = docId ?: return
         val pos = currentPosition()
-        if (pos !in pages.indices) return
+        val file = pages.getOrNull(pos) ?: return
+        val dir = stagingDir
         lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) { commitPendingDeleteNow() }
-                repo.rotatePage(id, pos)
+                if (dir != null) {
+                    withContext(Dispatchers.IO) { ImageTools.rotate90(file) }
+                } else {
+                    val id = docId ?: return@launch
+                    withContext(Dispatchers.IO) { commitPendingDeleteNow() }
+                    repo.rotatePage(id, pos)
+                }
                 reload()
                 currentPos = pos.coerceAtMost(pages.lastIndex)
                 binding.pager.scrollToPosition(currentPos)
@@ -149,10 +208,32 @@ class PageViewerActivity : AppCompatActivity() {
     }
 
     private fun filterCurrent() {
-        val id = docId ?: return
         val pos = currentPosition()
         val file = pages.getOrNull(pos) ?: return
         val filters = ScanFilter.entries
+        val dir = stagingDir
+        if (dir != null) {
+            // Staging: the choice is virtual, persisted for the review screen.
+            val checked = filters.indexOf(stagingFilters[file.path] ?: ScanFilter.ENHANCE)
+            AlertDialog.Builder(this)
+                .setTitle(R.string.filter_title)
+                .setSingleChoiceItems(
+                    filters.map { getString(it.labelRes) }.toTypedArray(),
+                    checked
+                ) { dialog, which ->
+                    dialog.dismiss()
+                    stagingFilters[file.path] = filters[which]
+                    writeStagingFilters(dir)
+                    reload()
+                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    binding.pager.scrollToPosition(currentPos)
+                    updateIndicator()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            return
+        }
+        val id = docId ?: return
         lifecycleScope.launch {
             try {
                 // Land any pending delete first so `pos` matches disk indices.
@@ -205,20 +286,27 @@ class PageViewerActivity : AppCompatActivity() {
         val pos = currentPosition()
         val file = pages.getOrNull(pos) ?: return
         if (pages.size <= 1) {
-            Toast.makeText(this, R.string.last_page_guard, Toast.LENGTH_LONG).show()
+            // Deleting the last page of an unsaved scan = discarding it (confirmed).
+            if (stagingDir != null) confirmStagingDiscard()
+            else Toast.makeText(this, R.string.last_page_guard, Toast.LENGTH_LONG).show()
             return
         }
         // This snackbar replaces any previous one: the old Undo window is over.
         commitPendingDelete()
 
+        if (stagingDir != null && !file.renameTo(File(file.path + DEL_SUFFIX))) return
         pendingDelete = file.path
         reload()
         currentPos = pos.coerceAtMost(pages.lastIndex)
         binding.pager.scrollToPosition(currentPos)
         updateIndicator()
 
+        val path = file.path
         Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
             .setAction(R.string.undo) {
+                if (stagingDir != null) {
+                    File(path + DEL_SUFFIX).takeIf { it.exists() }?.renameTo(File(path))
+                }
                 pendingDelete = null
                 reload()
                 currentPos = pos.coerceAtMost(pages.lastIndex)
@@ -227,9 +315,26 @@ class PageViewerActivity : AppCompatActivity() {
             }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                    if (event != DISMISS_EVENT_ACTION) commitPendingDelete()
+                    // Only commit this snackbar's own page: a replacement may
+                    // already have moved pendingDelete on to a newer one.
+                    if (event != DISMISS_EVENT_ACTION && pendingDelete == path) {
+                        commitPendingDelete()
+                    }
                 }
             })
+            .show()
+    }
+
+    /** Last page of an unsaved scan: deleting it means discarding the scan. */
+    private fun confirmStagingDiscard() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.review_discard_title)
+            .setMessage(R.string.review_discard_msg)
+            .setPositiveButton(R.string.discard) { _, _ ->
+                stagingDir?.deleteRecursively()
+                finish()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
@@ -237,6 +342,11 @@ class PageViewerActivity : AppCompatActivity() {
     internal fun commitPendingDelete() {
         val path = pendingDelete ?: return
         pendingDelete = null
+        if (stagingDir != null) {
+            // Hidden since the rename; only now does the file really go.
+            File(path + DEL_SUFFIX).takeIf { it.exists() }?.delete()
+            return
+        }
         val id = docId ?: return
         committingDeletes.add(path)
         deleteScope.launch {
@@ -327,10 +437,19 @@ class PageViewerActivity : AppCompatActivity() {
     companion object {
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_PAGE = "page_index"
+        private const val EXTRA_STAGING = "staging_dir"
+        private const val FILTERS_FILE = "filters.txt"
+        private const val DEL_SUFFIX = ".del"
 
         fun intent(context: Context, docId: String, pageIndex: Int): Intent =
             Intent(context, PageViewerActivity::class.java)
                 .putExtra(EXTRA_DOC_ID, docId)
+                .putExtra(EXTRA_PAGE, pageIndex)
+
+        /** Full-screen view over an unsaved scan (the review screen's staging folder). */
+        fun stagingIntent(context: Context, stagingDir: String, pageIndex: Int): Intent =
+            Intent(context, PageViewerActivity::class.java)
+                .putExtra(EXTRA_STAGING, stagingDir)
                 .putExtra(EXTRA_PAGE, pageIndex)
     }
 }

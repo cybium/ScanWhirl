@@ -246,6 +246,7 @@ class DocumentViewerActivity : AppCompatActivity() {
 
         pendingDelete = file.path
         refreshGrid()
+        val path = file.path
         Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
             .setAction(R.string.undo) {
                 pendingDelete = null
@@ -253,7 +254,11 @@ class DocumentViewerActivity : AppCompatActivity() {
             }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                    if (event != DISMISS_EVENT_ACTION) commitPendingDelete()
+                    // Only commit this snackbar's own page: a replacement may
+                    // already have moved pendingDelete on to a newer one.
+                    if (event != DISMISS_EVENT_ACTION && pendingDelete == path) {
+                        commitPendingDelete()
+                    }
                 }
             })
             .show()

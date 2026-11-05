@@ -86,6 +86,19 @@ object ImageTools {
         null
     }
 
+    /** Rotates a JPEG file 90° clockwise in place (page rotation). */
+    fun rotate90(file: java.io.File) {
+        val src = BitmapFactory.decodeFile(file.path)
+            ?: throw IllegalStateException("Unreadable page")
+        val matrix = android.graphics.Matrix().apply { postRotate(90f) }
+        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+        src.recycle()
+        java.io.FileOutputStream(file).use { out ->
+            rotated.compress(Bitmap.CompressFormat.JPEG, 95, out)
+        }
+        rotated.recycle()
+    }
+
     fun encodePng(bitmap: Bitmap): ByteArray {
         val out = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)

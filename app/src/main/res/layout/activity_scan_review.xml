@@ -34,58 +34,53 @@
         </com.google.android.material.appbar.MaterialToolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
-    <HorizontalScrollView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:scrollbars="none">
-
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/filterGroup"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="6dp"
-            app:selectionRequired="true"
-            app:singleSelection="true">
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipOriginal"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="@string/filter_original" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipEnhance"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/filter_enhance" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipClean"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/filter_clean" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipBlackWhite"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/filter_bw" />
-        </com.google.android.material.chip.ChipGroup>
-    </HorizontalScrollView>
-
-    <androidx.recyclerview.widget.RecyclerView
+    <com.scanwhirl.app.ui.pagegrid.PageGridView
         android:id="@+id/pageGrid"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
         android:padding="8dp" />
+
+    <LinearLayout
+        android:id="@+id/selectBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/selCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelRotate"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/action_rotate" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelDelete"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/action_delete_page" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelDone"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/select_done" />
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -97,19 +92,8 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSavePdf"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="6dp"
-            android:layout_weight="1"
             android:text="@string/review_save_pdf" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSaveShare"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:text="@string/review_save_share" />
     </LinearLayout>
 </LinearLayout>

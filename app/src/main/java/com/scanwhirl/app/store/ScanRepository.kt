@@ -3,7 +3,6 @@ package com.scanwhirl.app.store
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.scanwhirl.app.model.ScanDocument
@@ -59,23 +58,30 @@ class ScanRepository(private val context: Context) {
         imageUris: List<Uri>,
         pdfUri: Uri?,
         suggestedName: String?,
-        filter: ScanFilter = ScanFilter.ORIGINAL
+        filter: ScanFilter = ScanFilter.ORIGINAL,
+        pageFilters: Map<Int, ScanFilter>? = null
     ): ScanDocument = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString().take(8)
         val dir = File(docsDir, id).apply { mkdirs() }
 
+        // Per-page filters win over the document-wide one. The scanner's PDF
+        // only still matches the pages when every page ends up untouched.
+        val effective: (Int) -> ScanFilter = { i -> pageFilters?.get(i) ?: filter }
+        val allOriginal = imageUris.indices.all { effective(it) == ScanFilter.ORIGINAL }
+
         val pageFiles = imageUris.mapIndexed { index, uri ->
+            val pageFilter = effective(index)
             val out = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index))
             val input = context.contentResolver.openInputStream(uri)
                 ?: throw IllegalStateException("Could not read scanned page ${index + 1}")
             input.use { i ->
-                if (filter == ScanFilter.ORIGINAL) {
+                if (pageFilter == ScanFilter.ORIGINAL) {
                     FileOutputStream(out).use { o -> i.copyTo(o) }
                 } else {
                     val bytes = i.readBytes()
                     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                         ?: throw IllegalStateException("Page ${index + 1} is not an image")
-                    val processed = filter.applyTo(bitmap)
+                    val processed = pageFilter.applyTo(bitmap)
                     FileOutputStream(out).use { o ->
                         processed.compress(Bitmap.CompressFormat.JPEG, 92, o)
                     }
@@ -90,7 +96,7 @@ class ScanRepository(private val context: Context) {
         }
 
         val pdfFile = File(dir, "scan.pdf")
-        if (pdfUri != null) {
+        if (pdfUri != null && allOriginal) {
             try {
                 context.contentResolver.openInputStream(pdfUri)?.use { input ->
                     FileOutputStream(pdfFile).use { output -> input.copyTo(output) }
@@ -219,17 +225,7 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rotate")
         }
 
-    private fun rotateFile90(file: File) {
-        val src = BitmapFactory.decodeFile(file.path)
-            ?: throw IllegalStateException("Unreadable page")
-        val matrix = Matrix().apply { postRotate(90f) }
-        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
-        src.recycle()
-        FileOutputStream(file).use { out ->
-            rotated.compress(Bitmap.CompressFormat.JPEG, 95, out)
-        }
-        rotated.recycle()
-    }
+    private fun rotateFile90(file: File) = ImageTools.rotate90(file)
 
     suspend fun movePage(id: String, fromIndex: Int, toIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {

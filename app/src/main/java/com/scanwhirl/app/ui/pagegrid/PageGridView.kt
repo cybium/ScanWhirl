@@ -34,8 +34,20 @@ class PageGridView @JvmOverloads constructor(
     /** Drag finished after moving: indices are pre-drag positions of the item. */
     var onDropped: ((from: Int, to: Int) -> Unit)? = null
 
-    /** Which filter a cell at [index] should display. */
-    var filterFor: (Int) -> ScanFilter = { ScanFilter.ORIGINAL }
+    /** Which filter a cell's file should display (file-based so it stays correct mid-drag). */
+    var filterFor: (File) -> ScanFilter = { ScanFilter.ORIGINAL }
+
+    /** Multi-select: while true, cells not selected are dimmed and outlined. */
+    var selectionMode: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                refresh()
+            }
+        }
+
+    /** Whether the cell at [index] is selected (read only while [selectionMode]). */
+    var selectedAt: (Int) -> Boolean = { false }
 
     /** Set false to disable long-press drag (e.g. while multi-selecting). */
     var dragEnabled: Boolean = true
@@ -158,9 +170,13 @@ class PageGridView @JvmOverloads constructor(
             PageThumbLoader.load(
                 file,
                 thumbTargetPx(),
-                filterFor(index),
+                filterFor(file),
                 binding.pageThumb
             )
+            val selected = selectionMode && selectedAt(index)
+            binding.root.alpha = if (selectionMode && !selected) 0.45f else 1f
+            binding.root.strokeWidth =
+                if (selected) (3 * resources.displayMetrics.density).toInt() else 0
             binding.root.setOnClickListener {
                 val pos = bindingAdapterPosition
                 if (pos != NO_POSITION) onTap?.invoke(pos)

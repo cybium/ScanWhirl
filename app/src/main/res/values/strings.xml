@@ -6,8 +6,7 @@
     <string name="empty_subtitle">Tap the camera button to scan your first document. Auto edge detection, crop, batch pages, and PDF export included.</string>
     <string name="name_hint">Document name</string>
     <string name="save">Save</string>
-    <string name="review_save_pdf">Save PDF</string>
-    <string name="review_save_share">Save &amp; share PDF</string>
+    <string name="review_save_pdf">Save as PDF</string>
     <string name="review_saving">Saving…</string>
     <string name="review_discard_title">Discard this scan?</string>
     <string name="review_discard_msg">Your scanned pages haven\'t been saved yet.</string>
@@ -70,8 +69,6 @@
 
     <string name="page_actions_title">Page %1$d</string>
     <string name="action_rotate">Rotate</string>
-    <string name="action_move_earlier">Move earlier</string>
-    <string name="action_move_later">Move later</string>
     <string name="action_delete_page">Delete page</string>
     <string name="page_op_failed">Page operation failed: %1$s</string>
     <string name="page_deleted">Page deleted</string>
@@ -80,6 +77,10 @@
     <string name="page_indicator">%1$d / %2$d</string>
     <string name="filter_action">Filter</string>
     <string name="filter_title">Page filter</string>
+    <string name="select_pages">Select</string>
+    <string name="select_done">Done</string>
+    <string name="add_pages">Add pages</string>
+    <string name="selected_count">%1$d selected</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>
