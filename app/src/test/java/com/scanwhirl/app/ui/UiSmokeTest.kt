@@ -185,7 +185,7 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `viewer page tap shows actions and rotate works end to end`() {
+    fun `viewer tap opens the full-screen page view`() {
         val id = seedDoc("Rotate flow")
         val before = com.scanwhirl.app.util.PdfGenerator.readJpegInfo(
             repo.listDocuments().first { it.id == id }.pageFiles[0].readBytes())
@@ -193,20 +193,63 @@ class UiSmokeTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                val pages = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList)
+                val pages = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
                 forceLayout(pages)
-                val pageCard = pages.findViewHolderForAdapterPosition(0)!!.itemView
-                pageCard.performClick()
-                assertNotNull("page actions dialog should appear", ShadowDialog.getLatestDialog())
+                pages.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+
+                val started = shadowOf(activity).nextStartedActivity
+                assertEquals(
+                    PageViewerActivity::class.java.name,
+                    started?.component?.className
+                )
             }
         }
 
-        // rotate via repository directly (dialog item click handlers are exercised above)
+        // rotate via repository directly (the pager's Rotate button uses the same call)
         runBlocking { repo.rotatePage(id, 0) }
         val after = com.scanwhirl.app.util.PdfGenerator.readJpegInfo(
             repo.listDocuments().first { it.id == id }.pageFiles[0].readBytes())
         assertEquals(before.width, after.height)
         assertEquals(before.height, after.width)
+    }
+
+    @Test
+    fun `page viewer shows pager, indicator and rotate filter delete`() {
+        val id = seedDoc("Paged doc", pages = 3)
+        val intent = PageViewerActivity.intent(app, id, 1)
+        ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val pager = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
+                assertEquals(3, pager.adapter!!.itemCount)
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnClose))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotate))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnFilter))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnDelete))
+                val indicator = activity.findViewById<android.widget.TextView>(R.id.pageIndicator)
+                assertEquals("2 / 3", indicator.text.toString())
+            }
+        }
+    }
+
+    @Test
+    fun `page viewer delete is deferred until undo expires`() {
+        val id = seedDoc("Paged delete", pages = 3)
+        val intent = PageViewerActivity.intent(app, id, 0)
+        ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val pager = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
+                forceLayout(pager) // snap view must exist for currentPosition()
+                activity.findViewById<android.view.View>(R.id.btnDelete).performClick()
+                // Not deleted yet: the file survives while Undo is offered…
+                assertEquals(3, repo.listDocuments().first { it.id == id }.pageFiles.size)
+                // Simulate the snackbar timing out.
+                activity.commitPendingDelete()
+            }
+            val gone = pollUntil {
+                repo.listDocuments().first { it.id == id }.pageFiles.size == 2
+            }
+            assertTrue("page file should be deleted after the Undo window", gone)
+        }
     }
 
     @Test
@@ -338,9 +381,9 @@ class UiSmokeTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                val pages = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
-                forceLayout(pages)
-                pages.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+                // The menu is opened by a stationary long-press (device gesture);
+                // its content is what matters here.
+                activity.showPageActions(0)
 
                 val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
                 val texts = (0 until dialog.listView.count).map {
@@ -365,9 +408,7 @@ class UiSmokeTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                val pages = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
-                forceLayout(pages)
-                pages.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+                activity.showPageActions(0)
 
                 val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
                 dialog.listView.performItemClick(null, 2, 2) // "Delete page"
@@ -375,7 +416,8 @@ class UiSmokeTest {
                 // Not deleted yet: the file survives while Undo is offered…
                 assertEquals(2, repo.listDocuments().first { it.id == id }.pageFiles.size)
                 // …and the page is hidden from the grid immediately.
-                assertEquals(1, pages.pageCount())
+                val grid = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                assertEquals(1, grid.pageCount())
 
                 // Simulate the snackbar timing out.
                 activity.commitPendingDelete()
@@ -393,9 +435,8 @@ class UiSmokeTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                val pages = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
-                forceLayout(pages)
-                pages.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+                // The menu is opened by a stationary long-press (device gesture).
+                activity.showPageActions(0)
                 val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
                 dialog.listView.performItemClick(null, 2, 2) // "Delete page"
             }
