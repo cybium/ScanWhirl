@@ -194,7 +194,9 @@ class ScanRepository(private val context: Context) {
             require(pageIndex in doc.pageFiles.indices) { "No such page" }
             require(doc.pageFiles.size > 1) { "Can't delete the last page" }
 
-            doc.pageFiles[pageIndex].delete()
+            val victim = doc.pageFiles[pageIndex]
+            origOf(victim).delete()
+            victim.delete()
             renumberPages(dir)
             regeneratePdf(dir)
 
@@ -208,19 +210,26 @@ class ScanRepository(private val context: Context) {
             require(pageIndex in doc.pageFiles.indices) { "No such page" }
 
             val file = doc.pageFiles[pageIndex]
-            val src = BitmapFactory.decodeFile(file.path)
-                ?: throw IllegalStateException("Unreadable page")
-            val matrix = Matrix().apply { postRotate(90f) }
-            val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
-            src.recycle()
-            FileOutputStream(file).use { out ->
-                rotated.compress(Bitmap.CompressFormat.JPEG, 95, out)
-            }
-            rotated.recycle()
+            rotateFile90(file)
+            // Keep the kept original aligned so a later filter re-apply
+            // doesn't undo the rotation.
+            origOf(file).takeIf { it.exists() }?.let { rotateFile90(it) }
 
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rotate")
         }
+
+    private fun rotateFile90(file: File) {
+        val src = BitmapFactory.decodeFile(file.path)
+            ?: throw IllegalStateException("Unreadable page")
+        val matrix = Matrix().apply { postRotate(90f) }
+        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+        src.recycle()
+        FileOutputStream(file).use { out ->
+            rotated.compress(Bitmap.CompressFormat.JPEG, 95, out)
+        }
+        rotated.recycle()
+    }
 
     suspend fun movePage(id: String, fromIndex: Int, toIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
@@ -237,10 +246,13 @@ class ScanRepository(private val context: Context) {
                 reordered.forEachIndexed { i, f ->
                     val tmp = File(dir, String.format(Locale.ROOT, "tmp_%03d.jpg", i))
                     f.renameTo(tmp)
+                    origOf(f).takeIf { it.exists() }?.renameTo(origOf(tmp))
                     tmpNames.add(tmp)
                 }
                 tmpNames.forEachIndexed { i, tmp ->
-                    tmp.renameTo(File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i)))
+                    val target = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i))
+                    tmp.renameTo(target)
+                    origOf(tmp).takeIf { it.exists() }?.renameTo(origOf(target))
                 }
                 regeneratePdf(dir)
             }
@@ -251,6 +263,40 @@ class ScanRepository(private val context: Context) {
         dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
             ?.sortedBy { it.nameWithoutExtension }
             ?: emptyList()
+
+    /** Kept original of a filtered page: `page_001.jpg` -> `page_001.orig` (not a .jpg, never listed). */
+    private fun origOf(page: File): File =
+        File(page.parentFile, page.nameWithoutExtension + ".orig")
+
+    /**
+     * Applies [filter] to one saved page of a document — always re-processing
+     * from the kept original so filters never stack, and so "Original"
+     * restores the untouched scan. Creates the `.orig` sibling on first use.
+     */
+    suspend fun setPageFilter(id: String, pageIndex: Int, filter: ScanFilter): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            require(pageIndex in doc.pageFiles.indices) { "No such page" }
+            val file = doc.pageFiles[pageIndex]
+            val orig = origOf(file)
+            if (filter == ScanFilter.ORIGINAL) {
+                if (orig.exists()) {
+                    orig.copyTo(file, overwrite = true)
+                    orig.delete()
+                }
+            } else {
+                if (!orig.exists()) file.copyTo(orig, overwrite = true)
+                val src = BitmapFactory.decodeFile(orig.path)
+                    ?: throw IllegalStateException("Unreadable page")
+                val out = filter.applyTo(src)
+                FileOutputStream(file).use { o -> out.compress(Bitmap.CompressFormat.JPEG, 92, o) }
+                if (out !== src) out.recycle()
+                src.recycle()
+            }
+            regeneratePdf(dir)
+            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after filter")
+        }
 
     /** Creates a brand-new scan document from raw page JPEG bytes. */
     suspend fun createDocument(
@@ -317,7 +363,9 @@ class ScanRepository(private val context: Context) {
             if (f != target) {
                 val tmp = File(dir, String.format(Locale.ROOT, "renum_%03d.jpg", i))
                 f.renameTo(tmp)
+                origOf(f).takeIf { it.exists() }?.renameTo(origOf(tmp))
                 tmp.renameTo(target)
+                origOf(tmp).takeIf { it.exists() }?.renameTo(origOf(target))
             }
         }
     }

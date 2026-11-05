@@ -72,7 +72,12 @@ class DocumentViewerActivity : AppCompatActivity() {
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         if (!reloadDocument()) return
 
-        binding.pageList.onTap = { index -> showPageActions(index) }
+        binding.pageList.onTap = { index ->
+            docId?.let { id ->
+                startActivity(PageViewerActivity.intent(this, id, index))
+            }
+        }
+        binding.pageList.onLongPressMenu = { index -> showPageActions(index) }
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
 
         binding.btnShare.setOnClickListener { document?.let { ShareUtils.share(this, it) } }
@@ -91,6 +96,9 @@ class DocumentViewerActivity : AppCompatActivity() {
         // AppCompat re-syncs the toolbar title from the manifest label during resume;
         // re-apply the document name so it wins.
         document?.let { binding.toolbar.title = it.name }
+        // Returning from the full-screen page view: rotate/filter/delete may
+        // have changed the document.
+        if (document != null) reloadDocument()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -171,7 +179,7 @@ class DocumentViewerActivity : AppCompatActivity() {
     }
 
     /** Long-press menu: only Save / Rotate / Delete (reorder is drag now). */
-    private fun showPageActions(index: Int) {
+    internal fun showPageActions(index: Int) {
         val doc = document ?: return
         if (index !in visiblePages.indices) return
 

@@ -77,6 +77,9 @@
     <string name="page_deleted">Page deleted</string>
     <string name="undo">Undo</string>
     <string name="last_page_guard">A document needs at least one page. Delete the document instead.</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+    <string name="filter_action">Filter</string>
+    <string name="filter_title">Page filter</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>
