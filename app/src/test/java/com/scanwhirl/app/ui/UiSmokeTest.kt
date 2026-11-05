@@ -220,6 +220,8 @@ class UiSmokeTest {
             scenario.onActivity { activity ->
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowTheme))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowFont))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.rowGreeting))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.switchGreeting))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowLanguage))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowViewer))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowAbout))
@@ -227,6 +229,27 @@ class UiSmokeTest {
                 assertTrue(subTheme.text.isNotEmpty())
             }
         }
+    }
+
+    @Test
+    fun `home shows a time greeting and settings can turn it off`() {
+        com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val toolbar = activity.findViewById<
+                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+                assertNotNull("greeting subtitle should be shown", toolbar.subtitle)
+            }
+        }
+        com.scanwhirl.app.util.Prefs.setShowGreeting(app, false)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val toolbar = activity.findViewById<
+                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+                assertTrue("greeting should be off", toolbar.subtitle == null)
+            }
+        }
+        com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
     }
 
     @Test
