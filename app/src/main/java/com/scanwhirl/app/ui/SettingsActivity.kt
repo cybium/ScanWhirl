@@ -24,6 +24,13 @@ class SettingsActivity : BaseActivity() {
 
         binding.rowTheme.setOnClickListener { chooseTheme() }
         binding.rowFont.setOnClickListener { chooseFont() }
+        binding.rowGreeting.setOnClickListener {
+            binding.switchGreeting.isChecked = !binding.switchGreeting.isChecked
+        }
+        binding.switchGreeting.isChecked = Prefs.showGreeting(this)
+        binding.switchGreeting.setOnCheckedChangeListener { _, checked ->
+            Prefs.setShowGreeting(this, checked)
+        }
         binding.rowLanguage.setOnClickListener { chooseLanguage() }
         binding.rowViewer.setOnClickListener { chooseViewer() }
         binding.rowAbout.setOnClickListener { showAbout() }

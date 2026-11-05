@@ -198,6 +198,13 @@ class MergePdfActivity : BaseActivity() {
         fun bind(position: Int) {
             val item = picked[position]
             binding.pdfName.text = item.name
+            binding.btnPreview.setOnClickListener {
+                startActivity(
+                    PdfViewerActivity.uriIntent(
+                        this@MergePdfActivity, item.uri.toString(), item.name
+                    )
+                )
+            }
             binding.btnRemove.setOnClickListener {
                 val pos = bindingAdapterPosition
                 if (pos == RecyclerView.NO_POSITION) return@setOnClickListener

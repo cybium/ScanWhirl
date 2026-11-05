@@ -40,6 +40,7 @@ import com.scanwhirl.app.databinding.DialogCompressBinding
 import com.scanwhirl.app.databinding.DialogResizeBinding
 import com.scanwhirl.app.databinding.ItemScanBinding
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.util.Greeting
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
@@ -48,6 +49,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -124,6 +126,7 @@ class MainActivity : BaseActivity() {
         }?.forEach { it.deleteRecursively() }
 
         refreshList()
+        updateGreeting()
     }
 
     override fun onResume() {
@@ -131,6 +134,17 @@ class MainActivity : BaseActivity() {
         refreshList()
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
         binding.toolbar.title = selectionTitle()
+        updateGreeting()
+    }
+
+    /** Time-of-day hello under the app name, when enabled in Settings. */
+    private fun updateGreeting() {
+        binding.toolbar.subtitle =
+            if (Prefs.showGreeting(this) && !selectionMode) {
+                Greeting.forHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
+            } else {
+                null
+            }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -200,6 +214,7 @@ class MainActivity : BaseActivity() {
         binding.fabScan.isVisible = !enabled
         binding.toolsRow.isVisible = !enabled
         binding.toolbar.title = selectionTitle()
+        updateGreeting()
         invalidateOptionsMenu()
     }
 

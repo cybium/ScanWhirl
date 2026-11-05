@@ -116,6 +116,7 @@
     <string name="merge_done">PDFs merged</string>
     <string name="edit_pdf_failed">Could not open this PDF: %1$s</string>
     <string name="remove">Remove</string>
+    <string name="preview">Preview</string>
 
     <string name="search_hint">Search</string>
     <string name="sort">Sort</string>
@@ -139,6 +140,8 @@
     <string name="font_default">Default</string>
     <string name="font_serif">Serif</string>
     <string name="font_mono">Monospace</string>
+    <string name="settings_greeting">Greeting</string>
+    <string name="settings_greeting_summary">Show a time-based hello on the home screen</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>
     <string name="language_system">System default</string>

@@ -11,11 +11,11 @@ import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.util.LruCache
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -26,12 +26,9 @@ import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 /**
- * Read-only PDF viewer: renders the real `scan.pdf` (not the page JPEGs) with
- * the platform [PdfRenderer], one page per screen, swipe between pages and
- * pinch/double-tap to zoom. This is what the "view" action opens; the page
- * grid stays available separately as the editor.
- *
- * Accepts either an in-app scan id or a content-Uri (for the device PDFs tab).
+ * Read-only PDF viewer: a vertical, continuous, scrollable document (like the
+ * rest of the app) with a normal title bar. Pages keep their own aspect ratio.
+ * Tap a page for full-screen pinch/double-tap zoom.
  */
 class PdfViewerActivity : BaseActivity() {
 
@@ -41,18 +38,16 @@ class PdfViewerActivity : BaseActivity() {
     private val renderLock = Any()
     private var pageCount = 0
     private var title = ""
-    private var currentPos = 0
 
     private val renderExecutor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "pdf-render").apply { isDaemon = true }
     }
 
     /** At most a few full-page bitmaps in memory; the rest are re-rendered. */
-    private val pageCache = object : LruCache<Int, Bitmap>(3) {}
+    private val pageCache = object : LruCache<Int, Bitmap>(4) {}
 
     private val maxRenderDim = 1600
 
-    private lateinit var snapHelper: PagerSnapHelper
     private val pagerAdapter = PagerAdapter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,19 +60,19 @@ class PdfViewerActivity : BaseActivity() {
             return
         }
 
-        binding.pdfTitle.text = title
-        binding.btnClose.setOnClickListener { finish() }
+        binding.toolbar.title = title
+        binding.toolbar.setNavigationOnClickListener { handleBack() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = handleBack()
+        })
+        binding.btnZoomClose.setOnClickListener { closeZoom() }
 
-        binding.pdfPager.layoutManager =
-            LinearLayoutManager(this, RecyclerView.HORIZONTAL, false)
+        binding.pdfPager.layoutManager = LinearLayoutManager(this)
         binding.pdfPager.adapter = pagerAdapter
-        snapHelper = PagerSnapHelper().also { it.attachToRecyclerView(binding.pdfPager) }
-
         pagerAdapter.submit(pageCount)
+
         binding.pdfPager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
-                if (newState == RecyclerView.SCROLL_STATE_IDLE) updateIndicator()
-            }
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) = updateIndicator()
         })
         binding.pdfPager.post { updateIndicator() }
     }
@@ -96,6 +91,10 @@ class PdfViewerActivity : BaseActivity() {
         renderer = null
         pfd = null
         super.onDestroy()
+    }
+
+    private fun handleBack() {
+        if (binding.zoomOverlay.visibility == View.VISIBLE) closeZoom() else finish()
     }
 
     /** Opens the PDF from a scan id, a file path, or a content Uri. */
@@ -118,10 +117,14 @@ class PdfViewerActivity : BaseActivity() {
             path != null -> {
                 val file = File(path)
                 if (!file.exists() || file.length() == 0L) throw IllegalStateException("No PDF")
+                title = title.ifBlank { file.nameWithoutExtension }
                 ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             }
-            data != null -> contentResolver.openFileDescriptor(data, "r")
-                ?: throw IllegalStateException("No PDF")
+            data != null -> {
+                title = title.ifBlank { "PDF" }
+                contentResolver.openFileDescriptor(data, "r")
+                    ?: throw IllegalStateException("No PDF")
+            }
             else -> throw IllegalStateException("No source")
         }
 
@@ -172,11 +175,34 @@ class PdfViewerActivity : BaseActivity() {
     private fun updateIndicator() {
         if (pageCount <= 0) return
         val lm = binding.pdfPager.layoutManager as? LinearLayoutManager ?: return
-        val snap = snapHelper.findSnapView(lm)
-        val pos = if (snap != null) lm.getPosition(snap) else currentPos
-        currentPos = pos.coerceIn(0, pageCount - 1)
-        binding.pdfPageIndicator.text =
-            getString(R.string.page_indicator, currentPos + 1, pageCount)
+        val pos = lm.findFirstVisibleItemPosition()
+        if (pos == RecyclerView.NO_POSITION) return
+        val shown = pos.coerceIn(0, pageCount - 1)
+        binding.toolbar.subtitle =
+            getString(R.string.page_indicator, shown + 1, pageCount)
+    }
+
+    private fun openZoom(index: Int) {
+        val cached = pageCache.get(index)
+        if (cached != null) {
+            showZoom(cached)
+            return
+        }
+        renderExecutor.execute {
+            val bmp = renderPage(index) ?: return@execute
+            pageCache.put(index, bmp)
+            runOnUiThread { showZoom(bmp) }
+        }
+    }
+
+    private fun showZoom(bmp: Bitmap) {
+        binding.zoomImage.setImageBitmap(bmp)
+        binding.zoomOverlay.visibility = View.VISIBLE
+    }
+
+    private fun closeZoom() {
+        binding.zoomOverlay.visibility = View.GONE
+        binding.zoomImage.setImageDrawable(null)
     }
 
     private inner class PagerAdapter : RecyclerView.Adapter<VH>() {
@@ -200,6 +226,7 @@ class PdfViewerActivity : BaseActivity() {
 
         fun bind(index: Int) {
             binding.pageImage.tag = index
+            binding.pageImage.setOnClickListener { openZoom(index) }
             val cached = pageCache.get(index)
             if (cached != null) {
                 binding.pageImage.setImageBitmap(cached)
@@ -210,12 +237,9 @@ class PdfViewerActivity : BaseActivity() {
                 val bmp = renderPage(index)
                 runOnUiThread {
                     if (bmp == null) return@runOnUiThread
+                    pageCache.put(index, bmp)
                     if (binding.pageImage.tag == index) {
-                        pageCache.put(index, bmp)
                         binding.pageImage.setImageBitmap(bmp)
-                    } else {
-                        // Recycled before the render finished; let GC reclaim it.
-                        pageCache.put(index, bmp)
                     }
                 }
             }

@@ -12,6 +12,7 @@ object Prefs {
     private const val KEY_VIEWER = "default_viewer"
     private const val KEY_SORT = "sort_mode"
     private const val KEY_LOCALE = "locale_tag"
+    private const val KEY_GREETING = "show_greeting"
     private const val KEY_PICKED = "picked_pdfs"
 
     const val THEME_LIGHT = "light"
@@ -52,6 +53,9 @@ object Prefs {
 
     fun localeTag(c: Context): String = sp(c).getString(KEY_LOCALE, "") ?: ""
     fun setLocaleTag(c: Context, v: String) = sp(c).edit().putString(KEY_LOCALE, v).apply()
+
+    fun showGreeting(c: Context): Boolean = sp(c).getBoolean(KEY_GREETING, true)
+    fun setShowGreeting(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_GREETING, v).apply()
 
     fun pickedPdfs(c: Context): Set<String> =
         sp(c).getStringSet(KEY_PICKED, emptySet()) ?: emptySet()
