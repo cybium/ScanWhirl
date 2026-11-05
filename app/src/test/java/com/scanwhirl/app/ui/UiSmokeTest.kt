@@ -274,4 +274,180 @@ class UiSmokeTest {
         }
         staging.deleteRecursively()
     }
+
+    // ------------------------------------------------------------------
+    // Commit (b): drag reorder + long-press menu + deferred Undo delete
+    // ------------------------------------------------------------------
+
+    private fun coloredJpeg(color: Int): ByteArray {
+        val bmp = android.graphics.Bitmap.createBitmap(
+            64, 64, android.graphics.Bitmap.Config.ARGB_8888
+        )
+        bmp.eraseColor(color)
+        val out = java.io.ByteArrayOutputStream()
+        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+        bmp.recycle()
+        return out.toByteArray()
+    }
+
+    private fun dominantColor(file: java.io.File): String {
+        val bmp = android.graphics.BitmapFactory.decodeFile(file.path) ?: return "unreadable"
+        val c = bmp.getPixel(bmp.width / 2, bmp.height / 2)
+        bmp.recycle()
+        val r = (c shr 16) and 0xFF
+        val g = (c shr 8) and 0xFF
+        val b = c and 0xFF
+        return when {
+            r > 150 && g < 120 && b < 120 -> "red"
+            g > 150 && r < 120 && b < 120 -> "green"
+            b > 150 && r < 120 && g < 120 -> "blue"
+            r > 150 && g > 150 && b < 120 -> "yellow"
+            else -> "other:$r,$g,$b"
+        }
+    }
+
+    private fun pollUntil(timeoutMs: Long = 8000, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            if (condition()) return true
+            Thread.sleep(50)
+        }
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        return condition()
+    }
+
+    @Test
+    fun `grid moveItem reorders pages`() {
+        val files = (0 until 4).map { i ->
+            java.io.File(app.cacheDir, "grid_$i.jpg").apply { writeBytes(jpegBytes()) }
+        }
+        val grid = com.scanwhirl.app.ui.pagegrid.PageGridView(app)
+        grid.submit(files)
+        assertEquals(4, grid.pageCount())
+        grid.moveItem(0, 3)
+        assertEquals(files[0], grid.pageAt(3))
+        assertEquals(files[1], grid.pageAt(0))
+        grid.moveItem(3, 1)
+        assertEquals(files[0], grid.pageAt(1))
+    }
+
+    @Test
+    fun `viewer long-press menu offers only save, rotate and delete`() {
+        val id = seedDoc("Menu doc", pages = 2)
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val pages = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                forceLayout(pages)
+                pages.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+
+                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+                val texts = (0 until dialog.listView.count).map {
+                    dialog.listView.adapter.getItem(it).toString()
+                }
+                assertEquals(
+                    listOf(
+                        app.getString(R.string.save_this_page),
+                        app.getString(R.string.action_rotate),
+                        app.getString(R.string.action_delete_page)
+                    ),
+                    texts
+                )
+                dialog.dismiss()
+            }
+        }
+    }
+
+    @Test
+    fun `page delete is deferred until undo expires`() {
+        val id = seedDoc("Deleteme", pages = 2)
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val pages = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                forceLayout(pages)
+                pages.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+
+                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+                dialog.listView.performItemClick(null, 2, 2) // "Delete page"
+
+                // Not deleted yet: the file survives while Undo is offered…
+                assertEquals(2, repo.listDocuments().first { it.id == id }.pageFiles.size)
+                // …and the page is hidden from the grid immediately.
+                assertEquals(1, pages.pageCount())
+
+                // Simulate the snackbar timing out.
+                activity.commitPendingDelete()
+            }
+            val gone = pollUntil {
+                repo.listDocuments().first { it.id == id }.pageFiles.size == 1
+            }
+            assertTrue("page file should be deleted after the Undo window", gone)
+        }
+    }
+
+    @Test
+    fun `undo keeps the page on disk`() {
+        val id = seedDoc("Undome", pages = 2)
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val pages = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                forceLayout(pages)
+                pages.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+                dialog.listView.performItemClick(null, 2, 2) // "Delete page"
+            }
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+
+            scenario.onActivity { activity ->
+                val action = activity.findViewById<android.view.View>(
+                    com.google.android.material.R.id.snackbar_action
+                )
+                assertNotNull("Undo action should be on screen", action)
+                action.performClick()
+                // If Undo failed to clear the pending delete, this would wipe the file.
+                activity.commitPendingDelete()
+            }
+
+            val stillThere = pollUntil(3000) {
+                repo.listDocuments().first { it.id == id }.pageFiles.size == 2
+            }
+            assertTrue("page must survive an Undo", stillThere)
+        }
+    }
+
+    @Test
+    fun `drag reorder persists the new page order`() {
+        val doc = runBlocking {
+            repo.createDocument(
+                "Colors",
+                listOf(
+                    coloredJpeg(android.graphics.Color.RED),
+                    coloredJpeg(android.graphics.Color.GREEN),
+                    coloredJpeg(android.graphics.Color.BLUE),
+                    coloredJpeg(android.graphics.Color.YELLOW)
+                )
+            )
+        }
+        val intent = DocumentViewerActivity.intent(app, doc.id)
+        ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                // Drag page 1 (red) to the last slot.
+                activity.reorderPages(0, 3)
+            }
+            val persisted = pollUntil {
+                val pages = repo.listDocuments().first { it.id == doc.id }.pageFiles
+                pages.size == 4 &&
+                    dominantColor(pages[0]) == "green" &&
+                    dominantColor(pages[3]) == "red"
+            }
+            val pages = repo.listDocuments().first { it.id == doc.id }.pageFiles
+            assertTrue(
+                "order not persisted: ${pages.joinToString { dominantColor(it) }}",
+                persisted
+            )
+        }
+    }
 }
