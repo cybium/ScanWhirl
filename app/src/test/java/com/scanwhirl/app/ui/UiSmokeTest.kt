@@ -287,7 +287,7 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `review screen shows title, filter chips, and save buttons`() {
+    fun `review screen shows title, page grid, and save as pdf`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
         java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
@@ -299,21 +299,231 @@ class UiSmokeTest {
                 val title = activity.findViewById<android.widget.EditText>(R.id.titleInput)
                 assertEquals("Document 7", title.text.toString())
 
-                val original = activity.findViewById<android.widget.CompoundButton>(R.id.chipOriginal)
-                assertTrue(original.isChecked)
+                // The shared page grid replaces the old chips row + adapter.
+                val grid =
+                    activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
+                assertEquals(2, grid.pageCount())
+                // Per-page filters default to Enhance (staging map).
+                assertEquals(
+                    com.scanwhirl.app.util.ScanFilter.ENHANCE,
+                    grid.filterFor(java.io.File(staging, "page_000.jpg"))
+                )
 
-                // Selecting Enhance moves the check and keeps save buttons ready.
-                activity.findViewById<android.widget.CompoundButton>(R.id.chipEnhance).isChecked = true
-                assertFalse(original.isChecked)
+                // One primary action; the toolbar offers Select + Add pages.
                 assertTrue(activity.findViewById<android.view.View>(R.id.btnSavePdf).isEnabled)
-                assertTrue(activity.findViewById<android.view.View>(R.id.btnSaveShare).isEnabled)
+                val menu =
+                    activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
+                assertNotNull(menu.findItem(R.id.action_select))
+                assertNotNull(menu.findItem(R.id.action_add_pages))
 
-                // The B/W filter chip exists and takes over the selection.
-                val bw = activity.findViewById<android.widget.CompoundButton>(R.id.chipBlackWhite)
-                bw.isChecked = true
-                assertFalse(original.isChecked)
-                assertFalse(activity.findViewById<android.widget.CompoundButton>(R.id.chipEnhance).isChecked)
+                // Select mode shows Rotate/Delete/Done; back exits it without discarding.
+                activity.setSelecting(true)
+                assertEquals(
+                    android.view.View.VISIBLE,
+                    activity.findViewById<android.view.View>(R.id.selectBar).visibility
+                )
+                activity.onBackPressedDispatcher.onBackPressed()
+                assertEquals(
+                    android.view.View.GONE,
+                    activity.findViewById<android.view.View>(R.id.selectBar).visibility
+                )
+                assertTrue("back in select mode must not discard the scan", staging.exists())
             }
+        }
+        staging.deleteRecursively()
+    }
+
+    @Test
+    fun `review tap opens the full-screen page view`() {
+        val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
+
+        val intent = ScanReviewActivity.intent(app, staging.path, null, "Doc")
+        ActivityScenario.launch<ScanReviewActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val grid =
+                    activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
+                forceLayout(grid)
+                grid.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+
+                val started = shadowOf(activity).nextStartedActivity
+                assertEquals(
+                    PageViewerActivity::class.java.name,
+                    started?.component?.className
+                )
+                assertEquals(staging.path, started.getStringExtra("staging_dir"))
+            }
+        }
+        staging.deleteRecursively()
+    }
+
+    @Test
+    fun `review delete is deferred until undo expires`() {
+        val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
+        java.io.File(staging, "page_001.jpg").writeBytes(jpegBytes())
+        val victimPath = java.io.File(staging, "page_000.jpg").path
+
+        val intent = ScanReviewActivity.intent(app, staging.path, null, "Doc")
+        ActivityScenario.launch<ScanReviewActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val grid =
+                    activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
+                activity.setSelecting(true)
+                grid.onTap?.invoke(0) // select page 1
+                activity.findViewById<android.view.View>(R.id.btnSelDelete).performClick()
+
+                // Hidden immediately (renamed to .del) but still on disk…
+                assertEquals(1, grid.pageCount())
+                assertTrue(java.io.File(staging, "page_000.jpg.del").exists())
+                assertFalse(java.io.File(staging, "page_000.jpg").exists())
+
+                // …until the Undo window is over.
+                activity.commitPendingDeletes(listOf(victimPath))
+            }
+            val gone = pollUntil { !java.io.File(staging, "page_000.jpg.del").exists() }
+            assertTrue("page file should be deleted after the Undo window", gone)
+        }
+        staging.deleteRecursively()
+    }
+
+    @Test
+    fun `review undo keeps the page on disk`() {
+        val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
+        java.io.File(staging, "page_001.jpg").writeBytes(jpegBytes())
+        val victimPath = java.io.File(staging, "page_000.jpg").path
+
+        val intent = ScanReviewActivity.intent(app, staging.path, null, "Doc")
+        ActivityScenario.launch<ScanReviewActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val grid =
+                    activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
+                activity.setSelecting(true)
+                grid.onTap?.invoke(0)
+                activity.findViewById<android.view.View>(R.id.btnSelDelete).performClick()
+            }
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+
+            scenario.onActivity { activity ->
+                val action = activity.findViewById<android.view.View>(
+                    com.google.android.material.R.id.snackbar_action
+                )
+                assertNotNull("Undo action should be on screen", action)
+                action.performClick()
+                // If Undo failed to restore, this would wipe the file.
+                activity.commitPendingDeletes(listOf(victimPath))
+            }
+
+            val restored = pollUntil(3000) {
+                java.io.File(staging, "page_000.jpg").exists() &&
+                    !java.io.File(staging, "page_000.jpg.del").exists()
+            }
+            assertTrue("page must survive an Undo", restored)
+        }
+        staging.deleteRecursively()
+    }
+
+    @Test
+    fun `add pages appends with continuing numbering`() {
+        val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
+        java.io.File(staging, "page_001.jpg").writeBytes(jpegBytes())
+
+        val intent = ScanReviewActivity.intent(app, staging.path, null, "Doc")
+        ActivityScenario.launch<ScanReviewActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.appendStagedPages(listOf(contentUri(jpegBytes())))
+            }
+            val added = pollUntil { java.io.File(staging, "page_002.jpg").exists() }
+            assertTrue("new page should be staged with the next number", added)
+
+            scenario.onActivity { activity ->
+                val grid =
+                    activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
+                assertEquals(3, grid.pageCount())
+            }
+        }
+        staging.deleteRecursively()
+    }
+
+    @Test
+    fun `review save opens the saved document`() {
+        val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
+
+        val intent = ScanReviewActivity.intent(app, staging.path, null, "Doc")
+        ActivityScenario.launch<ScanReviewActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick()
+            }
+
+            var opened: android.content.Intent? = null
+            val done = pollUntil {
+                scenario.onActivity { activity ->
+                    opened = shadowOf(activity).peekNextStartedActivity()
+                }
+                opened != null
+            }
+            assertTrue("save should open the document viewer", done)
+            assertEquals(
+                DocumentViewerActivity::class.java.name,
+                opened?.component?.className
+            )
+            assertTrue("staging must be cleaned up after save", !staging.exists())
+        }
+    }
+
+    @Test
+    fun `staging page viewer shows pager, indicator and controls`() {
+        val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
+        java.io.File(staging, "page_001.jpg").writeBytes(jpegBytes())
+
+        val intent = PageViewerActivity.stagingIntent(app, staging.path, 1)
+        ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val pager = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
+                assertEquals(2, pager.adapter!!.itemCount)
+                val indicator = activity.findViewById<android.widget.TextView>(R.id.pageIndicator)
+                assertEquals("2 / 2", indicator.text.toString())
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnClose))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotate))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnFilter))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnDelete))
+            }
+        }
+        staging.deleteRecursively()
+    }
+
+    @Test
+    fun `staging filter choice persists for the review screen`() {
+        val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
+        java.io.File(staging, "page_001.jpg").writeBytes(jpegBytes())
+
+        val intent = PageViewerActivity.stagingIntent(app, staging.path, 0)
+        ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnFilter).performClick()
+                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+                dialog.listView.performItemClick(null, 3, 3) // B/W
+            }
+            val persisted = pollUntil {
+                java.io.File(staging, "filters.txt")
+                    .let { it.exists() && it.readText().contains("page_000.jpg=bw") }
+            }
+            assertTrue("filter choice should be written for the review screen", persisted)
+            // The untouched sibling keeps the Enhance default.
+            val text = java.io.File(staging, "filters.txt").readText()
+            assertTrue(text.contains("page_001.jpg=enhance"))
         }
         staging.deleteRecursively()
     }

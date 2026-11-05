@@ -304,5 +304,71 @@ class ScanRepositoryTest {
         assertEquals(before, after)
     }
 
+    @Test
+    fun `saveScan applies per-page filters without touching siblings`() = runBlocking {
+        val repo = ScanRepository(context)
+        val doc = repo.saveScan(
+            listOf(
+                contentUri(realJpegBytes(320, 240, android.graphics.Color.rgb(250, 100, 100))),
+                contentUri(realJpegBytes(320, 240, android.graphics.Color.rgb(100, 250, 100)))
+            ),
+            null,
+            "per page",
+            pageFilters = mapOf(
+                0 to com.scanwhirl.app.util.ScanFilter.BLACKWHITE,
+                1 to com.scanwhirl.app.util.ScanFilter.ORIGINAL
+            )
+        )
+
+        // Page 1 was binarized: its center pixel is pure gray.
+        val bw = android.graphics.BitmapFactory.decodeFile(doc.pageFiles[0].path)
+        val c0 = bw.getPixel(bw.width / 2, bw.height / 2)
+        bw.recycle()
+        assertEquals((c0 shr 16) and 0xFF, (c0 shr 8) and 0xFF)
+        assertEquals((c0 shr 8) and 0xFF, c0 and 0xFF)
+
+        // Page 2 was left alone: still colored.
+        val kept = android.graphics.BitmapFactory.decodeFile(doc.pageFiles[1].path)
+        val c1 = kept.getPixel(kept.width / 2, kept.height / 2)
+        kept.recycle()
+        assertNotEquals((c1 shr 16) and 0xFF, (c1 shr 8) and 0xFF)
+    }
+
+    @Test
+    fun `saveScan copies the scanner pdf only when every page is original`() = runBlocking {
+        val repo = ScanRepository(context)
+        // A real generated PDF stands in for the scanner's output.
+        val seed = repo.saveScan(
+            listOf(contentUri(realJpegBytes(320, 240, android.graphics.Color.RED))),
+            null,
+            "seed"
+        )
+        val scannerPdf = seed.pdfFile.readBytes()
+
+        // All-original pages: the scanner's PDF is copied as-is.
+        val untouched = repo.saveScan(
+            listOf(contentUri(realJpegBytes(320, 240, android.graphics.Color.BLUE))),
+            contentUri(scannerPdf),
+            "untouched",
+            pageFilters = mapOf(0 to com.scanwhirl.app.util.ScanFilter.ORIGINAL)
+        )
+        assertTrue(
+            "scanner pdf should be copied when nothing was filtered",
+            scannerPdf.contentEquals(untouched.pdfFile.readBytes())
+        )
+
+        // A filtered page forces a regeneration instead of the stale copy.
+        val filtered = repo.saveScan(
+            listOf(contentUri(realJpegBytes(320, 240, android.graphics.Color.BLUE))),
+            contentUri(scannerPdf),
+            "filtered",
+            pageFilters = mapOf(0 to com.scanwhirl.app.util.ScanFilter.ENHANCE)
+        )
+        assertTrue(
+            "scanner pdf must not be copied when a page is filtered",
+            !scannerPdf.contentEquals(filtered.pdfFile.readBytes())
+        )
+    }
+
 
 }
