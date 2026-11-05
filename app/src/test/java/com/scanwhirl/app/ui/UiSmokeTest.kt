@@ -765,6 +765,35 @@ class UiSmokeTest {
     }
 
     @Test
+    fun `grid drop target works horizontally and across rows`() {
+        val id = seedDoc("Targets", pages = 4)
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val grid = activity.findViewById<
+                    com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                forceLayout(grid)
+
+                fun centerOf(pos: Int): Pair<Float, Float> {
+                    val view = grid.findViewHolderForAdapterPosition(pos)!!.itemView
+                    return ((view.left + view.right) / 2f) to ((view.top + view.bottom) / 2f)
+                }
+
+                val c0 = centerOf(0)
+                val c1 = centerOf(1)
+                val c2 = centerOf(2)
+
+                // Drag page 3 (index 2) over page 1 (index 0): a cross-row drop.
+                assertEquals(0, grid.targetForPoint(c0.first, c0.second, 2))
+                // Drag page 3 over index 1: a purely horizontal target.
+                assertEquals(1, grid.targetForPoint(c1.first, c1.second, 2))
+                // Drag page 1 down over page 3 (index 2).
+                assertEquals(2, grid.targetForPoint(c2.first, c2.second, 0))
+            }
+        }
+    }
+
+    @Test
     fun `page cells keep a fixed 3 by 4 height`() {
         val cell = com.scanwhirl.app.ui.pagegrid.AspectRatioLayout(app)
         cell.measure(
