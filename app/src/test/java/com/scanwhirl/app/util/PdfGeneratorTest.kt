@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Rule
@@ -16,6 +17,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.roundToInt
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -152,6 +154,33 @@ class PdfGeneratorTest {
         } catch (e: IllegalArgumentException) {
             assertTrue(e.message!!.contains("No images"))
         }
+    }
+
+    @Test
+    fun `each page keeps its own cropped size`() {
+        // Two deliberately different aspect ratios: a cropped page must not be
+        // padded to a fixed page size (which would show bands around it).
+        val wide = makeJpeg("wide.jpg", 800, 300, Color.GREEN)
+        val tall = makeJpeg("tall.jpg", 300, 400, Color.RED)
+        val pdf = File(tmp.root, "sizes.pdf")
+
+        PdfGenerator.imagesToPdf(listOf(wide, tall), pdf)
+
+        val boxes = Regex("/MediaBox \\[0 0 (\\d+) (\\d+)]")
+            .findAll(pdf.readText(Charsets.ISO_8859_1))
+            .map { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
+            .toList()
+        assertEquals(2, boxes.size)
+        // 72 pt / 150 dpi = 0.48
+        assertEquals(
+            (800 * 72f / 150f).roundToInt() to (300 * 72f / 150f).roundToInt(),
+            boxes[0]
+        )
+        assertEquals(
+            (300 * 72f / 150f).roundToInt() to (400 * 72f / 150f).roundToInt(),
+            boxes[1]
+        )
+        assertNotEquals("pages must not share a forced page size", boxes[0], boxes[1])
     }
 
     @Test

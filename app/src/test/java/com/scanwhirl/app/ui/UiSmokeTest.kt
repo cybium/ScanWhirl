@@ -84,6 +84,46 @@ class UiSmokeTest {
     }
 
     @Test
+    fun `main list view opens the pdf viewer and edit opens the editor`() {
+        val id = seedDoc("Open me")
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                forceLayout(list)
+                val row = list.findViewHolderForAdapterPosition(0)!!.itemView
+
+                // Explicit view icon -> real PDF viewer.
+                row.findViewById<android.view.View>(R.id.btnView).performClick()
+                val viewIntent = shadowOf(activity).nextStartedActivity
+                assertEquals(PdfViewerActivity::class.java.name, viewIntent?.component?.className)
+                assertEquals(id, viewIntent.getStringExtra("doc_id"))
+
+                // Explicit edit icon -> page-grid editor.
+                row.findViewById<android.view.View>(R.id.btnEdit).performClick()
+                val editIntent = shadowOf(activity).nextStartedActivity
+                assertEquals(
+                    DocumentViewerActivity::class.java.name,
+                    editIntent?.component?.className
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `tapping a saved scan opens the pdf viewer, not the editor`() {
+        seedDoc("Tap me")
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                forceLayout(list)
+                list.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+                val started = shadowOf(activity).nextStartedActivity
+                assertEquals(PdfViewerActivity::class.java.name, started?.component?.className)
+            }
+        }
+    }
+
+    @Test
     fun `long press enters selection mode and back exits it`() {
         seedDoc("Select me")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -628,8 +668,11 @@ class UiSmokeTest {
             }
 
             val cropped = pollUntil {
-                val size = com.scanwhirl.app.util.ImageTools.imageSize(
-                    repo.listDocuments().first { it.id == id }.pageFiles[0].readBytes())
+                // The crop rewrites the file in place; a poll may catch the
+                // zero-length window, when listDocuments() omits the page.
+                val page = repo.listDocuments().firstOrNull { it.id == id }
+                    ?.pageFiles?.firstOrNull() ?: return@pollUntil false
+                val size = com.scanwhirl.app.util.ImageTools.imageSize(page.readBytes())
                 size != null && size.first in 240..256 && size.second in 360..376
             }
             assertTrue("page should be cropped to ~(248, 368)", cropped)
