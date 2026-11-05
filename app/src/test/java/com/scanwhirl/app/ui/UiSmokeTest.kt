@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -309,15 +310,16 @@ class UiSmokeTest {
                     grid.filterFor(java.io.File(staging, "page_000.jpg"))
                 )
 
-                // One primary action; the toolbar offers Select + Add pages.
+                // One primary action; the toolbar overflow holds the page actions.
                 assertTrue(activity.findViewById<android.view.View>(R.id.btnSavePdf).isEnabled)
                 val menu =
                     activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
-                assertNotNull(menu.findItem(R.id.action_select))
+                assertNotNull(menu.findItem(R.id.action_rotate_page))
+                assertNotNull(menu.findItem(R.id.action_delete_page))
                 assertNotNull(menu.findItem(R.id.action_add_pages))
 
-                // Select mode shows Rotate/Delete/Done; back exits it without discarding.
-                activity.setSelecting(true)
+                // A checkbox tick shows the selection bar; back clears it, not the scan.
+                activity.toggleSelect(0)
                 assertEquals(
                     android.view.View.VISIBLE,
                     activity.findViewById<android.view.View>(R.id.selectBar).visibility
@@ -327,7 +329,7 @@ class UiSmokeTest {
                     android.view.View.GONE,
                     activity.findViewById<android.view.View>(R.id.selectBar).visibility
                 )
-                assertTrue("back in select mode must not discard the scan", staging.exists())
+                assertTrue("back with a selection must not discard the scan", staging.exists())
             }
         }
         staging.deleteRecursively()
@@ -371,9 +373,8 @@ class UiSmokeTest {
             scenario.onActivity { activity ->
                 val grid =
                     activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
-                activity.setSelecting(true)
-                grid.onTap?.invoke(0) // select page 1
-                activity.findViewById<android.view.View>(R.id.btnSelDelete).performClick()
+                activity.toggleSelect(0) // tick page 1
+                activity.deleteSelected()
 
                 // Hidden immediately (renamed to .del) but still on disk…
                 assertEquals(1, grid.pageCount())
@@ -402,9 +403,8 @@ class UiSmokeTest {
             scenario.onActivity { activity ->
                 val grid =
                     activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
-                activity.setSelecting(true)
-                grid.onTap?.invoke(0)
-                activity.findViewById<android.view.View>(R.id.btnSelDelete).performClick()
+                activity.toggleSelect(0)
+                activity.deleteSelected()
             }
             shadowOf(android.os.Looper.getMainLooper()).idle()
 
@@ -751,28 +751,53 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `viewer long-press menu offers only save, rotate and delete`() {
+    fun `grid can move page three in front of page one`() {
+        val files = (0 until 3).map { i ->
+            java.io.File(app.cacheDir, "front_$i.jpg").apply { writeBytes(jpegBytes()) }
+        }
+        val grid = com.scanwhirl.app.ui.pagegrid.PageGridView(app)
+        grid.submit(files)
+        // A cross-row move (row 2 col 1 -> row 1 col 1) is a plain index move.
+        grid.moveItem(2, 0)
+        assertEquals(files[2], grid.pageAt(0))
+        assertEquals(files[0], grid.pageAt(1))
+        assertEquals(files[1], grid.pageAt(2))
+    }
+
+    @Test
+    fun `page cells keep a fixed 3 by 4 height`() {
+        val cell = com.scanwhirl.app.ui.pagegrid.AspectRatioLayout(app)
+        cell.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(300, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(2000, android.view.View.MeasureSpec.AT_MOST)
+        )
+        assertEquals(300, cell.measuredWidth)
+        assertEquals(400, cell.measuredHeight)
+    }
+
+    @Test
+    fun `viewer toolbar offers rotate, delete and save page actions`() {
         val id = seedDoc("Menu doc", pages = 2)
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                // The menu is opened by a stationary long-press (device gesture);
-                // its content is what matters here.
-                activity.showPageActions(0)
+                val menu = activity.findViewById<
+                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
+                assertNotNull(menu.findItem(R.id.action_rotate_page))
+                assertNotNull(menu.findItem(R.id.action_delete_page))
+                assertNotNull(menu.findItem(R.id.action_save_page))
 
-                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
-                val texts = (0 until dialog.listView.count).map {
-                    dialog.listView.adapter.getItem(it).toString()
-                }
+                // Ticking a page only selects it: no popup appears.
+                val grid = activity.findViewById<
+                    com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                forceLayout(grid)
+                grid.findViewHolderForAdapterPosition(0)!!.itemView
+                    .findViewById<android.widget.CheckBox>(R.id.checkSelect).performClick()
                 assertEquals(
-                    listOf(
-                        app.getString(R.string.save_this_page),
-                        app.getString(R.string.action_rotate),
-                        app.getString(R.string.action_delete_page)
-                    ),
-                    texts
+                    app.resources.getQuantityString(R.plurals.selected_count, 1, 1),
+                    activity.supportActionBar?.subtitle
                 )
-                dialog.dismiss()
+                assertNull("selecting a page must not open a dialog", ShadowDialog.getLatestDialog())
             }
         }
     }
@@ -783,10 +808,8 @@ class UiSmokeTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                activity.showPageActions(0)
-
-                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
-                dialog.listView.performItemClick(null, 2, 2) // "Delete page"
+                activity.toggleSelected(0)
+                activity.deleteSelectedPages()
 
                 // Not deleted yet: the file survives while Undo is offered…
                 assertEquals(2, repo.listDocuments().first { it.id == id }.pageFiles.size)
@@ -810,10 +833,8 @@ class UiSmokeTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                // The menu is opened by a stationary long-press (device gesture).
-                activity.showPageActions(0)
-                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
-                dialog.listView.performItemClick(null, 2, 2) // "Delete page"
+                activity.toggleSelected(0)
+                activity.deleteSelectedPages()
             }
             shadowOf(android.os.Looper.getMainLooper()).idle()
 
