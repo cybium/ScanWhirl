@@ -94,6 +94,16 @@
     <string name="overwrite_pdf">Overwrite saved PDF</string>
     <string name="save_as_new">Save as new document</string>
     <string name="saved_as_new">Saved as a new document</string>
+    <string name="result_title">Result</string>
+    <string name="result_before_after">Before %1$s  →  After %2$s</string>
+    <string name="result_dimensions">%1$d × %2$d px</string>
+    <string name="result_save_downloads">Save to Downloads</string>
+    <string name="result_save_documents">Save to Documents</string>
+    <string name="result_share">Share</string>
+    <string name="result_saved_downloads">Saved to Downloads/ScanWhirl: %1$s</string>
+    <string name="result_saved_documents">Saved to Documents/ScanWhirl: %1$s</string>
+    <string name="result_save_failed">Could not save: %1$s</string>
+    <string name="compress_grew_warning">This PDF is text/vector, so the result is larger than the original.</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>
@@ -194,7 +204,7 @@
     <string name="compress_level_medium">Medium</string>
     <string name="compress_level_high">High</string>
     <string name="compress_level_ultra">Ultra</string>
-    <string name="compress_est_item">%1$s · ≈ %2$s</string>
+    <string name="compress_est_item">%1$s · estimated %2$s</string>
     <string name="compress_estimating">Estimating sizes…</string>
     <string name="compress_pick_scan">Choose a scan to compress</string>
     <string name="compress_done">Compressed: %1$s → %2$s</string>

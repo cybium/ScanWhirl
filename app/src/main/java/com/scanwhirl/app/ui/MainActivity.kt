@@ -40,6 +40,7 @@ import com.scanwhirl.app.databinding.DialogCompressBinding
 import com.scanwhirl.app.databinding.DialogResizeBinding
 import com.scanwhirl.app.databinding.ItemScanBinding
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Greeting
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
@@ -427,7 +428,6 @@ class MainActivity : BaseActivity() {
         dialogBinding.fileInfo.text = getString(
             R.string.resize_file_info, name, formatBytes(bytes.size.toLong()), origW, origH
         )
-        dialogBinding.editDpi.setText(getString(R.string.resize_default_dpi))
 
         val presetValues = mapOf(
             R.id.preset50 to "50 KB",
@@ -488,7 +488,6 @@ class MainActivity : BaseActivity() {
             dialogBinding.editWidth.text?.clear()
             dialogBinding.editHeight.text?.clear()
             suppress = false
-            dialogBinding.editDpi.setText(getString(R.string.resize_default_dpi))
             dialogBinding.editMaxSize.text?.clear()
             dialogBinding.presetGroup.clearCheck()
             dialogBinding.checkAdvanced.isChecked = false
@@ -519,12 +518,13 @@ class MainActivity : BaseActivity() {
                     Toast.makeText(this, R.string.resize_invalid_size, Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                val dpi = dialogBinding.editDpi.text.toString().toIntOrNull()?.coerceIn(1, 65535) ?: 96
+                // DPI is intentionally not exposed: a DPI tag alone does not change
+                // pixels, so only real pixel dimensions + target size are offered.
                 doResize(
                     bytes, name,
                     ImageTools.ResizeOptions(
-                        width = w, height = h, dpi = dpi, keepRatio = ratio,
-                        maxBytes = target, keepPng = true
+                        width = w, height = h, keepRatio = ratio,
+                        maxBytes = target, keepPng = false
                     )
                 )
             }
@@ -541,24 +541,28 @@ class MainActivity : BaseActivity() {
             try {
                 val result = withContext(Dispatchers.IO) { ImageTools.resize(bytes, opts) }
                 val dir = File(filesDir, "exports").apply { mkdirs() }
-                val base = sanitizeFileName(name).substringBeforeLast('.')
+                val base = sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
                 val ext = if (result.isPng) "png" else "jpg"
-                val file = File(dir, "${base}_${result.width}x${result.height}.$ext")
-                file.writeBytes(result.bytes)
+                val fileName = "${base}_${result.width}x${result.height}.$ext"
+                val file = File(dir, fileName)
+                withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
 
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.resize_done, file.name, formatBytes(result.bytes.size.toLong())),
-                    Toast.LENGTH_SHORT
-                ).show()
-
-                val contentUri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", file)
-                val share = Intent(Intent.ACTION_SEND).apply {
-                    type = if (result.isPng) "image/png" else "image/jpeg"
-                    putExtra(Intent.EXTRA_STREAM, contentUri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                startActivity(Intent.createChooser(share, getString(R.string.resize_share)))
+                // Show the real result (preview + before/after) instead of a toast.
+                startActivity(
+                    ExportResultActivity.intent(
+                        this@MainActivity,
+                        outputPath = file.path,
+                        previewPath = file.path,
+                        mime = if (result.isPng) "image/png" else "image/jpeg",
+                        displayName = fileName,
+                        beforeBytes = bytes.size.toLong(),
+                        afterBytes = result.bytes.size.toLong(),
+                        width = result.width,
+                        height = result.height,
+                        title = name,
+                        warning = null
+                    )
+                )
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, getString(R.string.resize_failed, e.message), Toast.LENGTH_LONG).show()
             } finally {
@@ -725,11 +729,7 @@ class MainActivity : BaseActivity() {
                 val out = repo.compressScan(doc.id, level.quality, level.maxDim)
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 refreshList()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.compress_done, formatBytes(before), formatBytes(after)),
-                    Toast.LENGTH_LONG
-                ).show()
+                showCompressResult(out, before, after)
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
             } finally {
@@ -751,17 +751,36 @@ class MainActivity : BaseActivity() {
                 val pages = withContext(Dispatchers.IO) { fitFilesToTotal(doc.pageFiles, target) }
                 val out = repo.createDocument("${doc.name} (compressed)", pages)
                 refreshList()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.compress_done, formatBytes(before), formatBytes(out.pdfFile.length())),
-                    Toast.LENGTH_LONG
-                ).show()
+                showCompressResult(out, before, out.pdfFile.length())
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
             } finally {
                 progress.dismiss()
             }
         }
+    }
+
+    /** Opens the real result screen (preview + actual before/after + save/share). */
+    private fun showCompressResult(out: ScanDocument, before: Long, after: Long) {
+        startActivity(
+            ExportResultActivity.intent(
+                this,
+                outputPath = out.pdfFile.path,
+                previewPath = out.pageFiles.firstOrNull()?.path,
+                mime = "application/pdf",
+                displayName = DownloadSaver.pdfNameFor(out.name),
+                beforeBytes = before,
+                afterBytes = after,
+                width = 0,
+                height = 0,
+                title = out.name,
+                warning = if (before > 0 && after > before) {
+                    getString(R.string.compress_grew_warning)
+                } else {
+                    null
+                }
+            )
+        )
     }
 
     private fun startCompressFromFile(uri: Uri) {
@@ -777,11 +796,7 @@ class MainActivity : BaseActivity() {
                 val out = repo.importPdfAsScan(uri, name, level.dpi, level.maxDim ?: 4096, level.quality)
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 refreshList()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.compress_done, formatBytes(before), formatBytes(after)),
-                    Toast.LENGTH_LONG
-                ).show()
+                showCompressResult(out, before, after)
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
             } finally {
@@ -807,11 +822,7 @@ class MainActivity : BaseActivity() {
                 }
                 val out = repo.createDocument("${baseName ?: "Document"} (compressed)", pages)
                 refreshList()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.compress_done, formatBytes(before), formatBytes(out.pdfFile.length())),
-                    Toast.LENGTH_LONG
-                ).show()
+                showCompressResult(out, before, out.pdfFile.length())
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
             } finally {

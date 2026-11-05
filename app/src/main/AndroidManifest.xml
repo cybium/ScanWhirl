@@ -52,6 +52,11 @@
             android:parentActivityName=".ui.MainActivity" />
 
         <activity
+            android:name=".ui.ExportResultActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
             android:name=".ui.PageViewerActivity"
             android:exported="false"
             android:parentActivityName=".ui.DocumentViewerActivity" />
