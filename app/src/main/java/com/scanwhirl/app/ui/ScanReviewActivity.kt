@@ -440,7 +440,7 @@ class ScanReviewActivity : BaseActivity() {
             lifecycleScope.launch {
                 try {
                     val uris = pages.map { Uri.fromFile(it) }
-                    // Complete map: every page defaults to Enhance unless changed.
+                    // Complete map: every page defaults to Original unless changed.
                     val perPage = pages.mapIndexed { i, f ->
                         i to (filters[f.path] ?: ScanFilter.ORIGINAL)
                     }.toMap()

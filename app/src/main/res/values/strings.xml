@@ -24,7 +24,7 @@
     <string name="save_pdf_device">Save PDF to Documents</string>
     <string name="pdf_missing">This scan has no PDF file yet</string>
     <string name="save_inside_app">Scan saved in the app (storage permission not granted)</string>
-    <string name="filter_original">Original</string>
+    <string name="filter_original">Original (as scanned)</string>
     <string name="filter_enhance">Enhance</string>
     <string name="filter_clean">Clean</string>
     <string name="filter_bw">B/W</string>
@@ -163,6 +163,16 @@
     <string name="settings_pro_summary">Password-protect a PDF, ID photo sizes, long-image share. One payment.</string>
     <string name="settings_pro_title">ScanWhirl Pro</string>
     <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>
+    <string name="settings_lab">Scanner engine (lab)</string>
+    <string name="settings_lab_summary">Test the dependency-free auto-crop pipeline on real photos.</string>
+    <string name="lab_take_photo">Take photo</string>
+    <string name="lab_pick">Pick from gallery</string>
+    <string name="lab_before">Original (before)</string>
+    <string name="lab_after">Auto-crop (no enhancement)</string>
+    <string name="lab_processing">Detecting the document…</string>
+    <string name="lab_no_paper">No document corners found. Keep the photo as-is.</string>
+    <string name="lab_timing">Auto-crop: %1$d ms detect + %2$d ms warp</string>
+    <string name="lab_stats">%1$d × %2$d px · before %3$s · after %4$s</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>
     <string name="language_system">System default</string>

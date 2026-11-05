@@ -64,6 +64,7 @@ class SettingsActivity : BaseActivity() {
         }
         binding.rowPrivacy.setOnClickListener { openPrivacy() }
         binding.rowPro.setOnClickListener { showProDialog() }
+        binding.rowLab.setOnClickListener { startActivity(SpikeActivity.intent(this)) }
         binding.rowLanguage.setOnClickListener { chooseLanguage() }
         binding.rowViewer.setOnClickListener { chooseViewer() }
         binding.rowAbout.setOnClickListener { showAbout() }

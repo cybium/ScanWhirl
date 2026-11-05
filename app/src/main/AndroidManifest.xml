@@ -57,6 +57,11 @@
             android:parentActivityName=".ui.MainActivity" />
 
         <activity
+            android:name=".ui.SpikeActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.SettingsActivity" />
+
+        <activity
             android:name=".ui.PageViewerActivity"
             android:exported="false"
             android:parentActivityName=".ui.DocumentViewerActivity" />
