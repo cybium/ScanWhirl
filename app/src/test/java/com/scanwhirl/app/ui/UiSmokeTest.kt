@@ -124,20 +124,40 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `home has two tabs and the device tab switches lists`() {
-        seedDoc("Tabbed")
+    fun `tools are a two by two grid and settings lives in the toolbar`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val tabs = activity.findViewById<com.google.android.material.tabs.TabLayout>(R.id.tabs)
-                assertEquals(2, tabs.tabCount)
-                val scan = activity.findViewById<android.view.View>(R.id.scanList)
-                val device = activity.findViewById<android.view.View>(R.id.deviceList)
-                assertTrue(scan.isVisible)
-                assertFalse(device.isVisible)
+                assertNotNull(activity.findViewById<android.view.View>(R.id.toolResize))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.toolCompress))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.toolEdit))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.toolMerge))
 
-                tabs.getTabAt(1)!!.select()
-                assertFalse(scan.isVisible)
-                assertTrue(device.isVisible)
+                val menu = activity.findViewById<
+                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
+                assertNotNull(menu.findItem(R.id.action_settings))
+            }
+        }
+    }
+
+    @Test
+    fun `edit tool opens the pdf picker`() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.toolEdit).performClick()
+                val started = shadowOf(activity).nextStartedActivity
+                assertEquals(android.content.Intent.ACTION_OPEN_DOCUMENT, started?.action)
+            }
+        }
+    }
+
+    @Test
+    fun `merge builder offers add and merge`() {
+        ActivityScenario.launch(MergePdfActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnAddPdf))
+                val merge = activity.findViewById<android.view.View>(R.id.btnMerge)
+                assertNotNull(merge)
+                assertFalse("merge needs at least 2 PDFs", merge.isEnabled)
             }
         }
     }
@@ -177,15 +197,19 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `merge tool opens a scan picker`() {
+    fun `merge tool asks scans or device PDFs`() {
         seedDoc("Merge one")
         seedDoc("Merge two")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.findViewById<android.view.View>(R.id.toolMerge).performClick()
-                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
-                assertTrue("merge picker should be showing", dialog.isShowing)
-                dialog.dismiss()
+                val chooser = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+                assertTrue("merge chooser should be showing", chooser.isShowing)
+                // Item 0 = merge saved scans -> the scan picker dialog.
+                chooser.listView.performItemClick(null, 0, 0)
+                val picker = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+                assertTrue("scan picker should be showing", picker.isShowing)
+                picker.dismiss()
             }
         }
     }
