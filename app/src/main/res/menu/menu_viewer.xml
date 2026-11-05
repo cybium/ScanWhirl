@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_rename"
+        android:icon="@drawable/ic_edit"
+        android:title="@string/rename"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_save_device"
+        android:icon="@drawable/ic_download"
+        android:title="@string/save_to_device"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_save_pdf"
+        android:title="@string/save_pdf_device"
+        app:showAsAction="never" />
+</menu>

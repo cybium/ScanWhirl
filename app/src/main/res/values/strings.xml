@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScanWhirl</string>
+    <string name="scan">Scan document</string>
+    <string name="empty_title">No scans yet</string>
+    <string name="empty_subtitle">Tap the camera button to scan your first document. Auto edge detection, crop, batch pages, and PDF export included.</string>
+    <string name="name_hint">Document name</string>
+    <string name="save">Save</string>
+    <string name="review_save_pdf">Save PDF</string>
+    <string name="review_save_share">Save &amp; share PDF</string>
+    <string name="review_saving">Saving…</string>
+    <string name="review_discard_title">Discard this scan?</string>
+    <string name="review_discard_msg">Your scanned pages haven\'t been saved yet.</string>
+    <string name="discard">Discard</string>
+
+    <string name="save_to_device">Save to device</string>
+    <string name="save_this_page">Save this page</string>
+    <string name="save_all_pages">Save all pages</string>
+    <string name="dl_saved">Saved to Downloads/ScanWhirl: %1$s</string>
+    <string name="dl_saved_all">Saved %1$d images to Downloads/ScanWhirl</string>
+    <string name="dl_failed">Could not save image: %1$s</string>
+    <string name="storage_perm_needed">Allow storage access so files can be saved to your device</string>
+    <string name="pdf_saved_docs">Saved to Documents/ScanWhirl: %1$s</string>
+    <string name="pdf_save_failed">Could not save PDF: %1$s</string>
+    <string name="save_pdf_device">Save PDF to Documents</string>
+    <string name="pdf_missing">This scan has no PDF file yet</string>
+    <string name="save_inside_app">Scan saved in the app (storage permission not granted)</string>
+    <string name="filter_original">Original</string>
+    <string name="filter_enhance">Enhance</string>
+    <string name="filter_clean">Clean</string>
+    <string name="filter_bw">B/W</string>
+    <string name="zoom_page">Page preview, pinch to zoom</string>
+
+    <string name="stage_failed">Could not prepare the scan: %1$s</string>
+    <string name="scan_no_pages">No pages scanned</string>
+    <string name="scanner_unavailable">Scanner unavailable (code %1$d). Is Google Play services installed and up to date?</string>
+    <string name="scanner_failed">Could not start scanner: %1$s</string>
+
+    <string name="about_title">About ScanWhirl</string>
+    <string name="about_message">ScanWhirl %1$s\n\nScan documents with your camera and save them as PDFs. Scanning, editing, and saving all happen on your phone — no accounts and no ads. Your scans are saved on your device only (in the app and in Documents/ScanWhirl).\n\nTelegram: @cybium\nEmail: t.mecybium@gmail.com</string>
+    <string name="share_pdf">Share</string>
+    <string name="delete">Delete</string>
+    <string name="delete_title">Delete scan?</string>
+    <string name="delete_selected_title">Delete selected scans?</string>
+    <plurals name="delete_selected_message">
+        <item quantity="one">%1$d scan and all its pages will be permanently deleted.</item>
+        <item quantity="other">%1$d scans and all their pages will be permanently deleted.</item>
+    </plurals>
+    <plurals name="pages">
+        <item quantity="one">%1$d page</item>
+        <item quantity="other">%1$d pages</item>
+    </plurals>
+    <string name="delete_message">\"%1$s\" and all its pages will be permanently deleted.</string>
+    <string name="doc_not_found">Document not found</string>
+    <string name="nothing_to_share">Nothing to share</string>
+    <plurals name="page_count_and_date">
+        <item quantity="one">%1$d page · %2$s</item>
+        <item quantity="other">%1$d pages · %2$s</item>
+    </plurals>
+
+    <string name="close">Close</string>
+    <string name="merge">Merge</string>
+    <string name="merge_title">Merge scans</string>
+    <string name="merge_name_hint">Merged document name</string>
+    <string name="merge_needs_two">Select at least 2 scans to merge</string>
+    <plurals name="selected_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+
+    <string name="page_actions_title">Page %1$d</string>
+    <string name="action_rotate">Rotate</string>
+    <string name="action_move_earlier">Move earlier</string>
+    <string name="action_move_later">Move later</string>
+    <string name="action_delete_page">Delete page</string>
+    <string name="page_op_failed">Page operation failed: %1$s</string>
+
+    <string name="rename">Rename</string>
+    <string name="rename_title">Rename document</string>
+
+    <string name="tool_resize">Resize</string>
+    <string name="tool_compress">Compress</string>
+
+    <string name="resize_title">Resize image</string>
+    <string name="resize_width">Width</string>
+    <string name="resize_default_dpi">96</string>
+    <string name="resize_auto">auto</string>
+    <string name="resize_px">px</string>
+    <string name="resize_dpi">DPI</string>
+    <string name="resize_times">×</string>
+    <string name="resize_keep_ratio">Keep proportions</string>
+    <string name="resize_keep_original">Reset all</string>
+    <string name="resize_target_label">Target file size (optional)</string>
+    <string name="resize_target_hint">e.g. 500 KB or 3 MB</string>
+    <string name="resize_advanced">Advanced (pixels &amp; DPI)</string>
+    <string name="size_50">50 KB</string>
+    <string name="size_100">100 KB</string>
+    <string name="size_200">200 KB</string>
+    <string name="size_500">500 KB</string>
+    <string name="resize_file_info">%1$s · %2$s · %3$d × %4$d px</string>
+    <string name="resize_action">Resize</string>
+    <string name="resize_share">Share resized image</string>
+    <string name="resize_failed">Resize failed: %1$s</string>
+    <string name="resize_invalid_size">Enter a valid size (1–12000 px)</string>
+    <string name="resize_invalid_target">Enter a size like 500 KB or 3 MB</string>
+    <string name="resize_done">Saved %1$s (%2$s)</string>
+
+    <string name="compress_title">Compress PDF</string>
+    <string name="compress_source_scan">Saved scan</string>
+    <string name="compress_source_file">PDF file</string>
+    <string name="compress_level_title">Compression level</string>
+    <string name="compress_target_label">…or an exact target size (optional)</string>
+    <string name="compress_level_low">Low</string>
+    <string name="compress_level_medium">Medium</string>
+    <string name="compress_level_high">High</string>
+    <string name="compress_level_ultra">Ultra</string>
+    <string name="compress_est_item">%1$s · ≈ %2$s</string>
+    <string name="compress_estimating">Estimating sizes…</string>
+    <string name="compress_pick_scan">Choose a scan to compress</string>
+    <string name="compress_done">Compressed: %1$s → %2$s</string>
+    <string name="compress_failed">Compression failed: %1$s</string>
+
+    <string name="progress_title">Working…</string>
+
+</resources>

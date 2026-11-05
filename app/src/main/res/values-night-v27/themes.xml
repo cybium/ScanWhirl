@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ScanWhirl" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/sf_primary</item>
+        <item name="colorOnPrimary">@color/sf_on_primary</item>
+        <item name="colorPrimaryContainer">@color/sf_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/sf_on_primary_container</item>
+        <item name="colorSecondaryContainer">@color/sf_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/sf_on_secondary_container</item>
+        <item name="android:colorBackground">@color/sf_background</item>
+        <item name="colorSurface">@color/sf_surface</item>
+        <item name="colorOnSurface">@color/sf_on_surface</item>
+        <item name="colorSurfaceContainer">@color/sf_surface</item>
+        <item name="android:statusBarColor">@color/sf_surface</item>
+        <item name="android:navigationBarColor">@color/sf_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

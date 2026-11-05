@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <files-path name="internal_docs" path="documents/" />
+    <files-path name="internal_exports" path="exports/" />
+    <cache-path name="cache_docs" path="documents/" />
+</paths>

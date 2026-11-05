@@ -1,0 +1,29 @@
+# Gradle / Android build outputs
+build/
+.gradle/
+.kotlin/
+local.properties
+captures/
+*.apk
+*.aab
+*.ap_
+
+# Signing material — never commit secrets
+keystore/
+keystore.properties
+*.keystore
+*.jks
+*.p12
+*.pepk
+
+# Release artifacts
+dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
