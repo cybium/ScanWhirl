@@ -1,43 +1,29 @@
 package com.scanwhirl.app.util
 
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class GreetingTest {
 
     @Test
-    fun `morning pool`() {
-        assertTrue(
-            Greeting.forHour(8) in setOf(
-                "☀️ Good morning", "🌅 Rise and shine", "☕ Morning! Ready to scan?"
-            )
-        )
+    fun `each two hour slot is deterministic`() {
+        assertEquals("🌙 Late-night scan", Greeting.forHour(0))
+        assertEquals("🌃 Up late?", Greeting.forHour(3))
+        assertEquals("✨ Night owl mode", Greeting.forHour(5))
+        assertEquals("🌅 Rise and shine", Greeting.forHour(7))
+        assertEquals("☕ Morning! Ready to scan?", Greeting.forHour(9))
+        assertEquals("☀️ Good morning", Greeting.forHour(11))
+        assertEquals("📄 Good afternoon", Greeting.forHour(12))
+        assertEquals("🌤️ Good afternoon", Greeting.forHour(15))
+        assertEquals("🖨️ Afternoon! Let's organize", Greeting.forHour(17))
+        assertEquals("🌆 Good evening", Greeting.forHour(19))
+        assertEquals("🌙 Good evening", Greeting.forHour(21))
+        assertEquals("📎 Evening! Time to tidy up", Greeting.forHour(23))
     }
 
     @Test
-    fun `afternoon pool`() {
-        assertTrue(
-            Greeting.forHour(14) in setOf(
-                "🌤️ Good afternoon", "📄 Good afternoon", "🖨️ Afternoon! Let's organize"
-            )
-        )
-    }
-
-    @Test
-    fun `evening pool`() {
-        assertTrue(
-            Greeting.forHour(19) in setOf(
-                "🌆 Good evening", "🌙 Good evening", "📎 Evening! Time to tidy up"
-            )
-        )
-    }
-
-    @Test
-    fun `late night pool`() {
-        assertTrue(
-            Greeting.forHour(2) in setOf(
-                "🌃 Up late?", "🌙 Late-night scan", "✨ Night owl mode"
-            )
-        )
+    fun `same slot always returns the same text`() {
+        assertEquals(Greeting.forHour(8), Greeting.forHour(8))
+        assertEquals(Greeting.forHour(14), Greeting.forHour(14))
     }
 }

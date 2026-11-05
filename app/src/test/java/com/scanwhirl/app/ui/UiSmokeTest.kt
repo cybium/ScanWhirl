@@ -215,6 +215,27 @@ class UiSmokeTest {
     }
 
     @Test
+    fun `scan rows show page badge and compact meta`() {
+        seedDoc("Badge doc", pages = 3)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                forceLayout(list)
+                val row = list.findViewHolderForAdapterPosition(0)!!.itemView
+                assertEquals(
+                    "3",
+                    row.findViewById<android.widget.TextView>(R.id.pageBadge).text.toString()
+                )
+                val meta = row.findViewById<android.widget.TextView>(R.id.scanMeta).text.toString()
+                assertTrue(
+                    "meta should start with time: $meta",
+                    Regex("^\\d{1,2}:\\d{2} · \\d{1,2}/\\d{1,2}/\\d{2} · ").containsMatchIn(meta)
+                )
+            }
+        }
+    }
+
+    @Test
     fun `settings exposes theme, font, language and viewer`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -222,9 +243,12 @@ class UiSmokeTest {
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowFont))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowGreeting))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.switchGreeting))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.rowWallpaper))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.switchWallpaper))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowLanguage))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowViewer))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.rowAbout))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.rowPrivacy))
                 val subTheme = activity.findViewById<android.widget.TextView>(R.id.subTheme)
                 assertTrue(subTheme.text.isNotEmpty())
             }
