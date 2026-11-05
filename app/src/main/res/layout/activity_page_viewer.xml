@@ -53,6 +53,14 @@
             android:textColor="#FFFFFFFF" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCrop"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/crop_action"
+            android:textColor="#FFFFFFFF" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnFilter"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
@@ -68,4 +76,41 @@
             android:text="@string/action_delete_page"
             android:textColor="#FFFFFFFF" />
     </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/cropOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FF000000"
+        android:visibility="gone">
+
+        <com.scanwhirl.app.ui.CropView
+            android:id="@+id/cropView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:gravity="end"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancelCrop"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@android:string/cancel"
+                android:textColor="#FFFFFFFF" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnApplyCrop"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/crop_apply" />
+        </LinearLayout>
+    </FrameLayout>
 </FrameLayout>

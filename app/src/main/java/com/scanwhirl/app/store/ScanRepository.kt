@@ -225,6 +225,23 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rotate")
         }
 
+    /**
+     * Crops one page to [rect] (full-file pixel coordinates), keeps the kept
+     * original in sync so a later filter re-apply stays cropped, and
+     * regenerates the PDF.
+     */
+    suspend fun cropPage(id: String, pageIndex: Int, rect: android.graphics.RectF): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            require(pageIndex in doc.pageFiles.indices) { "No such page" }
+            val file = doc.pageFiles[pageIndex]
+            ImageTools.cropTo(file, rect)
+            origOf(file).takeIf { it.exists() }?.let { ImageTools.cropTo(it, rect) }
+            regeneratePdf(dir)
+            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after crop")
+        }
+
     private fun rotateFile90(file: File) = ImageTools.rotate90(file)
 
     suspend fun movePage(id: String, fromIndex: Int, toIndex: Int): ScanDocument =

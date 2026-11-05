@@ -81,6 +81,8 @@
     <string name="select_done">Done</string>
     <string name="add_pages">Add pages</string>
     <string name="selected_count">%1$d selected</string>
+    <string name="crop_action">Crop</string>
+    <string name="crop_apply">Apply crop</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>

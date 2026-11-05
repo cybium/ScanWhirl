@@ -99,6 +99,22 @@ object ImageTools {
         rotated.recycle()
     }
 
+    /** Crops a JPEG file to [rect] (full-file pixel coordinates) in place. */
+    fun cropTo(file: java.io.File, rect: android.graphics.RectF) {
+        val src = BitmapFactory.decodeFile(file.path)
+            ?: throw IllegalStateException("Unreadable page")
+        val left = rect.left.roundToInt().coerceIn(0, src.width - 1)
+        val top = rect.top.roundToInt().coerceIn(0, src.height - 1)
+        val w = rect.width().roundToInt().coerceIn(1, src.width - left)
+        val h = rect.height().roundToInt().coerceIn(1, src.height - top)
+        val cropped = Bitmap.createBitmap(src, left, top, w, h)
+        src.recycle()
+        java.io.FileOutputStream(file).use { fos ->
+            cropped.compress(Bitmap.CompressFormat.JPEG, 95, fos)
+        }
+        cropped.recycle()
+    }
+
     fun encodePng(bitmap: Bitmap): ByteArray {
         val out = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)

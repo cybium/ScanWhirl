@@ -2,8 +2,11 @@ package com.scanwhirl.app.ui
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.RectF
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -60,6 +63,11 @@ class PageViewerActivity : AppCompatActivity() {
     /** Session memory of filters the user picked (disk keeps no filter state). */
     private val filterChoice = mutableMapOf<String, ScanFilter>()
 
+    /** Crop overlay state: the page being cropped + its display-size copy. */
+    private var cropPath: String? = null
+    private var cropIndex: Int = -1
+    private var cropBitmap: Bitmap? = null
+
     private val fullExecutor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "page-full").apply { isDaemon = true }
     }
@@ -94,8 +102,19 @@ class PageViewerActivity : AppCompatActivity() {
 
         binding.btnClose.setOnClickListener { finish() }
         binding.btnRotate.setOnClickListener { rotateCurrent() }
+        binding.btnCrop.setOnClickListener { startCrop() }
         binding.btnFilter.setOnClickListener { filterCurrent() }
         binding.btnDelete.setOnClickListener { deleteCurrent() }
+        binding.btnCancelCrop.setOnClickListener { closeCrop() }
+        binding.btnApplyCrop.setOnClickListener { applyCrop() }
+
+        // Back cancels an open crop first; otherwise it leaves the view.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (binding.cropOverlay.visibility == android.view.View.VISIBLE) closeCrop()
+                else finish()
+            }
+        })
     }
 
     override fun onDestroy() {
@@ -336,6 +355,104 @@ class PageViewerActivity : AppCompatActivity() {
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    // ------------------------------------------------------------------
+    // Crop (manual corner drag; no auto-detection)
+    // ------------------------------------------------------------------
+
+    private fun startCrop() {
+        val pos = currentPosition()
+        val file = pages.getOrNull(pos) ?: return
+        if (binding.cropOverlay.visibility == android.view.View.VISIBLE) return
+        lifecycleScope.launch {
+            try {
+                // Land any pending delete first so the page index stays valid.
+                if (stagingDir == null) withContext(Dispatchers.IO) { commitPendingDeleteNow() }
+            } catch (_: Exception) {
+                // Best effort; cropping proceeds against the visible page.
+            }
+            showCropOverlay(pos, file)
+        }
+    }
+
+    private fun showCropOverlay(pos: Int, file: File) {
+        cropIndex = pos
+        cropPath = file.path
+        binding.cropView.clearImage()
+        binding.cropOverlay.visibility = android.view.View.VISIBLE
+
+        // Display-size copy only (max 2048px) — the full-res file is read on Apply.
+        val key = "${file.path}|${file.lastModified()}|${file.length()}"
+        binding.cropView.tag = key
+        fullExecutor.execute {
+            val bmp = try {
+                ImageTools.decodeSampled(file.readBytes(), 2048)
+            } catch (_: Exception) {
+                null
+            } ?: return@execute
+            runOnUiThread {
+                if (binding.cropView.tag == key) {
+                    cropBitmap?.recycle()
+                    cropBitmap = bmp
+                    binding.cropView.setImage(bmp)
+                } else {
+                    bmp.recycle()
+                }
+            }
+        }
+    }
+
+    private fun closeCrop() {
+        binding.cropOverlay.visibility = android.view.View.GONE
+        binding.cropView.clearImage()
+        binding.cropView.tag = null // drop any in-flight decode result
+        cropBitmap?.recycle()
+        cropBitmap = null
+        cropPath = null
+    }
+
+    private fun applyCrop() {
+        val path = cropPath ?: return closeCrop()
+        val bmp = cropBitmap ?: return closeCrop()
+        val rect = binding.cropView.getCropRect()
+        if (rect.width() < 1f || rect.height() < 1f) return closeCrop()
+
+        val file = File(path)
+        val size = try {
+            ImageTools.imageSize(file.readBytes())
+        } catch (_: Exception) {
+            null
+        } ?: return closeCrop()
+
+        // Scale the display-copy rectangle onto the full-resolution file.
+        val sx = size.first.toFloat() / bmp.width
+        val sy = size.second.toFloat() / bmp.height
+        val fileRect = RectF(rect.left * sx, rect.top * sy, rect.right * sx, rect.bottom * sy)
+        val pos = cropIndex
+        val dir = stagingDir
+        closeCrop()
+
+        lifecycleScope.launch {
+            try {
+                if (dir != null) {
+                    withContext(Dispatchers.IO) { ImageTools.cropTo(file, fileRect) }
+                } else {
+                    val id = docId ?: return@launch
+                    repo.cropPage(id, pos, fileRect)
+                }
+                reload()
+                currentPos = pos.coerceAtMost(pages.lastIndex)
+                binding.pager.scrollToPosition(currentPos)
+                updateIndicator()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@PageViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     /** Deletes the Undo-pending page for good. No-op when nothing is pending. */
