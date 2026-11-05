@@ -54,9 +54,11 @@ class PdfViewerActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPdfViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        // Optional user wallpaper behind the pages (default: neutral grey).
-        com.scanwhirl.app.util.Wallpaper.drawable(this)?.let {
-            binding.pdfPager.background = it
+        // Optional full-screen wallpaper; otherwise the light document background shows.
+        val wallpaper = com.scanwhirl.app.util.Wallpaper.drawable(this)
+        if (wallpaper != null) {
+            binding.root.background = wallpaper
+            binding.pdfPager.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         }
 
         if (!openPdf()) {

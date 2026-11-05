@@ -216,9 +216,9 @@ class SettingsActivity : BaseActivity() {
 
     private fun showAbout() {
         val version = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "—"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0"
         } catch (_: Exception) {
-            "—"
+            "1.0"
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.about_title)

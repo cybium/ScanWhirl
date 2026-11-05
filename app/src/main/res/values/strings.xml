@@ -144,8 +144,8 @@
     <string name="settings_greeting_summary">Show a time-based hello on the home screen</string>
     <string name="settings_wallpaper">Wallpaper</string>
     <string name="settings_wallpaper_summary">Use a photo behind your PDFs</string>
-    <string name="wallpaper_on">On — tap to change the photo</string>
-    <string name="wallpaper_off">Off — pick a photo</string>
+    <string name="wallpaper_on">On, tap to change the photo</string>
+    <string name="wallpaper_off">Off, pick a photo</string>
     <string name="settings_privacy">Privacy policy</string>
     <string name="settings_privacy_summary">Opens the policy in your browser</string>
     <string name="privacy_open_failed">No browser available</string>

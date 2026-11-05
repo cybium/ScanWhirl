@@ -3,19 +3,21 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/pdf_bg"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/sf_appbar">
+        android:background="@color/pdf_toolbar">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:navigationIcon="?attr/homeAsUpIndicator"
-            app:titleTextColor="?attr/colorOnSurface" />
+            app:navigationIconTint="#FF1A1B20"
+            app:titleTextColor="#FF1A1B20" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <FrameLayout
@@ -27,7 +29,7 @@
             android:id="@+id/pdfPager"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="#FF3C3C3C"
+            android:background="@color/pdf_bg"
             android:clipToPadding="false"
             android:paddingVertical="8dp"
             android:scrollbars="none" />

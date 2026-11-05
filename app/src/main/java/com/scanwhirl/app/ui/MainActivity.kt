@@ -135,8 +135,7 @@ class MainActivity : BaseActivity() {
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
         binding.toolbar.title = selectionTitle()
         updateGreeting()
-        binding.scanList.background =
-            com.scanwhirl.app.util.Wallpaper.drawable(this)
+        binding.root.background = com.scanwhirl.app.util.Wallpaper.drawable(this)
     }
 
     /** Time-of-day hello under the app name, when enabled in Settings. */
@@ -886,9 +885,9 @@ class MainActivity : BaseActivity() {
 
     private fun showAbout() {
         val version = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "—"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0"
         } catch (e: Exception) {
-            "—"
+            "1.0"
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.about_title)
@@ -1003,7 +1002,7 @@ class MainActivity : BaseActivity() {
 }
 
 private fun formatBytes(bytes: Long): String = when {
-    bytes <= 0 -> "–"
+    bytes <= 0 -> "0 B"
     bytes >= 1_048_576 -> String.format(Locale.ROOT, "%.1f MB", bytes / 1_048_576.0)
     bytes >= 1024 -> String.format(Locale.ROOT, "%.0f KB", bytes / 1024.0)
     else -> "$bytes B"
