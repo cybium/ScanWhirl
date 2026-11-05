@@ -528,9 +528,9 @@ class UiSmokeTest {
                 val grid =
                     activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
                 assertEquals(2, grid.pageCount())
-                // Per-page filters default to Enhance (staging map).
+                // Per-page filters default to Original (no look applied).
                 assertEquals(
-                    com.scanwhirl.app.util.ScanFilter.ENHANCE,
+                    com.scanwhirl.app.util.ScanFilter.ORIGINAL,
                     grid.filterFor(java.io.File(staging, "page_000.jpg"))
                 )
 
@@ -745,9 +745,9 @@ class UiSmokeTest {
                     .let { it.exists() && it.readText().contains("page_000.jpg=bw") }
             }
             assertTrue("filter choice should be written for the review screen", persisted)
-            // The untouched sibling keeps the Enhance default.
+            // The untouched sibling keeps the default (no look applied).
             val text = java.io.File(staging, "filters.txt").readText()
-            assertTrue(text.contains("page_001.jpg=enhance"))
+            assertTrue(text.contains("page_001.jpg=original"))
         }
         staging.deleteRecursively()
     }
