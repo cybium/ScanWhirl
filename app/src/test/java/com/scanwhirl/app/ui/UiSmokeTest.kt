@@ -124,6 +124,88 @@ class UiSmokeTest {
     }
 
     @Test
+    fun `home has two tabs and the device tab switches lists`() {
+        seedDoc("Tabbed")
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val tabs = activity.findViewById<com.google.android.material.tabs.TabLayout>(R.id.tabs)
+                assertEquals(2, tabs.tabCount)
+                val scan = activity.findViewById<android.view.View>(R.id.scanList)
+                val device = activity.findViewById<android.view.View>(R.id.deviceList)
+                assertTrue(scan.isVisible)
+                assertFalse(device.isVisible)
+
+                tabs.getTabAt(1)!!.select()
+                assertFalse(scan.isVisible)
+                assertTrue(device.isVisible)
+            }
+        }
+    }
+
+    @Test
+    fun `search filters the scan list by name`() {
+        seedDoc("Alpha report")
+        seedDoc("Beta receipt")
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                forceLayout(list)
+                assertEquals(2, list.adapter!!.itemCount)
+
+                activity.findViewById<android.widget.EditText>(R.id.searchInput).setText("Alpha")
+                val filtered = pollUntil { list.adapter!!.itemCount == 1 }
+                assertTrue("search should leave only Alpha", filtered)
+            }
+        }
+    }
+
+    @Test
+    fun `sort by name puts the alphabetical first`() {
+        seedDoc("Zebra")
+        seedDoc("Apple")
+        com.scanwhirl.app.util.Prefs.setSortMode(app, com.scanwhirl.app.util.Prefs.SORT_NAME)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                forceLayout(list)
+                val first = list.findViewHolderForAdapterPosition(0)!!.itemView
+                    .findViewById<android.widget.TextView>(R.id.scanName).text.toString()
+                assertEquals("Apple", first)
+            }
+        }
+        com.scanwhirl.app.util.Prefs.setSortMode(app, com.scanwhirl.app.util.Prefs.SORT_DATE)
+    }
+
+    @Test
+    fun `merge tool opens a scan picker`() {
+        seedDoc("Merge one")
+        seedDoc("Merge two")
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.toolMerge).performClick()
+                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+                assertTrue("merge picker should be showing", dialog.isShowing)
+                dialog.dismiss()
+            }
+        }
+    }
+
+    @Test
+    fun `settings exposes theme, font, language and viewer`() {
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertNotNull(activity.findViewById<android.view.View>(R.id.rowTheme))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.rowFont))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.rowLanguage))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.rowViewer))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.rowAbout))
+                val subTheme = activity.findViewById<android.widget.TextView>(R.id.subTheme)
+                assertTrue(subTheme.text.isNotEmpty())
+            }
+        }
+    }
+
+    @Test
     fun `long press enters selection mode and back exits it`() {
         seedDoc("Select me")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
