@@ -236,6 +236,37 @@ class UiSmokeTest {
     }
 
     @Test
+    fun `export result screen shows real sizes and actions`() {
+        val img = java.io.File(app.cacheDir, "result_${System.nanoTime()}.jpg")
+        img.writeBytes(jpegBytes())
+        val intent = ExportResultActivity.intent(
+            app,
+            outputPath = img.path,
+            previewPath = img.path,
+            mime = "image/jpeg",
+            displayName = img.name,
+            beforeBytes = 4096,
+            afterBytes = 1024,
+            width = 310,
+            height = 444,
+            title = "Test result",
+            warning = null
+        )
+        ActivityScenario.launch<ExportResultActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnSaveResult))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnShareResult))
+                val stats = activity.findViewById<android.widget.TextView>(R.id.resultStats)
+                    .text.toString()
+                assertTrue("before size missing: $stats", stats.contains("4 KB"))
+                assertTrue("after size missing: $stats", stats.contains("1 KB"))
+                assertTrue("dimensions missing: $stats", stats.contains("310 × 444 px"))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.resultPreview))
+            }
+        }
+    }
+
+    @Test
     fun `settings exposes theme, font, language and viewer`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
