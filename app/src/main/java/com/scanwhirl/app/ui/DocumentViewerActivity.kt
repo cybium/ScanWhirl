@@ -11,17 +11,13 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityDocumentViewerBinding
-import com.scanwhirl.app.databinding.ItemPageBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.launch
-import java.io.File
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -57,11 +53,7 @@ class DocumentViewerActivity : AppCompatActivity() {
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         if (!reloadDocument()) return
 
-        binding.pageList.layoutManager =
-            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        binding.pageList.adapter = PageAdapter(document!!.pageFiles) { index ->
-            showPageActions(index)
-        }
+        binding.pageList.onTap = { index -> showPageActions(index) }
 
         binding.btnShare.setOnClickListener { document?.let { ShareUtils.share(this, it) } }
         binding.btnDelete.setOnClickListener { document?.let { confirmDelete(it) } }
@@ -98,8 +90,7 @@ class DocumentViewerActivity : AppCompatActivity() {
         binding.toolbar.title = doc.name
         binding.pageCount.text =
             resources.getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
-        (binding.pageList.adapter as? PageAdapter)?.submit(doc.pageFiles)
-            ?: run { binding.pageList.adapter = PageAdapter(doc.pageFiles) { showPageActions(it) } }
+        binding.pageList.submit(doc.pageFiles)
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
         return true
     }
@@ -206,8 +197,7 @@ class DocumentViewerActivity : AppCompatActivity() {
     private fun promptDownload() {
         val doc = document ?: return
         if (doc.pageFiles.isEmpty()) return
-        val current = (binding.pageList.layoutManager as? LinearLayoutManager)
-            ?.findFirstVisibleItemPosition()?.coerceAtLeast(0) ?: 0
+        val current = binding.pageList.firstVisiblePosition().coerceAtLeast(0)
         val items = arrayOf(
             getString(R.string.save_this_page),
             getString(R.string.save_all_pages)
@@ -290,39 +280,5 @@ class DocumentViewerActivity : AppCompatActivity() {
         private const val EXTRA_DOC_ID = "doc_id"
         fun intent(context: Context, docId: String): Intent =
             Intent(context, DocumentViewerActivity::class.java).putExtra(EXTRA_DOC_ID, docId)
-    }
-}
-
-class PageAdapter(
-    private var pages: List<File>,
-    private val onTap: (Int) -> Unit
-) : RecyclerView.Adapter<PageAdapter.VH>() {
-
-    fun submit(newPages: List<File>) {
-        pages = newPages
-        notifyDataSetChanged()
-    }
-
-    override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): VH {
-        val binding = ItemPageBinding.inflate(
-            android.view.LayoutInflater.from(parent.context), parent, false
-        )
-        return VH(binding)
-    }
-
-    override fun onBindViewHolder(holder: VH, position: Int) {
-        holder.bind(pages[position], position + 1)
-    }
-
-    override fun getItemCount() = pages.size
-
-    inner class VH(private val binding: ItemPageBinding) :
-        RecyclerView.ViewHolder(binding.root) {
-        fun bind(file: File, number: Int) {
-            binding.pageImage.setImageURI(null)
-            binding.pageImage.setImageURI(android.net.Uri.fromFile(file))
-            binding.pageNumber.text = String.format(java.util.Locale.ROOT, "%d", number)
-            binding.root.setOnClickListener { onTap(bindingAdapterPosition) }
-        }
     }
 }

@@ -31,7 +31,7 @@
             android:textAppearance="?attr/textAppearanceBodyMedium"
             android:textColor="?android:attr/textColorSecondary" />
 
-        <androidx.recyclerview.widget.RecyclerView
+        <com.scanwhirl.app.ui.pagegrid.PageGridView
             android:id="@+id/pageList"
             android:layout_width="match_parent"
             android:layout_height="0dp"
