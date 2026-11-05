@@ -167,6 +167,24 @@ class UiSmokeTest {
     }
 
     @Test
+    fun `viewer page grid is a vertical two-column PageGridView`() {
+        val id = seedDoc("Grid doc", pages = 4)
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val pages = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                val lm = pages.layoutManager as androidx.recyclerview.widget.GridLayoutManager
+                assertEquals(2, lm.spanCount)
+                assertEquals(
+                    androidx.recyclerview.widget.LinearLayoutManager.VERTICAL,
+                    lm.orientation
+                )
+                assertEquals(4, pages.pageCount())
+            }
+        }
+    }
+
+    @Test
     fun `viewer page tap shows actions and rotate works end to end`() {
         val id = seedDoc("Rotate flow")
         val before = com.scanwhirl.app.util.PdfGenerator.readJpegInfo(
