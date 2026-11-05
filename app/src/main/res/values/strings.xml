@@ -74,6 +74,9 @@
     <string name="action_move_later">Move later</string>
     <string name="action_delete_page">Delete page</string>
     <string name="page_op_failed">Page operation failed: %1$s</string>
+    <string name="page_deleted">Page deleted</string>
+    <string name="undo">Undo</string>
+    <string name="last_page_guard">A document needs at least one page. Delete the document instead.</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>
