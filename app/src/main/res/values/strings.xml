@@ -36,7 +36,7 @@
     <string name="scanner_failed">Could not start scanner: %1$s</string>
 
     <string name="about_title">About ScanWhirl</string>
-    <string name="about_message">ScanWhirl %1$s\n\nScan documents with your camera and save them as PDFs. Scanning, editing, and saving all happen on your phone — no accounts and no ads. Your scans are saved on your device only (in the app and in Documents/ScanWhirl).\n\nTelegram: @cybium\nEmail: t.mecybium@gmail.com</string>
+    <string name="about_message">ScanWhirl %1$s\n\nScan documents with your camera and save them as PDFs. Everything happens on your phone: no accounts, no ads, no servers. Your scans stay on your device only.\n\nDeveloper: Cybium (github.com/cybium)\nSupport: cybiumsupport@gmail.com\nPrivacy policy: cybium.github.io/scanwhirl-privacy</string>
     <string name="share_pdf">Share</string>
     <string name="delete">Delete</string>
     <string name="delete_title">Delete scan?</string>
@@ -159,6 +159,10 @@
     <string name="settings_privacy">Privacy policy</string>
     <string name="settings_privacy_summary">Opens the policy in your browser</string>
     <string name="privacy_open_failed">No browser available</string>
+    <string name="settings_pro">Pro (coming soon)</string>
+    <string name="settings_pro_summary">Password-protect a PDF, ID photo sizes, long-image share. One payment.</string>
+    <string name="settings_pro_title">ScanWhirl Pro</string>
+    <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>
     <string name="language_system">System default</string>
@@ -180,8 +184,8 @@
     <string name="resize_times">×</string>
     <string name="resize_keep_ratio">Keep proportions</string>
     <string name="resize_keep_original">Reset all</string>
-    <string name="resize_target_label">Target file size (optional)</string>
-    <string name="resize_target_hint">e.g. 500 KB or 3 MB</string>
+    <string name="resize_target_label">Limit file size (up to)</string>
+    <string name="resize_target_hint">Up to 500 KB, 3 MB</string>
     <string name="resize_advanced">Advanced (pixels &amp; DPI)</string>
     <string name="size_50">50 KB</string>
     <string name="size_100">100 KB</string>
@@ -199,7 +203,7 @@
     <string name="compress_source_scan">Saved scan</string>
     <string name="compress_source_file">PDF file</string>
     <string name="compress_level_title">Compression level</string>
-    <string name="compress_target_label">…or an exact target size (optional)</string>
+    <string name="compress_target_label">...or compress up to a target size (optional)</string>
     <string name="compress_level_low">Low</string>
     <string name="compress_level_medium">Medium</string>
     <string name="compress_level_high">High</string>

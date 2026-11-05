@@ -63,6 +63,7 @@ class SettingsActivity : BaseActivity() {
             }
         }
         binding.rowPrivacy.setOnClickListener { openPrivacy() }
+        binding.rowPro.setOnClickListener { showProDialog() }
         binding.rowLanguage.setOnClickListener { chooseLanguage() }
         binding.rowViewer.setOnClickListener { chooseViewer() }
         binding.rowAbout.setOnClickListener { showAbout() }
@@ -114,6 +115,14 @@ class SettingsActivity : BaseActivity() {
         } catch (_: Exception) {
             Toast.makeText(this, R.string.privacy_open_failed, Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun showProDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_pro_title)
+            .setMessage(R.string.settings_pro_message)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun chooseTheme() {
@@ -220,9 +229,12 @@ class SettingsActivity : BaseActivity() {
         } catch (_: Exception) {
             "1.0"
         }
+        val view = com.scanwhirl.app.databinding.DialogAboutBinding
+            .inflate(layoutInflater)
+        view.aboutText.text = getString(R.string.about_message, version)
         AlertDialog.Builder(this)
             .setTitle(R.string.about_title)
-            .setMessage(getString(R.string.about_message, version))
+            .setView(view.root)
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }

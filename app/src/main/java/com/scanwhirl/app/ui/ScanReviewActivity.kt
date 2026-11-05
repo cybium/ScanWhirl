@@ -127,7 +127,7 @@ class ScanReviewActivity : BaseActivity() {
         loadFilters()
         initialSnapshot = snapshot()
 
-        binding.pageGrid.filterFor = { f -> filters[f.path] ?: ScanFilter.ENHANCE }
+        binding.pageGrid.filterFor = { f -> filters[f.path] ?: ScanFilter.ORIGINAL }
         binding.pageGrid.checkedAt = { i -> selected.contains(pages.getOrNull(i)?.path) }
         binding.pageGrid.onTap = { i -> openPageViewer(i) }
         binding.pageGrid.onCheckToggle = { i -> toggleSelect(i) }
@@ -213,7 +213,7 @@ class ScanReviewActivity : BaseActivity() {
             }?.toMap()
             ?: emptyMap()
         filters.clear()
-        pages.forEach { filters[it.path] = fromFile[it.name] ?: ScanFilter.ENHANCE }
+        pages.forEach { filters[it.path] = fromFile[it.name] ?: ScanFilter.ORIGINAL }
     }
 
     // ------------------------------------------------------------------
@@ -251,7 +251,7 @@ class ScanReviewActivity : BaseActivity() {
                 val moved = pages.toMutableList().apply { add(to, removeAt(from)) }
                 val renumbered = moved.mapIndexed { i, f ->
                     String.format(Locale.ROOT, "page_%03d.jpg", i) to
-                        (filters[f.path] ?: ScanFilter.ENHANCE)
+                        (filters[f.path] ?: ScanFilter.ORIGINAL)
                 }
                 withContext(Dispatchers.IO) {
                     // Any pending delete must land first (its .del may collide).
@@ -442,7 +442,7 @@ class ScanReviewActivity : BaseActivity() {
                     val uris = pages.map { Uri.fromFile(it) }
                     // Complete map: every page defaults to Enhance unless changed.
                     val perPage = pages.mapIndexed { i, f ->
-                        i to (filters[f.path] ?: ScanFilter.ENHANCE)
+                        i to (filters[f.path] ?: ScanFilter.ORIGINAL)
                     }.toMap()
                     val doc = repo.saveScan(
                         uris,

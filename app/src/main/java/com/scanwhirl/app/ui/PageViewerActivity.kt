@@ -174,14 +174,14 @@ class PageViewerActivity : BaseActivity() {
             }?.toMap()
             ?: emptyMap()
         stagingFilters.clear()
-        pages.forEach { stagingFilters[it.path] = fromFile[it.name] ?: ScanFilter.ENHANCE }
+        pages.forEach { stagingFilters[it.path] = fromFile[it.name] ?: ScanFilter.ORIGINAL }
     }
 
     /** Writes the whole staging filter map so the review screen sees the choice. */
     private fun writeStagingFilters(dir: File) {
         File(dir, FILTERS_FILE).writeText(
             pages.joinToString("\n") {
-                "${it.name}=${stagingFilters[it.path]?.id ?: ScanFilter.ENHANCE.id}"
+                "${it.name}=${stagingFilters[it.path]?.id ?: ScanFilter.ORIGINAL.id}"
             }
         )
     }
@@ -233,7 +233,7 @@ class PageViewerActivity : BaseActivity() {
         val dir = stagingDir
         if (dir != null) {
             // Staging: the choice is virtual, persisted for the review screen.
-            val checked = filters.indexOf(stagingFilters[file.path] ?: ScanFilter.ENHANCE)
+            val checked = filters.indexOf(stagingFilters[file.path] ?: ScanFilter.ORIGINAL)
             AlertDialog.Builder(this)
                 .setTitle(R.string.filter_title)
                 .setSingleChoiceItems(

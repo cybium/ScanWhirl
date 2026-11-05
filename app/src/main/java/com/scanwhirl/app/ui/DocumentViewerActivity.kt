@@ -26,6 +26,7 @@ import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,6 +67,10 @@ class DocumentViewerActivity : BaseActivity() {
     /** Not lifecycle-bound: a pending delete must land even during onDestroy. */
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    /** Background snapshot of the pre-edit document (keeps opening large docs fast). */
+    private val snapshotScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var snapshotJob: Job? = null
+
     private var pendingDownload: (() -> Unit)? = null
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -88,9 +93,14 @@ class DocumentViewerActivity : BaseActivity() {
 
         // Editing happens in place; keep a pre-edit copy so Back can offer
         // "Save as new" (original restored) as well as "Overwrite".
+        // The copy runs in the background so opening a big document stays quick.
         docId?.let { id ->
             startSignature = signature()
-            snapshotDir = takeSnapshot(id)
+            if (snapshotDir == null) {
+                snapshotJob = snapshotScope.launch {
+                    snapshotDir = takeSnapshot(id)
+                }
+            }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleEditorBack()
@@ -115,6 +125,7 @@ class DocumentViewerActivity : BaseActivity() {
         // Leaving the screen makes any pending delete permanent (rule: Undo
         // only lives as long as this screen).
         if (!isChangingConfigurations) {
+            snapshotJob?.cancel()
             commitPendingDelete()
             snapshotDir?.deleteRecursively()
             snapshotDir = null
@@ -502,6 +513,8 @@ class DocumentViewerActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) {
+                    // Make sure the pre-edit snapshot is complete before restoring.
+                    snapshotJob?.join()
                     commitPendingDeletesNow()
                     val currentName = repo.listDocuments().find { it.id == id }?.name ?: "Document"
                     repo.duplicateDocument(id, "$currentName (edited)")

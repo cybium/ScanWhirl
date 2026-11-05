@@ -1,48 +1,26 @@
 # ScanWhirl
 
-Private document scanner: camera → auto edge detect / crop → multi-page batch → PDF. Built to help restore your Google Play developer account (inactive, no apps published).
+Fast, private document scanner for Android. Made for students who need small, clean PDFs and photos for forms and sharing.
 
-## What it does
-- Launches Google ML Kit document scanner (on-device): auto edge detection, manual crop corners, filters, batch pages, gallery import
-- Look filters on the review screen: Original / Enhance (auto levels) / Clean (whitens paper, removes stains and shadows)
-- Dark look by default
-- Saves scans locally (private storage); exported PDFs also land in Documents/ScanWhirl, page images in Downloads/ScanWhirl
-- Merge multiple scans into one PDF (long-press list → select → Merge)
-- Per-page editing in viewer: rotate 90°, move earlier/later, delete page
-- Rename scans; multi-select for merge or batch delete
-- Tools row on main screen:
-  - **Resize** — gallery image to exact px or auto aspect (width/height "auto" fields), DPI, keep-original button, keep-aspect lock, optional target size (e.g. 500 KB) that compresses to fit
-  - **Compress** — saved scans or any PDF file, Low / Medium / High / Ultra levels with estimated result sizes shown, creates "(compressed)" copy
-  - After scanning: review screen with all pages, editable default title ("Document 1", …), **Save PDF** / **Save & share PDF**
-  - Save any page image to **Downloads/ScanWhirl/** (viewer menu + page actions + per-page button on review screen)
-- Share PDF / pages via system share sheet
-- No accounts, no ads, no data collection
+## Features
+- Scan with Google's on-device scanner (auto edge detection, batch up to 30 pages)
+- Real PDF viewer: vertical scrolling pages, pinch/double-tap zoom
+- View or edit any saved scan, or edit a PDF from your device storage just like a scan
+- Merge several scans, or merge multiple device PDFs (preview each, drag to set the order)
+- Page tools: drag to reorder, rotate, crop, per-page Original / Enhance / Clean / B&W filters, delete with Undo
+- Resize images (exact pixels) and compress scans/PDFs to a size you choose
+- Search and sort your scans; Light/Dark/Follow-system themes, font styles, app language, optional wallpaper
+- Everything on-device: no accounts, no ads, no servers
 
-## Tests
-```bash
-./gradlew testReleaseUnitTest
-```
-65 unit tests: repository (save/load/merge/rotate/delete/move/compress/create, sequential Document N naming, filter application), pure-Kotlin PDF writer (DCTDecode embedding, xref validation), image tools (resize, target-size compression, JPEG/PNG DPI patches, stain whitening), scan filters (enhance range stretch, clean background), download and PDF file naming, UI smoke tests (main, viewer, review screen, dark default, scanner button). PDF output is additionally validated with PyMuPDF/pypdf (page count, dimensions).
+## Download
+- [Google Play](https://play.google.com/store/apps/details?id=com.scanwhirl.app) (1.1.0 live; 1.1.1 rolling out)
 
-## Build
-```bash
-export ANDROID_HOME=$HOME/android-sdk
-export ANDROID_SDK_ROOT=$ANDROID_HOME
-./gradlew bundleRelease
-```
-Or: `./build-release.sh`
+## Privacy
+- Policy: [cybium.github.io/scanwhirl-privacy](https://cybium.github.io/scanwhirl-privacy/)
 
-Output: `app/build/outputs/bundle/release/app-release.aab` (copy also in `dist/`)
+## Support
+- cybiumsupport@gmail.com
 
-## Keystore
-`keystore/scanwhirl.keystore` — alias and passwords are in the untracked `keystore.properties` (or `SCANWHIRL_*` env vars). Never commit either.
-**Back this up.** If you enable Play App Signing (recommended), this is your upload key; Google holds the app signing key.
+---
 
-## Next steps for Play
-1. Upload AAB in Play Console → Closed testing
-2. Complete data safety (no data collected), privacy policy, content rating
-3. Get 12 testers opted into closed testing for 14 continuous days
-4. Apply for production access
-5. The "account at risk / inactivity" warning clears once app activity exists
-
-See `STORE_LISTING.md` and `PRIVACY_POLICY.md`.
+Indie developer making simple, useful apps for everyday tasks. First release: ScanWhirl.
