@@ -529,6 +529,171 @@ class UiSmokeTest {
     }
 
     // ------------------------------------------------------------------
+    // Commit (e): manual corner-drag crop
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `crop view drags a corner and reports the rect`() {
+        val view = CropView(app)
+        view.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(1000, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(1000, android.view.View.MeasureSpec.EXACTLY)
+        )
+        view.layout(0, 0, 1000, 1000)
+        val bmp = android.graphics.Bitmap.createBitmap(
+            640, 640, android.graphics.Bitmap.Config.ARGB_8888
+        )
+        view.setImage(bmp)
+
+        // Untouched crop covers the whole image.
+        val full = view.getCropRect()
+        assertEquals(0f, full.left, 0.01f)
+        assertEquals(0f, full.top, 0.01f)
+        assertEquals(640f, full.right, 0.01f)
+        assertEquals(640f, full.bottom, 0.01f)
+
+        // Drag the top-left corner to view (200, 150) -> image (128, 96).
+        view.onTouchEvent(
+            android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_DOWN, 0f, 0f, 0)
+        )
+        view.onTouchEvent(
+            android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_MOVE, 200f, 150f, 0)
+        )
+        view.onTouchEvent(
+            android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_UP, 200f, 150f, 0)
+        )
+
+        val crop = view.getCropRect()
+        assertEquals(128f, crop.left, 2f)
+        assertEquals(96f, crop.top, 2f)
+        assertEquals(640f, crop.right, 0.01f) // other corners stay put
+        assertEquals(640f, crop.bottom, 0.01f)
+        bmp.recycle()
+    }
+
+    @Test
+    fun `page viewer crop shrinks the saved page`() {
+        val id = seedDoc("Cropdoc")
+        val before = com.scanwhirl.app.util.ImageTools.imageSize(
+            repo.listDocuments().first { it.id == id }.pageFiles[0].readBytes())
+        assertEquals(310 to 444, before)
+
+        val intent = PageViewerActivity.intent(app, id, 0)
+        ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnCrop).performClick()
+            }
+
+            var visible = false
+            assertTrue("crop overlay should open", pollUntil {
+                scenario.onActivity { a ->
+                    visible = a.findViewById<android.view.View>(R.id.cropOverlay).visibility ==
+                        android.view.View.VISIBLE
+                }
+                visible
+            })
+
+            var ready = false
+            assertTrue("crop view should have its image", pollUntil {
+                scenario.onActivity { a ->
+                    ready = a.findViewById<CropView>(R.id.cropView).getCropRect().width() > 0f
+                }
+                ready
+            })
+
+            scenario.onActivity { a ->
+                val cropView = a.findViewById<CropView>(R.id.cropView)
+                cropView.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
+                )
+                cropView.layout(0, 0, 1080, 1920)
+
+                // Drag the top-left corner in (image 310x444 fitCentered in 1080x1920).
+                val scale = kotlin.math.min(1080f / 310f, 1920f / 444f)
+                val drawnTop = (1920f - 444f * scale) / 2f
+                cropView.onTouchEvent(
+                    android.view.MotionEvent.obtain(
+                        0, 0, android.view.MotionEvent.ACTION_DOWN, 0f, drawnTop, 0)
+                )
+                cropView.onTouchEvent(
+                    android.view.MotionEvent.obtain(
+                        0, 0, android.view.MotionEvent.ACTION_MOVE, 216f, 450f, 0)
+                )
+                cropView.onTouchEvent(
+                    android.view.MotionEvent.obtain(
+                        0, 0, android.view.MotionEvent.ACTION_UP, 216f, 450f, 0)
+                )
+                a.findViewById<android.view.View>(R.id.btnApplyCrop).performClick()
+            }
+
+            val cropped = pollUntil {
+                val size = com.scanwhirl.app.util.ImageTools.imageSize(
+                    repo.listDocuments().first { it.id == id }.pageFiles[0].readBytes())
+                size != null && size.first in 240..256 && size.second in 360..376
+            }
+            assertTrue("page should be cropped to ~(248, 368)", cropped)
+        }
+    }
+
+    @Test
+    fun `staging crop writes the staged page`() {
+        val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_000.jpg").writeBytes(jpegBytes())
+
+        val intent = PageViewerActivity.stagingIntent(app, staging.path, 0)
+        ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnCrop).performClick()
+            }
+
+            var ready = false
+            assertTrue("crop view should have its image", pollUntil {
+                scenario.onActivity { a ->
+                    val overlayOpen = a.findViewById<android.view.View>(R.id.cropOverlay).visibility ==
+                        android.view.View.VISIBLE
+                    ready = overlayOpen &&
+                        a.findViewById<CropView>(R.id.cropView).getCropRect().width() > 0f
+                }
+                ready
+            })
+
+            scenario.onActivity { a ->
+                val cropView = a.findViewById<CropView>(R.id.cropView)
+                cropView.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
+                )
+                cropView.layout(0, 0, 1080, 1920)
+                val scale = kotlin.math.min(1080f / 310f, 1920f / 444f)
+                val drawnTop = (1920f - 444f * scale) / 2f
+                cropView.onTouchEvent(
+                    android.view.MotionEvent.obtain(
+                        0, 0, android.view.MotionEvent.ACTION_DOWN, 0f, drawnTop, 0)
+                )
+                cropView.onTouchEvent(
+                    android.view.MotionEvent.obtain(
+                        0, 0, android.view.MotionEvent.ACTION_MOVE, 216f, 450f, 0)
+                )
+                cropView.onTouchEvent(
+                    android.view.MotionEvent.obtain(
+                        0, 0, android.view.MotionEvent.ACTION_UP, 216f, 450f, 0)
+                )
+                a.findViewById<android.view.View>(R.id.btnApplyCrop).performClick()
+            }
+
+            val cropped = pollUntil {
+                val size = com.scanwhirl.app.util.ImageTools.imageSize(
+                    java.io.File(staging, "page_000.jpg").readBytes())
+                size != null && size.first in 240..256 && size.second in 360..376
+            }
+            assertTrue("staged page should be cropped in place", cropped)
+        }
+        staging.deleteRecursively()
+    }
+
+    // ------------------------------------------------------------------
     // Commit (b): drag reorder + long-press menu + deferred Undo delete
     // ------------------------------------------------------------------
 

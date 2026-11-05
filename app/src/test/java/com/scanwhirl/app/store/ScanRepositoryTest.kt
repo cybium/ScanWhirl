@@ -370,5 +370,32 @@ class ScanRepositoryTest {
         )
     }
 
+    @Test
+    fun `cropPage crops the page and its kept original`() = runBlocking {
+        val repo = ScanRepository(context)
+        val doc = repo.saveScan(
+            listOf(contentUri(realJpegBytes(300, 400, android.graphics.Color.RED))),
+            null,
+            "crop me"
+        )
+        // Create the kept original so we can verify it stays in sync.
+        repo.setPageFilter(doc.id, 0, com.scanwhirl.app.util.ScanFilter.BLACKWHITE)
+        val orig = File(context.filesDir, "documents/${doc.id}/page_000.orig")
+        assertTrue("kept original should exist", orig.exists())
+
+        repo.cropPage(doc.id, 0, android.graphics.RectF(50f, 100f, 300f, 400f))
+
+        val page = repo.listDocuments().first { it.id == doc.id }.pageFiles[0]
+        val pageSize = com.scanwhirl.app.util.ImageTools.imageSize(page.readBytes())
+        assertEquals(250 to 300, pageSize)
+
+        // The kept original is cropped too, so re-filtering can't undo it.
+        val origSize = com.scanwhirl.app.util.ImageTools.imageSize(orig.readBytes())
+        assertEquals(250 to 300, origSize)
+
+        val reloaded = repo.listDocuments().first { it.id == doc.id }
+        assertTrue("pdf regenerated after crop", reloaded.pdfFile.exists() && reloaded.pdfFile.length() > 0)
+    }
+
 
 }
