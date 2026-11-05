@@ -54,6 +54,10 @@ class PdfViewerActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPdfViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Optional user wallpaper behind the pages (default: neutral grey).
+        com.scanwhirl.app.util.Wallpaper.drawable(this)?.let {
+            binding.pdfPager.background = it
+        }
 
         if (!openPdf()) {
             finish()
@@ -178,7 +182,7 @@ class PdfViewerActivity : BaseActivity() {
         val pos = lm.findFirstVisibleItemPosition()
         if (pos == RecyclerView.NO_POSITION) return
         val shown = pos.coerceIn(0, pageCount - 1)
-        binding.toolbar.subtitle =
+        binding.pdfPageIndicator.text =
             getString(R.string.page_indicator, shown + 1, pageCount)
     }
 

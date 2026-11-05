@@ -135,16 +135,22 @@ class MainActivity : BaseActivity() {
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
         binding.toolbar.title = selectionTitle()
         updateGreeting()
+        binding.scanList.background =
+            com.scanwhirl.app.util.Wallpaper.drawable(this)
     }
 
     /** Time-of-day hello under the app name, when enabled in Settings. */
     private fun updateGreeting() {
-        binding.toolbar.subtitle =
-            if (Prefs.showGreeting(this) && !selectionMode) {
+        if (Prefs.showGreeting(this) && !selectionMode) {
+            val onSurface = ContextCompat.getColor(this, R.color.sf_on_surface)
+            binding.toolbar.setSubtitleTextAppearance(this, R.style.GreetingSubtitle)
+            // ~60% opacity so it stays a quiet secondary line.
+            binding.toolbar.setSubtitleTextColor((onSurface and 0x00FFFFFF) or (0x99 shl 24))
+            binding.toolbar.subtitle =
                 Greeting.forHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
-            } else {
-                null
-            }
+        } else {
+            binding.toolbar.subtitle = null
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -1013,7 +1019,8 @@ class ScanListAdapter(
     var selectionMode: Boolean = false
     var selectedIds: Set<String> = emptySet()
 
-    private val dateFmt = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+    private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val dateFmt = SimpleDateFormat("d/M/yy", Locale.getDefault())
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val binding = ItemScanBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -1027,18 +1034,16 @@ class ScanListAdapter(
     inner class VH(private val binding: ItemScanBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(doc: ScanDocument) {
             binding.scanName.text = doc.name
-            val baseMeta = binding.root.context.resources.getQuantityString(
-                R.plurals.page_count_and_date,
-                doc.pageCount,
-                doc.pageCount,
-                dateFmt.format(Date(doc.createdAt))
-            )
+            binding.pageBadge.text = doc.pageCount.toString()
+            binding.pageBadge.isVisible = doc.pageCount > 0
             val sizeBytes = if (doc.pdfFile.exists() && doc.pdfFile.length() > 0) {
                 doc.pdfFile.length()
             } else {
                 doc.pageFiles.sumOf { it.length() }
             }
-            binding.scanMeta.text = "$baseMeta · ${formatBytes(sizeBytes)}"
+            val whenDate = Date(doc.createdAt)
+            binding.scanMeta.text =
+                "${timeFmt.format(whenDate)} · ${dateFmt.format(whenDate)} · ${formatBytes(sizeBytes)}"
             val first = doc.pageFiles.firstOrNull()
             val thumb = if (first != null) ImageTools.decodeThumb(first, 320) else null
             if (thumb != null) {

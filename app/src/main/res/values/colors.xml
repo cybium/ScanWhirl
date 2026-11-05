@@ -10,6 +10,9 @@
     <color name="sf_surface">#FDFBFF</color>
     <color name="sf_on_surface">#1A1B20</color>
     <color name="sf_title_field">#E7F0FF</color>
+    <color name="sf_tool_bg">#EAF1FB</color>
+    <color name="sf_icon_badge">#D6E3FF</color>
+    <color name="sf_appbar">#B3FDFBFF</color>
     <color name="sf_toolbar">#1565C0</color>
     <color name="sf_ic_camera">#FFFFFF</color>
     <color name="sf_launcher_bg">#1565C0</color>

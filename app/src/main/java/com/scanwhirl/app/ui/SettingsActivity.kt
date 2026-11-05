@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -15,6 +17,21 @@ import com.scanwhirl.app.util.Prefs
 class SettingsActivity : BaseActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
+
+    private val pickWallpaper =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {
+            }
+            Prefs.setWallpaperUri(this, uri.toString())
+            Prefs.setShowWallpaper(this, true)
+            binding.switchWallpaper.isChecked = true
+            updateSummaries()
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,6 +48,21 @@ class SettingsActivity : BaseActivity() {
         binding.switchGreeting.setOnCheckedChangeListener { _, checked ->
             Prefs.setShowGreeting(this, checked)
         }
+        binding.rowWallpaper.setOnClickListener {
+            pickWallpaper.launch(arrayOf("image/*"))
+        }
+        binding.switchWallpaper.isChecked = Prefs.showWallpaper(this)
+        binding.switchWallpaper.setOnCheckedChangeListener { _, checked ->
+            if (checked && Prefs.wallpaperUri(this).isBlank()) {
+                // Need a photo before the wallpaper can be on.
+                binding.switchWallpaper.isChecked = false
+                pickWallpaper.launch(arrayOf("image/*"))
+            } else {
+                Prefs.setShowWallpaper(this, checked)
+                updateSummaries()
+            }
+        }
+        binding.rowPrivacy.setOnClickListener { openPrivacy() }
         binding.rowLanguage.setOnClickListener { chooseLanguage() }
         binding.rowViewer.setOnClickListener { chooseViewer() }
         binding.rowAbout.setOnClickListener { showAbout() }
@@ -66,6 +98,22 @@ class SettingsActivity : BaseActivity() {
                 R.string.viewer_in_app
             }
         )
+        binding.subWallpaper.setText(
+            if (Prefs.showWallpaper(this)) R.string.wallpaper_on else R.string.wallpaper_off
+        )
+    }
+
+    private fun openPrivacy() {
+        try {
+            startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://cybium.github.io/scanwhirl-privacy/")
+                )
+            )
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.privacy_open_failed, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun chooseTheme() {

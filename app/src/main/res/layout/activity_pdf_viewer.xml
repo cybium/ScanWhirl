@@ -7,7 +7,8 @@
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:background="@color/sf_appbar">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
@@ -17,15 +18,32 @@
             app:titleTextColor="?attr/colorOnSurface" />
     </com.google.android.material.appbar.AppBarLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/pdfPager"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="#FF3C3C3C"
-        android:clipToPadding="false"
-        android:paddingVertical="8dp"
-        android:scrollbars="none" />
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/pdfPager"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#FF3C3C3C"
+            android:clipToPadding="false"
+            android:paddingVertical="8dp"
+            android:scrollbars="none" />
+
+        <TextView
+            android:id="@+id/pdfPageIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="12dp"
+            android:background="#66000000"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"
+            android:textColor="#FFFFFFFF"
+            android:textSize="14sp" />
+    </FrameLayout>
 
     <FrameLayout
         android:id="@+id/zoomOverlay"

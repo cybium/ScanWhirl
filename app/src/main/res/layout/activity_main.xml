@@ -11,7 +11,8 @@
 
         <com.google.android.material.appbar.AppBarLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:background="@color/sf_appbar">
 
             <com.google.android.material.appbar.MaterialToolbar
                 android:id="@+id/toolbar"
@@ -84,9 +85,10 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    app:cardBackgroundColor="@color/sf_tool_bg"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="?attr/colorOutlineVariant"
+                    app:strokeColor="@color/sf_primary"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -97,9 +99,11 @@
                         android:paddingVertical="14dp">
 
                         <ImageView
-                            android:layout_width="22dp"
-                            android:layout_height="22dp"
+                            android:layout_width="34dp"
+                            android:layout_height="34dp"
+                            android:background="@drawable/bg_icon_badge"
                             android:contentDescription="@null"
+                            android:padding="7dp"
                             android:src="@drawable/ic_resize"
                             app:tint="?attr/colorPrimary" />
 
@@ -120,9 +124,10 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    app:cardBackgroundColor="@color/sf_tool_bg"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="?attr/colorOutlineVariant"
+                    app:strokeColor="@color/sf_primary"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -133,9 +138,11 @@
                         android:paddingVertical="14dp">
 
                         <ImageView
-                            android:layout_width="22dp"
-                            android:layout_height="22dp"
+                            android:layout_width="34dp"
+                            android:layout_height="34dp"
+                            android:background="@drawable/bg_icon_badge"
                             android:contentDescription="@null"
+                            android:padding="7dp"
                             android:src="@drawable/ic_compress"
                             app:tint="?attr/colorPrimary" />
 
@@ -162,9 +169,10 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    app:cardBackgroundColor="@color/sf_tool_bg"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="?attr/colorOutlineVariant"
+                    app:strokeColor="@color/sf_primary"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -175,9 +183,11 @@
                         android:paddingVertical="14dp">
 
                         <ImageView
-                            android:layout_width="22dp"
-                            android:layout_height="22dp"
+                            android:layout_width="34dp"
+                            android:layout_height="34dp"
+                            android:background="@drawable/bg_icon_badge"
                             android:contentDescription="@null"
+                            android:padding="7dp"
                             android:src="@drawable/ic_edit"
                             app:tint="?attr/colorPrimary" />
 
@@ -198,9 +208,10 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    app:cardBackgroundColor="@color/sf_tool_bg"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="?attr/colorOutlineVariant"
+                    app:strokeColor="@color/sf_primary"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -211,9 +222,11 @@
                         android:paddingVertical="14dp">
 
                         <ImageView
-                            android:layout_width="22dp"
-                            android:layout_height="22dp"
+                            android:layout_width="34dp"
+                            android:layout_height="34dp"
+                            android:background="@drawable/bg_icon_badge"
                             android:contentDescription="@null"
+                            android:padding="7dp"
                             android:src="@drawable/ic_merge"
                             app:tint="?attr/colorPrimary" />
 

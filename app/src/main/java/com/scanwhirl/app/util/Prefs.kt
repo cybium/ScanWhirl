@@ -13,6 +13,8 @@ object Prefs {
     private const val KEY_SORT = "sort_mode"
     private const val KEY_LOCALE = "locale_tag"
     private const val KEY_GREETING = "show_greeting"
+    private const val KEY_WALLPAPER_URI = "wallpaper_uri"
+    private const val KEY_WALLPAPER_ON = "wallpaper_on"
     private const val KEY_PICKED = "picked_pdfs"
 
     const val THEME_LIGHT = "light"
@@ -56,6 +58,11 @@ object Prefs {
 
     fun showGreeting(c: Context): Boolean = sp(c).getBoolean(KEY_GREETING, true)
     fun setShowGreeting(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_GREETING, v).apply()
+
+    fun showWallpaper(c: Context): Boolean = sp(c).getBoolean(KEY_WALLPAPER_ON, false)
+    fun setShowWallpaper(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_WALLPAPER_ON, v).apply()
+    fun wallpaperUri(c: Context): String = sp(c).getString(KEY_WALLPAPER_URI, "") ?: ""
+    fun setWallpaperUri(c: Context, v: String) = sp(c).edit().putString(KEY_WALLPAPER_URI, v).apply()
 
     fun pickedPdfs(c: Context): Set<String> =
         sp(c).getStringSet(KEY_PICKED, emptySet()) ?: emptySet()
