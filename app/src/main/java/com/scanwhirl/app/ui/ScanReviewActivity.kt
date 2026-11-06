@@ -95,6 +95,16 @@ class ScanReviewActivity : BaseActivity() {
             }
         }
 
+    /** Direct gallery import ("Add from gallery"): EXIF orientation only, no crop. */
+    private val galleryPagesLauncher =
+        registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            if (uris.isNotEmpty()) {
+                appendStagedPages(uris)
+            } else {
+                Toast.makeText(this, R.string.scan_no_pages, Toast.LENGTH_SHORT).show()
+            }
+        }
+
     private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
             if (saving) return
@@ -152,6 +162,10 @@ class ScanReviewActivity : BaseActivity() {
                 }
                 R.id.action_add_pages -> {
                     launchAddPages()
+                    true
+                }
+                R.id.action_add_gallery -> {
+                    galleryPagesLauncher.launch("image/*")
                     true
                 }
                 else -> false
@@ -372,10 +386,14 @@ class ScanReviewActivity : BaseActivity() {
     // Add pages (second scanner batch)
     // ------------------------------------------------------------------
 
-    /** Opens Google's on-device document scanner (ML Kit), like the home screen. */
+    /**
+     * Opens Google's on-device document scanner (ML Kit), like the home
+     * screen. Gallery import is off inside the scanner because it applies
+     * perspective crop — photos are added via "Add from gallery" instead.
+     */
     private fun launchAddPages() {
         val options = GmsDocumentScannerOptions.Builder()
-            .setGalleryImportAllowed(true)
+            .setGalleryImportAllowed(false)
             .setScannerMode(
                 if (Prefs.autoEnhanceScan(this)) {
                     GmsDocumentScannerOptions.SCANNER_MODE_FULL
@@ -422,7 +440,8 @@ class ScanReviewActivity : BaseActivity() {
                         if (bytes.isEmpty()) throw IllegalStateException("a scanned page was empty")
                         next += 1
                         File(stagingDir, String.format(Locale.ROOT, "page_%03d.jpg", next))
-                            .writeBytes(bytes)
+                            // EXIF rotation only: never perspective-crop added photos.
+                            .writeBytes(ImageTools.normalizePage(bytes))
                     }
                 }
                 // The scanner's PDF no longer covers the full page set.

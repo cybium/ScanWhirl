@@ -3,7 +3,7 @@
     <string name="app_name">ScanWhirl</string>
     <string name="scan">Scan document</string>
     <string name="empty_title">No scans yet</string>
-    <string name="empty_subtitle">Tap the camera button to scan your first document. Auto edge detection, crop, batch pages, and PDF export included.</string>
+    <string name="empty_subtitle">Tap + to scan with your camera, or import a photo straight from your gallery. Batch pages, crop, filters, and PDF export included.</string>
     <string name="name_hint">Document name</string>
     <string name="save">Save</string>
     <string name="review_save_pdf">Save as PDF</string>
@@ -223,7 +223,7 @@
     <string name="vault_moved_in">Moved to Hidden Vault</string>
     <string name="vault_moved_out">Restored from Hidden Vault</string>
     <string name="vault_empty_title">Vault is empty</string>
-    <string name="vault_empty_subtitle">Open any scan → Pro Tools → Hide in Vault to keep private documents behind your 4-digit PIN.</string>
+    <string name="vault_empty_subtitle">Tap + to move a saved scan here or import a device PDF. Everything inside stays hidden behind your 4-digit PIN.</string>
     <string name="unlock_pdf_title">Password-Protected PDF</string>
     <string name="unlock_pdf_msg">Enter password for \"%1$s\":</string>
     <string name="unlock_pdf_remove">Unlock permanently</string>
@@ -293,5 +293,36 @@
     <string name="compress_failed">Compression failed: %1$s</string>
 
     <string name="progress_title">Working…</string>
+
+    <!-- New pages: camera or a straight gallery import (no scanner crop). -->
+    <string name="scan_chooser_title">Add pages</string>
+    <string name="scan_chooser_camera">Camera scanner</string>
+    <string name="scan_chooser_gallery">Import from gallery</string>
+    <string name="source_saved_scan">Saved scan</string>
+    <string name="source_device_pdf">Device PDF</string>
+    <string name="source_gallery_image">Gallery image</string>
+    <string name="add_from_gallery">Add from gallery</string>
+
+    <!-- Lock / Unlock across saved scans and device PDFs. -->
+    <string name="lock_source_lock_device">Lock a device PDF</string>
+    <string name="lock_source_unlock_device">Unlock a locked PDF file</string>
+    <string name="lock_device_title">Lock a device PDF</string>
+    <string name="lock_device_msg">ScanWhirl imports this PDF\'s pages as images first (the text stops being selectable), then protects the new PDF with your password. Save or share the locked file from the next screen.</string>
+    <string name="lock_device_note">Pages were imported as images, so this PDF is picture-based. The copy you save is password-protected.</string>
+    <string name="unlock_pdf_not_ours_title">Not a ScanWhirl-locked PDF</string>
+    <string name="unlock_pdf_not_ours_msg">ScanWhirl only removes passwords it set itself — it can\'t break a lock made by another app. This file was left untouched. Remove its password in the app that locked it, or ask the sender for an unlocked copy.</string>
+    <string name="unlock_device_note">Your scan in ScanWhirl keeps its password; this exported copy is open. Use Lock / Unlock → Saved scan to remove the password from the scan itself.</string>
+
+    <!-- Hidden Vault: add via the FAB. -->
+    <string name="vault_add_title">Add to Hidden Vault</string>
+    <string name="vault_add_scan">Move a saved scan here</string>
+    <string name="vault_add_pdf">Import a device PDF</string>
+    <string name="vault_imported">Imported into Hidden Vault</string>
+
+    <!-- Pro panel: pitch when free + test-only Free/Pro preview. -->
+    <string name="pro_panel_free">ScanWhirl stays free: scan, edit, merge, compress and view — no account, no ads, no server.\n\nPro is a one-time purchase that unlocks:\n• 🛡️ Hidden Vault — 4-digit PIN private folder\n• 📝 OCR Text — extract, copy &amp; search text inside pages\n• 🔒 Lock / Unlock PDF — protect scans and device PDFs\n• 🖼️ Long Image — stitch all pages into one tall image\n• 🪪 ID / Passport crop presets\n• 📦 Batch ZIP export\n\nTap the crown badge to unlock Pro.</string>
+    <string name="preview_free_ui">Preview Free UI</string>
+    <string name="preview_pro_ui">Preview Pro UI</string>
+    <string name="preview_changed">Showing the %1$s UI (test preview)</string>
 
 </resources>

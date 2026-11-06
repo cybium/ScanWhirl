@@ -26,4 +26,11 @@
         android:icon="@drawable/ic_camera"
         android:title="@string/add_pages"
         app:showAsAction="never" />
+
+    <!-- Photos added here are only EXIF-normalised, never perspective-cropped. -->
+    <item
+        android:id="@+id/action_add_gallery"
+        android:icon="@drawable/ic_gallery"
+        android:title="@string/add_from_gallery"
+        app:showAsAction="never" />
 </menu>

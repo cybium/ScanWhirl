@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import android.util.Base64
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OcrEngine
@@ -14,6 +15,7 @@ import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
+import com.scanwhirl.app.util.Sha256
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -246,10 +248,9 @@ class ScanRepository(private val context: Context) {
             try {
                 var pageNum = 0
                 for (uri in uris) {
-                    val fd = context.contentResolver.openFileDescriptor(uri, "r")
-                        ?: throw IllegalStateException("Could not open a PDF")
-                    fd.use {
-                        pageNum += appendPdfPages(fd, dir, pageNum, dpi = 150f, maxDim = 2048, quality = 85)
+                    // SAF PDFs are often pipes; the renderer needs a seekable fd.
+                    pageNum += PdfPageRenderer.withSeekablePdf(context, uri) { fd ->
+                        appendPdfPages(fd, dir, pageNum, dpi = 150f, maxDim = 2048, quality = 85)
                     }
                 }
                 if (pageNum == 0) throw IllegalStateException("No pages to merge")
@@ -469,12 +470,12 @@ class ScanRepository(private val context: Context) {
         maxDim: Int = 2048,
         quality: Int = 85
     ): ScanDocument = withContext(Dispatchers.IO) {
-        val fd = context.contentResolver.openFileDescriptor(uri, "r")
-            ?: throw IllegalStateException("Could not open PDF")
         val (id, dir) = newDocDir()
         try {
-            fd.use {
-                appendPdfPages(it, dir, 0, dpi = dpi, maxDim = maxDim, quality = quality)
+            // Copying once makes every provider (Downloads, Drive, chat apps)
+            // readable by PdfRenderer instead of failing "not seekable".
+            PdfPageRenderer.withSeekablePdf(context, uri) { fd ->
+                appendPdfPages(fd, dir, 0, dpi = dpi, maxDim = maxDim, quality = quality)
             }
             finalizeDoc(id, dir, name)
         } catch (e: Exception) {
@@ -483,12 +484,30 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /** Imports a device PDF straight into the Hidden Vault (Pro). */
+    suspend fun importPdfIntoVault(
+        uri: Uri,
+        name: String?,
+        dpi: Float = 150f,
+        maxDim: Int = 2048,
+        quality: Int = 85
+    ): ScanDocument {
+        val doc = importPdfAsScan(uri, name, dpi, maxDim, quality)
+        return setVaulted(doc.id, true) ?: doc
+    }
+
     private val LOCK_FILE = "locked.meta"
     private val VAULT_FILE = "vault.flag"
+    private val LOCK_INDEX_FILE = "locked_pdfs.txt"
+    private val OCR_HEADER = "#scanwhirl-ocr-v2"
 
     /**
      * Rebuilds the document's PDF with the password-protection extra applied
      * (Pro). The page images are untouched; only the PDF wrapper changes.
+     *
+     * The finished encrypted PDF's SHA-256 is recorded in an app-private
+     * index, so if the user later picks that saved/shared copy from storage
+     * ScanWhirl can recognise its own lock and offer an honest "Unlock PDF".
      */
     suspend fun protectPdf(id: String, password: String): ScanDocument =
         withContext(Dispatchers.IO) {
@@ -507,6 +526,7 @@ class ScanRepository(private val context: Context) {
                 PdfEncryptor.encrypt(src, protected, password)
                 protected.copyTo(doc.pdfFile, overwrite = true)
                 File(dir, LOCK_FILE).writeText(Prefs.sha256("pdf_lock:$password"))
+                recordLockIndex(doc.pdfFile, id)
             } finally {
                 src.delete()
                 protected.delete()
@@ -524,6 +544,7 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             File(dir, LOCK_FILE).delete()
             regeneratePdf(dir)
+            pruneLockIndex()
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after unlock")
         }
 
@@ -533,6 +554,46 @@ class ScanRepository(private val context: Context) {
         if (!lockFile.exists()) return true
         val stored = lockFile.readText().trim()
         return stored == Prefs.sha256("pdf_lock:$password")
+    }
+
+    // ------------------------------------------------------------------
+    // Password-lock index (recognises ScanWhirl-locked PDFs later)
+    // ------------------------------------------------------------------
+
+    private fun recordLockIndex(pdf: File, docId: String) {
+        try {
+            val hash = Sha256.of(pdf)
+            File(context.filesDir, LOCK_INDEX_FILE)
+                .appendText("$hash\t$docId\n")
+        } catch (_: Exception) {
+            // Indexing is a convenience; a failed write must never break locking.
+        }
+    }
+
+    /** Finds the still-locked ScanWhirl document that produced [hash]. */
+    fun findLockedDocumentByHash(hash: String): ScanDocument? {
+        val index = File(context.filesDir, LOCK_INDEX_FILE)
+        if (!index.exists()) return null
+        return index.readLines().asReversed().firstNotNullOfOrNull { line ->
+            val parts = line.split('\t')
+            if (parts.size != 2 || parts[0] != hash) return@firstNotNullOfOrNull null
+            val doc = getDocument(parts[1]) ?: return@firstNotNullOfOrNull null
+            if (doc.isLocked) doc else null
+        }
+    }
+
+    /** Drops index entries whose document is gone or no longer locked. */
+    private fun pruneLockIndex() {
+        try {
+            val index = File(context.filesDir, LOCK_INDEX_FILE)
+            if (!index.exists()) return
+            val kept = index.readLines().filter { line ->
+                val parts = line.split('\t')
+                parts.size == 2 && getDocument(parts[1])?.isLocked == true
+            }
+            index.writeText(kept.joinToString("\n").let { if (it.isBlank()) "" else "$it\n" })
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -566,10 +627,22 @@ class ScanRepository(private val context: Context) {
     fun ocrDoc(id: String): Map<String, String> = try {
         val file = File(File(docsDir, id), "ocr.txt")
         if (!file.exists()) emptyMap()
-        else file.readLines().mapNotNull { line ->
-            val parts = line.split('\t', limit = 2)
-            if (parts.size == 2) parts[0] to parts[1] else null
-        }.toMap()
+        else {
+            val lines = file.readLines()
+            if (lines.firstOrNull() == OCR_HEADER) {
+                lines.drop(1).mapNotNull { line ->
+                    val parts = line.split('\t', limit = 2)
+                    if (parts.size != 2) null
+                    else parts[0] to String(Base64.decode(parts[1], Base64.NO_WRAP), Charsets.UTF_8)
+                }.toMap()
+            } else {
+                // Legacy file (pre-test21): only the first line of each page survived.
+                lines.mapNotNull { line ->
+                    val parts = line.split('\t', limit = 2)
+                    if (parts.size == 2) parts[0] to parts[1] else null
+                }.toMap()
+            }
+        }
     } catch (_: Exception) {
         emptyMap()
     }
@@ -577,22 +650,39 @@ class ScanRepository(private val context: Context) {
     /** True when this document has OCR text saved already. */
     fun hasOcr(id: String): Boolean = File(File(docsDir, id), "ocr.txt").exists()
 
-    /** Runs OCR over every page (background) and stores docid/ocr.txt. */
-    suspend fun buildOcr(id: String): Int = withContext(Dispatchers.IO) {
+    /**
+     * Runs OCR over every page (background) and stores docid/ocr.txt.
+     * [recognize] is injectable so the multi-line round-trip can be tested
+     * without Play services. The text is Base64-encoded: newlines, tabs and
+     * every paragraph survive intact instead of being cut at the first line.
+     */
+    suspend fun buildOcr(
+        id: String,
+        recognize: suspend (File) -> String = { OcrEngine.recognize(it) }
+    ): Int = withContext(Dispatchers.IO) {
         val dir = File(docsDir, id)
         val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
         val map = mutableMapOf<String, String>()
         for (page in doc.pageFiles) {
             try {
-                map[page.name] = OcrEngine.recognize(page)
+                map[page.name] = recognize(page)
             } catch (_: Exception) {
                 map[page.name] = "" // page unreadable: skip silently, honest
             }
         }
-        File(dir, "ocr.txt").writeText(
-            map.entries.joinToString("\n") { "${it.key}\t${it.value}" }
-        )
+        writeOcr(id, map)
         map.size
+    }
+
+    /** Persists a page -> text map in the lossless Base64 OCR format. */
+    internal fun writeOcr(id: String, pages: Map<String, String>) {
+        val dir = File(docsDir, id)
+        dir.mkdirs()
+        File(dir, "ocr.txt").writeText(
+            (listOf(OCR_HEADER) + pages.map { (name, text) ->
+                "$name\t${Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)}"
+            }).joinToString("\n")
+        )
     }
 
     private fun renumberPages(dir: File) {

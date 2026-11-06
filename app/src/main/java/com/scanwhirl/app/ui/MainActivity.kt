@@ -44,9 +44,11 @@ import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Greeting
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
@@ -119,6 +121,32 @@ class MainActivity : BaseActivity() {
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { startCompressFromFile(it) } }
 
+    /** Pending action for a Pro device-PDF picker (OCR, Lock, Long Image…). */
+    private var pendingUriAction: ((Uri) -> Unit)? = null
+
+    private val pickProPdf = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        val action = pendingUriAction
+        pendingUriAction = null
+        if (uri != null) action?.invoke(uri)
+    }
+
+    private val pickProImage = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        val action = pendingUriAction
+        pendingUriAction = null
+        if (uri != null) action?.invoke(uri)
+    }
+
+    /** Direct gallery import: no scanner, no perspective crop, no tilt. */
+    private val pickGalleryImages = registerForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isNotEmpty()) stageAndReview(uris)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -131,8 +159,12 @@ class MainActivity : BaseActivity() {
         binding.scanList.layoutManager = LinearLayoutManager(this)
         binding.scanList.adapter = adapter
 
-        binding.fabScan.setOnClickListener { launchScanner() }
-        binding.emptyState.setOnClickListener { launchScanner() }
+        binding.fabScan.setOnClickListener {
+            if (vaultMode) addToVault() else showScanChooser()
+        }
+        binding.emptyState.setOnClickListener {
+            if (vaultMode) addToVault() else showScanChooser()
+        }
 
         binding.toolResize.setOnClickListener { pickResizeImage.launch("image/*") }
         binding.toolCompress.setOnClickListener { startCompress() }
@@ -145,13 +177,20 @@ class MainActivity : BaseActivity() {
         binding.btnProSuite.setOnClickListener { toggleProSuite() }
         binding.toolVault.setOnClickListener { openVaultWithPin() }
         binding.toolOcr.setOnClickListener {
-            pickScan(R.string.ocr_title) { doc -> runOcrForScan(doc) }
+            chooseProSource(
+                R.string.ocr_title,
+                onScan = { doc -> runOcrForScan(doc) },
+                onPdf = { uri -> runOcrForPdf(uri) },
+                onImage = { uri -> runOcrForImage(uri) }
+            )
         }
-        binding.toolLockPdf.setOnClickListener {
-            pickScan(R.string.btn_lock_unlock) { doc -> promptLockOrUnlockScan(doc) }
-        }
+        binding.toolLockPdf.setOnClickListener { chooseLockSource() }
         binding.toolLongImage.setOnClickListener {
-            pickScan(R.string.btn_long_image) { doc -> runLongImageForScan(doc) }
+            chooseProSource(
+                R.string.btn_long_image,
+                onScan = { doc -> runLongImageForScan(doc) },
+                onPdf = { uri -> runLongImageForPdf(uri) }
+            )
         }
         binding.btnVaultLock.setOnClickListener { setVaultMode(false) }
         binding.btnVaultChangePin.setOnClickListener { promptSetVaultPin(onSuccess = {}) }
@@ -164,11 +203,7 @@ class MainActivity : BaseActivity() {
                 applyList()
             }
         })
-        if (ProGate.isPro(this)) {
-            binding.searchInput.hint = getString(R.string.search_hint_pro)
-        }
-        binding.btnSort.setOnClickListener { showSortMenu() }
-        // Tapping the crown badge (or the whole title block) opens the Pro panel.
+        binding.btnSort.setOnClickListener { showSortMenu() }        // Tapping the crown badge (or the whole title block) opens the Pro panel.
         binding.proBadge.setOnClickListener { showProPanel() }
         binding.titleBlock.setOnClickListener { showProPanel() }
 
@@ -242,7 +277,8 @@ class MainActivity : BaseActivity() {
         menu.findItem(R.id.action_merge)?.isVisible = selectionMode
         menu.findItem(R.id.action_merge)?.isEnabled = selectedIds.size >= 2
         menu.findItem(R.id.action_delete_selected)?.isVisible = selectionMode
-        menu.findItem(R.id.action_export_zip)?.isVisible = selectionMode
+        // Pro extras only appear in the Pro UI (Free keeps no dead buttons around).
+        menu.findItem(R.id.action_export_zip)?.isVisible = selectionMode && ProGate.isPro(this)
         menu.findItem(R.id.action_export_zip)?.isEnabled =
             selectedIds.isNotEmpty() && ProGate.isPro(this)
         return super.onPrepareOptionsMenu(menu)
@@ -338,9 +374,13 @@ class MainActivity : BaseActivity() {
         updateGreeting()
     }
 
-    /** Crown badge next to the app name: gold PRO unlocked, dim FREE otherwise. */
+    /**
+     * Crown badge next to the app name: gold PRO unlocked, dim FREE otherwise.
+     * In Free, the Pro Suite card is hidden entirely — the badge is the only
+     * entry point to the pitch, and OCR search hint falls back to plain search.
+     */
     private fun updateProBadge() {
-        val pro = com.scanwhirl.app.util.ProGate.isPro(this)
+        val pro = ProGate.isPro(this)
         if (pro) {
             binding.proBadge.text = getString(R.string.badge_pro)
             binding.proBadge.setTextColor(ContextCompat.getColor(this, R.color.pro_gold))
@@ -355,16 +395,43 @@ class MainActivity : BaseActivity() {
                     ContextCompat.getColor(this, R.color.sf_on_surface_variant)
                 )
             binding.proBadge.setBackgroundResource(R.drawable.bg_free_badge)
+            // Free UI: no Pro Suite card, always a collapsed grid when it returns.
+            binding.proSuiteGrid.isVisible = false
+            binding.proSuiteChevron.setImageResource(R.drawable.ic_chevron_down)
         }
+        binding.proSuiteCard.isVisible = pro
+        binding.searchInput.hint =
+            getString(if (pro) R.string.search_hint_pro else R.string.search_hint)
     }
 
-    /** Pro panel: what the crown unlocks and where each extra lives. */
+    /**
+     * Pro panel: what the crown unlocks and where each extra lives. Test
+     * builds get a "Preview Free/Pro" toggle so both UIs can be reviewed on
+     * the same phone without a second APK.
+     */
     private fun showProPanel() {
-        AlertDialog.Builder(this)
+        val pro = ProGate.isPro(this)
+        val builder = AlertDialog.Builder(this)
             .setTitle(getString(R.string.settings_pro_title))
-            .setMessage(getString(R.string.pro_panel_home))
+            .setMessage(getString(if (pro) R.string.pro_panel_home else R.string.pro_panel_free))
             .setPositiveButton(android.R.string.ok, null)
-            .show()
+        if (com.scanwhirl.app.BuildConfig.TEST_BUILD) {
+            builder.setNeutralButton(
+                if (pro) R.string.preview_free_ui else R.string.preview_pro_ui
+            ) { _, _ ->
+                ProGate.setTestOverride(this, !pro)
+                recreate()
+                Toast.makeText(
+                    this,
+                    getString(
+                        R.string.preview_changed,
+                        getString(if (pro) R.string.badge_free else R.string.badge_pro)
+                    ),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        builder.show()
     }
 
     private fun setSelectionMode(enabled: Boolean) {
@@ -373,7 +440,7 @@ class MainActivity : BaseActivity() {
         if (!enabled) selectedIds.clear()
         adapter.selectionMode = enabled
         adapter.notifyDataSetChanged()
-        binding.fabScan.isVisible = !enabled && !vaultMode
+        binding.fabScan.isVisible = !enabled
         binding.toolsRow.isVisible = !enabled && !vaultMode
         applyToolbarTitle()
         updateGreeting()
@@ -458,7 +525,11 @@ class MainActivity : BaseActivity() {
         backCallback.isEnabled = selectionMode || vaultMode
         binding.vaultBanner.isVisible = enabled
         binding.toolsRow.isVisible = !enabled && !selectionMode
-        binding.fabScan.isVisible = !enabled && !selectionMode
+        // In the vault the FAB becomes "add": move a scan in, or import a PDF.
+        binding.fabScan.isVisible = !selectionMode
+        binding.fabScan.setImageResource(if (enabled) R.drawable.ic_add else R.drawable.ic_camera)
+        binding.fabScan.contentDescription =
+            getString(if (enabled) R.string.vault_add_title else R.string.scan)
         binding.emptyTitle.setText(if (enabled) R.string.vault_empty_title else R.string.empty_title)
         binding.emptySubtitle.setText(if (enabled) R.string.vault_empty_subtitle else R.string.empty_subtitle)
         refreshList()
@@ -481,25 +552,10 @@ class MainActivity : BaseActivity() {
                         .joinToString("\n\n")
                 }
                 progress.dismiss()
-                val shown = text.ifBlank { getString(R.string.ocr_empty) }
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle(doc.name)
-                    .setMessage(shown)
-                    .setPositiveButton(R.string.ocr_copy) { _, _ ->
-                        val cb = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                        cb?.setPrimaryClip(android.content.ClipData.newPlainText(doc.name, shown))
-                        Toast.makeText(this@MainActivity, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
-                    }
-                    .setNeutralButton(R.string.share_pdf) { _, _ ->
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, doc.name)
-                            putExtra(Intent.EXTRA_TEXT, shown)
-                        }
-                        startActivity(Intent.createChooser(send, getString(R.string.share_pdf)))
-                    }
-                    .setNegativeButton(R.string.close, null)
-                    .show()
+                showOcrTextDialog(
+                    doc.name,
+                    text.ifBlank { getString(R.string.ocr_empty) }
+                )
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -606,6 +662,483 @@ class MainActivity : BaseActivity() {
                         warning = null
                     )
                 )
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Scan source chooser (camera vs a straight gallery import)
+    // ------------------------------------------------------------------
+
+    /**
+     * One entry point for new pages. The gallery path bypasses ML Kit's
+     * scanner on purpose: the scanner perspective-crops imported photos,
+     * which is what used to tilt them. Direct import only fixes EXIF
+     * rotation — the picture is otherwise exactly as taken.
+     */
+    private fun showScanChooser() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.scan_chooser_title)
+            .setItems(
+                arrayOf(
+                    getString(R.string.scan_chooser_camera),
+                    getString(R.string.scan_chooser_gallery)
+                )
+            ) { _, which ->
+                when (which) {
+                    0 -> launchScanner()
+                    1 -> pickGalleryImages.launch("image/*")
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Where should this Pro extra take its input from? Saved scans work
+     * in place; device PDFs and gallery images run the same extra on an
+     * imported file so the features are not limited to scans made in-app.
+     */
+    private fun chooseProSource(
+        titleRes: Int,
+        onScan: (ScanDocument) -> Unit,
+        onPdf: (Uri) -> Unit,
+        onImage: ((Uri) -> Unit)? = null
+    ) {
+        val items = mutableListOf(
+            getString(R.string.source_saved_scan),
+            getString(R.string.source_device_pdf)
+        )
+        if (onImage != null) items += getString(R.string.source_gallery_image)
+        AlertDialog.Builder(this)
+            .setTitle(titleRes)
+            .setItems(items.toTypedArray()) { _, which ->
+                when (which) {
+                    0 -> pickScan(titleRes) { doc -> onScan(doc) }
+                    1 -> {
+                        pendingUriAction = onPdf
+                        pickProPdf.launch(arrayOf("application/pdf"))
+                    }
+                    else -> {
+                        pendingUriAction = onImage ?: return@setItems
+                        pickProImage.launch("image/*")
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    // ------------------------------------------------------------------
+    // Pro Suite: Lock / Unlock for saved scans AND device PDFs
+    // ------------------------------------------------------------------
+
+    private fun chooseLockSource() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.btn_lock_unlock)
+            .setItems(
+                arrayOf(
+                    getString(R.string.source_saved_scan),
+                    getString(R.string.lock_source_lock_device),
+                    getString(R.string.lock_source_unlock_device)
+                )
+            ) { _, which ->
+                when (which) {
+                    0 -> pickScan(R.string.btn_lock_unlock) { doc -> promptLockOrUnlockScan(doc) }
+                    1 -> {
+                        pendingUriAction = { uri -> lockDevicePdf(uri) }
+                        pickProPdf.launch(arrayOf("application/pdf"))
+                    }
+                    else -> {
+                        pendingUriAction = { uri -> unlockDevicePdf(uri) }
+                        pickProPdf.launch(arrayOf("application/pdf"))
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Locking a device PDF honestly means importing it (pages become
+     * images) and protecting the new ScanWhirl PDF. The confirmation says
+     * so before anything is written.
+     */
+    private fun lockDevicePdf(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.lock_device_title)
+            .setMessage(R.string.lock_device_msg)
+            .setPositiveButton(R.string.continue_label) { _, _ ->
+                val input = EditText(this).apply {
+                    hint = getString(R.string.protect_hint)
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                        android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.protect_title)
+                    .setMessage(R.string.protect_note)
+                    .setView(input)
+                    .setPositiveButton(R.string.protect_apply) { _, _ ->
+                        runLockDevicePdf(uri, input.text?.toString().orEmpty())
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun runLockDevicePdf(uri: Uri, password: String) {
+        if (password.isBlank()) {
+            Toast.makeText(this, R.string.protect_hint, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val before = withContext(Dispatchers.IO) {
+                    contentResolver.openFileDescriptor(uri, "r")
+                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
+                }
+                val name = devicePdfName(uri)
+                val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
+                val locked = withContext(Dispatchers.IO) { repo.protectPdf(doc.id, password) }
+                progress.dismiss()
+                refreshList()
+                Toast.makeText(this@MainActivity, R.string.protect_done, Toast.LENGTH_LONG).show()
+                startActivity(
+                    ExportResultActivity.intent(
+                        this@MainActivity,
+                        outputPath = locked.pdfFile.path,
+                        previewPath = locked.pageFiles.firstOrNull()?.path,
+                        mime = "application/pdf",
+                        displayName = DownloadSaver.pdfNameFor(locked.name),
+                        beforeBytes = before,
+                        afterBytes = locked.pdfFile.length(),
+                        width = 0,
+                        height = 0,
+                        title = getString(R.string.lock_device_title),
+                        warning = getString(R.string.lock_device_note)
+                    )
+                )
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /**
+     * Unlock a PDF file from storage. ScanWhirl recognises its own locks by
+     * a SHA-256 index of the protected file; any other PDF stays untouched
+     * with an honest explanation (we cannot break other people's passwords).
+     */
+    private fun unlockDevicePdf(uri: Uri) {
+        val progress = showProgress(R.string.unlock_pdf_title)
+        lifecycleScope.launch {
+            try {
+                val hash = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { Sha256.of(it) }
+                        ?: throw IllegalStateException("could not read the PDF")
+                }
+                val doc = withContext(Dispatchers.IO) { repo.findLockedDocumentByHash(hash) }
+                progress.dismiss()
+                if (doc == null) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle(R.string.unlock_pdf_not_ours_title)
+                        .setMessage(R.string.unlock_pdf_not_ours_msg)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                    return@launch
+                }
+                promptDeviceUnlockPassword(doc, uri)
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun promptDeviceUnlockPassword(doc: ScanDocument, uri: Uri) {
+        val input = EditText(this).apply {
+            hint = getString(R.string.protect_hint)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.unlock_pdf_title)
+            .setMessage(getString(R.string.unlock_pdf_msg, doc.name))
+            .setView(input)
+            .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
+                val pw = input.text?.toString().orEmpty()
+                if (repo.verifyPdfPassword(doc.id, pw)) {
+                    runUnlockDevicePdf(doc, uri)
+                } else {
+                    Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Exports a clean (password-free) copy of the locked scan's pages. */
+    private fun runUnlockDevicePdf(doc: ScanDocument, uri: Uri) {
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val before = withContext(Dispatchers.IO) {
+                    contentResolver.openFileDescriptor(uri, "r")
+                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
+                }
+                val clean = withContext(Dispatchers.IO) { repo.unlockedPreviewPdf(doc.id) }
+                progress.dismiss()
+                startActivity(
+                    ExportResultActivity.intent(
+                        this@MainActivity,
+                        outputPath = clean.path,
+                        previewPath = doc.pageFiles.firstOrNull()?.path,
+                        mime = "application/pdf",
+                        displayName = DownloadSaver.pdfNameFor("${doc.name} (unlocked)"),
+                        beforeBytes = before,
+                        afterBytes = clean.length(),
+                        width = 0,
+                        height = 0,
+                        title = getString(R.string.unlock_pdf_title),
+                        warning = getString(R.string.unlock_device_note)
+                    )
+                )
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Pro Suite: OCR from a scan, a device PDF, or a gallery image
+    // ------------------------------------------------------------------
+
+    private fun runOcrForPdf(uri: Uri) {
+        val progress = showProgress(R.string.ocr_running)
+        lifecycleScope.launch {
+            try {
+                // Render + read one page at a time: no whole PDF in memory.
+                val parts = withContext(Dispatchers.IO) {
+                    PdfPageRenderer.withSeekablePdf(this@MainActivity, uri) { fd ->
+                        val count = PdfPageRenderer.pageCount(fd)
+                        (0 until count).mapNotNull { i ->
+                            val page = PdfPageRenderer.renderPageJpeg(fd, i, 200f, 2400, 92)
+                            val text = OcrEngine.recognizeBytes(page).trim()
+                            if (text.isEmpty()) null else "--- Page ${i + 1} ---\n$text"
+                        }
+                    }
+                }
+                progress.dismiss()
+                showOcrTextDialog(
+                    devicePdfName(uri),
+                    parts.joinToString("\n\n").ifBlank { getString(R.string.ocr_empty) }
+                )
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun runOcrForImage(uri: Uri) {
+        val progress = showProgress(R.string.ocr_running)
+        lifecycleScope.launch {
+            try {
+                val text = withContext(Dispatchers.IO) {
+                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: throw IllegalStateException("could not read the image")
+                    // EXIF rotation only — the photo is never warped or cropped.
+                    OcrEngine.recognizeBytes(ImageTools.normalizePage(bytes)).trim()
+                }
+                progress.dismiss()
+                val title = repo.displayNameOf(uri)?.substringBeforeLast('.')
+                    ?.takeIf { it.isNotBlank() } ?: getString(R.string.source_gallery_image)
+                showOcrTextDialog(title, text.ifBlank { getString(R.string.ocr_empty) })
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /** Shared OCR result dialog: every line, copyable and shareable. */
+    private fun showOcrTextDialog(title: String, shown: String) {
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(shown)
+            .setPositiveButton(R.string.ocr_copy) { _, _ ->
+                val cb = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                cb?.setPrimaryClip(android.content.ClipData.newPlainText(title, shown))
+                Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton(R.string.share_pdf) { _, _ ->
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, title)
+                    putExtra(Intent.EXTRA_TEXT, shown)
+                }
+                startActivity(Intent.createChooser(send, getString(R.string.share_pdf)))
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    // ------------------------------------------------------------------
+    // Pro Suite: Long Image from a scan or a device PDF
+    // ------------------------------------------------------------------
+
+    private fun runLongImageForPdf(uri: Uri) {
+        val progress = showProgress()
+        val tempDir = File(cacheDir, "longpdf_${System.nanoTime()}")
+        lifecycleScope.launch {
+            try {
+                val out = withContext(Dispatchers.IO) {
+                    tempDir.mkdirs()
+                    val pages = PdfPageRenderer.withSeekablePdf(this@MainActivity, uri) { fd ->
+                        val count = PdfPageRenderer.pageCount(fd)
+                        (0 until count).map { i ->
+                            val file = File(
+                                tempDir, String.format(Locale.ROOT, "page_%03d.jpg", i + 1)
+                            )
+                            file.writeBytes(PdfPageRenderer.renderPageJpeg(fd, i, 150f, 2048, 90))
+                            file
+                        }
+                    }
+                    val shareDir = File(cacheDir, "documents/share").apply { mkdirs() }
+                    val file = File(shareDir, ShareUtils.sanitizeName(devicePdfName(uri)) + " - long.jpg")
+                    LongImage.stitch(pages, file)
+                    file
+                }
+                progress.dismiss()
+                val dims = ImageTools.imageSize(out.readBytes()) ?: (0 to 0)
+                val before = withContext(Dispatchers.IO) {
+                    contentResolver.openFileDescriptor(uri, "r")
+                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
+                }
+                startActivity(
+                    ExportResultActivity.intent(
+                        this@MainActivity,
+                        outputPath = out.path,
+                        previewPath = out.path,
+                        mime = "image/jpeg",
+                        displayName = out.name,
+                        beforeBytes = before,
+                        afterBytes = out.length(),
+                        width = dims.first,
+                        height = dims.second,
+                        title = devicePdfName(uri),
+                        warning = null
+                    )
+                )
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                tempDir.deleteRecursively()
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Hidden Vault: add from FAB (saved scan or device PDF)
+    // ------------------------------------------------------------------
+
+    private fun addToVault() {
+        if (!ProGate.isPro(this)) {
+            showProPanel()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.vault_add_title)
+            .setItems(
+                arrayOf(
+                    getString(R.string.vault_add_scan),
+                    getString(R.string.vault_add_pdf)
+                )
+            ) { _, which ->
+                if (which == 0) {
+                    lifecycleScope.launch {
+                        // Vault mode lists vault contents; moving in needs the home list.
+                        val docs = withContext(Dispatchers.IO) { repo.listDocuments() }
+                        if (docs.isEmpty()) {
+                            Toast.makeText(this@MainActivity, R.string.empty_title, Toast.LENGTH_SHORT).show()
+                        } else {
+                            pickScan(R.string.vault_add_scan, docs) { doc -> moveDocToVault(doc) }
+                        }
+                    }
+                } else {
+                    pendingUriAction = { uri -> importPdfToVault(uri) }
+                    pickProPdf.launch(arrayOf("application/pdf"))
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun moveDocToVault(doc: ScanDocument) {
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repo.setVaulted(doc.id, true) }
+                progress.dismiss()
+                Toast.makeText(this@MainActivity, R.string.vault_moved_in, Toast.LENGTH_SHORT).show()
+                refreshList()
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun importPdfToVault(uri: Uri) {
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val name = devicePdfName(uri)
+                withContext(Dispatchers.IO) { repo.importPdfIntoVault(uri, name) }
+                progress.dismiss()
+                Toast.makeText(this@MainActivity, R.string.vault_imported, Toast.LENGTH_SHORT).show()
+                refreshList()
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -1057,8 +1590,18 @@ class MainActivity : BaseActivity() {
             .show()
     }
 
-    private fun pickScan(titleRes: Int, onPicked: (ScanDocument) -> Unit) {
-        val docs = allDocs
+    /** Name for an imported device PDF: real file name when we can read it. */
+    private fun devicePdfName(uri: Uri): String =
+        repo.displayNameOf(uri)
+            ?.removeSuffix(".pdf")?.removeSuffix(".PDF")
+            ?.trim()?.takeIf { it.isNotBlank() }
+            ?: "Imported PDF"
+
+    private fun pickScan(
+        titleRes: Int,
+        docs: List<ScanDocument> = allDocs,
+        onPicked: (ScanDocument) -> Unit
+    ) {
         if (docs.isEmpty()) {
             Toast.makeText(this, R.string.empty_title, Toast.LENGTH_SHORT).show()
             return
@@ -1107,16 +1650,15 @@ class MainActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val estimates = withContext(Dispatchers.IO) {
-                    val count = contentResolver.openFileDescriptor(uri, "r")?.use {
-                        PdfPageRenderer.pageCount(it)
-                    } ?: throw IllegalStateException("Could not open PDF")
-                    levels.map { level ->
-                        val first = contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
-                            PdfPageRenderer.renderPageJpeg(
+                    // One seekable copy: SAF pipes cannot be rendered directly.
+                    PdfPageRenderer.withSeekablePdf(this@MainActivity, uri) { fd ->
+                        val count = PdfPageRenderer.pageCount(fd)
+                        levels.map { level ->
+                            val first = PdfPageRenderer.renderPageJpeg(
                                 fd, 0, level.dpi, level.maxDim ?: 4096, level.quality
                             )
-                        } ?: throw IllegalStateException("Could not render PDF")
-                        (first.size.toDouble() * count * 1.02 + 1024).toLong()
+                            (first.size.toDouble() * count * 1.02 + 1024).toLong()
+                        }
                     }
                 }
                 progress.dismiss()
@@ -1240,8 +1782,11 @@ class MainActivity : BaseActivity() {
         val progress = showProgress()
         lifecycleScope.launch {
             try {
-                val before = contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
-                val name = repo.displayNameOf(uri)?.removeSuffix(".pdf")?.removeSuffix(".PDF")
+                val before = withContext(Dispatchers.IO) {
+                    contentResolver.openFileDescriptor(uri, "r")
+                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
+                }
+                val name = devicePdfName(uri)
                 val out = repo.importPdfAsScan(uri, name, level.dpi, level.maxDim ?: 4096, level.quality)
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 refreshList()
@@ -1259,12 +1804,13 @@ class MainActivity : BaseActivity() {
         val progress = showProgress()
         lifecycleScope.launch {
             try {
-                val before = contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
-                val baseName = repo.displayNameOf(uri)?.removeSuffix(".pdf")?.removeSuffix(".PDF")
+                val before = withContext(Dispatchers.IO) {
+                    contentResolver.openFileDescriptor(uri, "r")
+                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
+                }
+                val baseName = devicePdfName(uri)
                 val pages = withContext(Dispatchers.IO) {
-                    val fd = contentResolver.openFileDescriptor(uri, "r")
-                        ?: throw IllegalStateException("Could not open PDF")
-                    val rendered = fd.use {
+                    val rendered = PdfPageRenderer.withSeekablePdf(this@MainActivity, uri) { fd ->
                         // One page at a time: never hold a whole PDF's JPEGs in memory.
                         val out = mutableListOf<ByteArray>()
                         val count = PdfPageRenderer.pageCount(fd)
@@ -1275,7 +1821,7 @@ class MainActivity : BaseActivity() {
                     }
                     fitJpegsToTotal(rendered, target)
                 }
-                val out = repo.createDocument("${baseName ?: "Document"} (compressed)", pages)
+                val out = repo.createDocument("$baseName (compressed)", pages)
                 refreshList()
                 showCompressResult(out, before, out.pdfFile.length(),
                     if (out.pdfFile.length() > target) getString(R.string.compress_target_missed, formatBytes(target)) else null)
@@ -1378,10 +1924,15 @@ class MainActivity : BaseActivity() {
             }
         }
 
-    /** Opens the Google scanner, mode dependent on auto-enhance setting. */
+    /**
+     * Opens the Google scanner, mode dependent on auto-enhance setting.
+     * Gallery import inside the scanner is disabled on purpose: it runs
+     * perspective crop and tilted photos came back tilted. Photos are
+     * imported directly from the scan chooser instead (EXIF only).
+     */
     private fun launchScanner() {
         val options = GmsDocumentScannerOptions.Builder()
-            .setGalleryImportAllowed(true)
+            .setGalleryImportAllowed(false)
             .setScannerMode(
                 if (Prefs.autoEnhanceScan(this)) {
                     GmsDocumentScannerOptions.SCANNER_MODE_FULL
@@ -1427,7 +1978,8 @@ class MainActivity : BaseActivity() {
                             ?: throw IllegalStateException("could not read a scanned page")
                         if (bytes.isEmpty()) throw IllegalStateException("a scanned page was empty")
                         File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
-                            .writeBytes(bytes)
+                            // EXIF rotation only: gallery photos are never cropped or tilted.
+                            .writeBytes(ImageTools.normalizePage(bytes))
                     }
                     staging
                 }
@@ -1502,7 +2054,16 @@ class MainActivity : BaseActivity() {
             .show()
     }
 
+    /** Editing a locked scan asks for the password first (pages stay protected). */
     private fun openEditor(doc: ScanDocument) {
+        if (doc.isLocked) {
+            promptUnlockBeforeOpen(doc) { launchEditor(doc) }
+            return
+        }
+        launchEditor(doc)
+    }
+
+    private fun launchEditor(doc: ScanDocument) {
         startActivity(DocumentViewerActivity.intent(this, doc.id))
     }
 
@@ -1537,8 +2098,7 @@ class ScanListAdapter(
     var selectionMode: Boolean = false
     var selectedIds: Set<String> = emptySet()
 
-    private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
-    private val dateFmt = SimpleDateFormat("d/M/yy", Locale.getDefault())
+    private val dateFmt = SimpleDateFormat("d MMM", Locale.getDefault())
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val binding = ItemScanBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -1561,8 +2121,13 @@ class ScanListAdapter(
                 doc.pageFiles.sumOf { it.length() }
             }
             val whenDate = Date(doc.createdAt)
-            binding.scanMeta.text =
-                "${timeFmt.format(whenDate)} · ${dateFmt.format(whenDate)} · ${formatBytes(sizeBytes)}"
+            // Compact single line: "3 pages · 243 KB · 6 Nov".
+            // Non-breaking spaces keep each unit glued to its number.
+            val pagesText = binding.root.context.resources
+                .getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
+            binding.scanMeta.text = "$pagesText · " +
+                formatBytes(sizeBytes).replace(' ', '\u00A0') + " · " +
+                dateFmt.format(whenDate).replace(' ', '\u00A0')
             val first = doc.pageFiles.firstOrNull()
             if (first != null) {
                 // Background decode + cache; the main thread never touches JPEGs.

@@ -218,6 +218,10 @@ class DocumentViewerActivity : BaseActivity() {
         binding.btnUnlockPdf.isVisible = doc.isLocked
         binding.btnProtect.setText(if (doc.isLocked) R.string.btn_change_pw else R.string.btn_lock_pdf)
         binding.btnVaultDoc.setText(if (doc.isVaulted) R.string.btn_vault_unhide else R.string.btn_vault_hide)
+        // Free UI: the crown entry point is hidden together with its drawer.
+        val pro = ProGate.isPro(this)
+        binding.btnProTools.isVisible = pro
+        if (!pro) binding.proToolsPanel.isVisible = false
         refreshGrid()
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
         invalidateOptionsMenu()

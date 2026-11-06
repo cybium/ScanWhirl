@@ -1,18 +1,56 @@
 package com.scanwhirl.app.util
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
+import android.net.Uri
 import android.os.ParcelFileDescriptor
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
-/** Renders PDF pages to JPEG bytes using the platform PdfRenderer (read-only, on-device). */
+/**
+ * Renders PDF pages to JPEG bytes using the platform PdfRenderer
+ * (read-only, on-device).
+ *
+ * Android's PdfRenderer needs a *seekable* file descriptor. SAF providers
+ * (Downloads, Drive, WhatsApp…) often hand back a pipe, so every external PDF
+ * is copied once into cacheDir and opened from there. That single copy is what
+ * fixes the "file descriptor not seekable" failure when editing, merging,
+ * compressing, OCR-ing or locking a device PDF.
+ */
 object PdfPageRenderer {
 
     /** Number of pages in the PDF (opens the renderer briefly). */
     fun pageCount(fd: ParcelFileDescriptor): Int = PdfRenderer(fd).use { it.pageCount }
+
+    /**
+     * Copies [uri] into a cache file, opens it seekably, and runs [block].
+     * Suspending so callers can OCR/render page by page while the window is
+     * open without holding the whole document in memory.
+     */
+    suspend fun <T> withSeekablePdf(
+        context: Context,
+        uri: Uri,
+        block: suspend (ParcelFileDescriptor) -> T
+    ): T {
+        val dir = File(context.cacheDir, "pdf_fd").apply { mkdirs() }
+        val tmp = File(dir, "seek_${System.nanoTime()}.pdf")
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(tmp).use { out -> input.copyTo(out) }
+            } ?: throw IllegalStateException("Could not open PDF")
+            require(tmp.length() > 0L) { "PDF is empty" }
+            ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                return block(fd)
+            }
+        } finally {
+            tmp.delete()
+        }
+    }
 
     /** Renders a single page to JPEG bytes. */
     fun renderPageJpeg(

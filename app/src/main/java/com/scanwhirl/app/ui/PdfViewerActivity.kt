@@ -35,6 +35,9 @@ class PdfViewerActivity : BaseActivity() {
     private lateinit var binding: ActivityPdfViewerBinding
     private var pfd: ParcelFileDescriptor? = null
     private var renderer: PdfRenderer? = null
+
+    /** Cache copy of an opened content Uri (seekable); deleted with the screen. */
+    private var tempPdf: File? = null
     private val renderLock = Any()
     private var pageCount = 0
     private var title = ""
@@ -96,6 +99,8 @@ class PdfViewerActivity : BaseActivity() {
         }
         renderer = null
         pfd = null
+        tempPdf?.delete()
+        tempPdf = null
         super.onDestroy()
     }
 
@@ -135,8 +140,24 @@ class PdfViewerActivity : BaseActivity() {
             }
             data != null -> {
                 title = title.ifBlank { "PDF" }
-                contentResolver.openFileDescriptor(data, "r")
-                    ?: throw NoPdfException(R.string.pdf_missing)
+                // SAF providers often return a pipe; PdfRenderer needs a
+                // seekable file, so copy once into cache and open that.
+                val dir = File(cacheDir, "pdf_open").apply { mkdirs() }
+                val tmp = File(dir, "view_${System.nanoTime()}.pdf")
+                try {
+                    contentResolver.openInputStream(data)?.use { input ->
+                        java.io.FileOutputStream(tmp).use { out -> input.copyTo(out) }
+                    } ?: throw NoPdfException(R.string.pdf_missing)
+                    if (tmp.length() == 0L) throw NoPdfException(R.string.pdf_missing)
+                } catch (e: NoPdfException) {
+                    tmp.delete()
+                    throw e
+                } catch (e: Exception) {
+                    tmp.delete()
+                    throw NoPdfException(R.string.pdf_missing)
+                }
+                tempPdf = tmp
+                ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
             }
             else -> throw NoPdfException(R.string.pdf_missing)
         }
@@ -158,6 +179,8 @@ class PdfViewerActivity : BaseActivity() {
         }
         renderer = null
         pfd = null
+        tempPdf?.delete()
+        tempPdf = null
         false
     } catch (e: Exception) {
         Toast.makeText(this, R.string.pdf_viewer_failed, Toast.LENGTH_LONG).show()
@@ -171,6 +194,8 @@ class PdfViewerActivity : BaseActivity() {
         }
         renderer = null
         pfd = null
+        tempPdf?.delete()
+        tempPdf = null
         false
     }
 

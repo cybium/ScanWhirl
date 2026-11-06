@@ -34,6 +34,9 @@ class UiSmokeTest {
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
         repo = ScanRepository(app)
+        // Fresh Pro state per test: real flag off, no Free/Pro preview override.
+        com.scanwhirl.app.util.ProGate.setPro(app, false)
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
     }
 
     private fun contentUri(bytes: ByteArray): Uri {
@@ -227,10 +230,13 @@ class UiSmokeTest {
                     row.findViewById<android.widget.TextView>(R.id.pageBadge).text.toString()
                 )
                 val meta = row.findViewById<android.widget.TextView>(R.id.scanMeta).text.toString()
+                val plain = meta.replace(' ', ' ')
                 assertTrue(
-                    "meta should start with time: $meta",
-                    Regex("^\\d{1,2}:\\d{2} · \\d{1,2}/\\d{1,2}/\\d{2} · ").containsMatchIn(meta)
+                    "meta should read \"N pages · size · date\": $meta",
+                    Regex("^3 pages · [0-9.]+ [KM]?B · \\d{1,2} \\S+$").matches(plain)
                 )
+                // Non-breaking spaces keep "243 KB" from wrapping apart.
+                assertTrue("meta must glue units to their numbers", meta.contains(' '))
             }
         }
     }
@@ -507,12 +513,22 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `scan button opens the in-house scanner flow without crashing`() {
+    fun `scan button offers camera or gallery import without crashing`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val fab = activity.findViewById<android.view.View>(R.id.fabScan)
                 assertNotNull("FAB should be on screen", fab)
                 fab.performClick()
+                val dialog = ShadowDialog.getLatestDialog()
+                assertNotNull("Scan source chooser should open", dialog)
+                assertTrue((dialog as android.app.Dialog).isShowing)
+                val chooser = dialog as? androidx.appcompat.app.AlertDialog
+                assertEquals(
+                    "camera + gallery paths",
+                    2,
+                    chooser?.listView?.adapter?.count ?: -1
+                )
+                dialog.dismiss()
             }
         }
     }
@@ -1399,6 +1415,7 @@ class UiSmokeTest {
     @Test
     fun `home selection shows the zip export in the toolbar`() {
         seedDoc("Select zip", pages = 1)
+        com.scanwhirl.app.util.ProGate.setPro(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
@@ -1631,6 +1648,176 @@ class UiSmokeTest {
             }
         }
         Unit
+    }
+
+    // ------------------------------------------------------------------
+    // test21: sources, seekable PDFs, OCR fidelity, lock index, Free UI
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `free preview hides the pro suite and shows the free badge`() {
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val card = activity.findViewById<android.view.View>(R.id.proSuiteCard)
+                assertFalse("Pro Suite card must be hidden in Free", card.isVisible)
+                assertEquals(
+                    "FREE",
+                    activity.findViewById<android.widget.TextView>(R.id.proBadge).text.toString()
+                )
+                assertEquals(
+                    app.getString(R.string.search_hint),
+                    activity.findViewById<android.widget.EditText>(R.id.searchInput).hint.toString()
+                )
+            }
+        }
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
+    }
+
+    @Test
+    fun `pro preview shows the suite, the gold badge and pro search`() {
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, true)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val card = activity.findViewById<android.view.View>(R.id.proSuiteCard)
+                assertTrue("Pro Suite card must be visible in Pro", card.isVisible)
+                assertEquals(
+                    "PRO",
+                    activity.findViewById<android.widget.TextView>(R.id.proBadge).text.toString()
+                )
+                assertEquals(
+                    app.getString(R.string.search_hint_pro),
+                    activity.findViewById<android.widget.EditText>(R.id.searchInput).hint.toString()
+                )
+            }
+        }
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
+    }
+
+    @Test
+    fun `ocr store keeps every line, paragraph and tab of multi-page text`() = runBlocking {
+        val id = seedDoc("OCR storage", pages = 2)
+        val multi = "First line\nSecond line\n\nTabbed\tvalue & symbols"
+        repo.writeOcr(id, linkedMapOf("page_001.jpg" to multi, "page_002.jpg" to "Plain page"))
+        val read = repo.ocrDoc(id)
+        assertEquals(multi, read["page_001.jpg"])
+        assertEquals("Plain page", read["page_002.jpg"])
+        assertTrue("ocr.txt should exist", repo.hasOcr(id))
+        Unit
+    }
+
+    @Test
+    fun `buildOcr persists exactly what the recognizer returned`() = runBlocking {
+        val id = seedDoc("Recognised", pages = 1)
+        val pages = repo.buildOcr(id) { _ -> "line one\nline two" }
+        assertEquals(1, pages)
+        assertEquals("line one\nline two", repo.ocrDoc(id).values.first())
+        Unit
+    }
+
+    @Test
+    fun `legacy ocr files from before test21 still load`() = runBlocking {
+        val id = seedDoc("Legacy OCR", pages = 1)
+        java.io.File(app.filesDir, "documents/$id/ocr.txt")
+            .writeText("page_001.jpg\tfirst line only")
+        assertEquals("first line only", repo.ocrDoc(id)["page_001.jpg"])
+        Unit
+    }
+
+    @Test
+    fun `ocr assembly keeps every line in reading order`() {
+        val blocks = listOf(
+            com.scanwhirl.app.util.OcrEngine.OcrBlock(200, 0, listOf("Footer")),
+            com.scanwhirl.app.util.OcrEngine.OcrBlock(10, 40, listOf("Title second", "Title third")),
+            com.scanwhirl.app.util.OcrEngine.OcrBlock(10, 4, listOf("Title first"))
+        )
+        assertEquals(
+            "Title first\n\nTitle second\nTitle third\n\nFooter",
+            com.scanwhirl.app.util.OcrEngine.assemble(blocks)
+        )
+        // A single block's second line must never be dropped again.
+        assertEquals(
+            "A\nB",
+            com.scanwhirl.app.util.OcrEngine.assemble(
+                listOf(com.scanwhirl.app.util.OcrEngine.OcrBlock(0, 0, listOf("A", "B")))
+            )
+        )
+    }
+
+    @Test
+    fun `seekable pdf wrapper copies content uris to a real file and cleans up`() = runBlocking {
+        val bytes = jpegBytes()
+        val uri = contentUri(bytes)
+        val stat = com.scanwhirl.app.util.PdfPageRenderer.withSeekablePdf(app, uri) { fd ->
+            fd.statSize // a copied regular file is always seekable
+        }
+        assertEquals(bytes.size.toLong(), stat)
+        val leftovers = java.io.File(app.cacheDir, "pdf_fd").listFiles()
+        assertTrue("temp copy must be deleted afterwards", leftovers.isNullOrEmpty())
+        Unit
+    }
+
+    @Test
+    fun `lock index finds and forgets its own locked pdfs`() = runBlocking {
+        val id = seedDoc("Index me", pages = 1)
+        val locked = repo.protectPdf(id, "open-sesame")
+        val hash = com.scanwhirl.app.util.Sha256.of(locked.pdfFile)
+        val found = repo.findLockedDocumentByHash(hash)
+        assertEquals(id, found?.id)
+        assertTrue("found doc must be locked", found!!.isLocked)
+        repo.unlockPdf(id)
+        assertNull("index entry pruned after unlock", repo.findLockedDocumentByHash(hash))
+        Unit
+    }
+
+    @Test
+    fun `vault mode shows the vault list and turns the fab into add`() {
+        seedDoc("Public lecture", pages = 1)
+        val secretId = seedDoc("Private notes", pages = 1)
+        repo.setVaulted(secretId, true)
+        com.scanwhirl.app.util.Prefs.setVaultPin(app, "1357")
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setVaultMode(true)
+                assertTrue(activity.findViewById<android.view.View>(R.id.vaultBanner).isVisible)
+                assertFalse(activity.findViewById<android.view.View>(R.id.toolsRow).isVisible)
+                val fab = activity.findViewById<android.view.View>(R.id.fabScan)
+                assertTrue("add stays available in the vault", fab.isVisible)
+                assertEquals(
+                    app.getString(R.string.vault_add_title),
+                    fab.contentDescription?.toString()
+                )
+            }
+            val onlySecretShown = pollUntil {
+                var matches = false
+                scenario.onActivity { activity ->
+                    val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                    forceLayout(list)
+                    matches = list.adapter?.itemCount == 1
+                }
+                matches
+            }
+            assertTrue("vault lists only the hidden scan", onlySecretShown)
+        }
+    }
+
+    @Test
+    fun `review screen offers a direct gallery add next to the camera batch`() {
+        val staging = java.io.File(app.cacheDir, "pending_gallery_${System.nanoTime()}")
+            .apply { mkdirs() }
+        java.io.File(staging, "page_001.jpg").writeBytes(jpegBytes())
+        val intent = ScanReviewActivity.intent(app, staging.path, null, "Gallery test")
+        ActivityScenario.launch<ScanReviewActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val menu = activity.findViewById<
+                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
+                val gallery = menu.findItem(R.id.action_add_gallery)
+                assertNotNull("Add from gallery must exist", gallery)
+                assertEquals(app.getString(R.string.add_from_gallery), gallery.title.toString())
+                assertNotNull(menu.findItem(R.id.action_add_pages))
+            }
+        }
     }
 
     private fun renderActivityPng(activity: android.app.Activity, outPath: String) {

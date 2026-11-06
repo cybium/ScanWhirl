@@ -72,11 +72,11 @@
 
                 <TextView
                     android:id="@+id/scanName"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:ellipsize="end"
                     android:maxLines="1"
-                    android:maxWidth="195dp"
                     android:textAppearance="?attr/textAppearanceTitleMedium"
                     android:textSize="15sp" />
 
@@ -84,7 +84,7 @@
                     android:id="@+id/lockBadge"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
                     android:background="@drawable/bg_lock_badge"
                     android:drawableStart="@drawable/ic_lock_small"
                     android:drawablePadding="3dp"
@@ -99,11 +99,14 @@
                     android:visibility="gone" />
             </LinearLayout>
 
+            <!-- One compact line: "3 pages · 243 KB · 6 Nov" (never wraps). -->
             <TextView
                 android:id="@+id/scanMeta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="?android:attr/textColorSecondary" />
         </LinearLayout>
