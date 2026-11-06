@@ -17,8 +17,8 @@ android {
             if (project.hasProperty("testBuild")) "ScanWhirl Test" else "ScanWhirl"
         minSdk = 24
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.1.1-test21"
+        versionCode = 22
+        versionName = "1.1.1-test22"
 
         // Pro features are unlocked in test builds so they can be tried free.
         buildConfigField(
@@ -47,8 +47,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Test builds (-PtestBuild) ship OPEN: no R8 minify, no resource
+            // shrinking, so class and method names stay readable for code
+            // review. The Play build keeps minification for small downloads.
+            isMinifyEnabled = !project.hasProperty("testBuild")
+            isShrinkResources = !project.hasProperty("testBuild")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
