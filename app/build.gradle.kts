@@ -17,8 +17,8 @@ android {
             if (project.hasProperty("testBuild")) "ScanWhirl Test" else "ScanWhirl"
         minSdk = 24
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.1.1-test18"
+        versionCode = 19
+        versionName = "1.1.1-test19"
 
         // Pro features are unlocked in test builds so they can be tried free.
         buildConfigField(
@@ -99,6 +99,7 @@ dependencies {
     // On-device text recognition through Play services (model downloads on
     // first use; keeps the APK small, consistent with the scanner).
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:18.0.1")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

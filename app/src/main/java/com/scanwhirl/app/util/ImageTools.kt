@@ -90,6 +90,67 @@ object ImageTools {
     private const val WORK_DIM = 3000
 
     /**
+     * Normalises a page JPEG's orientation: applies the EXIF rotation tag if
+     * one is present, then optionally straightens a perspectived paper quad.
+     * Gallery photos carry orientation tags that plain decodes ignore — this
+     * is why "picked from the gallery" pages came out tilted. Both steps are
+     * geometric only: no brightness, contrast or color is ever touched.
+     */
+    fun normalizePage(bytes: ByteArray): ByteArray = try {
+        val oriented = orientJpeg(bytes)
+        orientDeskew(oriented)
+    } catch (_: Exception) {
+        bytes
+    }
+
+    /** Applies the EXIF orientation tag of a JPEG, when present. */
+    fun orientJpeg(bytes: ByteArray): ByteArray {
+        val orientation = try {
+            val stream = java.io.ByteArrayInputStream(bytes)
+            val exif = androidx.exifinterface.media.ExifInterface(stream)
+            when (exif.getAttributeInt(
+                androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+            )) {
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> 0f
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_FLIP_VERTICAL -> 0f
+                else -> 0f
+            }
+        } catch (_: Exception) {
+            0f
+        }
+        if (orientation == 0f) return bytes
+        return try {
+            val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                ?: return bytes
+            val matrix = android.graphics.Matrix().apply { postRotate(orientation) }
+            val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+            val aliased = rotated === src
+            val result = encodeJpeg(rotated, 95)
+            if (!rotated.isRecycled) rotated.recycle()
+            if (!aliased && !src.isRecycled) src.recycle()
+            result
+        } catch (_: Exception) {
+            bytes
+        }
+    }
+
+    /**
+     * Conservative perspective straighten for a photographed paper quad.
+     * Runs on a bounded copy, only fires when strong corners are found, and
+     * never changes color information — a straightened scan, not a fake one.
+     */
+    fun orientDeskew(bytes: ByteArray): ByteArray = try {
+        val quad = Deskew.detectQuad(bytes) ?: return bytes
+        Deskew.warp(bytes, quad)
+    } catch (_: Exception) {
+        bytes
+    }
+
+    /**
      * Writes [writer]'s output to a temp file next to [target] and swaps it in
      * with an atomic rename. A failure therefore can never leave the page
      * truncated/blank — the original file survives untouched.

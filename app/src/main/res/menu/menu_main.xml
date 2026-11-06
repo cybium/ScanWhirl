@@ -21,7 +21,7 @@
         android:icon="@drawable/ic_download"
         android:title="@string/export_zip"
         android:visible="false"
-        app:showAsAction="never" />
+        app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/action_merge"

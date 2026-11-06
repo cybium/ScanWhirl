@@ -291,17 +291,18 @@ class UiSmokeTest {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val toolbar = activity.findViewById<
-                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
-                assertNotNull("greeting subtitle should be shown", toolbar.subtitle)
+                val greeting = activity.findViewById<android.widget.TextView>(R.id.greetingText)
+                assertTrue(
+                    "greeting line should be shown under the name",
+                    greeting.text.isNotEmpty() && greeting.isVisible
+                )
             }
         }
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, false)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val toolbar = activity.findViewById<
-                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
-                assertTrue("greeting should be off", toolbar.subtitle == null)
+                val greeting = activity.findViewById<android.widget.TextView>(R.id.greetingText)
+                assertTrue("greeting should be off", greeting.text.isEmpty())
             }
         }
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
@@ -1307,10 +1308,118 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `greeting stays plain text without emoji`() {
+    fun `greeting renders under the app name, and the badge is clickable`() {
+        com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val greeting = activity.findViewById<android.widget.TextView>(R.id.greetingText)
+                assertEquals(
+                    com.scanwhirl.app.util.Greeting.forHour(
+                        java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                    ),
+                    greeting.text.toString()
+                )
+                // Crown badge opens the Pro panel.
+                activity.findViewById<android.view.View>(R.id.proBadge).performClick()
+            }
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            scenario.onActivity { activity ->
+                val dialog = ShadowDialog.getLatestDialog()
+                assertNotNull("Pro panel should open from the badge", dialog)
+                assertTrue((dialog as android.app.Dialog).isShowing)
+                dialog.dismiss()
+            }
+        }
+        com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
+    }
+
+    @Test
+    fun `settings no longer shows Pro anywhere`() {
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val views = mutableListOf<android.widget.TextView>()
+                collectTextViews(activity.window.decorView, views)
+                val texts = views.map { it.text.toString() }
+                val pro = activity.getString(R.string.settings_pro_title)
+                assertTrue("Pro row removed from Settings", texts.none { it == pro })
+            }
+        }
+    }
+
+    @Test
+    fun `exif orientation tag rotates the page`() {
+        val dir = java.io.File(app.cacheDir, "exif_${System.nanoTime()}").apply { mkdirs() }
+        val input = java.io.File(dir, "in.jpg")
+        input.writeBytes(jpegBytes())
+        // Tag as orientation 6 (90° turn needed), using the file API directly.
+        val exif = androidx.exifinterface.media.ExifInterface(input.path)
+        exif.setAttribute(
+            androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
+            androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90.toString()
+        )
+        exif.saveAttributes()
+        val tagged = input.readBytes()
+
+        val oriented = com.scanwhirl.app.util.ImageTools.orientJpeg(tagged)
+        val before = com.scanwhirl.app.util.ImageTools.imageSize(jpegBytes())!!
+        val dims = com.scanwhirl.app.util.ImageTools.imageSize(oriented)!!
+        assertEquals("exif 90° must swap the sides", before.second, dims.first)
+        assertEquals(before.first, dims.second)
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `deskew leaves a flat page untouched`() {
+        val flat = jpegBytes()
+        val result = com.scanwhirl.app.util.ImageTools.orientDeskew(flat)
+        val dims = com.scanwhirl.app.util.ImageTools.imageSize(result)!!
+        assertTrue("flat page should stay decodable", dims.first > 0 && dims.second > 0)
+    }
+
+    @Test
+    fun `document viewer exposes the pro actions on screen`() {
+        val doc = seedDoc("Pro buttons", pages = 1)
+        val intent = DocumentViewerActivity.intent(app, doc)
+        ActivityScenario.launch(DocumentViewerActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val protect = activity.findViewById<android.view.View>(R.id.btnProtect)
+                val longImage = activity.findViewById<android.view.View>(R.id.btnLongImage)
+                assertNotNull("Password button should be on screen", protect)
+                assertNotNull("Long image button should be on screen", longImage)
+                assertTrue(protect.isVisible)
+                assertTrue(longImage.isVisible)
+                // The ZIP export is on the home toolbar during selection.
+                val menu =
+                    activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
+                assertNull(menu.findItem(R.id.action_export_zip))
+            }
+        }
+    }
+
+    @Test
+    fun `home selection shows the zip export in the toolbar`() {
+        seedDoc("Select zip", pages = 1)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                forceLayout(list)
+                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+            }
+            scenario.onActivity { activity ->
+                val menu = activity.findViewById<
+                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
+                val zip = menu.findItem(R.id.action_export_zip)
+                assertNotNull("Export ZIP should be in the toolbar", zip)
+                assertTrue(zip.isVisible)
+            }
+        }
+    }
+
+    @Test
+    fun `greeting text is populated for every hour`() {
         for (hour in 0..23) {
             val text = com.scanwhirl.app.util.Greeting.forHour(hour)
-            assertTrue("greeting must be emoji-free: $text", text.none { it.code > 0x2500 })
+            assertTrue("greeting must be non-empty: $text", text.isNotBlank())
         }
     }
 

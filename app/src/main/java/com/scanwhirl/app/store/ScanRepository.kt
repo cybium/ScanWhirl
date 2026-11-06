@@ -78,12 +78,15 @@ class ScanRepository(private val context: Context) {
             val input = context.contentResolver.openInputStream(uri)
                 ?: throw IllegalStateException("Could not read scanned page ${index + 1}")
             input.use { i ->
+                val bytes = i.readBytes()
                 if (pageFilter == ScanFilter.ORIGINAL) {
-                    FileOutputStream(out).use { o -> i.copyTo(o) }
+                    // Straight and honest: EXIF orientation + geometry-only
+                    // deskew, no enhancement. Fixes tilted gallery imports.
+                    out.writeBytes(ImageTools.normalizePage(bytes))
                 } else {
-                    val bytes = i.readBytes()
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        ?: throw IllegalStateException("Page ${index + 1} is not an image")
+                    val bitmap = BitmapFactory.decodeByteArray(
+                        ImageTools.orientJpeg(bytes), 0, bytes.size
+                    ) ?: throw IllegalStateException("Page ${index + 1} is not an image")
                     val processed = pageFilter.applyTo(bitmap)
                     FileOutputStream(out).use { o ->
                         processed.compress(Bitmap.CompressFormat.JPEG, 92, o)

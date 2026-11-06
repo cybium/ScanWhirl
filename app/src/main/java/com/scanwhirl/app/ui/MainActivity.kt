@@ -139,7 +139,13 @@ class MainActivity : BaseActivity() {
                 applyList()
             }
         })
+        if (ProGate.isPro(this)) {
+            binding.searchInput.hint = getString(R.string.search_hint_pro)
+        }
         binding.btnSort.setOnClickListener { showSortMenu() }
+        // Tapping the crown badge (or the whole title block) opens the Pro panel.
+        binding.proBadge.setOnClickListener { showProPanel() }
+        binding.titleBlock.setOnClickListener { showProPanel() }
 
         // Stale edit snapshots (cache) go; an unfinished scan is offered back to
         // the user instead of silently wiped (it survives in cacheDir).
@@ -193,14 +199,11 @@ class MainActivity : BaseActivity() {
     /** Time-of-day hello under the app name, when enabled in Settings. */
     private fun updateGreeting() {
         if (Prefs.showGreeting(this) && !selectionMode) {
-            val onSurface = ContextCompat.getColor(this, R.color.sf_on_surface)
-            binding.toolbar.setSubtitleTextAppearance(this, R.style.GreetingSubtitle)
-            // ~60% opacity so it stays a quiet secondary line.
-            binding.toolbar.setSubtitleTextColor((onSurface and 0x00FFFFFF) or (0x99 shl 24))
-            binding.toolbar.subtitle =
+            binding.greetingText.text =
                 Greeting.forHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
+            binding.greetingText.isVisible = true
         } else {
-            binding.toolbar.subtitle = null
+            binding.greetingText.isVisible = false
         }
     }
 
@@ -296,9 +299,11 @@ class MainActivity : BaseActivity() {
             binding.toolbar.title = title
         } else {
             binding.titleRow.visibility = View.VISIBLE
+            binding.titleBlock.visibility = View.VISIBLE
             binding.toolbar.title = null
         }
         updateProBadge()
+        updateGreeting()
     }
 
     /** Crown badge next to the app name: gold PRO unlocked, dim FREE otherwise. */
@@ -319,6 +324,15 @@ class MainActivity : BaseActivity() {
                 )
             binding.proBadge.setBackgroundResource(R.drawable.bg_free_badge)
         }
+    }
+
+    /** Pro panel: what the crown unlocks and where each extra lives. */
+    private fun showProPanel() {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.settings_pro_title))
+            .setMessage(getString(R.string.pro_panel_home))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun setSelectionMode(enabled: Boolean) {

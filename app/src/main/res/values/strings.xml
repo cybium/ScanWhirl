@@ -147,6 +147,7 @@
     <string name="preview">Preview</string>
 
     <string name="search_hint">Search</string>
+    <string name="search_hint_pro">Search name or scanned text</string>
     <string name="sort">Sort</string>
     <string name="sort_name">Name</string>
     <string name="sort_date">Date created</string>
@@ -195,6 +196,13 @@
     <string name="menu_protect_pdf">Password-protect PDF</string>
     <string name="export_zip">Export ZIP</string>
     <string name="ocr_note">Text search works best on printed pages.</string>
+    <string name="pro_panel_home">Unlocked:
+\n• Password-protect a PDF — open a scan \u2192 the lock button below the page grid
+\n• ID / passport sizes — open a page \u2192 Crop \u2192 preset chips
+\n• Share as long image — open a scan \u2192 the image button
+\n• Batch ZIP — long-press scans \u2192 Select \u2192 Export ZIP in the toolbar
+\n• Text search (OCR) — search above; matches inside scanned pages
+\n\nAll Pro extras are free in this test build.</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
     <string name="settings_auto_enhance_summary">Google processing is on when this is on. Off gives a fast, original-looking scan.</string>
     <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>

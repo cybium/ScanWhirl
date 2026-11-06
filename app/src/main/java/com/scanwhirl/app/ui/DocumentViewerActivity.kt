@@ -112,6 +112,8 @@ class DocumentViewerActivity : BaseActivity() {
 
         binding.btnShare.setOnClickListener { document?.let { ShareUtils.share(this, it) } }
         binding.btnDelete.setOnClickListener { document?.let { confirmDelete(it) } }
+        binding.btnProtect.setOnClickListener { promptProtectPdf() }
+        binding.btnLongImage.setOnClickListener { shareLongImage() }
 
         // First load (off the main thread), then start the pre-edit snapshot.
         lifecycleScope.launch {
