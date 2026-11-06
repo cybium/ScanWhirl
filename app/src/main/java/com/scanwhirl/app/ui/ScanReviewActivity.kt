@@ -137,8 +137,12 @@ class ScanReviewActivity : BaseActivity() {
         binding.toolbar.inflateMenu(R.menu.menu_review)
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.action_rotate_page -> {
-                    rotateSelected()
+                R.id.action_rotate_left -> {
+                    rotateSelected(clockwise = false)
+                    true
+                }
+                R.id.action_rotate_right -> {
+                    rotateSelected(clockwise = true)
                     true
                 }
                 R.id.action_delete_page -> {
@@ -292,7 +296,7 @@ class ScanReviewActivity : BaseActivity() {
     // Multi-select: rotate / delete
     // ------------------------------------------------------------------
 
-    private fun rotateSelected() {
+    private fun rotateSelected(clockwise: Boolean) {
         if (selected.isEmpty()) {
             Toast.makeText(this, R.string.select_pages_first, Toast.LENGTH_SHORT).show()
             return
@@ -300,7 +304,7 @@ class ScanReviewActivity : BaseActivity() {
         val targets = pages.filter { it.path in selected }
         lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) { targets.forEach { ImageTools.rotate90(it) } }
+                withContext(Dispatchers.IO) { targets.forEach { ImageTools.rotate90(it, clockwise) } }
                 structureChanged = true
                 reloadFromDisk()
             } catch (e: Exception) {

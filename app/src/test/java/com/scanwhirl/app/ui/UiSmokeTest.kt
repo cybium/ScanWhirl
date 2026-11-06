@@ -447,7 +447,8 @@ class UiSmokeTest {
                 val pager = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
                 assertEquals(3, pager.adapter!!.itemCount)
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnClose))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotate))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotateLeft))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotateRight))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnFilter))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnDelete))
                 val indicator = activity.findViewById<android.widget.TextView>(R.id.pageIndicator)
@@ -538,7 +539,8 @@ class UiSmokeTest {
                 assertTrue(activity.findViewById<android.view.View>(R.id.btnSavePdf).isEnabled)
                 val menu =
                     activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
-                assertNotNull(menu.findItem(R.id.action_rotate_page))
+                assertNotNull(menu.findItem(R.id.action_rotate_left))
+                assertNotNull(menu.findItem(R.id.action_rotate_right))
                 assertNotNull(menu.findItem(R.id.action_delete_page))
                 assertNotNull(menu.findItem(R.id.action_add_pages))
 
@@ -718,7 +720,8 @@ class UiSmokeTest {
                 val indicator = activity.findViewById<android.widget.TextView>(R.id.pageIndicator)
                 assertEquals("2 / 2", indicator.text.toString())
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnClose))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotate))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotateLeft))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotateRight))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnFilter))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnDelete))
             }
@@ -1039,7 +1042,8 @@ class UiSmokeTest {
             scenario.onActivity { activity ->
                 val menu = activity.findViewById<
                     com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
-                assertNotNull(menu.findItem(R.id.action_rotate_page))
+                assertNotNull(menu.findItem(R.id.action_rotate_left))
+                assertNotNull(menu.findItem(R.id.action_rotate_right))
                 assertNotNull(menu.findItem(R.id.action_delete_page))
                 assertNotNull(menu.findItem(R.id.action_save_page))
 
@@ -1142,5 +1146,130 @@ class UiSmokeTest {
                 persisted
             )
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Coverage gaps: parsing, honesty caps, generators, resilience
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `size parsing handles kb mb bare and invalid input`() {
+        val parse = com.scanwhirl.app.util.ImageTools::parseSizeInput
+        assertEquals(1024L, parse("1 KB"))
+        assertEquals(1_048_576L, parse("1 MB"))
+        assertEquals(1_572_864L, parse("1.5mb"))
+        assertEquals(512_000L, parse("500"))  // bare number = 500 KB
+        assertEquals(2048L, parse("2k"))
+        assertNull(parse("nonsense"))
+        assertNull(parse(""))
+        assertNull(parse(null))
+    }
+
+    @Test
+    fun `resize caps output under the requested max bytes`() {
+        // A striped source so it has room to shrink.
+        val bmp = android.graphics.Bitmap.createBitmap(
+            600, 600, android.graphics.Bitmap.Config.ARGB_8888
+        )
+        val canvas = android.graphics.Canvas(bmp)
+        for (y in 0 until 600 step 8) {
+            val paint = android.graphics.Paint().apply {
+                color = if ((y / 8) % 2 == 0) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+            }
+            canvas.drawRect(0f, y.toFloat(), 600f, (y + 4).toFloat(), paint)
+        }
+        val src = com.scanwhirl.app.util.ImageTools.encodeJpeg(bmp, 95)
+        bmp.recycle()
+
+        val result = com.scanwhirl.app.util.ImageTools.resize(
+            src,
+            com.scanwhirl.app.util.ImageTools.ResizeOptions(maxBytes = 8_000, dpi = 0)
+        )
+        assertTrue(
+            "output ${result.bytes.size} B should fit under 8000 B",
+            result.bytes.size <= 8_000
+        )
+    }
+
+    @Test
+    fun `download saver unique names never collide`() {
+        val taken = mutableSetOf("Report.pdf", "Report (2).pdf")
+        val name = com.scanwhirl.app.util.DownloadSaver.uniqueName("Report.pdf") { it in taken }
+        assertEquals("Report (3).pdf", name)
+        taken.add(name)
+        assertEquals(
+            "Report (4).pdf",
+            com.scanwhirl.app.util.DownloadSaver.uniqueName("Report.pdf") { it in taken }
+        )
+        // A free name passes through unchanged.
+        assertEquals(
+            "Other.pdf",
+            com.scanwhirl.app.util.DownloadSaver.uniqueName("Other.pdf") { it in taken }
+        )
+    }
+
+    @Test
+    fun `readJpegInfo skips large app segments before the frame header`() {
+        // A fake APP1 (Exif-style) segment ahead of the SOF marker.
+        val payload = ByteArray(4096) { 'A'.code.toByte() }
+        val app1 = byteArrayOf(
+            0xFF.toByte(), 0xE1.toByte(),
+            (((payload.size + 2) shr 8) and 0xFF).toByte(), ((payload.size + 2) and 0xFF).toByte()
+        ) + payload
+        val base = jpegBytes()
+        val withExif = base.copyOfRange(0, 2) + app1 + base.copyOfRange(2, base.size)
+
+        val info = com.scanwhirl.app.util.PdfGenerator.readJpegInfo(withExif)
+        assertEquals(310, info.width)
+        assertEquals(444, info.height)
+    }
+
+    @Test
+    fun `pdf generator stays valid from one page to many`() {
+        val dir = java.io.File(app.cacheDir, "pdfgen_${System.nanoTime()}").apply { mkdirs() }
+        for (pageCount in intArrayOf(1, 7)) {
+            val files = (0 until pageCount).map { i ->
+                val f = java.io.File(dir, "p$i.jpg")
+                f.writeBytes(jpegBytes())
+                f
+            }
+            val out = java.io.File(dir, "out$pageCount.pdf")
+            com.scanwhirl.app.util.PdfGenerator.imagesToPdf(files, out)
+            val text = out.readText(Charsets.ISO_8859_1)
+            assertTrue("page count should be $pageCount", "/Count $pageCount" in text)
+            assertTrue("xref present", "startxref" in text)
+            val tail = out.readBytes()
+            assertTrue(
+                "eof marker",
+                tail.size >= 5 &&
+                    tail[tail.size - 5] == 0x25.toByte() && // %
+                    tail[tail.size - 4] == 0x45.toByte() && // E
+                    tail[tail.size - 3] == 0x4F.toByte() && // O
+                    tail[tail.size - 2] == 0x46.toByte() && // F
+                    tail[tail.size - 1] == 0x0A.toByte()
+            )
+            files.forEach { it.delete() }
+            out.delete()
+        }
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `compress to target never leaves a page larger than its share`() {
+        val doc = seedDoc("Target fit", pages = 3)
+        val pages = repo.listDocuments().first { it.id == doc }.pageFiles
+        val original = pages[0].readBytes()
+        val bmp = android.graphics.BitmapFactory.decodeByteArray(original, 0, original.size)!!
+        val fitted = com.scanwhirl.app.util.ImageTools.compressToFit(bmp, 6_000).bytes
+        bmp.recycle()
+        assertTrue("fitted ${fitted.size} B must fit its share", fitted.size <= 6_000)
+    }
+
+    @Test
+    fun `blank wallpaper uri is ignored without crashing`() {
+        com.scanwhirl.app.util.Prefs.setShowWallpaper(app, true)
+        com.scanwhirl.app.util.Prefs.setWallpaperUri(app, "")
+        assertNull(com.scanwhirl.app.util.Wallpaper.drawable(app))
+        com.scanwhirl.app.util.Prefs.setShowWallpaper(app, false)
     }
 }

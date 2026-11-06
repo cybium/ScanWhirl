@@ -69,6 +69,8 @@
 
     <string name="page_actions_title">Page %1$d</string>
     <string name="action_rotate">Rotate</string>
+    <string name="rotate_left">Rotate left</string>
+    <string name="rotate_right">Rotate right</string>
     <string name="action_delete_page">Delete page</string>
     <string name="page_op_failed">Page operation failed: %1$s</string>
     <string name="page_deleted">Page deleted</string>
@@ -104,6 +106,16 @@
     <string name="result_saved_documents">Saved to Documents/ScanWhirl: %1$s</string>
     <string name="result_save_failed">Could not save: %1$s</string>
     <string name="compress_grew_warning">This PDF is text/vector, so the result is larger than the original.</string>
+    <string name="compress_target_missed">Couldn\'t reach %1$s — this is the smallest honest result.</string>
+
+    <string name="pdf_rasterize_note">The pages become images, so text won\'t be selectable afterwards. Reordering, rotating, cropping and deleting work the same.</string>
+    <string name="edit_pdf_note_title">Import PDF</string>
+    <string name="continue_label">Continue</string>
+    <string name="pdf_protected">This PDF is password-protected. Remove the password first, then import.</string>
+
+    <string name="resume_scan_title">Resume unsaved scan?</string>
+    <string name="resume_scan_msg">You have %1$d unsaved page(s) from last time. Resume, or delete them?</string>
+    <string name="resume_scan_resume">Resume</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>

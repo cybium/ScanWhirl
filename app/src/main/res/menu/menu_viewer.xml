@@ -21,9 +21,15 @@
 
     <!-- Page actions: apply to the ticked pages (tap a checkbox first). -->
     <item
-        android:id="@+id/action_rotate_page"
-        android:icon="@drawable/ic_rotate"
-        android:title="@string/action_rotate"
+        android:id="@+id/action_rotate_left"
+        android:icon="@drawable/ic_rotate_left"
+        android:title="@string/rotate_left"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_rotate_right"
+        android:icon="@drawable/ic_rotate_right"
+        android:title="@string/rotate_right"
         app:showAsAction="never" />
 
     <item

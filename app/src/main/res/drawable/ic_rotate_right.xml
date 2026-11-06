@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- Clockwise quarter arc (down the right side) -->
+    <path
+        android:pathData="M19,12 A7,7 0 0 1 12,19"
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- Arrowhead at the start, pointing along the motion (down) -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M19,17.6 L15.6,12.6 L22.4,12.6 Z" />
+</vector>

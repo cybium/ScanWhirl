@@ -103,6 +103,9 @@ class PdfViewerActivity : BaseActivity() {
         if (binding.zoomOverlay.visibility == View.VISIBLE) closeZoom() else finish()
     }
 
+    private class NoPdfException(@androidx.annotation.StringRes val messageRes: Int) :
+        IllegalStateException("No PDF")
+
     /** Opens the PDF from a scan id, a file path, or a content Uri. */
     private fun openPdf(): Boolean = try {
         val docId = intent.getStringExtra(EXTRA_DOC_ID)
@@ -115,23 +118,22 @@ class PdfViewerActivity : BaseActivity() {
                     .listDocuments().find { it.id == docId }
                 val file = doc?.pdfFile
                 title = doc?.name ?: title
-                if (file == null || !file.exists() || file.length() == 0L) {
-                    throw IllegalStateException("No PDF")
-                }
+                if (file == null) throw NoPdfException(R.string.doc_not_found)
+                if (!file.exists() || file.length() == 0L) throw NoPdfException(R.string.pdf_missing)
                 ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             }
             path != null -> {
                 val file = File(path)
-                if (!file.exists() || file.length() == 0L) throw IllegalStateException("No PDF")
+                if (!file.exists() || file.length() == 0L) throw NoPdfException(R.string.pdf_missing)
                 title = title.ifBlank { file.nameWithoutExtension }
                 ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             }
             data != null -> {
                 title = title.ifBlank { "PDF" }
                 contentResolver.openFileDescriptor(data, "r")
-                    ?: throw IllegalStateException("No PDF")
+                    ?: throw NoPdfException(R.string.pdf_missing)
             }
-            else -> throw IllegalStateException("No source")
+            else -> throw NoPdfException(R.string.pdf_missing)
         }
 
         pfd = fd
@@ -139,6 +141,19 @@ class PdfViewerActivity : BaseActivity() {
         pageCount = renderer?.pageCount ?: 0
         if (pageCount <= 0) throw IllegalStateException("Empty PDF")
         true
+    } catch (e: NoPdfException) {
+        Toast.makeText(this, e.messageRes, Toast.LENGTH_LONG).show()
+        try {
+            renderer?.close()
+        } catch (_: Exception) {
+        }
+        try {
+            pfd?.close()
+        } catch (_: Exception) {
+        }
+        renderer = null
+        pfd = null
+        false
     } catch (e: Exception) {
         Toast.makeText(this, R.string.pdf_viewer_failed, Toast.LENGTH_LONG).show()
         try {

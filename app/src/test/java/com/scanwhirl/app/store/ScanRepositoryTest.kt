@@ -222,6 +222,22 @@ class ScanRepositoryTest {
     }
 
     @Test
+    fun `rotate left also swaps dimensions`() = runBlocking {
+        val repo = ScanRepository(context)
+        val doc = saveDoc(repo, "rotate left") // 310x444 portrait
+
+        val after = repo.rotatePage(doc.id, 0, clockwise = false)
+
+        assertEquals(1, after.pageCount)
+        val dims = com.scanwhirl.app.util.PdfGenerator.readJpegInfo(after.pageFiles[0].readBytes())
+        assertEquals(444, dims.width)
+        assertEquals(310, dims.height)
+        // Right then left returns the page to its starting orientation.
+        val back = repo.rotatePage(doc.id, 0, clockwise = true)
+        assertEquals(310 to 444, com.scanwhirl.app.util.ImageTools.imageSize(back.pageFiles[0].readBytes()))
+    }
+
+    @Test
     fun `move page reorders and rebuilds pdf`() = runBlocking {
         val repo = ScanRepository(context)
         val doc = saveDoc(repo, "reorder", pageCount = 3)

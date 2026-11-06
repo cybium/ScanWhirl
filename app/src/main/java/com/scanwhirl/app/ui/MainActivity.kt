@@ -72,8 +72,24 @@ class MainActivity : BaseActivity() {
     /** Edit tool: pick one device PDF and open it as editable pages. */
     private val pickEditPdf =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri != null) startEditPdf(uri)
+            if (uri != null) confirmEditPdf(uri)
         }
+
+    /**
+     * Editing rebuilds the PDF from page images, so vector/text pages become
+     * raster. The user confirms this once — honesty over surprise.
+     */
+    private fun confirmEditPdf(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.edit_pdf_note_title)
+            .setMessage(R.string.pdf_rasterize_note)
+            .setPositiveButton(R.string.continue_label) { _, _ -> startEditPdf(uri) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** All documents on disk; refreshed off the main thread, queried in memory. */
+    private var allDocs: List<ScanDocument> = emptyList()
 
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -115,19 +131,44 @@ class MainActivity : BaseActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
                 query = s?.toString()?.trim().orEmpty()
-                refreshList()
+                applyList()
             }
         })
         binding.btnSort.setOnClickListener { showSortMenu() }
 
-        // Staging folders / edit snapshots from an earlier process death are stale.
-        cacheDir.listFiles { f ->
-            f.isDirectory &&
-                (f.name.startsWith("pending_") || f.name.startsWith("edit_snapshot_"))
-        }?.forEach { it.deleteRecursively() }
+        // Stale edit snapshots (cache) go; an unfinished scan is offered back to
+        // the user instead of silently wiped (it survives in cacheDir).
+        val stale = cacheDir.listFiles { f ->
+            f.isDirectory && f.name.startsWith("edit_snapshot_")
+        }
+        stale?.forEach { it.deleteRecursively() }
+        offerUnfinishedScan()
 
         refreshList()
         updateGreeting()
+    }
+
+    /**
+     * A review screen that died mid-edit leaves its staging folder behind.
+     * Offer to resume it; deleting is the user's explicit choice.
+     */
+    private fun offerUnfinishedScan() {
+        val pending = cacheDir.listFiles { f ->
+            f.isDirectory &&
+                f.name.startsWith("pending_") &&
+                !f.listFiles { p -> p.extension.equals("jpg", true) }.isNullOrEmpty()
+        }?.maxByOrNull { it.lastModified() } ?: return
+        val count = pending.listFiles { p -> p.extension.equals("jpg", true) }?.size ?: 0
+        AlertDialog.Builder(this)
+            .setTitle(R.string.resume_scan_title)
+            .setMessage(getString(R.string.resume_scan_msg, count))
+            .setPositiveButton(R.string.resume_scan_resume) { _, _ ->
+                startActivity(
+                    ScanReviewActivity.intent(this, pending.path, null, repo.nextDocumentName())
+                )
+            }
+            .setNegativeButton(R.string.discard) { _, _ -> pending.deleteRecursively() }
+            .show()
     }
 
     override fun onResume() {
@@ -136,7 +177,13 @@ class MainActivity : BaseActivity() {
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
         binding.toolbar.title = selectionTitle()
         updateGreeting()
-        binding.root.background = com.scanwhirl.app.util.Wallpaper.drawable(this)
+        // Wallpaper decode is disk I/O; keep it off the UI thread.
+        lifecycleScope.launch {
+            val background = withContext(Dispatchers.IO) {
+                com.scanwhirl.app.util.Wallpaper.drawable(this@MainActivity)
+            }
+            binding.root.background = background
+        }
     }
 
     /** Time-of-day hello under the app name, when enabled in Settings. */
@@ -178,8 +225,15 @@ class MainActivity : BaseActivity() {
     }
 
     private fun refreshList() {
-        val docs = repo.listDocuments()
-        val filtered = docs.filter { query.isBlank() || it.name.contains(query, true) }
+        lifecycleScope.launch {
+            allDocs = withContext(Dispatchers.IO) { repo.listDocuments() }
+            applyList()
+        }
+    }
+
+    /** In-memory filter + sort over [allDocs]; used by search and sort too. */
+    private fun applyList() {
+        val filtered = allDocs.filter { query.isBlank() || it.name.contains(query, true) }
         val sorted = sortDocs(filtered)
         adapter.selectedIds = selectedIds
         adapter.submitList(sorted) {
@@ -187,7 +241,7 @@ class MainActivity : BaseActivity() {
         }
         binding.emptyState.isVisible = sorted.isEmpty()
         binding.scanList.isVisible = true
-        if (selectionMode && docs.none { it.id in selectedIds }) {
+        if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
     }
@@ -274,6 +328,9 @@ class MainActivity : BaseActivity() {
                 val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
                 progress.dismiss()
                 startActivity(DocumentViewerActivity.intent(this@MainActivity, doc.id))
+            } catch (e: SecurityException) {
+                progress.dismiss()
+                Toast.makeText(this@MainActivity, R.string.pdf_protected, Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -318,7 +375,7 @@ class MainActivity : BaseActivity() {
                 else -> Prefs.SORT_MODIFIED
             }
             Prefs.setSortMode(this, mode)
-            refreshList()
+            applyList()
             true
         }
         popup.show()
@@ -326,7 +383,7 @@ class MainActivity : BaseActivity() {
 
     /** Merge tool: tick 2+ scans, then name the merged document. */
     private fun showMergePicker() {
-        val docs = repo.listDocuments()
+        val docs = allDocs
         if (docs.size < 2) {
             Toast.makeText(this, R.string.merge_needs_two, Toast.LENGTH_SHORT).show()
             return
@@ -519,12 +576,13 @@ class MainActivity : BaseActivity() {
                     return@setPositiveButton
                 }
                 // DPI is intentionally not exposed: a DPI tag alone does not change
-                // pixels, so only real pixel dimensions + target size are offered.
+                // pixels, so only real pixel dimensions + target size are offered,
+                // and no DPI metadata is stamped the user didn't ask for.
                 doResize(
                     bytes, name,
                     ImageTools.ResizeOptions(
                         width = w, height = h, keepRatio = ratio,
-                        maxBytes = target, keepPng = false
+                        maxBytes = target, keepPng = false, dpi = 0
                     )
                 )
             }
@@ -591,7 +649,7 @@ class MainActivity : BaseActivity() {
 
     private fun startCompress() {
         // No saved scans yet: the source is necessarily an external file.
-        if (repo.listDocuments().isEmpty()) {
+        if (allDocs.isEmpty()) {
             pickCompressPdf.launch("application/pdf")
             return
         }
@@ -611,7 +669,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun pickScan(titleRes: Int, onPicked: (ScanDocument) -> Unit) {
-        val docs = repo.listDocuments()
+        val docs = allDocs
         if (docs.isEmpty()) {
             Toast.makeText(this, R.string.empty_title, Toast.LENGTH_SHORT).show()
             return
@@ -751,7 +809,8 @@ class MainActivity : BaseActivity() {
                 val pages = withContext(Dispatchers.IO) { fitFilesToTotal(doc.pageFiles, target) }
                 val out = repo.createDocument("${doc.name} (compressed)", pages)
                 refreshList()
-                showCompressResult(out, before, out.pdfFile.length())
+                showCompressResult(out, before, out.pdfFile.length(),
+                    if (out.pdfFile.length() > target) getString(R.string.compress_target_missed, formatBytes(target)) else null)
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
             } finally {
@@ -761,7 +820,12 @@ class MainActivity : BaseActivity() {
     }
 
     /** Opens the real result screen (preview + actual before/after + save/share). */
-    private fun showCompressResult(out: ScanDocument, before: Long, after: Long) {
+    private fun showCompressResult(out: ScanDocument, before: Long, after: Long, extraWarning: String? = null) {
+        val warning = when {
+            extraWarning != null -> extraWarning
+            before > 0 && after > before -> getString(R.string.compress_grew_warning)
+            else -> null
+        }
         startActivity(
             ExportResultActivity.intent(
                 this,
@@ -774,11 +838,7 @@ class MainActivity : BaseActivity() {
                 width = 0,
                 height = 0,
                 title = out.name,
-                warning = if (before > 0 && after > before) {
-                    getString(R.string.compress_grew_warning)
-                } else {
-                    null
-                }
+                warning = warning
             )
         )
     }
@@ -816,13 +876,20 @@ class MainActivity : BaseActivity() {
                     val fd = contentResolver.openFileDescriptor(uri, "r")
                         ?: throw IllegalStateException("Could not open PDF")
                     val rendered = fd.use {
-                        PdfPageRenderer.renderJpegs(it, dpi = 150f, maxDim = 2048, quality = 85)
+                        // One page at a time: never hold a whole PDF's JPEGs in memory.
+                        val out = mutableListOf<ByteArray>()
+                        val count = PdfPageRenderer.pageCount(fd)
+                        for (i in 0 until count) {
+                            PdfPageRenderer.renderPageJpeg(fd, i, 150f, 2048, 85).let { out.add(it) }
+                        }
+                        out
                     }
                     fitJpegsToTotal(rendered, target)
                 }
                 val out = repo.createDocument("${baseName ?: "Document"} (compressed)", pages)
                 refreshList()
-                showCompressResult(out, before, out.pdfFile.length())
+                showCompressResult(out, before, out.pdfFile.length(),
+                    if (out.pdfFile.length() > target) getString(R.string.compress_target_missed, formatBytes(target)) else null)
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
             } finally {
@@ -857,8 +924,11 @@ class MainActivity : BaseActivity() {
     /** Never grows a page: keeps the original bytes when they already fit the share. */
     private fun fitToShare(orig: ByteArray, share: Long): ByteArray {
         if (orig.size.toLong() <= share) return orig
-        val bmp = BitmapFactory.decodeByteArray(orig, 0, orig.size)
-            ?: throw IllegalStateException("A page could not be decoded")
+        val bmp = try {
+            ImageTools.decodeSampled(orig, 3000)
+        } catch (e: Exception) {
+            null
+        } ?: throw IllegalStateException("A page could not be decoded")
         val fitted = ImageTools.compressToFit(bmp, share).bytes
         bmp.recycle()
         return if (fitted.size >= orig.size) orig else fitted
@@ -1061,9 +1131,11 @@ class ScanListAdapter(
             binding.scanMeta.text =
                 "${timeFmt.format(whenDate)} · ${dateFmt.format(whenDate)} · ${formatBytes(sizeBytes)}"
             val first = doc.pageFiles.firstOrNull()
-            val thumb = if (first != null) ImageTools.decodeThumb(first, 320) else null
-            if (thumb != null) {
-                binding.scanThumb.setImageBitmap(thumb)
+            if (first != null) {
+                // Background decode + cache; the main thread never touches JPEGs.
+                binding.scanThumb.setImageResource(R.drawable.ic_document)
+                com.scanwhirl.app.ui.pagegrid.PageThumbLoader.load(first, 320,
+                    com.scanwhirl.app.util.ScanFilter.ORIGINAL, binding.scanThumb)
             } else {
                 binding.scanThumb.setImageResource(R.drawable.ic_document)
             }

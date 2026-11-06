@@ -133,8 +133,18 @@ class MergePdfActivity : BaseActivity() {
             .setTitle(R.string.merge_builder_title)
             .setView(input)
             .setPositiveButton(R.string.merge_action) { _, _ ->
-                doMerge(input.text?.toString())
+                confirmMerge(input.text?.toString())
             }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Device-PDF merge rasterizes each page; the user confirms that once. */
+    private fun confirmMerge(name: String?) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.merge_builder_title)
+            .setMessage(R.string.pdf_rasterize_note)
+            .setPositiveButton(R.string.continue_label) { _, _ -> doMerge(name) }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
@@ -153,6 +163,9 @@ class MergePdfActivity : BaseActivity() {
                 ).show()
                 startActivity(PdfViewerActivity.intent(this@MergePdfActivity, doc.id, doc.name))
                 finish()
+            } catch (e: SecurityException) {
+                progress.dismiss()
+                Toast.makeText(this@MergePdfActivity, R.string.pdf_protected, Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(

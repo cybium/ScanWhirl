@@ -64,6 +64,9 @@ class DocumentViewerActivity : BaseActivity() {
     /** File signature at open; a diff on resume means the page view edited files. */
     private var startSignature: String = ""
 
+    /** True once onCreate has finished its async first load. */
+    private var firstLoad = false
+
     /** Not lifecycle-bound: a pending delete must land even during onDestroy. */
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -89,19 +92,7 @@ class DocumentViewerActivity : BaseActivity() {
         binding.toolbar.setNavigationOnClickListener { handleEditorBack() }
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
-        if (!reloadDocument()) return
 
-        // Editing happens in place; keep a pre-edit copy so Back can offer
-        // "Save as new" (original restored) as well as "Overwrite".
-        // The copy runs in the background so opening a big document stays quick.
-        docId?.let { id ->
-            startSignature = signature()
-            if (snapshotDir == null) {
-                snapshotJob = snapshotScope.launch {
-                    snapshotDir = takeSnapshot(id)
-                }
-            }
-        }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleEditorBack()
         })
@@ -119,6 +110,22 @@ class DocumentViewerActivity : BaseActivity() {
 
         binding.btnShare.setOnClickListener { document?.let { ShareUtils.share(this, it) } }
         binding.btnDelete.setOnClickListener { document?.let { confirmDelete(it) } }
+
+        // First load (off the main thread), then start the pre-edit snapshot.
+        lifecycleScope.launch {
+            if (!reloadDocument()) return@launch
+            startSignature = signature()
+            firstLoad = true
+            // Editing happens in place; keep a pre-edit copy so Back can offer
+            // "Save as new" (original restored) as well as "Overwrite".
+            docId?.let { id ->
+                if (snapshotDir == null) {
+                    snapshotJob = snapshotScope.launch {
+                        snapshotDir = takeSnapshot(id)
+                    }
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -140,9 +147,12 @@ class DocumentViewerActivity : BaseActivity() {
         document?.let { binding.toolbar.title = it.name }
         // Returning from the full-screen page view: rotate/filter/delete may
         // have changed the document.
-        if (document != null) {
-            reloadDocument()
-            if (startSignature.isNotEmpty() && signature() != startSignature) dirty = true
+        if (document != null && firstLoad) {
+            lifecycleScope.launch {
+                if (reloadDocument() && startSignature.isNotEmpty() && signature() != startSignature) {
+                    dirty = true
+                }
+            }
         }
     }
 
@@ -155,15 +165,18 @@ class DocumentViewerActivity : BaseActivity() {
         R.id.action_rename -> { promptRename(); true }
         R.id.action_save_device -> { promptDownload(); true }
         R.id.action_save_pdf -> { savePdfToDocuments(); true }
-        R.id.action_rotate_page -> { rotateSelected(); true }
+        R.id.action_rotate_left -> { rotateSelected(clockwise = false); true }
+        R.id.action_rotate_right -> { rotateSelected(clockwise = true); true }
         R.id.action_delete_page -> { deleteSelectedPages(); true }
         R.id.action_save_page -> { saveSelectedPages(); true }
         else -> super.onOptionsItemSelected(item)
     }
 
     /** Re-reads the document from disk and refreshes all UI. Returns false if it vanished. */
-    private fun reloadDocument(): Boolean {
-        val doc = repo.listDocuments().find { it.id == docId }
+    private suspend fun reloadDocument(): Boolean {
+        val doc = withContext(Dispatchers.IO) {
+            repo.listDocuments().find { it.id == docId }
+        }
         if (doc == null) {
             Toast.makeText(this, R.string.doc_not_found, Toast.LENGTH_SHORT).show()
             finish()
@@ -225,7 +238,7 @@ class DocumentViewerActivity : BaseActivity() {
     }
 
     /** Rotates every ticked page (a single selection rotates just that page). */
-    internal fun rotateSelected() {
+    internal fun rotateSelected(clockwise: Boolean) {
         val paths = requireSelection() ?: return
         val id = docId ?: return
         lifecycleScope.launch {
@@ -236,7 +249,7 @@ class DocumentViewerActivity : BaseActivity() {
                     for (path in paths) {
                         val doc = repo.listDocuments().find { it.id == id } ?: break
                         val idx = doc.pageFiles.indexOfFirst { it.path == path }
-                        if (idx >= 0) repo.rotatePage(id, idx)
+                        if (idx >= 0) repo.rotatePage(id, idx, clockwise)
                     }
                 }
                 dirty = true
@@ -314,7 +327,9 @@ class DocumentViewerActivity : BaseActivity() {
             committingDeletes.removeAll(toDelete.toSet())
             // Refresh only now: the pages are gone from disk, so they can't flash back.
             runOnUiThread {
-                if (!isFinishing && !isDestroyed) reloadDocument()
+                if (!isFinishing && !isDestroyed) {
+                    lifecycleScope.launch { reloadDocument() }
+                }
             }
         }
     }
@@ -409,7 +424,7 @@ class DocumentViewerActivity : BaseActivity() {
                 if (!newName.isNullOrBlank()) {
                     repo.renameDocument(doc.id, newName.trim())
                     dirty = true
-                    reloadDocument()
+                    lifecycleScope.launch { reloadDocument() }
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -537,10 +552,12 @@ class DocumentViewerActivity : BaseActivity() {
         }
     }
 
-    /** Pre-edit copy of the document directory (cache; never listed as a scan). */
+    /** Pre-edit copy of the document directory (persistent files dir, never listed). */
     private fun takeSnapshot(id: String): File? = try {
         val src = File(filesDir, "documents/$id")
-        val dest = File(cacheDir, "edit_snapshot_$id")
+        // Files dir, not cache: a process death mid-edit must not lose the
+        // revert copy, because the edits themselves are destructive.
+        val dest = File(filesDir, "edit_snapshot_$id")
         dest.deleteRecursively()
         dest.mkdirs()
         src.listFiles()?.forEach { f ->

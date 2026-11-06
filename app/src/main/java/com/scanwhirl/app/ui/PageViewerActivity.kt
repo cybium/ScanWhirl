@@ -101,7 +101,8 @@ class PageViewerActivity : BaseActivity() {
         updateIndicator()
 
         binding.btnClose.setOnClickListener { finish() }
-        binding.btnRotate.setOnClickListener { rotateCurrent() }
+        binding.btnRotateLeft.setOnClickListener { rotateCurrent(clockwise = false) }
+        binding.btnRotateRight.setOnClickListener { rotateCurrent(clockwise = true) }
         binding.btnCrop.setOnClickListener { startCrop() }
         binding.btnFilter.setOnClickListener { filterCurrent() }
         binding.btnDelete.setOnClickListener { deleteCurrent() }
@@ -199,18 +200,18 @@ class PageViewerActivity : BaseActivity() {
             getString(R.string.page_indicator, currentPos + 1, pages.size)
     }
 
-    private fun rotateCurrent() {
+    private fun rotateCurrent(clockwise: Boolean) {
         val pos = currentPosition()
         val file = pages.getOrNull(pos) ?: return
         val dir = stagingDir
         lifecycleScope.launch {
             try {
                 if (dir != null) {
-                    withContext(Dispatchers.IO) { ImageTools.rotate90(file) }
+                    withContext(Dispatchers.IO) { ImageTools.rotate90(file, clockwise) }
                 } else {
                     val id = docId ?: return@launch
                     withContext(Dispatchers.IO) { commitPendingDeleteNow() }
-                    repo.rotatePage(id, pos)
+                    repo.rotatePage(id, pos, clockwise)
                 }
                 reload()
                 currentPos = pos.coerceAtMost(pages.lastIndex)

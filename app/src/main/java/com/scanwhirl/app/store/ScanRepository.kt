@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.ImageTools
@@ -210,27 +211,51 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
-     * Merges device PDFs (content Uris) in the given order: each is rendered to
-     * page JPEGs and the pages are concatenated into a new scan.
+     * Merges device PDFs (content Uris) in the given order. Pages are rendered
+     * and written to disk one at a time — no page-byte list is ever held in
+     * memory, so merging many or large PDFs cannot OOM.
      */
     suspend fun mergePdfUris(uris: List<Uri>, suggestedName: String?): ScanDocument =
         withContext(Dispatchers.IO) {
             require(uris.size >= 2) { "Pick at least 2 PDFs" }
-            val pages = mutableListOf<ByteArray>()
-            for (uri in uris) {
-                val fd = context.contentResolver.openFileDescriptor(uri, "r")
-                    ?: throw IllegalStateException("Could not open a PDF")
-                fd.use {
-                    pages.addAll(
-                        PdfPageRenderer.renderJpegs(it, dpi = 150f, maxDim = 2048, quality = 85)
-                    )
+            val (id, dir) = newDocDir()
+            try {
+                var pageNum = 0
+                for (uri in uris) {
+                    val fd = context.contentResolver.openFileDescriptor(uri, "r")
+                        ?: throw IllegalStateException("Could not open a PDF")
+                    fd.use {
+                        pageNum += appendPdfPages(fd, dir, pageNum, dpi = 150f, maxDim = 2048, quality = 85)
+                    }
                 }
+                if (pageNum == 0) throw IllegalStateException("No pages to merge")
+                finalizeDoc(id, dir, suggestedName ?: defaultMergedName("Merged PDF"))
+            } catch (e: Exception) {
+                dir.deleteRecursively()
+                throw e
             }
-            if (pages.isEmpty()) throw IllegalStateException("No pages to merge")
-            val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
-                ?: "Merged PDF ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())}"
-            createDocument(name, pages)
         }
+
+    /**
+     * Renders every page of the open PDF into [dir], continuing at [start].
+     * Returns how many pages were appended.
+     */
+    private fun appendPdfPages(
+        fd: ParcelFileDescriptor,
+        dir: File,
+        start: Int,
+        dpi: Float,
+        maxDim: Int,
+        quality: Int
+    ): Int {
+        val count = PdfPageRenderer.pageCount(fd)
+        require(count > 0) { "PDF has no pages" }
+        for (i in 0 until count) {
+            val jpeg = PdfPageRenderer.renderPageJpeg(fd, i, dpi, maxDim, quality)
+            File(dir, String.format(Locale.ROOT, PAGE_FORMAT, start + i)).writeBytes(jpeg)
+        }
+        return count
+    }
 
     suspend fun deletePage(id: String, pageIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
@@ -248,17 +273,17 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after delete")
         }
 
-    suspend fun rotatePage(id: String, pageIndex: Int): ScanDocument =
+    suspend fun rotatePage(id: String, pageIndex: Int, clockwise: Boolean = true): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             require(pageIndex in doc.pageFiles.indices) { "No such page" }
 
             val file = doc.pageFiles[pageIndex]
-            rotateFile90(file)
+            rotateFile90(file, clockwise)
             // Keep the kept original aligned so a later filter re-apply
             // doesn't undo the rotation.
-            origOf(file).takeIf { it.exists() }?.let { rotateFile90(it) }
+            origOf(file).takeIf { it.exists() }?.let { rotateFile90(it, clockwise) }
 
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rotate")
@@ -281,7 +306,7 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after crop")
         }
 
-    private fun rotateFile90(file: File) = ImageTools.rotate90(file)
+    private fun rotateFile90(file: File, clockwise: Boolean = true) = ImageTools.rotate90(file, clockwise)
 
     suspend fun movePage(id: String, fromIndex: Int, toIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
@@ -350,6 +375,33 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after filter")
         }
 
+    /** Fresh document directory (never finalised: no meta yet). */
+    private fun newDocDir(): Pair<String, File> {
+        val id = UUID.randomUUID().toString().take(8)
+        return id to File(docsDir, id).apply { mkdirs() }
+    }
+
+    /** Writes the name/meta, generates the PDF, and returns the listed document. */
+    private fun finalizeDoc(id: String, dir: File, suggestedName: String?): ScanDocument {
+        val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
+            ?: nextDocumentName()
+        File(dir, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\n")
+        val pdfFile = File(dir, "scan.pdf")
+        try {
+            PdfGenerator.imagesToPdf(pageFilesIn(dir), pdfFile)
+        } catch (e: Exception) {
+            pdfFile.delete()
+        }
+        return loadDocument(dir) ?: throw IllegalStateException("Scan could not be saved")
+    }
+
+    /** "Merged PDF <timestamp>" when no name is given. */
+    private fun defaultMergedName(prefix: String): String =
+        "$prefix ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())}"
+
+    // Shared page-file naming (page_000.jpg, page_001.jpg, …).
+    private val PAGE_FORMAT = "page_%03d.jpg"
+
     /** Creates a brand-new scan document from raw page JPEG bytes. */
     suspend fun createDocument(
         name: String?,
@@ -357,26 +409,14 @@ class ScanRepository(private val context: Context) {
     ): ScanDocument = withContext(Dispatchers.IO) {
         require(pageBytes.isNotEmpty()) { "No pages" }
 
-        val id = UUID.randomUUID().toString().take(8)
-        val dir = File(docsDir, id).apply { mkdirs() }
+        val (id, dir) = newDocDir()
 
         pageBytes.forEachIndexed { index, bytes ->
             require(bytes.isNotEmpty()) { "Page ${index + 1} is empty" }
-            File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index)).writeBytes(bytes)
+            File(dir, String.format(Locale.ROOT, PAGE_FORMAT, index)).writeBytes(bytes)
         }
 
-        val finalName = name?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
-            ?: nextDocumentName()
-        File(dir, "meta.txt").writeText("$finalName\n${System.currentTimeMillis()}\n")
-
-        val pdfFile = File(dir, "scan.pdf")
-        try {
-            PdfGenerator.imagesToPdf(pageFilesIn(dir), pdfFile)
-        } catch (e: Exception) {
-            pdfFile.delete()
-        }
-
-        loadDocument(dir) ?: throw IllegalStateException("Scan could not be saved")
+        finalizeDoc(id, dir, name)
     }
 
     /** Copies a scan with pages re-encoded at [quality] (optionally downscaled to [maxDim]). */
@@ -394,19 +434,29 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Imports an external PDF file as a new scan (rendered on-device).
-     * [dpi]/[maxDim]/[quality] control the rasterization, i.e. the compression level.
+     * [dpi]/[maxDim]/[quality] control the rasterization, i.e. the compression
+     * level. Pages are rendered and written one at a time so large PDFs
+     * cannot OOM.
      */
     suspend fun importPdfAsScan(
         uri: Uri,
         name: String?,
         dpi: Float = 150f,
-        maxDim: Int = 4096,
+        maxDim: Int = 2048,
         quality: Int = 85
     ): ScanDocument = withContext(Dispatchers.IO) {
         val fd = context.contentResolver.openFileDescriptor(uri, "r")
             ?: throw IllegalStateException("Could not open PDF")
-        val pages = fd.use { PdfPageRenderer.renderJpegs(it, dpi = dpi, maxDim = maxDim, quality = quality) }
-        createDocument(name, pages)
+        val (id, dir) = newDocDir()
+        try {
+            fd.use {
+                appendPdfPages(it, dir, 0, dpi = dpi, maxDim = maxDim, quality = quality)
+            }
+            finalizeDoc(id, dir, name)
+        } catch (e: Exception) {
+            dir.deleteRecursively()
+            throw e
+        }
     }
 
     private fun renumberPages(dir: File) {

@@ -86,11 +86,16 @@ object ImageTools {
         null
     }
 
-    /** Rotates a JPEG file 90° clockwise in place (page rotation). */
-    fun rotate90(file: java.io.File) {
-        val src = BitmapFactory.decodeFile(file.path)
+    /** Working cap so rotate/crop/re-encode never decode a monster file full-res. */
+    private const val WORK_DIM = 3000
+
+    /** Rotates a JPEG file 90° in place. [clockwise] = right, false = left. */
+    fun rotate90(file: java.io.File, clockwise: Boolean = true) {
+        val src = decodeSampled(file.readBytes(), WORK_DIM)
             ?: throw IllegalStateException("Unreadable page")
-        val matrix = android.graphics.Matrix().apply { postRotate(90f) }
+        val matrix = android.graphics.Matrix().apply {
+            postRotate(if (clockwise) 90f else -90f)
+        }
         val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
         src.recycle()
         java.io.FileOutputStream(file).use { out ->
@@ -101,7 +106,7 @@ object ImageTools {
 
     /** Crops a JPEG file to [rect] (full-file pixel coordinates) in place. */
     fun cropTo(file: java.io.File, rect: android.graphics.RectF) {
-        val src = BitmapFactory.decodeFile(file.path)
+        val src = decodeSampled(file.readBytes(), WORK_DIM)
             ?: throw IllegalStateException("Unreadable page")
         val left = rect.left.roundToInt().coerceIn(0, src.width - 1)
         val top = rect.top.roundToInt().coerceIn(0, src.height - 1)
@@ -208,12 +213,7 @@ object ImageTools {
      * [maxDim] null keeps original dimensions.
      */
     fun recompressJpeg(src: ByteArray, quality: Int, maxDim: Int?): ByteArray {
-        val bitmap = if (maxDim == null) {
-            BitmapFactory.decodeByteArray(src, 0, src.size)
-                ?: throw IllegalStateException("Could not decode image")
-        } else {
-            decodeSampled(src, maxDim)
-        }
+        val bitmap = decodeSampled(src, maxDim ?: WORK_DIM)
 
         val target = if (maxDim != null &&
             (bitmap.width > maxDim || bitmap.height > maxDim)
