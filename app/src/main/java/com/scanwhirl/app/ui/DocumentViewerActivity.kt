@@ -172,6 +172,7 @@ class DocumentViewerActivity : BaseActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.action_rename -> { promptRename(); true }
+        R.id.action_categorize -> { promptCategorize(); true }
         R.id.action_save_device -> { promptDownload(); true }
         R.id.action_save_pdf -> { savePdfToDocuments(); true }
         R.id.action_ocr_text -> { runAndShowOcr(); true }
@@ -667,6 +668,31 @@ class DocumentViewerActivity : BaseActivity() {
                     dirty = true
                     lifecycleScope.launch { reloadDocument() }
                 }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Globe ring picker: Study / Receipts / IDs / Forms / Other. */
+    private fun promptCategorize() {
+        val doc = document ?: return
+        val cats = com.scanwhirl.app.util.CategoryRules.ALL.toTypedArray()
+        val current = cats.indexOf(doc.category).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.categorize_title)
+            .setSingleChoiceItems(cats, current) { dialog, which ->
+                lifecycleScope.launch {
+                    withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        repo.setCategory(doc.id, cats[which])
+                    }
+                    reloadDocument()
+                    Toast.makeText(
+                        this@DocumentViewerActivity,
+                        getString(R.string.categorize_title) + ": " + cats[which],
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                dialog.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()

@@ -49,6 +49,12 @@
         android:title="@string/btn_vault_hide"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_categorize"
+        android:icon="@drawable/ic_document"
+        android:title="@string/action_categorize"
+        app:showAsAction="never" />
+
     <!-- Page actions: apply to the ticked pages (tap a checkbox first). -->
     <item
         android:id="@+id/action_rotate_left"

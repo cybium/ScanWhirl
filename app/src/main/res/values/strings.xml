@@ -325,4 +325,18 @@
     <string name="preview_pro_ui">Preview Pro UI</string>
     <string name="preview_changed">Showing the %1$s UI (test preview)</string>
 
+    <!-- Globe home (test23): holographic Earth + category rings. -->
+    <string name="globe_pull_search">↓ Pull to Search</string>
+    <string name="globe_pull_release">↑ Release to Search</string>
+    <string name="globe_hint_home">Tap Earth to explore • Drag to spin</string>
+    <string name="globe_hint_rings">Drag rings to spin • Pinch in for List</string>
+    <string name="globe_search_hint">Search document names</string>
+    <string name="globe_match_all">Showing all %1$d documents</string>
+    <string name="globe_match_count">Found %1$d of %2$d matching</string>
+    <string name="globe_search_open">Search</string>
+    <string name="settings_globe_home">Globe home screen</string>
+    <string name="settings_globe_home_summary">Open the rotating Earth home first; pinch in for the Shelf list</string>
+    <string name="action_categorize">Categorize</string>
+    <string name="categorize_title">Categorize this document</string>
+
 </resources>

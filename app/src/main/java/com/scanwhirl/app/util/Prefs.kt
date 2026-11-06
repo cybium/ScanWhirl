@@ -68,6 +68,12 @@ object Prefs {
     private const val KEY_AUTO_ENHANCE = "auto_enhance_scan"
 
     fun autoEnhanceScan(c: Context): Boolean = sp(c).getBoolean(KEY_AUTO_ENHANCE, false)
+
+    private const val KEY_GLOBE_HOME = "globe_home"
+
+    /** test23: open the holographic globe home first (false = plain Shelf). */
+    fun globeHomeEnabled(c: Context): Boolean = sp(c).getBoolean(KEY_GLOBE_HOME, true)
+    fun setGlobeHomeEnabled(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_GLOBE_HOME, v).apply()
     fun setAutoEnhanceScan(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_AUTO_ENHANCE, v).apply()
 
     fun pickedPdfs(c: Context): Set<String> =

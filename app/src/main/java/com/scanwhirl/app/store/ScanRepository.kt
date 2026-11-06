@@ -8,6 +8,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import android.util.Base64
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.PdfEncryptor
@@ -59,6 +60,9 @@ class ScanRepository(private val context: Context) {
         if (lines.isEmpty()) return null
         val name = lines[0].ifBlank { "Untitled scan" }
         val createdAt = lines.getOrNull(1)?.toLongOrNull() ?: dir.lastModified()
+        // Line 3 = category (test23+). Older scans simply read as Other.
+        val category = lines.getOrNull(2)?.takeIf { CategoryRules.isValid(it) }
+            ?: CategoryRules.OTHER
         val pdf = File(dir, "scan.pdf")
         val pages = dir.listFiles { f -> f.extension.equals("jpg", true) || f.extension.equals("jpeg", true) }
             ?.filter { it.length() > 0 }
@@ -75,8 +79,33 @@ class ScanRepository(private val context: Context) {
             pdfFile = pdf,
             pageFiles = pages,
             isLocked = isLocked,
-            isVaulted = isVaulted
+            isVaulted = isVaulted,
+            category = category
         )
+    }
+
+    /**
+     * Writes `name / createdAt / category` (meta.txt). The category is
+     * guessed from the name unless one is given, so every document lands on
+     * a globe ring without the user having to tag anything.
+     */
+    private fun writeMeta(dir: File, name: String, category: String? = null) {
+        val cat = category?.takeIf { CategoryRules.isValid(it) }
+            ?: CategoryRules.classify(name)
+        File(dir, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\n$cat\n")
+    }
+
+    /** User-chosen category override (editor → "Categorize"). */
+    fun setCategory(id: String, category: String): ScanDocument? {
+        require(CategoryRules.isValid(category)) { "Unknown category: $category" }
+        val dir = File(docsDir, id)
+        val meta = File(dir, "meta.txt")
+        if (!meta.exists()) return null
+        val lines = meta.readLines().toMutableList()
+        while (lines.size < 3) lines.add(CategoryRules.OTHER)
+        lines[2] = category
+        meta.writeText(lines.joinToString("\n"))
+        return loadDocument(dir)
     }
 
     suspend fun saveScan(
@@ -145,7 +174,7 @@ class ScanRepository(private val context: Context) {
         val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
             ?: nextDocumentName()
 
-        File(dir, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\n")
+        writeMeta(dir, name)
 
         val pages = dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
             ?.sortedBy { it.nameWithoutExtension }
@@ -189,7 +218,11 @@ class ScanRepository(private val context: Context) {
             }
             val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
                 ?: nextDocumentName()
-            File(dest, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\n")
+            // A copy keeps its original category when it has one.
+            val inherited = src.listFiles { f -> f.name == "meta.txt" }
+                ?.firstOrNull()?.readLines()?.getOrNull(2)
+                ?.takeIf { CategoryRules.isValid(it) }
+            writeMeta(dest, name, inherited)
             loadDocument(dest) ?: throw IllegalStateException("Copy could not be opened")
         }
 
@@ -224,7 +257,7 @@ class ScanRepository(private val context: Context) {
         val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
             ?: "Merged scan ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())}"
 
-        File(dir, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\n")
+        writeMeta(dir, name)
 
         val pdfFile = File(dir, "scan.pdf")
         try {
@@ -410,7 +443,7 @@ class ScanRepository(private val context: Context) {
     private fun finalizeDoc(id: String, dir: File, suggestedName: String?): ScanDocument {
         val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
             ?: nextDocumentName()
-        File(dir, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\n")
+        writeMeta(dir, name)
         val pdfFile = File(dir, "scan.pdf")
         try {
             PdfGenerator.imagesToPdf(pageFilesIn(dir), pdfFile)

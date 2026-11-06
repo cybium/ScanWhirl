@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Holographic Earth Mobile Prototype</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #020408;
+      background-image: radial-gradient(circle at 50% 50%, #0a1120 0%, #020408 80%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #e2f8ff;
+    }
+    /* Centered 9:16 mobile frame */
+    .mobile-wrapper {
+      position: relative;
+      aspect-ratio: 9 / 16;
+      height: 100vh;
+      max-height: 100vh;
+      max-width: calc(100vh * 9 / 16);
+      width: auto;
+      background: #05070d;
+      border-radius: 42px;
+      box-shadow: 
+        0 0 0 1.5px rgba(0, 240, 255, 0.25),
+        0 25px 70px rgba(0, 0, 0, 0.85),
+        0 0 50px rgba(0, 240, 255, 0.08);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    @media (max-aspect-ratio: 9/16) {
+      .mobile-wrapper {
+        width: 100vw;
+        height: calc(100vw * 16 / 9);
+        border-radius: 0;
+      }
+    }
+    canvas#stage {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+    /* Status bar */
+    .status-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 38px;
+      padding: 10px 22px 0 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: rgba(220, 245, 255, 0.75);
+      z-index: 20;
+      pointer-events: none;
+    }
+    .status-icons {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .status-icons svg {
+      fill: currentColor;
+    }
+    /* HUD overlay */
+    .hud-header {
+      position: absolute;
+      top: 40px;
+      left: 0;
+      width: 100%;
+      padding: 0 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 25;
+      pointer-events: none;
+    }
+    .hud-pill {
+      pointer-events: auto;
+      background: rgba(8, 20, 36, 0.65);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      border-radius: 14px;
+      padding: 4px 10px;
+      font-size: 10.5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #00f0ff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    .hud-controls {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .hud-btn {
+      cursor: pointer;
+      background: rgba(8, 20, 36, 0.65);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 14px;
+      padding: 4px 10px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: rgba(220, 245, 255, 0.85);
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .hud-btn:hover, .hud-btn:active {
+      background: rgba(0, 240, 255, 0.2);
+      border-color: #00f0ff;
+      color: #fff;
+    }
+    .hud-btn.active {
+      background: rgba(0, 240, 255, 0.25);
+      border-color: #00f0ff;
+      color: #00f0ff;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+    }
+    /* Pull-down search panel */
+    .search-panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 76px 16px 14px 16px;
+      background: linear-gradient(180deg, rgba(5, 12, 22, 0.95) 0%, rgba(5, 12, 22, 0.85) 85%, transparent 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+      transform: translateY(-100%);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .search-panel.open {
+      transform: translateY(0);
+    }
+    .search-bar-inner {
+      display: flex;
+      align-items: center;
+      background: rgba(10, 25, 45, 0.8);
+      border: 1.5px solid rgba(0, 240, 255, 0.4);
+      border-radius: 16px;
+      padding: 8px 12px;
+      gap: 8px;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+    }
+    .search-icon {
+      color: #00f0ff;
+      font-size: 14px;
+    }
+    .search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #e2f8ff;
+      font-size: 13.5px;
+      font-family: inherit;
+    }
+    .search-input::placeholder {
+      color: rgba(140, 200, 225, 0.5);
+    }
+    .search-clear {
+      cursor: pointer;
+      font-size: 12px;
+      color: rgba(200, 240, 255, 0.6);
+      padding: 2px 6px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      display: none;
+    }
+    .search-chips {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .search-chips::-webkit-scrollbar {
+      display: none;
+    }
+    .chip {
+      cursor: pointer;
+      font-size: 10.5px;
+      padding: 3px 9px;
+      border-radius: 10px;
+      background: rgba(15, 35, 60, 0.6);
+      border: 1px solid rgba(0, 240, 255, 0.2);
+      color: rgba(200, 240, 255, 0.75);
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .chip.active, .chip:hover {
+      background: rgba(0, 240, 255, 0.25);
+      border-color: #00f0ff;
+      color: #00f0ff;
+    }
+    .search-status {
+      font-size: 10.5px;
+      color: rgba(0, 240, 255, 0.85);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px;
+    }
+    /* Pull indicator hint */
+    .pull-indicator {
+      position: absolute;
+      top: 42px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 240, 255, 0.15);
+      border: 1px solid rgba(0, 240, 255, 0.4);
+      border-radius: 12px;
+      padding: 3px 10px;
+      font-size: 10px;
+      color: #00f0ff;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 15;
+    }
+    /* Gesture guide at bottom */
+    .gesture-hint {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: rgba(140, 210, 240, 0.45);
+      letter-spacing: 0.2px;
+      pointer-events: none;
+      z-index: 20;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="mobile-wrapper" id="mobileFrame">
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span id="clockText">09:41</span>
+      <div class="status-icons">
+        <!-- 5G Signal -->
+        <svg width="13" height="10" viewBox="0 0 13 10">
+          <rect x="0" y="7" width="2" height="3" rx="0.5"/>
+          <rect x="3" y="5" width="2" height="5" rx="0.5"/>
+          <rect x="6" y="3" width="2" height="7" rx="0.5"/>
+          <rect x="9" y="0.5" width="2" height="9.5" rx="0.5"/>
+        </svg>
+        <!-- Wifi -->
+        <svg width="12" height="10" viewBox="0 0 12 10">
+          <path d="M6 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3.5-3.5a5 5 0 0 1 7 0 .6.6 0 0 0 .8-.8 6.2 6.2 0 0 0-8.6 0 .6.6 0 0 0 .8.8zm-2-2a7.8 7.8 0 0 1 11 0 .6.6 0 0 0 .8-.8 9 9 0 0 0-12.6 0 .6.6 0 0 0 .8.8z"/>
+        </svg>
+        <!-- Battery -->
+        <svg width="20" height="10" viewBox="0 0 20 10">
+          <rect x="0.5" y="0.5" width="16" height="9" rx="2.5" fill="none" stroke="currentColor"/>
+          <rect x="2" y="2" width="11" height="6" rx="1"/>
+          <path d="M18 3.5v3" stroke="currentColor" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- HUD Header -->
+    <div class="hud-header">
+      <div class="hud-pill" id="fpsDisplay">
+        <span style="width:6px; height:6px; border-radius:50%; background:#00f0ff; display:inline-block; box-shadow:0 0 6px #00f0ff;"></span>
+        <span id="fpsVal">30 FPS [CAP 30]</span>
+      </div>
+      <div class="hud-controls">
+        <button class="hud-btn" id="searchToggleBtn" title="Pull down or click to search">
+          🔍 <span id="searchBtnLabel">Search</span>
+        </button>
+        <button class="hud-btn" id="viewToggleBtn" title="Pinch or click to toggle List/Rings">
+          <span id="viewIcon">☰</span> <span id="viewLabel">List</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Pull Down Search Panel -->
+    <div class="search-panel" id="searchPanel">
+      <div class="search-bar-inner">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="searchInput" placeholder="Search document titles..." autocomplete="off" spellcheck="false">
+        <span class="search-clear" id="searchClear">✕</span>
+      </div>
+      <div class="search-chips" id="searchChips">
+        <div class="chip active" data-tag="">All (24)</div>
+        <div class="chip" data-tag="Passport">Passport</div>
+        <div class="chip" data-tag="Tax">Tax</div>
+        <div class="chip" data-tag="Lease">Lease</div>
+        <div class="chip" data-tag="Insurance">Insurance</div>
+        <div class="chip" data-tag="Contract">Contract</div>
+        <div class="chip" data-tag="Identity">Identity</div>
+      </div>
+      <div class="search-status">
+        <span id="matchCountText">Showing all 24 documents</span>
+        <span style="cursor:pointer; opacity:0.7;" id="searchCloseBtn">Done</span>
+      </div>
+    </div>
+
+    <div class="pull-indicator" id="pullHint">↓ Pull to Search</div>
+    <div class="gesture-hint" id="gestureHint">Tap Earth to explore • Pinch for list view</div>
+
+    <!-- Canvas Stage -->
+    <canvas id="stage"></canvas>
+  </div>
+
+  <script>
+    // --- 1. EMBEDDED NATURAL EARTH 110M 360x180 LAND MASK ---
+    const LAND_MASK_B64 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//gAAD//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//////Hf///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/////////////AAAAAAAAAAAAAAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAAB/////////////wAAAAX/8AAP8AAAAAAfwAAAAAAAAAAAAAAAAAAAAAAAAAOB////g////////AAAAD//wAAAAAAAAAAH/gAAAAAAAAAAAAAAAAAAAAAAAeP3vv/7////////+AAAAB//AAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAAAA8+AL4f/g////////+AAAAAfvgAAAAAAAAAAAF+AAAAAAAAAAAAAAAAAAAAAH/3R////gP////////AAAAAHAAAAAAAf4AAAHP//AAAA8AAAAAAAAAAAAAAACP/5///8AAAf/////+AAAAAAAAAAAAf+AAAH////gAAD//gAAAAAAAAAAAAAf4+AN//+AAAP/////+AAAAAAAAAAAAeAAAAP///4AAAA/nAAAAAAAAAAAAAAf/B8///3wAAH/////8AAAAAAAAAAAB4AEAP//////H4AfAAAAAAAAAAAAAAA//+5/9//4AAD/////wAAAAAAAAAAAHwAHt////////8Af/AAAAA4AABgAAAA///8f8///AAD/////wAAAAAAAiAAAHwA//////////8///gQAADwAA//+gAOYf//1+///+AB/////4AAAAAAH/wAAB8A/v/////////////8AIDAAD///+P/////v/j///AB////+AAAAAAAf//gAAA+/////////////////P+4Af//////////H/z4f/AAf///4AAAAAAD///4eB//////////////////////AH/////////////45/wA///8AAAAAAAP////e///////////////////////4f/////////////gD/+A///wAycAAAAf//////////////////////////////////////////7g/+4Af//AB/+AAAA/+f+f///////////////////////jwf/////////////9//oAf/wAA/8AAAD/8//////////////////////////APH////////////PcB/wAP/gAAfgAAAP/3/////////////////////////+ACP////////////A///gAD/AAAAAAAB//H//////////////////////////AAf///////////wAG/5AAD/AAAAAAAD//H/////////////////////////gAA////////////wAA/4QAB+AAAAAAAB//n//////////////////////D/+AAAb/zwn///////wAA/44AAAAAAAAAAB//D//////////////////////D6IAAAAv4AA///////4AB//8AAAAAAAAA4B5/B///////////////////4AYPgAAAAAH8AAD///////AAf/8AAAAAAAAA+AP+H///////////////////gAA/wAAAAAfQAAB///////wAf/+AAAAAAAAB8AO8H///////////////////AAB/wAAAAD8AAAA////////x///gAAAAAAAD8AP4H//////////////////+AAB/AAAAAGAAAAD////////z///4AAAAAAAH/AP////////////////////+yAB/gAAAAAAAAADP///////x///+AAAAAAAPfj//////////////////////+AB+AAAAAAAAAABv///////5///+AAAAAAAPfz///////////////////////AA4AAAAAAAAAAAD///////////+AAAAAAAM/////////////////////////AA4AAAAAAAAAAAH///////////MAAAAAAAA////////////////////////7AAAAAAAAAAAAAAH//////////+fgAAAAAAAj///////////////////////7AAAAAAAAAAAAAAA//////////w/wAAAAAAAf///////////////////////+gAAAAAAAAAAAAAAf/////////x/wAAAAAAAf///////////////////////yAAAAAAAAAAAAAAAf/////////9DgAAAAAAAD///////////////////////nAAAAAAAAAAAAAAAP//////////gAAAAAAAAD/////P////////////////+GAAAAAAAAAAAAAAAP/////////4AAAAAAAAAD/////Hf///////////////8HQAAAAAAAAAAAAAAf////////5gAAAAAAAAP//3z/+AH///////////////8PwAAAAAAAAAAAAAAf////////wAAAAAAAAAH/4P5/8HB//////////////+wfgAAAAAAAAAAAAAAf////////4AAAAAAAAAP/8M+f//n//////////////8AdAAAAAAAAAAAAAAAf////////gAAAAAAAAAH/gMP//////////////////8AcAAAAAAAAAAAAAAAP///////8AAAAAAAAAAP/AMH/P///////////////fwAMAAAAAAAAAAAAAAAP///////8AAAAAAAAAAP/gI/Pv//////////////+T4AYAAAAAAAAAAAAAAAH///////4AAAAAAAAAAH/A3+Hn///////////////78C4AAAAAAAAAAAAAAAD///////4AAAAAAAAAAH8//MHH///////////////48D4AAAAAAAAAAAAAAAB///////4AAAAAAAAAAB//+AB4P//////////////A8/4AAAAAAAAAAAAAAAB///////wAAAAAAAAAAB//+AAgP//////////////g7/gAAAAAAAAAAAAAAAAf//////AAAAAAAAAAAH///AAAB//////////////gH8AAAAAAAAAAAAAAAAAP/////8AAAAAAAAAAAP///8PAD//////////////wHwAAAAAAAAAAAAAAAAAH/////4AAAAAAAAAAAP///+f/7//////////////wDAAAAAAAAAAAAAAAAAAH/////4AAAAAAAAAAAP/////////////////////wAAAAAAAAAAAAAAAAAAAD////i8AAAAAAAAAAAf/////////////////////4AAAAAAAAAAAAAAAAAAAB///gAcAAAAAAAAAAB//////////v///////////wAAAAAAAAAAAAAAAAAAAD//+AAcgAAAAAAAAAD//////////3///////////gAAAAAAAAAAAAAAAAAAAA7/+AAdwAAAAAAAAAH///////+//9///////////AAAAAAAAAAAAAAAAAAAAAf/+AANgAAAAAAAAAH///////+//8f//////////QAAAAAAAAAAAAAAAAAAAAc/+AABgAAAAAAAAAP///////+f//4Af///////+wAAAAAAAAAAAAAAAAAAAAGf+AAcgAAAAAAAAAf////////P//+Af///////8wAAAAAAAAAAAAIAAAAAAAGf+AB/gAAAAAAAAAf////////n///AH///////wwAAAAAAAAAAAAPAAAAAAAAP+A9H4AAAAAAAAA/////////3///AD///v//8AgAAAAAAAAAAAABgAAAAAAAP+B8B8AAAAAAAAA/////////n//+AD//8P/+YAAAAAAAAAAAAAABwAAAAAAAP/B4A/4AAAAAAAAf////////z//8AA//wH/88AAAAAAAAAAAAAAAgAAAAAAAD//4B3/gAAAAAAAf////////x//8AAf/AD/+4A4AAAAAAAAAAAAAAAAAAAAAB//wAwjgAAAAAAAf////////5//4AAf/AD/+AA4AAAAAAAAAAAAAAAAAAAAAAP/0AAAAAAAAAAAf////////4//gAAf+AD//gB4AAAAAAAAAAAAAAAAAAAAAADP/gAAAAAAAAAAf////////8/+AAAf4ADf/gBwAAAAAAAAAAAAAAAAAAAAAAAH/gAAAAAAAAAA///////////wAAAP4AAf/gA4AAAAAAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAf//////////gAAAP4AAP/wA8AAAAAAAAAAAAAAAAAAAAAAAAPgAoAAAAAAAAf/////////8MAAAPwAAP/wAzAAAAAAAAAAAAAAAAAAAAAAAAHgH8AAAAAAAAf/////////x8AAAHwAAMfwBfAAAAAAAAAAAAAAAAAAAAAAAADgP//AAAAAAAH//////////8AAADwAAMfADfAAAAAAAAAAAAAAAAAAAAAAAAD/f//AAAAAAAH//////////4AAAD4AAMOAGNgAAAAAAAAAAAAAAAAAAAAAAAA////gAAAAAAD//////////4AAAD8AAOEAEPgAAAAAAAAAAAAAAAAAAAAAAAAN///wAAAAAAB//////////wAAABcAAOAAAfgAAAAAAAAAAAAAAAAAAAAAAAAA///6AAAAAAA//////////wAAAAcAAHgAMPgAAAAAAAAAAAAAAAAAAAAAAAAA////wAAAAAAP/x///////gAAAAIABzgAfBAAAAAAAAAAAAAAAAAAAAAAAAAA////4AAAAAAPuB///////AAAAAAAB7wA+AAAAAAAAAAAAAAAAAAAAAAAAAAA////4AAAAAAAAAP/////+AAAAAAAA/wD8AAAAAAAAAAAAAAAAAAAAAAAAAAB////4AAAAAAAAAH/////+AAAAAAAAfwX+AQAAAAAAAAAAAAAAAAAAAAAAAAB////+AAAAAAAAAH/////4AAAAAAAAP4f8xYAAAAAAAAAAAAAAAAAAAAAAAAH////8AAAAAAAAAH/////wAAAAAAAAHw//+YAAAAAAAAAAAAAAAAAAAAAAAAH/////wAAAAAAAAP/////gAAAAAAAADwf98bwAAAAAAAAAAAAAAAAAAAAAAAH/////8AAAAAAAAP/////AAAAAAAAAD4f58D5gAAAAAAAAAAAAAAAAAAAAAAH//////4AAAAAAAH////+AAAAAAAAAD8P7wN78AwAAAAAAAAAAAAAAAAAAAAH//////8AAAAAAAB////+AAAAAAAAAA+H55+//gcAAAAAAAAAAAAAAAAAAAAP//////+AAAAAAAB////8AAAAAAAAAA8Ap8A3/wcAAAAAAAAAAAAAAAAAAAAH///////gAAAAAAB////4AAAAAAAAAAfABsAJ/zzAAAAAAAAAAAAAAAAAAAAP///////wAAAAAAA////8AAAAAAAAAAH+AAAI//hgAAAAAAAAAAAAAAAAAAAD///////wAAAAAAA////8AAAAAAAAAAD/gAAA/8A4AAAAAAAAAAAAAAAAAAAD///////gAAAAAAA////8AAAAAAAAAAAP37wB/OAGAAAAAAAAAAAAAAAAAAAB///////gAAAAAAA////8AAAAAAAAAAAAPnAAGHgHAAAAAAAAAAAAAAAAAAAB///////AAAAAAAAf///+AAAAAAAAAAAAAmAACHgBgAAAAAAAAAAAAAAAAAAA//////+AAAAAAAAf///+AAAAAAAAAAAAAAB+HAAAAAAAAAAAAAAAAAAAAAAA//////+AAAAAAAAf///+AwAAAAAAAAAAAAD+HAAAAAAAAAAAAAAAAAAAAAAAf/////8AAAAAAAA////+B4AAAAAAAAAAAA3+HAAAAAAAAAAAAAAAAAAAAAAAf/////8AAAAAAAA////+B4AAAAAAAAAAAB/8HwAADAAAAAAAAAAAAAAAAAAAP/////8AAAAAAAB////+H4AAAAAAAAAAAD//HwAADAAgAAAAAAAAAAAAAAAAD/////4AAAAAAAB////+P4AAAAAAAAAAAH//nwAABADAAAAAAAAAAAAAAAAAA/////4AAAAAAAB////4fwAAAAAAAAAAAP///4AAAAGAAAAAAAAAAAAAAAAAAf////4AAAAAAAB////gPwAAAAAAAAAAAf///4AAAAGAAAAAAAAAAAAAAAAAAf////4AAAAAAAA////APwAAAAAAAAAAB////+AAAAAAAAAAAAAAAAAAAAAAAf////wAAAAAAAAf//+AfgAAAAAAAAAAP////+AAMAAAAAAAAAAAAAAAAAAAAf////wAAAAAAAAf///AfAAAAAAAAAAA//////AAOAAAAAAAAAAAAAAAAAAAAf////gAAAAAAAAP///AfAAAAAAAAAAB//////gADAAAAAAAAAAAAAAAAAAAAf///8AAAAAAAAAP///AfAAAAAAAAAAB//////gAAAAAAAAAAAAAAAAAAAAAAf///wAAAAAAAAAP///AfAAAAAAAAAAB//////4AAAAAAAAAAAAAAAAAAAAAAf///AAAAAAAAAAP//8AOAAAAAAAAAAB//////4AAAAAAAAAAAAAAAAAAAAAAf///AAAAAAAAAAP//4AAAAAAAAAAAAB//////8AAAAAAAAAAAAAAAAAAAAAAf///AAAAAAAAAAH//4AAAAAAAAAAAAA//////8AAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAD//4AAAAAAAAAAAAA//////8AAAAAAAAAAAAAAAAAAAAAA///+AAAAAAAAAAB//wAAAAAAAAAAAAAf/////8AAAAAAAAAAAAAAAAAAAAAA///8AAAAAAAAAAB//gAAAAAAAAAAAAA//////8AAAAAAAAAAAAAAAAAAAAAA///4AAAAAAAAAAA//gAAAAAAAAAAAAAf/////4AAAAAAAAAAAAAAAAAAAAAA///wAAAAAAAAAAB/+AAAAAAAAAAAAAAf/w///4AAAAAAAAAAAAAAAAAAAAAA///wAAAAAAAAAAA/8AAAAAAAAAAAAAAf+AP//wAAAAAAAAAAAAAAAAAAAAAA///gAAAAAAAAAAA8AAAAAAAAAAAAAAAfIAH//wAADAAAAAAAAAAAAAAAAAAB//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAD//gAABgAAAAAAAAAAAAAAAAAB//8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/gAABwAAAAAAAAAAAAAAAAAD//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/AAAA+AAAAAAAAAAAAAAAAAD//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAA+AAAAAAAAAAAAAAAAAD/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAB8AAAAAAAAAAAAAAAAAD/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2AAADYAAAAAAAAAAAAAAAAAH/sAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+AAAH4AAAAAAAAAAAAAAAAAH/4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAeAAAHAAAAAAAAAAAAAAAAAAH/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAA/AAAAAAAAAAAAAAAAAAH/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8AAAAAAAAAAAAAAAAAAH/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4AAAAAAAAAAAAAAAAAAP+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwAAAAAAAAAAAAAAAAAAP/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/gAAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP+AAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8D4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH8BgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8AAAAAAAAAAAAAAAAAAB4AAAAAAA4BAAAEAAAAAAAAAAAAAAAAAAAAAAAAAD8AAAAAAAAAAAAAAAAAAP8AAAAGAD//8f///wAAAAAAAAAAAAAAAAAAAAAAADwAAAAAAAAAAAAAAAAAH//34AP//////////4AAAAAAAAAAAAAAAAAAAAAAAT4AAAAAAAAAAAAAAAGD////8A/////////////AAAAAAAAAAAAAAAAAAAAAA/8AAAAAAAAAAAQRwA//////8f/////////////8AAAAAAAAAAAAAAAAAAAAA/+AAAAAAAABAH//////////8f///////////////gAAAAAAAAAAAAAB9AAAP/+AAAAAAAA/////////////5////////////////8AAAAAAAAAAAAAD/AgAH/+AAAAAAAH//////////////////////////////8AAAAAAAAAD3wgD///////AAAAAAAf//////////////////////////////wAAAAAAAB/////H//////+AAAAAAAf//////////////////////////////AAAAAAAH/////////////wAAAAAAP//////////////////////////////4AAAAAGAf////////////8AAAAAAf///////////////////////////////wAAAAAH/////////////+AAAAQAP////////////////////////////////4AAAAD3/////////////8AAAD+A/////////////////////////////////+AAAAB4/////////////wADAP+A/////////////////////////////////wAAAAAAAP////////////h/h/+Af///////////////////////////////+AAAAAAB///////////////5AH9//////////////////////////////////AAAAAAAP////////////////////////////////////////////////////8AAACAAP/////////////////////////////////////////////////////wA//8AB///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////";
+
+    const landMaskRaw = atob(LAND_MASK_B64);
+    const landMaskBytes = new Uint8Array(landMaskRaw.length);
+    for (let i = 0; i < landMaskRaw.length; i++) {
+      landMaskBytes[i] = landMaskRaw.charCodeAt(i);
+    }
+
+    function isLand(lonDeg, latDeg) {
+      let x = Math.floor(lonDeg + 180.0) % 360;
+      if (x < 0) x += 360;
+      let y = Math.floor(90.0 - latDeg);
+      if (y < 0) y = 0;
+      if (y >= 180) y = 179;
+      const idx = y * 360 + x;
+      const byteIdx = idx >> 3;
+      const bitIdx = 7 - (idx & 7);
+      return (landMaskBytes[byteIdx] & (1 << bitIdx)) !== 0;
+    }
+
+    // --- 2. FIBONACCI SPHERE (2200 DOTS) ---
+    const TOTAL_DOTS = 2200;
+    const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+    const sphereDots = new Array(TOTAL_DOTS);
+
+    let landCount = 0;
+    for (let i = 0; i < TOTAL_DOTS; i++) {
+      const y = 1.0 - (i / (TOTAL_DOTS - 1)) * 2.0; // 1 to -1
+      const r = Math.sqrt(Math.max(0.0, 1.0 - y * y));
+      const theta = GOLDEN_ANGLE * i;
+      const x = r * Math.cos(theta);
+      const z = r * Math.sin(theta);
+      
+      const lat = Math.asin(Math.max(-1, Math.min(1, y))) * 180.0 / Math.PI;
+      const lon = Math.atan2(x, z) * 180.0 / Math.PI;
+      const land = isLand(lon, lat);
+      if (land) landCount++;
+
+      sphereDots[i] = {
+        x: x, y: y, z: z,
+        lat: lat, lon: lon,
+        isLand: land,
+        seed: Math.random()
+      };
+    }
+
+    // --- 3. DOCUMENT CARDS DATA (4 RINGS x 6 CARDS = 24 TOTAL) ---
+    const CATEGORIES = ['Identity', 'Finance', 'Legal', 'Travel'];
+    const CAT_COLORS = {
+      'Identity': '#00f0ff',
+      'Finance': '#38ef7d',
+      'Legal': '#ffb703',
+      'Travel': '#a855f7'
+    };
+
+    const RING_DOCS = [
+      // Ring 0: Inner - Identity & Security
+      [
+        { id: 1, title: 'Passport Scan', cat: 'Identity', date: '2026.10', icon: 'ID', size: '2.4 MB' },
+        { id: 2, title: 'National ID Card', cat: 'Identity', date: '2026.08', icon: 'CARD', size: '1.8 MB' },
+        { id: 3, title: 'Biometric Health Pass', cat: 'Identity', date: '2026.09', icon: 'BIO', size: '3.1 MB' },
+        { id: 4, title: 'Cloud SSH Keypair', cat: 'Identity', date: '2026.06', icon: 'KEY', size: '0.4 MB' },
+        { id: 5, title: 'Driver License Front', cat: 'Identity', date: '2026.05', icon: 'AUTO', size: '2.1 MB' },
+        { id: 6, title: 'Global Entry Pass', cat: 'Identity', date: '2026.07', icon: 'PASS', size: '1.5 MB' }
+      ],
+      // Ring 1: Finance & Banking
+      [
+        { id: 7, title: 'Tax Return 2025', cat: 'Finance', date: '2026.04', icon: 'TAX', size: '4.8 MB' },
+        { id: 8, title: 'Bank Statement Q3', cat: 'Finance', date: '2026.09', icon: 'BANK', size: '1.2 MB' },
+        { id: 9, title: 'Crypto Cold Vault', cat: 'Finance', date: '2026.10', icon: 'VAULT', size: '0.8 MB' },
+        { id: 10, title: 'Investment 10-K', cat: 'Finance', date: '2026.03', icon: 'CHART', size: '5.6 MB' },
+        { id: 11, title: 'Mortgage Approval', cat: 'Finance', date: '2026.02', icon: 'HOME', size: '3.9 MB' },
+        { id: 12, title: 'Paystub September', cat: 'Finance', date: '2026.10', icon: 'PAY', size: '0.9 MB' }
+      ],
+      // Ring 2: Legal & Contracts
+      [
+        { id: 13, title: 'Apartment Lease', cat: 'Legal', date: '2026.01', icon: 'LEASE', size: '6.2 MB' },
+        { id: 14, title: 'Employment Contract', cat: 'Legal', date: '2026.05', icon: 'JOB', size: '4.1 MB' },
+        { id: 15, title: 'NDA Agreement US', cat: 'Legal', date: '2026.08', icon: 'SEAL', size: '1.6 MB' },
+        { id: 16, title: 'Auto Insurance Policy', cat: 'Legal', date: '2026.06', icon: 'SHIELD', size: '2.9 MB' },
+        { id: 17, title: 'Property Deed Title', cat: 'Legal', date: '2026.02', icon: 'DEED', size: '7.4 MB' },
+        { id: 18, title: 'Patent Filing #984', cat: 'Legal', date: '2026.07', icon: 'PATENT', size: '5.0 MB' }
+      ],
+      // Ring 3: Outer - Travel & Personal
+      [
+        { id: 19, title: 'Boarding Pass NYC', cat: 'Travel', date: '2026.11', icon: 'AIR', size: '1.1 MB' },
+        { id: 20, title: 'Hotel Booking Paris', cat: 'Travel', date: '2026.10', icon: 'HOTEL', size: '1.7 MB' },
+        { id: 21, title: 'University Diploma', cat: 'Travel', date: '2026.05', icon: 'GRAD', size: '8.3 MB' },
+        { id: 22, title: 'Vaccination Record', cat: 'Travel', date: '2026.04', icon: 'MED', size: '1.3 MB' },
+        { id: 23, title: 'Blood Panel Results', cat: 'Travel', date: '2026.09', icon: 'LAB', size: '2.5 MB' },
+        { id: 24, title: 'Vehicle Registration', cat: 'Travel', date: '2026.03', icon: 'CAR', size: '1.9 MB' }
+      ]
+    ];
+
+    // Flat list of all 24 docs
+    const ALL_DOCS = [];
+    RING_DOCS.forEach((ring, rIdx) => {
+      ring.forEach((d, idx) => {
+        ALL_DOCS.push({ ...d, ringIndex: rIdx, slotIndex: idx });
+      });
+    });
+
+    // 5 Orbiting docs for HOME state
+    const ORBIT_DOCS = [
+      { title: 'Passport Scan', cat: 'Identity', icon: 'ID', color: '#00f0ff' },
+      { title: 'Tax Return 25', cat: 'Finance', icon: 'TAX', color: '#38ef7d' },
+      { title: 'Apartment Lease', cat: 'Legal', icon: 'DOC', color: '#ffb703' },
+      { title: 'Flight NYC->HND', cat: 'Travel', icon: 'AIR', color: '#a855f7' },
+      { title: 'Health Card', cat: 'Identity', icon: 'MED', color: '#00f0ff' }
+    ];
+
+    // --- 4. STATE MACHINE & APP CONFIG ---
+    // States: 0 = HOME, 1 = RINGS, 2 = LIST
+    const STATE_HOME = 0;
+    const STATE_RINGS = 1;
+    const STATE_LIST = 2;
+
+    let appState = STATE_HOME;
+    let stateTransition = 0.0; // 0.0 = Home, 1.0 = Rings
+    let listProgress = 0.0;    // 0.0 = Rings, 1.0 = Plain List
+
+    // Rotation angles and dynamics
+    let earthRotY = 0.0;
+    let earthRotX = 0.22; // slight axial tilt
+    let earthVelY = 0.0;
+    let earthVelX = 0.0;
+    const BASE_ROT_SPEED = (Math.PI * 2) / 60; // 1 turn per 60s
+
+    // 4 ring angles and angular velocities
+    const ringAngles = [0.0, 0.5, 1.2, 0.8];
+    const ringVels = [0.0, 0.0, 0.0, 0.0];
+
+    // Search query
+    let searchQuery = '';
+
+    // Camera FAB ripple animation
+    let cameraPulse = 0;
+    let scanFlashAlpha = 0;
+
+    // List scroll offset
+    let listScrollY = 0;
+    let listScrollVel = 0;
+
+    // Stars background
+    const NUM_STARS = 120;
+    const stars = [];
+    for (let i = 0; i < NUM_STARS; i++) {
+      stars.push({
+        x: Math.random(),
+        y: Math.random(),
+        size: Math.random() * 1.5 + 0.5,
+        alpha: Math.random() * 0.7 + 0.2,
+        twinkleSpeed: Math.random() * 2 + 1,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    // --- 5. DOM & CANVAS SETUP ---
+    const frameEl = document.getElementById('mobileFrame');
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+
+    const fpsValEl = document.getElementById('fpsVal');
+    const searchPanel = document.getElementById('searchPanel');
+    const searchInput = document.getElementById('searchInput');
+    const searchClear = document.getElementById('searchClear');
+    const searchChips = document.getElementById('searchChips');
+    const searchToggleBtn = document.getElementById('searchToggleBtn');
+    const searchCloseBtn = document.getElementById('searchCloseBtn');
+    const matchCountText = document.getElementById('matchCountText');
+    const viewToggleBtn = document.getElementById('viewToggleBtn');
+    const viewLabel = document.getElementById('viewLabel');
+    const viewIcon = document.getElementById('viewIcon');
+    const pullHint = document.getElementById('pullHint');
+    const gestureHint = document.getElementById('gestureHint');
+    const clockText = document.getElementById('clockText');
+
+    let cssWidth = 360;
+    let cssHeight = 640;
+    let dpr = 1;
+
+    function resize() {
+      const rect = frameEl.getBoundingClientRect();
+      cssWidth = rect.width;
+      cssHeight = rect.height;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = cssWidth * dpr;
+      canvas.height = cssHeight * dpr;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Update real clock
+    function updateClock() {
+      const now = new Date();
+      let hrs = now.getHours();
+      let mins = now.getMinutes();
+      hrs = hrs % 12 || 12;
+      mins = mins < 10 ? '0' + mins : mins;
+      clockText.textContent = hrs + ':' + mins;
+    }
+    setInterval(updateClock, 10000);
+    updateClock();
+
+    // --- 6. 30 FPS CAPPED LOOP & PAGE VISIBILITY ---
+    const TARGET_FPS = 30;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS; // ~33.33ms
+    let lastTime = performance.now();
+    let frameCounter = 0;
+    let fpsTimer = performance.now();
+    let isPaused = false;
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        isPaused = true;
+      } else {
+        isPaused = false;
+        lastTime = performance.now();
+        fpsTimer = performance.now();
+      }
+    });
+
+    // --- 7. POINTER / TOUCH / GESTURE INTERACTION ---
+    let pointerDown = false;
+    let pointerStartX = 0;
+    let pointerStartY = 0;
+    let pointerLastX = 0;
+    let pointerLastY = 0;
+    let pointerActiveRing = -1; // -1 = globe or background, 0..3 = ring
+    let isDraggingGlobe = false;
+    let isDraggingList = false;
+    let pullStartY = 0;
+    let pullDistance = 0;
+    let isPulling = false;
+
+    // Multi-touch pinch tracking
+    let initialPinchDist = 0;
+    let isPinching = false;
+
+    function getCanvasCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    // Helper: current globe center and radius based on stateTransition
+    function getGlobeGeometry() {
+      const startY = cssHeight * 0.44;
+      const targetY = cssHeight * 0.20;
+      const startR = cssWidth * 0.31;
+      const targetR = cssWidth * 0.16;
+      
+      const t = stateTransition;
+      return {
+        cx: cssWidth * 0.5,
+        cy: startY + (targetY - startY) * t,
+        r: startR + (targetR - startR) * t
+      };
+    }
+
+    // Helper: get ring geometry
+    function getRingGeometry(rIdx) {
+      const rxBase = [cssWidth * 0.22, cssWidth * 0.32, cssWidth * 0.42, cssWidth * 0.51];
+      const ryRatio = 0.42; // perspective tilt
+      const ringsCenterY = cssHeight * 0.63;
+      return {
+        cx: cssWidth * 0.5,
+        cy: ringsCenterY,
+        rx: rxBase[rIdx],
+        ry: rxBase[rIdx] * ryRatio
+      };
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      const pos = getCanvasCoords(e);
+      pointerDown = true;
+      pointerStartX = pos.x;
+      pointerStartY = pos.y;
+      pointerLastX = pos.x;
+      pointerLastY = pos.y;
+      pointerActiveRing = -1;
+      isDraggingGlobe = false;
+      isDraggingList = false;
+      isPulling = false;
+
+      // Check Big Camera Button hit test in Home state
+      if (appState === STATE_HOME && stateTransition < 0.2) {
+        const camBtnY = cssHeight - 75;
+        const camBtnDist = Math.hypot(pos.x - cssWidth * 0.5, pos.y - camBtnY);
+        if (camBtnDist < 36) {
+          triggerCameraScan();
+          return;
+        }
+      }
+
+      // Check Pull-down start (near top area)
+      if (pos.y < 90 && appState !== STATE_LIST) {
+        isPulling = true;
+        pullStartY = pos.y;
+      }
+
+      // Check List drag
+      if (appState === STATE_LIST && listProgress > 0.6) {
+        isDraggingList = true;
+        listScrollVel = 0;
+        return;
+      }
+
+      const globe = getGlobeGeometry();
+      const distToGlobe = Math.hypot(pos.x - globe.cx, pos.y - globe.cy);
+
+      if (distToGlobe <= globe.r * 1.15) {
+        isDraggingGlobe = true;
+        earthVelX = 0;
+        earthVelY = 0;
+        return;
+      }
+
+      // If in rings state, check ring hit test
+      if (appState === STATE_RINGS && stateTransition > 0.6) {
+        for (let r = 0; r < 4; r++) {
+          const ring = getRingGeometry(r);
+          const dx = (pos.x - ring.cx) / ring.rx;
+          const dy = (pos.y - ring.cy) / ring.ry;
+          const normDist = Math.hypot(dx, dy);
+          if (Math.abs(normDist - 1.0) < 0.22) {
+            pointerActiveRing = r;
+            ringVels[r] = 0;
+            break;
+          }
+        }
+      }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!pointerDown) return;
+      const pos = getCanvasCoords(e);
+      const dx = pos.x - pointerLastX;
+      const dy = pos.y - pointerLastY;
+      pointerLastX = pos.x;
+      pointerLastY = pos.y;
+
+      // Handle pull down search
+      if (isPulling) {
+        pullDistance = Math.max(0, pos.y - pullStartY);
+        if (pullDistance > 15) {
+          pullHint.style.opacity = Math.min(1, pullDistance / 60);
+          if (pullDistance > 65) {
+            pullHint.textContent = '↑ Release to Search';
+          } else {
+            pullHint.textContent = '↓ Pull to Search';
+          }
+        }
+        return;
+      }
+
+      // Handle list scrolling
+      if (isDraggingList) {
+        listScrollY += dy;
+        listScrollVel = dy;
+        return;
+      }
+
+      // Handle Globe spin
+      if (isDraggingGlobe) {
+        earthRotY += dx * 0.012;
+        earthRotX = Math.max(-0.6, Math.min(0.6, earthRotX + dy * 0.008));
+        earthVelY = dx * 0.012;
+        earthVelX = dy * 0.008;
+        return;
+      }
+
+      // Handle Ring spin
+      if (pointerActiveRing >= 0 && pointerActiveRing < 4) {
+        const ring = getRingGeometry(pointerActiveRing);
+        const prevAngle = Math.atan2(pointerLastY - dy - ring.cy, (pointerLastX - dx - ring.cx) * (ring.ry / ring.rx));
+        const curAngle = Math.atan2(pos.y - ring.cy, (pos.x - ring.cx) * (ring.ry / ring.rx));
+        let dAngle = curAngle - prevAngle;
+        if (dAngle > Math.PI) dAngle -= Math.PI * 2;
+        if (dAngle < -Math.PI) dAngle += Math.PI * 2;
+        ringAngles[pointerActiveRing] += dAngle;
+        ringVels[pointerActiveRing] = dAngle;
+        return;
+      }
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      if (!pointerDown) return;
+      pointerDown = false;
+
+      // Check if pull down was completed
+      if (isPulling) {
+        if (pullDistance > 65) {
+          openSearch();
+        }
+        pullHint.style.opacity = 0;
+        isPulling = false;
+        pullDistance = 0;
+      }
+
+      const pos = getCanvasCoords(e);
+      const totalMove = Math.hypot(pos.x - pointerStartX, pos.y - pointerStartY);
+
+      // Tap on Earth toggles between HOME and RINGS!
+      if (totalMove < 8) {
+        const globe = getGlobeGeometry();
+        const dist = Math.hypot(pos.x - globe.cx, pos.y - globe.cy);
+        if (dist <= globe.r * 1.15) {
+          if (appState === STATE_HOME) {
+            setAppState(STATE_RINGS);
+          } else if (appState === STATE_RINGS) {
+            setAppState(STATE_HOME);
+          }
+        }
+      }
+
+      isDraggingGlobe = false;
+      isDraggingList = false;
+      pointerActiveRing = -1;
+    });
+
+    // Touch pinch events for pinch-in (to list) and pinch-out (to rings)
+    window.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        isPinching = true;
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        initialPinchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (isPinching && e.touches.length === 2) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        const pinchDelta = currentDist - initialPinchDist;
+
+        if (pinchDelta < -35 && appState === STATE_RINGS) {
+          // Pinch in -> List
+          setAppState(STATE_LIST);
+          isPinching = false;
+        } else if (pinchDelta > 35 && appState === STATE_LIST) {
+          // Pinch out -> Rings
+          setAppState(STATE_RINGS);
+          isPinching = false;
+        }
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', () => {
+      isPinching = false;
+    });
+
+    // Mouse wheel pinch/zoom gesture
+    window.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > 20) {
+        if (e.deltaY > 0 && appState === STATE_RINGS) {
+          setAppState(STATE_LIST); // Wheel down -> pinch-in to List
+        } else if (e.deltaY < 0 && appState === STATE_LIST && listScrollY >= 0) {
+          setAppState(STATE_RINGS); // Wheel up at top -> pinch-out to Rings
+        }
+      }
+    }, { passive: true });
+
+    // --- 8. STATE MANAGEMENT & HUD BUTTONS ---
+    function setAppState(newState) {
+      appState = newState;
+      if (appState === STATE_HOME) {
+        viewLabel.textContent = 'List';
+        viewIcon.textContent = '☰';
+        gestureHint.textContent = 'Tap Earth to explore • Drag to spin';
+      } else if (appState === STATE_RINGS) {
+        viewLabel.textContent = 'List';
+        viewIcon.textContent = '☰';
+        gestureHint.textContent = 'Drag rings to spin • Pinch in for List';
+      } else if (appState === STATE_LIST) {
+        viewLabel.textContent = 'Rings';
+        viewIcon.textContent = '⊚';
+        gestureHint.textContent = 'Scroll to browse • Pinch out for Rings';
+      }
+    }
+
+    viewToggleBtn.addEventListener('click', () => {
+      if (appState === STATE_LIST) {
+        setAppState(STATE_RINGS);
+      } else {
+        setAppState(STATE_LIST);
+      }
+    });
+
+    function openSearch() {
+      searchPanel.classList.add('open');
+      searchInput.focus();
+      searchToggleBtn.classList.add('active');
+    }
+
+    function closeSearch() {
+      searchPanel.classList.remove('open');
+      searchInput.blur();
+      searchToggleBtn.classList.remove('active');
+    }
+
+    searchToggleBtn.addEventListener('click', () => {
+      if (searchPanel.classList.contains('open')) {
+        closeSearch();
+      } else {
+        openSearch();
+      }
+    });
+
+    searchCloseBtn.addEventListener('click', closeSearch);
+
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value.trim().toLowerCase();
+      searchClear.style.display = searchQuery ? 'block' : 'none';
+      updateFilterFeedback();
+    });
+
+    searchClear.addEventListener('click', () => {
+      searchInput.value = '';
+      searchQuery = '';
+      searchClear.style.display = 'none';
+      searchInput.focus();
+      updateFilterFeedback();
+    });
+
+    // Category chips
+    searchChips.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const tag = chip.dataset.tag;
+      searchInput.value = tag;
+      searchQuery = tag.toLowerCase();
+      searchClear.style.display = searchQuery ? 'block' : 'none';
+      updateFilterFeedback();
+    });
+
+    function updateFilterFeedback() {
+      if (!searchQuery) {
+        matchCountText.textContent = 'Showing all 24 documents';
+        return;
+      }
+      let matches = 0;
+      ALL_DOCS.forEach(doc => {
+        if (doc.title.toLowerCase().includes(searchQuery) || doc.cat.toLowerCase().includes(searchQuery)) {
+          matches++;
+        }
+      });
+      matchCountText.textContent = 'Found ' + matches + ' of 24 matching documents';
+    }
+
+    function triggerCameraScan() {
+      scanFlashAlpha = 1.0;
+      cameraPulse = 1.0;
+    }
+
+    // --- 9. UPDATE LOGIC (INERTIA & TRANSITIONS) ---
+    function update(dt) {
+      // 1. Smooth state interpolations
+      const targetStateTrans = (appState === STATE_HOME) ? 0.0 : 1.0;
+      stateTransition += (targetStateTrans - stateTransition) * 0.12;
+
+      const targetListTrans = (appState === STATE_LIST) ? 1.0 : 0.0;
+      listProgress += (targetListTrans - listProgress) * 0.14;
+
+      // 2. Earth rotation (1 turn per 60s base + inertia)
+      if (!isDraggingGlobe) {
+        earthRotY += (BASE_ROT_SPEED * dt) + earthVelY;
+        earthVelY *= 0.94;
+        earthVelX *= 0.94;
+      }
+
+      // 3. Rings rotation inertia
+      for (let r = 0; r < 4; r++) {
+        if (pointerActiveRing !== r) {
+          // slight gentle drift for ambient life
+          const ambientDrift = (r % 2 === 0 ? 0.03 : -0.02) * dt;
+          ringAngles[r] += ringVels[r] + ambientDrift;
+          ringVels[r] *= 0.94;
+        }
+      }
+
+      // 4. List scroll inertia
+      if (!isDraggingList && appState === STATE_LIST) {
+        listScrollY += listScrollVel;
+        listScrollVel *= 0.92;
+        // Bound checks
+        const maxScroll = Math.max(0, ALL_DOCS.length * 64 - (cssHeight - 160));
+        if (listScrollY > 0) {
+          listScrollY += (0 - listScrollY) * 0.2;
+        } else if (listScrollY < -maxScroll) {
+          listScrollY += (-maxScroll - listScrollY) * 0.2;
+        }
+      }
+
+      // 5. Shutter flash decay
+      if (scanFlashAlpha > 0.01) {
+        scanFlashAlpha *= 0.88;
+      } else {
+        scanFlashAlpha = 0;
+      }
+      if (cameraPulse > 0.01) {
+        cameraPulse *= 0.92;
+      }
+    }
+
+    // --- 10. RENDERING FUNCTIONS ---
+
+    function draw() {
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+      const now = performance.now() * 0.001;
+
+      // (A) Deep Space Background & Stars
+      drawStars(now);
+
+      // (B) Holographic Earth
+      drawHolographicEarth(now);
+
+      // (C) Home Orbiting Document Thumbnails (State 0)
+      if (stateTransition < 0.98) {
+        drawHomeOrbitDocs(now, 1.0 - stateTransition);
+      }
+
+      // (D) 4 Expanding Rings with 6 Doc Cards Each (State 1)
+      if (stateTransition > 0.02 && listProgress < 0.98) {
+        const ringAlpha = stateTransition * (1.0 - listProgress);
+        drawDocRings(now, ringAlpha);
+      }
+
+      // (E) Plain List View (State 2 / Cross-fade)
+      if (listProgress > 0.02) {
+        drawPlainListView(listProgress);
+      }
+
+      // (F) Big Camera Action Button (Home state)
+      if (stateTransition < 0.8) {
+        drawCameraButton(1.0 - stateTransition);
+      }
+
+      // (G) Scanline flash effect (if triggered)
+      if (scanFlashAlpha > 0.01) {
+        ctx.fillStyle = 'rgba(0, 240, 255, ' + (scanFlashAlpha * 0.45) + ')';
+        ctx.fillRect(0, 0, cssWidth, cssHeight);
+      }
+
+      ctx.restore();
+    }
+
+    // --- STARS BACKGROUND ---
+    function drawStars(now) {
+      for (let i = 0; i < NUM_STARS; i++) {
+        const s = stars[i];
+        const twinkle = Math.sin(now * s.twinkleSpeed + s.phase) * 0.3 + 0.7;
+        const alpha = s.alpha * twinkle;
+        ctx.fillStyle = 'rgba(180, 230, 255, ' + alpha + ')';
+        ctx.fillRect(s.x * cssWidth, s.y * cssHeight, s.size, s.size);
+      }
+    }
+
+    // --- HOLOGRAPHIC EARTH RENDERING ---
+    function drawHolographicEarth(now) {
+      const globe = getGlobeGeometry();
+      const cx = globe.cx;
+      const cy = globe.cy;
+      const R = globe.r;
+
+      // 1. Soft Additive Glow Halo behind Earth
+      const haloGrad = ctx.createRadialGradient(cx, cy, R * 0.65, cx, cy, R * 1.35);
+      haloGrad.addColorStop(0.0, 'rgba(0, 240, 255, 0.22)');
+      haloGrad.addColorStop(0.5, 'rgba(0, 160, 255, 0.08)');
+      haloGrad.addColorStop(1.0, 'rgba(0, 100, 255, 0.0)');
+
+      ctx.save();
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Precompute rotation matrices
+      const cosY = Math.cos(earthRotY);
+      const sinY = Math.sin(earthRotY);
+      const cosX = Math.cos(earthRotX);
+      const sinX = Math.sin(earthRotX);
+
+      // 2. Thin Latitude Rings (Equator, Tropics, Polar)
+      const latCircles = [0, 23.5, -23.5, 66.5, -66.5];
+      latCircles.forEach(latDeg => {
+        const radLat = latDeg * Math.PI / 180;
+        const circleY = Math.sin(radLat);
+        const circleR = Math.cos(radLat);
+        const numSteps = 48;
+
+        // Front arc and back arc separation
+        ctx.beginPath();
+        let first = true;
+        for (let s = 0; s <= numSteps; s++) {
+          const theta = (s / numSteps) * Math.PI * 2;
+          const x0 = circleR * Math.cos(theta);
+          const z0 = circleR * Math.sin(theta);
+          const y0 = circleY;
+
+          // Rotate around Y
+          const x1 = x0 * cosY - z0 * sinY;
+          const z1 = x0 * sinY + z0 * cosY;
+          // Tilt around X
+          const y2 = y0 * cosX - z1 * sinX;
+          const z2 = y0 * sinX + z1 * cosX;
+
+          const sx = cx + x1 * R;
+          const sy = cy - y2 * R;
+
+          if (first) {
+            ctx.moveTo(sx, sy);
+            first = false;
+          } else {
+            ctx.lineTo(sx, sy);
+          }
+        }
+        ctx.strokeStyle = (latDeg === 0) ? 'rgba(0, 240, 255, 0.28)' : 'rgba(0, 210, 255, 0.12)';
+        ctx.lineWidth = (latDeg === 0) ? 1.0 : 0.6;
+        ctx.stroke();
+      });
+
+      // 3. Render 2200 Dots (Fibonacci Sphere with Natural Earth 110m Mask)
+      const projectedDots = new Array(TOTAL_DOTS);
+
+      for (let i = 0; i < TOTAL_DOTS; i++) {
+        const dot = sphereDots[i];
+        // Rotate around Y
+        const x1 = dot.x * cosY - dot.z * sinY;
+        const z1 = dot.x * sinY + dot.z * cosY;
+        // Tilt around X
+        const y2 = dot.y * cosX - z1 * sinX;
+        const z2 = dot.y * sinX + z1 * cosX;
+
+        projectedDots[i] = {
+          sx: cx + x1 * R,
+          sy: cy - y2 * R,
+          z2: z2,
+          isLand: dot.isLand,
+          seed: dot.seed
+        };
+      }
+
+      // Draw dots
+      for (let i = 0; i < TOTAL_DOTS; i++) {
+        const p = projectedDots[i];
+        const isBack = p.z2 < 0;
+        const depthNorm = (p.z2 + 1.0) * 0.5; // 0 (far back) to 1 (near front)
+
+        if (p.isLand) {
+          // Land dots: bright cyan, back-side dimmer
+          let alpha, radius;
+          if (isBack) {
+            alpha = 0.14 + depthNorm * 0.22;
+            radius = 1.0;
+            ctx.fillStyle = 'rgba(0, 200, 230, ' + alpha + ')';
+          } else {
+            alpha = 0.65 + depthNorm * 0.35;
+            radius = 1.5 + depthNorm * 0.5;
+            ctx.fillStyle = 'rgba(0, 245, 255, ' + alpha + ')';
+          }
+
+          ctx.beginPath();
+          ctx.arc(p.sx, p.sy, radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Extra soft additive glow for very prominent front dots
+          if (!isBack && depthNorm > 0.85 && p.seed > 0.65) {
+            ctx.fillStyle = 'rgba(0, 240, 255, ' + (alpha * 0.35) + ')';
+            ctx.beginPath();
+            ctx.arc(p.sx, p.sy, radius * 2.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          // Ocean dots: very dim
+          const alpha = isBack ? 0.04 : (0.10 + depthNorm * 0.08);
+          ctx.fillStyle = 'rgba(0, 110, 180, ' + alpha + ')';
+          ctx.beginPath();
+          ctx.arc(p.sx, p.sy, isBack ? 0.7 : 0.9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 4. Subtle Scanline Shimmer
+      const scanPhase = (now * 0.55) % 1.0;
+      const scanY = cy - R + scanPhase * (2 * R);
+      const scanWidth = Math.sqrt(Math.max(0, R * R - (scanY - cy) * (scanY - cy)));
+      
+      if (scanWidth > 4) {
+        const scanGrad = ctx.createLinearGradient(cx - scanWidth, scanY, cx + scanWidth, scanY);
+        scanGrad.addColorStop(0, 'rgba(0, 240, 255, 0.0)');
+        scanGrad.addColorStop(0.5, 'rgba(0, 245, 255, 0.28)');
+        scanGrad.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+
+        ctx.fillStyle = scanGrad;
+        ctx.fillRect(cx - scanWidth, scanY - 2, scanWidth * 2, 4);
+      }
+
+      // Holographic rim contour
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // --- HOME STATE: 5 ORBITING DOCUMENT THUMBNAILS ---
+    function drawHomeOrbitDocs(now, alpha) {
+      if (alpha <= 0.01) return;
+      const globe = getGlobeGeometry();
+      const cx = globe.cx;
+      const cy = globe.cy;
+      const R = globe.r;
+
+      const orbitRx = R * 1.55;
+      const orbitRy = R * 0.50;
+      const orbitTilt = 0.25;
+
+      const baseAngle = now * 0.35;
+
+      // Calculate 3D position for all 5 docs
+      const items = ORBIT_DOCS.map((doc, idx) => {
+        const theta = baseAngle + (idx * (Math.PI * 2 / 5));
+        const ox = Math.cos(theta) * orbitRx;
+        const oz = Math.sin(theta);
+        const oy = Math.sin(theta) * orbitRy + ox * orbitTilt;
+        return {
+          doc,
+          x: cx + ox,
+          y: cy + oy,
+          z: oz,
+          depth: (oz + 1) * 0.5
+        };
+      });
+
+      // Sort by depth (back to front)
+      items.sort((a, b) => a.z - b.z);
+
+      items.forEach(item => {
+        const cardAlpha = alpha * (item.z < 0 ? 0.35 : 0.95);
+        const scale = 0.8 + item.depth * 0.35;
+        const w = 62 * scale;
+        const h = 42 * scale;
+
+        ctx.save();
+        ctx.translate(item.x, item.y);
+
+        // Glassmorphism card body
+        ctx.fillStyle = 'rgba(6, 18, 34, ' + (cardAlpha * 0.85) + ')';
+        ctx.strokeStyle = 'rgba(0, 240, 255, ' + (cardAlpha * 0.7) + ')';
+        ctx.lineWidth = 1;
+        
+        ctx.beginPath();
+        roundRect(ctx, -w / 2, -h / 2, w, h, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        // Card header icon & tag
+        ctx.fillStyle = item.doc.color;
+        ctx.font = 'bold ' + Math.round(8 * scale) + 'px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(item.doc.icon, -w / 2 + 5, -h / 2 + 11 * scale);
+
+        // Title preview line
+        ctx.fillStyle = 'rgba(220, 245, 255, ' + (cardAlpha * 0.9) + ')';
+        ctx.font = Math.round(7.5 * scale) + 'px sans-serif';
+        ctx.fillText(item.doc.title, -w / 2 + 5, -h / 2 + 23 * scale);
+
+        // Mini document lines
+        ctx.fillStyle = 'rgba(0, 240, 255, ' + (cardAlpha * 0.35) + ')';
+        ctx.fillRect(-w / 2 + 5, -h / 2 + 28 * scale, w * 0.7, 1.5);
+        ctx.fillRect(-w / 2 + 5, -h / 2 + 33 * scale, w * 0.5, 1.5);
+
+        ctx.restore();
+      });
+    }
+
+    // --- STATE 1: 4 EXPANDING RINGS WITH 6 DOC CARDS EACH ---
+    function drawDocRings(now, alpha) {
+      if (alpha <= 0.01) return;
+
+      const ringList = [];
+
+      for (let r = 0; r < 4; r++) {
+        const geom = getRingGeometry(r);
+
+        // Draw ring orbit guide track
+        ctx.beginPath();
+        ctx.ellipse(geom.cx, geom.cy, geom.rx, geom.ry, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = (pointerActiveRing === r) ? 'rgba(0, 240, 255, 0.45)' : 'rgba(0, 210, 255, 0.16)';
+        ctx.lineWidth = (pointerActiveRing === r) ? 1.5 : 0.8;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 6 Cards on this ring
+        const docs = RING_DOCS[r];
+        const baseAngle = ringAngles[r];
+
+        for (let i = 0; i < 6; i++) {
+          const cardAngle = baseAngle + (i * (Math.PI * 2 / 6));
+          const cosA = Math.cos(cardAngle);
+          const sinA = Math.sin(cardAngle);
+          
+          const x = geom.cx + cosA * geom.rx;
+          const y = geom.cy + sinA * geom.ry;
+          const z = sinA; // front has sinA > 0, back has sinA < 0
+
+          ringList.push({
+            doc: docs[i],
+            ringIdx: r,
+            x: x,
+            y: y,
+            z: z,
+            depth: (z + 1) * 0.5
+          });
+        }
+      }
+
+      // Sort all 24 cards across rings by depth so front cards cleanly overlap back cards
+      ringList.sort((a, b) => a.z - b.z);
+
+      // Render cards
+      ringList.forEach(item => {
+        const isMatched = !searchQuery || 
+          item.doc.title.toLowerCase().includes(searchQuery) || 
+          item.doc.cat.toLowerCase().includes(searchQuery);
+
+        // Prompt requirement: "typing dims non-matching cards"
+        const matchDimAlpha = isMatched ? 1.0 : 0.12;
+        const depthAlpha = (item.z < 0) ? 0.45 : 1.0;
+        const cardAlpha = alpha * matchDimAlpha * depthAlpha;
+
+        const scale = 0.72 + item.depth * 0.32;
+        const w = 58 * scale;
+        const h = 42 * scale;
+
+        ctx.save();
+        ctx.translate(item.x, item.y);
+
+        // Card glass background
+        ctx.fillStyle = 'rgba(8, 20, 36, ' + (cardAlpha * 0.9) + ')';
+        if (isMatched && searchQuery) {
+          ctx.strokeStyle = 'rgba(0, 255, 200, ' + (cardAlpha * 0.95) + ')';
+          ctx.lineWidth = 1.8;
+        } else {
+          ctx.strokeStyle = 'rgba(0, 220, 255, ' + (cardAlpha * 0.65) + ')';
+          ctx.lineWidth = 1;
+        }
+
+        ctx.beginPath();
+        roundRect(ctx, -w / 2, -h / 2, w, h, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        // Card header icon & category
+        const catColor = CAT_COLORS[item.doc.cat] || '#00f0ff';
+        ctx.fillStyle = catColor;
+        ctx.font = 'bold ' + Math.round(7.5 * scale) + 'px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(item.doc.icon, -w / 2 + 5, -h / 2 + 11 * scale);
+
+        // Title preview
+        ctx.fillStyle = 'rgba(225, 245, 255, ' + (cardAlpha * 0.95) + ')';
+        ctx.font = '600 ' + Math.round(7.0 * scale) + 'px sans-serif';
+        const titleShort = item.doc.title.length > 11 ? item.doc.title.substring(0, 10) + '..' : item.doc.title;
+        ctx.fillText(titleShort, -w / 2 + 5, -h / 2 + 22 * scale);
+
+        // Date and size tag
+        ctx.fillStyle = 'rgba(130, 210, 240, ' + (cardAlpha * 0.7) + ')';
+        ctx.font = Math.round(6.0 * scale) + 'px sans-serif';
+        ctx.fillText(item.doc.date, -w / 2 + 5, -h / 2 + 32 * scale);
+
+        // Matching glow indicator
+        if (isMatched && searchQuery) {
+          ctx.fillStyle = '#00f0ff';
+          ctx.beginPath();
+          ctx.arc(w / 2 - 8 * scale, -h / 2 + 8 * scale, 2.5 * scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      });
+    }
+
+    // --- STATE 2: PLAIN LIST VIEW (CROSS-FADE) ---
+    function drawPlainListView(alpha) {
+      if (alpha <= 0.01) return;
+
+      const topY = 110;
+      const listH = cssHeight - topY - 30;
+      const rowH = 60;
+
+      ctx.save();
+      // Clip inside list bounds
+      ctx.beginPath();
+      ctx.rect(0, topY, cssWidth, listH);
+      ctx.clip();
+
+      const currentScroll = listScrollY;
+
+      ALL_DOCS.forEach((doc, idx) => {
+        const rowY = topY + idx * rowH + currentScroll;
+        if (rowY + rowH < topY - 50 || rowY > topY + listH + 50) return;
+
+        const isMatched = !searchQuery || 
+          doc.title.toLowerCase().includes(searchQuery) || 
+          doc.cat.toLowerCase().includes(searchQuery);
+
+        const matchAlpha = isMatched ? 1.0 : 0.12;
+        const rowAlpha = alpha * matchAlpha;
+
+        // Row background
+        ctx.fillStyle = 'rgba(10, 24, 44, ' + (rowAlpha * 0.75) + ')';
+        ctx.strokeStyle = isMatched && searchQuery ? 'rgba(0, 255, 200, ' + (rowAlpha * 0.8) + ')' : 'rgba(0, 240, 255, ' + (rowAlpha * 0.25) + ')';
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        roundRect(ctx, 16, rowY + 4, cssWidth - 32, rowH - 8, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        // Icon badge
+        const catColor = CAT_COLORS[doc.cat] || '#00f0ff';
+        ctx.fillStyle = 'rgba(0, 240, 255, ' + (rowAlpha * 0.12) + ')';
+        ctx.beginPath();
+        roundRect(ctx, 28, rowY + 12, 36, 28, 8);
+        ctx.fill();
+
+        ctx.fillStyle = catColor;
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(doc.icon, 46, rowY + 29);
+
+        // Title
+        ctx.fillStyle = 'rgba(230, 248, 255, ' + (rowAlpha * 0.95) + ')';
+        ctx.font = '600 13px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(doc.title, 74, rowY + 26);
+
+        // Subtitle (Category • Date • Size)
+        ctx.fillStyle = 'rgba(140, 210, 240, ' + (rowAlpha * 0.65) + ')';
+        ctx.font = '10.5px sans-serif';
+        ctx.fillText(doc.cat + '  •  ' + doc.date + '  •  ' + doc.size, 74, rowY + 42);
+
+        // Chevron arrow
+        ctx.fillStyle = 'rgba(0, 240, 255, ' + (rowAlpha * 0.45) + ')';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('›', cssWidth - 32, rowY + 32);
+      });
+
+      // Scrollbar indicator
+      const totalContentH = ALL_DOCS.length * rowH;
+      if (totalContentH > listH) {
+        const barH = Math.max(25, (listH / totalContentH) * listH);
+        const scrollRatio = -currentScroll / (totalContentH - listH);
+        const barY = topY + Math.max(0, Math.min(listH - barH, scrollRatio * (listH - barH)));
+
+        ctx.fillStyle = 'rgba(0, 240, 255, ' + (alpha * 0.35) + ')';
+        ctx.beginPath();
+        roundRect(ctx, cssWidth - 7, barY, 3, barH, 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    // --- HOME STATE: BIG CAMERA ACTION BUTTON ---
+    function drawCameraButton(alpha) {
+      if (alpha <= 0.01) return;
+
+      const cx = cssWidth * 0.5;
+      const cy = cssHeight - 75;
+      const baseR = 32;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // Outer pulsing ripple ring
+      const rippleR = baseR + 12 + Math.sin(performance.now() * 0.004) * 4 + cameraPulse * 15;
+      ctx.strokeStyle = 'rgba(0, 240, 255, ' + (0.25 - cameraPulse * 0.15) + ')';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rippleR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Camera button gradient fill
+      const camGrad = ctx.createRadialGradient(cx, cy, 5, cx, cy, baseR);
+      camGrad.addColorStop(0, 'rgba(0, 240, 255, 0.45)');
+      camGrad.addColorStop(0.7, 'rgba(6, 28, 54, 0.95)');
+      camGrad.addColorStop(1, 'rgba(2, 14, 30, 0.98)');
+
+      ctx.fillStyle = camGrad;
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, baseR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Camera vector icon
+      ctx.strokeStyle = '#ffffff';
+      ctx.fillStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Camera body
+      const cw = 24;
+      const ch = 17;
+      ctx.beginPath();
+      roundRect(ctx, cx - cw / 2, cy - ch / 2 + 2, cw, ch, 4);
+      ctx.stroke();
+
+      // Top ridge
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy - ch / 2 + 2);
+      ctx.lineTo(cx - 3, cy - ch / 2 - 2);
+      ctx.lineTo(cx + 3, cy - ch / 2 - 2);
+      ctx.lineTo(cx + 5, cy - ch / 2 + 2);
+      ctx.stroke();
+
+      // Lens
+      ctx.beginPath();
+      ctx.arc(cx, cy + 2.5, 4.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Small lens reflection
+      ctx.beginPath();
+      ctx.arc(cx + 1.5, cy + 1, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Button label below
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.75)';
+      ctx.font = '600 9.5px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('TAP TO SCAN', cx, cy + baseR + 15);
+
+      ctx.restore();
+    }
+
+    // Canvas roundRect polyfill / helper
+    function roundRect(c, x, y, w, h, r) {
+      if (w < 2 * r) r = w / 2;
+      if (h < 2 * r) r = h / 2;
+      c.beginPath();
+      c.moveTo(x + r, y);
+      c.arcTo(x + w, y, x + w, y + h, r);
+      c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r);
+      c.arcTo(x, y, x + w, y, r);
+      c.closePath();
+    }
+
+    // --- 11. MAIN ANIMATION LOOP (EXACT 30 FPS LIMIT) ---
+    function loop(currentTime) {
+      requestAnimationFrame(loop);
+
+      if (isPaused) return;
+
+      const elapsed = currentTime - lastTime;
+
+      // Throttle to 30 fps (~33.33ms)
+      if (elapsed >= FRAME_INTERVAL - 1.5) {
+        lastTime = currentTime - (elapsed % FRAME_INTERVAL);
+        const dt = Math.min(elapsed / 1000, 0.1);
+
+        update(dt);
+        draw();
+
+        frameCounter++;
+        if (currentTime - fpsTimer >= 500) {
+          const currentFps = Math.round((frameCounter * 1000) / (currentTime - fpsTimer));
+          fpsValEl.textContent = currentFps + ' FPS [CAP 30]';
+          frameCounter = 0;
+          fpsTimer = currentTime;
+        }
+      }
+    }
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

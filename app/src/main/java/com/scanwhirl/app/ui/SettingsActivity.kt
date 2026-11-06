@@ -52,6 +52,10 @@ class SettingsActivity : BaseActivity() {
         binding.switchAutoEnhance.setOnCheckedChangeListener { _, checked ->
             Prefs.setAutoEnhanceScan(this, checked)
         }
+        binding.switchGlobeHome.isChecked = Prefs.globeHomeEnabled(this)
+        binding.switchGlobeHome.setOnCheckedChangeListener { _, checked ->
+            Prefs.setGlobeHomeEnabled(this, checked)
+        }
         binding.rowWallpaper.setOnClickListener {
             pickWallpaper.launch(arrayOf("image/*"))
         }

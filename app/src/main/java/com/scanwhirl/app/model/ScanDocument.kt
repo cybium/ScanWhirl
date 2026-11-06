@@ -10,5 +10,7 @@ data class ScanDocument(
     val pdfFile: File,
     val pageFiles: List<File>,
     val isLocked: Boolean = false,
-    val isVaulted: Boolean = false
+    val isVaulted: Boolean = false,
+    /** Globe ring this scan belongs to: Study / Receipts / IDs / Forms / Other. */
+    val category: String = com.scanwhirl.app.util.CategoryRules.OTHER
 )

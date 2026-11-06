@@ -69,6 +69,30 @@ object PageThumbLoader {
         }
     }
 
+    /**
+     * Decodes a thumb off the main thread and hands it back on the main
+     * thread (canvas UIs — the globe home — draw into bitmaps, not ImageViews).
+     * The result lands in the same cache as [load], so no double decoding.
+     */
+    fun loadAsync(file: File, targetPx: Int, filter: ScanFilter, onResult: (Bitmap) -> Unit) {
+        val key = keyFor(file, targetPx, filter)
+        val cached = cache.get(key)
+        if (cached != null && !cached.isRecycled) {
+            mainHandler.post { onResult(cached) }
+            return
+        }
+        executor.execute {
+            val decoded = ImageTools.decodeThumb(file, targetPx) ?: return@execute
+            val thumb = if (filter == ScanFilter.ORIGINAL) decoded else {
+                val filtered = filter.applyTo(decoded)
+                if (filtered !== decoded) decoded.recycle()
+                filtered
+            }
+            cache.put(key, thumb)
+            mainHandler.post { onResult(thumb) }
+        }
+    }
+
     /** Drops cached thumbs for a path (called after rotate/replace so mtime isn't trusted). */
     fun invalidate(file: File) {
         val prefix = "${file.path}|"

@@ -48,6 +48,7 @@ import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.SearchMatcher
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.ZipExporter
@@ -217,6 +218,13 @@ class MainActivity : BaseActivity() {
 
         applyToolbarTitle()
         refreshList()
+
+        // Launched from the globe home's scan button: jump straight into the
+        // camera/gallery chooser (cleared so recreation doesn't re-show it).
+        if (intent.getBooleanExtra(EXTRA_OPEN_SCANNER, false)) {
+            intent.removeExtra(EXTRA_OPEN_SCANNER)
+            showScanChooser()
+        }
     }
 
     /**
@@ -307,12 +315,12 @@ class MainActivity : BaseActivity() {
 
     /** In-memory filter + sort over [allDocs]; used by search and sort too. */
     private fun applyList() {
-        val byName = allDocs.filter { it.name.contains(query, true) }
-        // Pro: when the name search misses, fall back to OCR text search.
-        ocrMatches = if (!ProGate.isPro(this)) emptyList()
-        else if (query.isBlank() || byName.isNotEmpty()) emptyList()
-        else repoOcrMatches(query)
-        val shown = if (byName.isEmpty() && ocrMatches.isNotEmpty()) ocrMatches else byName
+        // Shared with the globe home (test23): name match, Pro OCR fallback,
+        // vaulted docs never surface before the PIN.
+        val (shown, ocr) = SearchMatcher.match(
+            query, allDocs, ProGate.isPro(this), includeVaulted = vaultMode
+        ) { repo.ocrDoc(it) }
+        ocrMatches = ocr
         val sorted = sortDocs(shown)
         adapter.selectedIds = selectedIds
         adapter.submitList(sorted) {
@@ -324,12 +332,6 @@ class MainActivity : BaseActivity() {
             setSelectionMode(false)
         }
     }
-
-    /** Pro OCR search: documents whose scanned text matches [query]. */
-    private fun repoOcrMatches(query: String): List<ScanDocument> =
-        allDocs.filter { doc ->
-            repo.ocrDoc(doc.id).values.any { it.contains(query, ignoreCase = true) }
-        }
 
     private fun sortDocs(docs: List<ScanDocument>): List<ScanDocument> =
         when (Prefs.sortMode(this)) {
@@ -2078,6 +2080,11 @@ class MainActivity : BaseActivity() {
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(this, R.string.no_pdf_app, Toast.LENGTH_LONG).show()
         false
+    }
+
+    companion object {
+        /** Set by the globe home so the scan button lands on the chooser. */
+        const val EXTRA_OPEN_SCANNER = "open_scanner"
     }
 }
 
