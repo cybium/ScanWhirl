@@ -11,8 +11,34 @@
         <item name="colorSurface">@color/sf_surface</item>
         <item name="colorOnSurface">@color/sf_on_surface</item>
         <item name="colorSurfaceContainer">@color/sf_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/glass_surface_raised</item>
         <item name="android:statusBarColor">@color/sf_surface</item>
         <item name="android:navigationBarColor">@color/sf_background</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">@color/text_hologram_hi</item>
+        <item name="android:textColorSecondary">@color/text_hologram_mid</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.ScanWhirl.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.ScanWhirl.Dialog</item>
+    </style>
+
+    <!-- Neural Vault Glass Dialog Theme -->
+    <style name="ThemeOverlay.ScanWhirl.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="android:backgroundDimAmount">0.85</item>
+        <item name="colorSurface">@color/glass_surface_raised</item>
+        <item name="colorOnSurface">@color/text_hologram_hi</item>
+        <item name="android:textColorPrimary">@color/text_hologram_hi</item>
+        <item name="android:textColorSecondary">@color/text_hologram_mid</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.ScanWhirl.Button.DialogPositive</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.ScanWhirl.Button.DialogNegative</item>
+        <item name="buttonBarNeutralButtonStyle">@style/Widget.ScanWhirl.Button.DialogNegative</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.Button.DialogPositive" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/cyan_primary</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.Button.DialogNegative" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/text_hologram_mid</item>
     </style>
 </resources>

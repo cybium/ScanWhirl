@@ -25,9 +25,10 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:letterSpacing="0.06"
             android:text="@string/app_name"
             android:textAppearance="?attr/textAppearanceTitleLarge"
-            android:textColor="#E2F8FF"
+            android:textColor="@color/text_hologram_hi"
             android:textStyle="bold" />
 
         <View
@@ -39,11 +40,11 @@
             android:id="@+id/btnGlobeSearch"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:background="@drawable/bg_pro_badge"
+            android:background="@drawable/bg_glass_round_btn"
             android:contentDescription="@string/globe_search_open"
             android:padding="8dp"
             android:src="@drawable/ic_search"
-            app:tint="#00F0FF" />
+            app:tint="@color/cyan_primary" />
     </LinearLayout>
 
     <!-- Pull-down search panel (hidden until pulled / tapped). -->
@@ -150,14 +151,42 @@
             android:textColor="#8CB8E1" />
     </LinearLayout>
 
-    <!-- Primary action: scan. -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabGlobeScan"
+    <!-- Primary action: scan with double cyan concentric ring + "TAP TO SCAN" label. -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="28dp"
-        android:contentDescription="@string/scan"
-        android:src="@drawable/ic_camera"
-        app:tint="?attr/colorOnPrimaryContainer" />
+        android:layout_marginBottom="20dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="@drawable/bg_fab_outer_ring">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabGlobeScan"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:contentDescription="@string/scan"
+                android:src="@drawable/ic_camera"
+                app:backgroundTint="@color/glass_surface_raised"
+                app:elevation="0dp"
+                app:hoveredFocusedTranslationZ="0dp"
+                app:pressedTranslationZ="0dp"
+                app:tint="@color/cyan_primary" />
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:letterSpacing="0.08"
+            android:text="@string/scan_tap_prompt"
+            android:textColor="@color/cyan_primary"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 </FrameLayout>

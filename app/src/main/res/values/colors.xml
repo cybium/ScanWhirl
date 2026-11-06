@@ -1,31 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="sf_primary">#1565C0</color>
-    <color name="sf_on_primary">#FFFFFF</color>
-    <color name="sf_primary_container">#D6E3FF</color>
-    <color name="sf_on_primary_container">#001B3F</color>
-    <color name="sf_secondary_container">#DDE7FF</color>
-    <color name="sf_on_secondary_container">#001B41</color>
-    <color name="sf_background">#F8FAFD</color>
-    <color name="sf_surface">#FDFBFF</color>
-    <color name="sf_on_surface">#1A1B20</color>
-    <color name="sf_on_surface_variant">#44474F</color>
-    <color name="pro_gold">#B45309</color>
-    <color name="pro_badge_bg">#24F59E0B</color>
-    <color name="pro_badge_stroke">#80D97706</color>
-    <color name="free_badge_bg">#121565C0</color>
-    <color name="free_badge_stroke">#331565C0</color>
-    <color name="sf_title_field">#99E7F0FF</color>
-    <color name="sf_tool_bg">#FFFFFFFF</color>
-    <color name="sf_pro_bg">#FFFBEB</color>
-    <color name="sf_card_bg">#FFFFFFFF</color>
-    <color name="sf_card_stroke">#1A0F172A</color>
-    <color name="sf_search_bg">#EFF4FB</color>
-    <color name="sf_icon_badge">#E8F0FE</color>
-    <color name="sf_appbar">#E6FDFBFF</color>
-    <color name="pdf_bg">#FFE9E9EC</color>
-    <color name="pdf_toolbar">#CCFFFFFF</color>
-    <color name="sf_toolbar">#1565C0</color>
+    <!-- Orbital Archive & Neural Document Vault Palette -->
+    <color name="void_abyss">#050A14</color>
+    <color name="void_nebula">#0B1426</color>
+    <color name="glass_surface">#C20A162B</color>
+    <color name="glass_surface_raised">#D60F1F3D</color>
+    <color name="cyan_primary">#00F0FF</color>
+    <color name="cyan_glow_soft">#2E00F0FF</color>
+    <color name="cyan_border_idle">#3800F0FF</color>
+    <color name="cyan_border_active">#BF00F0FF</color>
+    <color name="text_hologram_hi">#EDF9FF</color>
+    <color name="text_hologram_mid">#8EA8C4</color>
+    <color name="text_hologram_dim">#486282</color>
+    <color name="gold_pro_primary">#FFB800</color>
+    <color name="gold_pro_surface">#CC1A1505</color>
+    <color name="gold_pro_glow">#33FFB800</color>
+    <color name="laser_danger">#FF3B69</color>
+
+    <!-- ScanWhirl Semantic Theme Mappings -->
+    <color name="sf_primary">#00F0FF</color>
+    <color name="sf_on_primary">#050A14</color>
+    <color name="sf_primary_container">#162846</color>
+    <color name="sf_on_primary_container">#EDF9FF</color>
+    <color name="sf_secondary_container">#0F1F3D</color>
+    <color name="sf_on_secondary_container">#8EA8C4</color>
+    <color name="sf_background">#050A14</color>
+    <color name="sf_surface">#050A14</color>
+    <color name="sf_on_surface">#EDF9FF</color>
+    <color name="sf_on_surface_variant">#8EA8C4</color>
+    <color name="pro_gold">#FFB800</color>
+    <color name="pro_badge_bg">#33FFB800</color>
+    <color name="pro_badge_stroke">#80FFB800</color>
+    <color name="free_badge_bg">#2E00F0FF</color>
+    <color name="free_badge_stroke">#3800F0FF</color>
+    <color name="sf_title_field">#D60F1F3D</color>
+    <color name="sf_tool_bg">#C20A162B</color>
+    <color name="sf_pro_bg">#CC1A1505</color>
+    <color name="sf_card_bg">#C20A162B</color>
+    <color name="sf_card_stroke">#3800F0FF</color>
+    <color name="sf_search_bg">#D60F1F3D</color>
+    <color name="sf_icon_badge">#2200F0FF</color>
+    <color name="sf_appbar">#050A14</color>
+    <color name="pdf_bg">#050A14</color>
+    <color name="pdf_toolbar">#D60F1F3D</color>
+    <color name="sf_toolbar">#050A14</color>
     <color name="sf_ic_camera">#FFFFFF</color>
-    <color name="sf_launcher_bg">#1565C0</color>
+    <color name="sf_launcher_bg">#050A14</color>
 </resources>

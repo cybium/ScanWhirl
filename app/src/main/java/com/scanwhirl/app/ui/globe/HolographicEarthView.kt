@@ -714,6 +714,15 @@ class HolographicEarthView @JvmOverloads constructor(
             )
         }
 
+        // HUD telemetry reticle ticks on right corners
+        if (!card.hidden && a > 0.3f) {
+            val tick = 4f * scale
+            canvas.drawLine(cardRect.right - tick, cardRect.top + 2f * scale, cardRect.right - 2f * scale, cardRect.top + 2f * scale, cardBorderPaint)
+            canvas.drawLine(cardRect.right - 2f * scale, cardRect.top + 2f * scale, cardRect.right - 2f * scale, cardRect.top + tick, cardBorderPaint)
+            canvas.drawLine(cardRect.right - tick, cardRect.bottom - 2f * scale, cardRect.right - 2f * scale, cardRect.bottom - 2f * scale, cardBorderPaint)
+            canvas.drawLine(cardRect.right - 2f * scale, cardRect.bottom - 2f * scale, cardRect.right - 2f * scale, cardRect.bottom - tick, cardBorderPaint)
+        }
+
         if (recordHit && front) {
             hitCards.add(HitCard(card.docId, cx, cy, w / 2f, h / 2f, back))
         }

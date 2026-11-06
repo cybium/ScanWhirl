@@ -3,37 +3,39 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@drawable/bg_space"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/sf_appbar">
+        android:background="@color/sf_appbar"
+        app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:title="@string/scan"
-            app:titleTextColor="?attr/colorOnSurface">
+            app:titleTextColor="@color/text_hologram_hi">
 
             <EditText
                 android:id="@+id/titleInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
+                android:layout_marginEnd="48dp"
                 android:background="@drawable/bg_title_input"
                 android:hint="@string/name_hint"
                 android:importantForAutofill="no"
                 android:inputType="textCapWords"
-                android:layout_marginEnd="48dp"
                 android:maxLines="1"
                 android:paddingHorizontal="12dp"
                 android:paddingVertical="8dp"
                 android:selectAllOnFocus="true"
                 android:singleLine="true"
-                android:textColor="?attr/colorOnSurface"
-                android:textColorHint="?attr/colorOutline"
+                android:textColor="@color/text_hologram_hi"
+                android:textColorHint="@color/text_hologram_dim"
                 android:textSize="18sp" />
         </com.google.android.material.appbar.MaterialToolbar>
     </com.google.android.material.appbar.AppBarLayout>
@@ -61,7 +63,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/text_hologram_hi"
             android:textSize="14sp" />
 
         <com.google.android.material.button.MaterialButton
@@ -70,7 +72,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/clear_selection"
-            app:icon="@drawable/ic_close" />
+            android:textColor="@color/text_hologram_mid"
+            app:icon="@drawable/ic_close"
+            app:iconTint="@color/text_hologram_mid" />
     </LinearLayout>
 
     <LinearLayout
@@ -84,7 +88,12 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSavePdf"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/review_save_pdf" />
+            android:layout_height="48dp"
+            android:backgroundTint="@color/cyan_primary"
+            android:text="@string/review_save_pdf"
+            android:textColor="@color/sf_on_primary"
+            android:textStyle="bold"
+            app:cornerRadius="14dp"
+            app:elevation="0dp" />
     </LinearLayout>
 </LinearLayout>

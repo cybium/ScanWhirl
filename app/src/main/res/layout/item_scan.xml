@@ -7,10 +7,10 @@
     android:layout_marginVertical="5dp"
     android:clickable="true"
     android:focusable="true"
-    app:cardBackgroundColor="@color/sf_card_bg"
-    app:cardCornerRadius="16dp"
+    app:cardBackgroundColor="@color/glass_surface"
+    app:cardCornerRadius="14dp"
     app:cardElevation="0dp"
-    app:strokeColor="@color/sf_card_stroke"
+    app:strokeColor="@color/cyan_border_idle"
     app:strokeWidth="1dp">
 
     <LinearLayout
@@ -23,9 +23,10 @@
         <com.google.android.material.card.MaterialCardView
             android:layout_width="68dp"
             android:layout_height="68dp"
-            app:cardCornerRadius="10dp"
+            app:cardBackgroundColor="@color/void_abyss"
+            app:cardCornerRadius="8dp"
             app:cardElevation="0dp"
-            app:strokeColor="@color/sf_card_stroke"
+            app:strokeColor="@color/cyan_border_idle"
             app:strokeWidth="1dp">
 
             <FrameLayout
@@ -39,6 +40,12 @@
                     android:contentDescription="@null"
                     android:scaleType="centerCrop"
                     android:src="@drawable/ic_document" />
+
+                <!-- Subtle cyan overlay for HUD look -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="#2600F0FF" />
 
                 <TextView
                     android:id="@+id/pageBadge"
@@ -76,8 +83,10 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:ellipsize="end"
+                    android:letterSpacing="0.02"
                     android:maxLines="1"
                     android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="@color/text_hologram_hi"
                     android:textSize="15sp" />
 
                 <TextView
@@ -95,8 +104,7 @@
                     android:text="@string/badge_locked"
                     android:textColor="@color/pro_gold"
                     android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:visibility="gone" />
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <!-- One compact line: "3 pages · 243 KB · 6 Nov" (never wraps). -->
@@ -108,7 +116,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textAppearance="?attr/textAppearanceBodySmall"
-                android:textColor="?android:attr/textColorSecondary" />
+                android:textColor="@color/text_hologram_mid" />
         </LinearLayout>
 
         <ImageButton
@@ -119,7 +127,7 @@
             android:contentDescription="@string/view"
             android:padding="8dp"
             android:src="@drawable/ic_visibility"
-            app:tint="?attr/colorPrimary" />
+            app:tint="@color/cyan_primary" />
 
         <ImageButton
             android:id="@+id/btnEdit"
@@ -129,7 +137,7 @@
             android:contentDescription="@string/edit"
             android:padding="8dp"
             android:src="@drawable/ic_edit"
-            app:tint="?attr/colorPrimary" />
+            app:tint="@color/cyan_primary" />
 
         <CheckBox
             android:id="@+id/checkSelect"
@@ -139,6 +147,6 @@
             android:clickable="false"
             android:focusable="false"
             android:visibility="gone"
-            app:buttonTint="@color/sf_primary" />
+            app:buttonTint="@color/cyan_primary" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

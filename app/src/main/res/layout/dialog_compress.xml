@@ -18,14 +18,21 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         android:text="@string/compress_target_label"
-        android:textAppearance="?attr/textAppearanceLabelLarge" />
+        android:textAppearance="?attr/textAppearanceLabelLarge"
+        android:textColor="@color/text_hologram_hi" />
 
     <EditText
         android:id="@+id/editCompressTarget"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/bg_search_bar"
         android:hint="@string/resize_target_hint"
         android:importantForAutofill="no"
         android:inputType="text"
-        android:selectAllOnFocus="true" />
+        android:paddingHorizontal="12dp"
+        android:selectAllOnFocus="true"
+        android:textColor="@color/text_hologram_hi"
+        android:textColorHint="@color/text_hologram_dim"
+        android:textSize="14sp" />
 </LinearLayout>
