@@ -501,7 +501,7 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `scan button starts the Google document scanner flow without crashing`() {
+    fun `scan button opens the in-house scanner flow without crashing`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val fab = activity.findViewById<android.view.View>(R.id.fabScan)
