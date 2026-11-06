@@ -162,6 +162,8 @@
     <string name="settings_pro">Pro (coming soon)</string>
     <string name="settings_pro_summary">Password-protect a PDF, ID photo sizes, long-image share. One payment.</string>
     <string name="settings_pro_title">ScanWhirl Pro</string>
+    <string name="settings_auto_enhance">Auto enhance scans</string>
+    <string name="settings_auto_enhance_summary">Google processing is on when this is on. Off gives a fast, original-looking scan.</string>
     <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>
     <string name="settings_lab">Scanner engine (lab)</string>
     <string name="settings_lab_summary">Test the dependency-free auto-crop pipeline on real photos.</string>

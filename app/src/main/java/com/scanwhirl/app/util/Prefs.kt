@@ -64,6 +64,12 @@ object Prefs {
     fun wallpaperUri(c: Context): String = sp(c).getString(KEY_WALLPAPER_URI, "") ?: ""
     fun setWallpaperUri(c: Context, v: String) = sp(c).edit().putString(KEY_WALLPAPER_URI, v).apply()
 
+    /** Auto-enhance on scan: ON uses Google's SCANNER_MODE_FULL, OFF uses BASE. */
+    private const val KEY_AUTO_ENHANCE = "auto_enhance_scan"
+
+    fun autoEnhanceScan(c: Context): Boolean = sp(c).getBoolean(KEY_AUTO_ENHANCE, false)
+    fun setAutoEnhanceScan(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_AUTO_ENHANCE, v).apply()
+
     fun pickedPdfs(c: Context): Set<String> =
         sp(c).getStringSet(KEY_PICKED, emptySet()) ?: emptySet()
 

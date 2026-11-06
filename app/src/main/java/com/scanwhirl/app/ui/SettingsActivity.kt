@@ -48,6 +48,10 @@ class SettingsActivity : BaseActivity() {
         binding.switchGreeting.setOnCheckedChangeListener { _, checked ->
             Prefs.setShowGreeting(this, checked)
         }
+        binding.switchAutoEnhance.isChecked = Prefs.autoEnhanceScan(this)
+        binding.switchAutoEnhance.setOnCheckedChangeListener { _, checked ->
+            Prefs.setAutoEnhanceScan(this, checked)
+        }
         binding.rowWallpaper.setOnClickListener {
             pickWallpaper.launch(arrayOf("image/*"))
         }

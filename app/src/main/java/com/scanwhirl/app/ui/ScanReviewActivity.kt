@@ -25,6 +25,7 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityScanReviewBinding
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -370,7 +371,13 @@ class ScanReviewActivity : BaseActivity() {
     private fun launchAddPages() {
         val options = GmsDocumentScannerOptions.Builder()
             .setGalleryImportAllowed(true)
-            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+            .setScannerMode(
+                if (Prefs.autoEnhanceScan(this)) {
+                    GmsDocumentScannerOptions.SCANNER_MODE_FULL
+                } else {
+                    GmsDocumentScannerOptions.SCANNER_MODE_BASE
+                }
+            )
             .setResultFormats(
                 GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
                 GmsDocumentScannerOptions.RESULT_FORMAT_PDF

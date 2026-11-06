@@ -919,11 +919,17 @@ class MainActivity : BaseActivity() {
             }
         }
 
-    /** Opens Google\'s on-device document scanner (ML Kit). */
+    /** Opens the Google scanner, mode dependent on auto-enhance setting. */
     private fun launchScanner() {
         val options = GmsDocumentScannerOptions.Builder()
             .setGalleryImportAllowed(true)
-            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+            .setScannerMode(
+                if (Prefs.autoEnhanceScan(this)) {
+                    GmsDocumentScannerOptions.SCANNER_MODE_FULL
+                } else {
+                    GmsDocumentScannerOptions.SCANNER_MODE_BASE
+                }
+            )
             .setResultFormats(
                 GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
                 GmsDocumentScannerOptions.RESULT_FORMAT_PDF
