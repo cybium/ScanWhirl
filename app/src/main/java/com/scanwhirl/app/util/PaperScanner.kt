@@ -100,7 +100,14 @@ object PaperScanner {
         val pixels = IntArray(w * h)
         bmp.getPixels(pixels, 0, w, 0, 0, w, h)
         bmp.recycle()
+        return detectQuadPixels(pixels, w, h)
+    }
 
+    /**
+     * Quad detection on an already-decoded frame, so the live camera preview can
+     * call it on cheap analysis frames (and `autoCrop` on a full capture).
+     */
+    fun detectQuadPixels(pixels: IntArray, w: Int, h: Int): FloatArray? {
         val gray = FloatArray(w * h)
         for (i in pixels.indices) {
             val c = pixels[i]

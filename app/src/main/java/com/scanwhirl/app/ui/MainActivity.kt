@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import android.Manifest
+import android.content.pm.PackageManager
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -18,7 +20,6 @@ import android.widget.ProgressBar
 import android.widget.RadioButton
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
@@ -29,10 +30,6 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.gms.common.api.ApiException
-import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
-import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
-import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityMainBinding
@@ -89,6 +86,15 @@ class MainActivity : BaseActivity() {
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { startCompressFromFile(it) } }
 
+    private val cameraPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                startActivity(ScanCameraActivity.intent(this))
+            } else {
+                Toast.makeText(this, R.string.scan_no_camera, Toast.LENGTH_LONG).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -100,8 +106,8 @@ class MainActivity : BaseActivity() {
         binding.scanList.layoutManager = LinearLayoutManager(this)
         binding.scanList.adapter = adapter
 
-        binding.fabScan.setOnClickListener { launchScanner() }
-        binding.emptyState.setOnClickListener { launchScanner() }
+        binding.fabScan.setOnClickListener { openScanner() }
+        binding.emptyState.setOnClickListener { openScanner() }
 
         binding.toolResize.setOnClickListener { pickResizeImage.launch("image/*") }
         binding.toolCompress.setOnClickListener { startCompress() }
@@ -907,82 +913,16 @@ class MainActivity : BaseActivity() {
             .show()
     }
 
-    private val scannerLauncher =
-        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-            if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
-            val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
-            val uris = scanResult?.pages.orEmpty().mapNotNull { it.imageUri }
-            if (uris.isEmpty()) {
-                Toast.makeText(this, R.string.scan_no_pages, Toast.LENGTH_SHORT).show()
-            } else {
-                stageAndReview(uris)
-            }
-        }
 
-    /** Opens Google\'s on-device document scanner (ML Kit). */
-    private fun launchScanner() {
-        val options = GmsDocumentScannerOptions.Builder()
-            .setGalleryImportAllowed(true)
-            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
-            .setResultFormats(
-                GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
-                GmsDocumentScannerOptions.RESULT_FORMAT_PDF
-            )
-            .setPageLimit(30)
-            .build()
-        try {
-            GmsDocumentScanning.getClient(options)
-                .getStartScanIntent(this)
-                .addOnSuccessListener { sender ->
-                    scannerLauncher.launch(IntentSenderRequest.Builder(sender).build())
-                }
-                .addOnFailureListener { e ->
-                    val msg = if (e is ApiException) {
-                        getString(R.string.scanner_unavailable, e.statusCode)
-                    } else {
-                        getString(R.string.scanner_failed, e.message)
-                    }
-                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                }
-        } catch (e: Exception) {
-            Toast.makeText(this, getString(R.string.scanner_failed, e.message), Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /** Copies the scanned page URIs into a staging folder, then opens the review screen. */
-    private fun stageAndReview(uris: List<Uri>) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val dir = withContext(Dispatchers.IO) {
-                    val staging = File(cacheDir, "pending_${System.currentTimeMillis()}")
-                    staging.mkdirs()
-                    uris.forEachIndexed { index, uri ->
-                        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: throw IllegalStateException("could not read a scanned page")
-                        if (bytes.isEmpty()) throw IllegalStateException("a scanned page was empty")
-                        File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
-                            .writeBytes(bytes)
-                    }
-                    staging
-                }
-                startActivity(
-                    ScanReviewActivity.intent(
-                        this@MainActivity,
-                        dir.path,
-                        null,
-                        repo.nextDocumentName()
-                    )
-                )
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.stage_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            } finally {
-                progress.dismiss()
-            }
+    /** FAB: open the in-house scanner (asks for camera on first use). */
+    private fun openScanner() {
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            startActivity(ScanCameraActivity.intent(this))
+        } else {
+            cameraPermission.launch(Manifest.permission.CAMERA)
         }
     }
 

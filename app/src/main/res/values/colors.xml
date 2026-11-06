@@ -16,6 +16,7 @@
     <color name="sf_appbar">#B3FDFBFF</color>
     <color name="pdf_bg">#FFE9E9EC</color>
     <color name="pdf_toolbar">#CCFFFFFF</color>
+    <color name="lab_gold">#FFB4880A</color>
     <color name="sf_toolbar">#1565C0</color>
     <color name="sf_ic_camera">#FFFFFF</color>
     <color name="sf_launcher_bg">#1565C0</color>
