@@ -173,12 +173,6 @@
     <string name="lab_no_paper">No document corners found. Keep the photo as-is.</string>
     <string name="lab_timing">Auto-crop: %1$d ms detect + %2$d ms warp</string>
     <string name="lab_stats">%1$d × %2$d px · before %3$s · after %4$s</string>
-    <string name="scan_hold_steady">Hold the paper still…</string>
-    <string name="scan_torch">Flash</string>
-    <string name="scan_cap">Capture</string>
-    <string name="scan_no_camera">Camera permission needed so the scanner works.</string>
-    <string name="scan_camera_failed">Scanner error: %1$s</string>
-    <string name="done_label">Done</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>
     <string name="language_system">System default</string>

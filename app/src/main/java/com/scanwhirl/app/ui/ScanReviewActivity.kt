@@ -9,11 +9,16 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.common.api.ApiException
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -75,14 +80,17 @@ class ScanReviewActivity : BaseActivity() {
             pendingDownload = null
         }
 
-    /** Add pages: opens the in-house scanner and merges its pages in. */
-    private val addPagesLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode != RESULT_OK || result.data == null) {
-                return@registerForActivityResult
+    /** Another scanner batch ("Add pages"), appended to this staging folder. */
+    private val scannerLauncher =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
+            val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
+            val uris = scanResult?.pages.orEmpty().mapNotNull { it.imageUri }
+            if (uris.isEmpty()) {
+                Toast.makeText(this, R.string.scan_no_pages, Toast.LENGTH_SHORT).show()
+            } else {
+                appendStagedPages(uris)
             }
-            val dir = result.data?.getStringExtra(EXTRA_ADDED_PAGES_DIR) ?: return@registerForActivityResult
-            mergeIntoStaging(File(dir))
         }
 
     private val backCallback = object : OnBackPressedCallback(true) {
@@ -359,44 +367,33 @@ class ScanReviewActivity : BaseActivity() {
     // ------------------------------------------------------------------
 
     /** Opens Google's on-device document scanner (ML Kit), like the home screen. */
-    /** Merges page JPEGs from [source] into the current staging folder. */
-    private fun mergeIntoStaging(source: File) {
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    var next = (
-                        stagingDir.listFiles { f -> f.extension.equals("jpg", true) }
-                            ?.mapNotNull { it.nameWithoutExtension.removePrefix("page_").toIntOrNull() }
-                            ?.maxOrNull() ?: 0
-                    )
-                    source.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
-                        ?.sortedBy { it.nameWithoutExtension }
-                        ?.forEach { page ->
-                            next += 1
-                            val target = File(
-                                stagingDir,
-                                String.format(Locale.ROOT, "page_%03d.jpg", next)
-                            )
-                            page.copyTo(target, overwrite = true)
-                        }
-                    source.deleteRecursively()
-                }
-                pdfFile = null
-                structureChanged = true
-                reloadFromDisk()
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@ScanReviewActivity,
-                    getString(R.string.stage_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    /** Add pages: launches the in-house scanner in append mode. */
     private fun launchAddPages() {
-        startActivity(ScanCameraActivity.intentForAppend(this))
+        val options = GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(true)
+            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+            .setResultFormats(
+                GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
+                GmsDocumentScannerOptions.RESULT_FORMAT_PDF
+            )
+            .setPageLimit(30)
+            .build()
+        try {
+            GmsDocumentScanning.getClient(options)
+                .getStartScanIntent(this)
+                .addOnSuccessListener { sender ->
+                    scannerLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                }
+                .addOnFailureListener { e ->
+                    val msg = if (e is ApiException) {
+                        getString(R.string.scanner_unavailable, e.statusCode)
+                    } else {
+                        getString(R.string.scanner_failed, e.message)
+                    }
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                }
+        } catch (e: Exception) {
+            Toast.makeText(this, getString(R.string.scanner_failed, e.message), Toast.LENGTH_LONG).show()
+        }
     }
 
     /** Copies [uris] into the staging folder with continuing page numbers. */
@@ -536,7 +533,6 @@ class ScanReviewActivity : BaseActivity() {
 
     companion object {
         private const val EXTRA_STAGING = "staging_dir"
-        const val EXTRA_ADDED_PAGES_DIR = "added_pages_dir"
         private const val EXTRA_PDF = "pdf_path"
         private const val EXTRA_NAME = "default_name"
         private const val FILTERS_FILE = "filters.txt"

@@ -4,7 +4,6 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -61,11 +60,6 @@
             android:name=".ui.SpikeActivity"
             android:exported="false"
             android:parentActivityName=".ui.SettingsActivity" />
-
-        <activity
-            android:name=".ui.ScanCameraActivity"
-            android:exported="false"
-            android:parentActivityName=".ui.MainActivity" />
 
         <activity
             android:name=".ui.PageViewerActivity"
