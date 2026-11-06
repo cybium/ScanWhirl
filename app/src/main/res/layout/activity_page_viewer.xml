@@ -40,89 +40,84 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:background="#99000000"
-        android:gravity="center"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:paddingVertical="6dp">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnRotateLeft"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="52dp"
-            android:layout_weight="1"
-            android:insetLeft="0dp"
-            android:insetRight="0dp"
-            android:paddingHorizontal="2dp"
-            android:text="@string/rotate_left"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp"
-            app:icon="@drawable/ic_rotate_left"
-            app:iconPadding="2dp"
-            app:iconTint="#FFFFFFFF" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnRotateRight"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="52dp"
-            android:layout_weight="1"
-            android:insetLeft="0dp"
-            android:insetRight="0dp"
-            android:paddingHorizontal="2dp"
-            android:text="@string/rotate_right"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp"
-            app:icon="@drawable/ic_rotate"
-            app:iconPadding="2dp"
-            app:iconTint="#FFFFFFFF" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRotateRight"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                android:paddingHorizontal="2dp"
+                android:text="@string/action_rotate"
+                android:textColor="#FFFFFFFF"
+                android:textSize="13sp"
+                app:icon="@drawable/ic_rotate"
+                app:iconPadding="4dp"
+                app:iconTint="#FFFFFFFF" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCrop"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="52dp"
-            android:layout_weight="1"
-            android:insetLeft="0dp"
-            android:insetRight="0dp"
-            android:paddingHorizontal="2dp"
-            android:text="@string/crop_action"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp"
-            app:icon="@drawable/ic_crop"
-            app:iconPadding="2dp"
-            app:iconTint="#FFFFFFFF" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCrop"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                android:paddingHorizontal="2dp"
+                android:text="@string/crop_action"
+                android:textColor="#FFFFFFFF"
+                android:textSize="13sp"
+                app:icon="@drawable/ic_crop"
+                app:iconPadding="4dp"
+                app:iconTint="#FFFFFFFF" />
+        </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnFilter"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="52dp"
-            android:layout_weight="1"
-            android:insetLeft="0dp"
-            android:insetRight="0dp"
-            android:paddingHorizontal="2dp"
-            android:text="@string/filter_action"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp"
-            app:icon="@drawable/ic_filter"
-            app:iconPadding="2dp"
-            app:iconTint="#FFFFFFFF" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnDelete"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="52dp"
-            android:layout_weight="1"
-            android:insetLeft="0dp"
-            android:insetRight="0dp"
-            android:paddingHorizontal="2dp"
-            android:text="@string/delete"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp"
-            app:icon="@drawable/ic_delete"
-            app:iconPadding="2dp"
-            app:iconTint="#FFFFFFFF" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFilter"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                android:paddingHorizontal="2dp"
+                android:text="@string/filter_action"
+                android:textColor="#FFFFFFFF"
+                android:textSize="13sp"
+                app:icon="@drawable/ic_filter"
+                app:iconPadding="4dp"
+                app:iconTint="#FFFFFFFF" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDelete"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                android:paddingHorizontal="2dp"
+                android:text="@string/delete"
+                android:textColor="#FFFFFFFF"
+                android:textSize="13sp"
+                app:icon="@drawable/ic_delete"
+                app:iconPadding="4dp"
+                app:iconTint="#FFFFFFFF" />
+        </LinearLayout>
     </LinearLayout>
 
     <FrameLayout
@@ -136,6 +131,58 @@
             android:id="@+id/cropView"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <HorizontalScrollView
+            android:id="@+id/cropPresets"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:scrollbars="none"
+            android:layout_marginBottom="56dp"
+            android:paddingHorizontal="12dp">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chipCropGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleLine="true"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipCropFree"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="true"
+                    android:checked="true"
+                    android:text="@string/crop_size_free" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipCropPassport"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="true"
+                    android:text="@string/crop_size_passport" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipCropIdCard"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="true"
+                    android:text="@string/crop_size_id" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipCropVisa"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="true"
+                    android:text="@string/crop_size_visa" />
+            </com.google.android.material.chip.ChipGroup>
+        </HorizontalScrollView>
 
         <LinearLayout
             android:layout_width="match_parent"

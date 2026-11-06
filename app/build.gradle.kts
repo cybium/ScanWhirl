@@ -17,8 +17,15 @@ android {
             if (project.hasProperty("testBuild")) "ScanWhirl Test" else "ScanWhirl"
         minSdk = 24
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.1.1-test17"
+        versionCode = 18
+        versionName = "1.1.1-test18"
+
+        // Pro features are unlocked in test builds so they can be tried free.
+        buildConfigField(
+            "boolean",
+            "TEST_BUILD",
+            if (project.hasProperty("testBuild")) "true" else "false"
+        )
     }
 
     signingConfigs {
@@ -74,6 +81,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         viewBinding = true
     }
 }
@@ -88,6 +96,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
+    // On-device text recognition through Play services (model downloads on
+    // first use; keeps the APK small, consistent with the scanner).
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:18.0.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

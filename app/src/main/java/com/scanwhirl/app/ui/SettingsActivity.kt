@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivitySettingsBinding
+import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.Prefs
 
 class SettingsActivity : BaseActivity() {
@@ -68,7 +69,6 @@ class SettingsActivity : BaseActivity() {
         }
         binding.rowPrivacy.setOnClickListener { openPrivacy() }
         binding.rowPro.setOnClickListener { showProDialog() }
-        binding.rowLab.setOnClickListener { startActivity(SpikeActivity.intent(this)) }
         binding.rowLanguage.setOnClickListener { chooseLanguage() }
         binding.rowViewer.setOnClickListener { chooseViewer() }
         binding.rowAbout.setOnClickListener { showAbout() }
@@ -123,9 +123,21 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun showProDialog() {
+        val pro = ProGate.isPro(this)
+        val items = arrayOf(
+            getString(R.string.pro_feat_password),
+            getString(R.string.pro_feat_id_sizes),
+            getString(R.string.pro_feat_long_image),
+            getString(R.string.pro_feat_zip),
+            getString(R.string.pro_feat_ocr)
+        )
         AlertDialog.Builder(this)
             .setTitle(R.string.settings_pro_title)
-            .setMessage(R.string.settings_pro_message)
+            .setItems(items) { _, _ -> }
+            .setMessage(
+                if (pro) R.string.pro_panel_active
+                else R.string.settings_pro_message
+            )
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }

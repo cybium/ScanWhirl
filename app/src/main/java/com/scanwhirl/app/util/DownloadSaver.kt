@@ -39,22 +39,27 @@ object DownloadSaver {
     fun pdfNameFor(docTitle: String): String = sanitize(docTitle) + ".pdf"
 
     /**
-     * Writes JPEG bytes to Downloads/ScanWhirl/[displayName] and returns the final name
+     * Writes JPEG bytes to Downloads/ScanWhirl/[displayName] (or into a named
+     * subfolder when [subdir] is given) and returns the final name
      * (renamed with " (n)" if one already exists).
      * Throws on missing storage permission / unavailable storage.
      */
-    fun saveJpeg(context: Context, bytes: ByteArray, displayName: String): String {
+    fun saveJpeg(context: Context, bytes: ByteArray, displayName: String, subdir: String? = null): String {
         if (Build.VERSION.SDK_INT >= 29) {
-            return saveQ(context, bytes, displayName)
+            return saveQ(context, bytes, displayName, subdir)
         }
-        return savePreQ(bytes, displayName)
+        return savePreQ(bytes, displayName, subdir)
     }
 
     @androidx.annotation.RequiresApi(29)
-    private fun saveQ(context: Context, bytes: ByteArray, displayName: String): String {
+    private fun saveQ(context: Context, bytes: ByteArray, displayName: String, subdir: String?): String {
         val resolver = context.contentResolver
         val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-        val relPath = Environment.DIRECTORY_DOWNLOADS + "/" + SUBDIR
+        val relPath = if (subdir.isNullOrBlank()) {
+            Environment.DIRECTORY_DOWNLOADS + "/" + SUBDIR
+        } else {
+            Environment.DIRECTORY_DOWNLOADS + "/" + SUBDIR + "/" + subdir
+        }
         val name = uniqueName(displayName) { candidate ->
             resolver.query(
                 collection,
@@ -86,13 +91,13 @@ object DownloadSaver {
     }
 
     @Suppress("DEPRECATION")
-    private fun savePreQ(bytes: ByteArray, displayName: String): String {
+    private fun savePreQ(bytes: ByteArray, displayName: String, subdir: String? = null): String {
         if (Environment.getExternalStorageState() != Environment.MEDIA_MOUNTED) {
             throw IllegalStateException("Storage unavailable")
         }
         val dir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            SUBDIR
+            if (subdir.isNullOrBlank()) SUBDIR else "$SUBDIR/$subdir"
         ).apply { mkdirs() }
         val name = uniqueName(displayName) { File(dir, it).exists() }
         File(dir, name).writeBytes(bytes)

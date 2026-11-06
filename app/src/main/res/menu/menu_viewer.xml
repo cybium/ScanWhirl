@@ -19,6 +19,18 @@
         android:title="@string/save_pdf_device"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_long_image"
+        android:icon="@drawable/ic_visibility"
+        android:title="@string/menu_long_image"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_protect_pdf"
+        android:icon="@drawable/ic_lock"
+        android:title="@string/menu_protect_pdf"
+        app:showAsAction="never" />
+
     <!-- Page actions: apply to the ticked pages (tap a checkbox first). -->
     <item
         android:id="@+id/action_rotate_left"

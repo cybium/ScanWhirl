@@ -38,6 +38,13 @@ class CropView @JvmOverloads constructor(
     /** Which corner is being dragged: 0 TL, 1 TR, 2 BR, 3 BL. */
     private var activeCorner = -1
 
+    /**
+     * Optional fixed aspect ratio (width / height) the crop rectangle is
+     * forced to while dragging; used by the Pro ID/passport photo presets.
+     * Null = free crop.
+     */
+    var aspectRatio: Float? = null
+
     private val density = resources.displayMetrics.density
     private val handleRadius = 28f * density
     private val handleLength = 20f * density
@@ -212,9 +219,42 @@ class CropView @JvmOverloads constructor(
                 crop.bottom = iy.coerceIn(crop.top + minH, bmp.height.toFloat())
             }
         }
+        if (aspectRatio != null) applyAspectRatio()
         crop.left = max(0f, crop.left)
         crop.top = max(0f, crop.top)
         crop.right = min(bmp.width.toFloat(), crop.right)
         crop.bottom = min(bmp.height.toFloat(), crop.bottom)
+    }
+
+    /**
+     * Keeps width/height at [aspectRatio], anchored to the corner opposite
+     * the one being dragged. Clamped to the image bounds; the opposite corner
+     * stays put, so the rectangle grows/shrinks from the dragged one only.
+     */
+    private fun applyAspectRatio() {
+        val ratio = aspectRatio ?: return
+        val bmp = image ?: return
+        when (activeCorner) {
+            0 -> { // anchored BR
+                var h = (crop.width() / ratio)
+                if (crop.bottom - h < 0f) h = crop.bottom
+                crop.top = crop.bottom - h
+            }
+            1 -> { // anchored BL
+                var h = (crop.width() / ratio)
+                if (crop.bottom - h < 0f) h = crop.bottom
+                crop.top = crop.bottom - h
+            }
+            2 -> { // anchored TL
+                var h = (crop.width() / ratio)
+                if (crop.top + h > bmp.height) h = bmp.height - crop.top
+                crop.bottom = crop.top + h
+            }
+            3 -> { // anchored TR
+                var h = (crop.width() / ratio)
+                if (crop.top + h > bmp.height) h = bmp.height - crop.top
+                crop.bottom = crop.top + h
+            }
+        }
     }
 }

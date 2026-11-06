@@ -8,6 +8,8 @@ import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.OcrEngine
+import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.ScanFilter
@@ -457,6 +459,61 @@ class ScanRepository(private val context: Context) {
             dir.deleteRecursively()
             throw e
         }
+    }
+
+    /**
+     * Rebuilds the document's PDF with the password-protection extra applied
+     * (Pro). The page images are untouched; only the PDF wrapper changes.
+     */
+    suspend fun protectPdf(id: String, password: String): ScanDocument =
+        withContext(Dispatchers.IO) {
+            require(password.isNotBlank()) { "Password must not be empty" }
+            val dir = File(docsDir, id)
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            require(doc.pdfFile.exists() && doc.pdfFile.length() > 0L) { "PDF missing" }
+            val src = File(dir, "plain.pdf")
+            doc.pdfFile.copyTo(src, overwrite = true)
+            try {
+                val protected = File(dir, "protected.pdf")
+                PdfEncryptor.encrypt(src, protected, password)
+                protected.copyTo(doc.pdfFile, overwrite = true)
+            } finally {
+                src.delete()
+            }
+            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after protection")
+        }
+
+    /** OCR text of a document, when it exists: lines keyed by the page file name. */
+    fun ocrDoc(id: String): Map<String, String> = try {
+        val file = File(File(docsDir, id), "ocr.txt")
+        if (!file.exists()) emptyMap()
+        else file.readLines().mapNotNull { line ->
+            val parts = line.split('\t', limit = 2)
+            if (parts.size == 2) parts[0] to parts[1] else null
+        }.toMap()
+    } catch (_: Exception) {
+        emptyMap()
+    }
+
+    /** True when this document has OCR text saved already. */
+    fun hasOcr(id: String): Boolean = File(File(docsDir, id), "ocr.txt").exists()
+
+    /** Runs OCR over every page (background) and stores docid/ocr.txt. */
+    suspend fun buildOcr(id: String): Int = withContext(Dispatchers.IO) {
+        val dir = File(docsDir, id)
+        val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+        val map = mutableMapOf<String, String>()
+        for (page in doc.pageFiles) {
+            try {
+                map[page.name] = OcrEngine.recognize(page)
+            } catch (_: Exception) {
+                map[page.name] = "" // page unreadable: skip silently, honest
+            }
+        }
+        File(dir, "ocr.txt").writeText(
+            map.entries.joinToString("\n") { "${it.key}\t${it.value}" }
+        )
+        map.size
     }
 
     private fun renumberPages(dir: File) {

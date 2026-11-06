@@ -24,6 +24,14 @@ object ShareUtils {
         }
     }
 
+    /** Shares any file with an explicit MIME type (long image, ZIP, …). */
+    fun shareFile(context: Context, file: File, mime: String) {
+        shareSingle(context, file, mime)
+    }
+
+    /** Public alias of the private sanitizer for reuse by export jobs. */
+    fun sanitizeName(name: String): String = sanitize(name)
+
     private fun shareSingle(context: Context, file: File, mime: String) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {

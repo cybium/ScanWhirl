@@ -45,6 +45,8 @@ import com.scanwhirl.app.util.Greeting
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,6 +92,9 @@ class MainActivity : BaseActivity() {
 
     /** All documents on disk; refreshed off the main thread, queried in memory. */
     private var allDocs: List<ScanDocument> = emptyList()
+
+    /** Documents whose scanned text matched the current query (Pro search). */
+    private var ocrMatches: List<ScanDocument> = emptyList()
 
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -175,9 +180,8 @@ class MainActivity : BaseActivity() {
         super.onResume()
         refreshList()
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
-        binding.toolbar.title = selectionTitle()
+        applyToolbarTitle()
         updateGreeting()
-        // Wallpaper decode is disk I/O; keep it off the UI thread.
         lifecycleScope.launch {
             val background = withContext(Dispatchers.IO) {
                 com.scanwhirl.app.util.Wallpaper.drawable(this@MainActivity)
@@ -210,6 +214,9 @@ class MainActivity : BaseActivity() {
         menu.findItem(R.id.action_merge)?.isVisible = selectionMode
         menu.findItem(R.id.action_merge)?.isEnabled = selectedIds.size >= 2
         menu.findItem(R.id.action_delete_selected)?.isVisible = selectionMode
+        menu.findItem(R.id.action_export_zip)?.isVisible = selectionMode
+        menu.findItem(R.id.action_export_zip)?.isEnabled =
+            selectedIds.isNotEmpty() && ProGate.isPro(this)
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -221,6 +228,7 @@ class MainActivity : BaseActivity() {
             true
         }
         R.id.action_delete_selected -> { confirmDeleteSelected(); true }
+        R.id.action_export_zip -> { exportSelectedZip(); true }
         else -> super.onOptionsItemSelected(item)
     }
 
@@ -233,18 +241,29 @@ class MainActivity : BaseActivity() {
 
     /** In-memory filter + sort over [allDocs]; used by search and sort too. */
     private fun applyList() {
-        val filtered = allDocs.filter { query.isBlank() || it.name.contains(query, true) }
-        val sorted = sortDocs(filtered)
+        val byName = allDocs.filter { it.name.contains(query, true) }
+        // Pro: when the name search misses, fall back to OCR text search.
+        ocrMatches = if (!ProGate.isPro(this)) emptyList()
+        else if (query.isBlank() || byName.isNotEmpty()) emptyList()
+        else repoOcrMatches(query)
+        val shown = if (byName.isEmpty() && ocrMatches.isNotEmpty()) ocrMatches else byName
+        val sorted = sortDocs(shown)
         adapter.selectedIds = selectedIds
         adapter.submitList(sorted) {
             adapter.notifyDataSetChanged()
         }
-        binding.emptyState.isVisible = sorted.isEmpty()
+        binding.emptyState.isVisible = sorted.isEmpty() && ocrMatches.isEmpty()
         binding.scanList.isVisible = true
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
     }
+
+    /** Pro OCR search: documents whose scanned text matches [query]. */
+    private fun repoOcrMatches(query: String): List<ScanDocument> =
+        allDocs.filter { doc ->
+            repo.ocrDoc(doc.id).values.any { it.contains(query, ignoreCase = true) }
+        }
 
     private fun sortDocs(docs: List<ScanDocument>): List<ScanDocument> =
         when (Prefs.sortMode(this)) {
@@ -265,6 +284,43 @@ class MainActivity : BaseActivity() {
             getString(R.string.app_name)
         }
 
+    /**
+     * Title + badge live together: normal mode shows the custom title row
+     * (name + Pro badge) and a null toolbar title; selection mode hides the
+     * row and lets the toolbar show "N selected".
+     */
+    private fun applyToolbarTitle() {
+        val title = selectionTitle()
+        if (selectionMode) {
+            binding.titleRow.visibility = View.GONE
+            binding.toolbar.title = title
+        } else {
+            binding.titleRow.visibility = View.VISIBLE
+            binding.toolbar.title = null
+        }
+        updateProBadge()
+    }
+
+    /** Crown badge next to the app name: gold PRO unlocked, dim FREE otherwise. */
+    private fun updateProBadge() {
+        val pro = com.scanwhirl.app.util.ProGate.isPro(this)
+        if (pro) {
+            binding.proBadge.text = getString(R.string.badge_pro)
+            binding.proBadge.setTextColor(ContextCompat.getColor(this, R.color.pro_gold))
+            binding.proBadge.compoundDrawableTintList =
+                android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.pro_gold))
+            binding.proBadge.setBackgroundResource(R.drawable.bg_pro_badge)
+        } else {
+            binding.proBadge.text = getString(R.string.badge_free)
+            binding.proBadge.setTextColor(ContextCompat.getColor(this, R.color.sf_on_surface_variant))
+            binding.proBadge.compoundDrawableTintList =
+                android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.sf_on_surface_variant)
+                )
+            binding.proBadge.setBackgroundResource(R.drawable.bg_free_badge)
+        }
+    }
+
     private fun setSelectionMode(enabled: Boolean) {
         selectionMode = enabled
         backCallback.isEnabled = enabled
@@ -273,7 +329,7 @@ class MainActivity : BaseActivity() {
         adapter.notifyDataSetChanged()
         binding.fabScan.isVisible = !enabled
         binding.toolsRow.isVisible = !enabled
-        binding.toolbar.title = selectionTitle()
+        applyToolbarTitle()
         updateGreeting()
         invalidateOptionsMenu()
     }
@@ -281,7 +337,7 @@ class MainActivity : BaseActivity() {
     private fun toggleSelection(id: String) {
         if (!selectedIds.remove(id)) selectedIds.add(id)
         adapter.notifyDataSetChanged()
-        binding.toolbar.title = selectionTitle()
+        applyToolbarTitle()
         invalidateOptionsMenu()
     }
 
@@ -306,7 +362,7 @@ class MainActivity : BaseActivity() {
             setSelectionMode(true)
             selectedIds.add(doc.id)
             adapter.notifyDataSetChanged()
-            binding.toolbar.title = selectionTitle()
+            applyToolbarTitle()
             invalidateOptionsMenu()
         } else {
             toggleSelection(doc.id)
@@ -326,6 +382,12 @@ class MainActivity : BaseActivity() {
                     ?.removeSuffix(".pdf")?.removeSuffix(".PDF")
                     ?.takeIf { it.isNotBlank() } ?: "Imported PDF"
                 val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
+                // Imported pages index into Pro text search too.
+                if (ProGate.isPro(this@MainActivity)) {
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        try { repo.buildOcr(doc.id) } catch (_: Exception) { }
+                    }
+                }
                 progress.dismiss()
                 startActivity(DocumentViewerActivity.intent(this@MainActivity, doc.id))
             } catch (e: SecurityException) {
@@ -444,6 +506,50 @@ class MainActivity : BaseActivity() {
                 openViewer(merged)
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "Merge failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** Pro extra: pack every ticked scan's PDF into one ZIP, then show the result. */
+    private fun exportSelectedZip() {
+        if (!ProGate.isPro(this)) return
+        val ids = selectedIds.toList()
+        if (ids.isEmpty()) return
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val docs = withContext(Dispatchers.IO) {
+                    ids.mapNotNull { id -> allDocs.firstOrNull { it.id == id } }
+                }
+                val out = withContext(Dispatchers.IO) {
+                    val dir = File(cacheDir, "documents/share").apply { mkdirs() }
+                    val file = File(dir, "ScanWhirl ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())}.zip")
+                    ZipExporter.export(docs, file)
+                    file
+                }
+                progress.dismiss()
+                startActivity(
+                    ExportResultActivity.intent(
+                        this@MainActivity,
+                        outputPath = out.path,
+                        previewPath = null,
+                        mime = "application/zip",
+                        displayName = out.name,
+                        beforeBytes = docs.sumOf { it.pdfFile.length() },
+                        afterBytes = out.length(),
+                        width = 0,
+                        height = 0,
+                        title = out.name,
+                        warning = null
+                    )
+                )
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }

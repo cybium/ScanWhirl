@@ -20,7 +20,10 @@ import com.scanwhirl.app.databinding.ActivityPageViewerBinding
 import com.scanwhirl.app.databinding.ItemPagerPageBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ScanFilter
+import androidx.core.view.isVisible
+import android.view.View
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -101,13 +104,13 @@ class PageViewerActivity : BaseActivity() {
         updateIndicator()
 
         binding.btnClose.setOnClickListener { finish() }
-        binding.btnRotateLeft.setOnClickListener { rotateCurrent(clockwise = false) }
         binding.btnRotateRight.setOnClickListener { rotateCurrent(clockwise = true) }
         binding.btnCrop.setOnClickListener { startCrop() }
         binding.btnFilter.setOnClickListener { filterCurrent() }
         binding.btnDelete.setOnClickListener { deleteCurrent() }
         binding.btnCancelCrop.setOnClickListener { closeCrop() }
         binding.btnApplyCrop.setOnClickListener { applyCrop() }
+        setupCropPresets()
 
         // Back cancels an open crop first; otherwise it leaves the view.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -142,6 +145,7 @@ class PageViewerActivity : BaseActivity() {
         pages = doc.pageFiles.filter {
             it.path != pendingDelete && it.path !in committingDeletes
         }
+        pagerAdapter.filterFor = { file -> filterChoice[file.path] ?: ScanFilter.ORIGINAL }
         pagerAdapter.submit(pages)
         return true
     }
@@ -161,6 +165,7 @@ class PageViewerActivity : BaseActivity() {
             return false
         }
         loadStagingFilters(dir)
+        pagerAdapter.filterFor = { file -> stagingFilters[file.path] ?: ScanFilter.ORIGINAL }
         pagerAdapter.submit(pages)
         return true
     }
@@ -381,7 +386,10 @@ class PageViewerActivity : BaseActivity() {
         cropIndex = pos
         cropPath = file.path
         binding.cropView.clearImage()
-        binding.cropOverlay.visibility = android.view.View.VISIBLE
+        binding.cropOverlay.visibility = View.VISIBLE
+        // ID/passport size presets are a Pro extra; only Pro sees the chips.
+        binding.cropPresets.isVisible = ProGate.isPro(this)
+        binding.chipCropFree.isChecked = true
 
         // Display-size copy only (max 2048px) — the full-res file is read on Apply.
         val key = "${file.path}|${file.lastModified()}|${file.length()}"
@@ -394,7 +402,7 @@ class PageViewerActivity : BaseActivity() {
             } ?: return@execute
             runOnUiThread {
                 if (binding.cropView.tag == key) {
-                    cropBitmap?.recycle()
+                    cropBitmap?.takeIf { !it.isRecycled }?.recycle()
                     cropBitmap = bmp
                     binding.cropView.setImage(bmp)
                 } else {
@@ -404,11 +412,28 @@ class PageViewerActivity : BaseActivity() {
         }
     }
 
+    /** Wire the Pro photo-size chips (Free / Passport / ID card / Visa). */
+    private fun setupCropPresets() {
+        val ratios = listOf(
+            binding.chipCropFree to null,
+            binding.chipCropPassport to 35f / 45f,
+            binding.chipCropIdCard to 85.6f / 54f,
+            binding.chipCropVisa to 5f / 7f
+        )
+        val group = binding.chipCropGroup
+        group.setOnCheckedStateChangeListener { _, checked ->
+            val chip = group.findViewById<com.google.android.material.chip.Chip>(
+                checked.firstOrNull() ?: View.NO_ID
+            )
+            binding.cropView.aspectRatio = ratios.firstOrNull { it.first == chip }?.second
+        }
+    }
+
     private fun closeCrop() {
         binding.cropOverlay.visibility = android.view.View.GONE
-        binding.cropView.clearImage()
         binding.cropView.tag = null // drop any in-flight decode result
-        cropBitmap?.recycle()
+        binding.cropView.clearImage() // drop the view's reference BEFORE recycling
+        cropBitmap?.takeIf { !it.isRecycled }?.recycle()
         cropBitmap = null
         cropPath = null
     }
@@ -504,6 +529,7 @@ class PageViewerActivity : BaseActivity() {
 
     private inner class PagerAdapter : RecyclerView.Adapter<PagerVH>() {
         var items: List<File> = emptyList()
+        var filterFor: (File) -> ScanFilter = { ScanFilter.ORIGINAL }
 
         fun submit(newItems: List<File>) {
             items = newItems
@@ -531,9 +557,16 @@ class PageViewerActivity : BaseActivity() {
          * Decodes a display-size copy (max 2048px, never the raw multi-MB
          * file) on a background thread; the tag guard drops late results if
          * this cell was rebound to another page first.
+         *
+         * The chosen [ScanFilter] is applied to the preview exactly like the
+         * grid thumbnails are, so picking a filter changes the page on
+         * screen immediately — in staging where the filter is virtual and
+         * in saved documents alike. The key includes the filter so a filter
+         * change re-renders even though the file itself did not change.
          */
         fun bind(file: File) {
-            val key = "${file.path}|${file.lastModified()}|${file.length()}"
+            val filter = pagerAdapter.filterFor(file)
+            val key = "${file.path}|${file.lastModified()}|${file.length()}|${filter.id}"
             binding.pageImage.tag = key
             fullExecutor.execute {
                 val bmp = try {
@@ -541,11 +574,16 @@ class PageViewerActivity : BaseActivity() {
                 } catch (_: Exception) {
                     null
                 } ?: return@execute
+                val shown: Bitmap = if (filter == ScanFilter.ORIGINAL) bmp else try {
+                    filter.applyTo(bmp).also { applied -> if (applied !== bmp) bmp.recycle() }
+                } catch (_: Exception) {
+                    bmp
+                }
                 runOnUiThread {
-                    if (binding.pageImage.tag == key) {
-                        binding.pageImage.setImageBitmap(bmp)
+                    if (binding.pageImage.tag == key && !shown.isRecycled) {
+                        binding.pageImage.setImageBitmap(shown)
                     } else {
-                        bmp.recycle()
+                        if (!shown.isRecycled) shown.recycle()
                     }
                 }
             }

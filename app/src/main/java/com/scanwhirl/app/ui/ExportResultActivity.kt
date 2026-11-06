@@ -118,8 +118,10 @@ class ExportResultActivity : BaseActivity() {
                                 this@ExportResultActivity, file.readBytes(), displayName
                             )
                         } else {
+                            // Resized images get their own folder in Downloads.
                             DownloadSaver.saveJpeg(
-                                this@ExportResultActivity, file.readBytes(), displayName
+                                this@ExportResultActivity, file.readBytes(), displayName,
+                                subdir = "Resize"
                             )
                         }
                     }

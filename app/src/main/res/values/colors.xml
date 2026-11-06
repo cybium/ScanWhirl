@@ -9,6 +9,8 @@
     <color name="sf_background">#FDFBFF</color>
     <color name="sf_surface">#FDFBFF</color>
     <color name="sf_on_surface">#1A1B20</color>
+    <color name="sf_on_surface_variant">#44474F</color>
+    <color name="pro_gold">#FFC04D</color>
     <color name="sf_title_field">#99E7F0FF</color>
     <color name="sf_tool_bg">#99EAF1FB</color>
     <color name="sf_card_bg">#CCFDFBFF</color>

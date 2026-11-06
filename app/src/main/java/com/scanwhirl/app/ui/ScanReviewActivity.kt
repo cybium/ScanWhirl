@@ -26,6 +26,7 @@ import com.scanwhirl.app.databinding.ActivityScanReviewBinding
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ScanFilter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -488,6 +489,12 @@ class ScanReviewActivity : BaseActivity() {
                     }
                     Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
                     startActivity(DocumentViewerActivity.intent(this@ScanReviewActivity, doc.id))
+                    // Index the pages for Pro text search in the background.
+                    if (ProGate.isPro(this@ScanReviewActivity)) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try { repo.buildOcr(doc.id) } catch (_: Exception) { }
+                        }
+                    }
                     finish()
                 } catch (e: Exception) {
                     saving = false

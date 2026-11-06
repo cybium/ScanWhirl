@@ -75,7 +75,7 @@ class UiSmokeTest {
                 assertEquals(1, list.adapter!!.itemCount)
                 assertFalse(empty.isVisible)
                 assertEquals(app.getString(R.string.app_name),
-                    (activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).title))
+                    activity.findViewById<android.widget.TextView>(R.id.appNameText).text.toString())
                 forceLayout(list)
                 assertNotNull(list.findViewHolderForAdapterPosition(0))
             }
@@ -318,8 +318,10 @@ class UiSmokeTest {
                 val toolbar = activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
                 val fab = activity.findViewById<android.view.View>(R.id.fabScan)
 
-                // normal mode initially
-                assertEquals(app.getString(R.string.app_name), toolbar.title)
+                // normal mode: the custom title row carries the name now
+                assertEquals(app.getString(R.string.app_name),
+                    activity.findViewById<android.widget.TextView>(R.id.appNameText).text.toString())
+                assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
                 assertTrue(fab.isVisible)
 
                 // long press -> selection mode with 1 selected
@@ -327,9 +329,11 @@ class UiSmokeTest {
                 assertEquals(app.resources.getQuantityString(R.plurals.selected_count, 1, 1), toolbar.title)
                 assertFalse(fab.isVisible)
 
-                // back -> exits selection mode
+                // back -> exits selection mode, title row comes back
                 activity.onBackPressed()
-                assertEquals(app.getString(R.string.app_name), toolbar.title)
+                assertEquals(app.getString(R.string.app_name),
+                    activity.findViewById<android.widget.TextView>(R.id.appNameText).text.toString())
+                assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
                 assertTrue(fab.isVisible)
             }
         }
@@ -447,8 +451,8 @@ class UiSmokeTest {
                 val pager = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
                 assertEquals(3, pager.adapter!!.itemCount)
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnClose))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotateLeft))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotateRight))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnCrop))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnFilter))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnDelete))
                 val indicator = activity.findViewById<android.widget.TextView>(R.id.pageIndicator)
@@ -720,8 +724,8 @@ class UiSmokeTest {
                 val indicator = activity.findViewById<android.widget.TextView>(R.id.pageIndicator)
                 assertEquals("2 / 2", indicator.text.toString())
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnClose))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotateLeft))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnRotateRight))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnCrop))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnFilter))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnDelete))
             }
@@ -1271,5 +1275,150 @@ class UiSmokeTest {
         com.scanwhirl.app.util.Prefs.setWallpaperUri(app, "")
         assertNull(com.scanwhirl.app.util.Wallpaper.drawable(app))
         com.scanwhirl.app.util.Prefs.setShowWallpaper(app, false)
+    }
+
+    // ------------------------------------------------------------------
+    // test18: Pro features + regression guards
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `pro gate mirrors the build flag`() {
+        assertEquals(
+            com.scanwhirl.app.BuildConfig.TEST_BUILD,
+            com.scanwhirl.app.util.ProGate.isPro(app)
+        )
+    }
+
+    @Test
+    fun `home toolbar shows the crown badge matching the build`() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val badge = activity.findViewById<android.widget.TextView>(R.id.proBadge)
+                assertEquals(
+                    if (com.scanwhirl.app.BuildConfig.TEST_BUILD) "PRO" else "FREE",
+                    badge.text.toString()
+                )
+                // Badge sits in the custom title row next to the app name.
+                assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
+                assertNull(activity.findViewById<
+                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).title)
+            }
+        }
+    }
+
+    @Test
+    fun `greeting stays plain text without emoji`() {
+        for (hour in 0..23) {
+            val text = com.scanwhirl.app.util.Greeting.forHour(hour)
+            assertTrue("greeting must be emoji-free: $text", text.none { it.code > 0x2500 })
+        }
+    }
+
+    @Test
+    fun `encryptor adds the standard password dictionary`() = runBlocking {
+        val doc = seedDoc("Protect me", pages = 1)
+        val pdf = repo.listDocuments().first { it.id == doc }.pdfFile
+        val before = pdf.readText(Charsets.ISO_8859_1)
+        assertFalse("/Encrypt" in before)
+
+        val dir = java.io.File(app.cacheDir, "prot_${System.nanoTime()}").apply { mkdirs() }
+        val dst = java.io.File(dir, "locked.pdf")
+        com.scanwhirl.app.util.PdfEncryptor.encrypt(pdf, dst, "student123")
+
+        val after = dst.readText(Charsets.ISO_8859_1)
+        assertTrue("/Encrypt" in after)
+        assertTrue("/Filter /Standard" in after)
+        assertTrue("/V 2" in after && "/R 3" in after && "/Length 128" in after)
+        assertTrue("file id present", "/ID [" in after)
+        // RC4 preserves lengths, so the honest page count must survive.
+        assertEquals("/Count 1", Regex("/Count (\\d+)").find(after)!!.value)
+        dir.deleteRecursively()
+        Unit
+    }
+
+    @Test
+    fun `protect pdf stores the password in the document`() = runBlocking {
+        val doc = seedDoc("Vault", pages = 1)
+        val protected = repo.protectPdf(doc, "hunter2")
+        // Pages are untouched by the wrapper change.
+        assertEquals(1, protected.pageCount)
+        assertTrue(protected.pdfFile.exists())
+        assertTrue(
+            "/Encrypt" in repo.listDocuments().first { it.id == doc }
+                .pdfFile.readText(Charsets.ISO_8859_1)
+        )
+        Unit
+    }
+
+    @Test
+    fun `crop view honours a locked aspect ratio`() {
+        val view = CropView(app)
+        view.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(1000, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(1000, android.view.View.MeasureSpec.EXACTLY)
+        )
+        view.layout(0, 0, 1000, 1000)
+        val bmp = android.graphics.Bitmap.createBitmap(600, 600, android.graphics.Bitmap.Config.ARGB_8888)
+        view.setImage(bmp)
+        view.aspectRatio = 1f // square: passport-style lock
+
+        view.onTouchEvent(android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_DOWN, 1000f, 1000f, 0))
+        view.onTouchEvent(android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_MOVE, 1000f, 250f, 0))
+        view.onTouchEvent(android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_UP, 1000f, 250f, 0))
+
+        val crop = view.getCropRect()
+        assertEquals(crop.width(), crop.height(), 6f)
+        bmp.recycle()
+    }
+
+    @Test
+    fun `long image stitches pages into one tall jpeg`() {
+        val dir = java.io.File(app.cacheDir, "long_${System.nanoTime()}").apply { mkdirs() }
+        val pages = (0 until 2).map { i ->
+            val f = java.io.File(dir, "p$i.jpg")
+            f.writeBytes(jpegBytes())
+            f
+        }
+        val out = java.io.File(dir, "long.jpg")
+        com.scanwhirl.app.util.LongImage.stitch(pages, out)
+        assertTrue("stitch produced a file", out.exists() && out.length() > 0)
+        val dims = com.scanwhirl.app.util.ImageTools.imageSize(out.readBytes())!!
+        assertEquals(310, dims.first)
+        assertEquals("taller than one page", 888, dims.second)
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `zip exporter packs one entry per scan`() = runBlocking {
+        val a = seedDoc("Zip A", pages = 1)
+        val b = seedDoc("Zip B", pages = 2)
+        val docs = repo.listDocuments().filter { it.id == a || it.id == b }
+        val dir = java.io.File(app.cacheDir, "zip_${System.nanoTime()}").apply { mkdirs() }
+        val out = java.io.File(dir, "bundle.zip")
+        com.scanwhirl.app.util.ZipExporter.export(docs, out)
+        assertTrue(out.exists() && out.length() > 0)
+        val names = java.util.zip.ZipFile(out).use { z ->
+            (0 until z.size()).map { z.entries().asSequence().toList().sortedBy { e -> e.name }[it].name }
+        }
+        assertTrue("contains Zip A.pdf", names.any { it.startsWith("Zip A") })
+        assertTrue("contains Zip B.pdf", names.any { it.startsWith("Zip B") })
+        dir.deleteRecursively()
+        Unit
+    }
+
+    @Test
+    fun `page op after a full-rect crop keeps the page intact`() = runBlocking {
+        val doc = seedDoc("Safe crop")
+        // Reproduced crash: open crop, immediately hit Apply (full-page crop rect).
+        val before = com.scanwhirl.app.util.ImageTools.imageSize(
+            repo.listDocuments().first { it.id == doc }.pageFiles[0].readBytes())
+        val page = repo.listDocuments().first { it.id == doc }.pageFiles[0]
+        com.scanwhirl.app.util.ImageTools.cropTo(
+            page,
+            android.graphics.RectF(0f, 0f, before!!.first.toFloat(), before.second.toFloat())
+        )
+        val after = com.scanwhirl.app.util.ImageTools.imageSize(
+            repo.listDocuments().first { it.id == doc }.pageFiles[0].readBytes())
+        assertEquals("page dims must survive a whole-page crop", before, after)
     }
 }

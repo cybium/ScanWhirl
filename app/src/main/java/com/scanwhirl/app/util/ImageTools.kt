@@ -89,6 +89,26 @@ object ImageTools {
     /** Working cap so rotate/crop/re-encode never decode a monster file full-res. */
     private const val WORK_DIM = 3000
 
+    /**
+     * Writes [writer]'s output to a temp file next to [target] and swaps it in
+     * with an atomic rename. A failure therefore can never leave the page
+     * truncated/blank — the original file survives untouched.
+     */
+    private inline fun atomicWrite(target: java.io.File, writer: (java.io.File) -> Unit) {
+        val tmp = java.io.File(target.parentFile, target.name + ".tmp")
+        try {
+            writer(tmp)
+            if (!tmp.renameTo(target)) {
+                target.delete()
+                if (!tmp.renameTo(target)) {
+                    throw IllegalStateException("Could not replace ${target.name}")
+                }
+            }
+        } finally {
+            if (tmp.exists() && tmp.exists()) tmp.delete()
+        }
+    }
+
     /** Rotates a JPEG file 90° in place. [clockwise] = right, false = left. */
     fun rotate90(file: java.io.File, clockwise: Boolean = true) {
         val src = decodeSampled(file.readBytes(), WORK_DIM)
@@ -97,11 +117,14 @@ object ImageTools {
             postRotate(if (clockwise) 90f else -90f)
         }
         val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
-        src.recycle()
-        java.io.FileOutputStream(file).use { out ->
-            rotated.compress(Bitmap.CompressFormat.JPEG, 95, out)
+        if (rotated !== src) src.recycle()
+        atomicWrite(file) { tmp ->
+            if (rotated.isRecycled) throw IllegalStateException("Rotated page is gone")
+            java.io.FileOutputStream(tmp).use { out ->
+                rotated.compress(Bitmap.CompressFormat.JPEG, 95, out)
+            }
         }
-        rotated.recycle()
+        if (!rotated.isRecycled) rotated.recycle()
     }
 
     /** Crops a JPEG file to [rect] (full-file pixel coordinates) in place. */
@@ -112,12 +135,19 @@ object ImageTools {
         val top = rect.top.roundToInt().coerceIn(0, src.height - 1)
         val w = rect.width().roundToInt().coerceIn(1, src.width - left)
         val h = rect.height().roundToInt().coerceIn(1, src.height - top)
+        // Framework quirk caught by test: for a full-page rect this returns the
+        // SAME object, so recycling src would kill the crop too. (This is the
+        // real cause of the "can't compress a recycled bitmap" crash.)
         val cropped = Bitmap.createBitmap(src, left, top, w, h)
-        src.recycle()
-        java.io.FileOutputStream(file).use { fos ->
-            cropped.compress(Bitmap.CompressFormat.JPEG, 95, fos)
+        val aliased = cropped === src
+        if (!aliased) src.recycle()
+        atomicWrite(file) { tmp ->
+            if (cropped.isRecycled) throw IllegalStateException("Cropped page is gone")
+            java.io.FileOutputStream(tmp).use { fos ->
+                cropped.compress(Bitmap.CompressFormat.JPEG, 95, fos)
+            }
         }
-        cropped.recycle()
+        if (!cropped.isRecycled) cropped.recycle()
     }
 
     fun encodePng(bitmap: Bitmap): ByteArray {

@@ -23,6 +23,8 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityDocumentViewerBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -165,6 +167,8 @@ class DocumentViewerActivity : BaseActivity() {
         R.id.action_rename -> { promptRename(); true }
         R.id.action_save_device -> { promptDownload(); true }
         R.id.action_save_pdf -> { savePdfToDocuments(); true }
+        R.id.action_long_image -> { shareLongImage(); true }
+        R.id.action_protect_pdf -> { promptProtectPdf(); true }
         R.id.action_rotate_left -> { rotateSelected(clockwise = false); true }
         R.id.action_rotate_right -> { rotateSelected(clockwise = true); true }
         R.id.action_delete_page -> { deleteSelectedPages(); true }
@@ -413,8 +417,80 @@ class DocumentViewerActivity : BaseActivity() {
         }
     }
 
-    private fun promptRename() {
+    /** Stitches the document's pages into one tall image (Pro) and shares it. */
+    private fun shareLongImage() {
+        if (!ProGate.isPro(this)) return
         val doc = document ?: return
+        if (doc.pageFiles.isEmpty()) return
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val out = withContext(Dispatchers.IO) {
+                    val dir = File(cacheDir, "documents/share").apply { mkdirs() }
+                    val file = File(dir, ShareUtils.sanitizeName(doc.name) + " - long.jpg")
+                    LongImage.stitch(doc.pageFiles, file)
+                    file
+                }
+                progress.dismiss()
+                ShareUtils.shareFile(this@DocumentViewerActivity, out, "image/jpeg")
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /** Password-protect the document's PDF (Pro; honest RC4-128 note included). */
+    private fun promptProtectPdf() {
+        if (!ProGate.isPro(this)) return
+        val doc = document ?: return
+        withStoragePermission {
+            val input = android.widget.EditText(this@DocumentViewerActivity).apply {
+                hint = getString(R.string.protect_hint)
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            AlertDialog.Builder(this@DocumentViewerActivity)
+                .setTitle(R.string.protect_title)
+                .setMessage(R.string.protect_note)
+                .setView(input)
+                .setPositiveButton(R.string.protect_apply) { _, _ ->
+                    val password = input.text?.toString().orEmpty()
+                    if (password.isBlank()) {
+                        Toast.makeText(this@DocumentViewerActivity, R.string.protect_hint, Toast.LENGTH_SHORT).show()
+                    } else {
+                        lifecycleScope.launch {
+                            val progress = showProgress()
+                            try {
+                                withContext(Dispatchers.IO) { repo.protectPdf(doc.id, password) }
+                                progress.dismiss()
+                                Toast.makeText(
+                                    this@DocumentViewerActivity,
+                                    R.string.protect_done,
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                reloadDocument()
+                            } catch (e: Exception) {
+                                progress.dismiss()
+                                Toast.makeText(
+                                    this@DocumentViewerActivity,
+                                    getString(R.string.page_op_failed, e.message),
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+    }
+
+    private fun promptRename() {        val doc = document ?: return
         val input = EditText(this).apply { setText(doc.name) }
         AlertDialog.Builder(this)
             .setTitle(R.string.rename_title)
@@ -591,6 +667,20 @@ class DocumentViewerActivity : BaseActivity() {
                     .append(':').append(f.lastModified())
             }
         }
+    }
+
+    /** Simple determinate-free progress dialog for Pro export jobs. */
+    private fun showProgress(): androidx.appcompat.app.AlertDialog {
+        val bar = android.widget.ProgressBar(this).apply {
+            isIndeterminate = true
+            val pad = (24 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        return androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.progress_title)
+            .setView(bar)
+            .setCancelable(false)
+            .show()
     }
 
     private fun confirmDelete(doc: ScanDocument) {
