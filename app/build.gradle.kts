@@ -17,8 +17,8 @@ android {
             if (project.hasProperty("testBuild")) "ScanWhirl Test" else "ScanWhirl"
         minSdk = 24
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.1.1-test14"
+        versionCode = 15
+        versionName = "1.1.1-test15"
     }
 
     signingConfigs {
