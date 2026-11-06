@@ -8,5 +8,7 @@ data class ScanDocument(
     val createdAt: Long,
     val pageCount: Int,
     val pdfFile: File,
-    val pageFiles: List<File>
+    val pageFiles: List<File>,
+    val isLocked: Boolean = false,
+    val isVaulted: Boolean = false
 )

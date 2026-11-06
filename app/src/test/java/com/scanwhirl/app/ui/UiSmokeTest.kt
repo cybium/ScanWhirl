@@ -1529,5 +1529,125 @@ class UiSmokeTest {
         val after = com.scanwhirl.app.util.ImageTools.imageSize(
             repo.listDocuments().first { it.id == doc }.pageFiles[0].readBytes())
         assertEquals("page dims must survive a whole-page crop", before, after)
+        Unit
+    }
+
+    @Test
+    fun `protect and unlock pdf toggles isLocked and lock badge on scan card`() = runBlocking {
+        val id = seedDoc("Secret notes", pages = 2)
+        val locked = repo.protectPdf(id, "4321")
+        assertTrue("doc should be marked locked", locked.isLocked)
+        assertTrue("password should verify", repo.verifyPdfPassword(id, "4321"))
+        assertFalse("wrong password must fail", repo.verifyPdfPassword(id, "0000"))
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val shown = pollUntil {
+                var visible = false
+                scenario.onActivity { activity ->
+                    val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                    forceLayout(list)
+                    val vh = list.findViewHolderForAdapterPosition(0)
+                    visible = vh?.itemView?.findViewById<android.view.View>(R.id.lockBadge)?.isVisible == true
+                }
+                visible
+            }
+            assertTrue("locked scan must show the lock badge on the home card", shown)
+        }
+
+        val unlocked = repo.unlockPdf(id)
+        assertFalse("doc should be unlocked after unlockPdf", unlocked.isLocked)
+        assertFalse(
+            "unlocked PDF must not contain /Encrypt",
+            "/Encrypt" in unlocked.pdfFile.readText(Charsets.ISO_8859_1)
+        )
+        Unit
+    }
+
+    @Test
+    fun `hidden vault hides scans from home list and verifies 4 digit pin`() = runBlocking {
+        val normalId = seedDoc("Public lecture", pages = 1)
+        val secretId = seedDoc("Private ID scan", pages = 1)
+        com.scanwhirl.app.util.Prefs.setVaultPin(app, "2580")
+        assertTrue(com.scanwhirl.app.util.Prefs.hasVaultPin(app))
+        assertTrue(com.scanwhirl.app.util.Prefs.verifyVaultPin(app, "2580"))
+        assertFalse(com.scanwhirl.app.util.Prefs.verifyVaultPin(app, "1111"))
+
+        repo.setVaulted(secretId, true)
+        assertEquals(listOf(normalId), repo.listDocuments().map { it.id })
+        assertEquals(listOf(secretId), repo.listVaultDocuments().map { it.id })
+
+        repo.setVaulted(secretId, false)
+        assertEquals(2, repo.listDocuments().size)
+        Unit
+    }
+
+    @Test
+    fun `expandable pro suite and editor pro tools reveal all pro actions and render screenshots`() = runBlocking {
+        com.scanwhirl.app.util.ProGate.setPro(app, true)
+        val lockedId = seedDoc("Physics Midterm (Locked)", pages = 3)
+        repo.protectPdf(lockedId, "1234")
+        seedDoc("Chemistry Lab Notes", pages = 5)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            pollUntil {
+                var ready = false
+                scenario.onActivity { a ->
+                    val list = a.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                    ready = (list.adapter?.itemCount ?: 0) >= 2
+                }
+                ready
+            }
+            scenario.onActivity { activity ->
+                val grid = activity.findViewById<android.view.View>(R.id.proSuiteGrid)
+                assertFalse("Pro Suite starts collapsed", grid.isVisible)
+                activity.findViewById<android.view.View>(R.id.btnProSuite).performClick()
+                assertTrue("Pro Suite expands on tap", grid.isVisible)
+                assertNotNull(activity.findViewById<android.view.View>(R.id.toolVault))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.toolOcr))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.toolLockPdf))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.toolLongImage))
+                renderActivityPng(activity, "/tmp/opencode/ui_home.png")
+            }
+        }
+
+        val intent = DocumentViewerActivity.intent(app, lockedId)
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            pollUntil {
+                var ready = false
+                scenario.onActivity { a ->
+                    ready = a.findViewById<android.view.View>(R.id.docLockBadge).isVisible
+                }
+                ready
+            }
+            scenario.onActivity { activity ->
+                val panel = activity.findViewById<android.view.View>(R.id.proToolsPanel)
+                assertFalse("Editor Pro Tools starts collapsed", panel.isVisible)
+                activity.findViewById<android.view.View>(R.id.btnProTools).performClick()
+                assertTrue("Editor Pro Tools expands on tap", panel.isVisible)
+                assertTrue(activity.findViewById<android.view.View>(R.id.btnUnlockPdf).isVisible)
+                assertTrue(activity.findViewById<android.view.View>(R.id.btnOcr).isVisible)
+                assertTrue(activity.findViewById<android.view.View>(R.id.btnVaultDoc).isVisible)
+                renderActivityPng(activity, "/tmp/opencode/ui_editor.png")
+            }
+        }
+        Unit
+    }
+
+    private fun renderActivityPng(activity: android.app.Activity, outPath: String) {
+        try {
+            val root = activity.window.decorView
+            val wSpec = android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY)
+            val hSpec = android.view.View.MeasureSpec.makeMeasureSpec(2200, android.view.View.MeasureSpec.EXACTLY)
+            root.measure(wSpec, hSpec)
+            root.layout(0, 0, 1080, 2200)
+            val bmp = android.graphics.Bitmap.createBitmap(1080, 2200, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bmp)
+            root.draw(canvas)
+            val outFile = java.io.File(outPath)
+            outFile.parentFile?.mkdirs()
+            java.io.FileOutputStream(outFile).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bmp.recycle()
+        } catch (_: Exception) {
+        }
     }
 }

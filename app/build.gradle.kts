@@ -17,8 +17,8 @@ android {
             if (project.hasProperty("testBuild")) "ScanWhirl Test" else "ScanWhirl"
         minSdk = 24
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.1.1-test19"
+        versionCode = 20
+        versionName = "1.1.1-test20"
 
         // Pro features are unlocked in test builds so they can be tried free.
         buildConfigField(

@@ -1,19 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="sf_primary">#1565C0</color>
-    <color name="sf_on_primary">#FFFFFF</color>
+    <color name="sf_primary">#4C9AFF</color>
+    <color name="sf_on_primary">#002752</color>
     <color name="sf_primary_container">#1E3A5F</color>
-    <color name="sf_on_primary_container">#C3E0FF</color>
+    <color name="sf_on_primary_container">#D6E8FF</color>
     <color name="sf_secondary_container">#2A3A55</color>
     <color name="sf_on_secondary_container">#D6E3FF</color>
-    <color name="sf_background">#0E1116</color>
+    <color name="sf_background">#0B0E14</color>
     <color name="sf_surface">#171B22</color>
-    <color name="sf_on_surface">#E4E2E6</color>
+    <color name="sf_on_surface">#ECEEF2</color>
+    <color name="sf_on_surface_variant">#9AA0AC</color>
+    <color name="pro_gold">#FFC04D</color>
+    <color name="pro_badge_bg">#28FFC04D</color>
+    <color name="pro_badge_stroke">#73FFC04D</color>
+    <color name="free_badge_bg">#1AFFFFFF</color>
+    <color name="free_badge_stroke">#38FFFFFF</color>
     <color name="sf_title_field">#991E3A5F</color>
-    <color name="sf_tool_bg">#9916233A</color>
-    <color name="sf_card_bg">#CC171B22</color>
-    <color name="sf_icon_badge">#1E3A5F</color>
-    <color name="sf_appbar">#B3171B22</color>
+    <color name="sf_tool_bg">#E6161C26</color>
+    <color name="sf_pro_bg">#E61F1C14</color>
+    <color name="sf_card_bg">#E6161C26</color>
+    <color name="sf_card_stroke">#22FFFFFF</color>
+    <color name="sf_search_bg">#1E2532</color>
+    <color name="sf_icon_badge">#1D3252</color>
+    <color name="sf_appbar">#E6171B22</color>
     <color name="sf_toolbar">#1565C0</color>
     <color name="sf_ic_camera">#FFFFFF</color>
     <color name="sf_launcher_bg">#1565C0</color>

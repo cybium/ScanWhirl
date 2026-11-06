@@ -76,4 +76,25 @@ object Prefs {
     fun addPickedPdf(c: Context, uri: String) {
         sp(c).edit().putStringSet(KEY_PICKED, pickedPdfs(c) + uri).apply()
     }
+
+    private const val KEY_VAULT_PIN = "vault_pin_sha256"
+
+    fun hasVaultPin(c: Context): Boolean =
+        !sp(c).getString(KEY_VAULT_PIN, null).isNullOrBlank()
+
+    fun setVaultPin(c: Context, pin: String) {
+        require(pin.length == 4 && pin.all { it.isDigit() }) { "PIN must be 4 digits" }
+        sp(c).edit().putString(KEY_VAULT_PIN, sha256("scanwhirl_vault:$pin")).apply()
+    }
+
+    fun verifyVaultPin(c: Context, pin: String): Boolean {
+        val stored = sp(c).getString(KEY_VAULT_PIN, null) ?: return false
+        return stored == sha256("scanwhirl_vault:$pin")
+    }
+
+    internal fun sha256(input: String): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(input.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
 }

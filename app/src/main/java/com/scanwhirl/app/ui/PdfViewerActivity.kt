@@ -114,11 +114,16 @@ class PdfViewerActivity : BaseActivity() {
 
         val fd = when {
             docId != null -> {
-                val doc = (application as ScanWhirlApp).repository
-                    .listDocuments().find { it.id == docId }
-                val file = doc?.pdfFile
+                val doc = (application as ScanWhirlApp).repository.getDocument(docId)
                 title = doc?.name ?: title
-                if (file == null) throw NoPdfException(R.string.doc_not_found)
+                if (doc == null) throw NoPdfException(R.string.doc_not_found)
+                val file = if (doc.isLocked && doc.pageFiles.isNotEmpty()) {
+                    val preview = File(cacheDir, "preview_${doc.id}.pdf")
+                    com.scanwhirl.app.util.PdfGenerator.imagesToPdf(doc.pageFiles, preview)
+                    preview
+                } else {
+                    doc.pdfFile
+                }
                 if (!file.exists() || file.length() == 0L) throw NoPdfException(R.string.pdf_missing)
                 ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             }

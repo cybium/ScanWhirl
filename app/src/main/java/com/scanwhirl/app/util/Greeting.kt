@@ -6,15 +6,15 @@ package com.scanwhirl.app.util
  */
 object Greeting {
     fun forHour(hour: Int): String = when (hour) {
-        0, 1 -> "🌃 Up late?"
+        0, 1 -> "🌙 Up late?"
         2, 3 -> "✨ Night owl mode"
         4, 5 -> "🌅 Rise and shine"
         6, 7 -> "☀️ Good morning"
         8, 9 -> "☕ Morning! Ready to scan?"
-        10, 11 -> "📄 Good morning"
-        12, 13 -> "🌤️ Good afternoon"
-        14, 15 -> "🖨️ Afternoon! Let's organize"
-        16, 17 -> "🌇 Good afternoon"
+        10, 11 -> "⚡ Good morning"
+        12, 13 -> "☀️ Good afternoon"
+        14, 15 -> "🚀 Afternoon! Let's organize"
+        16, 17 -> "🌤️ Good afternoon"
         18, 19 -> "🌆 Good evening"
         20, 21 -> "🌙 Good evening"
         else -> "🌙 Late-night scan"

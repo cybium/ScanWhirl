@@ -1,10 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24"
     android:tint="?attr/colorControlNormal">
+    <!-- Real compress icon: two arrows squeezing inward toward center bars -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M11,4h2v7h3l-4,6 -4,-6h3zM5,19h14v2H5z" />
+        android:pathData="M4,11h16v2H4v-2zM16,4l-4,4 -4,-4h3V1h2v3h3zM8,20l4,-4 4,4h-3v3h-2v-3H8z" />
 </vector>

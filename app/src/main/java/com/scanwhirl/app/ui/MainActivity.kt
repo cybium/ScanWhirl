@@ -43,9 +43,11 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Greeting
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -67,6 +69,9 @@ class MainActivity : BaseActivity() {
 
     private var selectionMode = false
     private val selectedIds = LinkedHashSet<String>()
+
+    /** True when the 4-digit PIN Hidden Vault is unlocked and showing private scans. */
+    private var vaultMode = false
 
     /** Current search query (applies to the saved-scans list). */
     private var query = ""
@@ -98,7 +103,11 @@ class MainActivity : BaseActivity() {
 
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
-            setSelectionMode(false)
+            if (selectionMode) {
+                setSelectionMode(false)
+            } else if (vaultMode) {
+                setVaultMode(false)
+            }
         }
     }
 
@@ -116,6 +125,7 @@ class MainActivity : BaseActivity() {
         setContentView(binding.root)
 
         setSupportActionBar(binding.toolbar)
+        supportActionBar?.setDisplayShowTitleEnabled(false)
         onBackPressedDispatcher.addCallback(this, backCallback)
 
         binding.scanList.layoutManager = LinearLayoutManager(this)
@@ -130,6 +140,21 @@ class MainActivity : BaseActivity() {
             pickEditPdf.launch(arrayOf("application/pdf"))
         }
         binding.toolMerge.setOnClickListener { showMergeChooser() }
+
+        // Expandable Pro Suite on Home: one button that expands Vault, OCR, Lock/Unlock, Long Image.
+        binding.btnProSuite.setOnClickListener { toggleProSuite() }
+        binding.toolVault.setOnClickListener { openVaultWithPin() }
+        binding.toolOcr.setOnClickListener {
+            pickScan(R.string.ocr_title) { doc -> runOcrForScan(doc) }
+        }
+        binding.toolLockPdf.setOnClickListener {
+            pickScan(R.string.btn_lock_unlock) { doc -> promptLockOrUnlockScan(doc) }
+        }
+        binding.toolLongImage.setOnClickListener {
+            pickScan(R.string.btn_long_image) { doc -> runLongImageForScan(doc) }
+        }
+        binding.btnVaultLock.setOnClickListener { setVaultMode(false) }
+        binding.btnVaultChangePin.setOnClickListener { promptSetVaultPin(onSuccess = {}) }
 
         binding.searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -155,8 +180,8 @@ class MainActivity : BaseActivity() {
         stale?.forEach { it.deleteRecursively() }
         offerUnfinishedScan()
 
+        applyToolbarTitle()
         refreshList()
-        updateGreeting()
     }
 
     /**
@@ -237,7 +262,9 @@ class MainActivity : BaseActivity() {
 
     private fun refreshList() {
         lifecycleScope.launch {
-            allDocs = withContext(Dispatchers.IO) { repo.listDocuments() }
+            allDocs = withContext(Dispatchers.IO) {
+                if (vaultMode) repo.listVaultDocuments() else repo.listDocuments()
+            }
             applyList()
         }
     }
@@ -295,12 +322,17 @@ class MainActivity : BaseActivity() {
     private fun applyToolbarTitle() {
         val title = selectionTitle()
         if (selectionMode) {
+            binding.titleBlock.visibility = View.GONE
             binding.titleRow.visibility = View.GONE
+            supportActionBar?.setDisplayShowTitleEnabled(true)
+            supportActionBar?.title = title
             binding.toolbar.title = title
         } else {
-            binding.titleRow.visibility = View.VISIBLE
-            binding.titleBlock.visibility = View.VISIBLE
+            supportActionBar?.setDisplayShowTitleEnabled(false)
+            supportActionBar?.title = null
             binding.toolbar.title = null
+            binding.titleBlock.visibility = View.VISIBLE
+            binding.titleRow.visibility = View.VISIBLE
         }
         updateProBadge()
         updateGreeting()
@@ -337,15 +369,252 @@ class MainActivity : BaseActivity() {
 
     private fun setSelectionMode(enabled: Boolean) {
         selectionMode = enabled
-        backCallback.isEnabled = enabled
+        backCallback.isEnabled = enabled || vaultMode
         if (!enabled) selectedIds.clear()
         adapter.selectionMode = enabled
         adapter.notifyDataSetChanged()
-        binding.fabScan.isVisible = !enabled
-        binding.toolsRow.isVisible = !enabled
+        binding.fabScan.isVisible = !enabled && !vaultMode
+        binding.toolsRow.isVisible = !enabled && !vaultMode
         applyToolbarTitle()
         updateGreeting()
         invalidateOptionsMenu()
+    }
+
+    /** Expands or collapses the Pro Suite grid right below the core tools. */
+    private fun toggleProSuite() {
+        if (!ProGate.isPro(this)) {
+            showProPanel()
+            return
+        }
+        val expanded = !binding.proSuiteGrid.isVisible
+        binding.proSuiteGrid.isVisible = expanded
+        binding.proSuiteChevron.setImageResource(
+            if (expanded) R.drawable.ic_chevron_up else R.drawable.ic_chevron_down
+        )
+    }
+
+    // ------------------------------------------------------------------
+    // Pro Suite: Hidden Vault (4-digit PIN), OCR, Lock/Unlock, Long Image
+    // ------------------------------------------------------------------
+
+    private fun openVaultWithPin() {
+        if (!ProGate.isPro(this)) {
+            showProPanel()
+            return
+        }
+        if (!Prefs.hasVaultPin(this)) {
+            promptSetVaultPin { setVaultMode(true) }
+            return
+        }
+        val input = EditText(this).apply {
+            hint = getString(R.string.vault_pin_hint)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.vault_enter_pin_title)
+            .setMessage(R.string.vault_enter_pin_msg)
+            .setView(input)
+            .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
+                val pin = input.text?.toString()?.trim().orEmpty()
+                if (Prefs.verifyVaultPin(this, pin)) {
+                    setVaultMode(true)
+                } else {
+                    Toast.makeText(this, R.string.vault_pin_wrong, Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun promptSetVaultPin(onSuccess: () -> Unit) {
+        val input = EditText(this).apply {
+            hint = getString(R.string.vault_pin_hint)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.vault_set_pin_title)
+            .setMessage(R.string.vault_set_pin_msg)
+            .setView(input)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val pin = input.text?.toString()?.trim().orEmpty()
+                if (pin.length != 4 || !pin.all { it.isDigit() }) {
+                    Toast.makeText(this, R.string.vault_pin_invalid, Toast.LENGTH_LONG).show()
+                } else {
+                    Prefs.setVaultPin(this, pin)
+                    Toast.makeText(this, R.string.vault_pin_saved, Toast.LENGTH_SHORT).show()
+                    onSuccess()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    internal fun setVaultMode(enabled: Boolean) {
+        vaultMode = enabled
+        backCallback.isEnabled = selectionMode || vaultMode
+        binding.vaultBanner.isVisible = enabled
+        binding.toolsRow.isVisible = !enabled && !selectionMode
+        binding.fabScan.isVisible = !enabled && !selectionMode
+        binding.emptyTitle.setText(if (enabled) R.string.vault_empty_title else R.string.empty_title)
+        binding.emptySubtitle.setText(if (enabled) R.string.vault_empty_subtitle else R.string.empty_subtitle)
+        refreshList()
+    }
+
+    private fun runOcrForScan(doc: ScanDocument) {
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val text = withContext(Dispatchers.IO) {
+                    if (!repo.hasOcr(doc.id) || repo.ocrDoc(doc.id).values.all { it.isBlank() }) {
+                        repo.buildOcr(doc.id)
+                    }
+                    repo.ocrDoc(doc.id).entries
+                        .sortedBy { it.key }
+                        .mapIndexedNotNull { idx, entry ->
+                            val clean = entry.value.trim()
+                            if (clean.isEmpty()) null else "--- Page ${idx + 1} ---\n$clean"
+                        }
+                        .joinToString("\n\n")
+                }
+                progress.dismiss()
+                val shown = text.ifBlank { getString(R.string.ocr_empty) }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle(doc.name)
+                    .setMessage(shown)
+                    .setPositiveButton(R.string.ocr_copy) { _, _ ->
+                        val cb = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        cb?.setPrimaryClip(android.content.ClipData.newPlainText(doc.name, shown))
+                        Toast.makeText(this@MainActivity, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
+                    }
+                    .setNeutralButton(R.string.share_pdf) { _, _ ->
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, doc.name)
+                            putExtra(Intent.EXTRA_TEXT, shown)
+                        }
+                        startActivity(Intent.createChooser(send, getString(R.string.share_pdf)))
+                    }
+                    .setNegativeButton(R.string.close, null)
+                    .show()
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun promptLockOrUnlockScan(doc: ScanDocument) {
+        if (doc.isLocked) {
+            AlertDialog.Builder(this)
+                .setTitle(doc.name)
+                .setItems(
+                    arrayOf(
+                        getString(R.string.btn_unlock_pdf),
+                        getString(R.string.btn_change_pw)
+                    )
+                ) { _, which ->
+                    if (which == 0) {
+                        lifecycleScope.launch {
+                            val progress = showProgress()
+                            try {
+                                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id) }
+                                progress.dismiss()
+                                Toast.makeText(this@MainActivity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
+                                refreshList()
+                            } catch (e: Exception) {
+                                progress.dismiss()
+                                Toast.makeText(this@MainActivity, getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
+                        promptNewPasswordForScan(doc)
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        } else {
+            promptNewPasswordForScan(doc)
+        }
+    }
+
+    private fun promptNewPasswordForScan(doc: ScanDocument) {
+        val input = EditText(this).apply {
+            hint = getString(R.string.protect_hint)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.protect_title)
+            .setMessage(R.string.protect_note)
+            .setView(input)
+            .setPositiveButton(R.string.protect_apply) { _, _ ->
+                val pw = input.text?.toString().orEmpty()
+                if (pw.isBlank()) {
+                    Toast.makeText(this, R.string.protect_hint, Toast.LENGTH_SHORT).show()
+                } else {
+                    lifecycleScope.launch {
+                        val progress = showProgress()
+                        try {
+                            withContext(Dispatchers.IO) { repo.protectPdf(doc.id, pw) }
+                            progress.dismiss()
+                            Toast.makeText(this@MainActivity, R.string.protect_done, Toast.LENGTH_LONG).show()
+                            refreshList()
+                        } catch (e: Exception) {
+                            progress.dismiss()
+                            Toast.makeText(this@MainActivity, getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun runLongImageForScan(doc: ScanDocument) {
+        if (doc.pageFiles.isEmpty()) return
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val out = withContext(Dispatchers.IO) {
+                    val dir = File(cacheDir, "documents/share").apply { mkdirs() }
+                    val file = File(dir, ShareUtils.sanitizeName(doc.name) + " - long.jpg")
+                    LongImage.stitch(doc.pageFiles, file)
+                    file
+                }
+                progress.dismiss()
+                val dims = ImageTools.imageSize(out.readBytes()) ?: (0 to 0)
+                startActivity(
+                    ExportResultActivity.intent(
+                        this@MainActivity,
+                        outputPath = out.path,
+                        previewPath = out.path,
+                        mime = "image/jpeg",
+                        displayName = out.name,
+                        beforeBytes = doc.pageFiles.sumOf { it.length() },
+                        afterBytes = out.length(),
+                        width = dims.first,
+                        height = dims.second,
+                        title = doc.name,
+                        warning = null
+                    )
+                )
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun toggleSelection(id: String) {
@@ -1183,11 +1452,54 @@ class MainActivity : BaseActivity() {
     }
 
     private fun openViewer(doc: ScanDocument) {
+        if (doc.isLocked) {
+            promptUnlockBeforeOpen(doc) { launchViewerUnchecked(doc) }
+            return
+        }
+        launchViewerUnchecked(doc)
+    }
+
+    private fun launchViewerUnchecked(doc: ScanDocument) {
         if (Prefs.defaultViewer(this) == Prefs.VIEWER_SYSTEM) {
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", doc.pdfFile)
             if (tryOpenExternally(uri)) return
         }
         startActivity(PdfViewerActivity.intent(this, doc.id, doc.name))
+    }
+
+    private fun promptUnlockBeforeOpen(doc: ScanDocument, onUnlocked: () -> Unit) {
+        val input = EditText(this).apply {
+            hint = getString(R.string.protect_hint)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.unlock_pdf_title)
+            .setMessage(getString(R.string.unlock_pdf_msg, doc.name))
+            .setView(input)
+            .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
+                val pw = input.text?.toString().orEmpty()
+                if (repo.verifyPdfPassword(doc.id, pw)) {
+                    onUnlocked()
+                } else {
+                    Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNeutralButton(R.string.unlock_pdf_remove) { _, _ ->
+                val pw = input.text?.toString().orEmpty()
+                if (repo.verifyPdfPassword(doc.id, pw)) {
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) { repo.unlockPdf(doc.id) }
+                        Toast.makeText(this@MainActivity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
+                        refreshList()
+                        onUnlocked()
+                    }
+                } else {
+                    Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun openEditor(doc: ScanDocument) {
@@ -1240,6 +1552,7 @@ class ScanListAdapter(
     inner class VH(private val binding: ItemScanBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(doc: ScanDocument) {
             binding.scanName.text = doc.name
+            binding.lockBadge.isVisible = doc.isLocked
             binding.pageBadge.text = doc.pageCount.toString()
             binding.pageBadge.isVisible = doc.pageCount > 0
             val sizeBytes = if (doc.pdfFile.exists() && doc.pdfFile.length() > 0) {

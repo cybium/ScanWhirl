@@ -20,8 +20,14 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_ocr_text"
+        android:icon="@drawable/ic_ocr"
+        android:title="@string/btn_ocr_text"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_long_image"
-        android:icon="@drawable/ic_visibility"
+        android:icon="@drawable/ic_long_image"
         android:title="@string/menu_long_image"
         app:showAsAction="never" />
 
@@ -29,6 +35,18 @@
         android:id="@+id/action_protect_pdf"
         android:icon="@drawable/ic_lock"
         android:title="@string/menu_protect_pdf"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_unlock_pdf"
+        android:icon="@drawable/ic_unlock"
+        android:title="@string/btn_unlock_pdf"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_vault_doc"
+        android:icon="@drawable/ic_vault"
+        android:title="@string/btn_vault_hide"
         app:showAsAction="never" />
 
     <!-- Page actions: apply to the ticked pages (tap a checkbox first). -->

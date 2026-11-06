@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- Long image icon: vertically stitched pages with image mountain -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M18,2H6C4.9,2 4,2.9 4,4v16c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4C20,2.9 19.1,2 18,2zM18,11H6V4h12V11zM18,20H6v-7h12V20zM8.5,9.5l2,-2.5 1.5,2 2,-2.5 2.5,3H8.5zM8.5,18.5l2,-2.5 1.5,2 2,-2.5 2.5,3H8.5z" />
+</vector>

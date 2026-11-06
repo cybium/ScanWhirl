@@ -192,17 +192,52 @@
     <string name="protect_apply">Apply password</string>
     <string name="protect_note">Uses the widely-compatible PDF standard password (RC4-128). It stops casual readers, not strong cryptography.</string>
     <string name="protect_done">PDF is password-protected</string>
-    <string name="menu_long_image">Share as long image</string>
-    <string name="menu_protect_pdf">Password-protect PDF</string>
+    <string name="menu_long_image">Long Image</string>
+    <string name="menu_protect_pdf">Lock PDF</string>
+    <string name="btn_pro_tools">Pro Tools</string>
+    <string name="btn_lock_pdf">Lock PDF</string>
+    <string name="btn_change_pw">Password</string>
+    <string name="btn_unlock_pdf">Unlock PDF</string>
+    <string name="btn_lock_unlock">Lock / Unlock</string>
+    <string name="btn_ocr_text">OCR Text</string>
+    <string name="btn_long_image">Long Image</string>
+    <string name="btn_vault_hide">Hide in Vault</string>
+    <string name="btn_vault_unhide">Remove Vault</string>
+    <string name="badge_locked">Locked</string>
+    <string name="badge_vault">Vault</string>
+    <string name="pro_suite_title">Pro Suite</string>
+    <string name="pro_suite_sub">Vault · OCR · Lock · Long Image</string>
+    <string name="vault_title">Hidden Vault</string>
+    <string name="vault_banner_title">Hidden Vault (Unlocked)</string>
+    <string name="vault_banner_sub">Private scans hidden from home list</string>
+    <string name="vault_exit">Lock</string>
+    <string name="vault_change_pin">PIN</string>
+    <string name="vault_set_pin_title">Set 4-Digit Vault PIN</string>
+    <string name="vault_set_pin_msg">Choose a 4-digit PIN to hide private scans behind a lock.</string>
+    <string name="vault_enter_pin_title">Unlock Hidden Vault</string>
+    <string name="vault_enter_pin_msg">Enter your 4-digit PIN to access hidden scans.</string>
+    <string name="vault_pin_hint">4-digit PIN (e.g. 1234)</string>
+    <string name="vault_pin_invalid">Enter a 4-digit number</string>
+    <string name="vault_pin_wrong">Incorrect 4-digit PIN</string>
+    <string name="vault_pin_saved">Vault PIN updated</string>
+    <string name="vault_moved_in">Moved to Hidden Vault</string>
+    <string name="vault_moved_out">Restored from Hidden Vault</string>
+    <string name="vault_empty_title">Vault is empty</string>
+    <string name="vault_empty_subtitle">Open any scan → Pro Tools → Hide in Vault to keep private documents behind your 4-digit PIN.</string>
+    <string name="unlock_pdf_title">Password-Protected PDF</string>
+    <string name="unlock_pdf_msg">Enter password for \"%1$s\":</string>
+    <string name="unlock_pdf_remove">Unlock permanently</string>
+    <string name="unlock_pdf_open">Open</string>
+    <string name="unlock_pdf_done">Password removed — PDF is unlocked</string>
+    <string name="unlock_pdf_wrong">Incorrect password</string>
+    <string name="ocr_title">Extracted Text (OCR)</string>
+    <string name="ocr_running">Extracting text from pages…</string>
+    <string name="ocr_empty">No printed text detected on these pages.</string>
+    <string name="ocr_copy">Copy Text</string>
+    <string name="ocr_copied">Copied to clipboard</string>
     <string name="export_zip">Export ZIP</string>
     <string name="ocr_note">Text search works best on printed pages.</string>
-    <string name="pro_panel_home">Unlocked:
-\n• Password-protect a PDF — open a scan \u2192 the lock button below the page grid
-\n• ID / passport sizes — open a page \u2192 Crop \u2192 preset chips
-\n• Share as long image — open a scan \u2192 the image button
-\n• Batch ZIP — long-press scans \u2192 Select \u2192 Export ZIP in the toolbar
-\n• Text search (OCR) — search above; matches inside scanned pages
-\n\nAll Pro extras are free in this test build.</string>
+    <string name="pro_panel_home">ScanWhirl Pro Suite (Unlocked in Test):\n\n• 🛡️ Hidden Vault — 4-digit PIN private folder\n• 📝 OCR Text — Extract, copy &amp; search text inside pages\n• 🔒 Lock / Unlock PDF — Password-protect or unlock any scan\n• 🖼️ Long Image — Stitch all pages into one tall image\n• 🪪 ID / Passport Crop — Aspect presets inside Crop\n• 📦 Batch ZIP — Multi-select scans → Export ZIP\n\nTap \"Pro Suite\" on Home or \"Pro Tools\" inside any scan.</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
     <string name="settings_auto_enhance_summary">Google processing is on when this is on. Off gives a fast, original-looking scan.</string>
     <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>

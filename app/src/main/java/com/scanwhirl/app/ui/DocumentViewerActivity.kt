@@ -24,6 +24,7 @@ import com.scanwhirl.app.databinding.ActivityDocumentViewerBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.CoroutineScope
@@ -112,8 +113,12 @@ class DocumentViewerActivity : BaseActivity() {
 
         binding.btnShare.setOnClickListener { document?.let { ShareUtils.share(this, it) } }
         binding.btnDelete.setOnClickListener { document?.let { confirmDelete(it) } }
+        binding.btnProTools.setOnClickListener { toggleProTools() }
         binding.btnProtect.setOnClickListener { promptProtectPdf() }
+        binding.btnUnlockPdf.setOnClickListener { unlockCurrentPdf() }
+        binding.btnOcr.setOnClickListener { runAndShowOcr() }
         binding.btnLongImage.setOnClickListener { shareLongImage() }
+        binding.btnVaultDoc.setOnClickListener { toggleVaultDoc() }
 
         // First load (off the main thread), then start the pre-edit snapshot.
         lifecycleScope.launch {
@@ -169,8 +174,11 @@ class DocumentViewerActivity : BaseActivity() {
         R.id.action_rename -> { promptRename(); true }
         R.id.action_save_device -> { promptDownload(); true }
         R.id.action_save_pdf -> { savePdfToDocuments(); true }
+        R.id.action_ocr_text -> { runAndShowOcr(); true }
         R.id.action_long_image -> { shareLongImage(); true }
         R.id.action_protect_pdf -> { promptProtectPdf(); true }
+        R.id.action_unlock_pdf -> { unlockCurrentPdf(); true }
+        R.id.action_vault_doc -> { toggleVaultDoc(); true }
         R.id.action_rotate_left -> { rotateSelected(clockwise = false); true }
         R.id.action_rotate_right -> { rotateSelected(clockwise = true); true }
         R.id.action_delete_page -> { deleteSelectedPages(); true }
@@ -178,10 +186,25 @@ class DocumentViewerActivity : BaseActivity() {
         else -> super.onOptionsItemSelected(item)
     }
 
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        val doc = document
+        val pro = ProGate.isPro(this)
+        menu.findItem(R.id.action_ocr_text)?.isVisible = pro
+        menu.findItem(R.id.action_long_image)?.isVisible = pro
+        menu.findItem(R.id.action_protect_pdf)?.isVisible = pro
+        menu.findItem(R.id.action_unlock_pdf)?.isVisible = pro && (doc?.isLocked == true)
+        menu.findItem(R.id.action_vault_doc)?.let {
+            it.isVisible = pro
+            it.setTitle(if (doc?.isVaulted == true) R.string.btn_vault_unhide else R.string.btn_vault_hide)
+        }
+        return super.onPrepareOptionsMenu(menu)
+    }
+
     /** Re-reads the document from disk and refreshes all UI. Returns false if it vanished. */
     private suspend fun reloadDocument(): Boolean {
+        val id = docId ?: return false
         val doc = withContext(Dispatchers.IO) {
-            repo.listDocuments().find { it.id == docId }
+            repo.getDocument(id)
         }
         if (doc == null) {
             Toast.makeText(this, R.string.doc_not_found, Toast.LENGTH_SHORT).show()
@@ -190,8 +213,14 @@ class DocumentViewerActivity : BaseActivity() {
         }
         document = doc
         binding.toolbar.title = doc.name
+        binding.docLockBadge.isVisible = doc.isLocked
+        binding.docVaultBadge.isVisible = doc.isVaulted
+        binding.btnUnlockPdf.isVisible = doc.isLocked
+        binding.btnProtect.setText(if (doc.isLocked) R.string.btn_change_pw else R.string.btn_lock_pdf)
+        binding.btnVaultDoc.setText(if (doc.isVaulted) R.string.btn_vault_unhide else R.string.btn_vault_hide)
         refreshGrid()
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
+        invalidateOptionsMenu()
         return true
     }
 
@@ -253,7 +282,7 @@ class DocumentViewerActivity : BaseActivity() {
                     // Land pending deletes first so disk indices are stable.
                     commitPendingDeletesNow()
                     for (path in paths) {
-                        val doc = repo.listDocuments().find { it.id == id } ?: break
+                        val doc = repo.getDocument(id) ?: break
                         val idx = doc.pageFiles.indexOfFirst { it.path == path }
                         if (idx >= 0) repo.rotatePage(id, idx, clockwise)
                     }
@@ -323,7 +352,7 @@ class DocumentViewerActivity : BaseActivity() {
         deleteScope.launch {
             try {
                 for (path in toDelete) {
-                    val doc = repo.listDocuments().find { it.id == id } ?: break
+                    val doc = repo.getDocument(id) ?: break
                     val idx = doc.pageFiles.indexOfFirst { it.path == path }
                     if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
                 }
@@ -347,7 +376,7 @@ class DocumentViewerActivity : BaseActivity() {
         if (toDelete.isEmpty()) return
         pendingDeletes.removeAll(toDelete.toSet())
         for (path in toDelete) {
-            val doc = repo.listDocuments().find { it.id == id } ?: return
+            val doc = repo.getDocument(id) ?: return
             val idx = doc.pageFiles.indexOfFirst { it.path == path }
             if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
         }
@@ -366,7 +395,7 @@ class DocumentViewerActivity : BaseActivity() {
             try {
                 // Any pending delete must land first so grid indices == disk indices.
                 withContext(Dispatchers.IO) { commitPendingDeletesNow() }
-                val doc = repo.listDocuments().find { it.id == id } ?: return@launch
+                val doc = repo.getDocument(id) ?: return@launch
                 val baseFrom = doc.pageFiles.indexOfFirst { it.path == baseFile.path }
                 if (baseFrom >= 0 && baseFrom != to) repo.movePage(id, baseFrom, to)
                 dirty = true
@@ -416,6 +445,136 @@ class DocumentViewerActivity : BaseActivity() {
                     ).show()
                 }
             }
+        }
+    }
+
+    /** Expands or collapses the Pro Tools drawer right above the bottom bar. */
+    private fun toggleProTools() {
+        if (!ProGate.isPro(this)) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.settings_pro_title)
+                .setMessage(R.string.settings_pro_message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+            return
+        }
+        binding.proToolsPanel.isVisible = !binding.proToolsPanel.isVisible
+    }
+
+    /** Removes password protection from this scan and restores the clean PDF. */
+    private fun unlockCurrentPdf() {
+        if (!ProGate.isPro(this)) return
+        val doc = document ?: return
+        lifecycleScope.launch {
+            val progress = showProgress()
+            try {
+                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id) }
+                progress.dismiss()
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    R.string.unlock_pdf_done,
+                    Toast.LENGTH_LONG
+                ).show()
+                reloadDocument()
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /** Dedicated OCR action: extracts text from all pages and shows a Copy/Share dialog. */
+    private fun runAndShowOcr() {
+        if (!ProGate.isPro(this)) return
+        val doc = document ?: return
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val text = withContext(Dispatchers.IO) {
+                    if (!repo.hasOcr(doc.id) || repo.ocrDoc(doc.id).values.all { it.isBlank() }) {
+                        repo.buildOcr(doc.id)
+                    }
+                    repo.ocrDoc(doc.id).entries
+                        .sortedBy { it.key }
+                        .mapIndexedNotNull { idx, entry ->
+                            val clean = entry.value.trim()
+                            if (clean.isEmpty()) null else "--- Page ${idx + 1} ---\n$clean"
+                        }
+                        .joinToString("\n\n")
+                }
+                progress.dismiss()
+                val shown = text.ifBlank { getString(R.string.ocr_empty) }
+                AlertDialog.Builder(this@DocumentViewerActivity)
+                    .setTitle(R.string.ocr_title)
+                    .setMessage(shown)
+                    .setPositiveButton(R.string.ocr_copy) { _, _ ->
+                        val cb = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        cb?.setPrimaryClip(android.content.ClipData.newPlainText(doc.name, shown))
+                        Toast.makeText(this@DocumentViewerActivity, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
+                    }
+                    .setNeutralButton(R.string.share_pdf) { _, _ ->
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, doc.name)
+                            putExtra(Intent.EXTRA_TEXT, shown)
+                        }
+                        startActivity(Intent.createChooser(send, getString(R.string.share_pdf)))
+                    }
+                    .setNegativeButton(R.string.close, null)
+                    .show()
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /** Moves this scan into or out of the 4-digit PIN Hidden Vault. */
+    private fun toggleVaultDoc() {
+        if (!ProGate.isPro(this)) return
+        val doc = document ?: return
+        if (doc.isVaulted) {
+            repo.setVaulted(doc.id, false)
+            Toast.makeText(this, R.string.vault_moved_out, Toast.LENGTH_SHORT).show()
+            lifecycleScope.launch { reloadDocument() }
+            return
+        }
+        if (!Prefs.hasVaultPin(this)) {
+            val input = EditText(this).apply {
+                hint = getString(R.string.vault_pin_hint)
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+                filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+            }
+            AlertDialog.Builder(this)
+                .setTitle(R.string.vault_set_pin_title)
+                .setMessage(R.string.vault_set_pin_msg)
+                .setView(input)
+                .setPositiveButton(R.string.save) { _, _ ->
+                    val pin = input.text?.toString()?.trim().orEmpty()
+                    if (pin.length != 4 || !pin.all { it.isDigit() }) {
+                        Toast.makeText(this, R.string.vault_pin_invalid, Toast.LENGTH_SHORT).show()
+                    } else {
+                        Prefs.setVaultPin(this, pin)
+                        repo.setVaulted(doc.id, true)
+                        Toast.makeText(this, R.string.vault_moved_in, Toast.LENGTH_LONG).show()
+                        finish()
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        } else {
+            repo.setVaulted(doc.id, true)
+            Toast.makeText(this, R.string.vault_moved_in, Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
@@ -609,7 +768,7 @@ class DocumentViewerActivity : BaseActivity() {
                     // Make sure the pre-edit snapshot is complete before restoring.
                     snapshotJob?.join()
                     commitPendingDeletesNow()
-                    val currentName = repo.listDocuments().find { it.id == id }?.name ?: "Document"
+                    val currentName = repo.getDocument(id)?.name ?: "Document"
                     repo.duplicateDocument(id, "$currentName (edited)")
                     restoreSnapshot(id)
                 }

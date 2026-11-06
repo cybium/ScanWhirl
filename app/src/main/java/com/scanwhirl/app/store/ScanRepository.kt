@@ -12,6 +12,7 @@ import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
+import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,14 +28,29 @@ class ScanRepository(private val context: Context) {
     private val docsDir: File
         get() = File(context.filesDir, "documents").apply { mkdirs() }
 
-    fun listDocuments(): List<ScanDocument> {
+    fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
         return docsDir.listFiles { f -> f.isDirectory }
             ?.sortedByDescending { it.lastModified() }
             ?.mapNotNull { dir -> loadDocument(dir) }
+            ?.filter { includeVaulted || !it.isVaulted }
             ?: emptyList()
     }
 
+    /** Documents hidden inside the 4-digit PIN Pro Vault. */
+    fun listVaultDocuments(): List<ScanDocument> {
+        return docsDir.listFiles { f -> f.isDirectory }
+            ?.sortedByDescending { it.lastModified() }
+            ?.mapNotNull { dir -> loadDocument(dir) }
+            ?.filter { it.isVaulted }
+            ?: emptyList()
+    }
+
+    /** Finds a document by ID regardless of whether it is in the Vault. */
+    fun getDocument(id: String): ScanDocument? =
+        loadDocument(File(docsDir, id))
+
     private fun loadDocument(dir: File): ScanDocument? {
+        if (!dir.exists() || !dir.isDirectory) return null
         val meta = File(dir, "meta.txt")
         if (!meta.exists()) return null
         val lines = meta.readLines()
@@ -47,13 +63,17 @@ class ScanRepository(private val context: Context) {
             ?.sortedBy { it.nameWithoutExtension }
             ?: emptyList()
         if (!pdf.exists() && pages.isEmpty()) return null
+        val isLocked = File(dir, LOCK_FILE).exists()
+        val isVaulted = File(dir, VAULT_FILE).exists()
         return ScanDocument(
             id = dir.name,
             name = name,
             createdAt = createdAt,
             pageCount = pages.size,
             pdfFile = pdf,
-            pageFiles = pages
+            pageFiles = pages,
+            isLocked = isLocked,
+            isVaulted = isVaulted
         )
     }
 
@@ -80,12 +100,11 @@ class ScanRepository(private val context: Context) {
             input.use { i ->
                 val bytes = i.readBytes()
                 if (pageFilter == ScanFilter.ORIGINAL) {
-                    // Straight and honest: EXIF orientation + geometry-only
-                    // deskew, no enhancement. Fixes tilted gallery imports.
                     out.writeBytes(ImageTools.normalizePage(bytes))
                 } else {
+                    val oriented = ImageTools.orientJpeg(bytes)
                     val bitmap = BitmapFactory.decodeByteArray(
-                        ImageTools.orientJpeg(bytes), 0, bytes.size
+                        oriented, 0, oriented.size
                     ) ?: throw IllegalStateException("Page ${index + 1} is not an image")
                     val processed = pageFilter.applyTo(bitmap)
                     FileOutputStream(out).use { o ->
@@ -464,6 +483,9 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    private val LOCK_FILE = "locked.meta"
+    private val VAULT_FILE = "vault.flag"
+
     /**
      * Rebuilds the document's PDF with the password-protection extra applied
      * (Pro). The page images are untouched; only the PDF wrapper changes.
@@ -473,18 +495,72 @@ class ScanRepository(private val context: Context) {
             require(password.isNotBlank()) { "Password must not be empty" }
             val dir = File(docsDir, id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            require(doc.pdfFile.exists() && doc.pdfFile.length() > 0L) { "PDF missing" }
             val src = File(dir, "plain.pdf")
-            doc.pdfFile.copyTo(src, overwrite = true)
+            if (doc.pageFiles.isNotEmpty()) {
+                PdfGenerator.imagesToPdf(doc.pageFiles, src)
+            } else {
+                require(doc.pdfFile.exists() && doc.pdfFile.length() > 0L) { "PDF missing" }
+                doc.pdfFile.copyTo(src, overwrite = true)
+            }
+            val protected = File(dir, "protected.pdf")
             try {
-                val protected = File(dir, "protected.pdf")
                 PdfEncryptor.encrypt(src, protected, password)
                 protected.copyTo(doc.pdfFile, overwrite = true)
+                File(dir, LOCK_FILE).writeText(Prefs.sha256("pdf_lock:$password"))
             } finally {
                 src.delete()
+                protected.delete()
             }
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after protection")
         }
+
+    /**
+     * Removes password protection from a document by regenerating its clean
+     * PDF from the stored page JPEGs and clearing the lock marker.
+     */
+    suspend fun unlockPdf(id: String): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            File(dir, LOCK_FILE).delete()
+            regeneratePdf(dir)
+            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after unlock")
+        }
+
+    /** Checks a user-entered password against the stored lock hash. */
+    fun verifyPdfPassword(id: String, password: String): Boolean {
+        val lockFile = File(File(docsDir, id), LOCK_FILE)
+        if (!lockFile.exists()) return true
+        val stored = lockFile.readText().trim()
+        return stored == Prefs.sha256("pdf_lock:$password")
+    }
+
+    /**
+     * Builds a temporary unencrypted PDF in cacheDir so the in-app PdfRenderer
+     * can display a locked scan after the user enters their password.
+     */
+    suspend fun unlockedPreviewPdf(id: String): File =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            val outDir = File(context.cacheDir, "documents").apply { mkdirs() }
+            val preview = File(outDir, "preview_$id.pdf")
+            PdfGenerator.imagesToPdf(doc.pageFiles, preview)
+            preview
+        }
+
+    /** Moves a scan into or out of the 4-digit PIN Hidden Vault (Pro). */
+    fun setVaulted(id: String, vaulted: Boolean): ScanDocument? {
+        val dir = File(docsDir, id)
+        if (!dir.exists()) return null
+        val flag = File(dir, VAULT_FILE)
+        if (vaulted) {
+            flag.writeText("1")
+        } else {
+            flag.delete()
+        }
+        return loadDocument(dir)
+    }
 
     /** OCR text of a document, when it exists: lines keyed by the page file name. */
     fun ocrDoc(id: String): Map<String, String> = try {

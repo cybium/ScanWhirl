@@ -135,7 +135,7 @@ class PageViewerActivity : BaseActivity() {
 
     private fun reloadSaved(): Boolean {
         val id = docId ?: run { finish(); return false }
-        val doc = repo.listDocuments().find { it.id == id }
+        val doc = repo.getDocument(id)
         if (doc == null) {
             Toast.makeText(this, R.string.doc_not_found, Toast.LENGTH_SHORT).show()
             finish()
@@ -494,7 +494,7 @@ class PageViewerActivity : BaseActivity() {
         committingDeletes.add(path)
         deleteScope.launch {
             try {
-                val doc = repo.listDocuments().find { it.id == id } ?: return@launch
+                val doc = repo.getDocument(id) ?: return@launch
                 val idx = doc.pageFiles.indexOfFirst { it.path == path }
                 if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
             } catch (_: Exception) {
@@ -519,7 +519,7 @@ class PageViewerActivity : BaseActivity() {
         pendingDelete = null
         val id = docId ?: return
         try {
-            val doc = repo.listDocuments().find { it.id == id } ?: return
+            val doc = repo.getDocument(id) ?: return
             val idx = doc.pageFiles.indexOfFirst { it.path == path }
             if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
         } catch (_: Exception) {

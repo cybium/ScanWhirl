@@ -96,9 +96,13 @@ object ImageTools {
      * is why "picked from the gallery" pages came out tilted. Both steps are
      * geometric only: no brightness, contrast or color is ever touched.
      */
+    /**
+     * Normalises a page JPEG's orientation using only the EXIF 90°/180°/270°
+     * rotation tag. Never applies perspective warping so straight gallery
+     * images and scanner pages are never tilted.
+     */
     fun normalizePage(bytes: ByteArray): ByteArray = try {
-        val oriented = orientJpeg(bytes)
-        orientDeskew(oriented)
+        orientJpeg(bytes)
     } catch (_: Exception) {
         bytes
     }
@@ -143,12 +147,7 @@ object ImageTools {
      * Runs on a bounded copy, only fires when strong corners are found, and
      * never changes color information — a straightened scan, not a fake one.
      */
-    fun orientDeskew(bytes: ByteArray): ByteArray = try {
-        val quad = Deskew.detectQuad(bytes) ?: return bytes
-        Deskew.warp(bytes, quad)
-    } catch (_: Exception) {
-        bytes
-    }
+    fun orientDeskew(bytes: ByteArray): ByteArray = orientJpeg(bytes)
 
     /**
      * Writes [writer]'s output to a temp file next to [target] and swaps it in

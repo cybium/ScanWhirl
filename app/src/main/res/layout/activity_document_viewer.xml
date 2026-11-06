@@ -7,7 +7,8 @@
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/sf_appbar">
+        android:background="@color/sf_appbar"
+        app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
@@ -23,14 +24,54 @@
         android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <TextView
-            android:id="@+id/pageCount"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
             android:paddingHorizontal="16dp"
-            android:paddingTop="12dp"
-            android:textAppearance="?attr/textAppearanceBodyMedium"
-            android:textColor="?android:attr/textColorSecondary" />
+            android:paddingTop="10dp"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:id="@+id/pageCount"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?android:attr/textColorSecondary" />
+
+            <TextView
+                android:id="@+id/docVaultBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_lock_badge"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp"
+                android:text="@string/badge_vault"
+                android:textColor="@color/pro_gold"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/docLockBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_lock_badge"
+                android:drawableStart="@drawable/ic_lock_small"
+                android:drawablePadding="4dp"
+                android:drawableTint="@color/pro_gold"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp"
+                android:text="@string/badge_locked"
+                android:textColor="@color/pro_gold"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
 
         <com.scanwhirl.app.ui.pagegrid.PageGridView
             android:id="@+id/pageList"
@@ -40,63 +81,197 @@
             android:clipToPadding="false"
             android:padding="12dp" />
 
+        <!-- Expandable Pro Tools drawer: bunched into one expandable button -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/proToolsPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/sf_pro_bg"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/pro_badge_stroke"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnProtect"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_margin="3dp"
+                        android:layout_weight="1"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:maxLines="1"
+                        android:paddingHorizontal="8dp"
+                        android:text="@string/btn_lock_pdf"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="12sp"
+                        app:icon="@drawable/ic_lock"
+                        app:iconGravity="textStart"
+                        app:iconPadding="6dp"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/pro_gold"
+                        app:strokeColor="@color/pro_badge_stroke" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUnlockPdf"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_margin="3dp"
+                        android:layout_weight="1"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:maxLines="1"
+                        android:paddingHorizontal="8dp"
+                        android:text="@string/btn_unlock_pdf"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        app:icon="@drawable/ic_unlock"
+                        app:iconGravity="textStart"
+                        app:iconPadding="6dp"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/pro_gold"
+                        app:strokeColor="@color/pro_badge_stroke" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnOcr"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_margin="3dp"
+                        android:layout_weight="1"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:maxLines="1"
+                        android:paddingHorizontal="8dp"
+                        android:text="@string/btn_ocr_text"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="12sp"
+                        app:icon="@drawable/ic_ocr"
+                        app:iconGravity="textStart"
+                        app:iconPadding="6dp"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/pro_gold"
+                        app:strokeColor="@color/pro_badge_stroke" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLongImage"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_margin="3dp"
+                        android:layout_weight="1"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:maxLines="1"
+                        android:paddingHorizontal="8dp"
+                        android:text="@string/btn_long_image"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="12sp"
+                        app:icon="@drawable/ic_long_image"
+                        app:iconGravity="textStart"
+                        app:iconPadding="6dp"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/pro_gold"
+                        app:strokeColor="@color/pro_badge_stroke" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnVaultDoc"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_margin="3dp"
+                        android:layout_weight="1"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:maxLines="1"
+                        android:paddingHorizontal="8dp"
+                        android:text="@string/btn_vault_hide"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="12sp"
+                        app:icon="@drawable/ic_vault"
+                        app:iconGravity="textStart"
+                        app:iconPadding="6dp"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/pro_gold"
+                        app:strokeColor="@color/pro_badge_stroke" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp">
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="10dp">
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnProtect"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:text="@string/menu_protect_pdf"
-                android:textSize="12sp"
-                app:icon="@drawable/ic_lock"
-                app:iconTint="?attr/colorPrimary" />
+                android:id="@+id/btnProTools"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="1"
+                android:paddingHorizontal="14dp"
+                android:text="@string/btn_pro_tools"
+                android:textColor="@color/pro_gold"
+                android:textSize="13sp"
+                app:icon="@drawable/ic_crown"
+                app:iconSize="16dp"
+                app:iconTint="@color/pro_gold"
+                app:strokeColor="@color/pro_badge_stroke" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnLongImage"
-                style="@style/Widget.Material3.Button.TextButton"
+            <Space
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:text="@string/menu_long_image"
-                android:textSize="12sp"
-                app:icon="@drawable/ic_visibility"
-                app:iconTint="?attr/colorPrimary" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnShare"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:text="@string/share_pdf"
-                android:textSize="12sp"
-                app:icon="@drawable/ic_share" />
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnDelete"
                 style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="1"
                 android:text="@string/delete"
-                android:textSize="12sp"
                 app:icon="@drawable/ic_delete" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnShare"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="1"
+                android:text="@string/share_pdf"
+                app:icon="@drawable/ic_share" />
         </LinearLayout>
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

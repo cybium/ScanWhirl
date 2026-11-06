@@ -12,17 +12,21 @@
         <com.google.android.material.appbar.AppBarLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/sf_appbar">
+            android:background="@color/sf_appbar"
+            app:elevation="0dp">
 
             <com.google.android.material.appbar.MaterialToolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
-                android:layout_height="?attr/actionBarSize">
+                android:layout_height="wrap_content"
+                android:minHeight="?attr/actionBarSize"
+                android:paddingVertical="6dp"
+                app:titleTextColor="?attr/colorOnSurface">
 
                 <LinearLayout
                     android:id="@+id/titleBlock"
                     android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
+                    android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="vertical">
 
@@ -39,7 +43,8 @@
                             android:layout_height="wrap_content"
                             android:text="@string/app_name"
                             android:textAppearance="?attr/textAppearanceTitleLarge"
-                            android:textColor="?attr/colorOnSurface" />
+                            android:textColor="?attr/colorOnSurface"
+                            android:textStyle="bold" />
 
                         <TextView
                             android:id="@+id/proBadge"
@@ -48,14 +53,15 @@
                             android:layout_marginStart="8dp"
                             android:background="@drawable/bg_pro_badge"
                             android:clickable="true"
-                            android:focusable="true"
                             android:drawableStart="@drawable/ic_crown"
-                            android:drawablePadding="3dp"
-                            android:drawableTint="#FFFFC04D"
+                            android:drawablePadding="4dp"
+                            android:drawableTint="@color/pro_gold"
+                            android:focusable="true"
+                            android:gravity="center_vertical"
                             android:paddingHorizontal="8dp"
-                            android:paddingVertical="2dp"
-                            android:text="@string/badge_free"
-                            android:textColor="#99FFFFFF"
+                            android:paddingVertical="3dp"
+                            android:text="@string/badge_pro"
+                            android:textColor="@color/pro_gold"
                             android:textSize="11sp"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -64,18 +70,23 @@
                         android:id="@+id/greetingText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textAppearance="?attr/textAppearanceLabelSmall"
-                        android:textColor="?android:attr/textColorSecondary" />
+                        android:layout_marginTop="1dp"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="12sp" />
                 </LinearLayout>
             </com.google.android.material.appbar.MaterialToolbar>
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="46dp"
+                android:layout_marginHorizontal="12dp"
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_search_bar"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingStart="16dp"
-                android:paddingEnd="8dp">
+                android:paddingStart="14dp"
+                android:paddingEnd="6dp">
 
                 <ImageView
                     android:layout_width="20dp"
@@ -87,23 +98,24 @@
                 <EditText
                     android:id="@+id/searchInput"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="10dp"
                     android:layout_weight="1"
                     android:background="@null"
+                    android:gravity="center_vertical"
                     android:hint="@string/search_hint"
                     android:imeOptions="actionSearch"
                     android:inputType="text"
                     android:maxLines="1"
                     android:singleLine="true"
                     android:textColor="?attr/colorOnSurface"
-                    android:textColorHint="?attr/colorOutline"
-                    android:textSize="15sp" />
+                    android:textColorHint="?attr/colorOnSurfaceVariant"
+                    android:textSize="14sp" />
 
                 <ImageButton
                     android:id="@+id/btnSort"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/sort"
                     android:padding="8dp"
@@ -112,13 +124,95 @@
             </LinearLayout>
         </com.google.android.material.appbar.AppBarLayout>
 
+        <!-- Hidden Vault active banner (shown only when 4-digit PIN Vault is open) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/vaultBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/sf_pro_bg"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/pro_badge_stroke"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_vault"
+                    app:tint="@color/pro_gold" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/vault_banner_title"
+                        android:textColor="@color/pro_gold"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/vault_banner_sub"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnVaultChangePin"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:text="@string/vault_change_pin"
+                    android:textColor="@color/pro_gold"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnVaultLock"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:text="@string/vault_exit"
+                    android:textColor="@color/pro_gold"
+                    android:textSize="12sp"
+                    app:strokeColor="@color/pro_badge_stroke" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <LinearLayout
             android:id="@+id/toolsRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingHorizontal="8dp"
-            android:paddingTop="8dp">
+            android:paddingTop="6dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -134,31 +228,32 @@
                     android:clickable="true"
                     android:focusable="true"
                     app:cardBackgroundColor="@color/sf_tool_bg"
-                    app:cardCornerRadius="16dp"
+                    app:cardCornerRadius="14dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/sf_primary"
+                    app:strokeColor="@color/sf_card_stroke"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
+                        android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingVertical="14dp">
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="11dp">
 
                         <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
                             android:background="@drawable/bg_icon_badge"
                             android:contentDescription="@null"
-                            android:padding="7dp"
+                            android:padding="6dp"
                             android:src="@drawable/ic_resize"
                             app:tint="?attr/colorPrimary" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
+                            android:layout_marginStart="10dp"
                             android:text="@string/tool_resize"
                             android:textAppearance="?attr/textAppearanceLabelLarge" />
                     </LinearLayout>
@@ -173,31 +268,32 @@
                     android:clickable="true"
                     android:focusable="true"
                     app:cardBackgroundColor="@color/sf_tool_bg"
-                    app:cardCornerRadius="16dp"
+                    app:cardCornerRadius="14dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/sf_primary"
+                    app:strokeColor="@color/sf_card_stroke"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
+                        android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingVertical="14dp">
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="11dp">
 
                         <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
                             android:background="@drawable/bg_icon_badge"
                             android:contentDescription="@null"
-                            android:padding="7dp"
+                            android:padding="6dp"
                             android:src="@drawable/ic_compress"
                             app:tint="?attr/colorPrimary" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
+                            android:layout_marginStart="10dp"
                             android:text="@string/tool_compress"
                             android:textAppearance="?attr/textAppearanceLabelLarge" />
                     </LinearLayout>
@@ -218,31 +314,32 @@
                     android:clickable="true"
                     android:focusable="true"
                     app:cardBackgroundColor="@color/sf_tool_bg"
-                    app:cardCornerRadius="16dp"
+                    app:cardCornerRadius="14dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/sf_primary"
+                    app:strokeColor="@color/sf_card_stroke"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
+                        android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingVertical="14dp">
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="11dp">
 
                         <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
                             android:background="@drawable/bg_icon_badge"
                             android:contentDescription="@null"
-                            android:padding="7dp"
+                            android:padding="6dp"
                             android:src="@drawable/ic_edit"
                             app:tint="?attr/colorPrimary" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
+                            android:layout_marginStart="10dp"
                             android:text="@string/tool_edit"
                             android:textAppearance="?attr/textAppearanceLabelLarge" />
                     </LinearLayout>
@@ -257,36 +354,210 @@
                     android:clickable="true"
                     android:focusable="true"
                     app:cardBackgroundColor="@color/sf_tool_bg"
-                    app:cardCornerRadius="16dp"
+                    app:cardCornerRadius="14dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/sf_primary"
+                    app:strokeColor="@color/sf_card_stroke"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
+                        android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingVertical="14dp">
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="11dp">
 
                         <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
                             android:background="@drawable/bg_icon_badge"
                             android:contentDescription="@null"
-                            android:padding="7dp"
+                            android:padding="6dp"
                             android:src="@drawable/ic_merge"
                             app:tint="?attr/colorPrimary" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
+                            android:layout_marginStart="10dp"
                             android:text="@string/tool_merge"
                             android:textAppearance="?attr/textAppearanceLabelLarge" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
+
+            <!-- Expandable Pro Suite: one sleek button that expands all Pro tools -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/proSuiteCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="4dp"
+                app:cardBackgroundColor="@color/sf_pro_bg"
+                app:cardCornerRadius="14dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/pro_badge_stroke"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/btnProSuite"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="10dp">
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_crown"
+                            app:tint="@color/pro_gold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/pro_suite_title"
+                            android:textColor="@color/pro_gold"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:text="@string/pro_suite_sub"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="12sp" />
+
+                        <ImageView
+                            android:id="@+id/proSuiteChevron"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_down"
+                            app:tint="@color/pro_gold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/proSuiteGrid"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="8dp"
+                        android:paddingBottom="8dp"
+                        android:visibility="gone">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/toolVault"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="42dp"
+                                android:layout_margin="3dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:maxLines="1"
+                                android:paddingHorizontal="10dp"
+                                android:text="@string/vault_title"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="12sp"
+                                app:icon="@drawable/ic_vault"
+                                app:iconGravity="textStart"
+                                app:iconPadding="6dp"
+                                app:iconSize="17dp"
+                                app:iconTint="@color/pro_gold"
+                                app:strokeColor="@color/pro_badge_stroke" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/toolOcr"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="42dp"
+                                android:layout_margin="3dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:maxLines="1"
+                                android:paddingHorizontal="10dp"
+                                android:text="@string/btn_ocr_text"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="12sp"
+                                app:icon="@drawable/ic_ocr"
+                                app:iconGravity="textStart"
+                                app:iconPadding="6dp"
+                                app:iconSize="17dp"
+                                app:iconTint="@color/pro_gold"
+                                app:strokeColor="@color/pro_badge_stroke" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/toolLockPdf"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="42dp"
+                                android:layout_margin="3dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:maxLines="1"
+                                android:paddingHorizontal="10dp"
+                                android:text="@string/btn_lock_unlock"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="12sp"
+                                app:icon="@drawable/ic_lock"
+                                app:iconGravity="textStart"
+                                app:iconPadding="6dp"
+                                app:iconSize="17dp"
+                                app:iconTint="@color/pro_gold"
+                                app:strokeColor="@color/pro_badge_stroke" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/toolLongImage"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="42dp"
+                                android:layout_margin="3dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:maxLines="1"
+                                android:paddingHorizontal="10dp"
+                                android:text="@string/btn_long_image"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="12sp"
+                                app:icon="@drawable/ic_long_image"
+                                app:iconGravity="textStart"
+                                app:iconPadding="6dp"
+                                app:iconSize="17dp"
+                                app:iconTint="@color/pro_gold"
+                                app:strokeColor="@color/pro_badge_stroke" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
         <FrameLayout
@@ -310,20 +581,22 @@
                 android:padding="32dp">
 
                 <ImageView
-                    android:layout_width="120dp"
-                    android:layout_height="120dp"
+                    android:layout_width="104dp"
+                    android:layout_height="104dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_scan_empty" />
 
                 <TextView
+                    android:id="@+id/emptyTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="24dp"
+                    android:layout_marginTop="20dp"
                     android:gravity="center"
                     android:text="@string/empty_title"
                     android:textAppearance="?attr/textAppearanceTitleLarge" />
 
                 <TextView
+                    android:id="@+id/emptySubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
