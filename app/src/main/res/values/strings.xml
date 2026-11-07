@@ -163,6 +163,10 @@
     <string name="search_clear">Clear search</string>
     <string name="in_text_chip">In text</string>
     <string name="select">Select</string>
+    <!-- test26 T3.6: bottom bar + Tools sheet (bar_tools doubles as the sheet title). -->
+    <string name="bar_tools">Tools</string>
+    <string name="bar_scan">Scan</string>
+    <string name="bar_vault">Vault</string>
     <string name="list_count_category">%1$d in %2$s</string>
     <plurals name="list_count">
         <item quantity="one">%1$d document</item>

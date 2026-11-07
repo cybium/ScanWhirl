@@ -21,6 +21,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowDialog
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -444,6 +445,41 @@ class HomeScreenTest {
                     "${activity.getString(R.string.sort_name)} ▾",
                     sortSel.text.toString()
                 )
+            }
+        }
+    }
+
+    // ---- T3.6: bottom bar + Tools sheet ---------------------------------
+
+    @Test
+    fun `tools sheet opens and lists eight tiles in two rows`() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
+                assertTrue("bottom bar shows in normal mode", bar.isVisible)
+
+                activity.findViewById<android.view.View>(R.id.btnTools).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("Tools sheet opens", sheet)
+
+                val all = listOf(
+                    R.id.tile_edit, R.id.tile_merge, R.id.tile_compress, R.id.tile_resize,
+                    R.id.tile_ocr, R.id.tile_lock, R.id.tile_long_image, R.id.tile_vault
+                )
+                for (id in all) {
+                    assertNotNull(
+                        "tile ${activity.resources.getResourceEntryName(id)} present",
+                        sheet!!.findViewById<android.view.View>(id)
+                    )
+                }
+
+                val row1 = sheet.findViewById<android.view.ViewGroup>(R.id.sheetRow1)
+                val row2 = sheet.findViewById<android.view.ViewGroup>(R.id.sheetRow2)
+                assertEquals("core row holds 4 tiles", 4, row1.childCount)
+                assertEquals("pro row holds 4 tiles", 4, row2.childCount)
+
+                sheet.dismiss()
+                assertFalse("sheet dismissed", sheet.isShowing)
             }
         }
     }

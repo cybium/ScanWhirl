@@ -317,431 +317,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <LinearLayout
-            android:id="@+id/toolsRow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingHorizontal="8dp"
-            android:paddingTop="6dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/toolResize"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:stateListAnimator="@animator/sw_press"
-                    app:cardBackgroundColor="@color/glass_surface"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp"
-                    app:strokeColor="@color/sel_stroke_cyan"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="10dp">
-
-                        <ImageView
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/bg_icon_badge_glow"
-                            android:contentDescription="@null"
-                            android:padding="9dp"
-                            android:src="@drawable/ic_resize"
-                            app:tint="@color/cyan_primary" />
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/tool_resize"
-                                android:textAppearance="?attr/textAppearanceLabelLarge"
-                                android:textColor="@color/text_hologram_hi"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/tool_resize_sub"
-                                android:textColor="@color/text_hologram_mid"
-                                android:textSize="10sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/toolCompress"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:stateListAnimator="@animator/sw_press"
-                    app:cardBackgroundColor="@color/glass_surface"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp"
-                    app:strokeColor="@color/sel_stroke_cyan"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="10dp">
-
-                        <ImageView
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/bg_icon_badge_glow"
-                            android:contentDescription="@null"
-                            android:padding="9dp"
-                            android:src="@drawable/ic_compress"
-                            app:tint="@color/cyan_primary" />
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/tool_compress"
-                                android:textAppearance="?attr/textAppearanceLabelLarge"
-                                android:textColor="@color/text_hologram_hi"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/tool_compress_sub"
-                                android:textColor="@color/text_hologram_mid"
-                                android:textSize="10sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/toolEdit"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:stateListAnimator="@animator/sw_press"
-                    app:cardBackgroundColor="@color/glass_surface"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp"
-                    app:strokeColor="@color/sel_stroke_cyan"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="10dp">
-
-                        <ImageView
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/bg_icon_badge_glow"
-                            android:contentDescription="@null"
-                            android:padding="9dp"
-                            android:src="@drawable/ic_edit"
-                            app:tint="@color/cyan_primary" />
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/tool_edit"
-                                android:textAppearance="?attr/textAppearanceLabelLarge"
-                                android:textColor="@color/text_hologram_hi"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/tool_edit_sub"
-                                android:textColor="@color/text_hologram_mid"
-                                android:textSize="10sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/toolMerge"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:stateListAnimator="@animator/sw_press"
-                    app:cardBackgroundColor="@color/glass_surface"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp"
-                    app:strokeColor="@color/sel_stroke_cyan"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="10dp">
-
-                        <ImageView
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/bg_icon_badge_glow"
-                            android:contentDescription="@null"
-                            android:padding="9dp"
-                            android:src="@drawable/ic_merge"
-                            app:tint="@color/cyan_primary" />
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/tool_merge"
-                                android:textAppearance="?attr/textAppearanceLabelLarge"
-                                android:textColor="@color/text_hologram_hi"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/tool_merge_sub"
-                                android:textColor="@color/text_hologram_mid"
-                                android:textSize="10sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
-
-            <!-- Expandable Pro Suite: one sleek button that expands all Pro tools -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/proSuiteCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_margin="4dp"
-                app:cardBackgroundColor="@color/gold_pro_surface"
-                app:cardCornerRadius="14dp"
-                app:cardElevation="0dp"
-                app:strokeColor="@color/pro_badge_stroke"
-                app:strokeWidth="1dp">
-
-                <!--
-                    bg_pro_banner (the gradient + gold hairline) lives on the content
-                    container, NOT on app:cardBackgroundColor: cardBackgroundColor is a
-                    format="color" attr, and ResourcesImpl.loadComplexColorForCookie()
-                    only parses <gradient>/<selector> roots — a <shape> throws
-                    NotFoundException at inflation. The 1dp margin keeps the card's own
-                    pro_badge_stroke visible above the child.
-                -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_pro_banner"
-                    android:layout_margin="1dp"
-                    android:orientation="vertical">
-
-                    <LinearLayout
-                        android:id="@+id/btnProSuite"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="?attr/selectableItemBackground"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="10dp">
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_crown"
-                            app:tint="@color/pro_gold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="@string/pro_suite_title"
-                            android:textColor="@color/pro_gold"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:layout_weight="1"
-                            android:ellipsize="end"
-                            android:maxLines="1"
-                            android:text="@string/pro_suite_sub"
-                            android:textColor="?android:attr/textColorSecondary"
-                            android:textSize="12sp" />
-
-                        <ImageView
-                            android:id="@+id/proSuiteChevron"
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:contentDescription="@null"
-                            android:rotation="0"
-                            android:src="@drawable/ic_chevron_down"
-                            app:tint="@color/pro_gold" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/proSuiteGrid"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingHorizontal="8dp"
-                        android:paddingBottom="8dp"
-                        android:visibility="gone">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/toolVault"
-                                style="@style/Widget.ScanWhirl.Button.Pro"
-                                android:layout_width="0dp"
-                                android:layout_height="52dp"
-                                android:layout_margin="3dp"
-                                android:layout_weight="1"
-                                android:insetTop="0dp"
-                                android:insetBottom="0dp"
-                                android:maxLines="1"
-                                android:paddingHorizontal="10dp"
-                                android:text="@string/vault_title"
-                                android:textColor="?attr/colorOnSurface"
-                                android:textSize="12sp"
-                                app:icon="@drawable/ic_vault"
-                                app:iconGravity="textStart"
-                                app:iconPadding="6dp"
-                                app:iconSize="17dp"
-                                app:iconTint="@color/pro_gold" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/toolOcr"
-                                style="@style/Widget.ScanWhirl.Button.Pro"
-                                android:layout_width="0dp"
-                                android:layout_height="52dp"
-                                android:layout_margin="3dp"
-                                android:layout_weight="1"
-                                android:insetTop="0dp"
-                                android:insetBottom="0dp"
-                                android:maxLines="1"
-                                android:paddingHorizontal="10dp"
-                                android:text="@string/btn_ocr_text"
-                                android:textColor="?attr/colorOnSurface"
-                                android:textSize="12sp"
-                                app:icon="@drawable/ic_ocr"
-                                app:iconGravity="textStart"
-                                app:iconPadding="6dp"
-                                app:iconSize="17dp"
-                                app:iconTint="@color/pro_gold" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/toolLockPdf"
-                                style="@style/Widget.ScanWhirl.Button.Pro"
-                                android:layout_width="0dp"
-                                android:layout_height="52dp"
-                                android:layout_margin="3dp"
-                                android:layout_weight="1"
-                                android:insetTop="0dp"
-                                android:insetBottom="0dp"
-                                android:maxLines="1"
-                                android:paddingHorizontal="10dp"
-                                android:text="@string/btn_lock_unlock"
-                                android:textColor="?attr/colorOnSurface"
-                                android:textSize="12sp"
-                                app:icon="@drawable/ic_lock"
-                                app:iconGravity="textStart"
-                                app:iconPadding="6dp"
-                                app:iconSize="17dp"
-                                app:iconTint="@color/pro_gold" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/toolLongImage"
-                                style="@style/Widget.ScanWhirl.Button.Pro"
-                                android:layout_width="0dp"
-                                android:layout_height="52dp"
-                                android:layout_margin="3dp"
-                                android:layout_weight="1"
-                                android:insetTop="0dp"
-                                android:insetBottom="0dp"
-                                android:maxLines="1"
-                                android:paddingHorizontal="10dp"
-                                android:text="@string/btn_long_image"
-                                android:textColor="?attr/colorOnSurface"
-                                android:textSize="12sp"
-                                app:icon="@drawable/ic_long_image"
-                                app:iconGravity="textStart"
-                                app:iconPadding="6dp"
-                                app:iconSize="17dp"
-                                app:iconTint="@color/pro_gold" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-        </LinearLayout>
-
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -795,58 +370,106 @@
             </LinearLayout>
         </FrameLayout>
 
-        <!-- test26 T3.1: bottom bar (Tools · SCAN · Vault) — built in T3.6, GONE for now. -->
+        <!-- test26 T3.6: bottom bar (Tools · SCAN · Vault) — replaces the FAB
+             and the tool cards (R7/Q7). The screen root already carries the
+             system-bar padding (T1.1), so this needs no inset handling. -->
         <LinearLayout
             android:id="@+id/bottomBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/bg_dock_glass"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="8dp"
-            android:paddingVertical="8dp"
-            android:visibility="gone" />
+            android:paddingVertical="6dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/btnTools"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:minHeight="56dp"
+                android:orientation="vertical"
+                android:paddingVertical="6dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_tools"
+                    app:tint="@color/cyan_primary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/bar_tools"
+                    android:textColor="@color/text_hologram_mid"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- SCAN: 64dp viewfinder ring (§4.2), vault mode turns it to Add. -->
+            <FrameLayout
+                android:id="@+id/btnScan"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_marginHorizontal="12dp"
+                android:clickable="true"
+                android:contentDescription="@string/scan"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackgroundBorderless">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_fab_outer_ring" />
+
+                <ImageView
+                    android:id="@+id/scanIcon"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_camera"
+                    app:tint="@color/cyan_primary" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:id="@+id/btnVault"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:minHeight="56dp"
+                android:orientation="vertical"
+                android:paddingVertical="6dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_lock"
+                    app:tint="@color/cyan_primary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/bar_vault"
+                    android:textColor="@color/text_hologram_mid"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
-    <!--
-        Orbital FAB host (test25 Phase 2, item 6): 96dp FrameLayout carrying two static
-        rings behind the scan FAB. The host sits where the FAB used to, so the outer ring
-        inherits the old 24dp screen inset and the FAB centers inside it.
-        The rings are intentionally NOT animated here — pulse motion is Phase 4 and must
-        be gated on SwMotion.ambientAllowed() (does not exist yet).
-        Visibility of fabHost must always track fabScan (tests read fabScan directly).
-    -->
-    <FrameLayout
-        android:id="@+id/fabHost"
-        android:layout_width="96dp"
-        android:layout_height="96dp"
-        android:layout_gravity="bottom|end"
-        android:layout_margin="24dp">
-
-        <View
-            android:id="@+id/fabRing"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_gravity="center"
-            android:background="@drawable/bg_fab_outer_ring" />
-
-        <View
-            android:id="@+id/fabPulse"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_gravity="center"
-            android:background="@drawable/bg_fab_pulse" />
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fabScan"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:contentDescription="@string/scan"
-            android:src="@drawable/ic_camera"
-            app:backgroundTint="@color/cyan_primary"
-            app:elevation="0dp"
-            app:hoveredFocusedTranslationZ="0dp"
-            app:pressedTranslationZ="0dp"
-            app:tint="@color/sf_on_primary" />
-    </FrameLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

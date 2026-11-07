@@ -1,6 +1,5 @@
 package com.scanwhirl.app.ui
 
-import android.animation.ObjectAnimator
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -12,8 +11,9 @@ import android.view.ContextThemeWrapper
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.view.animation.PathInterpolator
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
@@ -26,6 +26,7 @@ import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.chip.Chip
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
@@ -220,39 +221,18 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.scanList.layoutManager = LinearLayoutManager(this)
         binding.scanList.adapter = adapter
 
-        binding.fabScan.setOnClickListener {
+        // T3.6: the bottom bar replaces the FAB and the tool cards (R7/Q7).
+        // SCAN keeps the old FAB behaviour: add when the vault is open.
+        binding.bottomBar.isVisible = true
+        binding.btnTools.setOnClickListener { showToolsSheet() }
+        binding.btnScan.setOnClickListener {
             if (vaultMode) vaultFlow.addToVault() else showScanChooser()
         }
+        binding.btnVault.setOnClickListener { vaultFlow.openVaultWithPin() }
         binding.emptyState.setOnClickListener {
             if (vaultMode) vaultFlow.addToVault() else showScanChooser()
         }
 
-        binding.toolResize.setOnClickListener { pickResizeImage.launch("image/*") }
-        binding.toolCompress.setOnClickListener { compressFlow.start() }
-        binding.toolEdit.setOnClickListener {
-            pickEditPdf.launch(arrayOf("application/pdf"))
-        }
-        binding.toolMerge.setOnClickListener { mergeFlow.showMergeChooser() }
-
-        // Expandable Pro Suite on Home: one button that expands Vault, OCR, Lock/Unlock, Long Image.
-        binding.btnProSuite.setOnClickListener { toggleProSuite() }
-        binding.toolVault.setOnClickListener { vaultFlow.openVaultWithPin() }
-        binding.toolOcr.setOnClickListener {
-            chooseProSource(
-                R.string.ocr_title,
-                onScan = { doc -> ocrFlow.runOcrForScan(doc) },
-                onPdf = { uri -> ocrFlow.runOcrForPdf(uri) },
-                onImage = { uri -> ocrFlow.runOcrForImage(uri) }
-            )
-        }
-        binding.toolLockPdf.setOnClickListener { lockFlow.chooseLockSource() }
-        binding.toolLongImage.setOnClickListener {
-            chooseProSource(
-                R.string.btn_long_image,
-                onScan = { doc -> longImageFlow.runLongImageForScan(doc) },
-                onPdf = { uri -> longImageFlow.runLongImageForPdf(uri) }
-            )
-        }
         binding.btnVaultLock.setOnClickListener { setVaultMode(false) }
         binding.btnVaultChangePin.setOnClickListener { vaultFlow.promptSetVaultPin(onSuccess = {}) }
 
@@ -564,9 +544,10 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /**
      * Crown badge next to the app name: gold PRO unlocked, dim FREE otherwise.
-     * In Free, the Pro Suite card is hidden entirely — the badge is the only
-     * entry point to the pitch. (The search hint no longer changes with Pro:
-     * T3.5 replaced it with the "In text" chip.)
+     * In Free it is the entry point to the pitch (the Pro Suite card died in
+     * T3.6; the Tools sheet gates its Pro tiles the same way). The search
+     * hint no longer changes with Pro — T3.5 replaced it with the "In text"
+     * chip.
      */
     private fun updateProBadge() {
         val pro = ProGate.isPro(this)
@@ -584,11 +565,7 @@ class MainActivity : BaseActivity(), HomeHost {
                     ContextCompat.getColor(this, R.color.sf_on_surface_variant)
                 )
             binding.proBadge.setBackgroundResource(R.drawable.bg_free_badge)
-            // Free UI: no Pro Suite card, always a collapsed grid when it returns.
-            binding.proSuiteGrid.isVisible = false
-            binding.proSuiteChevron.rotation = 0f
         }
-        binding.proSuiteCard.isVisible = pro
     }
 
     /**
@@ -624,13 +601,77 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * The scan FAB lives inside the 96dp orbital [R.id.fabHost], so both views must be
-     * shown or hidden together — UiSmokeTest asserts `fabScan` visibility directly, and a
-     * host-only toggle would leave the button on screen (and vice versa).
+     * T3.6 — the Tools sheet (§4.3): two rows of four tiles over a PRO
+     * divider, every tile a [R.layout.view_tool_tile]. Core tiles call the
+     * P2 flows directly; Pro tiles pass through [ProGate] first, so Free
+     * gets the pitch instead of the flow.
      */
-    private fun setFabVisible(visible: Boolean) {
-        binding.fabHost.isVisible = visible
-        binding.fabScan.isVisible = visible
+    private fun showToolsSheet() {
+        val sheet = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_tools, null)
+        sheet.setContentView(view)
+
+        class Tile(val id: Int, val label: Int, val icon: Int, val pro: Boolean, val run: () -> Unit)
+
+        fun addTiles(row: LinearLayout, tiles: List<Tile>) {
+            for (t in tiles) {
+                val tile = layoutInflater.inflate(R.layout.view_tool_tile, row, false)
+                tile.id = t.id
+                tile.findViewById<ImageView>(R.id.tileIcon).setImageResource(t.icon)
+                tile.findViewById<TextView>(R.id.tileLabel).setText(t.label)
+                tile.setOnClickListener {
+                    sheet.dismiss()
+                    if (t.pro && !ProGate.isPro(this@MainActivity)) showProPanel()
+                    else t.run()
+                }
+                row.addView(tile)
+            }
+        }
+
+        addTiles(
+            view.findViewById(R.id.sheetRow1),
+            listOf(
+                Tile(R.id.tile_edit, R.string.tool_edit, R.drawable.ic_edit, false) {
+                    pickEditPdf.launch(arrayOf("application/pdf"))
+                },
+                Tile(R.id.tile_merge, R.string.tool_merge, R.drawable.ic_merge, false) {
+                    mergeFlow.showMergeChooser()
+                },
+                Tile(R.id.tile_compress, R.string.tool_compress, R.drawable.ic_compress, false) {
+                    compressFlow.start()
+                },
+                Tile(R.id.tile_resize, R.string.tool_resize, R.drawable.ic_resize, false) {
+                    pickResizeImage.launch("image/*")
+                }
+            )
+        )
+        addTiles(
+            view.findViewById(R.id.sheetRow2),
+            listOf(
+                Tile(R.id.tile_ocr, R.string.btn_ocr_text, R.drawable.ic_ocr, true) {
+                    chooseProSource(
+                        R.string.ocr_title,
+                        onScan = { doc -> ocrFlow.runOcrForScan(doc) },
+                        onPdf = { uri -> ocrFlow.runOcrForPdf(uri) },
+                        onImage = { uri -> ocrFlow.runOcrForImage(uri) }
+                    )
+                },
+                Tile(R.id.tile_lock, R.string.btn_lock_unlock, R.drawable.ic_lock, true) {
+                    lockFlow.chooseLockSource()
+                },
+                Tile(R.id.tile_long_image, R.string.btn_long_image, R.drawable.ic_long_image, true) {
+                    chooseProSource(
+                        R.string.btn_long_image,
+                        onScan = { doc -> longImageFlow.runLongImageForScan(doc) },
+                        onPdf = { uri -> longImageFlow.runLongImageForPdf(uri) }
+                    )
+                },
+                Tile(R.id.tile_vault, R.string.bar_vault, R.drawable.ic_vault, true) {
+                    vaultFlow.openVaultWithPin()
+                }
+            )
+        )
+        sheet.show()
     }
 
     private fun setSelectionMode(enabled: Boolean) {
@@ -639,33 +680,11 @@ class MainActivity : BaseActivity(), HomeHost {
         if (!enabled) selectedIds.clear()
         adapter.selectionMode = enabled
         adapter.notifyDataSetChanged()
-        setFabVisible(!enabled)
-        binding.toolsRow.isVisible = !enabled && !vaultMode
+        binding.bottomBar.isVisible = !enabled
         applyToolbarTitle()
         updateStatusLine()
         updateListHeader()
         invalidateOptionsMenu()
-    }
-
-    /** Expands or collapses the Pro Suite grid right below the core tools. */
-    private fun toggleProSuite() {
-        if (!ProGate.isPro(this)) {
-            showProPanel()
-            return
-        }
-        val expanded = !binding.proSuiteGrid.isVisible
-        binding.proSuiteGrid.isVisible = expanded
-        // Single chevron asset, spun 180° instead of swapping up/down drawables.
-        // One-shot animator: the infinite-animation ambient gate (SwMotion) is Phase 4.
-        ObjectAnimator.ofFloat(
-            binding.proSuiteChevron, "rotation", if (expanded) 180f else 0f
-        ).apply {
-            duration = 200L
-            // Material3 standard curve (0.4,0,0.2,1) — PathInterpolator lives in the
-            // framework jar; androidx' FastOutSlowInInterpolator is not on our classpath.
-            interpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
-            start()
-        }
     }
 
     // ------------------------------------------------------------------
@@ -677,11 +696,10 @@ class MainActivity : BaseActivity(), HomeHost {
         vaultMode = enabled
         backCallback.isEnabled = selectionMode || vaultMode
         binding.vaultBanner.isVisible = enabled
-        binding.toolsRow.isVisible = !enabled && !selectionMode
-        // In the vault the FAB becomes "add": move a scan in, or import a PDF.
-        setFabVisible(!selectionMode)
-        binding.fabScan.setImageResource(if (enabled) R.drawable.ic_add else R.drawable.ic_camera)
-        binding.fabScan.contentDescription =
+        // In the vault SCAN becomes "add": move a scan in, or import a PDF.
+        binding.bottomBar.isVisible = !selectionMode
+        binding.scanIcon.setImageResource(if (enabled) R.drawable.ic_add else R.drawable.ic_camera)
+        binding.btnScan.contentDescription =
             getString(if (enabled) R.string.vault_add_title else R.string.scan)
         binding.emptyTitle.setText(if (enabled) R.string.vault_empty_title else R.string.empty_title)
         binding.emptySubtitle.setText(if (enabled) R.string.vault_empty_subtitle else R.string.empty_subtitle)

@@ -18,6 +18,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -25,6 +26,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowDialog
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
@@ -127,10 +129,18 @@ class TextFitTest {
      * T1.1), then two measure/layout passes so padding-driven remeasures settle.
      */
     private fun checkScreen(activity: Activity, name: String, afterLayout: (View) -> Unit = {}) {
-        val scale = RuntimeEnvironment.getFontScale()
-        val label = "$name @ scale $scale"
         val content = activity.findViewById<ViewGroup>(android.R.id.content)
         val root = content.getChildAt(0) ?: content
+        checkView(activity, root, name, afterLayout)
+    }
+
+    /**
+     * The measure/walk half of [checkScreen], reusable for views that live in
+     * another window (T3.6: the Tools sheet's dialog decor).
+     */
+    private fun checkView(activity: Activity, root: View, name: String, afterLayout: (View) -> Unit = {}) {
+        val scale = RuntimeEnvironment.getFontScale()
+        val label = "$name @ scale $scale"
         val config = activity.resources.configuration
         val density = activity.resources.displayMetrics.density
         val w = Math.round(config.screenWidthDp * density)
@@ -307,6 +317,27 @@ class TextFitTest {
         atBothFontScales {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 scenario.onActivity { checkScreen(it, "Home") }
+            }
+        }
+        assertNoProblems()
+    }
+
+    /**
+     * T3.6: the Tools sheet lives in its own dialog window, so it gets its own
+     * decor walk. Owner-approved to join the known-red list if it fails for a
+     * genuine fit reason (never `@Ignore`).
+     */
+    @Test
+    fun `tools sheet text fits`() {
+        atBothFontScales {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    activity.findViewById<View>(R.id.btnTools).performClick()
+                    val sheet = ShadowDialog.getLatestDialog()
+                    assertNotNull("tools sheet should open", sheet)
+                    checkView(activity, sheet!!.window!!.decorView, "ToolsSheet")
+                    sheet.dismiss()
+                }
             }
         }
         assertNoProblems()

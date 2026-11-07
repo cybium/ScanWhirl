@@ -127,13 +127,14 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `tools are a two by two grid and settings lives in the toolbar`() {
+    fun `bottom bar carries Tools, SCAN and Vault and settings lives in the toolbar`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                assertNotNull(activity.findViewById<android.view.View>(R.id.toolResize))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.toolCompress))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.toolEdit))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.toolMerge))
+                val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
+                assertTrue("bottom bar visible in normal mode", bar.isVisible)
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnTools))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnScan))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnVault))
 
                 val menu = activity.findViewById<
                     com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
@@ -143,10 +144,13 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `edit tool opens the pdf picker`() {
+    fun `edit tile in the tools sheet opens the pdf picker`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                activity.findViewById<android.view.View>(R.id.toolEdit).performClick()
+                activity.findViewById<android.view.View>(R.id.btnTools).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("tools sheet should open", sheet)
+                sheet!!.findViewById<android.view.View>(R.id.tile_edit).performClick()
                 val started = shadowOf(activity).nextStartedActivity
                 assertEquals(android.content.Intent.ACTION_OPEN_DOCUMENT, started?.action)
             }
@@ -205,7 +209,9 @@ class UiSmokeTest {
         seedDoc("Merge two")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                activity.findViewById<android.view.View>(R.id.toolMerge).performClick()
+                activity.findViewById<android.view.View>(R.id.btnTools).performClick()
+                ShadowDialog.getLatestDialog()!!
+                    .findViewById<android.view.View>(R.id.tile_merge).performClick()
                 val chooser = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
                 assertTrue("merge chooser should be showing", chooser.isShowing)
                 // Item 0 = merge saved scans -> the scan picker dialog.
@@ -323,44 +329,49 @@ class UiSmokeTest {
                 forceLayout(list)
                 val card = list.findViewHolderForAdapterPosition(0)!!.itemView
                 val toolbar = activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
-                val fab = activity.findViewById<android.view.View>(R.id.fabScan)
+                val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
 
                 // normal mode: the custom title row carries the name now
                 assertEquals(app.getString(R.string.app_name),
                     activity.findViewById<android.widget.TextView>(R.id.appNameText).text.toString())
                 assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
-                assertTrue(fab.isVisible)
+                assertTrue("bottom bar shows in normal mode", bar.isVisible)
 
                 // long press -> selection mode with 1 selected
                 card.performLongClick()
                 assertEquals(app.resources.getQuantityString(R.plurals.selected_count, 1, 1), toolbar.title)
-                assertFalse(fab.isVisible)
+                assertFalse("bottom bar hides while selecting", bar.isVisible)
 
                 // back -> exits selection mode, title row comes back
                 activity.onBackPressed()
                 assertEquals(app.getString(R.string.app_name),
                     activity.findViewById<android.widget.TextView>(R.id.appNameText).text.toString())
                 assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
-                assertTrue(fab.isVisible)
+                assertTrue("bottom bar returns with the list", bar.isVisible)
             }
         }
     }
 
     @Test
-    fun `tools row visible on main screen with resize and compress tools`() {
+    fun `tools row and pro suite card are gone, bottom bar replaces them`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val row = activity.findViewById<android.view.View>(R.id.toolsRow)
-                assertTrue("tools row visible when empty", row.isVisible)
-
-                val labels = mutableListOf<android.widget.TextView>()
-                collectTextViews(row, labels)
-                val texts = labels.map { it.text.toString() }
-                assertTrue("Resize label present: $texts", app.getString(R.string.tool_resize) in texts)
-                assertTrue("Compress label present: $texts", app.getString(R.string.tool_compress) in texts)
-
-                assertTrue(activity.findViewById<android.view.View>(R.id.toolResize).isClickable)
-                assertTrue(activity.findViewById<android.view.View>(R.id.toolCompress).isClickable)
+                // T3.6: the tools row and Pro Suite card are gone — the Tools
+                // sheet carries their tiles now (HomeScreenTest pins the sheet).
+                // The ids were deleted with their views, so look them up by name.
+                val pkg = activity.packageName
+                assertEquals(
+                    "toolsRow id must be gone",
+                    0, activity.resources.getIdentifier("toolsRow", "id", pkg)
+                )
+                assertEquals(
+                    "proSuiteCard id must be gone",
+                    0, activity.resources.getIdentifier("proSuiteCard", "id", pkg)
+                )
+                assertTrue(
+                    "bottom bar replaces the tools row",
+                    activity.findViewById<android.view.View>(R.id.bottomBar).isVisible
+                )
             }
         }
     }
@@ -377,7 +388,9 @@ class UiSmokeTest {
         seedDoc("Compressible")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                activity.findViewById<android.view.View>(R.id.toolCompress).performClick()
+                activity.findViewById<android.view.View>(R.id.btnTools).performClick()
+                ShadowDialog.getLatestDialog()!!
+                    .findViewById<android.view.View>(R.id.tile_compress).performClick()
                 val dialog = ShadowDialog.getLatestDialog()
                 assertNotNull("compress dialog should appear", dialog)
                 assertTrue((dialog as android.app.Dialog).isShowing)
@@ -516,9 +529,9 @@ class UiSmokeTest {
     fun `scan button offers camera or gallery import without crashing`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val fab = activity.findViewById<android.view.View>(R.id.fabScan)
-                assertNotNull("FAB should be on screen", fab)
-                fab.performClick()
+                val scan = activity.findViewById<android.view.View>(R.id.btnScan)
+                assertNotNull("SCAN should be on screen", scan)
+                scan.performClick()
                 val dialog = ShadowDialog.getLatestDialog()
                 assertNotNull("Scan source chooser should open", dialog)
                 assertTrue((dialog as android.app.Dialog).isShowing)
@@ -1609,7 +1622,7 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `expandable pro suite and editor pro tools reveal all pro actions and render screenshots`() = runBlocking {
+    fun `tools sheet reveals all pro actions and editor pro tools render screenshots`() = runBlocking {
         com.scanwhirl.app.util.ProGate.setPro(app, true)
         val lockedId = seedDoc("Physics Midterm (Locked)", pages = 3)
         repo.protectPdf(lockedId, "1234")
@@ -1625,15 +1638,17 @@ class UiSmokeTest {
                 ready
             }
             scenario.onActivity { activity ->
-                val grid = activity.findViewById<android.view.View>(R.id.proSuiteGrid)
-                assertFalse("Pro Suite starts collapsed", grid.isVisible)
-                activity.findViewById<android.view.View>(R.id.btnProSuite).performClick()
-                assertTrue("Pro Suite expands on tap", grid.isVisible)
-                assertNotNull(activity.findViewById<android.view.View>(R.id.toolVault))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.toolOcr))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.toolLockPdf))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.toolLongImage))
+                // T3.6: the Pro Suite card died; its four actions are Pro tiles
+                // in the Tools sheet behind btnTools.
+                activity.findViewById<android.view.View>(R.id.btnTools).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("tools sheet should open", sheet)
+                assertNotNull(sheet!!.findViewById<android.view.View>(R.id.tile_ocr))
+                assertNotNull(sheet.findViewById<android.view.View>(R.id.tile_lock))
+                assertNotNull(sheet.findViewById<android.view.View>(R.id.tile_long_image))
+                assertNotNull(sheet.findViewById<android.view.View>(R.id.tile_vault))
                 renderActivityPng(activity, "/tmp/opencode/ui_home.png")
+                sheet.dismiss()
             }
         }
 
@@ -1665,12 +1680,10 @@ class UiSmokeTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `free preview hides the pro suite and shows the free badge`() {
+    fun `free preview gates the tools sheet behind the pro pitch`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val card = activity.findViewById<android.view.View>(R.id.proSuiteCard)
-                assertFalse("Pro Suite card must be hidden in Free", card.isVisible)
                 assertEquals(
                     "FREE",
                     activity.findViewById<android.widget.TextView>(R.id.proBadge).text.toString()
@@ -1687,18 +1700,29 @@ class UiSmokeTest {
                     activity.findViewById<android.view.View>(R.id.chipInText).isVisible
                 )
                 search.clearFocus()
+
+                // T3.6: the Tools sheet itself is not gated — a Free tap on a
+                // Pro tile must land on the pitch instead of the flow.
+                activity.findViewById<android.view.View>(R.id.btnTools).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("Tools sheet opens in Free too", sheet)
+                sheet!!.findViewById<android.view.View>(R.id.tile_ocr).performClick()
+                val pitch = ShadowDialog.getLatestDialog()
+                assertNotNull("Free tap on a Pro tile shows the pitch", pitch)
+                assertNotNull(
+                    "pitch is the Pro panel",
+                    pitch!!.findViewById<android.view.View>(R.id.proDossierStatus)
+                )
             }
         }
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
     }
 
     @Test
-    fun `pro preview shows the suite, the gold badge and pro search`() {
+    fun `pro preview opens the source chooser and shows the gold badge`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val card = activity.findViewById<android.view.View>(R.id.proSuiteCard)
-                assertTrue("Pro Suite card must be visible in Pro", card.isVisible)
                 assertEquals(
                     "PRO",
                     activity.findViewById<android.widget.TextView>(R.id.proBadge).text.toString()
@@ -1717,6 +1741,15 @@ class UiSmokeTest {
                     activity.findViewById<android.view.View>(R.id.chipInText).isVisible
                 )
                 search.clearFocus()
+
+                // T3.6: in Pro the same tile runs the flow — the source chooser.
+                activity.findViewById<android.view.View>(R.id.btnTools).performClick()
+                ShadowDialog.getLatestDialog()!!
+                    .findViewById<android.view.View>(R.id.tile_ocr).performClick()
+                val chooser = ShadowDialog.getLatestDialog()
+                assertNotNull("Pro tap on OCR opens the source chooser", chooser)
+                assertTrue((chooser as android.app.Dialog).isShowing)
+                chooser.dismiss()
             }
         }
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
@@ -1799,7 +1832,7 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `vault mode shows the vault list and turns the fab into add`() {
+    fun `vault mode shows the vault list and turns SCAN into add`() {
         seedDoc("Public lecture", pages = 1)
         val secretId = seedDoc("Private notes", pages = 1)
         repo.setVaulted(secretId, true)
@@ -1809,12 +1842,11 @@ class UiSmokeTest {
             scenario.onActivity { activity ->
                 activity.setVaultMode(true)
                 assertTrue(activity.findViewById<android.view.View>(R.id.vaultBanner).isVisible)
-                assertFalse(activity.findViewById<android.view.View>(R.id.toolsRow).isVisible)
-                val fab = activity.findViewById<android.view.View>(R.id.fabScan)
-                assertTrue("add stays available in the vault", fab.isVisible)
+                val scan = activity.findViewById<android.view.View>(R.id.btnScan)
+                assertTrue("add stays available in the vault", scan.isVisible)
                 assertEquals(
                     app.getString(R.string.vault_add_title),
-                    fab.contentDescription?.toString()
+                    scan.contentDescription?.toString()
                 )
             }
             val onlySecretShown = pollUntil {

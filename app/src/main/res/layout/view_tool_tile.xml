@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- test26 T3.6 (§4.3): one tile of the Tools sheet — icon over a label,
+     ≥ 80dp tall, label ≤ 2 lines at 12sp. Width comes from the row
+     (0dp + weight 1); the margin spaces tiles inside a row. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    android:layout_weight="1"
+    android:background="@drawable/bg_chip_void"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center"
+    android:minHeight="80dp"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <ImageView
+        android:id="@+id/tileIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:contentDescription="@null"
+        app:tint="@color/cyan_primary" />
+
+    <TextView
+        android:id="@+id/tileLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:maxLines="2"
+        android:textColor="@color/text_hologram_hi"
+        android:textSize="12sp" />
+</LinearLayout>
