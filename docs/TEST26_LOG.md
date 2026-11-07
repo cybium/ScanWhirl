@@ -144,3 +144,52 @@ strict 0 red. P5 (dock rebuilds) + P3 T3.5 (search/sort bar) clear every item ab
 - T4.7 confirmed deferred to Phase 4 (owner instruction).
 
 ---
+
+## Phase 2 — Untangle MainActivity (pure refactor) ✅ complete
+
+**Result: `MainActivity.kt` 2,231 → 890 lines (gate < 900 met), zero visible change.**
+Method exactly per plan §P2: one flow per commit, bodies moved verbatim (only receiver
+changes), `registerForActivityResult` launchers stay in the Activity and are passed in as
+lambdas, full suite after every task.
+
+| Task | Commit | New file | MainActivity | Seams added |
+|---|---|---|---|---|
+| T2.1 | `65d7b63` | `tools/ResizeFlow.kt` (+`HomeHost`, `FlowUtil`) | 2231 → 2063 | `HomeHost` impl on MainActivity |
+| T2.2 | `86c5165` | `tools/CompressFlow.kt` | 2063 → 1749 | `pickPdf`, `docs` lambdas; `pickScan`/`devicePdfName` shared in `FlowUtil`; file-private `formatBytes` absorbed into `StatusLine.formatBytes` |
+| T2.3 | `4894cf5` | `tools/MergeFlow.kt` | 1749 → 1679 | `docs`, `onMerged` lambda (the 3 post-merge Home steps stay in one host lambda, order preserved); `showSortMenu` stayed behind |
+| T2.4 | `bd2bf56` | `tools/LockFlow.kt` | 1679 → 1424 | `docs`, `pickPdf` (wraps `pendingUriAction` + `pickProPdf`) |
+| T2.5 | `982b0f0` | `tools/VaultFlow.kt` | 1424 → 1305 | `pickPdf`, `setVaultMode`, `onProRequired`; **`setVaultMode` stays on the Activity** (tests call it: `UiSmokeTest`) |
+| T2.6 | `5ff7a9c` | `tools/LongImageFlow.kt` | 1305 → 1207 | none (source Uri handed in) |
+| T2.7 | `8cb7980` | `tools/OcrFlow.kt` | 1207 → 1094 | none; **old OCR dialog moved along untouched — P6 replaces it** |
+| T2.8 | `05dc6b5` | `tools/ScanLauncher.kt` | 1094 → 997 | `startScanning` lambda → `scannerLauncher` (registration stays); `showScanChooser`/`chooseProSource` stayed behind |
+| T2.9 | `709dd10` | `ui/ScanListAdapter.kt` | 997 → **890** | none — see deviation below |
+
+- **Suite after every task:** 221 tests/variant, **exactly the 3 documented
+  `TextFitTest` known-reds** (home / page editor / document), 0 any other failure —
+  same state as G1.
+- **Deviation T2.9 (documented):** the plan's T2.1–T2.8 table alone left MainActivity
+  at 997 — above the phase's `<900` gate. Closed it with pure refactors only:
+  `ScanListAdapter` moved to `ui/ScanListAdapter.kt` (same package → zero reference
+  changes), deleted `showAbout` (**already dead in `test25-final`** — zero callers;
+  `SettingsActivity` has its own), and 9 now-unused imports. No behaviour change.
+- **Near-miss caught pre-compile:** the `showAbout` deletion range also swallowed the
+  `scannerLauncher` registration (the `}` asserted as its close was actually
+  `scannerLauncher`'s). Caught by auditing `git diff` before building; restored
+  byte-identical from git (shows as untouched context in the diff), recompiled and
+  re-ran the suite green. Recorded here because it is exactly the class of error the
+  "verify before commit" discipline exists for.
+- `tools/` after the phase: **10 files, 1,609 lines** (`HomeHost` 23, `FlowUtil` 60,
+  `MergeFlow` 110, `LongImageFlow` 126, `ScanLauncher` 140, `OcrFlow` 141, `VaultFlow` 164,
+  `ResizeFlow` 204, `LockFlow` 295, `CompressFlow` 346).
+- **Phase-end full build** `test assembleRelease -PtestBuild --no-daemon --continue`:
+  BUILD FAILED *only* on the 3 known-red TextFit tests (expected with `--continue`);
+  **both variants 221 tests / 3 failures / 0 errors**, APK produced
+  (`app-release.apk`, 6,544,641 bytes — not delivered; next delivery is **alpha2 at G2**).
+- Gate check: same test count as G1 (221) ✅ · MainActivity < 900 (890) ✅ ·
+  diff mostly deletions in `MainActivity`, additions in `tools/` (+`ui/ScanListAdapter.kt`) ✅
+- Nothing pushed; 18 commits on `test26-redesign` through `709dd10`.
+
+**Next:** plan-mode review of Phase 3 (the new Home) with the owner → build mode →
+**G2 (`alpha2`)**.
+
+---
