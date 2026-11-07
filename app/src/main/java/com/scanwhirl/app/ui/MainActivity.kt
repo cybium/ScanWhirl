@@ -44,19 +44,18 @@ import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
+import com.scanwhirl.app.tools.LongImageFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.VaultFlow
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.ImageTools
-import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SearchMatcher
-import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
@@ -116,6 +115,9 @@ class MainActivity : BaseActivity(), HomeHost {
             setVaultMode = { enabled -> setVaultMode(enabled) },
             onProRequired = { showProPanel() }
         )
+    }
+    private val longImageFlow: LongImageFlow by lazy {
+        LongImageFlow(activity = this, repo = repo, host = this)
     }
 
     private var selectionMode = false
@@ -238,8 +240,8 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.toolLongImage.setOnClickListener {
             chooseProSource(
                 R.string.btn_long_image,
-                onScan = { doc -> runLongImageForScan(doc) },
-                onPdf = { uri -> runLongImageForPdf(uri) }
+                onScan = { doc -> longImageFlow.runLongImageForScan(doc) },
+                onPdf = { uri -> longImageFlow.runLongImageForPdf(uri) }
             )
         }
         binding.btnVaultLock.setOnClickListener { setVaultMode(false) }
@@ -618,46 +620,6 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-
-    private fun runLongImageForScan(doc: ScanDocument) {
-        if (doc.pageFiles.isEmpty()) return
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val out = withContext(Dispatchers.IO) {
-                    val dir = File(cacheDir, "documents/share").apply { mkdirs() }
-                    val file = File(dir, ShareUtils.sanitizeName(doc.name) + " - long.jpg")
-                    LongImage.stitch(doc.pageFiles, file)
-                    file
-                }
-                progress.dismiss()
-                val dims = ImageTools.imageSize(out.readBytes()) ?: (0 to 0)
-                startActivity(
-                    ExportResultActivity.intent(
-                        this@MainActivity,
-                        outputPath = out.path,
-                        previewPath = out.path,
-                        mime = "image/jpeg",
-                        displayName = out.name,
-                        beforeBytes = doc.pageFiles.sumOf { it.length() },
-                        afterBytes = out.length(),
-                        width = dims.first,
-                        height = dims.second,
-                        title = doc.name,
-                        warning = null
-                    )
-                )
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
     // ------------------------------------------------------------------
     // Scan source chooser (camera vs a straight gallery import)
     // ------------------------------------------------------------------
@@ -802,66 +764,6 @@ class MainActivity : BaseActivity(), HomeHost {
             }
             .setNegativeButton(R.string.close, null)
             .showSw(isSheet = true)
-    }
-
-    // ------------------------------------------------------------------
-    // Pro Suite: Long Image from a scan or a device PDF
-    // ------------------------------------------------------------------
-
-    private fun runLongImageForPdf(uri: Uri) {
-        val progress = showProgress()
-        val tempDir = File(cacheDir, "longpdf_${System.nanoTime()}")
-        lifecycleScope.launch {
-            try {
-                val out = withContext(Dispatchers.IO) {
-                    tempDir.mkdirs()
-                    val pages = PdfPageRenderer.withSeekablePdf(this@MainActivity, uri) { fd ->
-                        val count = PdfPageRenderer.pageCount(fd)
-                        (0 until count).map { i ->
-                            val file = File(
-                                tempDir, String.format(Locale.ROOT, "page_%03d.jpg", i + 1)
-                            )
-                            file.writeBytes(PdfPageRenderer.renderPageJpeg(fd, i, 150f, 2048, 90))
-                            file
-                        }
-                    }
-                    val shareDir = File(cacheDir, "documents/share").apply { mkdirs() }
-                    val file = File(shareDir, ShareUtils.sanitizeName(FlowUtil.devicePdfName(repo, uri)) + " - long.jpg")
-                    LongImage.stitch(pages, file)
-                    file
-                }
-                progress.dismiss()
-                val dims = ImageTools.imageSize(out.readBytes()) ?: (0 to 0)
-                val before = withContext(Dispatchers.IO) {
-                    contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
-                }
-                startActivity(
-                    ExportResultActivity.intent(
-                        this@MainActivity,
-                        outputPath = out.path,
-                        previewPath = out.path,
-                        mime = "image/jpeg",
-                        displayName = out.name,
-                        beforeBytes = before,
-                        afterBytes = out.length(),
-                        width = dims.first,
-                        height = dims.second,
-                        title = FlowUtil.devicePdfName(repo, uri),
-                        warning = null
-                    )
-                )
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            } finally {
-                tempDir.deleteRecursively()
-            }
-        }
     }
 
 
