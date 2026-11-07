@@ -48,16 +48,17 @@ class GlobeHomeActivityTest {
     }
 
     @Test
-    fun `globe activity is the launcher, main activity is not`() {
+    fun `main activity is the launcher, the globe is not`() {
         // MATCH_DEFAULT_ONLY would miss it: launcher filters carry no
         // CATEGORY_DEFAULT, so resolve with plain flags like a real launcher.
+        // test26 T3.9: Home (MainActivity) took the MAIN/LAUNCHER filter.
         val launch = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val resolved = app.packageManager.resolveActivity(launch, 0)
         assertNotNull("app must have a launcher", resolved)
         val name = resolved?.activityInfo?.name
         assertTrue(
-            "launcher should be the globe home, was $name",
-            name?.endsWith("GlobeHomeActivity") == true
+            "launcher should be Home (MainActivity), was $name",
+            name?.endsWith("MainActivity") == true
         )
     }
 

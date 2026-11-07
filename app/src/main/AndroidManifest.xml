@@ -21,22 +21,23 @@
         android:theme="@style/Theme.ScanWhirl"
         android:enableOnBackInvokedCallback="true">
 
+        <!-- test26 T3.9: Home is the launcher now; the globe activity stays
+             in the tree (unreachable) until T7 removes it. -->
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- test23 launcher: holographic globe home; pinch-in opens the Shelf. -->
-        <activity
-            android:name=".ui.globe.GlobeHomeActivity"
-            android:exported="true"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.ScanWhirl">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.globe.GlobeHomeActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.ScanWhirl" />
 
         <activity
             android:name=".ui.DocumentViewerActivity"

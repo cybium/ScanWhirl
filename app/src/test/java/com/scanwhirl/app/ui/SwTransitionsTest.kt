@@ -109,30 +109,9 @@ class SwTransitionsTest {
             }
     }
 
-    @Test
-    fun `finishing the shelf warps back to the globe`() {
-        val controller = org.robolectric.Robolectric
-            .buildActivity(MainActivity::class.java)
-            .create()
-            .start()
-            .resume()
-        val activity = controller.get()
-
-        activity.finish()
-
-        val shadow = shadowOf(activity)
-        assertEquals(
-            "Globe must warp back in",
-            R.anim.globe_enter_warp,
-            shadow.pendingTransitionEnterAnimationResourceId
-        )
-        assertEquals(
-            "Shelf must warp out",
-            R.anim.shelf_exit_warp,
-            shadow.pendingTransitionExitAnimationResourceId
-        )
-        controller.destroy()
-    }
+    // test26 T3.9: "finishing the shelf warps back to the globe" was deleted
+    // here — MainActivity.finish() no longer overrides (Home is the launcher;
+    // the globe exits with the app). The no-warp case below still holds.
 
     @Test
     fun `finishing the shelf without the globe preference plays no warp`() {

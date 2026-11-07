@@ -321,18 +321,6 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    /**
-     * test25 Phase 4: leaving the Shelf back to the globe home plays the
-     * return warp (globe enters, shelf exits) instead of the system fade.
-     * Only when the globe is the activity below — otherwise plain finish.
-     */
-    override fun finish() {
-        super.finish()
-        if (Prefs.globeHomeEnabled(this)) {
-            com.scanwhirl.app.ui.SwTransitions.warpBackToGlobe(this)
-        }
-    }
-
     /** HUD status line under the app name, when enabled in Settings (T1.5/T3.2). */
     private fun updateStatusLine() {
         if (Prefs.showGreeting(this) && !selectionMode) {
