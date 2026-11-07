@@ -31,9 +31,6 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.gms.common.api.ApiException
-import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
-import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -48,10 +45,10 @@ import com.scanwhirl.app.tools.LongImageFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.tools.ResizeFlow
+import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.tools.VaultFlow
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
-import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SearchMatcher
@@ -120,6 +117,14 @@ class MainActivity : BaseActivity(), HomeHost {
     }
     private val ocrFlow: OcrFlow by lazy {
         OcrFlow(activity = this, repo = repo, host = this)
+    }
+    private val scanLauncher: ScanLauncher by lazy {
+        ScanLauncher(
+            activity = this, repo = repo, host = this,
+            startScanning = { sender ->
+                scannerLauncher.launch(IntentSenderRequest.Builder(sender).build())
+            }
+        )
     }
 
     private var selectionMode = false
@@ -197,7 +202,7 @@ class MainActivity : BaseActivity(), HomeHost {
     private val pickGalleryImages = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
     ) { uris ->
-        if (uris.isNotEmpty()) stageAndReview(uris)
+        if (uris.isNotEmpty()) scanLauncher.stageAndReview(uris)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -267,7 +272,7 @@ class MainActivity : BaseActivity(), HomeHost {
             f.isDirectory && f.name.startsWith("edit_snapshot_")
         }
         stale?.forEach { it.deleteRecursively() }
-        offerUnfinishedScan()
+        scanLauncher.offerUnfinishedScan()
 
         applyToolbarTitle()
         refreshList()
@@ -278,29 +283,6 @@ class MainActivity : BaseActivity(), HomeHost {
             intent.removeExtra(EXTRA_OPEN_SCANNER)
             showScanChooser()
         }
-    }
-
-    /**
-     * A review screen that died mid-edit leaves its staging folder behind.
-     * Offer to resume it; deleting is the user's explicit choice.
-     */
-    private fun offerUnfinishedScan() {
-        val pending = cacheDir.listFiles { f ->
-            f.isDirectory &&
-                f.name.startsWith("pending_") &&
-                !f.listFiles { p -> p.extension.equals("jpg", true) }.isNullOrEmpty()
-        }?.maxByOrNull { it.lastModified() } ?: return
-        val count = pending.listFiles { p -> p.extension.equals("jpg", true) }?.size ?: 0
-        SwDialog.card(this)
-            .setTitle(R.string.resume_scan_title)
-            .setMessage(getString(R.string.resume_scan_msg, count))
-            .setPositiveButton(R.string.resume_scan_resume) { _, _ ->
-                startActivity(
-                    ScanReviewActivity.intent(this, pending.path, null, repo.nextDocumentName())
-                )
-            }
-            .setNegativeButton(R.string.discard) { _, _ -> pending.deleteRecursively() }
-            .showSw(isSheet = false)
     }
 
     override fun onResume() {
@@ -610,7 +592,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 )
             ) { _, which ->
                 when (which) {
-                    0 -> launchScanner()
+                    0 -> scanLauncher.launchScanner()
                     1 -> pickGalleryImages.launch("image/*")
                 }
             }
@@ -842,88 +824,9 @@ class MainActivity : BaseActivity(), HomeHost {
             if (uris.isEmpty()) {
                 Toast.makeText(this, R.string.scan_no_pages, Toast.LENGTH_SHORT).show()
             } else {
-                stageAndReview(uris)
+                scanLauncher.stageAndReview(uris)
             }
         }
-
-    /**
-     * Opens the Google scanner, mode dependent on auto-enhance setting.
-     * Gallery import inside the scanner is disabled on purpose: it runs
-     * perspective crop and tilted photos came back tilted. Photos are
-     * imported directly from the scan chooser instead (EXIF only).
-     */
-    private fun launchScanner() {
-        val options = GmsDocumentScannerOptions.Builder()
-            .setGalleryImportAllowed(false)
-            .setScannerMode(
-                if (Prefs.autoEnhanceScan(this)) {
-                    GmsDocumentScannerOptions.SCANNER_MODE_FULL
-                } else {
-                    GmsDocumentScannerOptions.SCANNER_MODE_BASE
-                }
-            )
-            .setResultFormats(
-                GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
-                GmsDocumentScannerOptions.RESULT_FORMAT_PDF
-            )
-            .setPageLimit(30)
-            .build()
-        try {
-            GmsDocumentScanning.getClient(options)
-                .getStartScanIntent(this)
-                .addOnSuccessListener { sender ->
-                    scannerLauncher.launch(IntentSenderRequest.Builder(sender).build())
-                }
-                .addOnFailureListener { e ->
-                    val msg = if (e is ApiException) {
-                        getString(R.string.scanner_unavailable, e.statusCode)
-                    } else {
-                        getString(R.string.scanner_failed, e.message)
-                    }
-                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                }
-        } catch (e: Exception) {
-            Toast.makeText(this, getString(R.string.scanner_failed, e.message), Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /** Copies the scanned page URIs into a staging folder, then opens the review screen. */
-    private fun stageAndReview(uris: List<Uri>) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val dir = withContext(Dispatchers.IO) {
-                    val staging = File(cacheDir, "pending_${System.currentTimeMillis()}")
-                    staging.mkdirs()
-                    uris.forEachIndexed { index, uri ->
-                        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: throw IllegalStateException("could not read a scanned page")
-                        if (bytes.isEmpty()) throw IllegalStateException("a scanned page was empty")
-                        File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
-                            // EXIF rotation only: gallery photos are never cropped or tilted.
-                            .writeBytes(ImageTools.normalizePage(bytes))
-                    }
-                    staging
-                }
-                startActivity(
-                    ScanReviewActivity.intent(
-                        this@MainActivity,
-                        dir.path,
-                        null,
-                        repo.nextDocumentName()
-                    )
-                )
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.stage_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            } finally {
-                progress.dismiss()
-            }
-        }
-    }
 
     private fun openViewer(doc: ScanDocument) {
         if (doc.isLocked) {
