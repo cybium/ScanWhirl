@@ -510,12 +510,13 @@ Files: New `SwMotion.kt`, New `SwTransitions.kt`, `GlobeScene.kt`, `HolographicE
 - `tools:ignore` on the new chip was dropped before the first build: the layout declares no
   `xmlns:tools`.
 - `chooseTheme()` remains dead-but-harmless (D1) — untouched.
-- **Next → Phase 6** (versionCode 25 / `1.1.1-test25`, APK + source zip deliverables,
-  git commit of Phases 2–5).
+- **Next → Phase 6 — ✅ COMPLETE** (versionCode 25 / `1.1.1-test25` shipped, APK + source
+  zip deliverables copied to `C:\Users\Cybium\Downloads\`, Phases 2–5 committed as
+  `52562d1`, Phase 6 record committed separately — see the Phase 6 as-run section below).
 
 ---
 
-## ⏳ PHASE 6 — Verification & Deliverables — **NOT STARTED**
+## ✅ PHASE 6 — Verification & Deliverables — **COMPLETE**
 
 ```bash
 # 1. Bump version
@@ -548,6 +549,40 @@ git commit -m "test25: Visual Overhaul & Architecture"
 ```
 
 Expected: 180 + new unit tests, 0 failures, 0 errors.
+
+### As-run verification (2026-11-07) — all green
+
+1. **Commit #1 (Phases 2–5 work):** `52562d1` — 27 files, +3128/−676, made **before**
+   the version bump so Phase 6 ships as its own commit (user-approved two-commit split;
+   differs from the single `git add -A` sketch above).
+2. **Version bump:** `app/build.gradle.kts` → `versionCode = 25`,
+   `versionName = "1.1.1-test25"` — verified as exactly 2 changed lines via `git diff`.
+3. **Full build + test:** `./gradlew test assembleRelease -PtestBuild --no-daemon` →
+   **BUILD SUCCESSFUL** (2m 33s). Parsed `app/build/test-results/{testDebugUnitTest,
+   testReleaseUnitTest}/*.xml` → **209 tests / 0 failures / 0 errors per variant**
+   (418 total across debug+release; 201 baseline + 8 `Phase5ScreensTest`).
+4. **APK badging** (`aapt2 dump badging`, build-tools 36.0.0):
+   - `package: name='com.scanwhirl.app.test' versionCode='25' versionName='1.1.1-test25'`
+   - `application-label:'ScanWhirl Test'`
+   - `launchable-activity: name='com.scanwhirl.app.ui.globe.GlobeHomeActivity'`
+5. **Deliverables:**
+   - `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test25.apk` (6,533,325 bytes) ✓
+   - `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test25-source.zip` — created **after
+     this record** so the shipped source contains the completed MD; verified via
+     `unzip -l` (contains `docs/SCANWHIRL_TEST25_MASTER_PLAN.md`, excludes `.git/`,
+     `build/`, `*.apk`).
+6. **Commit #2:** this Phase 6 record + version bump (hash recorded in git history).
+
+### Deviations from the sketch above
+
+- **Zip exclude list extended.** The `zip -r` command as originally written would have
+  shipped gitignored **signing material** (`keystore/`, `keystore.properties`) and build
+  junk (top-level `.gradle/`, `.kotlin/`, `dist/`, `captures/`, `local.properties`,
+  `*.apk`). The as-run command adds excludes for all of those — no secrets in the
+  delivered source archive.
+- **Two-commit structure** (see item 1) instead of one trailing `git add -A` commit.
+- **No `git push`** — deliverables are local copies only; remote untouched
+  (`origin/master` still at `0e0e17d`-era test24 history as before).
 
 ---
 
@@ -665,3 +700,9 @@ Expected: 180 + new unit tests, 0 failures, 0 errors.
 - Modified (Phase 2/3 work from earlier sessions): `globe/GlobeHomeActivityTest.kt`,
   `globe/GlobeSceneTest.kt`
 - Every other test file untouched (verified by mtime before Phase 5 completion)
+
+### Build / deliverables (Phase 6)
+- `app/build.gradle.kts` — version bump only (`versionCode = 25`, `versionName = "1.1.1-test25"`)
+- `docs/SCANWHIRL_TEST25_MASTER_PLAN.md` — Phase 6 ✅ COMPLETE as-run record (this file)
+- Delivered (not in repo): `ScanWhirl-1.1.1-test25.apk` + `ScanWhirl-1.1.1-test25-source.zip`
+  → `/mnt/c/Users/Cybium/Downloads/`
