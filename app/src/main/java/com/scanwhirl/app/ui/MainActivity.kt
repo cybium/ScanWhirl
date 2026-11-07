@@ -43,6 +43,7 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
+import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
@@ -82,6 +83,17 @@ class MainActivity : BaseActivity(), HomeHost {
             activity = this, repo = repo, host = this,
             pickPdf = { pickCompressPdf.launch("application/pdf") },
             docs = { allDocs }
+        )
+    }
+    private val mergeFlow: MergeFlow by lazy {
+        MergeFlow(
+            activity = this, repo = repo, host = this,
+            docs = { allDocs },
+            onMerged = { merged ->
+                setSelectionMode(false)
+                refreshList()
+                openViewer(merged)
+            }
         )
     }
 
@@ -188,7 +200,7 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.toolEdit.setOnClickListener {
             pickEditPdf.launch(arrayOf("application/pdf"))
         }
-        binding.toolMerge.setOnClickListener { showMergeChooser() }
+        binding.toolMerge.setOnClickListener { mergeFlow.showMergeChooser() }
 
         // Expandable Pro Suite on Home: one button that expands Vault, OCR, Lock/Unlock, Long Image.
         binding.btnProSuite.setOnClickListener { toggleProSuite() }
@@ -331,7 +343,7 @@ class MainActivity : BaseActivity(), HomeHost {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.action_close -> { setSelectionMode(false); true }
-        R.id.action_merge -> { promptMerge(); true }
+        R.id.action_merge -> { mergeFlow.promptMerge(selectedIds.toList()); true }
         R.id.action_settings -> {
             startActivity(SettingsActivity.intent(this))
             true
@@ -1297,23 +1309,6 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    /** Merge tool: choose saved scans or device PDFs. */
-    private fun showMergeChooser() {
-        SwDialog.sheet(this)
-            .setTitle(R.string.merge_chooser_title)
-            .setItems(
-                arrayOf(
-                    getString(R.string.merge_source_scans),
-                    getString(R.string.merge_source_device)
-                )
-            ) { _, which ->
-                if (which == 0) showMergePicker()
-                else startActivity(MergePdfActivity.intent(this))
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
     // ------------------------------------------------------------------
     // Search / sort / merge / settings
     // ------------------------------------------------------------------
@@ -1334,71 +1329,6 @@ class MainActivity : BaseActivity(), HomeHost {
             true
         }
         popup.show()
-    }
-
-    /** Merge tool: tick 2+ scans, then name the merged document. */
-    private fun showMergePicker() {
-        val docs = allDocs
-        if (docs.size < 2) {
-            Toast.makeText(this, R.string.merge_needs_two, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val checked = BooleanArray(docs.size)
-        val labels = docs.map { it.name }.toTypedArray()
-        SwDialog.sheet(this)
-            .setTitle(R.string.merge_title)
-            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
-                checked[which] = isChecked
-            }
-            .setPositiveButton(R.string.merge) { _, _ ->
-                val ids = docs.filterIndexed { i, _ -> checked[i] }.map { it.id }
-                if (ids.size < 2) {
-                    Toast.makeText(this, R.string.merge_needs_two, Toast.LENGTH_SHORT).show()
-                } else {
-                    promptMergeName(ids)
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
-    private fun promptMergeName(ids: List<String>) {
-        val (builder, input) = SwDialog.input(this, hint = getString(R.string.merge_name_hint))
-        builder
-            .setTitle(R.string.merge_title)
-            .setPositiveButton(R.string.save) { _, _ ->
-                doMerge(ids, input.text?.toString())
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
-
-    private fun promptMerge() {
-        if (selectedIds.size < 2) {
-            Toast.makeText(this, R.string.merge_needs_two, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val (builder, input) = SwDialog.input(this, hint = getString(R.string.merge_name_hint))
-        builder
-            .setTitle(R.string.merge_title)
-            .setPositiveButton(R.string.save) { _, _ ->
-                doMerge(selectedIds.toList(), input.text?.toString())
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
-
-    private fun doMerge(ids: List<String>, name: String?) {
-        lifecycleScope.launch {
-            try {
-                val merged = repo.mergeDocuments(ids, name)
-                setSelectionMode(false)
-                refreshList()
-                openViewer(merged)
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, "Merge failed: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        }
     }
 
     /** Pro extra: pack every ticked scan's PDF into one ZIP, then show the result. */
