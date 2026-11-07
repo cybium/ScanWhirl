@@ -193,3 +193,39 @@ lambdas, full suite after every task.
 **G2 (`alpha2`)**.
 
 ---
+
+## Phase 3 plan review — APPROVED (2026-11-07, owner + Claude)
+
+Plan-mode walkthrough of §PHASE 3 + §4.2/§4.3 + §5 rules against the current
+`activity_main.xml` (757 lines, 34 IDs), binding code, and all test ID references.
+Five decisions taken, all **owner-approved via question round**:
+
+1. **T2.9 deviation (P2) APPROVED as done** — adapter file move + dead `showAbout`
+   + 9 unused imports; pure refactors, gate `<900` met. Signed off at this review.
+2. **FAB dies in T3.6** (not named in the plan's Delete list) — §4.2 has no FAB;
+   bottom-bar SCAN inherits its click behavior incl. vault-mode add; `fabPulse`
+   ambient animator goes with it.
+3. **Selection `Move` button: visible but disabled in P3**, wired to the category
+   picker in T4.3 (HomeScreenTest asserts it shows; no dead-geometry surprises).
+4. **Nudge: view created in T3.1 but kept `GONE` until T4.4** (Quick Sort) — no
+   inert control ships in alpha2.
+5. **Tools-sheet `TextFitTest` added this phase**; if it fails for genuine fit
+   reasons it is documented as a 4th known-red until P5 — never `@Ignore`.
+
+**Execution strategy (T3.1 crux):** T3.1 builds the full §4.2 skeleton while the
+old toolbar / tools row / Pro suite / FAB stay parked in place, so every commit
+compiles and the suite stays green; T3.2–T3.6 each fill one region and delete only
+its own predecessor; the Delete list lands in T3.6 exactly where the plan says.
+Intermediate states are never delivered (first delivery = alpha2 at G2).
+
+**Defaults:** rename `greetingText` → `statusLine`, keep `proBadge`/`appNameText`
+IDs; Settings globe row stays until P7; new strings in `values/strings.xml` only
+(± `values-hi` where the key already exists), matching the T1.5 `status_*` pattern.
+
+**Tests contract:** counts grow (new `HomeFilterTest`, `HomeScreenTest`, TextFit
+Tools sheet) — exact numbers recorded at phase end; known-red set stays exactly
+the 3 documented TextFit screens ± the documented Tools-sheet one.
+
+**Next:** T3.1 layout skeleton → … → T3.9 launcher → **G2 (`alpha2`)**.
+
+---
