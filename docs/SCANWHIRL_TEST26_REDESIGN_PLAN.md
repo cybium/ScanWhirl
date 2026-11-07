@@ -11,28 +11,25 @@
 > a larger status-line spec in **T3.2**, test `ExportHygieneTest`, question **Q7**, checklist item **11**.
 > Everything else is unchanged. Do not redo T0–T1.
 
+> **Rev 3 — 2026-11-08, after G2 (alpha2 + 6 device screenshots, owner review).** G2 is **NOT passed yet**: the owner
+> found real defects that 258 green tests did not catch. Rev 3 adds only: complaints **#14–#18**, decisions **N11–N12**,
+> a new **Phase 3b** (T3.10–T3.13, fix-before-Phase-4) with mini-gate **G2b**, **T4.8** (delete also removes the app's own
+> exported copies) and a re-ordering of Phase 4 (**T4.7 first**), a rewritten **§4.5 Document screen** and **T5.2**, mini-gate
+> **G2c** after Phase 4, tests `StatusLineScreenTest` / `SelectionBarTest` / `DeleteExportsTest`, questions **Q8–Q9**, checklist
+> items **12–14**. Everything else is unchanged. Do not redo T0–T3.9; only fix what Phase 3b names.
+
 > **Target:** `versionCode = 26`, `versionName = "1.1.1-test26"`
 > **Project root:** `/home/cybium/ScanWhirl` (WSL/Ubuntu) · **Package:** `com.scanwhirl.app.test` only
 > **Branch:** `test26-redesign` (from tag `test25-final`)
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
-> **STATUS (2026-11-07):** T0–T3.9 done — **Phase 3 COMPLETE, G1 PASSED, G2 delivered →
-> STOPPED waiting for owner screenshots.** HEAD `fb96782` on `test26-redesign` (+ docs
-> commit), phase-end full build: **both variants 258 tests / 3 failures** — the 3 = exactly
-> `TextFitTest.{home,page editor,document}` (documented known-reds until P5). APK
-> `ScanWhirl-1.1.1-test26-alpha2.apk` in `/mnt/c/Users/Cybium/Downloads/` — aapt2:
-> `com.scanwhirl.app.test` · `ScanWhirl Test` · launcher **`MainActivity`** ·
-> versionCode 25 (bump in T9.1). Commits: T3.7 `e83ec2d` (selection contextual header,
-> Move visible-but-disabled until T4.3) · T3.8 `4405904` (empty states + Show all,
-> `emptyOrbit`/`ic_empty_orbit`/`empty_subtitle` deleted) · T3.9 `fb96782`
-> (MAIN/LAUNCHER → `MainActivity`, `finish()` warp override deleted).
-> **G2 needs 6 owner screenshots:** Home 0 docs · Home with docs · chip selected ·
-> search focused · Tools sheet · selection mode. After G2 passes → plan-mode review of
-> Phase 4 (T4.1–T4.7; Move wiring T4.3, nudge T4.4, export hygiene T4.7).
-> **How to continue in a new session:** read `docs/TEST26_HANDOFF.md` (session handoff)
-> — or its copy `/mnt/c/Users/Cybium/Downloads/ScanWhirl-test26-HANDOFF.md`, which points
-> at the repo docs. As-run record: `docs/TEST26_LOG.md`.
+> **STATUS (2026-11-08):** T0–T3.9 committed (HEAD `fb96782` + docs). Phase-end build was 258 tests / 3 known-red
+> TextFit. **G2 reviewed by the owner → not passed.** Next: **Phase 3b** (T3.10–T3.13, build mode, no extra plan review
+> needed — fully specified here) → build `alpha2b` → **STOP (G2b)** → then plan-mode review of the *revised* Phase 4
+> (T4.7 → T4.8 → T4.1–T4.6) → **G2c** (`alpha2c`) → Phase 5.
+> **How to continue in a new session:** read `docs/TEST26_HANDOFF.md` (or its copy in Downloads), then the
+> section **"PHASE 3b"** below, then §4.5 and T4.7/T4.8. As-run record: `docs/TEST26_LOG.md`.
 
 ---
 
@@ -121,6 +118,11 @@ to repaint what already existed. The result:
 | 11 | "OCR tool should have had edit option before copy" | — | OCR result is shown as a read-only `setMessage()` dialog with Copy/Share (`DocumentViewerActivity.runAndShowOcr` L504; `MainActivity.showOcrTextDialog` L1053). OCR output has line-break and spacing errors that need fixing before copy. | New full-screen **OCR Editor** with cleanup tools; Copy copies the *edited* text; edits persist for search (P6). |
 | 12 | "You feared overhauling, got useless Earth and a separate app inside" | — | See §1: the test25 plan locked everything and defined Phase 5 as "wiring only". | This plan removes the locks and merges the two homes. |
 | 13 | "Ghost PDF in Recent files" (found at G1, not in the original plan) | Android Files app > Recent shows `Document 2.pdf`, `Document 2 (1).pdf`, `(2)`, `(3)`, `Document 3 (1).pdf`, `Duo.pdf`. Sizes of `Document 2 (2).pdf` (249 kB) and `Document 3 (1).pdf` (14.78 MB) match the in-app sizes (243 KB and 14.1 MB as the app shows them, KiB/MiB) once units are converted, so they are copies of the current documents. | **(verified in the alpha1 APK bytecode)** `util/DownloadSaver.savePdf` never overwrites: `uniqueName()` appends ` (1)`, ` (2)` and inserts a new MediaStore row into `Documents/ScanWhirl` each time. It is called from: **`ScanReviewActivity.saveAndFinish` for Pro users, with no setting and no confirmation** (coroutine `saveAndFinish$1$1$1` reads `scan.pdf` and calls `savePdf`; the Pro condition is an `isPro` check right before the IO launch, so confirm it when you open the file), `DocumentViewerActivity.savePdfToDocuments` (download button), `ExportResultActivity.saveResult`, and the Compress / Lock / Unlock flows (they build names with `pdfNameFor`; the exact save call in those three was not traced, so read them in T4.7). So every scan saved in the app silently leaves a visible copy in the Files app, and every re-export adds another numbered copy. | Opt-in instead of silent, replace instead of duplicate, visible confirmation with Undo (T4.7, N10). |
+| 14 | "Status line says 0 DOCS while one document is listed; says 2 DOCS on an empty Home" (G2, screenshots Home-empty and Home-with-docs; the same line read `1 DOC 4.4 MB` correctly one minute later) | G2 screenshots: `GOOD NIGHT · 0 DOCS · 0 B` above a list with 1 document (4.4 MB), and `2 DOCS · 0 B` above the empty state after both documents were deleted in the app. | **(hypothesis from the screenshots, confirm in code)** The status line is refreshed on some events only (it was right after leaving selection mode, wrong after first load and after delete), i.e. it is computed from a different call / earlier snapshot than the list the adapter shows. `StatusLineTest` only tests the formatter, so nothing tests that the *screen* shows the right numbers. | T3.10: one `renderHome()` path; status line derives from the same unfiltered list. New `StatusLineScreenTest`. |
+| 15 | "Selection header reads `1 sel…`" (G2) | Selection mode: `X  1 sel…  Move  Merge  Export  Delete` on one 360dp row; the count is clipped. Merge is bright with 1 item selected. | Four text actions + count on one row (T3.7) — the same width-overflow class as complaint #6. | T3.12: count gets its own row; actions move to a bottom action bar (§4.2). |
+| 16 | "Compress is broken into `Compres` / `s`" in the Tools sheet (G2) | Tools sheet, 4th tile of row 1. `Lock / Unlock` and `Long Image` also wrap. | Tile inner width (~58dp after padding) < the width of the word at 12sp, so the line breaks **inside** the word. `TextFitTest` stayed green because it checks ellipsis/height, not "is a word broken". | T3.11: padding/columns fix + a new longest-word-fits assertion. |
+| 17 | "Edit screen three-dots list is long and duplicates the Pro Tools bar" (G2, Document screen) | Overflow lists: Save PDF to Documents, OCR Text, Long Image, Lock PDF, Hide in Vault, Categorize, **Rotate left, Rotate right, Delete page, Save this page**. The gold Pro Tools tray below lists Lock PDF / OCR Text / Long Image / Hide in Vault again. | Every new action was added to the overflow menu and to the tray (two entry points for the same thing), and page-level actions (rotate / delete page / save page) sit in a *document* menu where "which page?" is undefined. Also a crown "Pro Tools" button is shown to a user who is already Pro. | §4.5 rewrite + T5.2: one overflow only (the bottom `More`), page actions move to page selection / page editor, N12. |
+| 18 | "Deleting inside ScanWhirl does not delete the document in the ScanWhirl folder" (G2, checked in Files app) | `Documents/ScanWhirl/*.pdf` stays after the in-app delete. | Not a regression: those files are the **exported copies** from complaint #13 (silent Pro copy on save, every download/export). In-app documents live in app-private storage; deleting a doc never touches the MediaStore copies, because nothing records which copies belong to which document. T4.7 stops *creating* silent copies but does not remove existing ones. | N11, T4.8: record exported copies per document, offer to delete them together with the document. |
 
 ---
 
@@ -138,6 +140,8 @@ to repaint what already existed. The result:
 | N8 | **OCR Editor** replaces both OCR dialogs. | P6. |
 | N9 | **"Futuristic" comes from the design language, not from a 3-D toy:** starfield window background (already exists), glass cards, neon category colours, HUD micro-typography, viewfinder corner brackets, a scan-line on processing. | P8. |
 | N10 | **No silent copies outside the app.** Saving a scan never writes to `Documents/ScanWhirl` unless the owner turned on "Also save a copy to Documents" (default OFF). Every explicit export shows a confirmation with **Open** and **Undo**, and re-exporting the same document **replaces** its earlier copy instead of adding `(1)`, `(2)`. | Complaint #13. T4.7. Open question Q7. |
+| N11 | **Delete means delete.** Every copy of a document that ScanWhirl itself wrote to `Documents/ScanWhirl` is recorded in that document's `meta.txt`. Deleting the document (from Home, selection mode or the Document screen) asks once, in the same confirm dialog: **"Also delete N saved PDF copies in Documents/ScanWhirl"** (checkbox, default **ON**, shown only when N > 0). Copies the app cannot delete (created by another install/package) are skipped and reported, never block the in-app delete. | Complaint #18. T4.8. Question Q8. |
+| N12 | **Menu discipline.** An action has exactly one home: primary bar, or `More`, or a contextual bar. No action is listed in both a toolbar overflow and a tray. A document-level menu never contains page-level actions. A Pro user never sees a "Pro" button; Free users see a small `PRO` pill on locked rows. | Complaint #17. §4.5, T5.2. |
 
 **Category colours (D3, unchanged) + new:**
 Study `#38EF7D` · Receipts `#FF8A4C` · IDs `#5B9DFF` · Forms `#B07CFF` · Other `#94A3B8` ·
@@ -193,7 +197,20 @@ Every non-root screen has a visible Up arrow. No screen is reachable *only* by a
 └────────────────────────────────────┘
 ```
 
-Selection mode replaces the header: `X  2 selected   Move · Merge · Export · Delete`.
+**Selection mode (Rev 3, replaces the one-row header of T3.7):**
+
+```
+┌────────────────────────────────────┐
+│ [X]  2 selected              Select all │  header row: count never truncated
+│ (search + chip rail stay visible)  │
+│  list, selected cards outlined     │
+├────────────────────────────────────┤
+│ [Move] [Merge] [Export] [Delete]   │  contextual bottom action bar (replaces SCAN bar)
+└────────────────────────────────────┘
+```
+Action bar = §5.4 dock-item spec (icon over label, weight 1, minHeight 56dp, inset-aware). Enable rules: `Move` disabled
+until T4.3; `Merge` only when N ≥ 2; `Export` and `Delete` when N ≥ 1; `Delete` tinted with the danger colour. Back press /
+X leaves selection and restores the SCAN bar.
 
 ### 4.3 Tools sheet
 
@@ -203,7 +220,11 @@ Selection mode replaces the header: `X  2 selected   Move · Merge · Export · 
  ── PRO ──────────────────────────────
  [Text OCR] [Lock PDF] [Long image] [Vault]
 ```
-4-column grid, each tile ≥ 80dp tall, label ≤ 2 lines at 12sp.
+4-column grid, each tile ≥ 80dp tall, label ≤ 2 lines at 12sp, **and no word may ever be broken across lines**
+(Rev 3, complaint #16). If the longest label word does not fit the tile's inner width at the current width/font scale, the
+sheet uses **3 columns** instead of 4 (rows are chunked per section: Free tiles, then the PRO divider, then Pro tiles).
+Shorten `Lock / Unlock` to `Lock` (the tile already toggles by state). T4.4 adds a 9th tile (`Quick sort`), which also
+fits a 3-column layout.
 
 ### 4.4 Scan Review (save) — category is chosen here
 
@@ -217,16 +238,33 @@ Selection mode replaces the header: `X  2 selected   Move · Merge · Export · 
  [        Save as PDF        ]
 ```
 
-### 4.5 Document screen
+### 4.5 Document screen (rewritten in Rev 3 — complaint #17, N12)
 
 ```
- <-  Document 3                [download] [⋮]
- 3 pages · 14.1 MB · ● OTHER (tap to change)
+ <-  Document 3                           [download]      top bar: Up, title, ONE icon (explicit export)
+ 3 pages · 14.1 MB · ● OTHER (tap to change)              category chip -> picker (T4.6)
+ [Select pages]                                           visible button; page checkboxes appear only after tapping it
  page grid …
- [ Share (wide, primary) ] [ Edit ] [ Text ] [ More ]
+ [   Share (weight 2, primary)   ] [ Edit ] [ Text ] [ More ]
 ```
-`More` holds: Rename, Duplicate, Move to category, Lock/Unlock, Vault, Long image, **Delete**
-(with the existing danger confirmation). Delete leaves the primary bar so it can't be tapped by accident.
+
+- **No toolbar overflow (⋮) and no gold "Pro Tools" tray.** Delete the old overflow menu, `proToolsPanel`, the crown
+  `Pro Tools` button and the `btnDelete`/`btnShare` row. **Check what the pencil icon in the top bar does:** if it is *Edit
+  pages*, delete it (the bottom `Edit` replaces it); if it is *Rename*, remove the icon and make the title tappable, with
+  `Rename` also in `More`.
+- **`download` icon** = *Save a copy to Documents* (the only way a copy is made, N10). It shows the Snackbar with Open / Undo (T4.7).
+- **`More` bottom sheet** (the single home for everything secondary, 3 short groups, same handlers as today):
+  - *Organize*: Rename · Move to category · Duplicate
+  - *Tools*: Compress · Lock / Unlock PDF *(PRO)* · Long image *(PRO)* · Hide in Vault *(PRO)*
+  - *Danger* (visually separated, red): **Delete document** (existing danger confirm, which also carries the T4.8 checkbox)
+  - OCR is **not** repeated here: `Text` in the bottom bar is its entry point.
+- **Removed from the document level entirely:** `Rotate left`, `Rotate right`, `Delete page`, `Save this page`,
+  `Categorize` (chip replaces it), `Save PDF to Documents` (download icon replaces it). Page actions live in two places only:
+  1. *Select pages* mode → contextual bar `Rotate · Extract · Delete` acting on the ticked pages;
+  2. the Page editor dock (§4.6) for one page.
+- Free users see the three Pro rows with a small `PRO` pill (tap → `showProPanel()`); Pro users see no badge at all.
+- Page checkboxes and drag handles are **not** shown permanently; checkboxes only in *Select pages* mode; the reorder handle may
+  stay if drag-reorder has no other visible entry (R7) — keep it small and low-contrast.
 
 ### 4.6 Page editor
 Bottom dock: **Rotate · Crop · Filter · Delete**, equal weight, ≥ 64dp tall, inset-aware (spec in §5.4).
@@ -507,7 +545,57 @@ search focused, Tools sheet, selection mode.
 
 ---
 
+### PHASE 3b — G2 fixes (new in Rev 3, do these BEFORE Phase 4)
+
+Source: owner review of alpha2 (screenshots: Home 0 docs, Home with docs, Unsorted chip + Tools sheet, selection mode, Document
+screen ×2). Everything else on Home the owner called good — **do not redesign anything not named here.** Each task is one
+commit, `UiSmokeTest`/`HomeScreenTest` updated in the same commit. Build mode; no separate plan review needed.
+
+**T3.10 Status line shows the truth (complaint #14).**
+First *find the cause*: grep where `StatusLine.format` is called and where the adapter list is submitted. Fix so there is **one**
+`renderHome()` (or equivalent) that, from the **unfiltered** document list, updates the status line, chip counts, nudge input, and
+from the filtered list updates the adapter + list header. Call it after: first load, `onResume`, delete (single/bulk), import,
+save, `setCategory`, leaving selection mode. Size = sum of the PDF/document sizes the card already shows (never `0 B` when a
+document has size). Singular/plural already handled by the formatter.
+Tests — new `StatusLineScreenTest` (Robolectric NATIVE): launch with 1 stored doc → `statusLine` text contains `1 DOC` and the
+same size the card shows; add a doc → `2 DOCS`; delete both via the repo + refresh → `0 DOCS` and the empty state; filtering by
+a category does **not** change the status line. Write the red proof first (it must fail on alpha2's code).
+
+**T3.11 Tools sheet: no broken words (complaint #16).**
+(a) In `view_tool_tile`: horizontal padding ≤ 2dp, label 12sp `maxLines=2`, `hyphenationFrequency=none`, `breakStrategy=simple`;
+sheet side padding 16dp→12dp, tile gap 8dp→6dp. (b) Column rule from §4.3: if the longest label word still does not fit the
+tile's inner width (measure with the tile's real `TextPaint`) → 3 columns, chunking each section into rows. (c) Label
+`Lock / Unlock` → `Lock` (new/changed string only in `strings.xml`, + `values-hi` where the key exists).
+Tests: extend the Tools-sheet case of `TextFitTest` with a **longest-word assertion** for every tile label (`measureText(word) <=
+textView.width − paddings`) at `w320dp` × font scale 1.0 and 1.3. **Red-proof it first** by forcing a too-narrow tile (as T1.2 did);
+if Robolectric reports zero widths the assertion is vacuous — then add an XML-dimension fallback and say so in the log. `HomeScreenTest`
+"tools sheet lists 8 tiles" must stay green (8 tiles, any column count; update the old "rows 4/4" assertion to "sections 4 + 4").
+
+**T3.12 Selection mode: count never clipped, actions in a bottom bar (complaint #15).**
+Per §4.2 (Rev 3). Create `Widget.ScanWhirl.Button.DockItem` here (spec §5.4); T5.1 reuses it. Header row = `X` + full `N selected`
+label + `Select all` text button. Actions = contextual bottom action bar replacing the SCAN bar while selecting (this *amends* the
+approved T3.7 rule "bottom bar hidden while selecting" — same intent, better use of the space; note the amendment in the log).
+Enable rules in §4.2. Keep Export-ZIP and delete-confirm logic untouched.
+Tests — new `SelectionBarTest`: N=1 → header text is exactly the full string and `Merge` disabled; N=2 → `Merge` enabled; `Select all`
+selects every visible card; Back exits selection and the SCAN bar returns; header string passes the text-fit check at 320dp ×1.3 with N=12.
+
+**T3.13 Home polish (tiny, one commit, ≤ 40 lines total).**
+(a) Bottom bar: 12dp side margins and 8dp above the navigation bar so its rounded corners no longer touch the screen edges.
+(b) Fresh installs default to sort **Date (newest first)** as drawn in §4.2 (existing users keep their stored preference; the
+alpha2 screenshots show `Name ▾`, check which default is set). (c) Empty state: add one muted line under "Scan your first
+document" — `Tap the camera button to start` (new string `empty_first_scan_hint`, en + hi). Nothing else.
+
+**G2b (mini-gate):** build `ScanWhirl-1.1.1-test26-alpha2b.apk` → Downloads → **STOP**. Owner screenshots (4): Home with docs
+(status line right) · Tools sheet · selection mode (1 selected, and 2 selected) · **search focused** (this one was missing at G2:
+confirm the clear × and, on Pro, the `In text` chip). Suite expectation: new tests green, only the 3 documented TextFit reds remain
+(Tools-sheet TextFit case must be green *and* real).
+
+---
+
 ### PHASE 4 — Categories become usable
+
+**Order (Rev 3): T4.7 → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5) → T4.6.** T4.7 goes first because it edits the same
+`ScanReviewActivity.saveAndFinish` call site as T4.1 and because the owner is already seeing ghost files in Files > Recent.
 
 **T4.1 Choose category when saving.** `activity_scan_review.xml`: add a `categoryRail`
 (single-select chips) under the title field. Pre-select `CategoryRules.classify(title)`; if that is
@@ -550,30 +638,68 @@ chip (never auto-applies). Skip if it slips — the rest of P4 stands alone.
      return the `Uri` as well as the name (add a small `SavedFile(uri, name)` result type; keep the old String API as a wrapper so
      `DownloadSaverTest` stays green).
   4. **Settings** row for the toggle is in T5.4.
-- Do NOT delete or rename files already in the owner's `Documents/ScanWhirl` folder. Cleaning those is the owner's call.
+- T4.7 itself does not delete or rename anything already in the owner's `Documents/ScanWhirl` folder. Removing copies on delete is T4.8, and only for copies the app can prove are its own.
 - Tests: new `ExportHygieneTest` (Robolectric): saving a scan with the pref OFF does not call the saver; with the pref ON it does;
   exporting the same name twice leaves one row (replace) and returns the same name; Undo removes the row; fallback to ` (1)` when
   the existing row is not writable. Existing `DownloadSaverTest` must stay green untouched.
 - Done when: `ExportHygieneTest` and `DownloadSaverTest` green; on device, scanning a doc and saving it leaves **no new file** in
   Files > Recent, and tapping the download button twice leaves **one** file.
 
+**T4.8 Delete removes the app's own exported copies (complaint #18, N11, Q8).**
+Depends on T4.7 (`SavedFile(uri, name)`).
+1. **Record.** Every successful `DownloadSaver.savePdf` made on behalf of a document (download button, export result, compress/lock/unlock,
+   the opt-in auto-copy) appends the returned `uri` to that document's `meta.txt` as one extra line `exports=<uri1>|<uri2>`.
+   Read the current `writeMeta`/`setCategory`/reader **first**: old docs have 2–3 lines and no trailing newline (§8), the new key must
+   be optional, unknown/missing keys must survive a `setCategory` rewrite, and old builds must ignore the line. Add `ScanRepository`
+   helpers `addExport(id, uri)`, `exportsOf(id): List<Uri>`; keep every existing repo test untouched.
+2. **Find legacy copies (best effort).** For documents that predate this change, also query MediaStore
+   (`relative_path='Documents/ScanWhirl/'`, rows **owned by this package**) for `_display_name` equal to `<docName>.pdf` or
+   `<docName> (n).pdf`, and include those in the count. Never match by anything looser.
+3. **Delete flow.** In the existing delete confirm dialog (Home single/bulk, selection mode, Document screen `More`), when the
+   total number of copies N > 0 add a checkbox row **"Also delete N saved PDF copy/copies in Documents/ScanWhirl"** (plural
+   resource, en + hi), default **checked** (Q8). On confirm: delete the in-app document first (never blocked), then try
+   `contentResolver.delete(uri, null, null)` for each copy inside try/catch. A copy that throws `SecurityException` /
+   `RecoverableSecurityException` (created by another package, e.g. the Play app or an older install) is **skipped**; do not launch
+   permission prompts. Show a Snackbar: "Deleted. 2 copies removed." or "Deleted. 1 copy removed, 1 could not be removed (delete it in Files)."
+4. **Never** touch a file the app did not write or cannot prove it wrote, and never touch anything when the box is unchecked.
+- Tests — new `DeleteExportsTest` (Robolectric, fake MediaStore as `DownloadSaverTest` does): export twice (replace → 1 row) →
+  `exportsOf` has the uri; delete with box checked → row gone and doc gone; unchecked → row stays; foreign-owned row → skipped,
+  doc still deleted, message reports it; legacy name match only hits `<name>.pdf` / `<name> (n).pdf` owned by the package; old
+  2-line `meta.txt` still reads and survives `setCategory`.
+- Done when, on the device: scan + save + tap download, then delete the document with the box checked → `Documents/ScanWhirl`
+  no longer has it. (Copies made by the earlier alpha installs may be reported as "could not be removed" — **verify on device**
+  whether Android lets the reinstalled test package delete them; if not, that is expected and the owner clears them in Files once.)
+
 **Tests:** `ScanReviewCategoryTest` (pick chip → saved doc has that category; typing "Invoice May"
 preselects Receipts; manual pick stops live re-suggest), `QuickSortQueueTest`, Home test for bulk
 Move. Add `ScanReviewActivity` to `TextFitTest`.
+
+**G2c (mini-gate, new in Rev 3):** after Phase 4 build `ScanWhirl-1.1.1-test26-alpha2c.apk` → Downloads → **STOP**. Phase 4
+changes what is written to the phone's storage, so the owner must see it on the device before Phase 5. Owner checks:
+(1) scan + save → open Files > Recent: **no new file**; (2) Document screen download twice → **one** file + Snackbar Open/Undo;
+(3) delete that document with the new checkbox → the file is gone from `Documents/ScanWhirl`; (4) pick a category on the save
+screen → Home chip rail filters by it; (5) Move + Quick sort work. Screenshots: Scan Review with category rail, delete dialog with
+the checkbox, Quick sort sheet, Home with the nudge.
 
 ---
 
 ### PHASE 5 — Viewers/editors with no clipped text
 
 **T5.1 Page editor dock (screenshot 4).** `activity_page_viewer.xml`: rebuild the dock to §5.4.
-New style `Widget.ScanWhirl.Button.DockItem`; delete the fixed 48dp heights; weights 1/1/1/1;
+Reuse `Widget.ScanWhirl.Button.DockItem` (created in T3.12); delete the fixed 48dp heights; weights 1/1/1/1;
 inset-aware. Check the top bar and the page counter against the status bar too.
 
-**T5.2 Document screen bottom bar (screenshot 3).** `activity_document_viewer.xml` per §4.5:
-`Share` (weight 2, primary) · `Edit` · `Text` · `More`. Remove `proToolsPanel` (collapsible Pro
-panel), the old `btnProTools`/`btnDelete`/`btnShare` row, and their dialog wiring; `More` is a
-bottom sheet listing the Pro/maintenance actions already implemented in the activity (same
-handlers, new entry point). Delete keeps its confirm dialog.
+**T5.2 Document screen (screenshots 3 and G2 Document-screen ×2; complaints #6b, #17; N12).** Implement §4.5 exactly:
+bottom bar `Share` (weight 2, primary) · `Edit` · `Text` · `More`, built from `DockItem` with `0dp` weights, no fixed heights.
+Delete: the toolbar overflow menu (`menu_document*.xml` and its `onOptionsItemSelected` branches that only the removed items used),
+`proToolsPanel`, the crown `btnProTools`, `btnDelete`, `btnShare` row and their wiring. `More` = `BottomSheetDialog` with the three groups
+in §4.5 calling the **same existing handlers** (Rename, Duplicate, Compress, Lock/Unlock, Long image, Hide in Vault, Delete with
+its confirm + T4.8 checkbox). Top bar = Up arrow + title + the single `download` icon (verify what the pencil does, see §4.5).
+Add the `Select pages` button and move `Rotate`, `Extract (save selected pages)`, `Delete pages` into its contextual bar; delete the
+document-level `Rotate left/right`, `Delete page`, `Save this page`, `Categorize` entries (T4.6 supplies the chip).
+Tests: `UiSmokeTest` document cases rewritten; new assertions that the document screen has **no** toolbar overflow, `More` opens a
+sheet whose rows == the §4.5 list, no action appears in two places, and `Share/Edit/Text/More` fit at `w320dp` × 1.3 (this turns
+`TextFitTest.document` green).
 
 **T5.3 Scan Review dock.** Inset-aware, weights, no fixed heights. (Category rail is T4.1.)
 
@@ -678,7 +804,7 @@ the test25 excludes (`.git/`, `.gradle/`, `build/`, `.kotlin/`, `dist/`, `captur
 | **Keep untouched** (the real safety net) | `ScanRepositoryTest`, `PdfGeneratorTest`, `ImageToolsTest`, `DownloadSaverTest`, `ScanFilterTest`, `SearchMatcherTest`, `PageThumbLoaderTest`, `ExternalVerifyExport` (only extended where T1.4 says so) |
 | **Rewrite** (same commit as the UI change) | `CategoryRulesTest`, `CategoryPersistTest`, `GreetingTest` → `StatusLineTest`, `UiSmokeTest` (edit what touches changed screens), `Phase5ScreensTest` (keep Settings/Review/Viewer parts that still apply) |
 | **Delete** (P7) | `GlobeSceneTest`, `GlobeHomeActivityTest`, `SwTransitionsTest`, and `SwMotionTest` only if `SwMotion` is deleted |
-| **New** | `TextFitTest`, `EmojiGuardTest`, `HomeFilterTest`, `HomeScreenTest`, `QuickSortQueueTest`, `ScanReviewCategoryTest`, `OcrCleanupTest`, `OcrEditorTest`, `ExportHygieneTest` |
+| **New** | `TextFitTest`, `EmojiGuardTest`, `HomeFilterTest`, `HomeScreenTest`, `QuickSortQueueTest`, `ScanReviewCategoryTest`, `OcrCleanupTest`, `OcrEditorTest`, `ExportHygieneTest`, `StatusLineScreenTest`, `SelectionBarTest`, `DeleteExportsTest` |
 
 Rule: a phase is not done while any test is red or skipped. Never `@Ignore` a test to get green —
 delete it with a one-line reason in the commit message if its feature is gone.
@@ -705,6 +831,12 @@ delete it with a one-line reason in the commit message if its feature is gone.
   `readLines()` and never assume line count (old docs may have only 2 lines).
 - The agent's image viewer may show stale PNGs. Check renders with PIL pixel sampling, and
   rely on the owner's device screenshots at gates for the real verdict.
+- **Green is not the same as readable (G2 lesson).** At G2 the suite was 258 green yet the owner found: a word broken inside a Tools tile
+  (`Compres`/`s`), a clipped `1 sel…`, a status line showing 0 DOCS over a listed document. Every new screen gets (a) a
+  longest-word-fits assertion, (b) a test that on-screen *numbers* equal the data, and (c) a red-proof before the fix.
+- Exported copies in `Documents/ScanWhirl` are MediaStore rows owned by the **package that wrote them**. The test package
+  (`com.scanwhirl.app.test`) can delete only its own; anything from the Play package or from an uninstalled install may be
+  undeletable — skip and report, never prompt (T4.8).
 - The app ships `values-hi`. New or changed strings need a Hindi entry (T8.6) or Hindi users see English.
 
 ---
@@ -720,6 +852,8 @@ delete it with a one-line reason in the commit message if its feature is gone.
 | Q5 | OCR-based category suggestion (T4.5): include? | **Yes, optional, suggest-only, never auto-applies.** |
 | Q6 | Hindi: I machine-translate new strings and flag for review? | **Yes.** |
 | Q7 | Should saving a scan still drop a copy into `Documents/ScanWhirl` (today's silent Pro behaviour)? | **No.** Off by default; opt-in switch in Settings (T4.7 / T5.4). |
+| Q8 | When deleting a document that has saved PDF copies in `Documents/ScanWhirl`: should the "Also delete copies" checkbox start checked? | **Checked** (owner expects delete to delete; he can untick; shown only when copies exist; only copies the app wrote). |
+| Q9 | Default sort for fresh installs? | **Date, newest first** (matches §4.2); existing users keep their choice. |
 
 ---
 
@@ -744,6 +878,9 @@ Each line maps to a complaint in §2. All must pass on a real device.
 10. Full suite green; `aapt2` reports `com.scanwhirl.app.test`, `1.1.1-test26`, versionCode 26.
 11. **No ghost files.** Scan and save a document, then open Files > Recent: **nothing new appears**. Tap the Document screen's download
     button twice: **one** file, and a Snackbar offers Open and Undo. *(#13)*
+12. **Numbers are true.** The Home status line always matches the list (`1 DOC` with one document, `0 DOCS` after the last delete) and the Tools sheet shows every label as whole words. *(#14, #16)*
+13. **Selection mode** shows the full `N selected` text, Merge is dimmed until 2 are picked, actions sit in a bottom bar. *(#15)*
+14. **Delete deletes.** Delete a document with the box ticked: it disappears from the app **and** from `Documents/ScanWhirl`. The Document screen has one overflow only (`More`), with no duplicated or page-level actions. *(#17, #18)*
 
 ---
 
@@ -756,9 +893,10 @@ Each line maps to a complaint in §2. All must pass on a real device.
 | Edge-to-edge changes layouts on older Android | Inset helper is applied uniformly; verify on the owner's device at G1. |
 | A small model rewrites big files badly | §0 rules: split tasks, new files over rewrites, stop after two failed attempts. |
 | New `Unsorted` value read by older builds | Old builds treat unknown meta values as `Other` (`isValid` fallback), so downgrade is safe. |
+| Deleting exported copies removes something the owner wanted | Only copies the app wrote and recorded (or exact-name, package-owned legacy matches), only when the checkbox is ticked, listed with a count in the dialog; never a bulk "clean folder" action. |
 | Removing Earth later regrets | Tag `pre-globe-removal`, deletion is a single phase. |
 
 
-Owner chose defaults in answers!
+Owner chose defaults in answers! (Rev 3: the same defaults apply to Q8 and Q9 unless the owner says otherwise.)
 
 *End of plan.*

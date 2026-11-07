@@ -412,3 +412,42 @@ BUILD FAILED *only* on the 3 known-red TextFit tests (expected with `--continue`
 Phase 4 (T4.1–T4.7; Move wiring T4.3, nudge T4.4, export hygiene T4.7).
 
 ---
+## G2 review → plan Rev 3 (2026-11-08)
+
+Owner reviewed alpha2 (6 screenshots) together with a reviewer session → **G2 NOT
+passed.** Plan + handoff came back as **Rev 3** (adopted into `docs/` this session);
+the `search focused` screenshot was never sent (re-requested at G2b).
+
+| # | Defect | Task |
+|---|---|---|
+| 14 | Status line stale: `0 DOCS · 0 B` over a listed doc; `2 DOCS · 0 B` over empty Home; right only after leaving selection | T3.10 |
+| 15 | Selection header clips to `1 sel…`; Merge looks bright at 1 | T3.12 |
+| 16 | Tools sheet breaks `Compres`/`s`; `Lock / Unlock` wraps | T3.11 |
+| 17 | Document ⋮ menu long, duplicates Pro tray, holds page actions | §4.5 + T5.2 (P5) |
+| 18 | In-app delete leaves `Documents/ScanWhirl/*.pdf` | T4.7 first, then new T4.8 (P4) |
+| — | Polish: bottom bar touches edges; sort shows `Name`; empty state lacks a hint | T3.13 |
+
+**Root causes verified in source before coding (all three Home defects confirmed):**
+
+- **#14:** `updateStatusLine()` (MainActivity:325) reads `adapter.currentList`
+  (filtered **and** possibly stale) and is called only from `onResume` (:311 —
+  right after async `refreshList()` launches, so it sees the pre-load list),
+  `updateSelectionHeader` (:575) and `setSelectionMode` (:718). **Never from
+  `applyList()`** → first load renders `0 DOCS · 0 B` and never refreshes;
+  post-delete `onResume` beats the async diff → `2 DOCS · 0 B` (files gone);
+  leaving selection happens to call it → correct. Matches all 3 readings.
+- **#16:** `view_tool_tile.xml` = 8dp padding + 4dp margin → ~58dp inner width
+  at 4 columns on 360dp; no `hyphenationFrequency`/`breakStrategy` → word
+  broken across lines. Sheet rows are fixed (`sheetRow1`/`sheetRow2`).
+- **#15:** `selCount` (weight 1, ellipsize) shares one row with X + 4 actions +
+  3 separators → truncates. Merge enable-logic (`n >= 2`) is correct but plain
+  TextViews have no visual disabled state.
+- **T3.13(b):** `Prefs.sortMode` already defaults to `SORT_DATE` — the
+  `Name ▾` in screenshots is the owner's **stored** preference surviving the
+  upgrade (same package). Verify only; existing users keep their pref.
+
+**Phase 3b order:** docs adopt Rev 3 → T3.10 → T3.11 → T3.12 → T3.13 →
+phase-end full build → **G2b** (`alpha2b`, STOP for 4 screenshots). Then
+plan-mode review of the revised Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → G2c.
+
+---

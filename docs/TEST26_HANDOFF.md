@@ -1,8 +1,8 @@
 # ScanWhirl test26 — Session Handoff (read this first in a new session)
 
 > Purpose: everything a fresh agent needs to continue the test26 redesign without this
-> conversation. Written 2026-11-07 at HEAD `fb96782` + docs commit, **Phase 3 COMPLETE,
-> G2 (`alpha2`) delivered → STOPPED for owner screenshots.**
+> conversation. Written 2026-11-07 at HEAD `fb96782`; **revised 2026-11-08 after the owner's G2 review (plan Rev 3)**.
+> **Phase 3 is built but G2 is NOT passed: do Phase 3b first (see §5).**
 > **Authoritative plan:** `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` (Rev 2) — read §0
 > (rules), §4–§5 (target UI), §6 (tasks), §7 (tests), §8 (gotchas) before coding.
 > **As-run record:** `docs/TEST26_LOG.md` — per-task entries + phase-end tables here.
@@ -19,8 +19,7 @@ categories, zero clipped text, OCR editor, Earth removed in P7), ship
 `versionCode 26` / `1.1.1-test26`. Owner installs each gate APK and sends screenshots
 before the next phase starts.
 
-**Current position: STOPPED at G2 — Phase 3 complete, alpha2 APK + all three md files
-delivered to `/mnt/c/Users/Cybium/Downloads/`, waiting for the owner's 6 screenshots.**
+**Current position (2026-11-08): G2 reviewed, 5 defects found, plan is now Rev 3. Next work = Phase 3b (T3.10–T3.13), then STOP at mini-gate G2b (`alpha2b`).**
 
 ## 2. Locations
 
@@ -118,21 +117,40 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
 
 ## 5. Next steps (in order)
 
-1. **G2 is the live stop-gate (this session stopped here).** Owner installs
-   `ScanWhirl-1.1.1-test26-alpha2.apk` and sends the 6 screenshots (§3). Review them
-   against §4/§5 of the plan: Home 0 docs (frame brackets + "Scan your first document"),
-   Home with docs, chip selected (category colour), search focused (clear × + In-text
-   chip on Pro), Tools sheet (8 tiles, rows 4/4), selection mode (header row
-   `X · N selected · Move · Merge · Export · Delete`, bottom bar hidden, Move dimmed).
-2. If G2 passes → **plan-mode review of Phase 4** (T4.1–T4.7: categories usable,
-   Move wiring T4.3, nudge T4.4, export hygiene T4.7) → then build mode.
-3. If G2 fails → fix in the named task's style, same-commit test updates, re-run
-   phase-end build, deliver alpha2 again (never skip the gate).
-4. **End-of-session duty (every session):** after any md edit, re-copy all three to
-   `/mnt/c/Users/Cybium/Downloads/ScanWhirl-test26-{PLAN,LOG,HANDOFF}.md` so the
-   Downloads copies alone tell the next session where to read.
+**G2 owner review result (2026-11-08): Home looks good to the owner; these are real defects found on the device that 258 green tests missed:**
+
+| # | Defect | Fix task (plan Rev 3) |
+|---|---|---|
+| 14 | Status line wrong: `0 DOCS · 0 B` over a listed 4.4 MB doc; `2 DOCS` over the empty state; right (`1 DOC 4.4 MB`) only after leaving selection mode | **T3.10** one `renderHome()` for status/counts/list + `StatusLineScreenTest` (red-proof first) |
+| 15 | Selection header clipped to `1 sel…`; Merge enabled with 1 item | **T3.12** count on its own row, `Select all`, actions in a bottom bar (DockItem), `SelectionBarTest` |
+| 16 | Tools sheet breaks the word `Compres`/`s`; `Lock / Unlock` wraps | **T3.11** tile padding / 3-column fallback, label `Lock`, longest-word assertion in `TextFitTest` |
+| 17 | Document-screen ⋮ menu is long, duplicates the gold Pro Tools tray, and holds page actions (Rotate, Delete page, Save this page) | **T5.2 + §4.5 rewrite** (one overflow = bottom `More`; page actions → Select pages / Page editor; no Pro button for Pro users). Phase 5 work, spec fixed now. |
+| 18 | Deleting a doc in-app leaves `Documents/ScanWhirl/*.pdf` | **T4.7 first, then new T4.8** (record exported copies in `meta.txt`, delete checkbox in the confirm dialog, skip copies the app cannot delete) |
+| — | Home polish: bottom bar touches screen edges; default sort shows `Name`; empty state has no hint line | **T3.13** |
+| — | `search focused` screenshot was not sent | requested again at **G2b** |
+
+**Order now:**
+
+1. **Phase 3b in build mode** (spec is in plan §"PHASE 3b"; no extra plan review): T3.10 → T3.11 → T3.12 → T3.13, one commit each,
+   tests in the same commit, red-proof the new tests first. Note in the log that T3.12 *amends* the approved T3.7 rule
+   ("bottom bar hidden while selecting" → "replaced by a contextual action bar"). Phase-end full build; expected: only the 3
+   documented TextFit reds (home / page editor / document) remain, plus the new tests green.
+2. **G2b:** build `ScanWhirl-1.1.1-test26-alpha2b.apk` → `/mnt/c/Users/Cybium/Downloads/` → **STOP**. Owner sends 4 screenshots (Home with
+   docs, Tools sheet, selection mode with 1 and 2 selected, search focused).
+3. If G2b passes → **plan-mode review of the revised Phase 4**. Order is now **T4.7 → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5) → T4.6**.
+4. **G2c:** after Phase 4 build `alpha2c` and STOP: Phase 4 changes what is written to the phone's storage, so the owner verifies on the device
+   (no new file in Files > Recent after saving; download twice = one file; delete with the checkbox removes the file).
+5. Then Phase 5 (documents/editors; T5.2 per §4.5) → G3, and so on as in the plan.
+6. **End-of-session duty (every session):** after any md edit re-copy all three to
+   `/mnt/c/Users/Cybium/Downloads/ScanWhirl-test26-{PLAN,LOG,HANDOFF}.md`.
+
+Things the reviewer could NOT verify (only the screenshots and md files were available, not the source): the cause of the stale status
+line (hypothesis in plan #14), what the pencil icon on the Document screen does (§4.5 says check), the exact `meta.txt` reader/writer
+shape (T4.8 says read it first), and whether the reinstalled test package can delete copies written by earlier installs (verify on device).
 
 ## 6. Key decisions already taken (don't re-ask)
+
+Rev 3 additions: N11 (delete also removes the app's own exported copies, checkbox default ON, only copies the app wrote), N12 (one home per action; no page-level actions in document menus; no Pro button for Pro users), Q8 = checked by default, Q9 = Date default for fresh installs, mini-gates G2b and G2c.
 
 Q1–Q6 defaults, N10, Q7, T4.7 (in P4), T5.4 Settings switch, T6.1 `removeGaps`, T3.2
 status-line styling now, `ExportHygieneTest`, checklist item 11. T3.5: `searchInText`
@@ -146,6 +164,9 @@ sheet title. §5.3's 36dp chip beats R6's 48dp (no test enforces R6 — noted in
 `bg_chip_unsorted_dashed` belongs to T8.4.
 
 ## 7. Gotchas learned this session (see also plan §8)
+
+- **Green is not readable (G2).** Robolectric can report a Tools tile as fine while a real phone breaks the word. New UI assertions must (a) check the longest word fits, (b) check on-screen numbers equal the data, and (c) be red-proofed before the fix.
+- Exported copies are MediaStore rows owned by the writing package; the test package can delete only its own. Skip and report, never prompt.
 
 - `ScanListAdapter` is a `ListAdapter`: list diffs land async — **`pollUntil { }` after
   every list-changing interaction**; initial state after launch is sync; `forceLayout(rv)`
