@@ -89,6 +89,7 @@ class DocumentViewerActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityDocumentViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)

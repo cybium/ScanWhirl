@@ -121,6 +121,7 @@ class ScanReviewActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityScanReviewBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
         onBackPressedDispatcher.addCallback(this, backCallback)
 
         stagingDir = File(intent.getStringExtra(EXTRA_STAGING) ?: return finish())

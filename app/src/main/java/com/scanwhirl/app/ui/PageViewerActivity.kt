@@ -82,6 +82,7 @@ class PageViewerActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPageViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
 
         binding.pager.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)

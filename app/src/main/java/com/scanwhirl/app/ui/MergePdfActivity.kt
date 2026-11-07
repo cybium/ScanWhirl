@@ -84,6 +84,7 @@ class MergePdfActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMergePdfBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
         binding.toolbar.setNavigationOnClickListener { finish() }
 
         binding.mergeList.layoutManager = LinearLayoutManager(this)

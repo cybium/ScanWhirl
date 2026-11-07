@@ -37,6 +37,7 @@ class SettingsActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
         binding.toolbar.setNavigationOnClickListener { finish() }
 
         // test25 Phase 5A / D1: Orbital-only dark theme — the row stays in the

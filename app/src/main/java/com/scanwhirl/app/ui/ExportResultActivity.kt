@@ -48,6 +48,7 @@ class ExportResultActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityExportResultBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
         binding.toolbar.setNavigationOnClickListener { finish() }
 
         outputPath = intent.getStringExtra(EXTRA_OUTPUT)

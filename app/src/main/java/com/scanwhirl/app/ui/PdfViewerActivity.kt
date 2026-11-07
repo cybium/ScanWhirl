@@ -57,6 +57,7 @@ class PdfViewerActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPdfViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
         // Optional full-screen wallpaper; otherwise the light document background shows.
         val wallpaper = com.scanwhirl.app.util.Wallpaper.drawable(this)
         if (wallpaper != null) {

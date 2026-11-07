@@ -20,6 +20,7 @@ import com.scanwhirl.app.databinding.ActivityGlobeHomeBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.BaseActivity
+import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.MainActivity
 import com.scanwhirl.app.ui.PdfViewerActivity
@@ -61,6 +62,7 @@ class GlobeHomeActivity : BaseActivity(), HolographicEarthView.Listener {
         super.onCreate(savedInstanceState)
         binding = ActivityGlobeHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
         repo = ScanRepository(this)
 
         // Settings escape hatch: globe off → straight to the Shelf.
