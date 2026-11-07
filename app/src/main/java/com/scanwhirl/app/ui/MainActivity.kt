@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.ContextThemeWrapper
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -25,6 +26,7 @@ import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.chip.Chip
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -40,6 +42,8 @@ import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.tools.VaultFlow
+import com.scanwhirl.app.util.CategoryRules
+import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.HomeFilter
 import com.scanwhirl.app.util.HomeState
 import com.scanwhirl.app.util.Prefs
@@ -127,6 +131,9 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** Current search query (applies to the saved-scans list). */
     private var query = ""
+
+    /** T3.4 — active chip-rail filter; `null` means the "All" chip. */
+    private var selectedCategory: String? = null
 
     /** Edit tool: pick one device PDF and open it as editable pages. */
     private val pickEditPdf =
@@ -354,6 +361,7 @@ class MainActivity : BaseActivity(), HomeHost {
             allDocs = withContext(Dispatchers.IO) {
                 if (vaultMode) repo.listVaultDocuments() else repo.listDocuments()
             }
+            buildChipRail()
             applyList()
         }
     }
@@ -364,7 +372,7 @@ class MainActivity : BaseActivity(), HomeHost {
         // Vault mode passes includeVaulted so the PIN'd list is the list.
         val state = HomeState(
             query = query,
-            category = null, // chip rail filter arrives in T3.4
+            category = selectedCategory,
             sort = Prefs.sortMode(this),
             inText = ProGate.isPro(this),
             includeVaulted = vaultMode
@@ -383,6 +391,88 @@ class MainActivity : BaseActivity(), HomeHost {
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
+    }
+
+    /**
+     * test26 T3.4 — build the category chip rail: **All**, then **Unsorted**
+     * only while it has documents, then the five picker categories. Each chip
+     * shows its count (global, so chips don't jump around while typing) and
+     * is tinted with its category colour when checked.
+     */
+    private fun buildChipRail() {
+        val counts = HomeFilter.counts(allDocs)
+        val rail = binding.chipGroup
+        rail.removeAllViews()
+
+        // (null, "All") stands in for "no category filter".
+        val entries = mutableListOf<Pair<String?, String>>()
+        entries += null to getString(R.string.chip_all)
+        if ((counts[CategoryRules.UNSORTED] ?: 0) > 0) {
+            entries += CategoryRules.UNSORTED to CategoryRules.label(CategoryRules.UNSORTED)
+        }
+        for (cat in CategoryRules.ALL) {
+            entries += cat to CategoryRules.label(cat)
+        }
+
+        // Scoped context so only these chips pick up Widget.ScanWhirl.Chip;
+        // the resize dialog and page viewer style their own chips inline.
+        val ctx = ContextThemeWrapper(this, R.style.ThemeOverlay_ScanWhirl_ChipRail)
+        for ((key, label) in entries) {
+            val count = if (key == null) allDocs.size else counts[key] ?: 0
+            val chip = Chip(ctx).apply {
+                tag = key
+                text = "$label $count"
+                // Tapping the chip that is already active falls back to All.
+                setOnClickListener {
+                    selectCategory(if (key == selectedCategory) null else key)
+                }
+            }
+            rail.addView(chip)
+        }
+        binding.chipRail.isVisible = true
+        updateChipRailChecked()
+    }
+
+    /** Paint the one active chip (2dp stroke per §5.2) and uncheck the rest. */
+    private fun updateChipRailChecked() {
+        val rail = binding.chipGroup
+        for (i in 0 until rail.childCount) {
+            val chip = rail.getChildAt(i) as Chip
+            val active = chip.tag as String? == selectedCategory
+            chip.isChecked = active
+            paintChip(chip, chip.tag as String?, active)
+        }
+    }
+
+    /**
+     * Checked chips take their category colour: a dark tint behind, the full
+     * colour on the border (2dp) and label. Unchecked chips keep the plain
+     * hairline look from [R.style.Widget_ScanWhirl_Chip].
+     */
+    private fun paintChip(chip: Chip, key: String?, active: Boolean) {
+        // "All" has no category, so it borrows the app accent.
+        val color = if (key == null) ContextCompat.getColor(this, R.color.cyan_primary)
+        else CategoryStyle.color(key)
+        val density = resources.displayMetrics.density
+
+        chip.chipBackgroundColor = ColorStateList.valueOf(
+            if (active) (color and 0x00FFFFFF) or (0x33 shl 24)
+            else ContextCompat.getColor(this, R.color.chip_void)
+        )
+        chip.chipStrokeColor = ColorStateList.valueOf(
+            if (active) color else ContextCompat.getColor(this, R.color.cyan_border_idle)
+        )
+        chip.chipStrokeWidth = (if (active) 2f else 1f) * density  // §5.2: 1dp hairline, 2dp selected
+        chip.setTextColor(
+            if (active) color else ContextCompat.getColor(this, R.color.text_hologram_mid)
+        )
+    }
+
+    /** Chip tap: filter to [key], or back to All when it is tapped twice. */
+    private fun selectCategory(key: String?) {
+        selectedCategory = key
+        updateChipRailChecked()
+        applyList()
     }
 
     /** Sort pill label: mirrors [Prefs.sortMode] so the toolbar always says what's active. */

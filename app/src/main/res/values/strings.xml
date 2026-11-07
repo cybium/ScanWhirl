@@ -158,6 +158,8 @@
     <string name="sort_date">Date created</string>
     <string name="sort_modified">Last modified</string>
     <string name="sort_category">Category</string>
+    <!-- test26 T3.4: the chip rail's "show everything" chip. -->
+    <string name="chip_all">All</string>
     <string name="tab_my_scans">My scans</string>
     <string name="tab_device_pdfs">Device PDFs</string>
     <string name="device_empty">No PDFs found on this device. Pick one to open it in ScanWhirl.</string>
