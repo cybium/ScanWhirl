@@ -229,8 +229,19 @@ class MainActivity : BaseActivity(), HomeHost {
             if (vaultMode) vaultFlow.addToVault() else showScanChooser()
         }
         binding.btnVault.setOnClickListener { vaultFlow.openVaultWithPin() }
+        // T3.8: tapping the empty state starts a scan only when there is
+        // truly nothing yet — a filtered-out library must not launch the
+        // scanner (its Show all chip is the action there).
         binding.emptyState.setOnClickListener {
-            if (vaultMode) vaultFlow.addToVault() else showScanChooser()
+            when {
+                vaultMode -> vaultFlow.addToVault()
+                allDocs.isEmpty() -> showScanChooser()
+            }
+        }
+        // T3.8: Show all drops every filter (query + category) in one tap.
+        binding.btnShowAll.setOnClickListener {
+            binding.searchInput.setText("")
+            selectCategory(null)
         }
 
         binding.btnVaultLock.setOnClickListener { setVaultMode(false) }
@@ -381,11 +392,49 @@ class MainActivity : BaseActivity(), HomeHost {
         // is empty the name and OCR legs both came up empty, so no extra
         // ocrMatches bookkeeping is needed.
         binding.emptyState.isVisible = sorted.isEmpty()
+        if (sorted.isEmpty()) updateEmptyState()
         binding.scanList.isVisible = true
         shownCount = sorted.size
         updateListHeader()
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
+        }
+    }
+
+    /**
+     * test26 T3.8 — the empty state speaks for the situation it is in:
+     * fresh library → viewfinder brackets + "Scan your first document" (the
+     * SCAN button in the bottom bar is the call to action); a filter that
+     * hides everything → "No <Category> documents yet" / "No documents match
+     * your search" + a Show all chip; an empty vault keeps the copy set by
+     * [setVaultMode].
+     */
+    private fun updateEmptyState() {
+        binding.emptyFrame.isVisible = true
+        when {
+            vaultMode && allDocs.isEmpty() -> {
+                binding.emptyTitle.setText(R.string.vault_empty_title)
+                binding.emptySubtitle.setText(R.string.vault_empty_subtitle)
+                binding.emptySubtitle.isVisible = true
+                binding.btnShowAll.isVisible = false
+            }
+            allDocs.isEmpty() -> {
+                binding.emptyTitle.setText(R.string.empty_first_scan)
+                binding.emptySubtitle.isVisible = false
+                binding.btnShowAll.isVisible = false
+            }
+            else -> {
+                // The library exists; only the active filter hides it all.
+                val cat = selectedCategory
+                binding.emptyTitle.text =
+                    if (cat != null) {
+                        getString(R.string.empty_category, CategoryRules.label(cat))
+                    } else {
+                        getString(R.string.empty_no_match)
+                    }
+                binding.emptySubtitle.isVisible = false
+                binding.btnShowAll.isVisible = true
+            }
         }
     }
 
@@ -696,8 +745,8 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.scanIcon.setImageResource(if (enabled) R.drawable.ic_add else R.drawable.ic_camera)
         binding.btnScan.contentDescription =
             getString(if (enabled) R.string.vault_add_title else R.string.scan)
-        binding.emptyTitle.setText(if (enabled) R.string.vault_empty_title else R.string.empty_title)
-        binding.emptySubtitle.setText(if (enabled) R.string.vault_empty_subtitle else R.string.empty_subtitle)
+        // T3.8: the empty-state copy belongs to updateEmptyState() now —
+        // refreshList() below lands in applyList() and sets it per situation.
         refreshList()
     }
 

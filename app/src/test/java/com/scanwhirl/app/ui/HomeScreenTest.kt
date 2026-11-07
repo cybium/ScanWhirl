@@ -481,6 +481,94 @@ class HomeScreenTest {
         }
     }
 
+    // ---- T3.8: empty states ----------------------------------------------
+
+    @Test
+    fun `empty library shows the viewfinder frame and first-scan copy`() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val state = activity.findViewById<View>(R.id.emptyState)
+                assertTrue("empty state shows", state.isVisible)
+                assertTrue("viewfinder brackets show", activity.findViewById<View>(R.id.emptyFrame).isVisible)
+                assertEquals(
+                    "Scan your first document",
+                    activity.findViewById<android.widget.TextView>(R.id.emptyTitle).text.toString()
+                )
+                // Fresh library: no subtitle, no Show all — the SCAN button
+                // in the bottom bar is the call to action.
+                assertFalse("no subtitle for a fresh library",
+                    activity.findViewById<View>(R.id.emptySubtitle).isVisible)
+                assertFalse("no Show all chip for a fresh library",
+                    activity.findViewById<View>(R.id.btnShowAll).isVisible)
+                // The orbit icon died with T3.8.
+                assertEquals(
+                    "emptyOrbit id must be gone",
+                    0,
+                    activity.resources.getIdentifier("emptyOrbit", "id", activity.packageName)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `empty category offers Show all and brings the documents back`() {
+        seed("Lecture notes", CategoryRules.STUDY)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val group = activity.findViewById<ChipGroup>(R.id.chipGroup)
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                val state = activity.findViewById<View>(R.id.emptyState)
+                val showAll = activity.findViewById<View>(R.id.btnShowAll)
+
+                // Receipts has nothing while Study holds the only doc.
+                chipFor(group, CategoryRules.RECEIPTS).performClick()
+                assertTrue("empty state for the empty category",
+                    pollUntil { state.isVisible })
+                assertEquals(
+                    "No Receipts documents yet",
+                    activity.findViewById<android.widget.TextView>(R.id.emptyTitle).text.toString()
+                )
+                assertTrue("Show all appears", showAll.isVisible)
+
+                // One tap drops the filter: doc back, All checked, chip gone.
+                showAll.performClick()
+                assertTrue("doc returns", pollUntil { list.adapter!!.itemCount == 1 })
+                assertFalse("empty state leaves", state.isVisible)
+                assertTrue("All is checked again", chipFor(group, null).isChecked)
+                assertFalse(chipFor(group, CategoryRules.RECEIPTS).isChecked)
+            }
+        }
+    }
+
+    @Test
+    fun `search with no matches offers Show all and clears the query`() {
+        seed("Rent receipt", CategoryRules.RECEIPTS)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                val state = activity.findViewById<View>(R.id.emptyState)
+                val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
+
+                search.setText("zzz-no-such-doc")
+                assertTrue("empty state for the dead query", pollUntil { state.isVisible })
+                assertEquals(
+                    "No documents match your search",
+                    activity.findViewById<android.widget.TextView>(R.id.emptyTitle).text.toString()
+                )
+                val showAll = activity.findViewById<View>(R.id.btnShowAll)
+                assertTrue("Show all appears", showAll.isVisible)
+
+                // One tap wipes the query: doc back, box empty, state gone.
+                showAll.performClick()
+                assertTrue("doc returns", pollUntil { list.adapter!!.itemCount == 1 })
+                assertEquals("query cleared", "", search.text.toString())
+                assertFalse("empty state leaves", state.isVisible)
+            }
+        }
+    }
+
     @Test
     fun `sort selector opens a four-item menu and applies the choice`() {
         com.scanwhirl.app.util.Prefs.setSortMode(app, com.scanwhirl.app.util.Prefs.SORT_DATE)

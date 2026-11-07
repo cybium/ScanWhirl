@@ -4,7 +4,12 @@
     <string name="scan">Scan document</string>
     <string name="scan_tap_prompt">TAP TO SCAN</string>
     <string name="empty_title">No scans yet</string>
-    <string name="empty_subtitle">Tap + to scan with your camera, or import a photo straight from your gallery. Batch pages, crop, filters, and PDF export included.</string>
+    <!-- test26 T3.8: the empty state speaks per situation; the old "+"-button
+         subtitle died with the FAB in T3.6. -->
+    <string name="empty_first_scan">Scan your first document</string>
+    <string name="empty_category">No %1$s documents yet</string>
+    <string name="empty_no_match">No documents match your search</string>
+    <string name="show_all">Show all</string>
     <string name="name_hint">Document name</string>
     <string name="save">Save</string>
     <string name="review_save_pdf">Save as PDF</string>

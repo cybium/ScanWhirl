@@ -12,7 +12,6 @@
     <string name="tool_merge">मर्ज</string>
     <string name="tool_settings">सेटिंग्स</string>
     <string name="empty_title">अभी कोई स्कैन नहीं</string>
-    <string name="empty_subtitle">पहला दस्तावेज़ स्कैन करने के लिए कैमरा बटन दबाएँ। ऑटो किनारा पहचान, क्रॉप, कई पेज और PDF निर्यात शामिल हैं।</string>
     <string name="view">देखें</string>
     <string name="edit">संपादित करें</string>
     <string name="pick_pdf">PDF चुनें</string>
