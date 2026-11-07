@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/homeRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_space">
@@ -150,6 +151,43 @@
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.appbar.AppBarLayout>
+
+        <!-- test26 T3.1: category chip rail — filled in T3.4 (empty + GONE for now). -->
+        <HorizontalScrollView
+            android:id="@+id/chipRail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chipGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="4dp" />
+        </HorizontalScrollView>
+
+        <!-- test26 T3.1: Quick Sort nudge — stays GONE until T4.4 (owner decision). -->
+        <LinearLayout
+            android:id="@+id/nudge"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
+        <!-- test26 T3.1: list header (count · sort · select) — filled in T3.5. -->
+        <LinearLayout
+            android:id="@+id/listHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:visibility="gone" />
 
         <!-- Hidden Vault active banner (shown only when 4-digit PIN Vault is open) -->
         <com.google.android.material.card.MaterialCardView
@@ -710,6 +748,17 @@
                     android:textColor="@color/text_hologram_mid" />
             </LinearLayout>
         </FrameLayout>
+
+        <!-- test26 T3.1: bottom bar (Tools · SCAN · Vault) — built in T3.6, GONE for now. -->
+        <LinearLayout
+            android:id="@+id/bottomBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="8dp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!--
