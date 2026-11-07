@@ -5,6 +5,12 @@
 > Every root cause below was traced in the actual source, with file/line references.
 > Anything I could not verify without a device is marked **(verify on device)**.
 
+> **Rev 2 — 2026-11-07, after G1 (alpha1 APK + 5 device screenshots + APK inspection).**
+> T0–T1 are done and verified in the APK. Rev 2 adds only: complaint **#13** (ghost PDFs in Recent files),
+> decision **N10**, task **T4.7**, a Settings line in **T5.4**, an OCR "Remove gaps" tool in **T6.1**,
+> a larger status-line spec in **T3.2**, test `ExportHygieneTest`, question **Q7**, checklist item **11**.
+> Everything else is unchanged. Do not redo T0–T1.
+
 > **Target:** `versionCode = 26`, `versionName = "1.1.1-test26"`
 > **Project root:** `/home/cybium/ScanWhirl` (WSL/Ubuntu) · **Package:** `com.scanwhirl.app.test` only
 > **Branch:** `test26-redesign` (from tag `test25-final`)
@@ -97,10 +103,11 @@ to repaint what already existed. The result:
 | 10 | "Earth + rings cosmetic, useless" | all | True. Nothing functional depends on them. `UiSmokeTest` (78 tests) contains **0** references to the globe, so removal is low-risk. | Delete (P7). Reversible via git tag. |
 | 11 | "OCR tool should have had edit option before copy" | — | OCR result is shown as a read-only `setMessage()` dialog with Copy/Share (`DocumentViewerActivity.runAndShowOcr` L504; `MainActivity.showOcrTextDialog` L1053). OCR output has line-break and spacing errors that need fixing before copy. | New full-screen **OCR Editor** with cleanup tools; Copy copies the *edited* text; edits persist for search (P6). |
 | 12 | "You feared overhauling, got useless Earth and a separate app inside" | — | See §1: the test25 plan locked everything and defined Phase 5 as "wiring only". | This plan removes the locks and merges the two homes. |
+| 13 | "Ghost PDF in Recent files" (found at G1, not in the original plan) | Android Files app > Recent shows `Document 2.pdf`, `Document 2 (1).pdf`, `(2)`, `(3)`, `Document 3 (1).pdf`, `Duo.pdf`. Sizes of `Document 2 (2).pdf` (249 kB) and `Document 3 (1).pdf` (14.78 MB) match the in-app sizes (243 KB and 14.1 MB as the app shows them, KiB/MiB) once units are converted, so they are copies of the current documents. | **(verified in the alpha1 APK bytecode)** `util/DownloadSaver.savePdf` never overwrites: `uniqueName()` appends ` (1)`, ` (2)` and inserts a new MediaStore row into `Documents/ScanWhirl` each time. It is called from: **`ScanReviewActivity.saveAndFinish` for Pro users, with no setting and no confirmation** (coroutine `saveAndFinish$1$1$1` reads `scan.pdf` and calls `savePdf`; the Pro condition is an `isPro` check right before the IO launch, so confirm it when you open the file), `DocumentViewerActivity.savePdfToDocuments` (download button), `ExportResultActivity.saveResult`, and the Compress / Lock / Unlock flows (they build names with `pdfNameFor`; the exact save call in those three was not traced, so read them in T4.7). So every scan saved in the app silently leaves a visible copy in the Files app, and every re-export adds another numbered copy. | Opt-in instead of silent, replace instead of duplicate, visible confirmation with Undo (T4.7, N10). |
 
 ---
 
-## 3. Product decisions (new, numbered N1–N9)
+## 3. Product decisions (new, numbered N1–N10)
 
 | # | Decision | Notes |
 |---|---|---|
@@ -113,6 +120,7 @@ to repaint what already existed. The result:
 | N7 | **No emoji anywhere**; icons are vectors. Greeting becomes a status line. | Guard test. |
 | N8 | **OCR Editor** replaces both OCR dialogs. | P6. |
 | N9 | **"Futuristic" comes from the design language, not from a 3-D toy:** starfield window background (already exists), glass cards, neon category colours, HUD micro-typography, viewfinder corner brackets, a scan-line on processing. | P8. |
+| N10 | **No silent copies outside the app.** Saving a scan never writes to `Documents/ScanWhirl` unless the owner turned on "Also save a copy to Documents" (default OFF). Every explicit export shows a confirmation with **Open** and **Undo**, and re-exporting the same document **replaces** its earlier copy instead of adding `(1)`, `(2)`. | Complaint #13. T4.7. Open question Q7. |
 
 **Category colours (D3, unchanged) + new:**
 Study `#38EF7D` · Receipts `#FF8A4C` · IDs `#5B9DFF` · Forms `#B07CFF` · Other `#94A3B8` ·
@@ -384,6 +392,15 @@ and add this file as `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md`.
 
 **G1 (gate):** build `alpha1`; owner checks nothing draws under the nav bar on any screen.
 
+**G1 result (recorded by owner + Claude, 2026-11-07): PASSED with notes.** APK confirmed to contain
+`StatusLine`, `InsetsKt`, `CategoryRules.classifyOcr`, no `Greeting`; package `com.scanwhirl.app.test`, label
+`ScanWhirl Test`, launcher still `GlobeHomeActivity` (correct until T3.9), versionName still `1.1.1-test25` (correct until T9.1).
+Globe and Shelf screens show nothing drawn under the status or navigation bar. Ring labels now read plural
+(`STUDY / RECEIPTS / IDS / FORMS / OTHER`) = T1.3 `label()` working. Not yet seen on device: Settings, Document screen,
+Page editor, Scan Review (they are rebuilt in P5, so they are re-checked at G3). The things the owner still sees
+(rings, read-only OCR dialog, truncated search hint, plain status line, FAB over list buttons) are all scheduled below;
+the only unscheduled one was #13, now T4.7.
+
 ---
 
 ### PHASE 2 — Untangle `MainActivity` (pure refactor, zero visible change)
@@ -426,7 +443,7 @@ Rebuild `activity_main.xml` and the binding code. IDs are free to change; update
 bar. Empty views for now; app must launch and list docs.
 
 **T3.2 Header + status line.** Wordmark, Pro badge, gear (opens `SettingsActivity`), status line
-from `StatusLine.format`. Settings toggle text becomes "Status line"; the toggle still hides it.
+from `StatusLine.format`. Settings toggle text becomes "Status line"; the toggle still hides it. Style it now, do not wait for P8: 11sp caps, `letterSpacing 0.12`, colour `cyan_dim`, numbers in `monospace`, separators ` · ` in `cyan_border_hair`, and the PRO badge as a small outlined chip. (At G1 the plain line read as lacklustre.) T8.1 then only adds the signal dot.
 
 **T3.3 Filter logic (pure + tested).** New `util/HomeFilter.kt`:
 `data class HomeState(query: String, category: String?, sort: String, inText: Boolean)`,
@@ -501,6 +518,28 @@ chip (never auto-applies). Skip if it slips — the rest of P4 stands alone.
 **T4.6 Document screen chip.** `docCategoryChip` becomes clickable → picker. Remove the old
 "Categorize" list dialog (`DocumentViewerActivity` ≈ L687) once the chip works.
 
+**T4.7 Export hygiene (complaint #13, N10).**
+- Do in `util/DownloadSaver.kt` and its callers (read each caller first; keep every change small):
+  1. **Stop the silent copy.** In `ScanReviewActivity.saveAndFinish` (same call site T4.1 edits) remove the
+     unconditional Pro `DownloadSaver.savePdf` coroutine. Replace it with a check of new `Prefs.autoCopyToDocuments`
+     (default **false**). When true, behave exactly as today.
+  2. **Replace, don't duplicate.** Add `savePdf(context, bytes, displayName, replaceExisting: Boolean = true)`. On Android 10+ query
+     MediaStore for `relative_path='Documents/ScanWhirl/'` and `_display_name=displayName`; if a row exists that the app can
+     open for writing, overwrite it with `openOutputStream(uri, "wt")` and return the same name. If it cannot be opened (file
+     was created by an older install) fall back to the current `uniqueName` behaviour. Pre-Q: overwrite the `File` if it exists.
+  3. **Say what happened.** Replace the plain "Saved to Documents/ScanWhirl: X" toast in `DocumentViewerActivity.savePdfToDocuments`,
+     `ExportResultActivity.saveResult` and Compress/Lock/Unlock results with a `Snackbar`: "Saved to Documents/ScanWhirl/X.pdf"
+     + **Open** (ACTION_VIEW on the returned Uri) + **Undo** (deletes that MediaStore row). `DownloadSaver.savePdf` must therefore
+     return the `Uri` as well as the name (add a small `SavedFile(uri, name)` result type; keep the old String API as a wrapper so
+     `DownloadSaverTest` stays green).
+  4. **Settings** row for the toggle is in T5.4.
+- Do NOT delete or rename files already in the owner's `Documents/ScanWhirl` folder. Cleaning those is the owner's call.
+- Tests: new `ExportHygieneTest` (Robolectric): saving a scan with the pref OFF does not call the saver; with the pref ON it does;
+  exporting the same name twice leaves one row (replace) and returns the same name; Undo removes the row; fallback to ` (1)` when
+  the existing row is not writable. Existing `DownloadSaverTest` must stay green untouched.
+- Done when: `ExportHygieneTest` and `DownloadSaverTest` green; on device, scanning a doc and saving it leaves **no new file** in
+  Files > Recent, and tapping the download button twice leaves **one** file.
+
 **Tests:** `ScanReviewCategoryTest` (pick chip → saved doc has that category; typing "Invoice May"
 preselects Receipts; manual pick stops live re-suggest), `QuickSortQueueTest`, Home test for bulk
 Move. Add `ScanReviewActivity` to `TextFitTest`.
@@ -522,7 +561,7 @@ handlers, new entry point). Delete keeps its confirm dialog.
 **T5.3 Scan Review dock.** Inset-aware, weights, no fixed heights. (Category rail is T4.1.)
 
 **T5.4 Settings.** Remove nothing yet (globe row is removed in P7). Rename "Greeting" →
-"Status line". Fix any label flagged by `TextFitTest`.
+"Status line". Fix any label flagged by `TextFitTest`. Add one switch row "Also save a copy to Documents" (default OFF) bound to `Prefs.autoCopyToDocuments` with the subtitle "Off: scans stay inside ScanWhirl until you export them." (en + hi). Add it to `TextFitTest`.
 
 **T5.5** Run `TextFitTest` on all five screens at font scale 1.0 and 1.3. Fix every offender.
 
@@ -538,6 +577,9 @@ category rail), Settings.
   blank-line paragraph breaks; de-hyphenate `exam-\nple` → `example` only when the next char is
   lowercase.
 - `fixSpaces(text)`: collapse runs of spaces/tabs, trim line ends, collapse 3+ newlines to 2.
+- `removeGaps(text)`: collapse **every** run of blank lines to a single newline, then trim. Needed because ML Kit returns each text
+  block as its own paragraph (seen at G1: OCR of a phone screenshot came out as one fragment per paragraph), so `joinLines` alone
+  does nothing on that kind of input. Add a **[Remove gaps]** button next to Join lines / Fix spaces in §4.7 and the T6.2 `Undo` snapshot.
 - Tests with at least 6 samples (hard-wrapped paragraph, hyphenated word, bullet list that must
   *not* be joined — treat lines starting with `-`, `•`, `*` or a digit+`.` as paragraph starts —
   trailing spaces, mixed blank lines, empty string).
@@ -619,7 +661,7 @@ the test25 excludes (`.git/`, `.gradle/`, `build/`, `.kotlin/`, `dist/`, `captur
 | **Keep untouched** (the real safety net) | `ScanRepositoryTest`, `PdfGeneratorTest`, `ImageToolsTest`, `DownloadSaverTest`, `ScanFilterTest`, `SearchMatcherTest`, `PageThumbLoaderTest`, `ExternalVerifyExport` (only extended where T1.4 says so) |
 | **Rewrite** (same commit as the UI change) | `CategoryRulesTest`, `CategoryPersistTest`, `GreetingTest` → `StatusLineTest`, `UiSmokeTest` (edit what touches changed screens), `Phase5ScreensTest` (keep Settings/Review/Viewer parts that still apply) |
 | **Delete** (P7) | `GlobeSceneTest`, `GlobeHomeActivityTest`, `SwTransitionsTest`, and `SwMotionTest` only if `SwMotion` is deleted |
-| **New** | `TextFitTest`, `EmojiGuardTest`, `HomeFilterTest`, `HomeScreenTest`, `QuickSortQueueTest`, `ScanReviewCategoryTest`, `OcrCleanupTest`, `OcrEditorTest` |
+| **New** | `TextFitTest`, `EmojiGuardTest`, `HomeFilterTest`, `HomeScreenTest`, `QuickSortQueueTest`, `ScanReviewCategoryTest`, `OcrCleanupTest`, `OcrEditorTest`, `ExportHygieneTest` |
 
 Rule: a phase is not done while any test is red or skipped. Never `@Ignore` a test to get green —
 delete it with a one-line reason in the commit message if its feature is gone.
@@ -660,6 +702,7 @@ delete it with a one-line reason in the commit message if its feature is gone.
 | Q4 | Move `Delete` out of the Document screen's main bar into `More`? | **Yes** (fewer accidental deletions). |
 | Q5 | OCR-based category suggestion (T4.5): include? | **Yes, optional, suggest-only, never auto-applies.** |
 | Q6 | Hindi: I machine-translate new strings and flag for review? | **Yes.** |
+| Q7 | Should saving a scan still drop a copy into `Documents/ScanWhirl` (today's silent Pro behaviour)? | **No.** Off by default; opt-in switch in Settings (T4.7 / T5.4). |
 
 ---
 
@@ -682,6 +725,8 @@ Each line maps to a complaint in §2. All must pass on a real device.
 8. **Back arrow** is visible on every screen except Home. *(#9)*
 9. **Old documents** from test24/test25 still open and keep their categories.
 10. Full suite green; `aapt2` reports `com.scanwhirl.app.test`, `1.1.1-test26`, versionCode 26.
+11. **No ghost files.** Scan and save a document, then open Files > Recent: **nothing new appears**. Tap the Document screen's download
+    button twice: **one** file, and a Snackbar offers Open and Undo. *(#13)*
 
 ---
 

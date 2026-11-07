@@ -129,7 +129,18 @@ strict 0 red. P5 (dock rebuilds) + P3 T3.5 (search/sort bar) clear every item ab
 - **APK delivered:** `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alpha1.apk`
   (6,537,869 bytes).
 - **G1 owner check:** nothing draws under the navigation bar on ANY screen
-  (edge-to-edge + `applySystemBarsPadding` is new in this build). Waiting for
-  screenshots/OK before Phase 2.
+  (edge-to-edge + `applySystemBarsPadding` is new in this build).
+
+### G1 result — PASSED (2026-11-07, owner) ✅
+
+- Owner installed alpha1, confirmed no drawing under status/nav bars.
+- Plan file updated to **Rev 2** by the owner (G1 notes + 5 screenshots + APK
+  inspection): adds complaint **#13** (ghost PDFs in Recent), decision **N10**,
+  **T4.7** (Phase 4 — export hygiene), a Settings switch line in T5.4, OCR
+  `removeGaps` in T6.1, status-line styling spec in T3.2, `ExportHygieneTest`,
+  **Q7**, checklist item **11**. **Phase 2 is byte-identical between revs** —
+  verified with `diff`; T0–T1 are not to be redone.
+- `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` synced to Rev 2 (702 → 747 lines).
+- T4.7 confirmed deferred to Phase 4 (owner instruction).
 
 ---
