@@ -321,10 +321,18 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    /** HUD status line under the app name, when enabled in Settings (T1.5/T3.2). */
+    /**
+     * HUD status line under the app name, when enabled in Settings (T1.5/T3.2).
+     *
+     * test26 T3.10 (complaint #14): derives from the **unfiltered** [allDocs],
+     * so a category/search filter never changes the readout, and it is
+     * refreshed from the single render path in [applyList] — first load, add,
+     * delete and import all land there. Direct calls remain only for
+     * show/hide transitions (selection mode, resume).
+     */
     private fun updateStatusLine() {
         if (Prefs.showGreeting(this) && !selectionMode) {
-            val docs = adapter.currentList
+            val docs = allDocs
             binding.statusLine.text = StatusLine.styled(
                 this,
                 Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
@@ -384,6 +392,10 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.scanList.isVisible = true
         shownCount = sorted.size
         updateListHeader()
+        // test26 T3.10: the render path above feeds chips + adapter; the
+        // status line joins it here (from the unfiltered allDocs snapshot),
+        // so the numbers on screen can never lag the list (complaint #14).
+        updateStatusLine()
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
