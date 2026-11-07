@@ -43,6 +43,7 @@ import com.scanwhirl.app.databinding.DialogCompressBinding
 import com.scanwhirl.app.databinding.DialogResizeBinding
 import com.scanwhirl.app.databinding.ItemScanBinding
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Greeting
@@ -2205,7 +2206,7 @@ class ScanListAdapter(
             // Category accent rail + label chip (D3 palette via CategoryStyle).
             val catColor = CategoryStyle.color(doc.category.orEmpty())
             binding.catRail.backgroundTintList = ColorStateList.valueOf(catColor)
-            binding.catChip.text = "● ${CategoryStyle.shortTag(doc.category.orEmpty())}"
+            binding.catChip.text = "● ${CategoryRules.label(doc.category.orEmpty()).uppercase()}"
             binding.catChip.setTextColor(catColor)
 
             binding.root.setOnClickListener { onClick(doc) }

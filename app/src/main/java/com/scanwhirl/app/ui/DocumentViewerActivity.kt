@@ -220,7 +220,7 @@ class DocumentViewerActivity : BaseActivity() {
         // test25 Phase 5C: category tag in the header (recategorise funnels
         // through here too — see promptCategorize()).
         binding.docCategoryChip.text = "● " +
-            com.scanwhirl.app.util.CategoryStyle.shortTag(doc.category)
+            com.scanwhirl.app.util.CategoryRules.label(doc.category).uppercase()
         binding.docCategoryChip.setTextColor(
             com.scanwhirl.app.util.CategoryStyle.color(doc.category)
         )

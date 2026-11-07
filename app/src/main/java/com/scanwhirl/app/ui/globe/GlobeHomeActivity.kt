@@ -26,7 +26,6 @@ import com.scanwhirl.app.ui.MainActivity
 import com.scanwhirl.app.ui.PdfViewerActivity
 import com.scanwhirl.app.ui.SettingsActivity
 import com.scanwhirl.app.ui.SwTransitions
-import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SearchMatcher
@@ -133,7 +132,7 @@ class GlobeHomeActivity : BaseActivity(), HolographicEarthView.Listener {
         chips().forEachIndexed { i, chip ->
             chip.isSelected = i == ring
             chip.setTextColor(
-                if (i == ring) CategoryStyle.colorForRing(i)
+                if (i == ring) GlobeRingShim.colorForRing(i)
                 else ContextCompat.getColor(this, R.color.text_hologram_hi)
             )
         }
@@ -154,7 +153,7 @@ class GlobeHomeActivity : BaseActivity(), HolographicEarthView.Listener {
             docs.isEmpty() -> getString(R.string.globe_status_empty)
             focus >= 0 -> {
                 val n = scene.categoryCounts()[focus]
-                "${CategoryStyle.tagForRing(focus)} · " +
+                "${GlobeRingShim.tagForRing(focus)} · " +
                     resources.getQuantityString(R.plurals.globe_status_docs, n, n)
             }
             else -> {

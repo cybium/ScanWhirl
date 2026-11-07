@@ -1,12 +1,20 @@
 package com.scanwhirl.app.util
 
 /**
- * The five document categories that drive the globe home's rings
- * (Study, Receipts, IDs, Forms, Other).
+ * The document categories the app can store (N2/N3/N4 in the test26 plan):
+ * Study, Receipts, IDs, Forms, Other — plus **Unsorted**, the state of a scan
+ * nobody has looked at yet (new scans with no confident match land there
+ * instead of pretending to be "Other").
  *
- * [classify] is a keyword guess applied when a scan is created; the user can
- * override it any time from the editor's "Categorize" menu. Guessing is
- * honest: it only looks at the document name, never at page content.
+ * [classify] guesses from the document name first (as always), then from OCR
+ * text when the name says nothing. A guess is honest: name keywords win
+ * outright; OCR must produce **≥ 2 keyword hits with a clear winner** or the
+ * answer is [UNSORTED]. Display never invents a second name — everyone calls
+ * [label] (rule R9, N4).
+ *
+ * `meta.txt` compatibility: line 3 holds the category; only values accepted
+ * by [isValid] are ever written, and old documents missing/invalid on line 3
+ * still read as [OTHER] (`ScanRepository.loadDocument`).
  */
 object CategoryRules {
 
@@ -16,8 +24,14 @@ object CategoryRules {
     const val FORMS = "Forms"
     const val OTHER = "Other"
 
-    /** Ring order: innermost ring first. */
+    /** Stored value for "nobody has sorted this yet" (never a display label). */
+    const val UNSORTED = "Unsorted"
+
+    /** Picker order (historically also the globe's ring order). */
     val ALL: List<String> = listOf(STUDY, RECEIPTS, IDS, FORMS, OTHER)
+
+    /** Every value that may legally appear on meta.txt line 3. */
+    val ALL_WITH_UNSORTED: List<String> = ALL + UNSORTED
 
     private val RECEIPT_WORDS = Regex(
         """\b(receipts?|invoices?|bills?|billing|payments?|paystubs?|purchases?|orders?|refunds?|shopping)\b""",
@@ -36,14 +50,55 @@ object CategoryRules {
         RegexOption.IGNORE_CASE
     )
 
-    fun isValid(category: String): Boolean = category in ALL
+    /** OCR keyword families; each hit is counted, then the winner must be clear. */
+    private val OCR_RECEIPTS = rx("""total|subtotal|gst|invoice|amount|qty|paid""")
+    private val OCR_IDS = rx(
+        """date\s+of\s+birth|dob|aadhaar|uid|passport|licen[cs]e|valid\s+till|father'?s\s+name"""
+    )
+    private val OCR_FORMS = rx("""applicant|signature|please\s+fill|declaration|form""")
+    private val OCR_STUDY = rx("""chapter|exercise|theorem|question|marks|syllabus|unit""")
 
-    /** Best-effort category from the document name; defaults to [OTHER]. */
-    fun classify(name: String): String = when {
+    private fun rx(pattern: String) = Regex("""\b(?:$pattern)\b""", RegexOption.IGNORE_CASE)
+
+    /** All six stored values are valid; nothing else may be written. */
+    fun isValid(category: String): Boolean = category in ALL_WITH_UNSORTED
+
+    /**
+     * The one display name for a stored value (R9/N4): the value itself.
+     * `label("Receipts") == "Receipts"` — no second naming system.
+     */
+    fun label(category: String): String = category
+
+    /**
+     * Best-effort category from the document name, then from [ocrText] when
+     * the name matched nothing; defaults to [UNSORTED] (was [OTHER] — N3:
+     * "Other" is now only a deliberate user choice or an old document's
+     * fallback).
+     */
+    fun classify(name: String, ocrText: String? = null): String = when {
         RECEIPT_WORDS.containsMatchIn(name) -> RECEIPTS
         FORM_WORDS.containsMatchIn(name) -> FORMS
         ID_WORDS.containsMatchIn(name) -> IDS
         STUDY_WORDS.containsMatchIn(name) -> STUDY
-        else -> OTHER
+        else -> classifyOcr(ocrText) ?: UNSORTED
+    }
+
+    /**
+     * Counts keyword hits per category in OCR text. Returns the category only
+     * when it has **≥ 2 hits and strictly more than every rival** (a tie is no
+     * winner); otherwise null.
+     */
+    private fun classifyOcr(text: String?): String? {
+        if (text.isNullOrBlank()) return null
+        val hits = listOf(
+            RECEIPTS to OCR_RECEIPTS.findAll(text).count(),
+            IDS to OCR_IDS.findAll(text).count(),
+            FORMS to OCR_FORMS.findAll(text).count(),
+            STUDY to OCR_STUDY.findAll(text).count()
+        )
+        val sorted = hits.sortedByDescending { it.second }
+        val (winner, count) = sorted[0]
+        val runnerUp = sorted[1].second
+        return if (count >= 2 && count > runnerUp) winner else null
     }
 }

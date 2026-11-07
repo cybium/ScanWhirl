@@ -518,7 +518,7 @@ class HolographicEarthView @JvmOverloads constructor(
         for (ring in 0 until GlobeScene.RING_COUNT) {
             val g = scene.ringGeometry(ring, w, h)
             ringTrackRect.set(g.cx - g.rx, g.cy - g.ry, g.cx + g.rx, g.cy + g.ry)
-            val color = CategoryStyle.colorForRing(ring)
+            val color = GlobeRingShim.colorForRing(ring)
 
             ringTrackPath.rewind()
             ringTrackPath.addOval(ringTrackRect, Path.Direction.CW)
@@ -542,7 +542,7 @@ class HolographicEarthView @JvmOverloads constructor(
             ringLabelPath.rewind()
             ringLabelPath.addArc(ringTrackRect, 125f, -70f)
             ringLabelPaint.color = withAlpha(color, 0.65f * alpha)
-            val tag = CategoryStyle.tagForRing(ring)
+            val tag = GlobeRingShim.tagForRing(ring)
             val len = android.graphics.PathMeasure(ringLabelPath, false).length
             val hOff = ((len - ringLabelPaint.measureText(tag)) / 2f).coerceAtLeast(0f)
             canvas.drawTextOnPath(tag, ringLabelPath, hOff, 8.2f * unit, ringLabelPaint)
@@ -799,7 +799,7 @@ class HolographicEarthView @JvmOverloads constructor(
             cardTagPaint.textSize = 7.5f * scale
             val tagX = cardRect.left + 7f * scale
             val tagY = cardRect.top + 11f * scale
-            canvas.drawText(CategoryStyle.shortTag(card.category), tagX, tagY, cardTagPaint)
+            canvas.drawText(GlobeRingShim.shortTag(card.category), tagX, tagY, cardTagPaint)
 
             // Title, ellipsised to one line like the prototype.
             cardTextPaint.color = Color.argb((242 * a).toInt().coerceIn(0, 255), 225, 245, 255)

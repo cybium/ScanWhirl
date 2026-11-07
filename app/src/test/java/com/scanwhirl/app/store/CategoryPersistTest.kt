@@ -41,14 +41,15 @@ class CategoryPersistTest {
 
         assertEquals(CategoryRules.RECEIPTS, repo.getDocument(receipt.id)?.category)
         assertEquals(CategoryRules.STUDY, repo.getDocument(notes.id)?.category)
-        assertEquals(CategoryRules.OTHER, repo.getDocument(misc.id)?.category)
+        // N3: no confident match lands in Unsorted, not Other.
+        assertEquals(CategoryRules.UNSORTED, repo.getDocument(misc.id)?.category)
     }
 
     @Test
     fun `setCategory overrides the guess and survives a reload`() = runBlocking {
         val repo = ScanRepository(context)
         val doc = repo.saveScan(listOf(contentUri(fakeJpeg)), null, "Mystery pages")
-        assertEquals(CategoryRules.OTHER, repo.getDocument(doc.id)?.category)
+        assertEquals(CategoryRules.UNSORTED, repo.getDocument(doc.id)?.category)
 
         repo.setCategory(doc.id, CategoryRules.FORMS)
         assertEquals(CategoryRules.FORMS, repo.getDocument(doc.id)?.category)
