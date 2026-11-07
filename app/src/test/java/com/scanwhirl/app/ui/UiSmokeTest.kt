@@ -1329,11 +1329,17 @@ class UiSmokeTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val greeting = activity.findViewById<android.widget.TextView>(R.id.greetingText)
-                assertEquals(
-                    com.scanwhirl.app.util.Greeting.forHour(
-                        java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-                    ),
-                    greeting.text.toString()
+                // T1.5: the emoji greeting is now the HUD status line — it must
+                // lead with the phase for the current hour and carry count+size.
+                val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                val period = activity
+                    .getString(com.scanwhirl.app.util.StatusLine.phase(hour))
+                    .uppercase(java.util.Locale.ROOT)
+                val text = greeting.text.toString()
+                assertTrue("status line leads with the phase: \"$text\"", text.startsWith("$period · "))
+                assertTrue(
+                    "status line carries count and size: \"$text\"",
+                    Regex("""· \d+ DOCS? · .+""").containsMatchIn(text)
                 )
                 // Crown badge opens the Pro panel.
                 activity.findViewById<android.view.View>(R.id.proBadge).performClick()
@@ -1435,8 +1441,9 @@ class UiSmokeTest {
     @Test
     fun `greeting text is populated for every hour`() {
         for (hour in 0..23) {
-            val text = com.scanwhirl.app.util.Greeting.forHour(hour)
-            assertTrue("greeting must be non-empty: $text", text.isNotBlank())
+            val text = com.scanwhirl.app.util.StatusLine.format(app, hour, 1, 1_048_576)
+            assertTrue("status line must be non-empty: $text", text.isNotBlank())
+            assertTrue("status line is the HUD readout: $text", text.contains(" · "))
         }
     }
 

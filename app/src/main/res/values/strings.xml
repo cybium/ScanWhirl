@@ -176,6 +176,15 @@
     <string name="font_mono">Monospace</string>
     <string name="settings_greeting">Greeting</string>
     <string name="settings_greeting_summary">Show a time-based hello on the home screen</string>
+    <!-- Status line (test26 T1.5): replaces the emoji greetings of Greeting.kt. -->
+    <string name="status_morning">Good morning</string>
+    <string name="status_afternoon">Good afternoon</string>
+    <string name="status_evening">Good evening</string>
+    <string name="status_night">Good night</string>
+    <plurals name="status_docs">
+        <item quantity="one">%d doc</item>
+        <item quantity="other">%d docs</item>
+    </plurals>
     <string name="settings_wallpaper">Wallpaper</string>
     <string name="settings_wallpaper_summary">Use a photo behind your PDFs</string>
     <string name="wallpaper_on">On, tap to change the photo</string>
@@ -242,7 +251,7 @@
     <string name="ocr_copied">Copied to clipboard</string>
     <string name="export_zip">Export ZIP</string>
     <string name="ocr_note">Text search works best on printed pages.</string>
-    <string name="pro_panel_home">ScanWhirl Pro Suite (Unlocked in Test):\n\n• 🛡️ Hidden Vault — 4-digit PIN private folder\n• 📝 OCR Text — Extract, copy &amp; search text inside pages\n• 🔒 Lock / Unlock PDF — Password-protect or unlock any scan\n• 🖼️ Long Image — Stitch all pages into one tall image\n• 🪪 ID / Passport Crop — Aspect presets inside Crop\n• 📦 Batch ZIP — Multi-select scans → Export ZIP\n\nTap \"Pro Suite\" on Home or \"Pro Tools\" inside any scan.</string>
+    <string name="pro_panel_home">ScanWhirl Pro Suite (Unlocked in Test):\n\n• Hidden Vault — 4-digit PIN private folder\n• OCR Text — Extract, copy &amp; search text inside pages\n• Lock / Unlock PDF — Password-protect or unlock any scan\n• Long Image — Stitch all pages into one tall image\n• ID / Passport Crop — Aspect presets inside Crop\n• Batch ZIP — Multi-select scans → Export ZIP\n\nTap \"Pro Suite\" on Home or \"Pro Tools\" inside any scan.</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
     <string name="settings_auto_enhance_summary">Google processing is on when this is on. Off gives a fast, original-looking scan.</string>
     <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>
@@ -325,7 +334,7 @@
     <string name="vault_imported">Imported into Hidden Vault</string>
 
     <!-- Pro panel: pitch when free + test-only Free/Pro preview. -->
-    <string name="pro_panel_free">ScanWhirl stays free: scan, edit, merge, compress and view — no account, no ads, no server.\n\nPro is a one-time purchase that unlocks:\n• 🛡️ Hidden Vault — 4-digit PIN private folder\n• 📝 OCR Text — extract, copy &amp; search text inside pages\n• 🔒 Lock / Unlock PDF — protect scans and device PDFs\n• 🖼️ Long Image — stitch all pages into one tall image\n• 🪪 ID / Passport crop presets\n• 📦 Batch ZIP export\n\nTap the crown badge to unlock Pro.</string>
+    <string name="pro_panel_free">ScanWhirl stays free: scan, edit, merge, compress and view — no account, no ads, no server.\n\nPro is a one-time purchase that unlocks:\n• Hidden Vault — 4-digit PIN private folder\n• OCR Text — extract, copy &amp; search text inside pages\n• Lock / Unlock PDF — protect scans and device PDFs\n• Long Image — stitch all pages into one tall image\n• ID / Passport crop presets\n• Batch ZIP export\n\nTap the crown badge to unlock Pro.</string>
     <string name="preview_free_ui">Preview Free UI</string>
     <string name="preview_pro_ui">Preview Pro UI</string>
     <string name="preview_changed">Showing the %1$s UI (test preview)</string>

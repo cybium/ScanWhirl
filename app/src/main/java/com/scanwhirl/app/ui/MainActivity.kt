@@ -46,7 +46,6 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.DownloadSaver
-import com.scanwhirl.app.util.Greeting
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.OcrEngine
@@ -56,6 +55,7 @@ import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SearchMatcher
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
+import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -286,11 +286,16 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    /** Time-of-day hello under the app name, when enabled in Settings. */
+    /** HUD status line under the app name, when enabled in Settings (T1.5). */
     private fun updateGreeting() {
         if (Prefs.showGreeting(this) && !selectionMode) {
-            binding.greetingText.text =
-                Greeting.forHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
+            val docs = adapter.currentList
+            binding.greetingText.text = StatusLine.format(
+                this,
+                Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
+                docs.size,
+                docs.sumOf { it.pdfFile.length() }
+            )
             binding.greetingText.isVisible = true
         } else {
             binding.greetingText.isVisible = false
