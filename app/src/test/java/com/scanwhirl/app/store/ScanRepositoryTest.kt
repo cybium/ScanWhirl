@@ -3,6 +3,7 @@ package com.scanwhirl.app.store
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.util.CategoryRules
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -413,5 +414,67 @@ class ScanRepositoryTest {
         assertTrue("pdf regenerated after crop", reloaded.pdfFile.exists() && reloaded.pdfFile.length() > 0)
     }
 
+    // --- test26 T1.4: category on save, bulk move, OCR page edits ----------
 
+    @Test
+    fun `saveScan stores a caller-chosen category and rejects invalid values`() = runBlocking {
+        val repo = ScanRepository(context)
+
+        val picked = repo.saveScan(
+            listOf(contentUri(fakeJpeg)), null, "Whatever", category = CategoryRules.FORMS
+        )
+        assertEquals(CategoryRules.FORMS, repo.getDocument(picked.id)?.category)
+
+        // An unknown stored value never reaches meta.txt: fall back to the guess.
+        val bogus = repo.saveScan(
+            listOf(contentUri(fakeJpeg)), null, "Rent invoice", category = "Nope"
+        )
+        assertEquals(CategoryRules.RECEIPTS, repo.getDocument(bogus.id)?.category)
+    }
+
+    @Test
+    fun `bulk setCategory moves every doc and ignores missing ids`() = runBlocking {
+        val repo = ScanRepository(context)
+        val a = saveDoc(repo, "Bulk A")
+        val b = saveDoc(repo, "Bulk B")
+
+        repo.setCategory(listOf(a.id, b.id, "nope404"), CategoryRules.IDS)
+
+        assertEquals(CategoryRules.IDS, repo.getDocument(a.id)?.category)
+        assertEquals(CategoryRules.IDS, repo.getDocument(b.id)?.category)
+        assertEquals(null, repo.getDocument("nope404"))
+    }
+
+    @Test
+    fun `updateOcrPage round-trips and the edit is what search finds`() = runBlocking {
+        val repo = ScanRepository(context)
+        val doc = saveDoc(repo, "ocr edit")
+        repo.buildOcr(doc.id) { "Teh quik brownn fox" }
+        assertEquals("Teh quik brownn fox", repo.ocrDoc(doc.id)["page_000.jpg"])
+
+        val updated = repo.updateOcrPage(doc.id, "page_000.jpg", "The quick brown fox")
+        assertEquals("The quick brown fox", updated?.get("page_000.jpg"))
+        assertEquals("The quick brown fox", repo.ocrDoc(doc.id)["page_000.jpg"])
+
+        // P6 requirement: a corrected word must be what the search box finds.
+        val (hits, _) = com.scanwhirl.app.util.SearchMatcher.match(
+            "brown fox", repo.listDocuments(), ocrEnabled = true
+        ) { repo.ocrDoc(it) }
+        assertTrue("edited text is searchable", hits.any { it.id == doc.id })
+
+        // Unknown document → null, and no directory gets created for it.
+        assertEquals(null, repo.updateOcrPage("nope42", "page_000.jpg", "x"))
+        assertTrue(!File(context.filesDir, "documents/nope42").exists())
+    }
+
+    @Test
+    fun `three-line meta without trailing newline still loads`() {
+        val dir = File(File(context.filesDir, "documents"), "legacy03").apply { mkdirs() }
+        File(dir, "page_000.jpg").writeBytes(fakeJpeg)
+        File(dir, "meta.txt").writeText("Old receipt\n1700000000000\nReceipts")
+
+        val doc = ScanRepository(context).getDocument("legacy03")
+        assertEquals("Old receipt", doc?.name)
+        assertEquals(CategoryRules.RECEIPTS, doc?.category)
+    }
 }

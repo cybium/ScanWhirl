@@ -108,12 +108,21 @@ class ScanRepository(private val context: Context) {
         return loadDocument(dir)
     }
 
+    /**
+     * Bulk "Move to category" (Home selection mode). One pass per document;
+     * missing/locked-away ids are skipped rather than failing the batch.
+     */
+    fun setCategory(ids: List<String>, category: String) {
+        ids.forEach { id -> setCategory(id, category) }
+    }
+
     suspend fun saveScan(
         imageUris: List<Uri>,
         pdfUri: Uri?,
         suggestedName: String?,
         filter: ScanFilter = ScanFilter.ORIGINAL,
-        pageFilters: Map<Int, ScanFilter>? = null
+        pageFilters: Map<Int, ScanFilter>? = null,
+        category: String? = null
     ): ScanDocument = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString().take(8)
         val dir = File(docsDir, id).apply { mkdirs() }
@@ -174,7 +183,7 @@ class ScanRepository(private val context: Context) {
         val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
             ?: nextDocumentName()
 
-        writeMeta(dir, name)
+        writeMeta(dir, name, category)
 
         val pages = dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
             ?.sortedBy { it.nameWithoutExtension }
@@ -716,6 +725,21 @@ class ScanRepository(private val context: Context) {
                 "$name\t${Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)}"
             }).joinToString("\n")
         )
+    }
+
+    /**
+     * Replaces one page's OCR text (the OCR Editor's Save, P6) and rewrites
+     * `ocr.txt` through the same lossless writer [writeOcr] uses, so
+     * [SearchMatcher] finds the edited text byte-for-byte as before. Returns
+     * the full updated page map, or null when the document does not exist.
+     */
+    fun updateOcrPage(id: String, pageKey: String, text: String): Map<String, String>? {
+        val dir = File(docsDir, id)
+        if (!dir.isDirectory) return null
+        val pages = ocrDoc(id).toMutableMap()
+        pages[pageKey] = text
+        writeOcr(id, pages)
+        return pages
     }
 
     private fun renumberPages(dir: File) {
