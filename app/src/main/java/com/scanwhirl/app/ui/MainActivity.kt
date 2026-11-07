@@ -46,6 +46,7 @@ import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.ResizeFlow
+import com.scanwhirl.app.tools.VaultFlow
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.ImageTools
@@ -103,6 +104,17 @@ class MainActivity : BaseActivity(), HomeHost {
                 pendingUriAction = action
                 pickProPdf.launch(arrayOf("application/pdf"))
             }
+        )
+    }
+    private val vaultFlow: VaultFlow by lazy {
+        VaultFlow(
+            activity = this, repo = repo, host = this,
+            pickPdf = { action ->
+                pendingUriAction = action
+                pickProPdf.launch(arrayOf("application/pdf"))
+            },
+            setVaultMode = { enabled -> setVaultMode(enabled) },
+            onProRequired = { showProPanel() }
         )
     }
 
@@ -198,10 +210,10 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.scanList.adapter = adapter
 
         binding.fabScan.setOnClickListener {
-            if (vaultMode) addToVault() else showScanChooser()
+            if (vaultMode) vaultFlow.addToVault() else showScanChooser()
         }
         binding.emptyState.setOnClickListener {
-            if (vaultMode) addToVault() else showScanChooser()
+            if (vaultMode) vaultFlow.addToVault() else showScanChooser()
         }
 
         binding.toolResize.setOnClickListener { pickResizeImage.launch("image/*") }
@@ -213,7 +225,7 @@ class MainActivity : BaseActivity(), HomeHost {
 
         // Expandable Pro Suite on Home: one button that expands Vault, OCR, Lock/Unlock, Long Image.
         binding.btnProSuite.setOnClickListener { toggleProSuite() }
-        binding.toolVault.setOnClickListener { openVaultWithPin() }
+        binding.toolVault.setOnClickListener { vaultFlow.openVaultWithPin() }
         binding.toolOcr.setOnClickListener {
             chooseProSource(
                 R.string.ocr_title,
@@ -231,7 +243,7 @@ class MainActivity : BaseActivity(), HomeHost {
             )
         }
         binding.btnVaultLock.setOnClickListener { setVaultMode(false) }
-        binding.btnVaultChangePin.setOnClickListener { promptSetVaultPin(onSuccess = {}) }
+        binding.btnVaultChangePin.setOnClickListener { vaultFlow.promptSetVaultPin(onSuccess = {}) }
 
         binding.searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -558,61 +570,6 @@ class MainActivity : BaseActivity(), HomeHost {
     // Pro Suite: Hidden Vault (4-digit PIN), OCR, Lock/Unlock, Long Image
     // ------------------------------------------------------------------
 
-    private fun openVaultWithPin() {
-        if (!ProGate.isPro(this)) {
-            showProPanel()
-            return
-        }
-        if (!Prefs.hasVaultPin(this)) {
-            promptSetVaultPin { setVaultMode(true) }
-            return
-        }
-        val (builder, input) = SwDialog.input(
-            this,
-            hint = getString(R.string.vault_pin_hint),
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        )
-        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        builder
-            .setTitle(R.string.vault_enter_pin_title)
-            .setMessage(R.string.vault_enter_pin_msg)
-            .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
-                val pin = input.text?.toString()?.trim().orEmpty()
-                if (Prefs.verifyVaultPin(this, pin)) {
-                    setVaultMode(true)
-                } else {
-                    Toast.makeText(this, R.string.vault_pin_wrong, Toast.LENGTH_LONG).show()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
-
-    private fun promptSetVaultPin(onSuccess: () -> Unit) {
-        val (builder, input) = SwDialog.input(
-            this,
-            hint = getString(R.string.vault_pin_hint),
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        )
-        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        builder
-            .setTitle(R.string.vault_set_pin_title)
-            .setMessage(R.string.vault_set_pin_msg)
-            .setPositiveButton(R.string.save) { _, _ ->
-                val pin = input.text?.toString()?.trim().orEmpty()
-                if (pin.length != 4 || !pin.all { it.isDigit() }) {
-                    Toast.makeText(this, R.string.vault_pin_invalid, Toast.LENGTH_LONG).show()
-                } else {
-                    Prefs.setVaultPin(this, pin)
-                    Toast.makeText(this, R.string.vault_pin_saved, Toast.LENGTH_SHORT).show()
-                    onSuccess()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
 
     internal fun setVaultMode(enabled: Boolean) {
         vaultMode = enabled
@@ -907,82 +864,6 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Hidden Vault: add from FAB (saved scan or device PDF)
-    // ------------------------------------------------------------------
-
-    private fun addToVault() {
-        if (!ProGate.isPro(this)) {
-            showProPanel()
-            return
-        }
-        SwDialog.sheet(this)
-            .setTitle(R.string.vault_add_title)
-            .setItems(
-                arrayOf(
-                    getString(R.string.vault_add_scan),
-                    getString(R.string.vault_add_pdf)
-                )
-            ) { _, which ->
-                if (which == 0) {
-                    lifecycleScope.launch {
-                        // Vault mode lists vault contents; moving in needs the home list.
-                        val docs = withContext(Dispatchers.IO) { repo.listDocuments() }
-                        if (docs.isEmpty()) {
-                            Toast.makeText(this@MainActivity, R.string.empty_title, Toast.LENGTH_SHORT).show()
-                        } else {
-                            FlowUtil.pickScan(this@MainActivity, R.string.vault_add_scan, docs) { doc ->
-                                moveDocToVault(doc)
-                            }
-                        }
-                    }
-                } else {
-                    pendingUriAction = { uri -> importPdfToVault(uri) }
-                    pickProPdf.launch(arrayOf("application/pdf"))
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
-    private fun moveDocToVault(doc: ScanDocument) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) { repo.setVaulted(doc.id, true) }
-                progress.dismiss()
-                Toast.makeText(this@MainActivity, R.string.vault_moved_in, Toast.LENGTH_SHORT).show()
-                refreshList()
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    private fun importPdfToVault(uri: Uri) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val name = FlowUtil.devicePdfName(repo, uri)
-                withContext(Dispatchers.IO) { repo.importPdfIntoVault(uri, name) }
-                progress.dismiss()
-                Toast.makeText(this@MainActivity, R.string.vault_imported, Toast.LENGTH_SHORT).show()
-                refreshList()
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
 
     private fun toggleSelection(id: String) {
         if (!selectedIds.remove(id)) selectedIds.add(id)

@@ -1,0 +1,164 @@
+package com.scanwhirl.app.tools
+
+import android.net.Uri
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.scanwhirl.app.R
+import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.SwDialog
+import com.scanwhirl.app.ui.showSw
+import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.ProGate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * test26 T2.5 — Hidden Vault (PIN gate, add scans/PDFs), moved verbatim out
+ * of `MainActivity`. `setVaultMode` stays on the Activity (it drives the
+ * Home UI and is visible to tests).
+ *
+ * @param pickPdf seam for the Pro device-PDF picker (launcher stays in the
+ *   Activity via `pendingUriAction` + `pickProPdf`).
+ * @param setVaultMode enters/leaves vault mode on the Home screen.
+ * @param onProRequired shows the Pro panel when the feature is gated.
+ */
+class VaultFlow(
+    private val activity: AppCompatActivity,
+    private val repo: ScanRepository,
+    private val host: HomeHost,
+    private val pickPdf: ((Uri) -> Unit) -> Unit,
+    private val setVaultMode: (Boolean) -> Unit,
+    private val onProRequired: () -> Unit
+) {
+
+    fun openVaultWithPin() {
+        if (!ProGate.isPro(activity)) {
+            onProRequired()
+            return
+        }
+        if (!Prefs.hasVaultPin(activity)) {
+            promptSetVaultPin { setVaultMode(true) }
+            return
+        }
+        val (builder, input) = SwDialog.input(
+            activity,
+            hint = activity.getString(R.string.vault_pin_hint),
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        )
+        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        builder
+            .setTitle(R.string.vault_enter_pin_title)
+            .setMessage(R.string.vault_enter_pin_msg)
+            .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
+                val pin = input.text?.toString()?.trim().orEmpty()
+                if (Prefs.verifyVaultPin(activity, pin)) {
+                    setVaultMode(true)
+                } else {
+                    Toast.makeText(activity, R.string.vault_pin_wrong, Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .showSw(isSheet = false)
+    }
+
+    fun promptSetVaultPin(onSuccess: () -> Unit) {
+        val (builder, input) = SwDialog.input(
+            activity,
+            hint = activity.getString(R.string.vault_pin_hint),
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        )
+        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        builder
+            .setTitle(R.string.vault_set_pin_title)
+            .setMessage(R.string.vault_set_pin_msg)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val pin = input.text?.toString()?.trim().orEmpty()
+                if (pin.length != 4 || !pin.all { it.isDigit() }) {
+                    Toast.makeText(activity, R.string.vault_pin_invalid, Toast.LENGTH_LONG).show()
+                } else {
+                    Prefs.setVaultPin(activity, pin)
+                    Toast.makeText(activity, R.string.vault_pin_saved, Toast.LENGTH_SHORT).show()
+                    onSuccess()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .showSw(isSheet = false)
+    }
+
+    fun addToVault() {
+        if (!ProGate.isPro(activity)) {
+            onProRequired()
+            return
+        }
+        SwDialog.sheet(activity)
+            .setTitle(R.string.vault_add_title)
+            .setItems(
+                arrayOf(
+                    activity.getString(R.string.vault_add_scan),
+                    activity.getString(R.string.vault_add_pdf)
+                )
+            ) { _, which ->
+                if (which == 0) {
+                    activity.lifecycleScope.launch {
+                        // Vault mode lists vault contents; moving in needs the home list.
+                        val docs = withContext(Dispatchers.IO) { repo.listDocuments() }
+                        if (docs.isEmpty()) {
+                            Toast.makeText(activity, R.string.empty_title, Toast.LENGTH_SHORT).show()
+                        } else {
+                            FlowUtil.pickScan(activity, R.string.vault_add_scan, docs) { doc ->
+                                moveDocToVault(doc)
+                            }
+                        }
+                    }
+                } else {
+                    pickPdf { uri -> importPdfToVault(uri) }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .showSw(isSheet = true)
+    }
+
+    private fun moveDocToVault(doc: ScanDocument) {
+        val progress = host.showProgress()
+        activity.lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repo.setVaulted(doc.id, true) }
+                progress.dismiss()
+                Toast.makeText(activity, R.string.vault_moved_in, Toast.LENGTH_SHORT).show()
+                host.refreshList()
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    activity,
+                    activity.getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun importPdfToVault(uri: Uri) {
+        val progress = host.showProgress()
+        activity.lifecycleScope.launch {
+            try {
+                val name = FlowUtil.devicePdfName(repo, uri)
+                withContext(Dispatchers.IO) { repo.importPdfIntoVault(uri, name) }
+                progress.dismiss()
+                Toast.makeText(activity, R.string.vault_imported, Toast.LENGTH_SHORT).show()
+                host.refreshList()
+            } catch (e: Exception) {
+                progress.dismiss()
+                Toast.makeText(
+                    activity,
+                    activity.getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+}
