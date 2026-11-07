@@ -293,22 +293,22 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `home shows a time greeting and settings can turn it off`() {
+    fun `home shows a status line and settings can turn it off`() {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val greeting = activity.findViewById<android.widget.TextView>(R.id.greetingText)
+                val line = activity.findViewById<android.widget.TextView>(R.id.statusLine)
                 assertTrue(
-                    "greeting line should be shown under the name",
-                    greeting.text.isNotEmpty() && greeting.isVisible
+                    "status line should be shown under the name",
+                    line.text.isNotEmpty() && line.isVisible
                 )
             }
         }
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, false)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val greeting = activity.findViewById<android.widget.TextView>(R.id.greetingText)
-                assertTrue("greeting should be off", greeting.text.isEmpty())
+                val line = activity.findViewById<android.widget.TextView>(R.id.statusLine)
+                assertTrue("status line should be off", line.text.isEmpty() && !line.isVisible)
             }
         }
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
@@ -1324,23 +1324,26 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `greeting renders under the app name, and the badge is clickable`() {
+    fun `status line renders under the app name, and the badge is clickable`() {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val greeting = activity.findViewById<android.widget.TextView>(R.id.greetingText)
-                // T1.5: the emoji greeting is now the HUD status line — it must
+                val line = activity.findViewById<android.widget.TextView>(R.id.statusLine)
+                // T1.5/T3.2: the emoji greeting is now the HUD status line — it must
                 // lead with the phase for the current hour and carry count+size.
                 val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
                 val period = activity
                     .getString(com.scanwhirl.app.util.StatusLine.phase(hour))
                     .uppercase(java.util.Locale.ROOT)
-                val text = greeting.text.toString()
+                val text = line.text.toString()
                 assertTrue("status line leads with the phase: \"$text\"", text.startsWith("$period · "))
                 assertTrue(
                     "status line carries count and size: \"$text\"",
                     Regex("""· \d+ DOCS? · .+""").containsMatchIn(text)
                 )
+                // T3.2 styling: 11sp caps micro-label with wide tracking.
+                assertEquals(11f, line.textSize / line.resources.displayMetrics.scaledDensity, 0.01f)
+                assertEquals(0.12f, line.letterSpacing, 0.001f)
                 // Crown badge opens the Pro panel.
                 activity.findViewById<android.view.View>(R.id.proBadge).performClick()
             }
@@ -1439,7 +1442,7 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `greeting text is populated for every hour`() {
+    fun `status line text is populated for every hour`() {
         for (hour in 0..23) {
             val text = com.scanwhirl.app.util.StatusLine.format(app, hour, 1, 1_048_576)
             assertTrue("status line must be non-empty: $text", text.isNotBlank())

@@ -69,14 +69,19 @@
                             android:textStyle="bold" />
                     </LinearLayout>
 
+                    <!-- test26 T3.2: HUD status line — 11sp caps + 0.12 tracking (R2
+                         micro-label exception), dim cyan; digits monospace and the
+                         separators hairline-coloured via StatusLine.styled(). -->
                     <TextView
-                        android:id="@+id/greetingText"
+                        android:id="@+id/statusLine"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
-                        android:textAppearance="?attr/textAppearanceBodySmall"
-                        android:textColor="@color/text_hologram_mid"
-                        android:textSize="12sp" />
+                        android:layout_marginTop="2dp"
+                        android:ellipsize="end"
+                        android:letterSpacing="0.12"
+                        android:maxLines="1"
+                        android:textColor="@color/cyan_dim"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.appbar.MaterialToolbar>
 

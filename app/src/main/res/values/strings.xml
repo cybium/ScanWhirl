@@ -174,8 +174,8 @@
     <string name="font_default">Default</string>
     <string name="font_serif">Serif</string>
     <string name="font_mono">Monospace</string>
-    <string name="settings_greeting">Greeting</string>
-    <string name="settings_greeting_summary">Show a time-based hello on the home screen</string>
+    <string name="settings_greeting">Status line</string>
+    <string name="settings_greeting_summary">Show the status line on the home screen</string>
     <!-- Status line (test26 T1.5): replaces the emoji greetings of Greeting.kt. -->
     <string name="status_morning">Good morning</string>
     <string name="status_afternoon">Good afternoon</string>

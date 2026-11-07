@@ -1,6 +1,11 @@
 package com.scanwhirl.app.util
 
 import android.content.Context
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.TypefaceSpan
+import androidx.core.content.ContextCompat
 import com.scanwhirl.app.R
 import java.util.Locale
 
@@ -43,4 +48,41 @@ object StatusLine {
         bytes >= 1024 -> String.format(Locale.ROOT, "%.0f KB", bytes / 1024.0)
         else -> "$bytes B"
     }
+
+    /**
+     * test26 T3.2 — the same readout as [format] but as a `SpannableString`:
+     * digit runs in monospace, the ` · ` separators in `cyan_border_hair`.
+     * Everything else keeps the TextView's own colour (`cyan_dim` from the
+     * layout), so this only paints what the spec asks it to paint.
+     */
+    fun styled(context: Context, hour: Int, docCount: Int, totalBytes: Long): SpannableString {
+        val text = format(context, hour, docCount, totalBytes)
+        val span = SpannableString(text)
+        val hair = ContextCompat.getColor(context, R.color.cyan_border_hair)
+
+        // Separators: the " · " tokens between the three HUD segments.
+        var at = text.indexOf(SEP)
+        while (at >= 0) {
+            span.setSpan(
+                ForegroundColorSpan(hair), at, at + SEP.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            at = text.indexOf(SEP, at + SEP.length)
+        }
+
+        // Numbers: each run of digits (and its decimal point) goes monospace.
+        val mono = TypefaceSpan("monospace")
+        var i = 0
+        while (i < text.length) {
+            if (text[i].isDigit()) {
+                var end = i
+                while (end < text.length && (text[end].isDigit() || text[end] == '.')) end++
+                span.setSpan(mono, i, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                i = end
+            } else i++
+        }
+        return span
+    }
+
+    private const val SEP = " · "
 }

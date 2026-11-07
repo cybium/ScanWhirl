@@ -65,4 +65,41 @@ class StatusLineTest {
             }
         }
     }
+
+    @Test
+    fun `styled paints separators hairline and numbers monospace`() {
+        val span = StatusLine.styled(context, 14, 2, 14L * 1_048_576)
+        val text = span.toString()
+        assertEquals(StatusLine.format(context, 14, 2, 14L * 1_048_576), text)
+
+        // Every " · " separator carries a ForegroundColorSpan.
+        val seps = mutableListOf<Int>()
+        var at = text.indexOf(" · ")
+        while (at >= 0) {
+            seps += at
+            at = text.indexOf(" · ", at + 3)
+        }
+        assertEquals("two separators expected in \"$text\"", 2, seps.size)
+        for (s in seps) {
+            val spans = span.getSpans(s, s + 3, android.text.style.ForegroundColorSpan::class.java)
+            assertEquals("no colour span on separator at $s", 1, spans.size)
+        }
+
+        // The digit runs ("2", "14.0") are monospaced; the letters are not.
+        val mono = span.getSpans(0, text.length, android.text.style.TypefaceSpan::class.java)
+        assertTrue("monospace spans expected", mono.isNotEmpty())
+        for (m in mono) {
+            val s = span.getSpanStart(m)
+            val e = span.getSpanEnd(m)
+            assertTrue("empty mono span", e > s)
+            val covered = text.substring(s, e)
+            assertTrue("mono span must cover digits: \"$covered\"", covered.any { it.isDigit() })
+        }
+        // The phase word "AFTERNOON" must NOT be inside any mono span.
+        val phaseStart = text.indexOf("AFTERNOON")
+        val covering = mono.filter {
+            span.getSpanStart(it) <= phaseStart && span.getSpanEnd(it) >= phaseStart + 9
+        }
+        assertEquals("phase word must stay proportional", 0, covering.size)
+    }
 }

@@ -281,7 +281,7 @@ class MainActivity : BaseActivity(), HomeHost {
         refreshList()
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
         applyToolbarTitle()
-        updateGreeting()
+        updateStatusLine()
         lifecycleScope.launch {
             val background = withContext(Dispatchers.IO) {
                 com.scanwhirl.app.util.Wallpaper.drawable(this@MainActivity)
@@ -306,19 +306,19 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    /** HUD status line under the app name, when enabled in Settings (T1.5). */
-    private fun updateGreeting() {
+    /** HUD status line under the app name, when enabled in Settings (T1.5/T3.2). */
+    private fun updateStatusLine() {
         if (Prefs.showGreeting(this) && !selectionMode) {
             val docs = adapter.currentList
-            binding.greetingText.text = StatusLine.format(
+            binding.statusLine.text = StatusLine.styled(
                 this,
                 Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
                 docs.size,
                 docs.sumOf { it.pdfFile.length() }
             )
-            binding.greetingText.isVisible = true
+            binding.statusLine.isVisible = true
         } else {
-            binding.greetingText.isVisible = false
+            binding.statusLine.isVisible = false
         }
     }
 
@@ -434,7 +434,7 @@ class MainActivity : BaseActivity(), HomeHost {
             binding.titleRow.visibility = View.VISIBLE
         }
         updateProBadge()
-        updateGreeting()
+        updateStatusLine()
     }
 
     /**
@@ -518,7 +518,7 @@ class MainActivity : BaseActivity(), HomeHost {
         setFabVisible(!enabled)
         binding.toolsRow.isVisible = !enabled && !vaultMode
         applyToolbarTitle()
-        updateGreeting()
+        updateStatusLine()
         invalidateOptionsMenu()
     }
 
