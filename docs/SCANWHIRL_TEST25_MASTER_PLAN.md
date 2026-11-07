@@ -704,5 +704,7 @@ Expected: 180 + new unit tests, 0 failures, 0 errors.
 ### Build / deliverables (Phase 6)
 - `app/build.gradle.kts` — version bump only (`versionCode = 25`, `versionName = "1.1.1-test25"`)
 - `docs/SCANWHIRL_TEST25_MASTER_PLAN.md` — Phase 6 ✅ COMPLETE as-run record (this file)
+- `docs/TEST25_EXECUTION_REPORT.md` — **new** standalone handoff report (fast-read companion
+  to this plan: phase summaries, verification, constraints, gotchas, file map)
 - Delivered (not in repo): `ScanWhirl-1.1.1-test25.apk` + `ScanWhirl-1.1.1-test25-source.zip`
   → `/mnt/c/Users/Cybium/Downloads/`
