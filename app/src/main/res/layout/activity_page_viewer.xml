@@ -35,12 +35,15 @@
         android:textColor="#FFFFFFFF"
         android:textSize="14sp" />
 
+    <!-- test25 Phase 5B: inset floating glass dock (was a flat #99000000 bar). -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="#99000000"
+        android:layout_marginHorizontal="8dp"
+        android:background="@drawable/bg_dock_glass"
         android:orientation="vertical"
+        android:paddingHorizontal="8dp"
         android:paddingVertical="6dp">
 
         <LinearLayout
@@ -50,7 +53,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnRotateRight"
-                style="@style/Widget.Material3.Button.TextButton"
+                style="@style/Widget.ScanWhirl.Button.Dock"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1"
@@ -58,15 +61,12 @@
                 android:insetRight="0dp"
                 android:paddingHorizontal="2dp"
                 android:text="@string/action_rotate"
-                android:textColor="#FFFFFFFF"
-                android:textSize="13sp"
                 app:icon="@drawable/ic_rotate"
-                app:iconPadding="4dp"
-                app:iconTint="#FFFFFFFF" />
+                app:iconPadding="4dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCrop"
-                style="@style/Widget.Material3.Button.TextButton"
+                style="@style/Widget.ScanWhirl.Button.Dock"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1"
@@ -74,11 +74,8 @@
                 android:insetRight="0dp"
                 android:paddingHorizontal="2dp"
                 android:text="@string/crop_action"
-                android:textColor="#FFFFFFFF"
-                android:textSize="13sp"
                 app:icon="@drawable/ic_crop"
-                app:iconPadding="4dp"
-                app:iconTint="#FFFFFFFF" />
+                app:iconPadding="4dp" />
         </LinearLayout>
 
         <LinearLayout
@@ -88,7 +85,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnFilter"
-                style="@style/Widget.Material3.Button.TextButton"
+                style="@style/Widget.ScanWhirl.Button.Dock"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1"
@@ -96,15 +93,12 @@
                 android:insetRight="0dp"
                 android:paddingHorizontal="2dp"
                 android:text="@string/filter_action"
-                android:textColor="#FFFFFFFF"
-                android:textSize="13sp"
                 app:icon="@drawable/ic_filter"
-                app:iconPadding="4dp"
-                app:iconTint="#FFFFFFFF" />
+                app:iconPadding="4dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnDelete"
-                style="@style/Widget.Material3.Button.TextButton"
+                style="@style/Widget.ScanWhirl.Button.Dock"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1"
@@ -112,11 +106,8 @@
                 android:insetRight="0dp"
                 android:paddingHorizontal="2dp"
                 android:text="@string/delete"
-                android:textColor="#FFFFFFFF"
-                android:textSize="13sp"
                 app:icon="@drawable/ic_delete"
-                app:iconPadding="4dp"
-                app:iconTint="#FFFFFFFF" />
+                app:iconPadding="4dp" />
         </LinearLayout>
     </LinearLayout>
 

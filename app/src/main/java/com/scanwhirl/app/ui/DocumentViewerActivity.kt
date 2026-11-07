@@ -216,6 +216,14 @@ class DocumentViewerActivity : BaseActivity() {
         binding.toolbar.title = doc.name
         binding.docLockBadge.isVisible = doc.isLocked
         binding.docVaultBadge.isVisible = doc.isVaulted
+        // test25 Phase 5C: category tag in the header (recategorise funnels
+        // through here too — see promptCategorize()).
+        binding.docCategoryChip.text = "● " +
+            com.scanwhirl.app.util.CategoryStyle.shortTag(doc.category)
+        binding.docCategoryChip.setTextColor(
+            com.scanwhirl.app.util.CategoryStyle.color(doc.category)
+        )
+        binding.docCategoryChip.isVisible = true
         binding.btnUnlockPdf.isVisible = doc.isLocked
         binding.btnProtect.setText(if (doc.isLocked) R.string.btn_change_pw else R.string.btn_lock_pdf)
         binding.btnVaultDoc.setText(if (doc.isVaulted) R.string.btn_vault_unhide else R.string.btn_vault_hide)

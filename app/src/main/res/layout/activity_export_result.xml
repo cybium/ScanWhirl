@@ -5,10 +5,13 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- test25 Phase 5D: cyan hairline over the existing sf_appbar (foreground
+         keeps the current background). -->
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/sf_appbar">
+        android:background="@color/sf_appbar"
+        android:foreground="@drawable/bg_appbar_hairline">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
@@ -66,16 +69,19 @@
         </LinearLayout>
     </ScrollView>
 
+    <!-- test25 Phase 5D: inset floating glass dock. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="8dp"
+        android:background="@drawable/bg_dock_glass"
         android:gravity="end"
         android:orientation="horizontal"
         android:padding="12dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnShareResult"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+            style="@style/Widget.ScanWhirl.Button.Secondary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/result_share"

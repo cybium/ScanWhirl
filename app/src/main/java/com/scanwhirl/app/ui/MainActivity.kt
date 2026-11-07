@@ -1,7 +1,9 @@
 package com.scanwhirl.app.ui
 
+import android.animation.ObjectAnimator
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
@@ -12,6 +14,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.PathInterpolator
 import android.widget.EditText
 import android.widget.PopupMenu
 import android.widget.RadioButton
@@ -269,6 +272,18 @@ class MainActivity : BaseActivity() {
         }
     }
 
+    /**
+     * test25 Phase 4: leaving the Shelf back to the globe home plays the
+     * return warp (globe enters, shelf exits) instead of the system fade.
+     * Only when the globe is the activity below — otherwise plain finish.
+     */
+    override fun finish() {
+        super.finish()
+        if (Prefs.globeHomeEnabled(this)) {
+            com.scanwhirl.app.ui.SwTransitions.warpBackToGlobe(this)
+        }
+    }
+
     /** Time-of-day hello under the app name, when enabled in Settings. */
     private fun updateGreeting() {
         if (Prefs.showGreeting(this) && !selectionMode) {
@@ -333,6 +348,7 @@ class MainActivity : BaseActivity() {
         }
         binding.emptyState.isVisible = sorted.isEmpty() && ocrMatches.isEmpty()
         binding.scanList.isVisible = true
+        updateSortLabel()
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
@@ -349,6 +365,19 @@ class MainActivity : BaseActivity() {
             }
             else -> docs.sortedByDescending { it.createdAt }
         }
+
+    /** Sort pill label: mirrors [Prefs.sortMode] so the toolbar always says what's active. */
+    private fun updateSortLabel() {
+        val label = when (Prefs.sortMode(this)) {
+            Prefs.SORT_NAME -> R.string.sort_name
+            Prefs.SORT_MODIFIED -> R.string.sort_modified
+            else -> R.string.sort_date
+        }
+        binding.sortLabel.setText(label)
+        // Keep the pill's a11y announcement in sync with the visible label.
+        binding.btnSort.contentDescription =
+            getString(R.string.sort) + ", " + getString(label)
+    }
 
     private fun selectionTitle(): String =
         if (selectionMode) {
@@ -404,7 +433,7 @@ class MainActivity : BaseActivity() {
             binding.proBadge.setBackgroundResource(R.drawable.bg_free_badge)
             // Free UI: no Pro Suite card, always a collapsed grid when it returns.
             binding.proSuiteGrid.isVisible = false
-            binding.proSuiteChevron.setImageResource(R.drawable.ic_chevron_down)
+            binding.proSuiteChevron.rotation = 0f
         }
         binding.proSuiteCard.isVisible = pro
         binding.searchInput.hint =
@@ -443,13 +472,23 @@ class MainActivity : BaseActivity() {
         builder.showSw(isSheet = true)
     }
 
+    /**
+     * The scan FAB lives inside the 96dp orbital [R.id.fabHost], so both views must be
+     * shown or hidden together — UiSmokeTest asserts `fabScan` visibility directly, and a
+     * host-only toggle would leave the button on screen (and vice versa).
+     */
+    private fun setFabVisible(visible: Boolean) {
+        binding.fabHost.isVisible = visible
+        binding.fabScan.isVisible = visible
+    }
+
     private fun setSelectionMode(enabled: Boolean) {
         selectionMode = enabled
         backCallback.isEnabled = enabled || vaultMode
         if (!enabled) selectedIds.clear()
         adapter.selectionMode = enabled
         adapter.notifyDataSetChanged()
-        binding.fabScan.isVisible = !enabled
+        setFabVisible(!enabled)
         binding.toolsRow.isVisible = !enabled && !vaultMode
         applyToolbarTitle()
         updateGreeting()
@@ -464,9 +503,17 @@ class MainActivity : BaseActivity() {
         }
         val expanded = !binding.proSuiteGrid.isVisible
         binding.proSuiteGrid.isVisible = expanded
-        binding.proSuiteChevron.setImageResource(
-            if (expanded) R.drawable.ic_chevron_up else R.drawable.ic_chevron_down
-        )
+        // Single chevron asset, spun 180° instead of swapping up/down drawables.
+        // One-shot animator: the infinite-animation ambient gate (SwMotion) is Phase 4.
+        ObjectAnimator.ofFloat(
+            binding.proSuiteChevron, "rotation", if (expanded) 180f else 0f
+        ).apply {
+            duration = 200L
+            // Material3 standard curve (0.4,0,0.2,1) — PathInterpolator lives in the
+            // framework jar; androidx' FastOutSlowInInterpolator is not on our classpath.
+            interpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
+            start()
+        }
     }
 
     // ------------------------------------------------------------------
@@ -535,7 +582,7 @@ class MainActivity : BaseActivity() {
         binding.vaultBanner.isVisible = enabled
         binding.toolsRow.isVisible = !enabled && !selectionMode
         // In the vault the FAB becomes "add": move a scan in, or import a PDF.
-        binding.fabScan.isVisible = !selectionMode
+        setFabVisible(!selectionMode)
         binding.fabScan.setImageResource(if (enabled) R.drawable.ic_add else R.drawable.ic_camera)
         binding.fabScan.contentDescription =
             getString(if (enabled) R.string.vault_add_title else R.string.scan)
@@ -2153,6 +2200,12 @@ class ScanListAdapter(
             binding.root.strokeWidth = if (selected) (2 * density).toInt() else (1 * density).toInt()
             binding.root.strokeColor =
                 ContextCompat.getColor(binding.root.context, if (selected) R.color.cyan_primary else R.color.cyan_border_idle)
+
+            // Category accent rail + label chip (D3 palette via CategoryStyle).
+            val catColor = CategoryStyle.color(doc.category.orEmpty())
+            binding.catRail.backgroundTintList = ColorStateList.valueOf(catColor)
+            binding.catChip.text = "● ${CategoryStyle.shortTag(doc.category.orEmpty())}"
+            binding.catChip.setTextColor(catColor)
 
             binding.root.setOnClickListener { onClick(doc) }
             binding.root.setOnLongClickListener {

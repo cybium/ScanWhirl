@@ -41,6 +41,22 @@
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:textColor="?android:attr/textColorSecondary" />
 
+            <!-- test25 Phase 5C: additive ID — category tag, filled in reloadDocument(). -->
+            <TextView
+                android:id="@+id/docCategoryChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_chip_void"
+                android:letterSpacing="0.08"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp"
+                android:textAllCaps="true"
+                android:textColor="@color/cyan_primary"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/docVaultBadge"
                 android:layout_width="wrap_content"
@@ -95,9 +111,14 @@
             app:strokeColor="@color/pro_badge_stroke"
             app:strokeWidth="1dp">
 
+            <!-- test25 Phase 5C: gold banner behind the Pro grid (Phase 2's
+                 inner-container trick — cardBackgroundColor can't take a
+                 drawable; the 1dp margin keeps the card's gold stroke visible). -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_margin="1dp"
+                android:background="@drawable/bg_pro_banner"
                 android:orientation="vertical"
                 android:padding="8dp">
 
@@ -108,7 +129,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnProtect"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.ScanWhirl.Button.Pro"
                         android:layout_width="0dp"
                         android:layout_height="42dp"
                         android:layout_margin="3dp"
@@ -118,18 +139,14 @@
                         android:maxLines="1"
                         android:paddingHorizontal="8dp"
                         android:text="@string/btn_lock_pdf"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="12sp"
                         app:icon="@drawable/ic_lock"
                         app:iconGravity="textStart"
                         app:iconPadding="6dp"
-                        app:iconSize="16dp"
-                        app:iconTint="@color/pro_gold"
-                        app:strokeColor="@color/pro_badge_stroke" />
+                        app:iconSize="16dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnUnlockPdf"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.ScanWhirl.Button.Pro"
                         android:layout_width="0dp"
                         android:layout_height="42dp"
                         android:layout_margin="3dp"
@@ -139,19 +156,15 @@
                         android:maxLines="1"
                         android:paddingHorizontal="8dp"
                         android:text="@string/btn_unlock_pdf"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="12sp"
                         android:visibility="gone"
                         app:icon="@drawable/ic_unlock"
                         app:iconGravity="textStart"
                         app:iconPadding="6dp"
-                        app:iconSize="16dp"
-                        app:iconTint="@color/pro_gold"
-                        app:strokeColor="@color/pro_badge_stroke" />
+                        app:iconSize="16dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnOcr"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.ScanWhirl.Button.Pro"
                         android:layout_width="0dp"
                         android:layout_height="42dp"
                         android:layout_margin="3dp"
@@ -161,14 +174,10 @@
                         android:maxLines="1"
                         android:paddingHorizontal="8dp"
                         android:text="@string/btn_ocr_text"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="12sp"
                         app:icon="@drawable/ic_ocr"
                         app:iconGravity="textStart"
                         app:iconPadding="6dp"
-                        app:iconSize="16dp"
-                        app:iconTint="@color/pro_gold"
-                        app:strokeColor="@color/pro_badge_stroke" />
+                        app:iconSize="16dp" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -178,7 +187,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnLongImage"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.ScanWhirl.Button.Pro"
                         android:layout_width="0dp"
                         android:layout_height="42dp"
                         android:layout_margin="3dp"
@@ -188,18 +197,14 @@
                         android:maxLines="1"
                         android:paddingHorizontal="8dp"
                         android:text="@string/btn_long_image"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="12sp"
                         app:icon="@drawable/ic_long_image"
                         app:iconGravity="textStart"
                         app:iconPadding="6dp"
-                        app:iconSize="16dp"
-                        app:iconTint="@color/pro_gold"
-                        app:strokeColor="@color/pro_badge_stroke" />
+                        app:iconSize="16dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnVaultDoc"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.ScanWhirl.Button.Pro"
                         android:layout_width="0dp"
                         android:layout_height="42dp"
                         android:layout_margin="3dp"
@@ -209,21 +214,20 @@
                         android:maxLines="1"
                         android:paddingHorizontal="8dp"
                         android:text="@string/btn_vault_hide"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="12sp"
                         app:icon="@drawable/ic_vault"
                         app:iconGravity="textStart"
                         app:iconPadding="6dp"
-                        app:iconSize="16dp"
-                        app:iconTint="@color/pro_gold"
-                        app:strokeColor="@color/pro_badge_stroke" />
+                        app:iconSize="16dp" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- test25 Phase 5C: inset floating glass dock. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:background="@drawable/bg_dock_glass"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="12dp"

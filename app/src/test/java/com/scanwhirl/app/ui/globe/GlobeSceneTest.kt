@@ -3,6 +3,7 @@ package com.scanwhirl.app.ui.globe
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.CategoryRules
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -200,5 +201,96 @@ class GlobeSceneTest {
         )
         assertEquals(listOf("1", "2"), scene.orbitCards.map { it.docId })
         assertTrue(scene.orbitCards.none { it.hidden })
+    }
+
+    // ------------------------------------------------------------------
+    // test25 Phase 3: compact rings, top reserve, focus, counts, orbit clamp
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `ring geometry uses the compact radii at fifty eight percent height`() {
+        val w = 1080f
+        val h = 1920f
+        val inner = scene.ringGeometry(0, w, h)
+        val outer = scene.ringGeometry(4, w, h)
+        assertEquals(w * 0.125f, inner.rx, 0.01f)
+        assertEquals(w * 0.385f, outer.rx, 0.01f)
+        assertEquals(h * 0.58f, inner.cy, 0.01f)
+        assertEquals(h * 0.58f, outer.cy, 0.01f)
+        assertEquals(inner.rx * 0.42f, inner.ry, 0.01f)
+    }
+
+    @Test
+    fun `top reserve lays geometry out below the hud`() {
+        val w = 1080f
+        val h = 1920f
+        val baseRing = scene.ringGeometry(0, w, h).cy
+        val baseGlobe = scene.globeGeometry(w, h).cy
+
+        scene.topReserve = 200f
+        val ring = scene.ringGeometry(0, w, h).cy
+        val globe = scene.globeGeometry(w, h).cy
+        assertEquals(200f + (h - 200f) * 0.58f, ring, 0.01f)
+        assertEquals(200f + (h - 200f) * 0.44f, globe, 0.01f)
+        assertTrue("rings move down below the HUD", ring > baseRing)
+        assertTrue("globe moves down below the HUD", globe > baseGlobe)
+
+        scene.topReserve = 0f
+        assertEquals(baseRing, scene.ringGeometry(0, w, h).cy, 0.01f)
+        assertEquals(baseGlobe, scene.globeGeometry(w, h).cy, 0.01f)
+    }
+
+    @Test
+    fun `focus ring dims the other four and leaves the focused ring bright`() {
+        scene.setDocs(
+            listOf(
+                doc("1", "Notes", CategoryRules.STUDY),
+                doc("2", "Bill", CategoryRules.RECEIPTS),
+                doc("3", "Recent", CategoryRules.STUDY, created = 50L)
+            )
+        )
+        val study = scene.cards.first { it.docId == "1" }
+        val receipts = scene.cards.first { it.docId == "2" }
+        val orbit = scene.orbitCards.first { it.docId == "3" }
+
+        assertEquals(1f, scene.ringAlphaFor(study), 0f) // nothing focused yet
+        scene.focusRing = 0
+        assertEquals(1f, scene.ringAlphaFor(study), 0f)
+        assertEquals(GlobeScene.FOCUS_DIM, scene.ringAlphaFor(receipts), 0f)
+        assertEquals(GlobeScene.ORBIT_DIM, scene.ringAlphaFor(orbit), 0f)
+        scene.focusRing = -1
+        assertEquals(1f, scene.ringAlphaFor(receipts), 0f)
+    }
+
+    @Test
+    fun `category counts group documents by ring without double counting orbits`() {
+        scene.setDocs(
+            listOf(
+                doc("1", "A", CategoryRules.STUDY),
+                doc("2", "B", CategoryRules.STUDY),
+                doc("3", "C", CategoryRules.IDS),
+                doc("4", "D", CategoryRules.OTHER, locked = true),
+                doc("5", "E", CategoryRules.STUDY, created = 99L)
+            )
+        )
+        // Study=3 (incl. the orbiting one), Receipts=0, IDs=1, Forms=0, Other=1.
+        assertArrayEquals(intArrayOf(3, 0, 1, 0, 1), scene.categoryCounts())
+        assertTrue("orbit card exists but must not inflate counts", scene.orbitCards.isNotEmpty())
+    }
+
+    @Test
+    fun `home orbit radius never pushes a card off screen`() {
+        val w = 1080f
+        val h = 1920f
+        val g = scene.globeGeometry(w, h)
+        val cardHalfW = 31f * (w / 360f) * 1.15f // widest orbit card
+        val rx = scene.homeOrbitRx(w, g.r, cardHalfW)
+        assertTrue("prototype bound 1.35r", rx <= 1.35f * g.r + 0.01f)
+        assertTrue(
+            "screen bound",
+            rx <= 0.5f * w - cardHalfW - 6f * (w / 360f) + 0.01f
+        )
+        assertTrue("right edge", g.cx + rx + cardHalfW <= w)
+        assertTrue("left edge", g.cx - rx - cardHalfW >= 0f)
     }
 }

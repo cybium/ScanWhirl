@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- test25 Phase 5B: glass card face + chip-void page badge. The card's
+     background drawable is set in code (PageGridView.VH) because
+     MaterialCardView silently drops XML android:background — see plan. -->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -6,7 +9,7 @@
     android:layout_margin="4dp"
     android:clickable="true"
     android:focusable="true"
-    app:cardCornerRadius="10dp"
+    app:cardCornerRadius="14dp"
     app:cardElevation="1dp"
     app:strokeColor="?attr/colorPrimary"
     app:strokeWidth="0dp">
@@ -30,7 +33,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|start"
             android:layout_margin="6dp"
-            android:background="@drawable/bg_page_number"
+            android:background="@drawable/bg_chip_void"
             android:paddingHorizontal="8dp"
             android:paddingVertical="2dp"
             android:textColor="#FFFFFFFF"

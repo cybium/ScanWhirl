@@ -79,9 +79,11 @@ All 53 dialog call sites across 7 files migrated. `AlertDialog.Builder` fully re
 
 ---
 
-## 🔄 PHASE 2 — Shelf Overhaul — **IN PROGRESS** (started, not complete)
+## ✅ PHASE 2 — Shelf Overhaul — **COMPLETE**
 
-### What was done so far
+All 7 remaining items done, built, and verified. **180 tests, 0 failures, 0 errors.**
+
+### What was done earlier (previous session)
 1. **`item_scan.xml`** — Fully rewritten with:
    - `catRail` (4dp × row height − 20dp, `bg_cat_rail` drawable, tinted at runtime)
    - Portrait thumbnail 60×80dp (was 68×68 square)
@@ -95,81 +97,421 @@ All 53 dialog call sites across 7 files migrated. `AlertDialog.Builder` fully re
 3. **`CategoryStyle` import** added to `MainActivity.kt`.
 4. **`ProgressBar` import removed** from `MainActivity.kt` (no longer needed after `showProgress` delegates to `SwDialog.progress()`).
 
-### What REMAINS for Phase 2
-Next session must complete these in order:
+### What was done now (items 1–7 of the remaining checklist)
 
-1. **Wire `catRail` + `catChip` in `ScanListAdapter.VH.bind()`** in `MainActivity.kt`:
+1. **`ScanListAdapter.VH.bind()`** (`MainActivity.kt`) — wired `catRail` + `catChip`:
    ```kotlin
-   // In VH.bind(), after existing bindings:
    val catColor = CategoryStyle.color(doc.category.orEmpty())
    binding.catRail.backgroundTintList = ColorStateList.valueOf(catColor)
    binding.catChip.text = "● ${CategoryStyle.shortTag(doc.category.orEmpty())}"
    binding.catChip.setTextColor(catColor)
    ```
-   Also add `import android.content.res.ColorStateList` if not present.
-
+   Added `import android.content.res.ColorStateList`. `CategoryStyle` was already imported.
 2. **Pro Suite card** (`activity_main.xml`):
-   - Set `app:cardBackgroundColor="@drawable/bg_pro_banner"` on `proSuiteCard` (wire the dead drawable).
-   - Pro buttons (`btnVaultDoc`, `btnOcr`, `btnLockPdf`, `btnLongImage`): style as `Widget.ScanWhirl.Button.Pro` — gold glass fill, 1dp gold border, 52dp high, 12dp corners.
-   - Chevron `proSuiteChevron`: add `android:rotation="0"` default; in `MainActivity.kt` animate to 180° on expand via `ObjectAnimator`.
+   - **Deviation from this plan (deliberate):** `app:cardBackgroundColor="@drawable/bg_pro_banner"`
+     is **not** usable and was **not** applied. `cardBackgroundColor` is `format="color"` →
+     `ResourcesImpl.loadColorStateList()` → `loadComplexColorForCookie()` only parses root
+     tags `<gradient>` / `<selector>`, returns `null` for a `<shape>`, then throws
+     `NotFoundException("Can't find ColorStateList from drawable resource ID #0x…")` at
+     inflation → **every MainActivity launch crashes**.
+   - Instead: `proSuiteCard` keeps `app:cardBackgroundColor="@color/gold_pro_surface"` (the
+     1dp ring + fallback under the card stroke), and the **inner vertical `LinearLayout`**
+     got `android:background="@drawable/bg_pro_banner"` + `android:layout_margin="1dp"` so
+     the card's own `pro_badge_stroke` stays visible above it. The dead drawable is now wired.
+   - `toolVault`, `toolOcr`, `toolLockPdf`, `toolLongImage`: `style` →
+     `@style/Widget.ScanWhirl.Button.Pro`, `layout_height` `42dp` → **`52dp`**, and the now
+     inert `app:strokeColor="@color/pro_badge_stroke"` removed (`bg_pro_tile` supplies the
+     1dp gold border + 12dp corners; `MaterialButtonHelper.setBackgroundOverwritten()` makes
+     `app:strokeColor` a no-op on a button that carries `android:background`).
+     - **Note:** the original plan text named `btnVaultDoc/btnOcr/btnLockPdf/btnLongImage`,
+       which live in `activity_document_viewer.xml` → **Phase 5C**. `btnLockPdf` does not
+       exist anywhere. The Phase 2 targets are the four `tool*` buttons.
+   - `proSuiteChevron`: `android:rotation="0"` added; `toggleProSuite()` now runs an
+     `ObjectAnimator` `0° → 180°` (200ms) instead of swapping `ic_chevron_down/up`.
+     `updateProBadge()`'s Free branch resets `rotation = 0f` instead of the drawable.
+     - **Gotcha:** `android.view.animation.FastOutSlowInInterpolator` does **not** exist in
+       the framework `android.jar` (checked android-36) and androidx' copy is not on the
+       compile classpath → **compile error**. Use
+       `android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)` (the same M3 curve) —
+       this applies to Phase 4 too.
+3. **Tool cards** `toolResize` / `toolCompress` / `toolEdit` / `toolMerge`:
+   `app:strokeColor` `cyan_border_idle` → `@color/sel_stroke_cyan`; added
+   `android:stateListAnimator="@animator/sw_press"`; `app:cardCornerRadius` `14dp` → **`16dp`**;
+   icon `ImageView` `32dp` → **`40dp`**, `bg_icon_badge` → **`bg_icon_badge_glow`**,
+   `padding` `6dp` → **`9dp`** (40 − 22 = 18 / 2 → 22dp glyph).
+4. **`btnSort` → pill** (`activity_main.xml`): `ImageButton` replaced by a `LinearLayout`
+   (`bg_search_bar` background, `ic_sort` 16dp + new **`sortLabel`** `TextView`, 34dp tall).
+   New ID `sortLabel` — **not** on the locked list, so it is additive. `btnSort` itself is
+   unchanged as an ID; `binding.btnSort.setOnClickListener` and the `PopupMenu(this,
+   binding.btnSort)` anchor still compile and work (both only need `View`).
+   `updateSortLabel()` in `MainActivity.kt` maps `Prefs.sortMode()` → `R.string.sort_name`
+   / `sort_date` / `sort_modified` and is called from `applyList()` (single source of truth:
+   covers onCreate, search, and `showSortMenu()`); it also keeps the pill's
+   `contentDescription` in sync for a11y.
+5. **Empty state**: `emptyState`'s child `ImageView` `ic_scan_empty` → **`ic_empty_orbit`**
+   (given id `emptyOrbit`, additive). `app:tint="@color/cyan_primary"` kept — the vector is
+   cyan-only and `src_in` tinting preserves per-path alpha.
+6. **FAB host** (`activity_main.xml`): `fabScan` wrapped in a 96dp
+   **`FrameLayout fabHost`** (`bottom|end`, 24dp margin) carrying **`fabRing`**
+   (`bg_fab_outer_ring`) and **`fabPulse`** (`bg_fab_pulse`) behind it; `fabScan` is now
+   `layout_gravity="center"` with no margin, so the ring inherits the old 24dp inset and the
+   FAB sits centred inside it.
+   - **Kotlin:** new `setFabVisible(visible)` helper sets **both** `fabHost` and `fabScan`;
+     called from `setSelectionMode()` and `setVaultMode()`. This matters — `UiSmokeTest`
+     asserts `R.id.fabScan` visibility *directly* (lines 326/337/519/1785), so a host-only
+     toggle breaks four assertions across three tests.
+   - Rings are intentionally **static**: both drawables are byte-identical today, and pulse
+     motion is Phase 4 where it must be gated on `SwMotion.ambientAllowed` — Phase 4 landed that
+     gated pulse on the globe home's `fabPulse1`/`fabPulse2` (the spec'd pulse); this Shelf FAB
+     stays static by design.
+7. **`scanList`**: `android:padding="8dp"` → `paddingStart/Top/End="8dp"` +
+   **`paddingBottom="96dp"`**; `clipToPadding="false"` was already present and is kept.
 
-3. **Tool cards** (`activity_main.xml` — `toolResize`, `toolCompress`, `toolEdit`, `toolMerge`):
-   - `app:strokeColor="@color/sel_stroke_cyan"`, `android:stateListAnimator="@animator/sw_press"`, `app:cardCornerRadius="16dp"`.
-   - Icon badge: 40dp `bg_icon_badge_glow`, icon 22dp.
+### Phase 2 verification
+- `./gradlew test assembleRelease -PtestBuild --no-daemon` → **BUILD SUCCESSFUL**.
+- Parsed `app/build/test-results/testDebugUnitTest/*.xml`: **180 tests, 0 failures,
+  0 errors, 0 skipped** (UiSmokeTest 78, ScanRepositoryTest 22, GlobeSceneTest 11,
+  ImageToolsTest 16, PdfGeneratorTest 10, DownloadSaverTest 9, CategoryRulesTest 6,
+  ScanFilterTest 5, GreetingTest 3, CategoryPersistTest 4, GlobeHomeActivityTest 8,
+  SearchMatcherTest 4, PageThumbLoaderTest 3, ExternalVerifyExport 1).
+- No locked ID removed or renamed; nothing under `com.scanwhirl.app` touched.
+- `/tmp/opencode/ui_home.png` (rendered by the suite) confirms: sort pill, 16dp glow-badge
+  tool cards, gold `bg_pro_banner` Pro Suite with four 52dp `.Pro` buttons, catChip on rows,
+  and the orbital FAB ring.
+- APK still reports `versionCode=24` / `1.1.1-test24` — **version bump is Phase 6**, not done.
 
-4. **`btnSort` → pill** (`activity_main.xml`): convert to `LinearLayout` pill with `ic_sort` + `sortLabel` TextView. In `MainActivity.kt`, update sort label text when sort mode changes.
-
-5. **Empty state** (`activity_main.xml`): swap `ic_scan_empty` → `ic_empty_orbit` on `emptyState` ImageView.
-
-6. **FAB host** (`activity_main.xml`): wrap `fabScan` in a `FrameLayout` with id `fabHost` (96dp), add `fabRing` and `fabPulse` behind it. In `MainActivity.kt`, toggle `fabHost.isVisible` wherever `fabScan.isVisible` is toggled.
-
-7. **`scanList` bottom padding**: set `scanList` `paddingBottom="96dp"` and `clipToPadding="false"`.
+**Next session can proceed directly to Phase 3.**
 
 ---
 
-## ⏳ PHASE 3 — Holographic Globe Overhaul — **NOT STARTED**
+## ✅ PHASE 3 — Holographic Globe Overhaul — **COMPLETE**
 
-Files: `GlobeScene.kt`, `HolographicEarthView.kt`, `GlobeHomeActivity.kt`, `activity_globe_home.xml`
+Files: `GlobeScene.kt`, `HolographicEarthView.kt`, `GlobeHomeActivity.kt`,
+`activity_globe_home.xml`, **new** `res/drawable/sel_chip_orbital.xml`,
+`GlobeSceneTest.kt`, `GlobeHomeActivityTest.kt`
 
-### Key tasks
-- **`GlobeScene.kt`:** Add `topReserve` parameter; update `RING_RX = [0.125, 0.19, 0.255, 0.32, 0.385] * w`; ring `cy = 0.58h`; home orbit `rx = min(1.35r, 0.5w − cardHalfW − 6u)`; add `focusRing` (Int, −1=none), `ringAlphaFor(card)`, `categoryCounts()`.
-- **`HolographicEarthView.kt`:** Draw dashed ellipse ring tracks (4u/4u, 0.8u stroke, category color at α.30); draw ring labels along lower-right arc (`Canvas.drawTextOnPath`, 9dp caps); draw 3u left category accent bar on cards; stop drawing `hintText` on canvas (`drawHintInCanvas = false` flag, keep property for tests).
-- **`activity_globe_home.xml`:** Add `globeTitle`, `globeStatus`, `btnGlobeList`, `btnGlobeSettings`, orbit dock with 5 category chips, hint pill `globeHint`, FAB pulse rings `fabPulse1`/`fabPulse2`, `bg_hud_scrim` behind HUD.
-- **`GlobeHomeActivity.kt`:** Extend `BaseActivity` (not `AppCompatActivity`); bind HUD status readout; bind category dock chips; bind List/Settings buttons; wire `focusRing`.
+### Key tasks (as implemented)
+- **`GlobeScene.kt`:** ✅ `topReserve` + `bandY(h, frac) = topReserve + (h − topReserve) · frac`
+  (default `0f` reduces to the plan's plain fractions); `RING_RX = [0.125, 0.19, 0.255, 0.32,
+  0.385]`; ring `cy = bandY(h, 0.58)`; home orbit `rx = min(1.35r, 0.5w − cardHalfW − 6u)` via
+  `homeOrbitRx(w, r, cardHalfW)`; `focusRing` (Int, −1 = none), `ringAlphaFor(card)`,
+  `categoryCounts()`, `FOCUS_DIM = 0.25`, `ORBIT_DIM = 0.4`.
+- **`HolographicEarthView.kt`:** ✅ dashed ellipse ring tracks (4u/4u, 0.8u stroke, category
+  colour α0.30 × stateT); ring labels along the lower arc, bottom-centred **125°→55°
+  counter-clockwise** (`drawTextOnPath`, `hOffset` centring via `PathMeasure`, `vOffset = 8.2u`
+  to sit just outside the stroke, 9u
+  caps, α0.65); 3u left category accent bar on cards (skipped on hidden cards, `tagX` 5u → 7u);
+  `drawHintInCanvas = false` flag — **`hintText` property kept** (tests read it); orbit radius
+  now clamped through `homeOrbitRx`.
+- **`activity_globe_home.xml`:** ✅ `hudScrim`, `globeTitle` + `globeStatus`, `btnGlobeList` /
+  `btnGlobeSettings`, `globeHint` pill, `globeDock` with 5 `globeChip*`, `fabPulse1` / `fabPulse2`,
+  FAB container → `bg_fab_orbital`, search panel `paddingTop` 64→76dp, empty copy →
+  `globe_empty_title` / `globe_empty_sub`.
+- **`GlobeHomeActivity.kt`:** ✅ still `BaseActivity`; `updateStatus()` status readout;
+  `wireDock()` / `setFocusRing()`; List → Shelf, gear → Settings (D5); `topReserve` posted from
+  `globeHud`; `setHint()` writes **both** the view property and the pill; a11y descriptions;
+  `runQuery` before `updateStatus` in `loadDocs`.
+
+### Deviations from the plan
+1. **D3 category unification** (user-approved): the view's private `categoryColor()` /
+   `shortTag()` were replaced by `CategoryStyle`, so Receipts/IDs/Forms card tags and ring labels
+   now use the D3 palette (`CategoryRules` import dropped from the view).
+2. **`topReserve` is a settable `GlobeScene.topReserve` property**, not a constructor parameter —
+   default `0f` keeps the plan's formulas exact; the activity posts the HUD height after measure.
+3. **`resources.getQuantityString(id, n, n)`** for the plurals — `getString(R.plurals.…)` throws
+   at runtime (repo convention: `MainActivity`, `DocumentViewerActivity`).
+4. **`runBlocking<Unit>`** on the screenshot test — an `= runBlocking { … }` expression body
+   infers a non-Unit return type and JUnit rejects it ("should be void").
+5. **New drawable `sel_chip_orbital.xml`** for the focused chip state (cyan-tinted glass);
+   default state matches `bg_chip_void`.
+6. **FAB container uses the orphaned `bg_fab_orbital`** (replacing `bg_fab_outer_ring` there);
+   `bg_orbit_dot` stays unused.
+7. **Chip tap = set `focusRing` + auto-expand to RINGS; second tap clears** (user-approved).
+8. **`fabPulse1` / `fabPulse2` are static** (α0.55 / 0.30). Motion was **Phase 4** and must be
+   gated on `SwMotion.ambientAllowed` — **done in Phase 4** (gated infinite pulse, see below).
+
+### Render verification — root cause found & fixed
+The screenshot tests produced **star-only** PNGs. Root cause: **`GlobeHomeActivityTest` was the
+only Robolectric UI test missing `@GraphicsMode(GraphicsMode.Mode.NATIVE)`**, so it ran in
+LEGACY graphics where `Canvas`/`Paint`/`Shader`/`Path` are shadow stubs — `drawCircle`/`drawPath`/
+`drawPoints` never rasterised, `GradientDrawable` backgrounds never drew, and
+`Paint.measureText` returned the *character count* (hence `globeTitle` measuring 9×41 px for
+"ScanWhirl"). **Fix = one annotation + one import.** Second half of the fix: the fake document
+URI now carries a **real JPEG** (`jpegBytes()`, mirrors `UiSmokeTest`) because `BitmapFactory` is
+genuine under NATIVE. Render helpers were also de-silenced — they no longer swallow exceptions,
+and pixel assertions now fail loudly on a blank render.
+
+### Phase 3 verification
+- `./gradlew test assembleRelease -PtestBuild --no-daemon` → **BUILD SUCCESSFUL**.
+- Parsed `app/build/test-results/testDebugUnitTest/*.xml`: **192 tests, 0 failures, 0 errors,
+  0 skipped** (UiSmokeTest 78, GlobeHomeActivityTest 15, GlobeSceneTest 16, ScanRepositoryTest 22,
+  ImageToolsTest 16, PdfGeneratorTest 10, DownloadSaverTest 9, CategoryRulesTest 6,
+  ScanFilterTest 5, GreetingTest 3, CategoryPersistTest 4, SearchMatcherTest 4,
+  PageThumbLoaderTest 3, ExternalVerifyExport 1).
+  - Plan target was 191; the **+1** is bookkeeping: the temporary `zz debug` test was added
+    *after* the 189-test baseline was measured (so it was never part of the 189) and has since
+    been deleted → 189 + 3 new = 192.
+- New guards: `native graphics is active - text measures to real widths`,
+  `globe view paints halo, dots and rim on a transparent canvas`,
+  `hud title and status have real text size and paint pixels`, plus bright-pixel assertions on
+  both screenshots (threshold 0.05, measured 0.239 home / 0.576 rings; globe-view lit fraction
+  1.0 vs 0.8 threshold; HUD title 111 px wide vs 100 threshold).
+- `/tmp/opencode/ui_globe.png` confirms: HUD title + `2 DOCUMENTS · 2 ORBITS`, search/List/
+  Settings buttons, dotted Earth with rim and latitude lines, two orbit cards with category
+  accent bars, hint pill, 5-chip dock, FAB with orbital rings + `TAP TO SCAN`.
+- `/tmp/opencode/ui_globe_rings.png` confirms: shrunken Earth, five dashed category ring tracks
+  with arc labels, hint pill switched to `Drag rings to spin · Pinch in for List`.
+- Sampled pixels: home centre `ff06414f`, rings centre `ff057f8f`, corner `ff060c16`
+  (dark and opaque, not transparent).
+- `aapt2 dump badging` → `com.scanwhirl.app.test`, label `ScanWhirl Test`, launcher
+  `GlobeHomeActivity` — unchanged. Still `versionCode=24` / `1.1.1-test24` (**Phase 6 bump**).
+- No locked ID removed or renamed; nothing under `com.scanwhirl.app` touched; no
+  `robolectric.properties`; no Gradle changes; no infinite animators.
+- **`Invalid ID 0x00000000.`** — emitted by Robolectric's
+  `org.robolectric.res.android.CppAssetManager2` (Android's own AssetManager logging a lookup of
+  resource id `0`). Reproduced with **`UiSmokeTest` alone (39×) with no Phase 3 code involved** →
+  pre-existing / environmental, not a resource bug in these layouts. Counts vary run to run.
+  Not a blocker.
+
+### Known visual notes (not spec defects)
+- **Ring label orientation — FIXED (post-Phase-3 follow-up):** the original clockwise 20°→80°
+  sweep made the tags read rotated/upside-down along the lower arc. The path is now swept
+  **counter-clockwise, bottom-centred 125°→55°**, so every tag runs left-to-right and reads
+  upright (max tilt ±16° on the 0.42-ratio ellipse; the strict 80°→20° flip would still have
+  tilted ~49° near the 3-o'clock end). `vOffset = 8.2u` puts the baseline just outside the
+  dashed stroke — balanced in the 31px inter-ring band (caps ≈20px) — and `hOffset` centres each
+  tag on the bottom. Verified on the regenerated rings PNG: all five tags upright, unclipped,
+  clear of the Earth, cards and neighbouring rings. `drawTextOnPath`, 9u caps and α0.65 kept;
+  no new IDs, no animators; GlobeHomeActivityTest 15/15 unchanged.
+- Orbit cards show the white test-fixture thumbnail scrimmed to grey — faithful to the
+  pre-existing `drawCard` scrim; real scans would show actual page content.
+
+**Next session can proceed directly to Phase 5 (Phase 4 is complete).**
 
 ---
 
-## ⏳ PHASE 4 — Motion & Transitions — **NOT STARTED**
+## ✅ PHASE 4 — Motion & Transitions — **COMPLETE**
 
-Files: New `SwMotion.kt`, New `SwTransitions.kt`
+Files: New `SwMotion.kt`, New `SwTransitions.kt`, `GlobeScene.kt`, `HolographicEarthView.kt`,
+`GlobeHomeActivity.kt`, `MainActivity.kt`, `activity_globe_home.xml`
 
-- **`SwMotion.kt`:** `ambientAllowed(context)` = `Settings.Global.ANIMATOR_DURATION_SCALE > 0 && Build.FINGERPRINT != "robolectric" && powerManager.isInteractive`. Used to gate all infinite animations.
-- **`SwTransitions.kt`:** Warp dive Globe↔Shelf (shared window animation `globe_enter_warp`/`shelf_enter_warp`), radial reveal for scan launch.
-- All anim XML files already created in Phase 0 (`res/anim/`).
+### As implemented
+- **`util/SwMotion.kt`:** `ambientAllowed(context, fingerprint = Build.FINGERPRINT)` =
+  `ANIMATOR_DURATION_SCALE > 0 && isInteractive && fingerprint != "robolectric"` — checks run in
+  that order so **all three branches are testable** under Robolectric (a fingerprint short-circuit
+  first would make the other two dead code; `fingerprint` is a default-arg injection point only).
+- **`ui/SwTransitions.kt`:** `warpToShelf` / `warpBackToGlobe` wrap `overridePendingTransition`
+  over the four Phase 0 warp anims (finite → deliberately **not** ambient-gated; the system scales
+  window anims itself). `revealScanLaunch` = radial reveal of the additive `scanReveal` view from
+  the FAB's centre, 260 ms, `PathInterpolator(0.4f, 0f, 0.2f, 1f)`; when `ambientAllowed` is false
+  it runs `onEnd` **synchronously** (same-frame launch — the existing scan test depends on this).
+  State machine: `revealSession` (abandoned `doOnNextLayout` listeners can never double-launch),
+  `revealPending` + cancelled-flag listener, and `cancelReveal` hides the wash **only** if a
+  reveal was actually running/pending — the launch's own `onPause` therefore keeps the globe
+  covered while the Shelf's enter warp fades in over it.
+- **FAB pulse** (`GlobeHomeActivity`): two code-built `AnimatorSet`s (α 0.55→0.14 / 0.30→0.08,
+  scale 1→1.14, 1800/2200 ms, 0/900 ms stagger, `INFINITE`+`REVERSE`, `PathInterpolator(0.4,0,0.2,1)`).
+  Started in `onResume` **only after `SwMotion.ambientAllowed`**, cancelled + reset to the static
+  XML values in `onPause`. This is the **only `INFINITE` in `app/src/main`** and it is gated
+  (grep-audited). `clipChildren="false"` added on the FAB container + its parent so the breathing
+  rings aren't clipped.
+- **Ambient gating matrix:** gated = FAB pulse, earth `BASE_ROT`, ring drift, star twinkle
+  (fixed α0.85 when off), new ring-track shimmer (`sin(time*1.6 + ring*1.1) * 0.07`, flat 0 when
+  off — per-ring phase so the five tracks don't pulse in lockstep), scan reveal. **Not** gated =
+  the 30fps Choreographer loop (it also drives `stateT` easing, which must keep responding with
+  animations disabled), `stateT`, flick inertia, finite `overridePendingTransition` warps.
+- **`GlobeScene.ambientMotion: Boolean = true`** — default `true` is load-bearing
+  (`GlobeSceneTest` drives `update()` directly and asserts auto-rotation); the activity flips it
+  via `HolographicEarthView.syncAmbientMotion()` on every resume (false under Robolectric →
+  deterministic screenshots).
+- **Return warp:** `MainActivity.finish()` override → `warpBackToGlobe` gated on
+  `Prefs.globeHomeEnabled` (globe off → plain system finish; verified no prior `finish()` override
+  and no existing test calls it).
+
+### Deviations from the plan
+- `fingerprint` became a default parameter of `ambientAllowed` (plan: plain `Context` overload) —
+  required so the scale and interactive branches can be *proven* rather than always
+  short-circuited by the Robolectric fingerprint.
+- Reveal adds a `revealSession` counter + `revealPending` flag beyond the plan sketch (double-tap
+  and abandoned-layout-listener guards).
+- No new tests for `syncAmbientMotion`/twinkle/shimmer specifically — they're covered indirectly
+  (gate off ⇒ flat values) and the render tests lock the output.
+
+### Verification
+- Full `./gradlew test assembleRelease -PtestBuild --no-daemon` → **201 tests, 0 failures,
+  0 errors** (192 baseline + 9 new: `SwMotionTest` 4, `SwTransitionsTest` 5).
+- New tests: all 3 `SwMotion` branches proven green-when-should-be; fab pulse static after
+  `idleFor(500ms)` (α 0.55/0.30, scale 1); pinch + List → `shelf_enter_warp`/`globe_exit_warp`;
+  scan click → same-frame launch, `scanReveal` stays GONE, scanner flag set;
+  `MainActivity.finish()` → `globe_enter_warp`/`shelf_exit_warp` (and **no** warp with the globe
+  preference off).
+- Audits: badging unchanged (`com.scanwhirl.app.test`, `versionCode 24`, label
+  `ScanWhirl Test`, launcher `GlobeHomeActivity`); 83/83 locked IDs present (`snackbar_action` is
+  a Material library ID, not app-defined); no `fontFamily` added; `INFINITE` appears exactly once
+  in `app/src/main` and is gated; zero new resources (reuses `bg_space`, the 4 Phase 0 warp anims,
+  `sw_*` interpolators — `res/anim/` inventory unchanged); no Gradle / `robolectric.properties` /
+  `com.scanwhirl.app` config touched; no existing test file modified (the two modified test files
+  are Phase 2/3 work from earlier sessions).
 
 ---
 
-## ⏳ PHASE 5 — Remaining Screens — **NOT STARTED**
+## ✅ PHASE 5 — Remaining Screens — **COMPLETE**
 
-### 5A — SettingsActivity
-- Group rows into glass section cards with cyan hairline dividers.
-- **D1:** Keep `rowTheme` in XML but set `visibility = View.GONE` (test `subTheme.text.isNotEmpty()` must pass — set text to `"Orbital Dark"` in code even though row is hidden).
-- Add icons to each row (`ic_palette`, `ic_font`, `ic_greeting`, etc.).
-- Replace literal `›` chevron TextViews with `ic_chevron_right` ImageView.
-- Apply `sel_switch_track` / `sel_switch_thumb` to all switches.
+> Implementation decisions confirmed with the product owner before build: row icons tinted
+> **`cyan_primary`**; docks are **inset floating pills** (8dp horizontal margin so
+> `bg_dock_glass`'s 24dp corners + cyan hairline read as a distinct bar); `item_merge_pdf`
+> rows **are** restyled to glass cards.
+
+### Pre-build findings (verified against the codebase / MDC 1.12 bytecode)
+- **`MaterialCardView` silently drops XML `android:background`**: `setBackgroundDrawable`
+  early-returns until `isParentCardViewDoneInitializing`, which is set *after* the View ctor
+  applies XML attrs → `bg_glass_card_ripple` on `item_page_grid` must be **set in code**
+  post-inflate (same trap explains Phase 2's inner-container workaround for `bg_pro_banner`).
+- **`app:cardBackgroundColor` cannot take a drawable** (Phase 2-proven crash) →
+  `proToolsPanel` gets `bg_pro_banner` via the **Phase 2 inner-container trick** (inner
+  `LinearLayout` background + 1dp margin so the gold `pro_badge_stroke` stays visible).
+- Once a card's background is overwritten the helper **stops drawing its stroke**
+  (`if (!isBackgroundOverwritten) setBackgroundInternal(...)`) → page-grid selection switches
+  from `root.strokeWidth` (0/3dp, no longer rendered) to `root.isSelected` →
+  `bg_glass_card_ripple`'s `state_selected` branch (2dp cyan stroke + tinted fill).
+  **Documented deviation.**
+- Theme already defines `Widget.ScanWhirl.Button.{Primary,Secondary,Pro,Dock}`,
+  `Widget.ScanWhirl.Switch` (sel_switch tints) and `materialCardViewStyle` = glass card →
+  Phase 5 is **wiring only, no new styles**. `thumbTint`/`trackTint` attrs exist (material),
+  minSdk 24 → explicit switch tints + `android:foreground` hairline both safe.
+- Test locks checked: `subTheme.text.isNotEmpty()` (GONE views still findable), row ID
+  `findViewById`s, `btnSavePdf.isEnabled`+click, `btnRotateRight` non-null,
+  `btnProtect/btnLongImage` visible, `btnAddPdf/btnMerge` enabled-state, `resultStats`
+  content; **no** test greps `›`, page-grid `strokeWidth`, or item_merge_pdf styling.
+  `ui_editor.png` (UiSmokeTest render) picks up the new DocumentViewer look automatically.
+
+### 5A — SettingsActivity (`activity_settings.xml`, `SettingsActivity.kt`)
+- **Group rows into glass section cards:** one `MaterialCardView` per section instead of one
+  per row — Appearance (`rowTheme, rowFont, rowGreeting, globe-home row, rowWallpaper`),
+  Language (`rowLanguage`), Viewing (`rowViewer, rowAutoEnhance`), About (`rowAbout,
+  rowPrivacy`). Drop per-card overrides (`strokeColor=colorOutlineVariant`, `16dp`) → theme's
+  `Widget.ScanWhirl.Card` applies (glass fill + **cyan sel_stroke_cyan hairline** + 14dp).
+  1dp cyan hairline dividers (`@color/cyan_border_hair`) between rows, inset ~56dp to align
+  under the text column. All locked IDs preserved (inside the grouped cards).
+- **D1:** `binding.rowTheme.visibility = View.GONE` in `onCreate` (row sits *inside* the
+  grouped Appearance card → no empty card left behind); `subTheme.text = "Orbital Dark"` set
+  once in code; **remove the `subTheme` overwrite from `updateSummaries()`**.
+  `chooseTheme()` stays as dead-but-harmless code.
+- **Row icons:** ID-less `ImageView`s, 24dp, `app:tint="@color/cyan_primary"` —
+  theme→`ic_palette`, font→`ic_font`, greeting→`ic_greeting`, globe→`ic_globe`,
+  wallpaper→`ic_wallpaper`, language→`ic_language`, viewer→`ic_viewer`,
+  auto-enhance→`ic_auto`, about→`ic_info`, privacy→`ic_privacy`.
+- **Chevrons:** replace the 6 literal `›` TextViews with `ImageView src=ic_chevron_right`,
+  20dp, `tint=?attr/colorOutline` (same colour as today).
+- **Switches:** explicit `app:thumbTint="@color/sel_switch_thumb"` +
+  `app:trackTint="@color/sel_switch_track"` on all 4 `SwitchMaterial`s (greeting,
+  globe-home, wallpaper, auto-enhance) — belt-and-braces over theme `switchStyle`, and
+  assertable in a test.
 
 ### 5B — ScanReviewActivity / PageViewerActivity
-- `item_page_grid` cards: `bg_glass_card_ripple`, `bg_chip_void` page badge.
-- Action dock: `bg_dock_glass`, buttons `.Dock` style.
-- `btnSavePdf` → `Widget.ScanWhirl.Button.Primary`.
+- **`item_page_grid.xml`:** `pageNum` background `bg_page_number` → **`bg_chip_void`**
+  (12dp radius, matches `pageBadge` in `item_scan`); `checkSelect`/`dragHandle` keep theirs
+  (spec says *page badge* only); card radius → 14dp to match the drawable.
+- **`PageGridView.kt` (2 edits in `VH`):** `onCreateViewHolder` →
+  `binding.root.setBackgroundResource(R.drawable.bg_glass_card_ripple)` (code-set; XML would
+  be dropped — gives idle 1dp cyan border, press ripple, 14dp corners); `bind` → replace
+  `root.strokeWidth = …` with `root.isSelected = checkedAt(index)` (selection via the
+  drawable's `state_selected` branch).
+- **`activity_scan_review.xml`:** bottom button container →
+  `android:background="@drawable/bg_dock_glass"` + `layout_marginHorizontal="8dp"` (floating
+  pill); `btnSavePdf` → `style="@style/Widget.ScanWhirl.Button.Primary"`, drop redundant
+  `backgroundTint/textColor/textStyle/cornerRadius/elevation`.
+- **`activity_page_viewer.xml`:** `#99000000` dock → `@drawable/bg_dock_glass` + 8dp
+  horizontal margin + breathing-room padding; `btnRotateRight/btnCrop/btnFilter/btnDelete`
+  → `style="@style/Widget.ScanWhirl.Button.Dock"` (icon-over-label, cyan icons), removing
+  explicit `textColor/textSize/iconTint/iconPadding`. IDs untouched.
 
-### 5C — DocumentViewerActivity
-- `proToolsPanel` card: `bg_pro_banner`; buttons `.Pro`.
-- Bottom dock: `bg_dock_glass`.
-- `docCategoryChip` new id.
+### 5C — DocumentViewerActivity (`activity_document_viewer.xml`, `DocumentViewerActivity.kt`)
+- **`proToolsPanel`:** inner `LinearLayout` → `android:background="@drawable/bg_pro_banner"`
+  + `layout_margin="1dp"` (Phase 2 proSuiteCard trick; card keeps gold stroke).
+- **5 `.Pro` buttons** (`btnProtect, btnUnlockPdf, btnOcr, btnLongImage, btnVaultDoc`) →
+  `style="@style/Widget.ScanWhirl.Button.Pro"`, remove now-inert `app:strokeColor` +
+  redundant `textColor/iconTint/textSize` (same treatment Phase 2 gave the `tool*` buttons).
+  Explicit `layout_height=42dp` kept (no metric change).
+- **Bottom dock** (`btnProTools/btnDelete/btnShare` container) → `@drawable/bg_dock_glass`
+  + 8dp horizontal margin.
+- **New `docCategoryChip`** (additive ID — allowed): `TextView` styled like `item_scan`'s
+  `catChip` (10sp caps, `bg_chip_void`) in the header row after `pageCount`. Wired in
+  `reloadDocument()` — `"● " + CategoryStyle.shortTag(doc.category)` coloured
+  `CategoryStyle.color(...)`; `promptCategorize()` already funnels through
+  `reloadDocument()`, so recategorising updates it for free.
 
 ### 5D — MergePdfActivity / PDFViewerActivity / ExportResultActivity
-- Glass dock, hairline toolbar, standard styling.
+- **Glass docks:** bottom containers of Merge (`btnAddPdf/btnMerge`) and Export
+  (`btnShareResult/btnSaveResult`) → `@drawable/bg_dock_glass` + 8dp horizontal margin.
+- **Hairline toolbar (all three):** `android:foreground="@drawable/bg_appbar_hairline"` on
+  each `AppBarLayout` — cyan bottom hairline **without changing existing backgrounds**
+  (merge = none, export = `sf_appbar`, pdf viewer = `pdf_toolbar`), zero new resources.
+  *Fallback if foreground misbehaves: per-screen layer-list drawables (2 new).*
+- **Standard styling:** `btnAddPdf`, `btnShareResult` → `Widget.ScanWhirl.Button.Secondary`
+  (the only raw `OutlinedButton`s; `btnMerge`/`btnSaveResult` already resolve to theme
+  `materialButtonStyle` = Primary). PDFViewer needs no button changes.
+- **`item_merge_pdf.xml`:** drop `colorOutlineVariant`/12dp overrides → theme glass card
+  (cyan hairline), matching the rest of the system (user-approved).
+
+### New tests — one new file only (as implemented: 8 tests, all green)
+`app/src/test/java/com/scanwhirl/app/ui/Phase5ScreensTest.kt` (existing files untouched):
+1. Settings: `rowTheme` present **and GONE**, `subTheme == "Orbital Dark"`.
+2. Settings: rows carry icons (rendered-pixel match vs `ic_palette`/`ic_font`/…, cyan-tint
+   normalised), chevron rows end in a 20dp `ic_chevron_right`, **zero** `›` TextViews.
+3. Settings: all 4 switches' `thumbTint`/`trackTint` defaultColor == `sel_switch_*`.
+4. Settings: grouping — `rowFont`/`rowGreeting` share one section container inside a
+   `MaterialCardView` (Appearance card = 5 rows + 4 one-dp `cyan_border_hair` dividers),
+   Viewing/About pairs grouped, Language single-row card, 4 section headers.
+5. Page grid: cell `background is RippleDrawable`; `pageNum` corner radius == 12dp;
+   `checkedAt=true` → `itemView.isSelected`.
+6. DocumentViewer: `docCategoryChip` visible with `● STUDY` after `repo.setCategory(STUDY)`
+   (async `reloadDocument()` awaited via `pollUntil`), colour == `CategoryStyle.COLOR_STUDY`;
+   bottom dock is `bg_dock_glass`, inset 8dp.
+7. ScanReview + PageViewer: dock backgrounds are `bg_dock_glass` (pixel match), inset 8dp;
+   `btnRotateRight.textSize == 11sp` (Dock style).
+8. Render PNGs `/tmp/opencode/ui_settings.png`, `/tmp/opencode/ui_review.png` (local copy of
+   the `renderActivityPng` helper, files deleted first; `ui_editor.png` regenerates from
+   UiSmokeTest).
+
+### Verification — as run (2026-11-07)
+- `./gradlew test assembleRelease -PtestBuild --no-daemon` → **BUILD SUCCESSFUL;
+  209 tests per variant (201 baseline + 8 new), 0 failures / 0 errors / 0 skipped**
+  (418 across debug + release; `app/build/test-results/*/*.xml` parsed).
+- `aapt2 dump badging` unchanged: `com.scanwhirl.app.test`, `versionCode 24`,
+  `versionName 1.1.1-test24`, label `ScanWhirl Test`, launcher `GlobeHomeActivity`
+  (the version bump stays Phase 6).
+- Audits: 83/83 locked IDs present (82 app-defined + `snackbar_action` = Material library);
+  only additive new ID is `docCategoryChip`; no `fontFamily` added (the 3 hits are the
+  untouched pre-existing `styles_fonts.xml` system-font styles); `INFINITE` still appears
+  exactly once (`GlobeHomeActivity`, pre-existing + gated) — Phase 5 added no animators;
+  zero new resource files (no res/values edits, no new drawables — `bg_appbar_hairline`
+  already existed); no Gradle / `robolectric.properties` / AndroidManifest /
+  `com.scanwhirl.app` app-config changes; existing test files untouched (mtimes pre-date
+  this session — only `Phase5ScreensTest.kt` is new); dialogs untouched.
+- Renders eyeballed: `ui_settings.png` (grouped glass cards, cyan icons/chevrons, hidden
+  theme row), `ui_review.png` (page grid + cyan Save-as-PDF dock), `ui_editor.png`
+  (regenerated with the new DocumentViewer look, glass dock present), `ui_home.png`
+  (regenerated) — the session's image viewer served stale frames, so content was confirmed
+  by PIL pixel signatures (white page rows + cyan dock rows etc.).
+
+### Deviations / as-implemented notes
+- 5A–5D shipped exactly as written above; the two **pre-planned** swaps behaved as
+  predicted: page-grid selection rides `bg_glass_card_ripple`'s `state_selected` branch
+  (the card's own stroke dies once the background is overwritten), and `proToolsPanel` uses
+  the Phase 2 inner-container trick (`bg_pro_banner` + 1dp margin keeps the gold stroke).
+- `android:foreground` hairline worked on all three AppBars → the 2-new-drawable fallback
+  was **not** needed; zero new resources stands.
+- Test identity checks use **rendered-pixel comparison** (tint-normalised for icons) instead
+  of `Drawable.constantState` equality — ConstantState instances are per-inflation, so
+  identity across two separate loads is unreliable.
+- Chip test seeds `CategoryRules.STUDY` and asserts `● STUDY` (plan sketch said `● OTHER`);
+  this additionally proves the `setCategory → reloadDocument` recategorise path.
+- `tools:ignore` on the new chip was dropped before the first build: the layout declares no
+  `xmlns:tools`.
+- `chooseTheme()` remains dead-but-harmless (D1) — untouched.
+- **Next → Phase 6** (versionCode 25 / `1.1.1-test25`, APK + source zip deliverables,
+  git commit of Phases 2–5).
 
 ---
 
@@ -264,27 +606,37 @@ Expected: 180 + new unit tests, 0 failures, 0 errors.
 - `app/src/main/java/com/scanwhirl/app/ui/SpaceBackgroundDrawable.kt`
 - `app/src/main/java/com/scanwhirl/app/ui/SwDialog.kt`
 - `app/src/main/java/com/scanwhirl/app/util/CategoryStyle.kt`
+- `app/src/main/java/com/scanwhirl/app/ui/SwTransitions.kt` (Phase 4)
+- `app/src/main/java/com/scanwhirl/app/util/SwMotion.kt` (Phase 4)
 
 ### Modified Kotlin files
 - `BaseActivity.kt` — wires SpaceBackgroundDrawable as window background
 - `MainActivity.kt` — all dialog migrations + ScanListAdapter stroke fix + catRail wiring (partial)
 - `GlobeHomeActivity.kt` — 2 dialog migrations + import showSw
-- `SettingsActivity.kt` — 5 dialog migrations
+- `SettingsActivity.kt` — 5 dialog migrations + Phase 5 D1 (rowTheme GONE, subTheme pinned)
 - `PageViewerActivity.kt` — 3 dialog migrations
 - `MergePdfActivity.kt` — 3 dialog migrations
 - `ScanReviewActivity.kt` — 2 dialog migrations
-- `DocumentViewerActivity.kt` — 10 dialog migrations
+- `DocumentViewerActivity.kt` — 10 dialog migrations + Phase 5 `docCategoryChip` wiring
+- `GlobeScene.kt`, `HolographicEarthView.kt` — Phase 3 globe / rings overhaul
+- `PageGridView.kt` — Phase 5 glass cell background (code-set) + `isSelected` selection
 
 ### New XML layout
 - `res/layout/dialog_pro_panel.xml`
 - `res/layout/item_scan.xml` ← **rewritten** (catRail, catChip, portrait thumb, stacked actions)
 
-### Modified XML layouts
+### Modified XML layouts (Phases 2–5)
 - `res/layout/activity_main.xml`
 - `res/layout/activity_pdf_viewer.xml`
+- `res/layout/activity_globe_home.xml` (Phase 3)
+- `res/layout/activity_settings.xml` ← **rewritten** (Phase 5A: grouped glass section cards)
+- `res/layout/activity_scan_review.xml`, `activity_page_viewer.xml` (Phase 5B docks)
+- `res/layout/activity_document_viewer.xml` (Phase 5C: chip, Pro grid, dock)
+- `res/layout/activity_merge_pdf.xml`, `activity_export_result.xml` (Phase 5D docks/hairlines)
+- `res/layout/item_page_grid.xml`, `item_merge_pdf.xml` (Phase 5 glass cards)
 
 ### New res/drawable (all new)
-`bg_action_circle, bg_appbar_hairline, bg_cat_rail, bg_chip_void, bg_danger_note, bg_dialog_glass, bg_dock_glass, bg_fab_pulse, bg_glass_card_ripple, bg_glass_round_btn, bg_hud_scrim, bg_icon_badge_glow, bg_orbit_dot, bg_pin_field, bg_popup_glass, bg_pro_tile, bg_sheet_glass, bg_sheet_top_glass, fg_glass_ripple, frame_corners, ic_auto, ic_check, ic_chevron_right, ic_empty_orbit, ic_filter_bw, ic_filter_clean, ic_filter_enhance, ic_filter_original, ic_font, ic_globe, ic_greeting, ic_language, ic_list, ic_palette, ic_privacy, ic_viewer, ic_wallpaper, sel_check_orbital, sel_radio_orbital`
+`bg_action_circle, bg_appbar_hairline, bg_cat_rail, bg_chip_void, bg_danger_note, bg_dialog_glass, bg_dock_glass, bg_fab_pulse, bg_glass_card_ripple, bg_glass_round_btn, bg_hud_scrim, bg_icon_badge_glow, bg_orbit_dot, bg_pin_field, bg_popup_glass, bg_pro_tile, bg_sheet_glass, bg_sheet_top_glass, fg_glass_ripple, frame_corners, ic_auto, ic_check, ic_chevron_right, ic_empty_orbit, ic_filter_bw, ic_filter_clean, ic_filter_enhance, ic_filter_original, ic_font, ic_globe, ic_greeting, ic_language, ic_list, ic_palette, ic_privacy, ic_viewer, ic_wallpaper, sel_check_orbital, sel_chip_orbital, sel_radio_orbital`
 
 ### Modified res/drawable
 `bg_page_number, ic_launcher_foreground, ic_scan_empty`
@@ -306,3 +658,10 @@ Expected: 180 + new unit tests, 0 failures, 0 errors.
 
 ### Deleted res/values
 `values-night/colors.xml, values-night/themes.xml, values-v27/themes.xml, values-night-v27/themes.xml`
+
+### Test files (test25)
+- New: `SwMotionTest.kt` (Phase 4), `SwTransitionsTest.kt` (Phase 4),
+  `Phase5ScreensTest.kt` (Phase 5 — 8 tests)
+- Modified (Phase 2/3 work from earlier sessions): `globe/GlobeHomeActivityTest.kt`,
+  `globe/GlobeSceneTest.kt`
+- Every other test file untouched (verified by mtime before Phase 5 completion)

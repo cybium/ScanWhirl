@@ -6,10 +6,13 @@
     android:background="@color/pdf_bg"
     android:orientation="vertical">
 
+    <!-- test25 Phase 5D: cyan hairline over the pdf_toolbar bar (foreground
+         keeps the current background). -->
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/pdf_toolbar">
+        android:background="@color/pdf_toolbar"
+        android:foreground="@drawable/bg_appbar_hairline">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"

@@ -18,8 +18,9 @@ import android.view.View
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
-import com.scanwhirl.app.util.CategoryRules
+import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.ScanFilter
+import com.scanwhirl.app.util.SwMotion
 import java.io.File
 import kotlin.math.PI
 import kotlin.math.abs
@@ -70,6 +71,23 @@ class HolographicEarthView @JvmOverloads constructor(
     /** Bottom gesture hint text (driven by the activity). */
     var hintText: String = ""
 
+    /**
+     * test25: the hint now lives in the `globeHint` pill (XML), so the
+     * canvas copy is off by default. The property itself stays — tests
+     * assert `hintText` directly — and the pill mirrors it in the activity.
+     */
+    var drawHintInCanvas: Boolean = false
+
+    /** Pixels of HUD to reserve at the top; forwarded to [GlobeScene]. */
+    var topReserve: Float
+        get() = scene.topReserve
+        set(value) {
+            if (scene.topReserve != value) {
+                scene.topReserve = value
+                invalidate()
+            }
+        }
+
     val scene: GlobeScene
 
     // Thumbs for card backgrounds, keyed by doc id.
@@ -85,6 +103,7 @@ class HolographicEarthView @JvmOverloads constructor(
     private val dotBucket = IntArray(GlobeScene.DOTS) // -1 back, 0..3 front, 9 glow
     private val latPath = Path()
     private val cardRect = RectF()
+    private val accentRect = RectF()
     private val hitCards = ArrayList<HitCard>(48)
 
     private class HitCard(
@@ -122,6 +141,25 @@ class HolographicEarthView @JvmOverloads constructor(
         strokeJoin = Paint.Join.ROUND
         color = Color.argb(230, 0, 240, 255)
     }
+
+    // test25: ring tracks, ring labels and card accent bars.
+    private val ringTrackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+    }
+    private val ringLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.LEFT
+    }
+    private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ringTrackRect = RectF()
+    private val ringTrackPath = Path()
+    private val ringLabelPath = Path()
+
+    /**
+     * Dash pattern lives in `u` units (width-dependent), so the effect is
+     * rebuilt only when the view's width changes — never per frame.
+     */
+    private var ringDash: android.graphics.DashPathEffect? = null
+    private var ringDashU = -1f
 
     // Animation loop -------------------------------------------------------
     private var animating = false
@@ -267,6 +305,17 @@ class HolographicEarthView @JvmOverloads constructor(
      * callback would spin there forever (real devices throttle to vsync).
      * Scene behaviour is unit-tested by driving [GlobeScene.update] directly.
      */
+    /**
+     * test25 Phase 4: pull the ambient-motion gate into the scene. Called from
+     * the activity's onResume so returning from system Settings with
+     * animations switched off stops the rotation/drift/twinkle/shimmer too.
+     * The 30fps loop itself keeps running — it also drives the stateT easing
+     * that makes taps respond with animations disabled.
+     */
+    fun syncAmbientMotion() {
+        scene.ambientMotion = SwMotion.ambientAllowed(context)
+    }
+
     fun setAnimating(on: Boolean) {
         val enable = on && !UNDER_ROBOLECTRIC
         if (enable == animating) return
@@ -405,6 +454,9 @@ class HolographicEarthView @JvmOverloads constructor(
         val ringAlpha = scene.stateT
         val orbitAlpha = 1f - scene.stateT
 
+        // (A.5) Dashed category ring tracks + arc labels (test25, rings only).
+        if (ringAlpha > 0.02f) drawRingTracks(canvas, w, h, ringAlpha)
+
         // (B) Far-side cards go behind the Earth (depth-correct).
         if (ringAlpha > 0.02f) drawRingCards(canvas, w, h, ringAlpha, back = true)
 
@@ -419,7 +471,7 @@ class HolographicEarthView @JvmOverloads constructor(
 
         // (F) Pull hint + gesture hint
         if (pullProgress > 0.01f) drawPullHint(canvas, w)
-        if (hintText.isNotEmpty()) {
+        if (drawHintInCanvas && hintText.isNotEmpty()) {
             hintPaint.textSize = 10f * u(w)
             canvas.drawText(hintText, w / 2f, h - 10f * u(w), hintPaint)
         }
@@ -431,7 +483,12 @@ class HolographicEarthView @JvmOverloads constructor(
     private fun drawStars(canvas: Canvas, w: Float, h: Float, now: Float) {
         dotPaint.style = Paint.Style.FILL
         for (s in scene.stars) {
-            val twinkle = sin(now * s.speed + s.phase) * 0.3f + 0.7f
+            // Phase 4: twinkle is ambient motion — hold a fixed level when off.
+            val twinkle = if (scene.ambientMotion) {
+                sin(now * s.speed + s.phase) * 0.3f + 0.7f
+            } else {
+                0.85f
+            }
             dotPaint.color = Color.argb(
                 (s.alpha * twinkle * 255).toInt().coerceIn(0, 255), 180, 230, 255
             )
@@ -439,6 +496,57 @@ class HolographicEarthView @JvmOverloads constructor(
             canvas.drawRect(s.x * w, s.y * h, s.x * w + size, s.y * h + size, dotPaint)
         }
         dotPaint.style = Paint.Style.STROKE
+    }
+
+    /**
+     * test25: the five category rings as dashed ellipses (4u dash / 4u gap,
+     * 0.8u stroke, category colour at α0.30) with the category tag riding the
+     * lower arc bottom-centred, counter-clockwise so it reads upright (9u caps,
+     * α0.65). Drawn in the RINGS state only,
+     * scaled by [alpha] (= stateT), under the cards and the Earth.
+     */
+    private fun drawRingTracks(canvas: Canvas, w: Float, h: Float, alpha: Float) {
+        val unit = u(w)
+        if (ringDashU != unit) {
+            ringDashU = unit
+            ringDash = android.graphics.DashPathEffect(floatArrayOf(4f * unit, 4f * unit), 0f)
+        }
+        ringTrackPaint.pathEffect = ringDash
+        ringTrackPaint.strokeWidth = 0.8f * unit
+        ringLabelPaint.textSize = 9f * unit
+
+        for (ring in 0 until GlobeScene.RING_COUNT) {
+            val g = scene.ringGeometry(ring, w, h)
+            ringTrackRect.set(g.cx - g.rx, g.cy - g.ry, g.cx + g.rx, g.cy + g.ry)
+            val color = CategoryStyle.colorForRing(ring)
+
+            ringTrackPath.rewind()
+            ringTrackPath.addOval(ringTrackRect, Path.Direction.CW)
+            // Phase 4: ambient shimmer — a slow alpha breathe, phase-offset per
+            // ring so the five tracks don't pulse in lockstep. Held flat (and
+            // screenshot-deterministic) when ambient motion is off.
+            val shimmer = if (scene.ambientMotion) {
+                sin(scene.time * 1.6f + ring * 1.1f) * 0.07f
+            } else {
+                0f
+            }
+            ringTrackPaint.color = withAlpha(color, (0.30f + shimmer) * alpha)
+            canvas.drawPath(ringTrackPath, ringTrackPaint)
+
+            // Label along the lower arc, swept counter-clockwise (125° → 55°
+            // through the bottom) so glyphs run left-to-right and read upright.
+            // vOffset moves the baseline along the path normal: with this sweep
+            // positive = outward, so the text sits just outside the dashed
+            // stroke instead of colliding with the ring interior. hOffset
+            // centres each tag on the bottom of its ellipse.
+            ringLabelPath.rewind()
+            ringLabelPath.addArc(ringTrackRect, 125f, -70f)
+            ringLabelPaint.color = withAlpha(color, 0.65f * alpha)
+            val tag = CategoryStyle.tagForRing(ring)
+            val len = android.graphics.PathMeasure(ringLabelPath, false).length
+            val hOff = ((len - ringLabelPaint.measureText(tag)) / 2f).coerceAtLeast(0f)
+            canvas.drawTextOnPath(tag, ringLabelPath, hOff, 8.2f * unit, ringLabelPaint)
+        }
     }
 
     private fun drawEarth(canvas: Canvas, w: Float, h: Float, now: Float) {
@@ -579,7 +687,8 @@ class HolographicEarthView @JvmOverloads constructor(
         val orbit = scene.orbitCards
         if (orbit.isEmpty()) return
         val g = scene.globeGeometry(w, h)
-        val rx = g.r * 1.55f
+        // test25: clamp so the widest orbit card keeps a 6u gutter on screen.
+        val rx = scene.homeOrbitRx(w, g.r, 31f * u(w) * 1.15f)
         val ry = g.r * 0.50f
         val baseAngle = scene.time * 0.35f
         // Two passes: behind the globe, then in front (depth without sorting).
@@ -593,7 +702,8 @@ class HolographicEarthView @JvmOverloads constructor(
                 if ((z >= 0f) != (front == 1)) continue
                 val depth = (z + 1f) * 0.5f
                 val scale = 0.8f + depth * 0.35f
-                val cardAlpha = alpha * (if (z < 0f) 0.35f else 0.95f)
+                val cardAlpha =
+                    alpha * (if (z < 0f) 0.35f else 0.95f) * scene.ringAlphaFor(card)
                 if (cardAlpha < 0.04f) continue
                 drawCard(
                     canvas, card, g.cx + ox, g.cy + oy,
@@ -616,7 +726,7 @@ class HolographicEarthView @JvmOverloads constructor(
             // Hidden cards only ever live on the far arc; never in front.
             if (card.hidden && z >= 0f) continue
             val matched = scene.matches(card)
-            var cardAlpha = scene.alphaFor(card, z) * alpha
+            var cardAlpha = scene.alphaFor(card, z) * scene.ringAlphaFor(card) * alpha
             // A search that misses dims hard; a far-side miss dims twice.
             if (cardAlpha < 0.03f) continue
             val depth = (z + 1f) * 0.5f
@@ -673,12 +783,23 @@ class HolographicEarthView @JvmOverloads constructor(
         if (card.hidden) {
             drawLockGlyph(canvas, cx, cy, scale, a)
         } else {
+            // test25: 3u category accent bar hugging the left edge (reused
+            // RectF — no allocation inside onDraw).
+            accentPaint.color = withAlpha(CategoryStyle.color(card.category), a)
+            accentRect.set(
+                cardRect.left + 1.5f * scale,
+                cardRect.top + 5f * scale,
+                cardRect.left + 4.5f * scale,
+                cardRect.bottom - 5f * scale
+            )
+            canvas.drawRoundRect(accentRect, 1.5f * scale, 1.5f * scale, accentPaint)
+
             // Category tag (top-left) — colour doubles as the ring legend.
-            cardTagPaint.color = withAlpha(categoryColor(card.category), a)
+            cardTagPaint.color = withAlpha(CategoryStyle.color(card.category), a)
             cardTagPaint.textSize = 7.5f * scale
-            val tagX = cardRect.left + 5f * scale
+            val tagX = cardRect.left + 7f * scale
             val tagY = cardRect.top + 11f * scale
-            canvas.drawText(shortTag(card.category), tagX, tagY, cardTagPaint)
+            canvas.drawText(CategoryStyle.shortTag(card.category), tagX, tagY, cardTagPaint)
 
             // Title, ellipsised to one line like the prototype.
             cardTextPaint.color = Color.argb((242 * a).toInt().coerceIn(0, 255), 225, 245, 255)
@@ -765,22 +886,6 @@ class HolographicEarthView @JvmOverloads constructor(
             12f * u(w), 12f * u(w), cardBgPaint
         )
         canvas.drawText(text, w / 2f, y, hintPaint)
-    }
-
-    private fun categoryColor(category: String): Int = when (category) {
-        CategoryRules.STUDY -> 0xFF38EF7D.toInt()
-        CategoryRules.RECEIPTS -> 0xFFFFB703.toInt()
-        CategoryRules.IDS -> 0xFF00F0FF.toInt()
-        CategoryRules.FORMS -> 0xFFA855F7.toInt()
-        else -> 0xFF94A3B8.toInt()
-    }
-
-    private fun shortTag(category: String): String = when (category) {
-        CategoryRules.RECEIPTS -> "RECEIPT"
-        CategoryRules.IDS -> "ID"
-        CategoryRules.FORMS -> "FORM"
-        CategoryRules.STUDY -> "STUDY"
-        else -> "DOC"
     }
 
     private fun withAlpha(color: Int, alpha: Float): Int =

@@ -282,8 +282,16 @@ class PageGridView @JvmOverloads constructor(
             notifyItemMoved(from, to)
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
-            VH(ItemPageGridBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val binding = ItemPageGridBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+            // test25 Phase 5B: the glass card face. Set in code — MaterialCardView
+            // silently drops XML android:background (setBackgroundDrawable early-
+            // returns until initialization finishes). Overwriting the background
+            // also disables the card's own stroke, so selection is driven through
+            // the drawable's state_selected branch (see bind).
+            binding.root.setBackgroundResource(R.drawable.bg_glass_card_ripple)
+            return VH(binding)
+        }
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             holder.bind(pages[position], position)
@@ -320,8 +328,10 @@ class PageGridView @JvmOverloads constructor(
                 val pos = bindingAdapterPosition
                 if (pos != NO_POSITION) onTap?.invoke(pos)
             }
-            binding.root.strokeWidth =
-                if (checkedAt(index)) (3 * resources.displayMetrics.density).toInt() else 0
+            // Selected state → the glass drawable's state_selected branch paints
+            // the 2dp cyan stroke + tinted fill (the card's own stroke can no
+            // longer render once the background is overwritten).
+            binding.root.isSelected = checkedAt(index)
         }
     }
 }

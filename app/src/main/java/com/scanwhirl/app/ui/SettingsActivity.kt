@@ -39,6 +39,13 @@ class SettingsActivity : BaseActivity() {
         setContentView(binding.root)
         binding.toolbar.setNavigationOnClickListener { finish() }
 
+        // test25 Phase 5A / D1: Orbital-only dark theme — the row stays in the
+        // XML (locked ID) but is hidden, and the summary is pinned to the one
+        // theme we ship. The row lives inside the grouped Appearance card, so
+        // hiding it leaves no empty card behind.
+        binding.rowTheme.visibility = android.view.View.GONE
+        binding.subTheme.text = "Orbital Dark"
+
         binding.rowTheme.setOnClickListener { chooseTheme() }
         binding.rowFont.setOnClickListener { chooseFont() }
         binding.rowGreeting.setOnClickListener {
@@ -79,13 +86,7 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun updateSummaries() {
-        binding.subTheme.setText(
-            when (Prefs.themeMode(this)) {
-                Prefs.THEME_LIGHT -> R.string.theme_light
-                Prefs.THEME_SYSTEM -> R.string.theme_system
-                else -> R.string.theme_dark
-            }
-        )
+        // subTheme is not updated here: D1 pins it to "Orbital Dark" in onCreate.
         binding.subFont.setText(
             when (Prefs.fontStyle(this)) {
                 Prefs.FONT_SERIF -> R.string.font_serif

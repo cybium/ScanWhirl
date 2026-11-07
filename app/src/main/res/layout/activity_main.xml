@@ -114,15 +114,40 @@
                     android:textColorHint="@color/text_hologram_dim"
                     android:textSize="14sp" />
 
-                <ImageButton
+                <!-- Sort pill (test25): ic_sort + live sortLabel. Was an ImageButton. -->
+                <LinearLayout
                     android:id="@+id/btnSort"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_search_bar"
+                    android:clickable="true"
                     android:contentDescription="@string/sort"
-                    android:padding="8dp"
-                    android:src="@drawable/ic_sort"
-                    app:tint="@color/cyan_primary" />
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="12dp">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_sort"
+                        app:tint="@color/cyan_primary" />
+
+                    <TextView
+                        android:id="@+id/sortLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/sort_date"
+                        android:textColor="@color/cyan_primary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
             </LinearLayout>
         </com.google.android.material.appbar.AppBarLayout>
 
@@ -229,10 +254,11 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    android:stateListAnimator="@animator/sw_press"
                     app:cardBackgroundColor="@color/glass_surface"
-                    app:cardCornerRadius="14dp"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/cyan_border_idle"
+                    app:strokeColor="@color/sel_stroke_cyan"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -244,11 +270,11 @@
                         android:paddingVertical="10dp">
 
                         <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:background="@drawable/bg_icon_badge"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:background="@drawable/bg_icon_badge_glow"
                             android:contentDescription="@null"
-                            android:padding="6dp"
+                            android:padding="9dp"
                             android:src="@drawable/ic_resize"
                             app:tint="@color/cyan_primary" />
 
@@ -284,10 +310,11 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    android:stateListAnimator="@animator/sw_press"
                     app:cardBackgroundColor="@color/glass_surface"
-                    app:cardCornerRadius="14dp"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/cyan_border_idle"
+                    app:strokeColor="@color/sel_stroke_cyan"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -299,11 +326,11 @@
                         android:paddingVertical="10dp">
 
                         <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:background="@drawable/bg_icon_badge"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:background="@drawable/bg_icon_badge_glow"
                             android:contentDescription="@null"
-                            android:padding="6dp"
+                            android:padding="9dp"
                             android:src="@drawable/ic_compress"
                             app:tint="@color/cyan_primary" />
 
@@ -345,10 +372,11 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    android:stateListAnimator="@animator/sw_press"
                     app:cardBackgroundColor="@color/glass_surface"
-                    app:cardCornerRadius="14dp"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/cyan_border_idle"
+                    app:strokeColor="@color/sel_stroke_cyan"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -360,11 +388,11 @@
                         android:paddingVertical="10dp">
 
                         <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:background="@drawable/bg_icon_badge"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:background="@drawable/bg_icon_badge_glow"
                             android:contentDescription="@null"
-                            android:padding="6dp"
+                            android:padding="9dp"
                             android:src="@drawable/ic_edit"
                             app:tint="@color/cyan_primary" />
 
@@ -400,10 +428,11 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    android:stateListAnimator="@animator/sw_press"
                     app:cardBackgroundColor="@color/glass_surface"
-                    app:cardCornerRadius="14dp"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/cyan_border_idle"
+                    app:strokeColor="@color/sel_stroke_cyan"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -415,11 +444,11 @@
                         android:paddingVertical="10dp">
 
                         <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:background="@drawable/bg_icon_badge"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:background="@drawable/bg_icon_badge_glow"
                             android:contentDescription="@null"
-                            android:padding="6dp"
+                            android:padding="9dp"
                             android:src="@drawable/ic_merge"
                             app:tint="@color/cyan_primary" />
 
@@ -460,9 +489,19 @@
                 app:strokeColor="@color/pro_badge_stroke"
                 app:strokeWidth="1dp">
 
+                <!--
+                    bg_pro_banner (the gradient + gold hairline) lives on the content
+                    container, NOT on app:cardBackgroundColor: cardBackgroundColor is a
+                    format="color" attr, and ResourcesImpl.loadComplexColorForCookie()
+                    only parses <gradient>/<selector> roots — a <shape> throws
+                    NotFoundException at inflation. The 1dp margin keeps the card's own
+                    pro_badge_stroke visible above the child.
+                -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:background="@drawable/bg_pro_banner"
+                    android:layout_margin="1dp"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -509,6 +548,7 @@
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:contentDescription="@null"
+                            android:rotation="0"
                             android:src="@drawable/ic_chevron_down"
                             app:tint="@color/pro_gold" />
                     </LinearLayout>
@@ -529,9 +569,9 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/toolVault"
-                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                style="@style/Widget.ScanWhirl.Button.Pro"
                                 android:layout_width="0dp"
-                                android:layout_height="42dp"
+                                android:layout_height="52dp"
                                 android:layout_margin="3dp"
                                 android:layout_weight="1"
                                 android:insetTop="0dp"
@@ -545,14 +585,13 @@
                                 app:iconGravity="textStart"
                                 app:iconPadding="6dp"
                                 app:iconSize="17dp"
-                                app:iconTint="@color/pro_gold"
-                                app:strokeColor="@color/pro_badge_stroke" />
+                                app:iconTint="@color/pro_gold" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/toolOcr"
-                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                style="@style/Widget.ScanWhirl.Button.Pro"
                                 android:layout_width="0dp"
-                                android:layout_height="42dp"
+                                android:layout_height="52dp"
                                 android:layout_margin="3dp"
                                 android:layout_weight="1"
                                 android:insetTop="0dp"
@@ -566,8 +605,7 @@
                                 app:iconGravity="textStart"
                                 app:iconPadding="6dp"
                                 app:iconSize="17dp"
-                                app:iconTint="@color/pro_gold"
-                                app:strokeColor="@color/pro_badge_stroke" />
+                                app:iconTint="@color/pro_gold" />
                         </LinearLayout>
 
                         <LinearLayout
@@ -577,9 +615,9 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/toolLockPdf"
-                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                style="@style/Widget.ScanWhirl.Button.Pro"
                                 android:layout_width="0dp"
-                                android:layout_height="42dp"
+                                android:layout_height="52dp"
                                 android:layout_margin="3dp"
                                 android:layout_weight="1"
                                 android:insetTop="0dp"
@@ -593,14 +631,13 @@
                                 app:iconGravity="textStart"
                                 app:iconPadding="6dp"
                                 app:iconSize="17dp"
-                                app:iconTint="@color/pro_gold"
-                                app:strokeColor="@color/pro_badge_stroke" />
+                                app:iconTint="@color/pro_gold" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/toolLongImage"
-                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                style="@style/Widget.ScanWhirl.Button.Pro"
                                 android:layout_width="0dp"
-                                android:layout_height="42dp"
+                                android:layout_height="52dp"
                                 android:layout_margin="3dp"
                                 android:layout_weight="1"
                                 android:insetTop="0dp"
@@ -614,8 +651,7 @@
                                 app:iconGravity="textStart"
                                 app:iconPadding="6dp"
                                 app:iconSize="17dp"
-                                app:iconTint="@color/pro_gold"
-                                app:strokeColor="@color/pro_badge_stroke" />
+                                app:iconTint="@color/pro_gold" />
                         </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>
@@ -632,7 +668,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:padding="8dp" />
+                android:paddingStart="8dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="96dp" />
 
             <LinearLayout
                 android:id="@+id/emptyState"
@@ -643,10 +682,11 @@
                 android:padding="32dp">
 
                 <ImageView
+                    android:id="@+id/emptyOrbit"
                     android:layout_width="104dp"
                     android:layout_height="104dp"
                     android:contentDescription="@null"
-                    android:src="@drawable/ic_scan_empty"
+                    android:src="@drawable/ic_empty_orbit"
                     app:tint="@color/cyan_primary" />
 
                 <TextView
@@ -672,17 +712,46 @@
         </FrameLayout>
     </LinearLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabScan"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <!--
+        Orbital FAB host (test25 Phase 2, item 6): 96dp FrameLayout carrying two static
+        rings behind the scan FAB. The host sits where the FAB used to, so the outer ring
+        inherits the old 24dp screen inset and the FAB centers inside it.
+        The rings are intentionally NOT animated here — pulse motion is Phase 4 and must
+        be gated on SwMotion.ambientAllowed() (does not exist yet).
+        Visibility of fabHost must always track fabScan (tests read fabScan directly).
+    -->
+    <FrameLayout
+        android:id="@+id/fabHost"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
         android:layout_gravity="bottom|end"
-        android:layout_margin="24dp"
-        android:contentDescription="@string/scan"
-        android:src="@drawable/ic_camera"
-        app:backgroundTint="@color/cyan_primary"
-        app:elevation="0dp"
-        app:hoveredFocusedTranslationZ="0dp"
-        app:pressedTranslationZ="0dp"
-        app:tint="@color/sf_on_primary" />
+        android:layout_margin="24dp">
+
+        <View
+            android:id="@+id/fabRing"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_fab_outer_ring" />
+
+        <View
+            android:id="@+id/fabPulse"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_fab_pulse" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabScan"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:contentDescription="@string/scan"
+            android:src="@drawable/ic_camera"
+            app:backgroundTint="@color/cyan_primary"
+            app:elevation="0dp"
+            app:hoveredFocusedTranslationZ="0dp"
+            app:pressedTranslationZ="0dp"
+            app:tint="@color/sf_on_primary" />
+    </FrameLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

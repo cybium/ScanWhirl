@@ -11,7 +11,18 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- HUD header: name + search entry. -->
+    <!--
+        test25: scrim behind the HUD so the title/status/buttons stay legible
+        over the star field (gradient fades downward into space).
+    -->
+    <View
+        android:id="@+id/hudScrim"
+        android:layout_width="match_parent"
+        android:layout_height="132dp"
+        android:layout_gravity="top"
+        android:background="@drawable/bg_hud_scrim" />
+
+    <!-- HUD header: title + status readout + search/List/Settings entries. -->
     <LinearLayout
         android:id="@+id/globeHud"
         android:layout_width="match_parent"
@@ -22,19 +33,33 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:letterSpacing="0.06"
-            android:text="@string/app_name"
-            android:textAppearance="?attr/textAppearanceTitleLarge"
-            android:textColor="@color/text_hologram_hi"
-            android:textStyle="bold" />
-
-        <View
+        <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/globeTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.06"
+                android:text="@string/app_name"
+                android:textAppearance="?attr/textAppearanceTitleLarge"
+                android:textColor="@color/text_hologram_hi"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/globeStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:letterSpacing="0.08"
+                android:text="@string/globe_status_empty"
+                android:textColor="@color/text_hologram_dim"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <ImageButton
             android:id="@+id/btnGlobeSearch"
@@ -44,6 +69,29 @@
             android:contentDescription="@string/globe_search_open"
             android:padding="8dp"
             android:src="@drawable/ic_search"
+            app:tint="@color/cyan_primary" />
+
+        <ImageButton
+            android:id="@+id/btnGlobeList"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_glass_round_btn"
+            android:contentDescription="@string/btn_list"
+            android:padding="8dp"
+            android:src="@drawable/ic_list"
+            app:tint="@color/cyan_primary" />
+
+        <!-- D5: gear → SettingsActivity. -->
+        <ImageButton
+            android:id="@+id/btnGlobeSettings"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_glass_round_btn"
+            android:contentDescription="@string/btn_settings"
+            android:padding="8dp"
+            android:src="@drawable/ic_settings"
             app:tint="@color/cyan_primary" />
     </LinearLayout>
 
@@ -56,7 +104,7 @@
         android:background="#E6050C16"
         android:orientation="vertical"
         android:paddingHorizontal="16dp"
-        android:paddingTop="64dp"
+        android:paddingTop="76dp"
         android:paddingBottom="14dp"
         android:visibility="invisible">
 
@@ -136,7 +184,7 @@
             android:id="@+id/globeEmptyTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/empty_title"
+            android:text="@string/globe_empty_title"
             android:textAppearance="?attr/textAppearanceTitleMedium"
             android:textColor="#E2F8FF" />
 
@@ -146,47 +194,178 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:gravity="center"
-            android:text="@string/empty_subtitle"
+            android:text="@string/globe_empty_sub"
             android:textAppearance="?attr/textAppearanceBodySmall"
             android:textColor="#8CB8E1" />
     </LinearLayout>
 
-    <!-- Primary action: scan with double cyan concentric ring + "TAP TO SCAN" label. -->
+    <!--
+        Bottom stack (test25): gesture hint pill → orbit dock (five category
+        chips that focus a ring) → scan FAB with two static pulse rings.
+        The canvas no longer draws the hint; globeHint mirrors
+        globeView.hintText. Pulse motion is Phase 4 (SwMotion-gated).
+    -->
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="20dp"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="16dp"
         android:gravity="center_horizontal"
         android:orientation="vertical">
 
-        <FrameLayout
-            android:layout_width="72dp"
-            android:layout_height="72dp"
-            android:background="@drawable/bg_fab_outer_ring">
-
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/fabGlobeScan"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:contentDescription="@string/scan"
-                android:src="@drawable/ic_camera"
-                app:backgroundTint="@color/glass_surface_raised"
-                app:elevation="0dp"
-                app:hoveredFocusedTranslationZ="0dp"
-                app:pressedTranslationZ="0dp"
-                app:tint="@color/cyan_primary" />
-        </FrameLayout>
-
         <TextView
+            android:id="@+id/globeHint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:letterSpacing="0.08"
-            android:text="@string/scan_tap_prompt"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_search_bar"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="5dp"
+            android:text="@string/globe_hint_home"
             android:textColor="@color/cyan_primary"
             android:textSize="10sp"
             android:textStyle="bold" />
+
+        <!-- Orbit dock: tap a chip to focus its ring, tap again to clear. -->
+        <LinearLayout
+            android:id="@+id/globeDock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/globeChipStudy"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="3dp"
+                android:background="@drawable/bg_chip_void"
+                android:paddingHorizontal="9dp"
+                android:paddingVertical="5dp"
+                android:text="@string/cat_label_study"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/globeChipReceipts"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="3dp"
+                android:background="@drawable/bg_chip_void"
+                android:paddingHorizontal="9dp"
+                android:paddingVertical="5dp"
+                android:text="@string/cat_label_receipts"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/globeChipIds"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="3dp"
+                android:background="@drawable/bg_chip_void"
+                android:paddingHorizontal="9dp"
+                android:paddingVertical="5dp"
+                android:text="@string/cat_label_ids"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/globeChipForms"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="3dp"
+                android:background="@drawable/bg_chip_void"
+                android:paddingHorizontal="9dp"
+                android:paddingVertical="5dp"
+                android:text="@string/cat_label_forms"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/globeChipOther"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="3dp"
+                android:background="@drawable/bg_chip_void"
+                android:paddingHorizontal="9dp"
+                android:paddingVertical="5dp"
+                android:text="@string/cat_label_other"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Primary action: scan with concentric rings + "TAP TO SCAN" label. -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:clipChildren="false"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:background="@drawable/bg_fab_orbital"
+                android:clipChildren="false">
+
+                <View
+                    android:id="@+id/fabPulse1"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:alpha="0.55"
+                    android:background="@drawable/bg_fab_pulse" />
+
+                <View
+                    android:id="@+id/fabPulse2"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:alpha="0.30"
+                    android:background="@drawable/bg_fab_pulse" />
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/fabGlobeScan"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/scan"
+                    android:src="@drawable/ic_camera"
+                    app:backgroundTint="@color/glass_surface_raised"
+                    app:elevation="0dp"
+                    app:hoveredFocusedTranslationZ="0dp"
+                    app:pressedTranslationZ="0dp"
+                    app:tint="@color/cyan_primary" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:letterSpacing="0.08"
+                android:text="@string/scan_tap_prompt"
+                android:textColor="@color/cyan_primary"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
+
+    <!--
+        test25 Phase 4: radial reveal wash for the scan launch — expands from
+        the FAB over the globe, then the Shelf warps in on top. Additive id
+        (not on the locked list); hidden until SwTransitions shows it, and only
+        ever shown when SwMotion.ambientAllowed.
+    -->
+    <View
+        android:id="@+id/scanReveal"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_space"
+        android:visibility="gone" />
 </FrameLayout>

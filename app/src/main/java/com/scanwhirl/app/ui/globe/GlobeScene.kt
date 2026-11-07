@@ -7,6 +7,7 @@ import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -63,13 +64,26 @@ class GlobeScene(private val landMask: ByteArray) {
         const val EASE_STATE = 0.12f
         private val GOLDEN_ANGLE = (PI * (3.0 - sqrt(5.0))).toFloat()
 
-        /** Ring radii as fractions of width — five rings, prototype had four. */
-        private val RING_RX = floatArrayOf(0.155f, 0.24f, 0.325f, 0.41f, 0.495f)
+        /**
+         * Ring radii as fractions of width — five rings, prototype had four.
+         * test25: tightened so the outer ring leaves room for the bottom
+         * orbit dock (hint pill + 5 category chips + FAB stack).
+         */
+        private val RING_RX = floatArrayOf(0.125f, 0.19f, 0.255f, 0.32f, 0.385f)
         private const val RING_RY_RATIO = 0.42f
+
+        /** Ring centre as a fraction of height (test25: was 0.63). */
+        private const val RING_CY = 0.58f
 
         /** Search miss dimming (prototype: 0.12) and far-side dimming (0.45). */
         const val DIM_ALPHA = 0.12f
         const val BACK_ALPHA = 0.45f
+
+        /** Ring alpha when another category ring is focused. */
+        const val FOCUS_DIM = 0.25f
+
+        /** Home-orbit alpha while a category ring is focused (orbit = no ring). */
+        const val ORBIT_DIM = 0.4f
 
         fun ringIndexFor(category: String): Int =
             CategoryRules.ALL.indexOf(category).coerceAtLeast(0)
@@ -103,6 +117,34 @@ class GlobeScene(private val landMask: ByteArray) {
     // --- Drag bookkeeping (set by the view) -------------------------------
     var draggingGlobe = false
     var draggingRing = -1
+
+    /**
+     * test25 Phase 4: ambient (endless) motion switch, mirrored from
+     * `SwMotion.ambientAllowed` by the view on resume. Gates only the loops
+     * that never stop — the earth's base rotation and the ring drift.
+     * `stateT` easing and flick inertia are **not** gated: they are
+     * interaction feedback and must keep working with animations disabled.
+     *
+     * Default `true` on purpose: GlobeSceneTest drives [update] directly and
+     * asserts the earth auto-rotates; the activity flips it under Robolectric
+     * (where `ambientAllowed` is false), which also keeps screenshots
+     * deterministic.
+     */
+    var ambientMotion: Boolean = true
+
+    /**
+     * Pixels of HUD reserved at the top of the screen (test25). All vertical
+     * geometry is laid out inside the band below it via [bandY]; with the
+     * default 0 the formulas reduce to the plain fractions from the plan.
+     * Set by the activity once the HUD has measured.
+     */
+    var topReserve: Float = 0f
+
+    /**
+     * Focused category ring (−1 = none). Tapping a dock chip sets this;
+     * [ringAlphaFor] dims everything else. Pure state — the view redraws.
+     */
+    var focusRing: Int = -1
 
     // --- Documents --------------------------------------------------------
     var cards: List<Card> = emptyList()
@@ -223,20 +265,64 @@ class GlobeScene(private val landMask: ByteArray) {
         return match * depth
     }
 
+    /**
+     * Focus dimming for [card] (test25): full alpha on the focused ring (or
+     * when nothing is focused), [FOCUS_DIM] on the other four, and
+     * [ORBIT_DIM] for home-orbit cards — they belong to no ring, so they
+     * recede rather than compete. Multiply with [alphaFor] in the view.
+     */
+    fun ringAlphaFor(card: Card): Float = when {
+        focusRing < 0 -> 1f
+        card.ringIndex == focusRing -> 1f
+        card.orbit -> ORBIT_DIM
+        else -> FOCUS_DIM
+    }
+
+    /**
+     * Documents per category ring (index = [ringIndex], orbit cards
+     * excluded — they are a subset of [cards] and must not double-count).
+     * Drives the HUD status readout while a ring is focused.
+     */
+    fun categoryCounts(): IntArray {
+        val counts = IntArray(RING_COUNT)
+        for (card in cards) {
+            if (card.ringIndex in 0 until RING_COUNT) counts[card.ringIndex]++
+        }
+        return counts
+    }
+
     // --- Geometry ---------------------------------------------------------
+
+    /**
+     * Maps a fraction of screen height into the band below [topReserve].
+     * With the default reserve of 0 this is exactly `frac * h`.
+     */
+    private fun bandY(h: Float, frac: Float): Float =
+        topReserve + (h - topReserve) * frac
 
     fun globeGeometry(w: Float, h: Float): GlobeGeom {
         val t = stateT
         return GlobeGeom(
             cx = w * 0.5f,
-            cy = h * 0.44f + (h * 0.20f - h * 0.44f) * t,
+            cy = bandY(h, 0.44f + (0.20f - 0.44f) * t),
             r = w * 0.31f + (w * 0.16f - w * 0.31f) * t
         )
     }
 
     fun ringGeometry(ring: Int, w: Float, h: Float): RingGeom {
         val rx = w * RING_RX[ring]
-        return RingGeom(cx = w * 0.5f, cy = h * 0.63f, rx = rx, ry = rx * RING_RY_RATIO)
+        return RingGeom(cx = w * 0.5f, cy = bandY(h, RING_CY), rx = rx, ry = rx * RING_RY_RATIO)
+    }
+
+    /**
+     * Home-orbit radius (test25): the ellipse must keep the widest orbit
+     * card ([cardHalfW]) plus a 6u gutter on screen, so clamp the prototype's
+     * 1.35r to `0.5w − cardHalfW − 6u`.
+     */
+    fun homeOrbitRx(w: Float, r: Float, cardHalfW: Float): Float {
+        val u = w / 360f
+        val screenBound = 0.5f * w - cardHalfW - 6f * u
+        return min(1.35f * r, screenBound).coerceAtLeast(cardHalfW)
     }
 
     /** Ellipse-normalised distance from ring [ring]'s outline (1.0 = on it). */
@@ -264,7 +350,8 @@ class GlobeScene(private val landMask: ByteArray) {
         if (abs(target - stateT) < 0.002f) stateT = target
 
         if (!draggingGlobe) {
-            earthRotY += BASE_ROT * dt + earthVelY * k
+            if (ambientMotion) earthRotY += BASE_ROT * dt
+            earthRotY += earthVelY * k
             earthVelY *= 0.94f.pow(k)
             earthVelX *= 0.94f.pow(k)
             earthRotX = (earthRotX + earthVelX * k).coerceIn(-0.6f, 0.6f)
@@ -272,8 +359,10 @@ class GlobeScene(private val landMask: ByteArray) {
 
         for (r in 0 until RING_COUNT) {
             if (draggingRing != r) {
-                val drift = (if (r % 2 == 0) 0.03f else -0.02f) * dt
-                ringAngles[r] += ringVels[r] * k + drift
+                if (ambientMotion) {
+                    ringAngles[r] += (if (r % 2 == 0) 0.03f else -0.02f) * dt
+                }
+                ringAngles[r] += ringVels[r] * k
                 ringVels[r] *= 0.94f.pow(k)
             }
         }

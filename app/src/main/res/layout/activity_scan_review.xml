@@ -77,9 +77,12 @@
             app:iconTint="@color/text_hologram_mid" />
     </LinearLayout>
 
+    <!-- test25 Phase 5B: inset floating glass dock. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="8dp"
+        android:background="@drawable/bg_dock_glass"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
@@ -87,13 +90,9 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSavePdf"
+            style="@style/Widget.ScanWhirl.Button.Primary"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:backgroundTint="@color/cyan_primary"
-            android:text="@string/review_save_pdf"
-            android:textColor="@color/sf_on_primary"
-            android:textStyle="bold"
-            app:cornerRadius="14dp"
-            app:elevation="0dp" />
+            android:text="@string/review_save_pdf" />
     </LinearLayout>
 </LinearLayout>
