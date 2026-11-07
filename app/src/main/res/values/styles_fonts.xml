@@ -8,6 +8,75 @@
     </style>
 
     <style name="GreetingSubtitle" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_hologram_mid</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
+    <!-- Global Typography System (System fonts only, preserves Serif/Mono user choice) -->
+    <style name="TextAppearance.SW.Hud.Title" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textColor">@color/text_hologram_hi</item>
+    </style>
+
+    <style name="TextAppearance.SW.Hud.Label" parent="TextAppearance.Material3.LabelSmall">
         <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.14</item>
+        <item name="android:textColor">@color/cyan_primary</item>
+    </style>
+
+    <style name="TextAppearance.SW.Section" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.14</item>
+        <item name="android:textColor">@color/cyan_primary</item>
+    </style>
+
+    <style name="TextAppearance.SW.Card.Title" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="android:textColor">@color/text_hologram_hi</item>
+    </style>
+
+    <style name="TextAppearance.SW.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textSize">14sp</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="android:textColor">@color/text_hologram_hi</item>
+    </style>
+
+    <style name="TextAppearance.SW.Meta" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">12sp</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="android:textColor">@color/text_hologram_mid</item>
+    </style>
+
+    <style name="TextAppearance.SW.Telemetry" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="android:textColor">@color/cyan_primary</item>
+    </style>
+
+    <style name="TextAppearance.SW.Action" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+
+    <style name="TextAppearance.SW.Dialog.Title" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="android:textColor">@color/text_hologram_hi</item>
+    </style>
+
+    <style name="TextAppearance.SW.Dialog.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textSize">15sp</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="android:textColor">@color/text_hologram_mid</item>
     </style>
 </resources>

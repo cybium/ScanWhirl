@@ -529,12 +529,12 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     private fun confirmDiscard() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        SwDialog.danger(this)
             .setTitle(R.string.review_discard_title)
             .setMessage(R.string.review_discard_msg)
             .setPositiveButton(R.string.discard) { _, _ -> discard() }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun discard() {
@@ -556,16 +556,7 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     private fun showProgress(): android.app.Dialog {
-        val bar = android.widget.ProgressBar(this).apply {
-            isIndeterminate = true
-            val pad = (24 * resources.displayMetrics.density).toInt()
-            setPadding(pad, pad, pad, pad)
-        }
-        return androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle(R.string.review_saving)
-            .setView(bar)
-            .setCancelable(false)
-            .show()
+        return SwDialog.progress(this, titleRes = R.string.review_saving)
     }
 
     companion object {

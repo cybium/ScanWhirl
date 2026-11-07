@@ -15,12 +15,14 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivityGlobeHomeBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.MainActivity
 import com.scanwhirl.app.ui.PdfViewerActivity
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SearchMatcher
+import com.scanwhirl.app.ui.showSw
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,7 +35,7 @@ import kotlinx.coroutines.withContext
  * list — the Shelf. Locked/vaulted documents sit on the far side of the
  * globe as glyph-only cards and open through the existing PIN/password flow.
  */
-class GlobeHomeActivity : AppCompatActivity(), HolographicEarthView.Listener {
+class GlobeHomeActivity : BaseActivity(), HolographicEarthView.Listener {
 
     private lateinit var binding: ActivityGlobeHomeBinding
     private lateinit var repo: ScanRepository
@@ -225,16 +227,16 @@ class GlobeHomeActivity : AppCompatActivity(), HolographicEarthView.Listener {
             onOk() // nothing to verify against; the doc is reachable anyway
             return
         }
-        val input = EditText(this).apply {
-            hint = getString(R.string.vault_pin_hint)
+        val (builder, input) = com.scanwhirl.app.ui.SwDialog.input(
+            this,
+            hint = getString(R.string.vault_pin_hint),
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        }
-        AlertDialog.Builder(this)
+        )
+        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        builder
             .setTitle(R.string.vault_enter_pin_title)
             .setMessage(R.string.vault_enter_pin_msg)
-            .setView(input)
             .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
                 val pin = input.text?.toString()?.trim().orEmpty()
                 if (Prefs.verifyVaultPin(this, pin)) {
@@ -244,19 +246,19 @@ class GlobeHomeActivity : AppCompatActivity(), HolographicEarthView.Listener {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun promptUnlock(doc: ScanDocument, onOk: () -> Unit) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.protect_hint)
+        val (builder, input) = com.scanwhirl.app.ui.SwDialog.input(
+            this,
+            hint = getString(R.string.protect_hint),
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        AlertDialog.Builder(this)
+        )
+        builder
             .setTitle(R.string.unlock_pdf_title)
             .setMessage(getString(R.string.unlock_pdf_msg, doc.name))
-            .setView(input)
             .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
                 val pw = input.text?.toString().orEmpty()
                 if (repo.verifyPdfPassword(doc.id, pw)) {
@@ -266,7 +268,7 @@ class GlobeHomeActivity : AppCompatActivity(), HolographicEarthView.Listener {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     companion object {

@@ -344,4 +344,57 @@
     <string name="action_categorize">Categorize</string>
     <string name="categorize_title">Categorize this document</string>
 
+    <!-- Test25 Visual Overhaul & Architecture Strings -->
+    <string name="globe_status_empty">AWAITING TRANSMISSION</string>
+    <string name="globe_empty_title">Awaiting transmission</string>
+    <string name="globe_empty_sub">Scan your first document to launch it into orbit.</string>
+    <string name="globe_search_pill">Search</string>
+    <string name="a11y_globe_summary">Document globe, %1$d documents</string>
+    <string name="btn_list">List</string>
+    <string name="btn_settings">Settings</string>
+
+    <!-- Category Labels -->
+    <string name="cat_label_study">Study</string>
+    <string name="cat_label_receipts">Receipts</string>
+    <string name="cat_label_ids">IDs</string>
+    <string name="cat_label_forms">Forms</string>
+    <string name="cat_label_other">Other</string>
+
+    <!-- Pro Feature Dossier -->
+    <string name="pro_feat_vault_title">Hidden Vault</string>
+    <string name="pro_feat_vault_sub">4-digit PIN protected local storage</string>
+    <string name="pro_feat_ocr_title">Lossless OCR Text</string>
+    <string name="pro_feat_ocr_sub">Extract, copy and search text inside scans</string>
+    <string name="pro_feat_lock_title">PDF Encryption</string>
+    <string name="pro_feat_lock_sub">Password-protect and unlock documents</string>
+    <string name="pro_feat_long_title">Long Image Stitching</string>
+    <string name="pro_feat_long_sub">Export all pages as a single tall image</string>
+    <string name="pro_feat_crop_title">ID &amp; Passport Crop</string>
+    <string name="pro_feat_crop_sub">Exact aspect ratio presets for identification</string>
+    <string name="pro_feat_zip_title">Batch ZIP Archive</string>
+    <string name="pro_feat_zip_sub">Export multiple documents at once</string>
+
+    <!-- Pro Tile Captions -->
+    <string name="pro_tile_vault_sub">PIN folder</string>
+    <string name="pro_tile_ocr_sub">Extract text</string>
+    <string name="pro_tile_lock_sub">Password</string>
+    <string name="pro_tile_long_sub">Stitch pages</string>
+
+    <!-- Dialog Eyebrows -->
+    <string name="dlg_eyebrow_notice">NOTICE</string>
+    <string name="dlg_eyebrow_confirm">CONFIRM</string>
+    <string name="dlg_eyebrow_warning">WARNING</string>
+    <string name="dlg_eyebrow_tool">TOOL</string>
+    <string name="dlg_eyebrow_security">SECURE ACCESS</string>
+    <string name="dlg_eyebrow_recovery">RECOVERY</string>
+
+    <plurals name="globe_status_docs">
+        <item quantity="one">%1$d DOCUMENT</item>
+        <item quantity="other">%1$d DOCUMENTS</item>
+    </plurals>
+    <plurals name="globe_status_orbits">
+        <item quantity="one">%1$d ORBIT</item>
+        <item quantity="other">%1$d ORBITS</item>
+    </plurals>
+
 </resources>

@@ -459,10 +459,6 @@
                 app:cardElevation="0dp"
                 app:strokeColor="@color/pro_badge_stroke"
                 app:strokeWidth="1dp">
-                app:cardCornerRadius="14dp"
-                app:cardElevation="0dp"
-                app:strokeColor="@color/pro_badge_stroke"
-                app:strokeWidth="1dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"

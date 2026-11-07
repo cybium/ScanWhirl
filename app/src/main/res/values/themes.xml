@@ -1,44 +1,187 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.ScanWhirl" parent="Theme.Material3.DayNight.NoActionBar">
+    <!-- Base Orbital Dark Theme (Universal dark universe; no DayNight drift) -->
+    <style name="Theme.ScanWhirl" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/sf_primary</item>
         <item name="colorOnPrimary">@color/sf_on_primary</item>
         <item name="colorPrimaryContainer">@color/sf_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/sf_on_primary_container</item>
+        <item name="colorSecondary">@color/sf_secondary</item>
         <item name="colorSecondaryContainer">@color/sf_secondary_container</item>
-        <item name="colorOnSecondaryContainer">@color/sf_on_secondary_container</item>
+        <item name="colorTertiary">@color/sf_tertiary</item>
+        <item name="colorOnTertiary">@color/sf_on_tertiary</item>
+        <item name="colorError">@color/laser_danger</item>
+        <item name="colorOnError">@color/sf_on_primary</item>
         <item name="android:colorBackground">@color/sf_background</item>
         <item name="colorSurface">@color/sf_surface</item>
         <item name="colorOnSurface">@color/sf_on_surface</item>
+        <item name="colorSurfaceContainerLowest">@color/sf_surface</item>
+        <item name="colorSurfaceContainerLow">#0A1222</item>
         <item name="colorSurfaceContainer">@color/sf_surface</item>
         <item name="colorSurfaceContainerHigh">@color/glass_surface_raised</item>
+        <item name="colorSurfaceContainerHighest">@color/glass_surface_high</item>
+        <item name="colorSurfaceVariant">@color/sf_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/sf_on_surface_variant</item>
+        <item name="colorOutline">@color/sf_outline</item>
+        <item name="colorOutlineVariant">@color/sf_outline_variant</item>
         <item name="android:statusBarColor">@color/sf_surface</item>
         <item name="android:navigationBarColor">@color/sf_background</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:textColorPrimary">@color/text_hologram_hi</item>
         <item name="android:textColorSecondary">@color/text_hologram_mid</item>
+
         <item name="alertDialogTheme">@style/ThemeOverlay.ScanWhirl.Dialog</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.ScanWhirl.Dialog</item>
+        <item name="popupMenuStyle">@style/Widget.ScanWhirl.PopupMenu</item>
+        <item name="actionOverflowMenuStyle">@style/Widget.ScanWhirl.PopupMenu.Overflow</item>
+        <item name="materialButtonStyle">@style/Widget.ScanWhirl.Button.Primary</item>
+        <item name="materialCardViewStyle">@style/Widget.ScanWhirl.Card</item>
+        <item name="switchStyle">@style/Widget.ScanWhirl.Switch</item>
     </style>
 
-    <!-- Neural Vault Glass Dialog Theme -->
+    <!-- Dialog & Sheet Window Animations -->
+    <style name="Animation.ScanWhirl.Card" parent="android:Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/dialog_card_enter</item>
+        <item name="android:windowExitAnimation">@anim/dialog_card_exit</item>
+    </style>
+
+    <style name="Animation.ScanWhirl.Sheet" parent="android:Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/sheet_enter</item>
+        <item name="android:windowExitAnimation">@anim/sheet_exit</item>
+    </style>
+
+    <!-- Neural Vault Glass Dialog Theme (Card) -->
     <style name="ThemeOverlay.ScanWhirl.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="android:windowBackground">@drawable/bg_dialog_glass</item>
         <item name="android:backgroundDimAmount">0.85</item>
-        <item name="colorSurface">@color/glass_surface_raised</item>
+        <item name="colorSurface">@color/glass_surface_high</item>
         <item name="colorOnSurface">@color/text_hologram_hi</item>
         <item name="android:textColorPrimary">@color/text_hologram_hi</item>
         <item name="android:textColorSecondary">@color/text_hologram_mid</item>
+        <item name="android:listChoiceIndicatorSingle">@drawable/sel_radio_orbital</item>
+        <item name="android:listChoiceIndicatorMultiple">@drawable/sel_check_orbital</item>
         <item name="buttonBarPositiveButtonStyle">@style/Widget.ScanWhirl.Button.DialogPositive</item>
         <item name="buttonBarNegativeButtonStyle">@style/Widget.ScanWhirl.Button.DialogNegative</item>
         <item name="buttonBarNeutralButtonStyle">@style/Widget.ScanWhirl.Button.DialogNegative</item>
     </style>
 
+    <!-- Neural Vault Glass Sheet Theme -->
+    <style name="ThemeOverlay.ScanWhirl.Dialog.Sheet" parent="ThemeOverlay.ScanWhirl.Dialog">
+        <item name="android:windowBackground">@drawable/bg_sheet_glass</item>
+    </style>
+
+    <!-- Danger Dialog Overlay -->
+    <style name="ThemeOverlay.ScanWhirl.Dialog.Danger" parent="ThemeOverlay.ScanWhirl.Dialog">
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.ScanWhirl.Button.DialogDanger</item>
+    </style>
+
+    <!-- Dialog Buttons -->
     <style name="Widget.ScanWhirl.Button.DialogPositive" parent="Widget.Material3.Button.TextButton.Dialog">
         <item name="android:textColor">@color/cyan_primary</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.04</item>
     </style>
 
     <style name="Widget.ScanWhirl.Button.DialogNegative" parent="Widget.Material3.Button.TextButton.Dialog">
         <item name="android:textColor">@color/text_hologram_mid</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.Button.DialogDanger" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/laser_danger</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+
+    <!-- App Button System -->
+    <style name="Widget.ScanWhirl.Button.Primary" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/cyan_primary</item>
+        <item name="android:textColor">@color/void_abyss</item>
+        <item name="iconTint">@color/void_abyss</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="cornerRadius">24dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.Button.Secondary" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="strokeColor">@color/cyan_border_idle</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="android:textColor">@color/text_hologram_hi</item>
+        <item name="iconTint">@color/cyan_primary</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="cornerRadius">24dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.Button.Danger" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="strokeColor">@color/laser_danger_border</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="android:textColor">@color/laser_danger</item>
+        <item name="iconTint">@color/laser_danger</item>
+        <item name="backgroundTint">@color/laser_danger_surface</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="cornerRadius">24dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.Button.Pro" parent="Widget.Material3.Button">
+        <item name="android:background">@drawable/bg_pro_tile</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:textColor">@color/text_hologram_hi</item>
+        <item name="iconTint">@color/gold_pro_primary</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.Button.Dock" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textColor">@color/text_hologram_hi</item>
+        <item name="iconTint">@color/cyan_primary</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="iconGravity">top</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
+    <!-- FAB Styles -->
+    <style name="Widget.ScanWhirl.Fab.Orbital" parent="Widget.Material3.FloatingActionButton.Surface">
+        <item name="backgroundTint">@color/glass_surface_raised</item>
+        <item name="tint">@color/cyan_primary</item>
+        <item name="elevation">0dp</item>
+        <item name="hoveredFocusedTranslationZ">0dp</item>
+        <item name="pressedTranslationZ">0dp</item>
+    </style>
+
+    <!-- Card Styles -->
+    <style name="Widget.ScanWhirl.Card" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/glass_surface</item>
+        <item name="strokeColor">@color/sel_stroke_cyan</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="cardCornerRadius">14dp</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <!-- Switch Style -->
+    <style name="Widget.ScanWhirl.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="thumbTint">@color/sel_switch_thumb</item>
+        <item name="trackTint">@color/sel_switch_track</item>
+    </style>
+
+    <!-- Popup Menu Styles -->
+    <style name="Widget.ScanWhirl.PopupMenu" parent="Widget.Material3.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_popup_glass</item>
+        <item name="android:popupElevation">12dp</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.PopupMenu.Overflow" parent="Widget.Material3.PopupMenu.Overflow">
+        <item name="android:popupBackground">@drawable/bg_popup_glass</item>
+        <item name="android:popupElevation">12dp</item>
     </style>
 </resources>

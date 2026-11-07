@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  item_scan.xml — Orbital design system, test25
+  Locked IDs: scanThumb, pageBadge, scanName, lockBadge, scanMeta, checkSelect, btnView, btnEdit
+  New IDs: catRail, catChip
+-->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -7,22 +12,37 @@
     android:layout_marginVertical="5dp"
     android:clickable="true"
     android:focusable="true"
+    android:stateListAnimator="@animator/sw_press"
     app:cardBackgroundColor="@color/glass_surface"
     app:cardCornerRadius="14dp"
     app:cardElevation="0dp"
-    app:strokeColor="@color/cyan_border_idle"
+    app:strokeColor="@color/sel_stroke_cyan"
     app:strokeWidth="1dp">
 
+    <!-- Root horizontal container -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="12dp">
+        android:orientation="horizontal">
 
+        <!-- Category colour rail — 4dp × (card height − 20dp), rounded, tinted at runtime -->
+        <View
+            android:id="@+id/catRail"
+            android:layout_width="4dp"
+            android:layout_height="0dp"
+            android:layout_gravity="fill_vertical"
+            android:layout_marginBottom="10dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_cat_rail" />
+
+        <!-- Thumbnail: portrait 60×80dp, 8dp radius -->
         <com.google.android.material.card.MaterialCardView
-            android:layout_width="68dp"
-            android:layout_height="68dp"
+            android:layout_width="60dp"
+            android:layout_height="80dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginVertical="10dp"
             app:cardBackgroundColor="@color/void_abyss"
             app:cardCornerRadius="8dp"
             app:cardElevation="0dp"
@@ -41,36 +61,40 @@
                     android:scaleType="centerCrop"
                     android:src="@drawable/ic_document" />
 
-                <!-- Subtle cyan overlay for HUD look -->
+                <!-- Bottom vignette for readability -->
                 <View
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="#2600F0FF" />
+                    android:layout_height="24dp"
+                    android:layout_gravity="bottom"
+                    android:background="@drawable/bg_hud_scrim" />
 
+                <!-- Page count badge -->
                 <TextView
                     android:id="@+id/pageBadge"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="top|start"
                     android:layout_margin="4dp"
-                    android:background="@drawable/bg_page_number"
+                    android:background="@drawable/bg_chip_void"
                     android:gravity="center"
                     android:minWidth="20dp"
                     android:paddingHorizontal="5dp"
                     android:paddingVertical="1dp"
-                    android:textColor="#FFFFFFFF"
+                    android:textColor="@color/text_hologram_hi"
                     android:textSize="11sp"
                     android:textStyle="bold" />
             </FrameLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Text column: name + lock badge + meta + category chip -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingVertical="10dp">
 
+            <!-- Name row with lock badge -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -107,46 +131,69 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- One compact line: "3 pages · 243 KB · 6 Nov" (never wraps). -->
+            <!-- Meta: "3 pages · 243 KB · 6 Nov" (regex-locked, never wraps) -->
             <TextView
                 android:id="@+id/scanMeta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
                 android:ellipsize="end"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="@color/text_hologram_mid" />
+
+            <!-- Category chip: dot + label, tinted at runtime -->
+            <TextView
+                android:id="@+id/catChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/cyan_primary"
+                android:textSize="10sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.08" />
         </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btnView"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/view"
-            android:padding="8dp"
-            android:src="@drawable/ic_visibility"
-            app:tint="@color/cyan_primary" />
-
-        <ImageButton
-            android:id="@+id/btnEdit"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/edit"
-            android:padding="8dp"
-            android:src="@drawable/ic_edit"
-            app:tint="@color/cyan_primary" />
-
-        <CheckBox
-            android:id="@+id/checkSelect"
-            android:layout_width="wrap_content"
+        <!-- Action column: btnView over btnEdit (36dp each) → replaces two 40dp side buttons -->
+        <LinearLayout
+            android:layout_width="36dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:clickable="false"
-            android:focusable="false"
-            android:visibility="gone"
-            app:buttonTint="@color/cyan_primary" />
+            android:layout_marginEnd="8dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <ImageButton
+                android:id="@+id/btnView"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/bg_action_circle"
+                android:contentDescription="@string/view"
+                android:padding="8dp"
+                android:src="@drawable/ic_visibility"
+                app:tint="@color/cyan_primary" />
+
+            <ImageButton
+                android:id="@+id/btnEdit"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/bg_action_circle"
+                android:contentDescription="@string/edit"
+                android:padding="8dp"
+                android:src="@drawable/ic_edit"
+                app:tint="@color/cyan_primary" />
+
+            <!-- Selection checkbox occupies the same column in selection mode -->
+            <CheckBox
+                android:id="@+id/checkSelect"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center"
+                android:clickable="false"
+                android:focusable="false"
+                android:visibility="gone"
+                app:buttonTint="@color/cyan_primary" />
+        </LinearLayout>
+
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -14,8 +14,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.PopupMenu
-import android.widget.ProgressBar
 import android.widget.RadioButton
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.IntentSenderRequest
@@ -40,6 +40,7 @@ import com.scanwhirl.app.databinding.DialogCompressBinding
 import com.scanwhirl.app.databinding.DialogResizeBinding
 import com.scanwhirl.app.databinding.ItemScanBinding
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Greeting
 import com.scanwhirl.app.util.ImageTools
@@ -90,12 +91,12 @@ class MainActivity : BaseActivity() {
      * raster. The user confirms this once — honesty over surprise.
      */
     private fun confirmEditPdf(uri: Uri) {
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.edit_pdf_note_title)
             .setMessage(R.string.pdf_rasterize_note)
             .setPositiveButton(R.string.continue_label) { _, _ -> startEditPdf(uri) }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     /** All documents on disk; refreshed off the main thread, queried in memory. */
@@ -238,7 +239,7 @@ class MainActivity : BaseActivity() {
                 !f.listFiles { p -> p.extension.equals("jpg", true) }.isNullOrEmpty()
         }?.maxByOrNull { it.lastModified() } ?: return
         val count = pending.listFiles { p -> p.extension.equals("jpg", true) }?.size ?: 0
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.resume_scan_title)
             .setMessage(getString(R.string.resume_scan_msg, count))
             .setPositiveButton(R.string.resume_scan_resume) { _, _ ->
@@ -247,7 +248,7 @@ class MainActivity : BaseActivity() {
                 )
             }
             .setNegativeButton(R.string.discard) { _, _ -> pending.deleteRecursively() }
-            .show()
+            .showSw(isSheet = false)
     }
 
     override fun onResume() {
@@ -260,7 +261,11 @@ class MainActivity : BaseActivity() {
             val background = withContext(Dispatchers.IO) {
                 com.scanwhirl.app.util.Wallpaper.drawable(this@MainActivity)
             }
-            binding.root.background = background
+            if (background != null) {
+                binding.root.background = background
+            } else {
+                binding.root.background = null
+            }
         }
     }
 
@@ -413,9 +418,11 @@ class MainActivity : BaseActivity() {
      */
     private fun showProPanel() {
         val pro = ProGate.isPro(this)
-        val builder = AlertDialog.Builder(this)
-            .setTitle(getString(R.string.settings_pro_title))
-            .setMessage(getString(if (pro) R.string.pro_panel_home else R.string.pro_panel_free))
+        val view = layoutInflater.inflate(R.layout.dialog_pro_panel, null)
+        view.findViewById<TextView>(R.id.proDossierStatus)?.text =
+            if (pro) "UNLOCKED IN TEST" else "ONE-TIME PURCHASE"
+        val builder = SwDialog.sheet(this)
+            .setView(view)
             .setPositiveButton(android.R.string.ok, null)
         if (com.scanwhirl.app.BuildConfig.TEST_BUILD) {
             builder.setNeutralButton(
@@ -433,7 +440,7 @@ class MainActivity : BaseActivity() {
                 ).show()
             }
         }
-        builder.show()
+        builder.showSw(isSheet = true)
     }
 
     private fun setSelectionMode(enabled: Boolean) {
@@ -475,16 +482,16 @@ class MainActivity : BaseActivity() {
             promptSetVaultPin { setVaultMode(true) }
             return
         }
-        val input = EditText(this).apply {
-            hint = getString(R.string.vault_pin_hint)
+        val (builder, input) = SwDialog.input(
+            this,
+            hint = getString(R.string.vault_pin_hint),
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        }
-        AlertDialog.Builder(this)
+        )
+        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        builder
             .setTitle(R.string.vault_enter_pin_title)
             .setMessage(R.string.vault_enter_pin_msg)
-            .setView(input)
             .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
                 val pin = input.text?.toString()?.trim().orEmpty()
                 if (Prefs.verifyVaultPin(this, pin)) {
@@ -494,20 +501,20 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun promptSetVaultPin(onSuccess: () -> Unit) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.vault_pin_hint)
+        val (builder, input) = SwDialog.input(
+            this,
+            hint = getString(R.string.vault_pin_hint),
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        }
-        AlertDialog.Builder(this)
+        )
+        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        builder
             .setTitle(R.string.vault_set_pin_title)
             .setMessage(R.string.vault_set_pin_msg)
-            .setView(input)
             .setPositiveButton(R.string.save) { _, _ ->
                 val pin = input.text?.toString()?.trim().orEmpty()
                 if (pin.length != 4 || !pin.all { it.isDigit() }) {
@@ -519,7 +526,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     internal fun setVaultMode(enabled: Boolean) {
@@ -571,7 +578,7 @@ class MainActivity : BaseActivity() {
 
     private fun promptLockOrUnlockScan(doc: ScanDocument) {
         if (doc.isLocked) {
-            AlertDialog.Builder(this)
+            SwDialog.sheet(this)
                 .setTitle(doc.name)
                 .setItems(
                     arrayOf(
@@ -597,22 +604,22 @@ class MainActivity : BaseActivity() {
                     }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showSw(isSheet = true)
         } else {
             promptNewPasswordForScan(doc)
         }
     }
 
     private fun promptNewPasswordForScan(doc: ScanDocument) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.protect_hint)
+        val (builder, input) = SwDialog.input(
+            this,
+            hint = getString(R.string.protect_hint),
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        AlertDialog.Builder(this)
+        )
+        builder
             .setTitle(R.string.protect_title)
             .setMessage(R.string.protect_note)
-            .setView(input)
             .setPositiveButton(R.string.protect_apply) { _, _ ->
                 val pw = input.text?.toString().orEmpty()
                 if (pw.isBlank()) {
@@ -633,7 +640,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun runLongImageForScan(doc: ScanDocument) {
@@ -686,7 +693,7 @@ class MainActivity : BaseActivity() {
      * rotation — the picture is otherwise exactly as taken.
      */
     private fun showScanChooser() {
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.scan_chooser_title)
             .setItems(
                 arrayOf(
@@ -700,7 +707,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     /**
@@ -719,7 +726,7 @@ class MainActivity : BaseActivity() {
             getString(R.string.source_device_pdf)
         )
         if (onImage != null) items += getString(R.string.source_gallery_image)
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(titleRes)
             .setItems(items.toTypedArray()) { _, which ->
                 when (which) {
@@ -735,7 +742,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     // ------------------------------------------------------------------
@@ -743,7 +750,7 @@ class MainActivity : BaseActivity() {
     // ------------------------------------------------------------------
 
     private fun chooseLockSource() {
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.btn_lock_unlock)
             .setItems(
                 arrayOf(
@@ -765,7 +772,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     /**
@@ -774,27 +781,27 @@ class MainActivity : BaseActivity() {
      * so before anything is written.
      */
     private fun lockDevicePdf(uri: Uri) {
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.lock_device_title)
             .setMessage(R.string.lock_device_msg)
             .setPositiveButton(R.string.continue_label) { _, _ ->
-                val input = EditText(this).apply {
-                    hint = getString(R.string.protect_hint)
+                val (builder, input) = SwDialog.input(
+                    this,
+                    hint = getString(R.string.protect_hint),
                     inputType = android.text.InputType.TYPE_CLASS_TEXT or
                         android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-                }
-                AlertDialog.Builder(this)
+                )
+                builder
                     .setTitle(R.string.protect_title)
                     .setMessage(R.string.protect_note)
-                    .setView(input)
                     .setPositiveButton(R.string.protect_apply) { _, _ ->
                         runLockDevicePdf(uri, input.text?.toString().orEmpty())
                     }
                     .setNegativeButton(android.R.string.cancel, null)
-                    .show()
+                    .showSw(isSheet = false)
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun runLockDevicePdf(uri: Uri, password: String) {
@@ -857,11 +864,11 @@ class MainActivity : BaseActivity() {
                 val doc = withContext(Dispatchers.IO) { repo.findLockedDocumentByHash(hash) }
                 progress.dismiss()
                 if (doc == null) {
-                    AlertDialog.Builder(this@MainActivity)
+                    SwDialog.card(this@MainActivity)
                         .setTitle(R.string.unlock_pdf_not_ours_title)
                         .setMessage(R.string.unlock_pdf_not_ours_msg)
                         .setPositiveButton(android.R.string.ok, null)
-                        .show()
+                        .showSw(isSheet = false)
                     return@launch
                 }
                 promptDeviceUnlockPassword(doc, uri)
@@ -877,15 +884,15 @@ class MainActivity : BaseActivity() {
     }
 
     private fun promptDeviceUnlockPassword(doc: ScanDocument, uri: Uri) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.protect_hint)
+        val (builder, input) = SwDialog.input(
+            this,
+            hint = getString(R.string.protect_hint),
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        AlertDialog.Builder(this)
+        )
+        builder
             .setTitle(R.string.unlock_pdf_title)
             .setMessage(getString(R.string.unlock_pdf_msg, doc.name))
-            .setView(input)
             .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
                 val pw = input.text?.toString().orEmpty()
                 if (repo.verifyPdfPassword(doc.id, pw)) {
@@ -895,7 +902,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     /** Exports a clean (password-free) copy of the locked scan's pages. */
@@ -997,7 +1004,7 @@ class MainActivity : BaseActivity() {
 
     /** Shared OCR result dialog: every line, copyable and shareable. */
     private fun showOcrTextDialog(title: String, shown: String) {
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(title)
             .setMessage(shown)
             .setPositiveButton(R.string.ocr_copy) { _, _ ->
@@ -1014,7 +1021,7 @@ class MainActivity : BaseActivity() {
                 startActivity(Intent.createChooser(send, getString(R.string.share_pdf)))
             }
             .setNegativeButton(R.string.close, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     // ------------------------------------------------------------------
@@ -1086,7 +1093,7 @@ class MainActivity : BaseActivity() {
             showProPanel()
             return
         }
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.vault_add_title)
             .setItems(
                 arrayOf(
@@ -1110,7 +1117,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun moveDocToVault(doc: ScanDocument) {
@@ -1224,7 +1231,7 @@ class MainActivity : BaseActivity() {
 
     /** Merge tool: choose saved scans or device PDFs. */
     private fun showMergeChooser() {
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.merge_chooser_title)
             .setItems(
                 arrayOf(
@@ -1236,7 +1243,7 @@ class MainActivity : BaseActivity() {
                 else startActivity(MergePdfActivity.intent(this))
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     // ------------------------------------------------------------------
@@ -1270,7 +1277,7 @@ class MainActivity : BaseActivity() {
         }
         val checked = BooleanArray(docs.size)
         val labels = docs.map { it.name }.toTypedArray()
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.merge_title)
             .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
                 checked[which] = isChecked
@@ -1284,19 +1291,18 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun promptMergeName(ids: List<String>) {
-        val input = EditText(this).apply { hint = getString(R.string.merge_name_hint) }
-        AlertDialog.Builder(this)
+        val (builder, input) = SwDialog.input(this, hint = getString(R.string.merge_name_hint))
+        builder
             .setTitle(R.string.merge_title)
-            .setView(input)
             .setPositiveButton(R.string.save) { _, _ ->
                 doMerge(ids, input.text?.toString())
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun promptMerge() {
@@ -1304,15 +1310,14 @@ class MainActivity : BaseActivity() {
             Toast.makeText(this, R.string.merge_needs_two, Toast.LENGTH_SHORT).show()
             return
         }
-        val input = EditText(this).apply { hint = getString(R.string.merge_name_hint) }
-        AlertDialog.Builder(this)
+        val (builder, input) = SwDialog.input(this, hint = getString(R.string.merge_name_hint))
+        builder
             .setTitle(R.string.merge_title)
-            .setView(input)
             .setPositiveButton(R.string.save) { _, _ ->
                 doMerge(selectedIds.toList(), input.text?.toString())
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun doMerge(ids: List<String>, name: String?) {
@@ -1375,7 +1380,7 @@ class MainActivity : BaseActivity() {
     private fun confirmDeleteSelected() {
         val ids = selectedIds.toList()
         if (ids.isEmpty()) return
-        AlertDialog.Builder(this)
+        SwDialog.danger(this)
             .setTitle(R.string.delete_selected_title)
             .setMessage(resources.getQuantityString(R.plurals.delete_selected_message, ids.size, ids.size))
             .setPositiveButton(R.string.delete) { _, _ ->
@@ -1384,7 +1389,7 @@ class MainActivity : BaseActivity() {
                 refreshList()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     // ------------------------------------------------------------------
@@ -1474,7 +1479,7 @@ class MainActivity : BaseActivity() {
             dialogBinding.checkAdvanced.isChecked = false
         }
 
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.resize_title)
             .setView(dialogBinding.root)
             .setPositiveButton(R.string.resize_action) { _, _ ->
@@ -1511,7 +1516,7 @@ class MainActivity : BaseActivity() {
                 )
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun derive(from: Int, fromOrig: Int, toOrig: Int): Int =
@@ -1577,7 +1582,7 @@ class MainActivity : BaseActivity() {
             pickCompressPdf.launch("application/pdf")
             return
         }
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.compress_title)
             .setItems(arrayOf(
                 getString(R.string.compress_source_scan),
@@ -1589,7 +1594,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     /** Name for an imported device PDF: real file name when we can read it. */
@@ -1608,13 +1613,13 @@ class MainActivity : BaseActivity() {
             Toast.makeText(this, R.string.empty_title, Toast.LENGTH_SHORT).show()
             return
         }
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(titleRes)
             .setItems(docs.map { it.name }.toTypedArray()) { _, which ->
                 onPicked(docs[which])
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     /** Compress sample pages at each level, then show the choice with sizes. */
@@ -1690,7 +1695,7 @@ class MainActivity : BaseActivity() {
         }
         (dialogBinding.levelGroup.getChildAt(1) as? RadioButton)?.isChecked = true
 
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.compress_level_title)
             .setView(dialogBinding.root)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -1709,7 +1714,7 @@ class MainActivity : BaseActivity() {
                 onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun runCompressScan(doc: ScanDocument, level: Level) {
@@ -1876,16 +1881,7 @@ class MainActivity : BaseActivity() {
     // ------------------------------------------------------------------
 
     private fun showProgress(titleRes: Int = R.string.progress_title): AlertDialog {
-        val bar = ProgressBar(this).apply {
-            isIndeterminate = true
-            val pad = (24 * resources.displayMetrics.density).toInt()
-            setPadding(pad, pad, pad, pad)
-        }
-        return AlertDialog.Builder(this)
-            .setTitle(titleRes)
-            .setView(bar)
-            .setCancelable(false)
-            .show()
+        return SwDialog.progress(this, titleRes = titleRes)
     }
 
     private fun readUriBytes(uri: Uri): ByteArray? = try {
@@ -1907,11 +1903,11 @@ class MainActivity : BaseActivity() {
         } catch (e: Exception) {
             "1.0"
         }
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.about_title)
             .setMessage(getString(R.string.about_message, version))
             .setPositiveButton(android.R.string.ok, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private val scannerLauncher =
@@ -2027,7 +2023,7 @@ class MainActivity : BaseActivity() {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.unlock_pdf_title)
             .setMessage(getString(R.string.unlock_pdf_msg, doc.name))
             .setView(input)
@@ -2053,7 +2049,7 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     /** Editing a locked scan asks for the password first (pages stay protected). */
@@ -2154,9 +2150,9 @@ class ScanListAdapter(
             binding.btnView.setOnClickListener { onView(doc) }
             binding.btnEdit.setOnClickListener { onEdit(doc) }
             val density = binding.root.resources.displayMetrics.density
-            binding.root.strokeWidth = if (selected) (2 * density).toInt() else 0
+            binding.root.strokeWidth = if (selected) (2 * density).toInt() else (1 * density).toInt()
             binding.root.strokeColor =
-                ContextCompat.getColor(binding.root.context, R.color.sf_primary)
+                ContextCompat.getColor(binding.root.context, if (selected) R.color.cyan_primary else R.color.cyan_border_idle)
 
             binding.root.setOnClickListener { onClick(doc) }
             binding.root.setOnLongClickListener {

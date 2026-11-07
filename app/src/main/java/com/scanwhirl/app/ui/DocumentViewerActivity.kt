@@ -456,11 +456,11 @@ class DocumentViewerActivity : BaseActivity() {
     /** Expands or collapses the Pro Tools drawer right above the bottom bar. */
     private fun toggleProTools() {
         if (!ProGate.isPro(this)) {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.settings_pro_title)
-                .setMessage(R.string.settings_pro_message)
+            val dossier = layoutInflater.inflate(R.layout.dialog_pro_panel, null)
+            SwDialog.sheet(this)
+                .setView(dossier)
                 .setPositiveButton(android.R.string.ok, null)
-                .show()
+                .showSw(isSheet = true)
             return
         }
         binding.proToolsPanel.isVisible = !binding.proToolsPanel.isVisible
@@ -513,7 +513,7 @@ class DocumentViewerActivity : BaseActivity() {
                 }
                 progress.dismiss()
                 val shown = text.ifBlank { getString(R.string.ocr_empty) }
-                AlertDialog.Builder(this@DocumentViewerActivity)
+                SwDialog.sheet(this@DocumentViewerActivity)
                     .setTitle(R.string.ocr_title)
                     .setMessage(shown)
                     .setPositiveButton(R.string.ocr_copy) { _, _ ->
@@ -530,7 +530,7 @@ class DocumentViewerActivity : BaseActivity() {
                         startActivity(Intent.createChooser(send, getString(R.string.share_pdf)))
                     }
                     .setNegativeButton(R.string.close, null)
-                    .show()
+                    .showSw(isSheet = true)
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -553,16 +553,16 @@ class DocumentViewerActivity : BaseActivity() {
             return
         }
         if (!Prefs.hasVaultPin(this)) {
-            val input = EditText(this).apply {
-                hint = getString(R.string.vault_pin_hint)
+            val (builder, input) = SwDialog.input(
+                this,
+                hint = getString(R.string.vault_pin_hint),
                 inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                     android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-                filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-            }
-            AlertDialog.Builder(this)
+            )
+            input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+            builder
                 .setTitle(R.string.vault_set_pin_title)
                 .setMessage(R.string.vault_set_pin_msg)
-                .setView(input)
                 .setPositiveButton(R.string.save) { _, _ ->
                     val pin = input.text?.toString()?.trim().orEmpty()
                     if (pin.length != 4 || !pin.all { it.isDigit() }) {
@@ -575,7 +575,7 @@ class DocumentViewerActivity : BaseActivity() {
                     }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showSw(isSheet = false)
         } else {
             repo.setVaulted(doc.id, true)
             Toast.makeText(this, R.string.vault_moved_in, Toast.LENGTH_LONG).show()
@@ -615,15 +615,15 @@ class DocumentViewerActivity : BaseActivity() {
         if (!ProGate.isPro(this)) return
         val doc = document ?: return
         withStoragePermission {
-            val input = android.widget.EditText(this@DocumentViewerActivity).apply {
-                hint = getString(R.string.protect_hint)
+            val (builder, input) = SwDialog.input(
+                this@DocumentViewerActivity,
+                hint = getString(R.string.protect_hint),
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or
                     android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-            AlertDialog.Builder(this@DocumentViewerActivity)
+            )
+            builder
                 .setTitle(R.string.protect_title)
                 .setMessage(R.string.protect_note)
-                .setView(input)
                 .setPositiveButton(R.string.protect_apply) { _, _ ->
                     val password = input.text?.toString().orEmpty()
                     if (password.isBlank()) {
@@ -652,15 +652,15 @@ class DocumentViewerActivity : BaseActivity() {
                     }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showSw(isSheet = false)
         }
     }
 
-    private fun promptRename() {        val doc = document ?: return
-        val input = EditText(this).apply { setText(doc.name) }
-        AlertDialog.Builder(this)
+    private fun promptRename() {
+        val doc = document ?: return
+        val (builder, input) = SwDialog.input(this, hint = getString(R.string.rename_title), initial = doc.name)
+        builder
             .setTitle(R.string.rename_title)
-            .setView(input)
             .setPositiveButton(R.string.save) { _, _ ->
                 val newName = input.text?.toString()
                 if (!newName.isNullOrBlank()) {
@@ -670,7 +670,7 @@ class DocumentViewerActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     /** Globe ring picker: Study / Receipts / IDs / Forms / Other. */
@@ -678,7 +678,7 @@ class DocumentViewerActivity : BaseActivity() {
         val doc = document ?: return
         val cats = com.scanwhirl.app.util.CategoryRules.ALL.toTypedArray()
         val current = cats.indexOf(doc.category).coerceAtLeast(0)
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.categorize_title)
             .setSingleChoiceItems(cats, current) { dialog, which ->
                 lifecycleScope.launch {
@@ -695,7 +695,7 @@ class DocumentViewerActivity : BaseActivity() {
                 dialog.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun promptDownload() {
@@ -706,7 +706,7 @@ class DocumentViewerActivity : BaseActivity() {
             getString(R.string.save_this_page),
             getString(R.string.save_all_pages)
         )
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.save_to_device)
             .setItems(items) { _, which ->
                 val indices: List<Int> =
@@ -715,7 +715,7 @@ class DocumentViewerActivity : BaseActivity() {
                 downloadPages(indices)
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun downloadPages(indices: List<Int>) {
@@ -777,13 +777,13 @@ class DocumentViewerActivity : BaseActivity() {
             finish()
             return
         }
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.save_changes_title)
             .setMessage(R.string.save_changes_msg)
             .setPositiveButton(R.string.overwrite_pdf) { _, _ -> finish() }
             .setNeutralButton(R.string.save_as_new) { _, _ -> saveAsNewDocument() }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     /**
@@ -862,20 +862,11 @@ class DocumentViewerActivity : BaseActivity() {
 
     /** Simple determinate-free progress dialog for Pro export jobs. */
     private fun showProgress(): androidx.appcompat.app.AlertDialog {
-        val bar = android.widget.ProgressBar(this).apply {
-            isIndeterminate = true
-            val pad = (24 * resources.displayMetrics.density).toInt()
-            setPadding(pad, pad, pad, pad)
-        }
-        return androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle(R.string.progress_title)
-            .setView(bar)
-            .setCancelable(false)
-            .show()
+        return SwDialog.progress(this, titleRes = R.string.progress_title)
     }
 
     private fun confirmDelete(doc: ScanDocument) {
-        AlertDialog.Builder(this)
+        SwDialog.danger(this)
             .setTitle(R.string.delete_title)
             .setMessage(getString(R.string.delete_message, doc.name))
             .setPositiveButton(R.string.delete) { _, _ ->
@@ -883,7 +874,7 @@ class DocumentViewerActivity : BaseActivity() {
                 finish()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     companion object {

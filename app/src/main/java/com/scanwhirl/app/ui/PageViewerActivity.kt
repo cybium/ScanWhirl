@@ -240,7 +240,7 @@ class PageViewerActivity : BaseActivity() {
         if (dir != null) {
             // Staging: the choice is virtual, persisted for the review screen.
             val checked = filters.indexOf(stagingFilters[file.path] ?: ScanFilter.ORIGINAL)
-            AlertDialog.Builder(this)
+            SwDialog.sheet(this)
                 .setTitle(R.string.filter_title)
                 .setSingleChoiceItems(
                     filters.map { getString(it.labelRes) }.toTypedArray(),
@@ -255,7 +255,7 @@ class PageViewerActivity : BaseActivity() {
                     updateIndicator()
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showSw(isSheet = true)
             return
         }
         val id = docId ?: return
@@ -266,7 +266,7 @@ class PageViewerActivity : BaseActivity() {
                 val checked = filters.indexOf(
                     filterChoice[file.path] ?: ScanFilter.ORIGINAL
                 )
-                AlertDialog.Builder(this@PageViewerActivity)
+                SwDialog.sheet(this@PageViewerActivity)
                     .setTitle(R.string.filter_title)
                     .setSingleChoiceItems(
                         filters.map { getString(it.labelRes) }.toTypedArray(),
@@ -276,7 +276,7 @@ class PageViewerActivity : BaseActivity() {
                         applyFilter(id, pos, file, filters[which])
                     }
                     .setNegativeButton(android.R.string.cancel, null)
-                    .show()
+                    .showSw(isSheet = true)
             } catch (e: Exception) {
                 Toast.makeText(
                     this@PageViewerActivity,
@@ -352,7 +352,7 @@ class PageViewerActivity : BaseActivity() {
 
     /** Last page of an unsaved scan: deleting it means discarding the scan. */
     private fun confirmStagingDiscard() {
-        AlertDialog.Builder(this)
+        SwDialog.danger(this)
             .setTitle(R.string.review_discard_title)
             .setMessage(R.string.review_discard_msg)
             .setPositiveButton(R.string.discard) { _, _ ->
@@ -360,7 +360,7 @@ class PageViewerActivity : BaseActivity() {
                 finish()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     // ------------------------------------------------------------------

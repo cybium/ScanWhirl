@@ -128,25 +128,24 @@ class MergePdfActivity : BaseActivity() {
             Toast.makeText(this, R.string.merge_needs_two_pdfs, Toast.LENGTH_SHORT).show()
             return
         }
-        val input = EditText(this).apply { hint = getString(R.string.merge_name_hint) }
-        AlertDialog.Builder(this)
+        val (builder, input) = SwDialog.input(this, hint = getString(R.string.merge_name_hint))
+        builder
             .setTitle(R.string.merge_builder_title)
-            .setView(input)
             .setPositiveButton(R.string.merge_action) { _, _ ->
                 confirmMerge(input.text?.toString())
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     /** Device-PDF merge rasterizes each page; the user confirms that once. */
     private fun confirmMerge(name: String?) {
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.merge_builder_title)
             .setMessage(R.string.pdf_rasterize_note)
             .setPositiveButton(R.string.continue_label) { _, _ -> doMerge(name) }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun doMerge(name: String?) {
@@ -178,16 +177,7 @@ class MergePdfActivity : BaseActivity() {
     }
 
     private fun showProgress(): android.app.Dialog {
-        val bar = android.widget.ProgressBar(this).apply {
-            isIndeterminate = true
-            val pad = (24 * resources.displayMetrics.density).toInt()
-            setPadding(pad, pad, pad, pad)
-        }
-        return AlertDialog.Builder(this)
-            .setTitle(R.string.progress_title)
-            .setView(bar)
-            .setCancelable(false)
-            .show()
+        return SwDialog.progress(this, titleRes = R.string.progress_title)
     }
 
     private inner class PickAdapter : RecyclerView.Adapter<VH>() {

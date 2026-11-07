@@ -16,8 +16,8 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:navigationIcon="?attr/homeAsUpIndicator"
-            app:navigationIconTint="#FF1A1B20"
-            app:titleTextColor="#FF1A1B20" />
+            app:navigationIconTint="@color/text_hologram_hi"
+            app:titleTextColor="@color/text_hologram_hi" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <FrameLayout

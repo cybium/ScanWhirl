@@ -132,7 +132,7 @@ class SettingsActivity : BaseActivity() {
             getString(R.string.theme_system)
         )
         val checked = values.indexOf(Prefs.themeMode(this)).coerceAtLeast(0)
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.settings_theme)
             .setSingleChoiceItems(labels, checked) { dialog, which ->
                 Prefs.setThemeMode(this, values[which])
@@ -141,7 +141,7 @@ class SettingsActivity : BaseActivity() {
                 updateSummaries()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun chooseFont() {
@@ -152,7 +152,7 @@ class SettingsActivity : BaseActivity() {
             getString(R.string.font_mono)
         )
         val checked = values.indexOf(Prefs.fontStyle(this)).coerceAtLeast(0)
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.settings_font)
             .setSingleChoiceItems(labels, checked) { dialog, which ->
                 Prefs.setFontStyle(this, values[which])
@@ -160,7 +160,7 @@ class SettingsActivity : BaseActivity() {
                 recreate()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun chooseLanguage() {
@@ -171,7 +171,7 @@ class SettingsActivity : BaseActivity() {
             .toMutableList()
         labels.add(getString(R.string.language_more))
         val checked = tags.indexOf(Prefs.localeTag(this)).coerceAtLeast(0)
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.settings_language)
             .setSingleChoiceItems(labels.toTypedArray(), checked) { dialog, which ->
                 dialog.dismiss()
@@ -182,7 +182,7 @@ class SettingsActivity : BaseActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun applyLanguage(tag: String) {
@@ -211,7 +211,7 @@ class SettingsActivity : BaseActivity() {
         val values = arrayOf(Prefs.VIEWER_IN_APP, Prefs.VIEWER_SYSTEM)
         val labels = arrayOf(getString(R.string.viewer_in_app), getString(R.string.viewer_system))
         val checked = values.indexOf(Prefs.defaultViewer(this)).coerceAtLeast(0)
-        AlertDialog.Builder(this)
+        SwDialog.sheet(this)
             .setTitle(R.string.settings_default_viewer)
             .setSingleChoiceItems(labels, checked) { dialog, which ->
                 Prefs.setDefaultViewer(this, values[which])
@@ -219,7 +219,7 @@ class SettingsActivity : BaseActivity() {
                 updateSummaries()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .showSw(isSheet = true)
     }
 
     private fun showAbout() {
@@ -231,11 +231,11 @@ class SettingsActivity : BaseActivity() {
         val view = com.scanwhirl.app.databinding.DialogAboutBinding
             .inflate(layoutInflater)
         view.aboutText.text = getString(R.string.about_message, version)
-        AlertDialog.Builder(this)
+        SwDialog.card(this)
             .setTitle(R.string.about_title)
             .setView(view.root)
             .setPositiveButton(android.R.string.ok, null)
-            .show()
+            .showSw(isSheet = false)
     }
 
     private fun languageLabel(tag: String): String = when (tag) {

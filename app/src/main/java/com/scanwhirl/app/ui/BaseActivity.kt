@@ -6,8 +6,9 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.util.Prefs
 
 /**
- * Applies the user's font-style theme overlay before the activity inflates.
- * All screens extend this so the Settings choice applies everywhere.
+ * Base activity for the Orbital design system.
+ * Sets the window background to [SpaceBackgroundDrawable] so all screens
+ * share a continuous cosmic backdrop, and applies font overlays before inflation.
  */
 abstract class BaseActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,5 +17,6 @@ abstract class BaseActivity : AppCompatActivity() {
             Prefs.FONT_MONO -> setTheme(R.style.Theme_ScanWhirl_Mono)
         }
         super.onCreate(savedInstanceState)
+        window.setBackgroundDrawable(SpaceBackgroundDrawable())
     }
 }
