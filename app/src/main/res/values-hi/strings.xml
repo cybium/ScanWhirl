@@ -2,7 +2,7 @@
 <resources>
     <string name="tab_my_scans">मेरे स्कैन</string>
     <string name="tab_device_pdfs">डिवाइस PDF</string>
-    <string name="search_hint">खोजें</string>
+    <string name="search_hint">दस्तावेज़ खोजें</string>
     <string name="sort">क्रमबद्ध करें</string>
     <string name="sort_name">नाम</string>
     <string name="sort_date">बनाने की तारीख</string>

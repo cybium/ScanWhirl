@@ -135,6 +135,12 @@ class MainActivity : BaseActivity(), HomeHost {
     /** T3.4 — active chip-rail filter; `null` means the "All" chip. */
     private var selectedCategory: String? = null
 
+    /** T3.5 — OCR "In text" toggle; gated by Pro inside HomeState.inText. */
+    private var searchInText = true
+
+    /** Documents in the list as last submitted; drives the list header count. */
+    private var shownCount = 0
+
     /** Edit tool: pick one device PDF and open it as editable pages. */
     private val pickEditPdf =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -255,10 +261,28 @@ class MainActivity : BaseActivity(), HomeHost {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
                 query = s?.toString()?.trim().orEmpty()
+                // T3.5: the clear (×) lives only while there is text to clear.
+                binding.btnClearSearch.isVisible = !s.isNullOrEmpty()
                 applyList()
             }
         })
-        binding.btnSort.setOnClickListener { showSortMenu() }        // Tapping the crown badge (or the whole title block) opens the Pro panel.
+        binding.sortSelector.setOnClickListener { showSortMenu() }
+        binding.btnSelect.setOnClickListener { setSelectionMode(true) }
+        binding.btnClearSearch.setOnClickListener {
+            binding.searchInput.setText("")
+            binding.searchInput.requestFocus()
+        }
+        // T3.5: the "In text" chip exists only for Pro, only while the field
+        // has focus — it replaced the long Pro hint (R7/Q7).
+        binding.searchInput.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+            binding.chipInText.isVisible = hasFocus && ProGate.isPro(this)
+        }
+        binding.chipInText.setOnClickListener {
+            // CompoundButton toggles checked before the click listener runs.
+            searchInText = binding.chipInText.isChecked
+            applyList()
+        }
+        // Tapping the crown badge (or the whole title block) opens the Pro panel.
         binding.proBadge.setOnClickListener { showProPanel() }
         binding.titleBlock.setOnClickListener { showProPanel() }
 
@@ -374,7 +398,7 @@ class MainActivity : BaseActivity(), HomeHost {
             query = query,
             category = selectedCategory,
             sort = Prefs.sortMode(this),
-            inText = ProGate.isPro(this),
+            inText = searchInText && ProGate.isPro(this),
             includeVaulted = vaultMode
         )
         val sorted = HomeFilter.apply(allDocs, state) { repo.ocrDoc(it) }
@@ -387,7 +411,8 @@ class MainActivity : BaseActivity(), HomeHost {
         // ocrMatches bookkeeping is needed.
         binding.emptyState.isVisible = sorted.isEmpty()
         binding.scanList.isVisible = true
-        updateSortLabel()
+        shownCount = sorted.size
+        updateListHeader()
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
@@ -475,17 +500,34 @@ class MainActivity : BaseActivity(), HomeHost {
         applyList()
     }
 
-    /** Sort pill label: mirrors [Prefs.sortMode] so the toolbar always says what's active. */
-    private fun updateSortLabel() {
+    /**
+     * List header (T3.5): "N documents" / "N in Category", the sort selector
+     * label mirroring [Prefs.sortMode], and Select. Hidden while the list is
+     * empty (the empty state speaks instead) or while selecting (the
+     * contextual header takes over in T3.7).
+     */
+    private fun updateListHeader() {
+        val show = shownCount > 0 && !selectionMode
+        binding.listHeader.isVisible = show
+        if (!show) return
+
+        val cat = selectedCategory
+        binding.headerCount.text =
+            if (cat == null) {
+                resources.getQuantityString(R.plurals.list_count, shownCount, shownCount)
+            } else {
+                getString(R.string.list_count_category, shownCount, CategoryRules.label(cat))
+            }
+
         val label = when (Prefs.sortMode(this)) {
             Prefs.SORT_NAME -> R.string.sort_name
             Prefs.SORT_MODIFIED -> R.string.sort_modified
             Prefs.SORT_CATEGORY -> R.string.sort_category
             else -> R.string.sort_date
         }
-        binding.sortLabel.setText(label)
-        // Keep the pill's a11y announcement in sync with the visible label.
-        binding.btnSort.contentDescription =
+        binding.sortSelector.text = getString(label) + " ▾"
+        // Keep the a11y announcement in sync with the visible label.
+        binding.sortSelector.contentDescription =
             getString(R.string.sort) + ", " + getString(label)
     }
 
@@ -523,7 +565,8 @@ class MainActivity : BaseActivity(), HomeHost {
     /**
      * Crown badge next to the app name: gold PRO unlocked, dim FREE otherwise.
      * In Free, the Pro Suite card is hidden entirely — the badge is the only
-     * entry point to the pitch, and OCR search hint falls back to plain search.
+     * entry point to the pitch. (The search hint no longer changes with Pro:
+     * T3.5 replaced it with the "In text" chip.)
      */
     private fun updateProBadge() {
         val pro = ProGate.isPro(this)
@@ -546,8 +589,6 @@ class MainActivity : BaseActivity(), HomeHost {
             binding.proSuiteChevron.rotation = 0f
         }
         binding.proSuiteCard.isVisible = pro
-        binding.searchInput.hint =
-            getString(if (pro) R.string.search_hint_pro else R.string.search_hint)
     }
 
     /**
@@ -602,6 +643,7 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.toolsRow.isVisible = !enabled && !vaultMode
         applyToolbarTitle()
         updateStatusLine()
+        updateListHeader()
         invalidateOptionsMenu()
     }
 
@@ -785,15 +827,17 @@ class MainActivity : BaseActivity(), HomeHost {
     // ------------------------------------------------------------------
 
     private fun showSortMenu() {
-        val popup = PopupMenu(this, binding.btnSort)
+        val popup = PopupMenu(this, binding.sortSelector)
         popup.menu.add(0, 0, 0, getString(R.string.sort_name))
         popup.menu.add(0, 1, 1, getString(R.string.sort_date))
         popup.menu.add(0, 2, 2, getString(R.string.sort_modified))
+        popup.menu.add(0, 3, 3, getString(R.string.sort_category))
         popup.setOnMenuItemClickListener { item ->
             val mode = when (item.itemId) {
                 0 -> Prefs.SORT_NAME
                 1 -> Prefs.SORT_DATE
-                else -> Prefs.SORT_MODIFIED
+                2 -> Prefs.SORT_MODIFIED
+                else -> Prefs.SORT_CATEGORY
             }
             Prefs.setSortMode(this, mode)
             applyList()

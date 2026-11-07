@@ -268,4 +268,183 @@ class HomeScreenTest {
             }
         }
     }
+
+    // ---- T3.5: search bar + list header --------------------------------
+
+    @Test
+    fun `search hint reads Search documents`() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
+                assertEquals("Search documents", search.hint.toString())
+            }
+        }
+    }
+
+    @Test
+    fun `clear button appears while typing and wipes the query`() {
+        seed("Alpha notes", CategoryRules.OTHER)
+        seed("Beta receipt", CategoryRules.OTHER)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
+                val clear = activity.findViewById<android.view.View>(R.id.btnClearSearch)
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+
+                assertFalse("hidden with an empty box", clear.isVisible)
+
+                search.setText("Alpha")
+                assertTrue("query narrows the list", pollUntil { list.adapter!!.itemCount == 1 })
+                assertTrue("clear shows with text", clear.isVisible)
+
+                clear.performClick()
+                assertTrue("query wiped", pollUntil { list.adapter!!.itemCount == 2 })
+                assertFalse("clear hides again", clear.isVisible)
+                assertEquals("", search.text.toString())
+            }
+        }
+    }
+
+    @Test
+    fun `in text chip toggles OCR matching for pro`() {
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, true)
+        val id = seed("Scanned bill", CategoryRules.OTHER)
+        runBlocking {
+            repo.writeOcr(id, linkedMapOf("page_001.jpg" to "hologram invoice"))
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
+                val chip = activity.findViewById<Chip>(R.id.chipInText)
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+
+                search.requestFocus()
+                assertTrue("chip shows for Pro on focus", chip.isVisible)
+                assertTrue("OCR matching starts on", chip.isChecked)
+
+                search.setText("hologram")
+                assertTrue("matches OCR text", pollUntil { list.adapter!!.itemCount == 1 })
+
+                chip.performClick()
+                assertFalse("tap turns OCR matching off", chip.isChecked)
+                assertTrue("names only now", pollUntil { list.adapter!!.itemCount == 0 })
+
+                search.clearFocus()
+                assertFalse("chip follows focus out", chip.isVisible)
+            }
+        }
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
+    }
+
+    @Test
+    fun `list header counts documents, offers sort and select`() {
+        com.scanwhirl.app.util.Prefs.setSortMode(app, com.scanwhirl.app.util.Prefs.SORT_DATE)
+        seed("Lecture notes", CategoryRules.STUDY)
+        seed("Electricity bill", CategoryRules.RECEIPTS)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val header = activity.findViewById<android.view.View>(R.id.listHeader)
+                assertTrue("header shows with a non-empty list", header.isVisible)
+                assertEquals(
+                    "2 documents",
+                    activity.findViewById<android.widget.TextView>(R.id.headerCount).text.toString()
+                )
+                assertEquals(
+                    "${activity.getString(R.string.sort_date)} ▾",
+                    activity.findViewById<android.widget.TextView>(R.id.sortSelector).text.toString()
+                )
+                assertEquals(
+                    "Select",
+                    activity.findViewById<android.widget.TextView>(R.id.btnSelect).text.toString()
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `list header counts within the selected category`() {
+        seed("Lecture notes", CategoryRules.STUDY)
+        seed("Electricity bill", CategoryRules.RECEIPTS)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val group = activity.findViewById<ChipGroup>(R.id.chipGroup)
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                val count = activity.findViewById<android.widget.TextView>(R.id.headerCount)
+
+                chipFor(group, CategoryRules.STUDY).performClick()
+                assertEquals("1 in Study", count.text.toString())
+                assertTrue(pollUntil { list.adapter!!.itemCount == 1 })
+
+                chipFor(group, CategoryRules.STUDY).performClick()
+                assertEquals("2 documents", count.text.toString())
+            }
+        }
+    }
+
+    @Test
+    fun `Select enters selection mode and hides the header until back`() {
+        seed("Lecture notes", CategoryRules.STUDY)
+        seed("Electricity bill", CategoryRules.RECEIPTS)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val header = activity.findViewById<android.view.View>(R.id.listHeader)
+                val toolbar = activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+                assertTrue(header.isVisible)
+
+                activity.findViewById<android.view.View>(R.id.btnSelect).performClick()
+                assertFalse("contextual header takes over", header.isVisible)
+                assertEquals("0 selected", toolbar.title?.toString())
+
+                activity.onBackPressed()
+                assertTrue("header returns with the list", header.isVisible)
+            }
+        }
+    }
+
+    @Test
+    fun `sort selector opens a four-item menu and applies the choice`() {
+        com.scanwhirl.app.util.Prefs.setSortMode(app, com.scanwhirl.app.util.Prefs.SORT_DATE)
+        seed("Zebra plan", CategoryRules.OTHER)
+        seed("Apple plan", CategoryRules.OTHER)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val sortSel = activity.findViewById<android.widget.TextView>(R.id.sortSelector)
+                sortSel.performClick()
+
+                val popup = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu()
+                assertNotNull("sort menu opens", popup)
+                val titles = (0 until popup.menu.size()).map { popup.menu.getItem(it).title.toString() }
+                assertEquals(
+                    listOf(
+                        activity.getString(R.string.sort_name),
+                        activity.getString(R.string.sort_date),
+                        activity.getString(R.string.sort_modified),
+                        activity.getString(R.string.sort_category)
+                    ),
+                    titles
+                )
+
+                // Choose "Name" through the menu, exactly as a tap would.
+                val nameItem = (0 until popup.menu.size())
+                    .map { popup.menu.getItem(it) }
+                    .first { it.title == activity.getString(R.string.sort_name) }
+                popup.menu.performIdentifierAction(nameItem.itemId, 0)
+
+                assertTrue(
+                    "pref switched to name",
+                    pollUntil { com.scanwhirl.app.util.Prefs.sortMode(app) == com.scanwhirl.app.util.Prefs.SORT_NAME }
+                )
+                assertEquals(
+                    "${activity.getString(R.string.sort_name)} ▾",
+                    sortSel.text.toString()
+                )
+            }
+        }
+    }
 }

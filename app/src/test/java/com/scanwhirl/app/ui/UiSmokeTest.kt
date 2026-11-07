@@ -1679,6 +1679,14 @@ class UiSmokeTest {
                     app.getString(R.string.search_hint),
                     activity.findViewById<android.widget.EditText>(R.id.searchInput).hint.toString()
                 )
+                // T3.5: Free never gets the "In text" chip, even focused.
+                val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
+                search.requestFocus()
+                assertFalse(
+                    "no In text chip in Free",
+                    activity.findViewById<android.view.View>(R.id.chipInText).isVisible
+                )
+                search.clearFocus()
             }
         }
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
@@ -1695,10 +1703,20 @@ class UiSmokeTest {
                     "PRO",
                     activity.findViewById<android.widget.TextView>(R.id.proBadge).text.toString()
                 )
-                assertEquals(
-                    app.getString(R.string.search_hint_pro),
-                    activity.findViewById<android.widget.EditText>(R.id.searchInput).hint.toString()
+                // T3.5: the hint no longer changes with Pro — the "In text"
+                // chip under the field takes over that job, on focus only.
+                val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
+                assertEquals(app.getString(R.string.search_hint), search.hint.toString())
+                assertFalse(
+                    "chip waits for focus",
+                    activity.findViewById<android.view.View>(R.id.chipInText).isVisible
                 )
+                search.requestFocus()
+                assertTrue(
+                    "In text chip shows for Pro on focus",
+                    activity.findViewById<android.view.View>(R.id.chipInText).isVisible
+                )
+                search.clearFocus()
             }
         }
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)

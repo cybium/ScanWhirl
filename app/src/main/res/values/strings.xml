@@ -151,15 +151,23 @@
     <string name="remove">Remove</string>
     <string name="preview">Preview</string>
 
-    <string name="search_hint">Search</string>
-    <string name="search_hint_pro">Search name or scanned text</string>
+    <string name="search_hint">Search documents</string>
     <string name="sort">Sort</string>
     <string name="sort_name">Name</string>
     <string name="sort_date">Date created</string>
     <string name="sort_modified">Last modified</string>
     <string name="sort_category">Category</string>
-    <!-- test26 T3.4: the chip rail's "show everything" chip. -->
+    <!-- test26 T3.5: the chip rail's "show everything" chip. -->
     <string name="chip_all">All</string>
+    <!-- test26 T3.5: search bar + list header. -->
+    <string name="search_clear">Clear search</string>
+    <string name="in_text_chip">In text</string>
+    <string name="select">Select</string>
+    <string name="list_count_category">%1$d in %2$s</string>
+    <plurals name="list_count">
+        <item quantity="one">%1$d document</item>
+        <item quantity="other">%1$d documents</item>
+    </plurals>
     <string name="tab_my_scans">My scans</string>
     <string name="tab_device_pdfs">Device PDFs</string>
     <string name="device_empty">No PDFs found on this device. Pick one to open it in ScanWhirl.</string>

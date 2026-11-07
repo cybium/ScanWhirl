@@ -120,41 +120,36 @@
                     android:textColorHint="@color/text_hologram_dim"
                     android:textSize="14sp" />
 
-                <!-- Sort pill (test25): ic_sort + live sortLabel. Was an ImageButton. -->
-                <LinearLayout
-                    android:id="@+id/btnSort"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:layout_marginStart="4dp"
-                    android:background="@drawable/bg_search_bar"
-                    android:clickable="true"
-                    android:contentDescription="@string/sort"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="12dp">
-
-                    <ImageView
-                        android:layout_width="16dp"
-                        android:layout_height="16dp"
-                        android:contentDescription="@null"
-                        android:src="@drawable/ic_sort"
-                        app:tint="@color/cyan_primary" />
-
-                    <TextView
-                        android:id="@+id/sortLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:text="@string/sort_date"
-                        android:textColor="@color/cyan_primary"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
+                <!-- test26 T3.5: clear (×) — appears only while there is text
+                     to clear. The sort pill left the bar (R7/Q7): sorting now
+                     lives in the list header. -->
+                <ImageView
+                    android:id="@+id/btnClearSearch"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:contentDescription="@string/search_clear"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_close"
+                    android:visibility="gone"
+                    app:tint="@color/cyan_dim" />
             </LinearLayout>
+
+            <!-- test26 T3.5: "In text" OCR toggle — only for Pro, only while
+                 the search field has focus (replaces the old long Pro hint,
+                 R7/Q7). Checked = OCR text may match too. -->
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipInText"
+                style="@style/Widget.ScanWhirl.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start"
+                android:layout_marginStart="16dp"
+                android:layout_marginBottom="6dp"
+                android:checked="true"
+                android:text="@string/in_text_chip"
+                android:textColor="@color/chip_in_text_text"
+                android:visibility="gone"
+                app:chipStrokeColor="@color/chip_in_text_stroke" />
         </com.google.android.material.appbar.AppBarLayout>
 
         <!-- test26 T3.1/T3.4: category chip rail. Built in code by
@@ -187,7 +182,9 @@
             android:orientation="vertical"
             android:visibility="gone" />
 
-        <!-- test26 T3.1: list header (count · sort · select) — filled in T3.5. -->
+        <!-- test26 T3.1/T3.5: list header — "N documents"/"N in Category",
+             sort selector (PopupMenu), Select. Built in code; GONE in XML
+             until the first updateListHeader() runs. -->
         <LinearLayout
             android:id="@+id/listHeader"
             android:layout_width="match_parent"
@@ -196,7 +193,47 @@
             android:orientation="horizontal"
             android:paddingHorizontal="16dp"
             android:paddingVertical="8dp"
-            android:visibility="gone" />
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/headerCount"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/cyan_dim"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/sortSelector"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="20dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:contentDescription="@string/sort"
+                android:focusable="true"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="2dp"
+                android:textColor="@color/cyan_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnSelect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="2dp"
+                android:text="@string/select"
+                android:textColor="@color/cyan_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <!-- Hidden Vault active banner (shown only when 4-digit PIN Vault is open) -->
         <com.google.android.material.card.MaterialCardView
