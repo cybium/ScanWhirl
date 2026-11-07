@@ -17,6 +17,11 @@
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
+> **STATUS (2026-11-07):** T0–T2 done, **G1 PASSED**; Phase 3 in progress — **T3.1–T3.6
+> committed** (HEAD `bbf52a4` on `test26-redesign`), suite **255 tests / 3 known-reds**.
+> Next: T3.7 → T3.8 → T3.9 → phase-end full build → **G2 (alpha2)**.
+> As-run record: `docs/TEST26_LOG.md` · session handoff: `docs/TEST26_HANDOFF.md`.
+
 ---
 
 ## 0. How to use this file (read this first, coding agent)
