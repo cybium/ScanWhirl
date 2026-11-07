@@ -40,9 +40,10 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityMainBinding
 import com.scanwhirl.app.databinding.DialogCompressBinding
-import com.scanwhirl.app.databinding.DialogResizeBinding
 import com.scanwhirl.app.databinding.ItemScanBinding
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.tools.HomeHost
+import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.DownloadSaver
@@ -65,15 +66,17 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlin.math.roundToInt
 
-class MainActivity : BaseActivity() {
+class MainActivity : BaseActivity(), HomeHost {
 
     private lateinit var binding: ActivityMainBinding
     private val adapter by lazy {
         ScanListAdapter(::onDocClick, ::onDocView, ::onDocEdit, ::onDocLongClick)
     }
     private val repo by lazy { (application as ScanWhirlApp).repository }
+
+    /** Tool flows extracted in Phase 2; launchers stay in this Activity. */
+    private val resizeFlow by lazy { ResizeFlow(this, repo, this) }
 
     private var selectionMode = false
     private val selectedIds = LinkedHashSet<String>()
@@ -121,7 +124,7 @@ class MainActivity : BaseActivity() {
 
     private val pickResizeImage = registerForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let { startResize(it) } }
+    ) { uri -> uri?.let { resizeFlow.start(it) } }
 
     private val pickCompressPdf = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -331,7 +334,7 @@ class MainActivity : BaseActivity() {
         else -> super.onOptionsItemSelected(item)
     }
 
-    private fun refreshList() {
+    override fun refreshList() {
         lifecycleScope.launch {
             allDocs = withContext(Dispatchers.IO) {
                 if (vaultMode) repo.listVaultDocuments() else repo.listDocuments()
@@ -1447,172 +1450,6 @@ class MainActivity : BaseActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Tool: resize image
-    // ------------------------------------------------------------------
-
-    private fun startResize(uri: Uri) {
-        val bytes = readUriBytes(uri) ?: run {
-            Toast.makeText(this, getString(R.string.resize_failed, "unreadable image"), Toast.LENGTH_LONG).show()
-            return
-        }
-        val size = ImageTools.imageSize(bytes) ?: run {
-            Toast.makeText(this, getString(R.string.resize_failed, "not an image"), Toast.LENGTH_LONG).show()
-            return
-        }
-        val name = repo.displayNameOf(uri) ?: "image"
-        showResizeDialog(bytes, size.first, size.second, name)
-    }
-
-    private fun showResizeDialog(bytes: ByteArray, origW: Int, origH: Int, name: String) {
-        val dialogBinding = DialogResizeBinding.inflate(layoutInflater)
-        dialogBinding.fileInfo.text = getString(
-            R.string.resize_file_info, name, formatBytes(bytes.size.toLong()), origW, origH
-        )
-
-        val presetValues = mapOf(
-            R.id.preset50 to "50 KB",
-            R.id.preset100 to "100 KB",
-            R.id.preset200 to "200 KB",
-            R.id.preset500 to "500 KB"
-        )
-
-        // Preset chip fills the size field; typing a custom size deselects the chip.
-        var suppressPreset = false
-        dialogBinding.presetGroup.setOnCheckedChangeListener { _, checkedId ->
-            val value = presetValues[checkedId] ?: return@setOnCheckedChangeListener
-            suppressPreset = true
-            dialogBinding.editMaxSize.setText(value)
-            suppressPreset = false
-        }
-        dialogBinding.editMaxSize.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (suppressPreset) return
-                val checkedId = dialogBinding.presetGroup.checkedChipId
-                val text = s?.toString()?.trim().orEmpty()
-                if (checkedId != -1 && presetValues[checkedId]?.equals(text, true) != true) {
-                    dialogBinding.presetGroup.clearCheck()
-                }
-            }
-        })
-
-        dialogBinding.checkAdvanced.setOnCheckedChangeListener { _, checked ->
-            dialogBinding.advancedBox.isVisible = checked
-        }
-
-        var suppress = false
-        val watcher = object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (suppress || !dialogBinding.checkRatio.isChecked) return
-                val editingHeight = s === dialogBinding.editHeight.text
-                val value = s?.toString()?.toIntOrNull()?.takeIf { it > 0 } ?: return
-                suppress = true
-                if (editingHeight) {
-                    val w = (value.toFloat() * origW / origH).roundToInt().coerceIn(1, 12000)
-                    dialogBinding.editWidth.setText(intText(w))
-                } else {
-                    val h = (value.toFloat() * origH / origW).roundToInt().coerceIn(1, 12000)
-                    dialogBinding.editHeight.setText(intText(h))
-                }
-                suppress = false
-            }
-        }
-        dialogBinding.editWidth.addTextChangedListener(watcher)
-        dialogBinding.editHeight.addTextChangedListener(watcher)
-
-        dialogBinding.btnKeepOriginal.setOnClickListener {
-            suppress = true
-            dialogBinding.editWidth.text?.clear()
-            dialogBinding.editHeight.text?.clear()
-            suppress = false
-            dialogBinding.editMaxSize.text?.clear()
-            dialogBinding.presetGroup.clearCheck()
-            dialogBinding.checkAdvanced.isChecked = false
-        }
-
-        SwDialog.sheet(this)
-            .setTitle(R.string.resize_title)
-            .setView(dialogBinding.root)
-            .setPositiveButton(R.string.resize_action) { _, _ ->
-                val ratio = dialogBinding.checkRatio.isChecked
-                val ew = dialogBinding.editWidth.text.toString().toIntOrNull()
-                val eh = dialogBinding.editHeight.text.toString().toIntOrNull()
-                val targetText = dialogBinding.editMaxSize.text?.toString()
-
-                val target = if (targetText.isNullOrBlank()) null else ImageTools.parseSizeInput(targetText)
-                if (!targetText.isNullOrBlank() && target == null) {
-                    Toast.makeText(this, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
-                    return@setPositiveButton
-                }
-
-                val (w, h) = when {
-                    ew == null && eh == null -> origW to origH
-                    ratio && ew == null -> (derive(eh!!, origH, origW)) to eh
-                    ratio -> ew to derive(ew!!, origW, origH)
-                    else -> (ew ?: origW) to (eh ?: origH)
-                }
-                if (w !in 1..12000 || h !in 1..12000) {
-                    Toast.makeText(this, R.string.resize_invalid_size, Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                // DPI is intentionally not exposed: a DPI tag alone does not change
-                // pixels, so only real pixel dimensions + target size are offered,
-                // and no DPI metadata is stamped the user didn't ask for.
-                doResize(
-                    bytes, name,
-                    ImageTools.ResizeOptions(
-                        width = w, height = h, keepRatio = ratio,
-                        maxBytes = target, keepPng = false, dpi = 0
-                    )
-                )
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
-    private fun derive(from: Int, fromOrig: Int, toOrig: Int): Int =
-        if (fromOrig > 0) (from.toDouble() * toOrig / fromOrig).roundToInt() else from
-
-    private fun doResize(bytes: ByteArray, name: String, opts: ImageTools.ResizeOptions) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) { ImageTools.resize(bytes, opts) }
-                val dir = File(filesDir, "exports").apply { mkdirs() }
-                val base = sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
-                val ext = if (result.isPng) "png" else "jpg"
-                val fileName = "${base}_${result.width}x${result.height}.$ext"
-                val file = File(dir, fileName)
-                withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
-
-                // Show the real result (preview + before/after) instead of a toast.
-                startActivity(
-                    ExportResultActivity.intent(
-                        this@MainActivity,
-                        outputPath = file.path,
-                        previewPath = file.path,
-                        mime = if (result.isPng) "image/png" else "image/jpeg",
-                        displayName = fileName,
-                        beforeBytes = bytes.size.toLong(),
-                        afterBytes = result.bytes.size.toLong(),
-                        width = result.width,
-                        height = result.height,
-                        title = name,
-                        warning = null
-                    )
-                )
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, getString(R.string.resize_failed, e.message), Toast.LENGTH_LONG).show()
-            } finally {
-                progress.dismiss()
-            }
-        }
-    }
-
-    // ------------------------------------------------------------------
     // Tool: compress PDF
     // ------------------------------------------------------------------
 
@@ -1934,21 +1771,16 @@ class MainActivity : BaseActivity() {
     // Shared helpers
     // ------------------------------------------------------------------
 
-    private fun showProgress(titleRes: Int = R.string.progress_title): AlertDialog {
+    override fun showProgress(titleRes: Int): AlertDialog {
         return SwDialog.progress(this, titleRes = titleRes)
     }
 
-    private fun readUriBytes(uri: Uri): ByteArray? = try {
-        contentResolver.openInputStream(uri)?.use { it.readBytes() }
-    } catch (e: Exception) {
-        null
+    override fun toast(res: Int, duration: Int) {
+        Toast.makeText(this, res, duration).show()
     }
 
-    private fun intText(value: Int): String = String.format(Locale.ROOT, "%d", value)
-
-    private fun sanitizeFileName(name: String): String {
-        val cleaned = name.replace(Regex("[\\\\/:*?\"<>|\\n\\r\\t]"), "_").trim().trim('_')
-        return cleaned.ifBlank { "image" }.take(60)
+    override fun toast(message: CharSequence, duration: Int) {
+        Toast.makeText(this, message, duration).show()
     }
 
     private fun showAbout() {
