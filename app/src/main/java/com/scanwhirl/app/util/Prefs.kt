@@ -31,6 +31,7 @@ object Prefs {
     const val SORT_DATE = "date"
     const val SORT_MODIFIED = "modified"
     const val SORT_NAME = "name"
+    const val SORT_CATEGORY = "category"
 
     private fun sp(c: Context) = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 

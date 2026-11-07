@@ -40,9 +40,10 @@ import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.tools.VaultFlow
+import com.scanwhirl.app.util.HomeFilter
+import com.scanwhirl.app.util.HomeState
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
-import com.scanwhirl.app.util.SearchMatcher
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
@@ -148,9 +149,6 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** All documents on disk; refreshed off the main thread, queried in memory. */
     private var allDocs: List<ScanDocument> = emptyList()
-
-    /** Documents whose scanned text matched the current query (Pro search). */
-    private var ocrMatches: List<ScanDocument> = emptyList()
 
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -362,18 +360,24 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** In-memory filter + sort over [allDocs]; used by search and sort too. */
     private fun applyList() {
-        // Shared with the globe home (test23): name match, Pro OCR fallback,
-        // vaulted docs never surface before the PIN.
-        val (shown, ocr) = SearchMatcher.match(
-            query, allDocs, ProGate.isPro(this), includeVaulted = vaultMode
-        ) { repo.ocrDoc(it) }
-        ocrMatches = ocr
-        val sorted = sortDocs(shown)
+        // Pure logic lives in HomeFilter (T3.3); this just builds the state.
+        // Vault mode passes includeVaulted so the PIN'd list is the list.
+        val state = HomeState(
+            query = query,
+            category = null, // chip rail filter arrives in T3.4
+            sort = Prefs.sortMode(this),
+            inText = ProGate.isPro(this),
+            includeVaulted = vaultMode
+        )
+        val sorted = HomeFilter.apply(allDocs, state) { repo.ocrDoc(it) }
         adapter.selectedIds = selectedIds
         adapter.submitList(sorted) {
             adapter.notifyDataSetChanged()
         }
-        binding.emptyState.isVisible = sorted.isEmpty() && ocrMatches.isEmpty()
+        // A search that matches nothing leaves nothing to show; if `sorted`
+        // is empty the name and OCR legs both came up empty, so no extra
+        // ocrMatches bookkeeping is needed.
+        binding.emptyState.isVisible = sorted.isEmpty()
         binding.scanList.isVisible = true
         updateSortLabel()
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
@@ -381,23 +385,12 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    private fun sortDocs(docs: List<ScanDocument>): List<ScanDocument> =
-        when (Prefs.sortMode(this)) {
-            Prefs.SORT_NAME -> docs.sortedBy { it.name.lowercase(Locale.getDefault()) }
-            Prefs.SORT_MODIFIED -> docs.sortedByDescending {
-                maxOf(
-                    it.pdfFile.lastModified(),
-                    it.pageFiles.maxOfOrNull { p -> p.lastModified() } ?: 0L
-                )
-            }
-            else -> docs.sortedByDescending { it.createdAt }
-        }
-
     /** Sort pill label: mirrors [Prefs.sortMode] so the toolbar always says what's active. */
     private fun updateSortLabel() {
         val label = when (Prefs.sortMode(this)) {
             Prefs.SORT_NAME -> R.string.sort_name
             Prefs.SORT_MODIFIED -> R.string.sort_modified
+            Prefs.SORT_CATEGORY -> R.string.sort_category
             else -> R.string.sort_date
         }
         binding.sortLabel.setText(label)

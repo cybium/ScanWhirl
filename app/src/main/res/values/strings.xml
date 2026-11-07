@@ -157,6 +157,7 @@
     <string name="sort_name">Name</string>
     <string name="sort_date">Date created</string>
     <string name="sort_modified">Last modified</string>
+    <string name="sort_category">Category</string>
     <string name="tab_my_scans">My scans</string>
     <string name="tab_device_pdfs">Device PDFs</string>
     <string name="device_empty">No PDFs found on this device. Pick one to open it in ScanWhirl.</string>
