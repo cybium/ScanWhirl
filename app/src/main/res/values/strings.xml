@@ -60,6 +60,8 @@
 
     <string name="close">Close</string>
     <string name="merge">Merge</string>
+    <string name="move">Move</string>
+    <string name="export">Export</string>
     <string name="merge_title">Merge scans</string>
     <string name="merge_name_hint">Merged document name</string>
     <string name="merge_needs_two">Select at least 2 scans to merge</string>

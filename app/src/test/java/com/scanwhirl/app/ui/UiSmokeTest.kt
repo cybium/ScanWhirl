@@ -330,20 +330,29 @@ class UiSmokeTest {
                 val card = list.findViewHolderForAdapterPosition(0)!!.itemView
                 val toolbar = activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
                 val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
+                val header = activity.findViewById<android.view.View>(R.id.selectionHeader)
 
                 // normal mode: the custom title row carries the name now
                 assertEquals(app.getString(R.string.app_name),
                     activity.findViewById<android.widget.TextView>(R.id.appNameText).text.toString())
                 assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
                 assertTrue("bottom bar shows in normal mode", bar.isVisible)
+                assertFalse("no selection header in normal mode", header.isVisible)
 
-                // long press -> selection mode with 1 selected
+                // long press -> selection mode: contextual header replaces the toolbar
                 card.performLongClick()
-                assertEquals(app.resources.getQuantityString(R.plurals.selected_count, 1, 1), toolbar.title)
+                assertTrue("selection header takes over", header.isVisible)
+                assertFalse("toolbar hides while selecting", toolbar.isVisible)
+                assertEquals(
+                    app.resources.getQuantityString(R.plurals.selected_count, 1, 1),
+                    activity.findViewById<android.widget.TextView>(R.id.selCount).text.toString()
+                )
                 assertFalse("bottom bar hides while selecting", bar.isVisible)
 
                 // back -> exits selection mode, title row comes back
                 activity.onBackPressed()
+                assertFalse("selection header leaves with back", header.isVisible)
+                assertTrue("toolbar returns", toolbar.isVisible)
                 assertEquals(app.getString(R.string.app_name),
                     activity.findViewById<android.widget.TextView>(R.id.appNameText).text.toString())
                 assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
@@ -1426,16 +1435,19 @@ class UiSmokeTest {
                 assertNotNull("Long image button should be on screen", longImage)
                 assertTrue(protect.isVisible)
                 assertTrue(longImage.isVisible)
-                // The ZIP export is on the home toolbar during selection.
-                val menu =
-                    activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
-                assertNull(menu.findItem(R.id.action_export_zip))
+                // The ZIP export lives in Home's selection header now (T3.7);
+                // the menu id it used to ride is gone everywhere.
+                assertEquals(
+                    "action_export_zip menu id must be gone",
+                    0,
+                    activity.resources.getIdentifier("action_export_zip", "id", activity.packageName)
+                )
             }
         }
     }
 
     @Test
-    fun `home selection shows the zip export in the toolbar`() {
+    fun `home selection shows the zip export in the selection header`() {
         seedDoc("Select zip", pages = 1)
         com.scanwhirl.app.util.ProGate.setPro(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -1445,11 +1457,13 @@ class UiSmokeTest {
                 list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
             }
             scenario.onActivity { activity ->
-                val menu = activity.findViewById<
-                    com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
-                val zip = menu.findItem(R.id.action_export_zip)
-                assertNotNull("Export ZIP should be in the toolbar", zip)
-                assertTrue(zip.isVisible)
+                val export = activity.findViewById<android.view.View>(R.id.btnSelExport)
+                assertTrue("Export should be in the selection header", export.isVisible)
+                assertTrue("Export enabled with 1 selected", export.isEnabled)
+                assertTrue("Delete enabled with 1 selected",
+                    activity.findViewById<android.view.View>(R.id.btnSelDelete).isEnabled)
+                assertFalse("Merge needs 2 selected",
+                    activity.findViewById<android.view.View>(R.id.btnSelMerge).isEnabled)
             }
         }
     }

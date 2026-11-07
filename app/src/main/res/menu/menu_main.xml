@@ -2,34 +2,9 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <item
-        android:id="@+id/action_close"
-        android:icon="@drawable/ic_close"
-        android:title="@string/close"
-        android:visible="false"
-        app:showAsAction="always" />
-
-    <item
-        android:id="@+id/action_delete_selected"
-        android:icon="@drawable/ic_delete_sweep"
-        android:title="@string/delete"
-        android:visible="false"
-        app:showAsAction="ifRoom" />
-
-    <item
-        android:id="@+id/action_export_zip"
-        android:icon="@drawable/ic_download"
-        android:title="@string/export_zip"
-        android:visible="false"
-        app:showAsAction="ifRoom" />
-
-    <item
-        android:id="@+id/action_merge"
-        android:icon="@drawable/ic_merge"
-        android:title="@string/merge"
-        android:visible="false"
-        app:showAsAction="always" />
-
+    <!-- test26 T3.7: the selection actions (close/merge/delete/export) left
+         the menu — they live in the contextual selectionHeader now. Only the
+         gear remains; it hides while selecting (the header takes the row). -->
     <item
         android:id="@+id/action_settings"
         android:icon="@drawable/ic_settings"

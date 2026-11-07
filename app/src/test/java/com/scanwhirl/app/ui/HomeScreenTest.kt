@@ -395,14 +395,88 @@ class HomeScreenTest {
             scenario.onActivity { activity ->
                 val header = activity.findViewById<android.view.View>(R.id.listHeader)
                 val toolbar = activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+                val selHeader = activity.findViewById<android.view.View>(R.id.selectionHeader)
                 assertTrue(header.isVisible)
+                assertFalse(selHeader.isVisible)
 
                 activity.findViewById<android.view.View>(R.id.btnSelect).performClick()
-                assertFalse("contextual header takes over", header.isVisible)
-                assertEquals("0 selected", toolbar.title?.toString())
+                assertFalse("contextual list header yields", header.isVisible)
+                assertTrue("selection header takes over", selHeader.isVisible)
+                assertFalse("toolbar hides", toolbar.isVisible)
+                assertEquals(
+                    "0 selected",
+                    activity.findViewById<android.widget.TextView>(R.id.selCount).text.toString()
+                )
 
                 activity.onBackPressed()
                 assertTrue("header returns with the list", header.isVisible)
+                assertFalse("selection header leaves", selHeader.isVisible)
+                assertTrue("toolbar returns", toolbar.isVisible)
+            }
+        }
+    }
+
+    @Test
+    fun `selection header shows Move disabled and gates Merge and Export`() {
+        seed("Lecture notes", CategoryRules.STUDY)
+        seed("Electricity bill", CategoryRules.RECEIPTS)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
+                forceLayout(list)
+
+                // Long-press picks one doc -> 1 selected.
+                // Test builds are Pro by default — force the Free UI first.
+                com.scanwhirl.app.util.ProGate.setTestOverride(activity, false)
+                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+
+                val move = activity.findViewById<android.view.View>(R.id.btnSelMove)
+                val merge = activity.findViewById<android.view.View>(R.id.btnSelMerge)
+                val del = activity.findViewById<android.view.View>(R.id.btnSelDelete)
+                val export = activity.findViewById<android.view.View>(R.id.btnSelExport)
+
+                // Move exists but is dead until T4.3 (owner decision).
+                assertTrue("Move is visible", move.isVisible)
+                assertFalse("Move is disabled until T4.3", move.isEnabled)
+                // Free build: no dead Export button.
+                assertFalse("Export hidden in Free", export.isVisible)
+                assertEquals(
+                    "1 selected",
+                    activity.findViewById<android.widget.TextView>(R.id.selCount).text.toString()
+                )
+                assertTrue("Delete works with 1", del.isEnabled)
+                assertFalse("Merge waits for 2", merge.isEnabled)
+
+                // Second doc -> Merge unlocks. (ListAdapter diffs async —
+                // wait for the row to exist before clicking it.)
+                assertTrue(
+                    "row 1 is laid out",
+                    pollUntil { list.findViewHolderForAdapterPosition(1) != null }
+                )
+                list.findViewHolderForAdapterPosition(1)!!.itemView.performClick()
+                assertTrue(
+                    "Merge enabled at 2 selected",
+                    pollUntil { merge.isEnabled }
+                )
+                assertEquals(
+                    "2 selected",
+                    activity.findViewById<android.widget.TextView>(R.id.selCount).text.toString()
+                )
+
+                // Pro: Export appears (the header re-reads Pro on every toggle).
+                com.scanwhirl.app.util.ProGate.setTestOverride(activity, true)
+                activity.findViewById<android.view.View>(R.id.btnSelClose).performClick()
+                forceLayout(list)
+                assertTrue(
+                    "row 0 is back after leaving selection",
+                    pollUntil { list.findViewHolderForAdapterPosition(0) != null }
+                )
+                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                assertTrue(
+                    "Export visible for Pro",
+                    pollUntil { export.isVisible }
+                )
             }
         }
     }

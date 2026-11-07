@@ -266,6 +266,13 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.proBadge.setOnClickListener { showProPanel() }
         binding.titleBlock.setOnClickListener { showProPanel() }
 
+        // T3.7: contextual selection header. Move is wired in T4.3 (category
+        // picker) — it exists disabled so the row never re-flows.
+        binding.btnSelClose.setOnClickListener { setSelectionMode(false) }
+        binding.btnSelMerge.setOnClickListener { mergeFlow.promptMerge(selectedIds.toList()) }
+        binding.btnSelExport.setOnClickListener { exportSelectedZip() }
+        binding.btnSelDelete.setOnClickListener { confirmDeleteSelected() }
+
         // Stale edit snapshots (cache) go; an unfinished scan is offered back to
         // the user instead of silently wiped (it survives in cacheDir).
         val stale = cacheDir.listFiles { f ->
@@ -274,7 +281,7 @@ class MainActivity : BaseActivity(), HomeHost {
         stale?.forEach { it.deleteRecursively() }
         scanLauncher.offerUnfinishedScan()
 
-        applyToolbarTitle()
+        updateSelectionHeader()
         refreshList()
 
         // Launched from the globe home's scan button: jump straight into the
@@ -289,7 +296,7 @@ class MainActivity : BaseActivity(), HomeHost {
         super.onResume()
         refreshList()
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
-        applyToolbarTitle()
+        updateSelectionHeader()
         updateStatusLine()
         lifecycleScope.launch {
             val background = withContext(Dispatchers.IO) {
@@ -336,27 +343,11 @@ class MainActivity : BaseActivity(), HomeHost {
         return true
     }
 
-    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        menu.findItem(R.id.action_close)?.isVisible = selectionMode
-        menu.findItem(R.id.action_merge)?.isVisible = selectionMode
-        menu.findItem(R.id.action_merge)?.isEnabled = selectedIds.size >= 2
-        menu.findItem(R.id.action_delete_selected)?.isVisible = selectionMode
-        // Pro extras only appear in the Pro UI (Free keeps no dead buttons around).
-        menu.findItem(R.id.action_export_zip)?.isVisible = selectionMode && ProGate.isPro(this)
-        menu.findItem(R.id.action_export_zip)?.isEnabled =
-            selectedIds.isNotEmpty() && ProGate.isPro(this)
-        return super.onPrepareOptionsMenu(menu)
-    }
-
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-        R.id.action_close -> { setSelectionMode(false); true }
-        R.id.action_merge -> { mergeFlow.promptMerge(selectedIds.toList()); true }
         R.id.action_settings -> {
             startActivity(SettingsActivity.intent(this))
             true
         }
-        R.id.action_delete_selected -> { confirmDeleteSelected(); true }
-        R.id.action_export_zip -> { exportSelectedZip(); true }
         else -> super.onOptionsItemSelected(item)
     }
 
@@ -511,32 +502,37 @@ class MainActivity : BaseActivity(), HomeHost {
             getString(R.string.sort) + ", " + getString(label)
     }
 
-    private fun selectionTitle(): String =
-        if (selectionMode) {
-            resources.getQuantityString(R.plurals.selected_count, selectedIds.size, selectedIds.size)
-        } else {
-            getString(R.string.app_name)
-        }
-
     /**
-     * Title + badge live together: normal mode shows the custom title row
-     * (name + Pro badge) and a null toolbar title; selection mode hides the
-     * row and lets the toolbar show "N selected".
+     * T3.7 — the contextual header replaces the toolbar row while selecting:
+     * the toolbar (wordmark, status line, gear) hides and `selectionHeader`
+     * shows `X · N selected · Move · Merge · Export · Delete`. Move stays
+     * visible-but-disabled until T4.3; Export only exists for Pro; Merge
+     * needs ≥ 2 picks; Delete needs ≥ 1. The menu is static now, so no
+     * `invalidateOptionsMenu` anywhere.
      */
-    private fun applyToolbarTitle() {
-        val title = selectionTitle()
+    private fun updateSelectionHeader() {
+        val n = selectedIds.size
         if (selectionMode) {
-            binding.titleBlock.visibility = View.GONE
-            binding.titleRow.visibility = View.GONE
-            supportActionBar?.setDisplayShowTitleEnabled(true)
-            supportActionBar?.title = title
-            binding.toolbar.title = title
+            binding.toolbar.visibility = View.GONE
+            binding.selectionHeader.visibility = View.VISIBLE
+            binding.selCount.text =
+                resources.getQuantityString(R.plurals.selected_count, n, n)
+            binding.btnSelMerge.isEnabled = n >= 2
+            binding.btnSelDelete.isEnabled = n > 0
+            // Pro extras only appear in the Pro UI (Free keeps no dead buttons).
+            val pro = ProGate.isPro(this)
+            binding.btnSelExport.visibility = if (pro) View.VISIBLE else View.GONE
+            binding.selSep2.visibility = if (pro) View.VISIBLE else View.GONE
+            binding.selSep3.visibility = if (pro) View.VISIBLE else View.GONE
+            binding.btnSelExport.isEnabled = pro && n > 0
         } else {
+            binding.toolbar.visibility = View.VISIBLE
+            binding.selectionHeader.visibility = View.GONE
+            // AppCompat re-syncs the toolbar title from the manifest label
+            // during resume — keep it suppressed (the title row carries the name).
             supportActionBar?.setDisplayShowTitleEnabled(false)
             supportActionBar?.title = null
             binding.toolbar.title = null
-            binding.titleBlock.visibility = View.VISIBLE
-            binding.titleRow.visibility = View.VISIBLE
         }
         updateProBadge()
         updateStatusLine()
@@ -681,10 +677,9 @@ class MainActivity : BaseActivity(), HomeHost {
         adapter.selectionMode = enabled
         adapter.notifyDataSetChanged()
         binding.bottomBar.isVisible = !enabled
-        applyToolbarTitle()
+        updateSelectionHeader()
         updateStatusLine()
         updateListHeader()
-        invalidateOptionsMenu()
     }
 
     // ------------------------------------------------------------------
@@ -773,8 +768,7 @@ class MainActivity : BaseActivity(), HomeHost {
     private fun toggleSelection(id: String) {
         if (!selectedIds.remove(id)) selectedIds.add(id)
         adapter.notifyDataSetChanged()
-        applyToolbarTitle()
-        invalidateOptionsMenu()
+        updateSelectionHeader()
     }
 
     private fun onDocClick(doc: ScanDocument) {
@@ -798,8 +792,7 @@ class MainActivity : BaseActivity(), HomeHost {
             setSelectionMode(true)
             selectedIds.add(doc.id)
             adapter.notifyDataSetChanged()
-            applyToolbarTitle()
-            invalidateOptionsMenu()
+            updateSelectionHeader()
         } else {
             toggleSelection(doc.id)
         }
