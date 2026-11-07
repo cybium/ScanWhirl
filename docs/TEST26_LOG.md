@@ -85,4 +85,51 @@ required green *from P5*. Phase-end full builds for P1–P4 will therefore expec
 these 3 red tests** (documented here); all other tests must be 0-failure. From P5 on:
 strict 0 red. P5 (dock rebuilds) + P3 T3.5 (search/sort bar) clear every item above.
 
+### T1.3 Category model ✅
+- `CategoryRules`: `UNSORTED` const, `ALL_WITH_UNSORTED`, `isValid` accepts six,
+  `label()` = value itself (R9/N4), `classify(name, ocrText)` — name rules unchanged,
+  then OCR keyword families (receipts/IDs/forms/study) requiring **≥2 hits and a strict
+  winner** (ties → Unsorted), else `UNSORTED`. `loadDocument` fallback still `OTHER`
+  (old docs unchanged; `CategoryPersistTest` legacy test untouched and green).
+- `CategoryStyle`: `COLOR_UNSORTED` added; `shortTag/tagForRing/colorForRing/ringIndex`
+  **deleted**. App callers now `CategoryRules.label(cat).uppercase()` (chip texts —
+  `● RECEIPTS` etc.; `● STUDY` assertion in Phase5ScreensTest still green). Globe's two
+  index-based lookups live in new `ui/globe/GlobeRingShim.kt` (dies in P7).
+
+### T1.4 Repository API ✅
+- `saveScan(..., category: String? = null)` → `writeMeta(dir, name, category)`
+  (invalid/null still falls back to `classify(name)`).
+- `setCategory(ids: List<String>, category)` bulk overload; missing ids skipped.
+- `updateOcrPage(id, pageKey, text)` public — rewrites `ocr.txt` through the same
+  lossless `writeOcr`, so `SearchMatcher` (which reads `repo.ocrDoc`) finds edits.
+- 4 new `ScanRepositoryTest` tests incl. search-finds-edited-word and old 3-line
+  meta-without-trailing-newline load.
+
+### T1.5 Status line + emoji guard ✅
+- New `util/StatusLine.kt`: `phase(hour)` → string res id (05–11/12–16/17–20/else),
+  `format(...)` → `GOOD AFTERNOON · 2 DOCS · 14.0 MB` (plurals `status_docs`,
+  `StatusLine.formatBytes` shared). `Greeting.kt` **deleted** (it was the emoji source).
+- Emoji stripped from `pro_panel_home`/`pro_panel_free` (values-hi ships neither string
+  and has no emoji — verified).
+- `EmojiGuardTest` walks code points (surrogate-safe) over `res/values*/strings.xml` +
+  `src/main/**/*.kt` → 0 hits. `GreetingTest` → `StatusLineTest` (git mv, rewritten).
+- `UiSmokeTest`: its 2 `Greeting.forHour` tests rewritten same-commit (status-line shape
+  + per-hour render).
+
+### G1 gate record — alpha1 (2026-11-07)
+- Full build `test assembleRelease -PtestBuild --continue` → APK built
+  (2m46s; `--continue` because of the documented known-red TextFitTest).
+- Results per variant: **221 tests, 3 failures, 0 errors — the 3 failures are EXACTLY
+  the documented TextFitTest screens** (home/page editor/document), 0 any other failure.
+  Baseline moved 209 → 221 (+5 TextFit, +1 EmojiGuard, +2 CategoryRules, +4 Repo;
+  Greeting→StatusLine net 0).
+- `aapt2 dump badging` on alpha1: `com.scanwhirl.app.test` · `ScanWhirl Test` ·
+  launcher `GlobeHomeActivity` (moves in T3.9) · versionCode 25/`1.1.1-test25`
+  (bump in T9.1) — all as expected for a mid-plan alpha.
+- **APK delivered:** `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alpha1.apk`
+  (6,537,869 bytes).
+- **G1 owner check:** nothing draws under the navigation bar on ANY screen
+  (edge-to-edge + `applySystemBarsPadding` is new in this build). Waiting for
+  screenshots/OK before Phase 2.
+
 ---
