@@ -46,13 +46,12 @@ import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.LongImageFlow
 import com.scanwhirl.app.tools.MergeFlow
+import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.VaultFlow
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.ImageTools
-import com.scanwhirl.app.util.OcrEngine
-import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SearchMatcher
@@ -118,6 +117,9 @@ class MainActivity : BaseActivity(), HomeHost {
     }
     private val longImageFlow: LongImageFlow by lazy {
         LongImageFlow(activity = this, repo = repo, host = this)
+    }
+    private val ocrFlow: OcrFlow by lazy {
+        OcrFlow(activity = this, repo = repo, host = this)
     }
 
     private var selectionMode = false
@@ -231,9 +233,9 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.toolOcr.setOnClickListener {
             chooseProSource(
                 R.string.ocr_title,
-                onScan = { doc -> runOcrForScan(doc) },
-                onPdf = { uri -> runOcrForPdf(uri) },
-                onImage = { uri -> runOcrForImage(uri) }
+                onScan = { doc -> ocrFlow.runOcrForScan(doc) },
+                onPdf = { uri -> ocrFlow.runOcrForPdf(uri) },
+                onImage = { uri -> ocrFlow.runOcrForImage(uri) }
             )
         }
         binding.toolLockPdf.setOnClickListener { lockFlow.chooseLockSource() }
@@ -588,38 +590,6 @@ class MainActivity : BaseActivity(), HomeHost {
         refreshList()
     }
 
-    private fun runOcrForScan(doc: ScanDocument) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val text = withContext(Dispatchers.IO) {
-                    if (!repo.hasOcr(doc.id) || repo.ocrDoc(doc.id).values.all { it.isBlank() }) {
-                        repo.buildOcr(doc.id)
-                    }
-                    repo.ocrDoc(doc.id).entries
-                        .sortedBy { it.key }
-                        .mapIndexedNotNull { idx, entry ->
-                            val clean = entry.value.trim()
-                            if (clean.isEmpty()) null else "--- Page ${idx + 1} ---\n$clean"
-                        }
-                        .joinToString("\n\n")
-                }
-                progress.dismiss()
-                showOcrTextDialog(
-                    doc.name,
-                    text.ifBlank { getString(R.string.ocr_empty) }
-                )
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
     // ------------------------------------------------------------------
     // Scan source chooser (camera vs a straight gallery import)
     // ------------------------------------------------------------------
@@ -680,89 +650,6 @@ class MainActivity : BaseActivity(), HomeHost {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
-
-    // ------------------------------------------------------------------
-    // Pro Suite: OCR from a scan, a device PDF, or a gallery image
-    // ------------------------------------------------------------------
-
-    private fun runOcrForPdf(uri: Uri) {
-        val progress = showProgress(R.string.ocr_running)
-        lifecycleScope.launch {
-            try {
-                // Render + read one page at a time: no whole PDF in memory.
-                val parts = withContext(Dispatchers.IO) {
-                    PdfPageRenderer.withSeekablePdf(this@MainActivity, uri) { fd ->
-                        val count = PdfPageRenderer.pageCount(fd)
-                        (0 until count).mapNotNull { i ->
-                            val page = PdfPageRenderer.renderPageJpeg(fd, i, 200f, 2400, 92)
-                            val text = OcrEngine.recognizeBytes(page).trim()
-                            if (text.isEmpty()) null else "--- Page ${i + 1} ---\n$text"
-                        }
-                    }
-                }
-                progress.dismiss()
-                showOcrTextDialog(
-                    FlowUtil.devicePdfName(repo, uri),
-                    parts.joinToString("\n\n").ifBlank { getString(R.string.ocr_empty) }
-                )
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    private fun runOcrForImage(uri: Uri) {
-        val progress = showProgress(R.string.ocr_running)
-        lifecycleScope.launch {
-            try {
-                val text = withContext(Dispatchers.IO) {
-                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw IllegalStateException("could not read the image")
-                    // EXIF rotation only — the photo is never warped or cropped.
-                    OcrEngine.recognizeBytes(ImageTools.normalizePage(bytes)).trim()
-                }
-                progress.dismiss()
-                val title = repo.displayNameOf(uri)?.substringBeforeLast('.')
-                    ?.takeIf { it.isNotBlank() } ?: getString(R.string.source_gallery_image)
-                showOcrTextDialog(title, text.ifBlank { getString(R.string.ocr_empty) })
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    /** Shared OCR result dialog: every line, copyable and shareable. */
-    private fun showOcrTextDialog(title: String, shown: String) {
-        SwDialog.sheet(this)
-            .setTitle(title)
-            .setMessage(shown)
-            .setPositiveButton(R.string.ocr_copy) { _, _ ->
-                val cb = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                cb?.setPrimaryClip(android.content.ClipData.newPlainText(title, shown))
-                Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton(R.string.share_pdf) { _, _ ->
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_SUBJECT, title)
-                    putExtra(Intent.EXTRA_TEXT, shown)
-                }
-                startActivity(Intent.createChooser(send, getString(R.string.share_pdf)))
-            }
-            .setNegativeButton(R.string.close, null)
             .showSw(isSheet = true)
     }
 
