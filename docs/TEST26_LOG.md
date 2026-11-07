@@ -229,3 +229,111 @@ the 3 documented TextFit screens ± the documented Tools-sheet one.
 **Next:** T3.1 layout skeleton → … → T3.9 launcher → **G2 (`alpha2`)**.
 
 ---
+
+## Phase 3 — The new Home (in progress: T3.1–T3.6 ✅, T3.7–T3.9 pending)
+
+Strategy as approved: skeleton first (T3.1), each task fills one region and deletes
+only its predecessor; nothing ships until G2. `UiSmokeTest` updated in the same commit
+as every layout/ID change; full suite after every task.
+
+| Task | Commit | Suite after | Notes |
+|---|---|---|---|
+| T3.1 | `e962bc6` | 221/3 | skeleton only, +49 lines layout, no test change |
+| T3.2 | `e1e3965` | 222/3 | +1 `StatusLineTest.styled` case |
+| T3.3 | `eef53c1` | 239/3 | +17 `HomeFilterTest` |
+| T3.4 | `d793de1` | 246/3 | +7 `HomeScreenTest` (first run 246/7 → fix) |
+| T3.5 | `c508baa` | 253/3 | +7 `HomeScreenTest` (first run 253/4 → fix) |
+| T3.6 | `4759972` | 255/3 | +1 HomeScreenTest +1 TextFit (first run 255/6 → fix) |
+
+The "3" in every row is exactly the documented `TextFitTest` known-red set
+(home / page editor / document) — 0 any other failure at every task.
+
+### T3.1 Layout skeleton ✅ (`e962bc6`)
+
+- `activity_main.xml` +49 lines only: `homeRoot` id on the CoordinatorLayout root, then
+  the four §4.2 regions as GONE placeholders in wireframe order — chip rail, Quick Sort
+  nudge (GONE until T4.4 per owner decision 4), list header, bottom bar. Legacy header /
+  tools row / Pro suite / FAB stayed parked in place untouched, so every intermediate
+  commit compiles and lists docs.
+
+### T3.2 Header + status line ✅ (`e1e3965`)
+
+- `StatusLine.styled()` (+42 lines): hairline-coloured ` · ` separators + monospace
+  digits over `format()`'s plain string (R2 spec), new `cyan_dim` `#4A8299` token.
+- `greetingText` → `statusLine` id rename; 11sp / letterSpacing 0.12 / `cyan_dim`
+  (micro-caps exception). Settings toggle text → "Status line"
+  (`settings_greeting`/`_summary` relabelled, key kept).
+- `UiSmokeTest` rewritten in-commit for the id; `StatusLineTest` +1 `styled()` case
+  (222 tests). **TextFit caught a settings-string regression immediately** (the plan's
+  §7 screenshot-7 class) and it was fixed in the same task — proof the rig works.
+
+### T3.3 HomeFilter pure logic ✅ (`eef53c1`)
+
+- New `util/HomeFilter.kt` (97 lines): `HomeState(query, category, sort, inText,
+  includeVaulted)` + pure `apply()`/`sort()`/`counts()`; `MainActivity.applyList()`
+  now delegates (the old `sortDocs` block and the redundant `ocrMatches` leg removed,
+  ~41 lines out of MainActivity).
+- `Prefs.SORT_CATEGORY` added; `sort_category` = "Category" string.
+- `HomeFilterTest` 17 cases (223 lines) → 239/3.
+
+### T3.4 Category chip rail ✅ (`d793de1`)
+
+- `Widget.ScanWhirl.Chip` style + `ThemeOverlay.ScanWhirl.ChipRail` (`parent=""` —
+  Material's overlay styles need an explicit empty parent, first attempt failed
+  without it); `buildChipRail`/`paintChip`/`selectCategory` in MainActivity;
+  `chipGroup` single-selection; category colour when checked (D3).
+- New `HomeScreenTest` (7 cases, 271 lines). **First run 246/7:** 4 reds, all the same
+  cause — `ScanListAdapter` is a `ListAdapter`, so post-tap `itemCount` assertions read
+  the pre-tap list until the background diff lands. Fixed by adding `pollUntil`/
+  `forceLayout` helpers (same contract `UiSmokeTest` already used) and making the
+  selection test a real long-press → **246/3**.
+
+### T3.5 Search + list header ✅ (`c508baa`)
+
+- Hint → "Search documents" (values + values-hi), `search_hint_pro` **deleted**;
+  `btnClearSearch` (×) appears while there is text; `chipInText` "In text" chip shows
+  only for Pro **and** only while the field has focus (checked-state colour selectors
+  `chip_in_text_text/stroke`); `searchInText` default **true** but consumed as
+  `searchInText && ProGate.isPro` (owner-approved: preserves Pro OCR-on behaviour).
+- List header: `headerCount` / `sortSelector` / `btnSelect`; `btnSort`/`sortLabel`
+  pill deleted from the search bar; `updateListHeader()` (hidden at count 0 or in
+  selection; category shows "N in <label>"); `showSortMenu()` anchored to the selector
+  with **4** items incl. Category, label composed `"<label> ▾"` in code.
+- UiSmokeTest hint tests rewritten to chip-on-focus asserts; `HomeScreenTest` +7
+  (253). **First run 253/4:** the clear (×) never flipped visible — visibility was not
+  wired into `afterTextChanged`; fixed there → **253/3**.
+
+### T3.6 Bottom bar + Tools sheet ✅ (`4759972`)
+
+- **Bottom bar** (`bg_dock_glass`, inset-aware via the root's existing
+  `applySystemBarsPadding`): `btnTools` (`ic_tools` new grid glyph + "Tools"),
+  `btnScan` 64dp `bg_fab_outer_ring` viewfinder (vault mode swaps to `ic_add` +
+  `vault_add_title` description), `btnVault` (→ `vaultFlow.openVaultWithPin()`).
+- **Deleted with it (owner decision 2):** `fabHost`/`fabRing`/`fabPulse`/`fabScan`
+  (the FAB block) and the whole `toolsRow` + Pro Suite card (`toolEdit/Merge/Compress/
+  Resize/ProSuite*/toolOcr/Vault/LockPdf/LongImage`) — `activity_main.xml` −561/+~100.
+  `setFabVisible`/`toggleProSuite` removed from MainActivity (890-line file stays put).
+  Selection mode hides the bar; `setVaultMode` re-shows it with SCAN→Add.
+- **Tools sheet** (`sheet_tools.xml` + `view_tool_tile.xml`, tiles built in code into
+  `sheetRow1/2` via ids in new `values/ids.xml`): row 1 Edit/Merge/Compress/Resize
+  (core), PRO divider (reuses `badge_pro`), row 2 OCR/Lock/Long/Vault — Pro tiles
+  gated **at tile level**: Free tap dismisses the sheet and opens `showProPanel()`,
+  Pro tap runs the P2 flow. `showToolsSheet()` dismisses the sheet before launching a
+  flow so `ShadowDialog.getLatestDialog()` returns the flow dialog.
+- **Tests:** UiSmokeTest 8 cases rewritten (bottom bar, tile paths, selection hides
+  bar, tools-row test now asserts the ids are *gone* via `getIdentifier`); new
+  `HomeScreenTest` "tools sheet opens and lists eight tiles in two rows" (rows 4/4);
+  `TextFitTest` refactored `checkScreen` → `checkView(activity, root, …)` so a second
+  window can be walked, + `tools sheet text fits` case — **it passed green**, so the
+  owner-approved contingency 4th known-red was NOT needed (known-red set stays 3).
+- **First run 255/6:** 3 NPEs — tile lookups went through `activity.findViewById`,
+  but tiles live in the dialog's window, not the activity; fixed to
+  `ShadowDialog.getLatestDialog()!!.findViewById` → **255/3**.
+
+**State:** tree clean at `4759972`; 255 tests, 3 documented known-reds; log entry for
+G2 pending phase-end full build.
+
+**Next:** T3.7 selection contextual header → T3.8 empty states → T3.9 launcher →
+phase-end full build + G2 (`alpha2`).
+
+---
