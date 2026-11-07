@@ -43,11 +43,11 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
+import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
-import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.OcrEngine
@@ -55,7 +55,6 @@ import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SearchMatcher
-import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
@@ -93,6 +92,16 @@ class MainActivity : BaseActivity(), HomeHost {
                 setSelectionMode(false)
                 refreshList()
                 openViewer(merged)
+            }
+        )
+    }
+    private val lockFlow: LockFlow by lazy {
+        LockFlow(
+            activity = this, repo = repo, host = this,
+            docs = { allDocs },
+            pickPdf = { action ->
+                pendingUriAction = action
+                pickProPdf.launch(arrayOf("application/pdf"))
             }
         )
     }
@@ -213,7 +222,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 onImage = { uri -> runOcrForImage(uri) }
             )
         }
-        binding.toolLockPdf.setOnClickListener { chooseLockSource() }
+        binding.toolLockPdf.setOnClickListener { lockFlow.chooseLockSource() }
         binding.toolLongImage.setOnClickListener {
             chooseProSource(
                 R.string.btn_long_image,
@@ -652,72 +661,6 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    private fun promptLockOrUnlockScan(doc: ScanDocument) {
-        if (doc.isLocked) {
-            SwDialog.sheet(this)
-                .setTitle(doc.name)
-                .setItems(
-                    arrayOf(
-                        getString(R.string.btn_unlock_pdf),
-                        getString(R.string.btn_change_pw)
-                    )
-                ) { _, which ->
-                    if (which == 0) {
-                        lifecycleScope.launch {
-                            val progress = showProgress()
-                            try {
-                                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id) }
-                                progress.dismiss()
-                                Toast.makeText(this@MainActivity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
-                                refreshList()
-                            } catch (e: Exception) {
-                                progress.dismiss()
-                                Toast.makeText(this@MainActivity, getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    } else {
-                        promptNewPasswordForScan(doc)
-                    }
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .showSw(isSheet = true)
-        } else {
-            promptNewPasswordForScan(doc)
-        }
-    }
-
-    private fun promptNewPasswordForScan(doc: ScanDocument) {
-        val (builder, input) = SwDialog.input(
-            this,
-            hint = getString(R.string.protect_hint),
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        )
-        builder
-            .setTitle(R.string.protect_title)
-            .setMessage(R.string.protect_note)
-            .setPositiveButton(R.string.protect_apply) { _, _ ->
-                val pw = input.text?.toString().orEmpty()
-                if (pw.isBlank()) {
-                    Toast.makeText(this, R.string.protect_hint, Toast.LENGTH_SHORT).show()
-                } else {
-                    lifecycleScope.launch {
-                        val progress = showProgress()
-                        try {
-                            withContext(Dispatchers.IO) { repo.protectPdf(doc.id, pw) }
-                            progress.dismiss()
-                            Toast.makeText(this@MainActivity, R.string.protect_done, Toast.LENGTH_LONG).show()
-                            refreshList()
-                        } catch (e: Exception) {
-                            progress.dismiss()
-                            Toast.makeText(this@MainActivity, getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
 
     private fun runLongImageForScan(doc: ScanDocument) {
         if (doc.pageFiles.isEmpty()) return
@@ -821,204 +764,6 @@ class MainActivity : BaseActivity(), HomeHost {
             .showSw(isSheet = true)
     }
 
-    // ------------------------------------------------------------------
-    // Pro Suite: Lock / Unlock for saved scans AND device PDFs
-    // ------------------------------------------------------------------
-
-    private fun chooseLockSource() {
-        SwDialog.sheet(this)
-            .setTitle(R.string.btn_lock_unlock)
-            .setItems(
-                arrayOf(
-                    getString(R.string.source_saved_scan),
-                    getString(R.string.lock_source_lock_device),
-                    getString(R.string.lock_source_unlock_device)
-                )
-            ) { _, which ->
-                when (which) {
-                    0 -> FlowUtil.pickScan(this, R.string.btn_lock_unlock, allDocs) { doc ->
-                        promptLockOrUnlockScan(doc)
-                    }
-                    1 -> {
-                        pendingUriAction = { uri -> lockDevicePdf(uri) }
-                        pickProPdf.launch(arrayOf("application/pdf"))
-                    }
-                    else -> {
-                        pendingUriAction = { uri -> unlockDevicePdf(uri) }
-                        pickProPdf.launch(arrayOf("application/pdf"))
-                    }
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
-    /**
-     * Locking a device PDF honestly means importing it (pages become
-     * images) and protecting the new ScanWhirl PDF. The confirmation says
-     * so before anything is written.
-     */
-    private fun lockDevicePdf(uri: Uri) {
-        SwDialog.card(this)
-            .setTitle(R.string.lock_device_title)
-            .setMessage(R.string.lock_device_msg)
-            .setPositiveButton(R.string.continue_label) { _, _ ->
-                val (builder, input) = SwDialog.input(
-                    this,
-                    hint = getString(R.string.protect_hint),
-                    inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                        android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-                )
-                builder
-                    .setTitle(R.string.protect_title)
-                    .setMessage(R.string.protect_note)
-                    .setPositiveButton(R.string.protect_apply) { _, _ ->
-                        runLockDevicePdf(uri, input.text?.toString().orEmpty())
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .showSw(isSheet = false)
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
-
-    private fun runLockDevicePdf(uri: Uri, password: String) {
-        if (password.isBlank()) {
-            Toast.makeText(this, R.string.protect_hint, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val before = withContext(Dispatchers.IO) {
-                    contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
-                }
-                val name = FlowUtil.devicePdfName(repo, uri)
-                val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
-                val locked = withContext(Dispatchers.IO) { repo.protectPdf(doc.id, password) }
-                progress.dismiss()
-                refreshList()
-                Toast.makeText(this@MainActivity, R.string.protect_done, Toast.LENGTH_LONG).show()
-                startActivity(
-                    ExportResultActivity.intent(
-                        this@MainActivity,
-                        outputPath = locked.pdfFile.path,
-                        previewPath = locked.pageFiles.firstOrNull()?.path,
-                        mime = "application/pdf",
-                        displayName = DownloadSaver.pdfNameFor(locked.name),
-                        beforeBytes = before,
-                        afterBytes = locked.pdfFile.length(),
-                        width = 0,
-                        height = 0,
-                        title = getString(R.string.lock_device_title),
-                        warning = getString(R.string.lock_device_note)
-                    )
-                )
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    /**
-     * Unlock a PDF file from storage. ScanWhirl recognises its own locks by
-     * a SHA-256 index of the protected file; any other PDF stays untouched
-     * with an honest explanation (we cannot break other people's passwords).
-     */
-    private fun unlockDevicePdf(uri: Uri) {
-        val progress = showProgress(R.string.unlock_pdf_title)
-        lifecycleScope.launch {
-            try {
-                val hash = withContext(Dispatchers.IO) {
-                    contentResolver.openInputStream(uri)?.use { Sha256.of(it) }
-                        ?: throw IllegalStateException("could not read the PDF")
-                }
-                val doc = withContext(Dispatchers.IO) { repo.findLockedDocumentByHash(hash) }
-                progress.dismiss()
-                if (doc == null) {
-                    SwDialog.card(this@MainActivity)
-                        .setTitle(R.string.unlock_pdf_not_ours_title)
-                        .setMessage(R.string.unlock_pdf_not_ours_msg)
-                        .setPositiveButton(android.R.string.ok, null)
-                        .showSw(isSheet = false)
-                    return@launch
-                }
-                promptDeviceUnlockPassword(doc, uri)
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    private fun promptDeviceUnlockPassword(doc: ScanDocument, uri: Uri) {
-        val (builder, input) = SwDialog.input(
-            this,
-            hint = getString(R.string.protect_hint),
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        )
-        builder
-            .setTitle(R.string.unlock_pdf_title)
-            .setMessage(getString(R.string.unlock_pdf_msg, doc.name))
-            .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
-                val pw = input.text?.toString().orEmpty()
-                if (repo.verifyPdfPassword(doc.id, pw)) {
-                    runUnlockDevicePdf(doc, uri)
-                } else {
-                    Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
-
-    /** Exports a clean (password-free) copy of the locked scan's pages. */
-    private fun runUnlockDevicePdf(doc: ScanDocument, uri: Uri) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val before = withContext(Dispatchers.IO) {
-                    contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
-                }
-                val clean = withContext(Dispatchers.IO) { repo.unlockedPreviewPdf(doc.id) }
-                progress.dismiss()
-                startActivity(
-                    ExportResultActivity.intent(
-                        this@MainActivity,
-                        outputPath = clean.path,
-                        previewPath = doc.pageFiles.firstOrNull()?.path,
-                        mime = "application/pdf",
-                        displayName = DownloadSaver.pdfNameFor("${doc.name} (unlocked)"),
-                        beforeBytes = before,
-                        afterBytes = clean.length(),
-                        width = 0,
-                        height = 0,
-                        title = getString(R.string.unlock_pdf_title),
-                        warning = getString(R.string.unlock_device_note)
-                    )
-                )
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
 
     // ------------------------------------------------------------------
     // Pro Suite: OCR from a scan, a device PDF, or a gallery image
