@@ -17,7 +17,6 @@ import android.view.ViewGroup
 import android.view.animation.PathInterpolator
 import android.widget.EditText
 import android.widget.PopupMenu
-import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -39,9 +38,10 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityMainBinding
-import com.scanwhirl.app.databinding.DialogCompressBinding
 import com.scanwhirl.app.databinding.ItemScanBinding
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.tools.CompressFlow
+import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.util.CategoryRules
@@ -77,6 +77,13 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** Tool flows extracted in Phase 2; launchers stay in this Activity. */
     private val resizeFlow by lazy { ResizeFlow(this, repo, this) }
+    private val compressFlow: CompressFlow by lazy {
+        CompressFlow(
+            activity = this, repo = repo, host = this,
+            pickPdf = { pickCompressPdf.launch("application/pdf") },
+            docs = { allDocs }
+        )
+    }
 
     private var selectionMode = false
     private val selectedIds = LinkedHashSet<String>()
@@ -128,7 +135,7 @@ class MainActivity : BaseActivity(), HomeHost {
 
     private val pickCompressPdf = registerForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let { startCompressFromFile(it) } }
+    ) { uri -> uri?.let { compressFlow.startFromFile(it) } }
 
     /** Pending action for a Pro device-PDF picker (OCR, Lock, Long Image…). */
     private var pendingUriAction: ((Uri) -> Unit)? = null
@@ -177,7 +184,7 @@ class MainActivity : BaseActivity(), HomeHost {
         }
 
         binding.toolResize.setOnClickListener { pickResizeImage.launch("image/*") }
-        binding.toolCompress.setOnClickListener { startCompress() }
+        binding.toolCompress.setOnClickListener { compressFlow.start() }
         binding.toolEdit.setOnClickListener {
             pickEditPdf.launch(arrayOf("application/pdf"))
         }
@@ -787,7 +794,7 @@ class MainActivity : BaseActivity(), HomeHost {
             .setTitle(titleRes)
             .setItems(items.toTypedArray()) { _, which ->
                 when (which) {
-                    0 -> pickScan(titleRes) { doc -> onScan(doc) }
+                    0 -> FlowUtil.pickScan(this, titleRes, allDocs) { doc -> onScan(doc) }
                     1 -> {
                         pendingUriAction = onPdf
                         pickProPdf.launch(arrayOf("application/pdf"))
@@ -817,7 +824,9 @@ class MainActivity : BaseActivity(), HomeHost {
                 )
             ) { _, which ->
                 when (which) {
-                    0 -> pickScan(R.string.btn_lock_unlock) { doc -> promptLockOrUnlockScan(doc) }
+                    0 -> FlowUtil.pickScan(this, R.string.btn_lock_unlock, allDocs) { doc ->
+                        promptLockOrUnlockScan(doc)
+                    }
                     1 -> {
                         pendingUriAction = { uri -> lockDevicePdf(uri) }
                         pickProPdf.launch(arrayOf("application/pdf"))
@@ -873,7 +882,7 @@ class MainActivity : BaseActivity(), HomeHost {
                     contentResolver.openFileDescriptor(uri, "r")
                         ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
                 }
-                val name = devicePdfName(uri)
+                val name = FlowUtil.devicePdfName(repo, uri)
                 val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
                 val locked = withContext(Dispatchers.IO) { repo.protectPdf(doc.id, password) }
                 progress.dismiss()
@@ -1020,7 +1029,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 }
                 progress.dismiss()
                 showOcrTextDialog(
-                    devicePdfName(uri),
+                    FlowUtil.devicePdfName(repo, uri),
                     parts.joinToString("\n\n").ifBlank { getString(R.string.ocr_empty) }
                 )
             } catch (e: Exception) {
@@ -1103,7 +1112,7 @@ class MainActivity : BaseActivity(), HomeHost {
                         }
                     }
                     val shareDir = File(cacheDir, "documents/share").apply { mkdirs() }
-                    val file = File(shareDir, ShareUtils.sanitizeName(devicePdfName(uri)) + " - long.jpg")
+                    val file = File(shareDir, ShareUtils.sanitizeName(FlowUtil.devicePdfName(repo, uri)) + " - long.jpg")
                     LongImage.stitch(pages, file)
                     file
                 }
@@ -1124,7 +1133,7 @@ class MainActivity : BaseActivity(), HomeHost {
                         afterBytes = out.length(),
                         width = dims.first,
                         height = dims.second,
-                        title = devicePdfName(uri),
+                        title = FlowUtil.devicePdfName(repo, uri),
                         warning = null
                     )
                 )
@@ -1165,7 +1174,9 @@ class MainActivity : BaseActivity(), HomeHost {
                         if (docs.isEmpty()) {
                             Toast.makeText(this@MainActivity, R.string.empty_title, Toast.LENGTH_SHORT).show()
                         } else {
-                            pickScan(R.string.vault_add_scan, docs) { doc -> moveDocToVault(doc) }
+                            FlowUtil.pickScan(this@MainActivity, R.string.vault_add_scan, docs) { doc ->
+                                moveDocToVault(doc)
+                            }
                         }
                     }
                 } else {
@@ -1200,7 +1211,7 @@ class MainActivity : BaseActivity(), HomeHost {
         val progress = showProgress()
         lifecycleScope.launch {
             try {
-                val name = devicePdfName(uri)
+                val name = FlowUtil.devicePdfName(repo, uri)
                 withContext(Dispatchers.IO) { repo.importPdfIntoVault(uri, name) }
                 progress.dismiss()
                 Toast.makeText(this@MainActivity, R.string.vault_imported, Toast.LENGTH_SHORT).show()
@@ -1450,324 +1461,6 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     // ------------------------------------------------------------------
-    // Tool: compress PDF
-    // ------------------------------------------------------------------
-
-    private data class Level(
-        val nameRes: Int,
-        val quality: Int,
-        val maxDim: Int?,
-        val dpi: Float
-    )
-
-    private val levels = listOf(
-        Level(R.string.compress_level_low, 80, null, 200f),
-        Level(R.string.compress_level_medium, 65, 2000, 150f),
-        Level(R.string.compress_level_high, 50, 1600, 130f),
-        Level(R.string.compress_level_ultra, 38, 1200, 110f)
-    )
-
-    private fun startCompress() {
-        // No saved scans yet: the source is necessarily an external file.
-        if (allDocs.isEmpty()) {
-            pickCompressPdf.launch("application/pdf")
-            return
-        }
-        SwDialog.sheet(this)
-            .setTitle(R.string.compress_title)
-            .setItems(arrayOf(
-                getString(R.string.compress_source_scan),
-                getString(R.string.compress_source_file)
-            )) { _, which ->
-                when (which) {
-                    0 -> pickScan(R.string.compress_pick_scan) { doc -> estimateForScan(doc) }
-                    1 -> pickCompressPdf.launch("application/pdf")
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
-    /** Name for an imported device PDF: real file name when we can read it. */
-    private fun devicePdfName(uri: Uri): String =
-        repo.displayNameOf(uri)
-            ?.removeSuffix(".pdf")?.removeSuffix(".PDF")
-            ?.trim()?.takeIf { it.isNotBlank() }
-            ?: "Imported PDF"
-
-    private fun pickScan(
-        titleRes: Int,
-        docs: List<ScanDocument> = allDocs,
-        onPicked: (ScanDocument) -> Unit
-    ) {
-        if (docs.isEmpty()) {
-            Toast.makeText(this, R.string.empty_title, Toast.LENGTH_SHORT).show()
-            return
-        }
-        SwDialog.sheet(this)
-            .setTitle(titleRes)
-            .setItems(docs.map { it.name }.toTypedArray()) { _, which ->
-                onPicked(docs[which])
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
-    /** Compress sample pages at each level, then show the choice with sizes. */
-    private fun estimateForScan(doc: ScanDocument) {
-        val progress = showProgress(R.string.compress_estimating)
-        lifecycleScope.launch {
-            try {
-                val estimates = withContext(Dispatchers.IO) {
-                    val sampleFiles = listOfNotNull(
-                        doc.pageFiles.firstOrNull(),
-                        doc.pageFiles.getOrNull(doc.pageFiles.size / 2)
-                    ).distinct()
-                    val samples = sampleFiles.map { it.readBytes() }
-                    levels.map { level ->
-                        val avg = samples.map {
-                            ImageTools.recompressJpeg(it, level.quality, level.maxDim).size.toLong()
-                        }.average()
-                        (avg * doc.pageCount * 1.02 + 1024).toLong()
-                    }
-                }
-                progress.dismiss()
-                pickLevel(estimates,
-                    onChosen = { level -> runCompressScan(doc, level) },
-                    onTarget = { target -> runCompressScanToTarget(doc, target) })
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    /** Render page 1 of an external PDF at each level, extrapolate, then choose. */
-    private fun estimateForPdfFile(uri: Uri) {
-        val progress = showProgress(R.string.compress_estimating)
-        lifecycleScope.launch {
-            try {
-                val estimates = withContext(Dispatchers.IO) {
-                    // One seekable copy: SAF pipes cannot be rendered directly.
-                    PdfPageRenderer.withSeekablePdf(this@MainActivity, uri) { fd ->
-                        val count = PdfPageRenderer.pageCount(fd)
-                        levels.map { level ->
-                            val first = PdfPageRenderer.renderPageJpeg(
-                                fd, 0, level.dpi, level.maxDim ?: 4096, level.quality
-                            )
-                            (first.size.toDouble() * count * 1.02 + 1024).toLong()
-                        }
-                    }
-                }
-                progress.dismiss()
-                pickLevel(estimates,
-                    onChosen = { level -> runCompressFile(uri, level) },
-                    onTarget = { target -> runCompressFileToTarget(uri, target) })
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    /** Level picker with size estimates, plus an exact target-size field. */
-    private fun pickLevel(estimates: List<Long>, onChosen: (Level) -> Unit, onTarget: (Long) -> Unit) {
-        val dialogBinding = DialogCompressBinding.inflate(layoutInflater)
-        levels.forEachIndexed { i, level ->
-            val button = RadioButton(this).apply {
-                id = View.generateViewId()
-                text = getString(
-                    R.string.compress_est_item,
-                    getString(level.nameRes),
-                    formatBytes(estimates.getOrElse(i) { 0L })
-                )
-            }
-            dialogBinding.levelGroup.addView(button)
-        }
-        (dialogBinding.levelGroup.getChildAt(1) as? RadioButton)?.isChecked = true
-
-        SwDialog.card(this)
-            .setTitle(R.string.compress_level_title)
-            .setView(dialogBinding.root)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val targetText = dialogBinding.editCompressTarget.text?.toString()
-                if (!targetText.isNullOrBlank()) {
-                    val target = ImageTools.parseSizeInput(targetText)
-                    if (target == null) {
-                        Toast.makeText(this, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
-                        return@setPositiveButton
-                    }
-                    onTarget(target)
-                    return@setPositiveButton
-                }
-                val checked = dialogBinding.levelGroup.checkedRadioButtonId
-                val index = dialogBinding.levelGroup.indexOfChild(dialogBinding.levelGroup.findViewById(checked))
-                onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
-
-    private fun runCompressScan(doc: ScanDocument, level: Level) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val before = if (doc.pdfFile.exists()) doc.pdfFile.length() else 0L
-                val out = repo.compressScan(doc.id, level.quality, level.maxDim)
-                val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
-                refreshList()
-                showCompressResult(out, before, after)
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
-            } finally {
-                progress.dismiss()
-            }
-        }
-    }
-
-    /** Compresses a saved scan so the finished PDF fits the exact target size. */
-    private fun runCompressScanToTarget(doc: ScanDocument, target: Long) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val before = if (doc.pdfFile.exists() && doc.pdfFile.length() > 0) {
-                    doc.pdfFile.length()
-                } else {
-                    doc.pageFiles.sumOf { it.length() }
-                }
-                val pages = withContext(Dispatchers.IO) { fitFilesToTotal(doc.pageFiles, target) }
-                val out = repo.createDocument("${doc.name} (compressed)", pages)
-                refreshList()
-                showCompressResult(out, before, out.pdfFile.length(),
-                    if (out.pdfFile.length() > target) getString(R.string.compress_target_missed, formatBytes(target)) else null)
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
-            } finally {
-                progress.dismiss()
-            }
-        }
-    }
-
-    /** Opens the real result screen (preview + actual before/after + save/share). */
-    private fun showCompressResult(out: ScanDocument, before: Long, after: Long, extraWarning: String? = null) {
-        val warning = when {
-            extraWarning != null -> extraWarning
-            before > 0 && after > before -> getString(R.string.compress_grew_warning)
-            else -> null
-        }
-        startActivity(
-            ExportResultActivity.intent(
-                this,
-                outputPath = out.pdfFile.path,
-                previewPath = out.pageFiles.firstOrNull()?.path,
-                mime = "application/pdf",
-                displayName = DownloadSaver.pdfNameFor(out.name),
-                beforeBytes = before,
-                afterBytes = after,
-                width = 0,
-                height = 0,
-                title = out.name,
-                warning = warning
-            )
-        )
-    }
-
-    private fun startCompressFromFile(uri: Uri) {
-        estimateForPdfFile(uri)
-    }
-
-    private fun runCompressFile(uri: Uri, level: Level) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val before = withContext(Dispatchers.IO) {
-                    contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
-                }
-                val name = devicePdfName(uri)
-                val out = repo.importPdfAsScan(uri, name, level.dpi, level.maxDim ?: 4096, level.quality)
-                val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
-                refreshList()
-                showCompressResult(out, before, after)
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
-            } finally {
-                progress.dismiss()
-            }
-        }
-    }
-
-    /** Renders an external PDF and re-fits its pages so the new scan hits the exact target. */
-    private fun runCompressFileToTarget(uri: Uri, target: Long) {
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val before = withContext(Dispatchers.IO) {
-                    contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
-                }
-                val baseName = devicePdfName(uri)
-                val pages = withContext(Dispatchers.IO) {
-                    val rendered = PdfPageRenderer.withSeekablePdf(this@MainActivity, uri) { fd ->
-                        // One page at a time: never hold a whole PDF's JPEGs in memory.
-                        val out = mutableListOf<ByteArray>()
-                        val count = PdfPageRenderer.pageCount(fd)
-                        for (i in 0 until count) {
-                            PdfPageRenderer.renderPageJpeg(fd, i, 150f, 2048, 85).let { out.add(it) }
-                        }
-                        out
-                    }
-                    fitJpegsToTotal(rendered, target)
-                }
-                val out = repo.createDocument("$baseName (compressed)", pages)
-                refreshList()
-                showCompressResult(out, before, out.pdfFile.length(),
-                    if (out.pdfFile.length() > target) getString(R.string.compress_target_missed, formatBytes(target)) else null)
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG).show()
-            } finally {
-                progress.dismiss()
-            }
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Exact-target compression helpers (PDF ≈ Σ page JPEGs + ~600 B/page)
-    // ------------------------------------------------------------------
-
-    private fun fitFilesToTotal(files: List<File>, target: Long): List<ByteArray> {
-        if (files.isEmpty()) throw IllegalStateException("No pages to compress")
-        val budget = (target - (files.size * 600L + 1000L)).coerceAtLeast(2048L)
-        val sizes = files.map { it.length().coerceAtLeast(1L) }
-        val sum = sizes.sum().coerceAtLeast(1L)
-        return files.mapIndexed { i, file ->
-            fitToShare(file.readBytes(), (budget * sizes[i] / sum).coerceAtLeast(1024L))
-        }
-    }
-
-    private fun fitJpegsToTotal(pages: List<ByteArray>, target: Long): List<ByteArray> {
-        if (pages.isEmpty()) throw IllegalStateException("No pages to compress")
-        val budget = (target - (pages.size * 600L + 1000L)).coerceAtLeast(2048L)
-        val sum = pages.sumOf { it.size.toLong() }.coerceAtLeast(1L)
-        return pages.map { orig ->
-            fitToShare(orig, (budget * orig.size / sum).coerceAtLeast(1024L))
-        }
-    }
-
-    /** Never grows a page: keeps the original bytes when they already fit the share. */
-    private fun fitToShare(orig: ByteArray, share: Long): ByteArray {
-        if (orig.size.toLong() <= share) return orig
-        val bmp = try {
-            ImageTools.decodeSampled(orig, 3000)
-        } catch (e: Exception) {
-            null
-        } ?: throw IllegalStateException("A page could not be decoded")
-        val fitted = ImageTools.compressToFit(bmp, share).bytes
-        bmp.recycle()
-        return if (fitted.size >= orig.size) orig else fitted
-    }
-
-    // ------------------------------------------------------------------
     // Shared helpers
     // ------------------------------------------------------------------
 
@@ -1970,13 +1663,6 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 }
 
-private fun formatBytes(bytes: Long): String = when {
-    bytes <= 0 -> "0 B"
-    bytes >= 1_048_576 -> String.format(Locale.ROOT, "%.1f MB", bytes / 1_048_576.0)
-    bytes >= 1024 -> String.format(Locale.ROOT, "%.0f KB", bytes / 1024.0)
-    else -> "$bytes B"
-}
-
 class ScanListAdapter(
     private val onClick: (ScanDocument) -> Unit,
     private val onView: (ScanDocument) -> Unit,
@@ -2015,7 +1701,7 @@ class ScanListAdapter(
             val pagesText = binding.root.context.resources
                 .getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
             binding.scanMeta.text = "$pagesText · " +
-                formatBytes(sizeBytes).replace(' ', '\u00A0') + " · " +
+                StatusLine.formatBytes(sizeBytes).replace(' ', '\u00A0') + " · " +
                 dateFmt.format(whenDate).replace(' ', '\u00A0')
             val first = doc.pageFiles.firstOrNull()
             if (first != null) {
