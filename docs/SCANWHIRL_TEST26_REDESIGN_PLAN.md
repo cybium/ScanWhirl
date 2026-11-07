@@ -17,36 +17,22 @@
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
-> **STATUS (2026-11-07, build mode ON — owner approved the plan below):** T0–T3.6 done,
-> **G1 PASSED**; HEAD `557d11e` on `test26-redesign`, suite **255 tests / 3 known-reds**.
-> **Execution plan for the rest of Phase 3 (specs unchanged in §6; design decisions here):**
-> **T3.7** — new `selectionHeader` row in `activity_main.xml` (sibling of `toolbar` inside
-> `AppBarLayout`, `gone` by default) replaces the toolbar row while selecting:
-> `btnSelClose (X) · selCount · Move · Merge · Export · Delete` with `·` separators.
-> Toolbar (and gear) hides during selection; the 4 selection items are **deleted** from
-> `menu_main.xml`; `onPrepareOptionsMenu` dies; `applyToolbarTitle`/`selectionTitle` become
-> one `updateSelectionHeader()` (no `invalidateOptionsMenu` — static menu). Move visible +
-> `enabled=false` + alpha 0.4 (wired T4.3); Merge enabled at ≥2; Export Pro-only + ≥1;
-> Delete ≥1; X/back both exit. Logic kept verbatim: `exportSelectedZip()`, `confirmDeleteSelected()`.
-> New strings `move`, `export`. Tests: rewrite 3, new 1 → **256/3**.
-> **T3.8** — `updateEmptyState()` in `applyList()`, 3 states: fresh library → `frame_corners`
-> brackets + `empty_first_scan` (+ SCAN button; subtitle GONE); filter-empty (category **or**
-> search) → `empty_category` / `empty_no_match` + `btnShowAll` chip (clears query + category);
-> vault → texts already set by `setVaultMode`, untouched. `emptyState` click = scan chooser only
-> when the library is truly empty. Delete `emptyOrbit`, `ic_empty_orbit`, `empty_subtitle`
-> (values + values-hi; `empty_title` stays — Toasts in FlowUtil/VaultFlow use it).
-> New strings `empty_first_scan`, `empty_category`, `empty_no_match`, `show_all`.
-> Tests: 3 new in `HomeScreenTest` → **259/3**.
-> **T3.9** — manifest `MAIN/LAUNCHER` moves `GlobeHomeActivity` → `MainActivity`; delete the
-> `finish()` warp override (kills the `globeHomeEnabled` branch in MainActivity). Globe stays in
-> the tree until P7. Known breakages fixed same-commit: `GlobeHomeActivityTest` launcher case
-> **rewritten** (MainActivity is launcher); `SwTransitionsTest.finishing the shelf warps back…`
-> **deleted** (feature gone — one-line reason in commit). → **258/3**.
-> Then: phase-end full build (`--continue`) → append T3.7–T3.9 + phase-end log → **G2**:
-> copy APK → `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alpha2.apk` → **STOP**
-> for the 6 owner screenshots (Home 0 docs, Home with docs, chip selected, search focused,
-> Tools sheet, selection mode).
-> As-run record: `docs/TEST26_LOG.md` · session handoff: `docs/TEST26_HANDOFF.md`.
+> **STATUS (2026-11-07):** T0–T3.9 done — **Phase 3 COMPLETE, G1 PASSED, G2 delivered →
+> STOPPED waiting for owner screenshots.** HEAD `fb96782` on `test26-redesign` (+ docs
+> commit), phase-end full build: **both variants 258 tests / 3 failures** — the 3 = exactly
+> `TextFitTest.{home,page editor,document}` (documented known-reds until P5). APK
+> `ScanWhirl-1.1.1-test26-alpha2.apk` in `/mnt/c/Users/Cybium/Downloads/` — aapt2:
+> `com.scanwhirl.app.test` · `ScanWhirl Test` · launcher **`MainActivity`** ·
+> versionCode 25 (bump in T9.1). Commits: T3.7 `e83ec2d` (selection contextual header,
+> Move visible-but-disabled until T4.3) · T3.8 `4405904` (empty states + Show all,
+> `emptyOrbit`/`ic_empty_orbit`/`empty_subtitle` deleted) · T3.9 `fb96782`
+> (MAIN/LAUNCHER → `MainActivity`, `finish()` warp override deleted).
+> **G2 needs 6 owner screenshots:** Home 0 docs · Home with docs · chip selected ·
+> search focused · Tools sheet · selection mode. After G2 passes → plan-mode review of
+> Phase 4 (T4.1–T4.7; Move wiring T4.3, nudge T4.4, export hygiene T4.7).
+> **How to continue in a new session:** read `docs/TEST26_HANDOFF.md` (session handoff)
+> — or its copy `/mnt/c/Users/Cybium/Downloads/ScanWhirl-test26-HANDOFF.md`, which points
+> at the repo docs. As-run record: `docs/TEST26_LOG.md`.
 
 ---
 

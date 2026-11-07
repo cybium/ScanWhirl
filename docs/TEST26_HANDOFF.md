@@ -1,10 +1,13 @@
 # ScanWhirl test26 — Session Handoff (read this first in a new session)
 
 > Purpose: everything a fresh agent needs to continue the test26 redesign without this
-> conversation. Written 2026-11-07 at HEAD **`bbf52a4`**, Phase 3 mid-flight (T3.1–T3.6 done).
-> **Authoritative plan:** `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` (Rev 2, 747 lines) — read §0
+> conversation. Written 2026-11-07 at HEAD `fb96782` + docs commit, **Phase 3 COMPLETE,
+> G2 (`alpha2`) delivered → STOPPED for owner screenshots.**
+> **Authoritative plan:** `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` (Rev 2) — read §0
 > (rules), §4–§5 (target UI), §6 (tasks), §7 (tests), §8 (gotchas) before coding.
-> **As-run record:** `docs/TEST26_LOG.md` — append per-task entries here, batch at phase end.
+> **As-run record:** `docs/TEST26_LOG.md` — per-task entries + phase-end tables here.
+> Owner reference copies (same content): `/mnt/c/Users/Cybium/Downloads/
+> ScanWhirl-test26-{PLAN,LOG,HANDOFF}.md` — re-copy all three after every md edit.
 
 ---
 
@@ -16,7 +19,8 @@ categories, zero clipped text, OCR editor, Earth removed in P7), ship
 `versionCode 26` / `1.1.1-test26`. Owner installs each gate APK and sends screenshots
 before the next phase starts.
 
-**Current position: Phase 3 (the new Home), task 6 of 9.**
+**Current position: STOPPED at G2 — Phase 3 complete, alpha2 APK + all three md files
+delivered to `/mnt/c/Users/Cybium/Downloads/`, waiting for the owner's 6 screenshots.**
 
 ## 2. Locations
 
@@ -99,35 +103,34 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
 - **P3 tasks committed** (one commit each): T3.1 `e962bc6` skeleton → T3.2 `e1e3965`
   status line → T3.3 `eef53c1` HomeFilter → T3.4 `d793de1` chip rail → T3.5 `c508baa`
   search+list header → T3.6 `4759972` bottom bar+Tools sheet (FAB and toolsRow/ProSuite
-  **deleted**) → log `bbf52a4`.
-- **Suite now: 255 tests / 3 failures = exactly the documented TextFit known-reds.**
+  **deleted**) → log `bbf52a4` → docs `557d11e` → T3.7 `e83ec2d` selection contextual
+  header (menu reduced to the gear; `updateSelectionHeader()`; Move visible-but-disabled
+  until T4.3) → T3.8 `4405904` empty states (frame_corners + first-scan; category/search
+  empty + Show all; `emptyOrbit`/`ic_empty_orbit`/`empty_subtitle` deleted) →
+  T3.9 `fb96782` **Home is the launcher** (MAIN/LAUNCHER → `MainActivity`, `finish()`
+  warp override deleted; launcher test rewritten, dead warp test deleted).
+- **Suite now: 258 tests / 3 failures = exactly the documented TextFit known-reds.**
+- **Phase-end full build PASSED the gate check:** both variants **258/3/0**, red = exactly
+  the 3 documented TextFit screens, APK built (6,561,168 bytes); aapt2: `com.scanwhirl.app.test`
+  · `ScanWhirl Test` · launcher `MainActivity` · versionCode 25/`1.1.1-test25` (T9.1 bumps).
+- **G2 delivered:** `ScanWhirl-1.1.1-test26-alpha2.apk` + the three md copies are in
+  `/mnt/c/Users/Cybium/Downloads/` — **session stopped here for owner screenshots.**
 
 ## 5. Next steps (in order)
 
-1. **T3.7 Selection mode** — long-press or `Select` enters; contextual header
-   `X · N selected · Move · Merge · Export · Delete` (replace toolbar title approach);
-   `Move` visible-but-**disabled** (wired in T4.3); bottom bar already hides in T3.6;
-   keep existing Export-ZIP + delete-confirm logic (`exportSelectedZip()`,
-   `confirmDeleteSelected()` in MainActivity). Rewrite selection tests in the same commit
-   (`UiSmokeTest.long press enters selection mode…`, `home selection shows the zip export…`,
-   `HomeScreenTest.Select enters selection mode…`, `…selection mode keeps the rail usable…`).
-   Menu ids currently carrying these: `menu_main.xml` `action_close/action_merge/
-   action_delete_selected/action_export_zip` + `onPrepareOptionsMenu`/`onOptionsItemSelected`
-   (~line 340).
-2. **T3.8 Empty states** — no docs: `frame_corners` viewfinder brackets + "Scan your
-   first document"; empty category: `No <Category> documents yet` + `Show all`;
-   `emptyOrbit` drawable/view dies.
-3. **T3.9 Launcher** — manifest MAIN/LAUNCHER → `MainActivity` (currently
-   `GlobeHomeActivity`), remove the `finish()` warp + `globeHomeEnabled` branch
-   (globe unreachable until P7, which deletes it).
-4. **Phase-end:** full build `test assembleRelease -PtestBuild --no-daemon --continue`
-   → append P3 log entry with exact counts (per-task T3.1–T3.6 entries already in the log;
-   add T3.7–T3.9 + phase-end table) → **G2**: copy
-   `app/build/outputs/apk/release/app-release.apk` →
-   `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alpha2.apk` → **STOP** for owner
-   screenshots (6 required, listed in §3 above).
-5. After G2 passes: plan-mode review of **Phase 4** (categories usable: T4.1–T4.7,
-   Move wiring at T4.3, nudge at T4.4, export hygiene T4.7) → then build mode.
+1. **G2 is the live stop-gate (this session stopped here).** Owner installs
+   `ScanWhirl-1.1.1-test26-alpha2.apk` and sends the 6 screenshots (§3). Review them
+   against §4/§5 of the plan: Home 0 docs (frame brackets + "Scan your first document"),
+   Home with docs, chip selected (category colour), search focused (clear × + In-text
+   chip on Pro), Tools sheet (8 tiles, rows 4/4), selection mode (header row
+   `X · N selected · Move · Merge · Export · Delete`, bottom bar hidden, Move dimmed).
+2. If G2 passes → **plan-mode review of Phase 4** (T4.1–T4.7: categories usable,
+   Move wiring T4.3, nudge T4.4, export hygiene T4.7) → then build mode.
+3. If G2 fails → fix in the named task's style, same-commit test updates, re-run
+   phase-end build, deliver alpha2 again (never skip the gate).
+4. **End-of-session duty (every session):** after any md edit, re-copy all three to
+   `/mnt/c/Users/Cybium/Downloads/ScanWhirl-test26-{PLAN,LOG,HANDOFF}.md` so the
+   Downloads copies alone tell the next session where to read.
 
 ## 6. Key decisions already taken (don't re-ask)
 
@@ -159,4 +162,10 @@ sheet title. §5.3's 36dp chip beats R6's 48dp (no test enforces R6 — noted in
 - Repo API shape: `saveScan(uris, pdfUri, suggestedName, filter, pageFilters, category)`
   (category is 6th), `runBlocking<Unit>`, `idleFor(Duration)`, `renderActivityPng`,
   `ProGate.setTestOverride(app, …)` must be reset per test.
-- aapt2 still reports versionCode 25 / launcher `GlobeHomeActivity` until T9.1/T3.9.
+- **Test builds are Pro by default** (`ProGate.isPro = BuildConfig.TEST_BUILD || …`):
+  to see or assert the Free UI, call `ProGate.setTestOverride(app, false)` FIRST
+  (`@Before` resets it to `null` = follow test-build default = Pro).
+- Leaving selection mode (toolbar row returns) can leave
+  `findViewHolderForAdapterPosition(n)` null until re-layout: `forceLayout(rv)` +
+  `pollUntil { findViewHolderForAdapterPosition(n) != null }` before clicking a row.
+- aapt2 reports launcher `MainActivity` after T3.9; versionCode stays 25 until T9.1.

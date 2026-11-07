@@ -230,7 +230,7 @@ the 3 documented TextFit screens ± the documented Tools-sheet one.
 
 ---
 
-## Phase 3 — The new Home (in progress: T3.1–T3.6 ✅, T3.7–T3.9 pending)
+## Phase 3 — The new Home ✅ complete (G2 stop-gate reached)
 
 Strategy as approved: skeleton first (T3.1), each task fills one region and deletes
 only its predecessor; nothing ships until G2. `UiSmokeTest` updated in the same commit
@@ -244,6 +244,9 @@ as every layout/ID change; full suite after every task.
 | T3.4 | `d793de1` | 246/3 | +7 `HomeScreenTest` (first run 246/7 → fix) |
 | T3.5 | `c508baa` | 253/3 | +7 `HomeScreenTest` (first run 253/4 → fix) |
 | T3.6 | `4759972` | 255/3 | +1 HomeScreenTest +1 TextFit (first run 255/6 → fix) |
+| T3.7 | `e83ec2d` | 256/3 | selection header; 2 tests rewritten + 1 new (first run 256/4 → fix) |
+| T3.8 | `4405904` | 259/3 | +3 HomeScreenTest empty-state cases, first run green |
+| T3.9 | `fb96782` | 258/3 | launcher moves; −1 dead warp test, launcher case rewritten |
 
 The "3" in every row is exactly the documented `TextFitTest` known-red set
 (home / page editor / document) — 0 any other failure at every task.
@@ -330,10 +333,82 @@ The "3" in every row is exactly the documented `TextFitTest` known-red set
   but tiles live in the dialog's window, not the activity; fixed to
   `ShadowDialog.getLatestDialog()!!.findViewById` → **255/3**.
 
-**State:** tree clean at `4759972`; 255 tests, 3 documented known-reds; log entry for
-G2 pending phase-end full build.
+### T3.7 Selection contextual header ✅ (`e83ec2d`)
 
-**Next:** T3.7 selection contextual header → T3.8 empty states → T3.9 launcher →
-phase-end full build + G2 (`alpha2`).
+- New `selectionHeader` row in `activity_main.xml` (sibling of `toolbar` inside
+  `AppBarLayout`, GONE by default): `btnSelClose (X) · selCount · Move · Merge ·
+  Export · Delete` with `·` separators (`selSep1-3`). While selecting the toolbar
+  row (wordmark + gear) hides and the header takes the row.
+- `menu_main.xml` keeps only `action_settings`; the 4 selection menu items +
+  `onPrepareOptionsMenu` deleted; `applyToolbarTitle`/`selectionTitle` merged into
+  `updateSelectionHeader()` — **no `invalidateOptionsMenu` anywhere** (static menu).
+  `exportSelectedZip()`/`confirmDeleteSelected()`/`mergeFlow` logic verbatim.
+- Gating: Move visible but **disabled** (T4.3 wires it — owner decision 3);
+  Merge ≥ 2; Delete ≥ 1; Export Pro-only ≥ 1 — Free hides Export + separators.
+- New strings `move`, `export`. Tests: UiSmokeTest long-press rewritten
+  (header/toolbar/selCount), zip-export test → `btnSelExport` + menu id asserted
+  gone via `getIdentifier==0`; HomeScreenTest Select rewritten + new gating case.
+- **First run 256/4:** (1) my gating case asserted Free — test builds are Pro by
+  default (`isPro = TEST_BUILD || …`), fixed with `setTestOverride(false)` and the
+  Pro half with `setTestOverride(true)`; (2) async `ListAdapter` row-1 NPE — fixed
+  with `pollUntil { findViewHolderForAdapterPosition(1) != null }` and re-`forceLayout`
+  + poll after leaving selection → **256/3**.
+
+### T3.8 Empty states ✅ (`4405904`)
+
+- `updateEmptyState()` called from `applyList()` when `sorted.isEmpty()` — three
+  states: **fresh library** → `frame_corners` brackets + `empty_first_scan`
+  ("Scan your first document", subtitle GONE, SCAN button is the CTA);
+  **filter-empty** (category *or* search) → `empty_category` "No <label> documents
+  yet" / `empty_no_match` + `btnShowAll` chip (clears query + category in one tap);
+  **vault-empty** → copy set inside `updateEmptyState` (`setVaultMode` no longer
+  sets it — its two lines died with the string).
+- `emptyState` click = scan chooser **only when `allDocs.isEmpty()`**; a
+  filtered-out library must not launch the scanner.
+- Deleted: `emptyOrbit` view, `ic_empty_orbit` drawable, `empty_subtitle` (values +
+  values-hi). `empty_title` kept — FlowUtil:49 / VaultFlow:111 toasts use it.
+  New strings `empty_first_scan`, `empty_category`, `empty_no_match`, `show_all`.
+- Smart-cast fix: `val cat = selectedCategory` (mutable property).
+- Tests: 3 new `HomeScreenTest` cases (fresh library incl. `emptyOrbit`
+  `getIdentifier==0`, dead category → Show all → doc back + All checked, dead
+  query → Show all → query cleared). **First run green → 259/3.** The known-red
+  `home screen text fits` stays red on its own `statusLine` ellipsis (its
+  `emptySubtitle` complaints naturally disappear with the view).
+
+### T3.9 Home is the launcher ✅ (`fb96782`)
+
+- Manifest: `MAIN/LAUNCHER` intent-filter moved `GlobeHomeActivity` →
+  `MainActivity`; the globe activity keeps its declaration (no filter) — in the
+  tree until P7.
+- `MainActivity.finish()` warp override deleted (`globeHomeEnabled` branch gone;
+  `SwTransitions.warpBackToGlobe` keeps zero callers, removed with the globe in P7).
+- Same-commit test fixes: `GlobeHomeActivityTest` launcher case **rewritten** →
+  `MainActivity` is the launcher; `SwTransitionsTest.finishing the shelf warps
+  back to the globe` **deleted** (feature gone — reason in commit); the no-warp
+  case kept and still passes. **First run 258/3.**
+
+### Phase-end full build — P3 (2026-11-07)
+
+Command: `./gradlew test assembleRelease -PtestBuild --no-daemon --continue` →
+BUILD FAILED *only* on the 3 known-red TextFit tests (expected with `--continue`,
+82 tasks); APK produced.
+
+| Variant | Tests | Failures | Errors | Red = the 3 documented TextFit? |
+|---------|------:|---------:|-------:|---|
+| testDebugUnitTest | 258 | 3 | 0 | ✅ home / page editor / document |
+| testReleaseUnitTest | 258 | 3 | 0 | ✅ home / page editor / document |
+
+- `aapt2 dump badging` on alpha2: `com.scanwhirl.app.test` · `ScanWhirl Test` ·
+  launcher **`com.scanwhirl.app.ui.MainActivity`** (T3.9 landed ✅) ·
+  versionCode 25 / `1.1.1-test25` (bump in T9.1 — unchanged by design).
+- Gate checks: both variants **258/3**, 0 any other failure ✅ · known-red set
+  exactly the documented 3 ✅ · baseline (209) exceeded ✅ · MainActivity < 900 ✅.
+- **APK delivered:** `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alpha2.apk`.
+- **G2 owner check (6 screenshots required):** Home with 0 docs · Home with docs ·
+  chip selected · search focused · Tools sheet · selection mode.
+- Nothing pushed; commits T3.7 `e83ec2d` → T3.8 `4405904` → T3.9 `fb96782`.
+
+**Next:** **STOP at G2** — wait for owner screenshots → then plan-mode review of
+Phase 4 (T4.1–T4.7; Move wiring T4.3, nudge T4.4, export hygiene T4.7).
 
 ---
