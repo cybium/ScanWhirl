@@ -141,4 +141,5 @@
     <string name="ocr_share_all"><!-- review -->सभी पृष्ठ साझा करें</string>
     <string name="ocr_save_txt"><!-- review -->.txt के रूप में सहेजें</string>
     <string name="ocr_rescan"><!-- review -->फिर से स्कैन करें</string>
+    <string name="share_text"><!-- review -->पाठ साझा करें</string>
 </resources>

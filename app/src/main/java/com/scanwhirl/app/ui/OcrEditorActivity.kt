@@ -361,7 +361,7 @@ class OcrEditorActivity : AppCompatActivity() {
             putExtra(Intent.EXTRA_SUBJECT, getString(R.string.ocr_editor_title))
             putExtra(Intent.EXTRA_TEXT, all)
         }
-        startActivity(Intent.createChooser(send, getString(R.string.ocr_share_text)))
+        startActivity(Intent.createChooser(send, getString(R.string.share_text)))
     }
 
     private fun saveAllAsTxt() {

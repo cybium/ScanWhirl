@@ -67,34 +67,50 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnJoinLines"
-            style="@style/Widget.ScanWhirl.Button.DockItem"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:minHeight="48dp"
+            android:paddingHorizontal="8dp"
+            android:textSize="12sp"
+            android:maxLines="2"
             android:text="@string/ocr_join_lines" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnFixSpaces"
-            style="@style/Widget.ScanWhirl.Button.DockItem"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:minHeight="48dp"
+            android:paddingHorizontal="8dp"
+            android:textSize="12sp"
+            android:maxLines="2"
             android:text="@string/ocr_fix_spaces" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnUndo"
-            style="@style/Widget.ScanWhirl.Button.DockItem"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:minHeight="48dp"
+            android:paddingHorizontal="8dp"
+            android:textSize="12sp"
+            android:maxLines="2"
             android:text="@string/ocr_undo" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRemoveGaps"
-            style="@style/Widget.ScanWhirl.Button.DockItem"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:minHeight="48dp"
+            android:paddingHorizontal="8dp"
+            android:textSize="12sp"
+            android:maxLines="2"
             android:text="@string/ocr_remove_gaps" />
     </LinearLayout>
 

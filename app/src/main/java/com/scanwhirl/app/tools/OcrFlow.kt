@@ -8,20 +8,20 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.SwDialog
-import com.scanwhirl.app.ui.showSw
+import com.scanwhirl.app.ui.OcrEditorActivity
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.PdfPageRenderer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * test26 T2.7 — OCR (scan / device PDF / gallery image), moved verbatim out
- * of `MainActivity`. The old result dialog moves along and stays until P6
- * (redesign); `chooseProSource` stays on the Activity and hands the source
- * in.
+ * of `MainActivity`. P6 replaces the old read-only result dialog with
+ * `OcrEditorActivity`; `chooseProSource` stays on the Activity and hands the
+ * source in.
  */
 class OcrFlow(
     private val activity: AppCompatActivity,
@@ -33,23 +33,17 @@ class OcrFlow(
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
-                val text = withContext(Dispatchers.IO) {
+                withContext(Dispatchers.IO) {
                     if (!repo.hasOcr(doc.id) || repo.ocrDoc(doc.id).values.all { it.isBlank() }) {
                         repo.buildOcr(doc.id)
                     }
-                    repo.ocrDoc(doc.id).entries
-                        .sortedBy { it.key }
-                        .mapIndexedNotNull { idx, entry ->
-                            val clean = entry.value.trim()
-                            if (clean.isEmpty()) null else "--- Page ${idx + 1} ---\n$clean"
-                        }
-                        .joinToString("\n\n")
                 }
                 progress.dismiss()
-                showOcrTextDialog(
-                    doc.name,
-                    text.ifBlank { activity.getString(R.string.ocr_empty) }
-                )
+                // Doc-backed: editor reads/writes repo.ocrDoc(doc.id).
+                val intent = Intent(activity, OcrEditorActivity::class.java).apply {
+                    putExtra(OcrEditorActivity.EXTRA_DOC_ID, doc.id)
+                }
+                activity.startActivity(intent)
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -66,21 +60,19 @@ class OcrFlow(
         activity.lifecycleScope.launch {
             try {
                 // Render + read one page at a time: no whole PDF in memory.
-                val parts = withContext(Dispatchers.IO) {
+                val text = withContext(Dispatchers.IO) {
                     PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
                         val count = PdfPageRenderer.pageCount(fd)
                         (0 until count).mapNotNull { i ->
                             val page = PdfPageRenderer.renderPageJpeg(fd, i, 200f, 2400, 92)
-                            val text = OcrEngine.recognizeBytes(page).trim()
-                            if (text.isEmpty()) null else "--- Page ${i + 1} ---\n$text"
+                            val t = OcrEngine.recognizeBytes(page).trim()
+                            if (t.isEmpty()) null else "--- Page ${i + 1} ---\n$t"
                         }
                     }
-                }
+                }.joinToString("\n\n")
                 progress.dismiss()
-                showOcrTextDialog(
-                    FlowUtil.devicePdfName(repo, uri),
-                    parts.joinToString("\n\n").ifBlank { activity.getString(R.string.ocr_empty) }
-                )
+                // Temp mode: write to cache, start editor with EXTRA_TEXT_PATH.
+                startEditorWithText(text, FlowUtil.devicePdfName(repo, uri))
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -105,7 +97,7 @@ class OcrFlow(
                 progress.dismiss()
                 val title = repo.displayNameOf(uri)?.substringBeforeLast('.')
                     ?.takeIf { it.isNotBlank() } ?: activity.getString(R.string.source_gallery_image)
-                showOcrTextDialog(title, text.ifBlank { activity.getString(R.string.ocr_empty) })
+                startEditorWithText(text, title)
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -117,25 +109,13 @@ class OcrFlow(
         }
     }
 
-    /** Shared OCR result dialog: every line, copyable and shareable. */
-    private fun showOcrTextDialog(title: String, shown: String) {
-        SwDialog.sheet(activity)
-            .setTitle(title)
-            .setMessage(shown)
-            .setPositiveButton(R.string.ocr_copy) { _, _ ->
-                val cb = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                cb?.setPrimaryClip(android.content.ClipData.newPlainText(title, shown))
-                Toast.makeText(activity, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton(R.string.share_pdf) { _, _ ->
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_SUBJECT, title)
-                    putExtra(Intent.EXTRA_TEXT, shown)
-                }
-                activity.startActivity(Intent.createChooser(send, activity.getString(R.string.share_pdf)))
-            }
-            .setNegativeButton(R.string.close, null)
-            .showSw(isSheet = true)
+    /** Write OCR text to a cache file and launch the editor with EXTRA_TEXT_PATH. */
+    private fun startEditorWithText(text: String, title: String) {
+        val cacheFile = File(activity.cacheDir, "ocr_${System.currentTimeMillis()}.txt")
+        cacheFile.writeText(text.ifBlank { activity.getString(R.string.ocr_empty) })
+        val intent = Intent(activity, OcrEditorActivity::class.java).apply {
+            putExtra(OcrEditorActivity.EXTRA_TEXT_PATH, cacheFile.absolutePath)
+        }
+        activity.startActivity(intent)
     }
 }

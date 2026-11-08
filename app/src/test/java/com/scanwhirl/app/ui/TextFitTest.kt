@@ -16,6 +16,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.OcrEditorActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertNotNull
@@ -442,6 +443,28 @@ class TextFitTest {
         atBothFontScales {
             ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
                 scenario.onActivity { checkScreen(it, "Settings") }
+            }
+        }
+        assertNoProblems()
+    }
+
+    @Test
+    fun `ocr editor text fits`() {
+        val docId = runBlocking {
+            repo.saveScan(listOf(contentUri(jpegBytes())), null, "OCR fit doc").id
+        }
+        runBlocking {
+            repo.buildOcr(docId) { _ ->
+                "This is some OCR text that needs editing before copying or saving.\nIt has multiple lines and paragraphs.\n\nA second paragraph here."
+            }
+        }
+        atBothFontScales {
+            ActivityScenario.launch<OcrEditorActivity>(
+                android.content.Intent(app, OcrEditorActivity::class.java).apply {
+                    putExtra(OcrEditorActivity.EXTRA_DOC_ID, docId)
+                }
+            ).use { scenario ->
+                scenario.onActivity { checkScreen(it, "OcrEditor") }
             }
         }
         assertNoProblems()
