@@ -13,6 +13,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivityExportResultBinding
+import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfOpener
@@ -33,6 +34,9 @@ class ExportResultActivity : BaseActivity() {
     private lateinit var binding: ActivityExportResultBinding
     private var outputPath: String? = null
     private var mime = "image/jpeg"
+
+    /** T4.8: the in-app document this export belongs to (null = not a doc's copy). */
+    private var docId: String? = null
     private var displayName = "ScanWhirl"
     private var beforeBytes = 0L
     private var afterBytes = 0L
@@ -56,6 +60,7 @@ class ExportResultActivity : BaseActivity() {
         outputPath = intent.getStringExtra(EXTRA_OUTPUT)
         mime = intent.getStringExtra(EXTRA_MIME) ?: "image/jpeg"
         displayName = intent.getStringExtra(EXTRA_NAME) ?: "ScanWhirl"
+        docId = intent.getStringExtra(EXTRA_DOC_ID)
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L)
         afterBytes = intent.getLongExtra(EXTRA_AFTER, 0L)
         isPdf = mime == "application/pdf"
@@ -121,7 +126,11 @@ class ExportResultActivity : BaseActivity() {
                         val saved = withContext(Dispatchers.IO) {
                             DownloadSaver.savePdfFile(
                                 this@ExportResultActivity, file.readBytes(), displayName
-                            )
+                            ).also {
+                                // T4.8: remember the copy so delete can remove it.
+                                docId?.let { id -> ScanRepository(this@ExportResultActivity)
+                                    .addExport(id, it.uri) }
+                            }
                         }
                         SavedSnackbar.show(
                             binding.root,
@@ -214,6 +223,9 @@ class ExportResultActivity : BaseActivity() {
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_WARNING = "warning"
 
+        /** T4.8: the document whose meta.txt should record the saved copy. */
+        private const val EXTRA_DOC_ID = "doc_id"
+
         fun intent(
             context: Context,
             outputPath: String,
@@ -225,7 +237,8 @@ class ExportResultActivity : BaseActivity() {
             width: Int,
             height: Int,
             title: String?,
-            warning: String?
+            warning: String?,
+            docId: String? = null
         ): Intent = Intent(context, ExportResultActivity::class.java)
             .putExtra(EXTRA_OUTPUT, outputPath)
             .putExtra(EXTRA_PREVIEW, previewPath)
@@ -237,5 +250,6 @@ class ExportResultActivity : BaseActivity() {
             .putExtra(EXTRA_HEIGHT, height)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_WARNING, warning)
+            .putExtra(EXTRA_DOC_ID, docId)
     }
 }

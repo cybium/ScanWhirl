@@ -29,6 +29,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.chip.Chip
+import com.google.android.material.snackbar.Snackbar
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -1008,13 +1009,33 @@ class MainActivity : BaseActivity(), HomeHost {
     private fun confirmDeleteSelected() {
         val ids = selectedIds.toList()
         if (ids.isEmpty()) return
-        SwDialog.danger(this)
+        // T4.8: find the Documents/ScanWhirl copies these documents own while
+        // their meta.txt still exists (recorded exports + exact-name rows).
+        val plan = ids.mapNotNull { repo.getDocument(it) }
+            .map { it to DeleteExports.copiesFor(this, repo, it.id, it.name) }
+        val total = plan.sumOf { it.second.size }
+        val builder = SwDialog.danger(this)
             .setTitle(R.string.delete_selected_title)
             .setMessage(resources.getQuantityString(R.plurals.delete_selected_message, ids.size, ids.size))
+        var box: android.widget.CheckBox? = null
+        if (total > 0) {
+            box = DeleteExports.checkboxRow(this, total)
+            builder.setView(box)
+        }
+        builder
             .setPositiveButton(R.string.delete) { _, _ ->
-                ids.forEach { repo.deleteDocument(it) }
+                ids.forEach { repo.deleteDocument(it) } // never blocked by copy removal
                 setSelectionMode(false)
                 refreshList()
+                if (box?.isChecked == true && total > 0) {
+                    val (removed, failed) =
+                        DeleteExports.removeCopies(this, plan.flatMap { it.second })
+                    Snackbar.make(
+                        binding.root,
+                        DeleteExports.message(this, removed, failed),
+                        Snackbar.LENGTH_LONG
+                    ).show()
+                }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .showSw(isSheet = false)

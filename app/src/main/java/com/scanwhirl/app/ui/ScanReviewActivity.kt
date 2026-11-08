@@ -492,11 +492,14 @@ class ScanReviewActivity : BaseActivity() {
                     ) {
                         try {
                             exported = withContext(Dispatchers.IO) {
-                                DownloadSaver.savePdf(
+                                DownloadSaver.savePdfFile(
                                     this@ScanReviewActivity,
                                     doc.pdfFile.readBytes(),
                                     DownloadSaver.pdfNameFor(doc.name)
-                                )
+                                ).also {
+                                    // T4.8: remember the copy so delete can remove it.
+                                    repo.addExport(doc.id, it.uri)
+                                }.name
                             }
                         } catch (e: Exception) {
                             exported = null

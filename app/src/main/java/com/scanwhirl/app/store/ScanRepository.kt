@@ -92,7 +92,53 @@ class ScanRepository(private val context: Context) {
     private fun writeMeta(dir: File, name: String, category: String? = null) {
         val cat = category?.takeIf { CategoryRules.isValid(it) }
             ?: CategoryRules.classify(name)
-        File(dir, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\n$cat\n")
+        // T4.8: a recorded `exports=` line (copies in Documents/ScanWhirl)
+        // survives a rewrite instead of being silently dropped.
+        val exports = File(dir, "meta.txt").takeIf { it.exists() }
+            ?.readLines()?.firstOrNull { it.startsWith(EXPORTS_KEY) }
+        File(dir, "meta.txt").writeText(buildString {
+            append(name).append('\n')
+            append(System.currentTimeMillis()).append('\n')
+            append(cat)
+            if (exports != null) append('\n').append(exports)
+            append('\n')
+        })
+    }
+
+    /**
+     * T4.8 (complaint #18): records a PDF copy this document saved into
+     * Documents/ScanWhirl so deleting the document can remove it too.
+     * Stored as an optional 4th meta line `exports=<uri1>|<uri2>` — old
+     * builds ignore unknown lines, and setCategory/renameDocument rewrite
+     * the whole file line-by-line, so it survives those.
+     */
+    fun addExport(id: String, uri: Uri) {
+        val meta = File(File(docsDir, id), "meta.txt")
+        if (!meta.exists()) return
+        val lines = meta.readLines().toMutableList()
+        while (lines.size < 3) lines.add(CategoryRules.OTHER)
+        val entry = lines.indexOfFirst { it.startsWith(EXPORTS_KEY) }
+        val recorded = if (entry >= 0) {
+            lines[entry].removePrefix(EXPORTS_KEY).split("|").filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+        val merged = (recorded + uri.toString()).distinct().joinToString("|")
+        if (entry >= 0) lines[entry] = EXPORTS_KEY + merged else lines.add(EXPORTS_KEY + merged)
+        meta.writeText(lines.joinToString("\n"))
+    }
+
+    /** T4.8: PDF copies of this document recorded in Documents/ScanWhirl. */
+    fun exportsOf(id: String): List<Uri> {
+        val meta = File(File(docsDir, id), "meta.txt")
+        if (!meta.exists()) return emptyList()
+        return meta.readLines()
+            .firstOrNull { it.startsWith(EXPORTS_KEY) }
+            ?.removePrefix(EXPORTS_KEY)
+            ?.split("|")
+            ?.filter { it.isNotBlank() }
+            ?.mapNotNull { raw -> runCatching { Uri.parse(raw) }.getOrNull() }
+            ?: emptyList()
     }
 
     /** User-chosen category override (editor → "Categorize"). */
@@ -231,6 +277,16 @@ class ScanRepository(private val context: Context) {
             val inherited = src.listFiles { f -> f.name == "meta.txt" }
                 ?.firstOrNull()?.readLines()?.getOrNull(2)
                 ?.takeIf { CategoryRules.isValid(it) }
+            // T4.8: exported copies belong to the original — a duplicate
+            // starts with none of its own.
+            val destMeta = File(dest, "meta.txt")
+            if (destMeta.exists()) {
+                destMeta.writeText(
+                    destMeta.readLines()
+                        .filterNot { it.startsWith(EXPORTS_KEY) }
+                        .joinToString("\n")
+                )
+            }
             writeMeta(dest, name, inherited)
             loadDocument(dest) ?: throw IllegalStateException("Copy could not be opened")
         }
@@ -540,6 +596,9 @@ class ScanRepository(private val context: Context) {
 
     private val LOCK_FILE = "locked.meta"
     private val VAULT_FILE = "vault.flag"
+
+    /** T4.8: prefix of the optional meta.txt line listing exported copies. */
+    private val EXPORTS_KEY = "exports="
     private val LOCK_INDEX_FILE = "locked_pdfs.txt"
     private val OCR_HEADER = "#scanwhirl-ocr-v2"
 

@@ -53,6 +53,19 @@
         <item quantity="one">%1$d scan and all its pages will be permanently deleted.</item>
         <item quantity="other">%1$d scans and all their pages will be permanently deleted.</item>
     </plurals>
+    <!-- test26 T4.8: deleting a document can remove its exported copies too. -->
+    <plurals name="delete_copies">
+        <item quantity="one">Also delete %1$d saved PDF copy in Documents/ScanWhirl</item>
+        <item quantity="other">Also delete %1$d saved PDF copies in Documents/ScanWhirl</item>
+    </plurals>
+    <plurals name="deleted_copies_ok">
+        <item quantity="one">Deleted. %1$d copy removed.</item>
+        <item quantity="other">Deleted. %1$d copies removed.</item>
+    </plurals>
+    <plurals name="deleted_copies_partial">
+        <item quantity="one">Deleted. %1$d copy removed, %2$d could not be removed (delete it in Files).</item>
+        <item quantity="other">Deleted. %1$d copies removed, %2$d could not be removed (delete it in Files).</item>
+    </plurals>
     <plurals name="pages">
         <item quantity="one">%1$d page</item>
         <item quantity="other">%1$d pages</item>

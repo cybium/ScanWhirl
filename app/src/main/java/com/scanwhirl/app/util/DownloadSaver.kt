@@ -147,6 +147,50 @@ object DownloadSaver {
         }
     }
 
+    /**
+     * T4.8: best-effort lookup of copies of [docName] this package owns in
+     * Documents/ScanWhirl — only `<name>.pdf` / `<name> (n).pdf`, never
+     * anything looser, and only rows `owner_package_name` proves we wrote
+     * (Android 10+; older installs return nothing rather than guessing).
+     */
+    fun findCopies(context: Context, docName: String): List<Uri> {
+        if (Build.VERSION.SDK_INT >= 29) return findCopiesQ(context, docName)
+        return emptyList()
+    }
+
+    @androidx.annotation.RequiresApi(29)
+    private fun findCopiesQ(context: Context, docName: String): List<Uri> {
+        val resolver = context.contentResolver
+        val collection = MediaStore.Files.getContentUri("external")
+        val relPath = Environment.DIRECTORY_DOCUMENTS + "/" + SUBDIR
+        val stem = pdfNameFor(docName).removeSuffix(".pdf")
+        val exact = Regex("^${Regex.escape(stem)}( \\(\\d+\\))?\\.pdf$")
+        val out = mutableListOf<Uri>()
+        // Best effort: no MediaStore here / no permission → no legacy matches.
+        try {
+            resolver.query(
+                collection,
+                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+                "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND " +
+                    "${MediaStore.MediaColumns.OWNER_PACKAGE_NAME}=?",
+                arrayOf("$relPath/", context.packageName),
+                null
+            )?.use { c ->
+                val idIdx = c.getColumnIndex(MediaStore.MediaColumns._ID)
+                val nameIdx = c.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                while (c.moveToNext()) {
+                    val name = c.getString(nameIdx) ?: continue
+                    if (exact.matches(name)) {
+                        out.add(ContentUris.withAppendedId(collection, c.getLong(idIdx)))
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            return emptyList()
+        }
+        return out
+    }
+
     @androidx.annotation.RequiresApi(29)
     private fun savePdfQ(context: Context, bytes: ByteArray, displayName: String): SavedFile {
         val resolver = context.contentResolver

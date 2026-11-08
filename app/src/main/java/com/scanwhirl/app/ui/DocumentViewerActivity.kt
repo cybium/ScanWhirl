@@ -446,7 +446,10 @@ class DocumentViewerActivity : BaseActivity() {
                             this@DocumentViewerActivity,
                             doc.pdfFile.readBytes(),
                             DownloadSaver.pdfNameFor(doc.name)
-                        )
+                        ).also {
+                            // T4.8: remember the copy so delete can remove it.
+                            repo.addExport(doc.id, it.uri)
+                        }
                     }
                     SavedSnackbar.show(
                         binding.root,
@@ -886,12 +889,38 @@ class DocumentViewerActivity : BaseActivity() {
     }
 
     private fun confirmDelete(doc: ScanDocument) {
-        SwDialog.danger(this)
+        // T4.8: locate this document's Documents/ScanWhirl copies while its
+        // meta.txt still exists (recorded exports + exact-name legacy rows).
+        val copies = DeleteExports.copiesFor(this, repo, doc.id, doc.name)
+        val builder = SwDialog.danger(this)
             .setTitle(R.string.delete_title)
             .setMessage(getString(R.string.delete_message, doc.name))
+        var box: android.widget.CheckBox? = null
+        if (copies.isNotEmpty()) {
+            box = DeleteExports.checkboxRow(this, copies.size)
+            builder.setView(box)
+        }
+        builder
             .setPositiveButton(R.string.delete) { _, _ ->
-                repo.deleteDocument(doc.id)
-                finish()
+                repo.deleteDocument(doc.id) // never blocked by copy removal
+                if (box?.isChecked == true && copies.isNotEmpty()) {
+                    val (removed, failed) = DeleteExports.removeCopies(this, copies)
+                    // The viewer is closing, so hold the close until the
+                    // result message has actually been seen.
+                    val snackbar = Snackbar.make(
+                        binding.root,
+                        DeleteExports.message(this, removed, failed),
+                        Snackbar.LENGTH_LONG
+                    )
+                    snackbar.addCallback(object : Snackbar.Callback() {
+                        override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                            if (!isFinishing) finish()
+                        }
+                    })
+                    snackbar.show()
+                } else {
+                    finish()
+                }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .showSw(isSheet = false)

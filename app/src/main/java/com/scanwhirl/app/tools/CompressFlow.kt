@@ -238,7 +238,8 @@ class CompressFlow(
                 width = 0,
                 height = 0,
                 title = out.name,
-                warning = warning
+                warning = warning,
+                docId = out.id // T4.8: record the saved copy on this document
             )
         )
     }

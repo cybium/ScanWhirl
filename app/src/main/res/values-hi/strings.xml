@@ -56,6 +56,19 @@
     <!-- review: the 2 entries below were machine-translated at T4.7 — native review pending -->
     <string name="open">खोलें</string>
     <string name="scan_saved">स्कैन सहेजा गया</string>
+    <!-- review: the 3 plurals below were machine-translated at T4.8 — native review pending -->
+    <plurals name="delete_copies">
+        <item quantity="one">Documents/ScanWhirl में सहेजी गई %1$d PDF प्रति भी हटाएँ</item>
+        <item quantity="other">Documents/ScanWhirl में सहेजी गई %1$d PDF प्रतियाँ भी हटाएँ</item>
+    </plurals>
+    <plurals name="deleted_copies_ok">
+        <item quantity="one">हटाया गया। %1$d प्रति हटाई गई।</item>
+        <item quantity="other">हटाया गया। %1$d प्रतियाँ हटाई गईं।</item>
+    </plurals>
+    <plurals name="deleted_copies_partial">
+        <item quantity="one">हटाया गया। %1$d प्रति हटाई गई, %2$d हटाई नहीं जा सकी (Files में हटाएँ)।</item>
+        <item quantity="other">हटाया गया। %1$d प्रतियाँ हटाई गईं, %2$d हटाई नहीं जा सकीं (Files में हटाएँ)।</item>
+    </plurals>
     <!-- review: the 23 entries below were machine-translated at T3.14 (G2b §3C) — native review pending -->
     <string name="empty_first_scan">अपना पहला दस्तावेज़ स्कैन करें</string>
     <string name="empty_category">%1$s के अभी कोई दस्तावेज़ नहीं</string>

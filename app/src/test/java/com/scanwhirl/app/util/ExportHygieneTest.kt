@@ -1,16 +1,8 @@
 package com.scanwhirl.app.util
 
 import android.app.Application
-import android.content.ContentProvider
-import android.content.ContentUris
-import android.content.ContentValues
 import android.content.pm.ProviderInfo
-import android.database.Cursor
-import android.database.MatrixCursor
 import android.net.Uri
-import android.os.Environment
-import android.os.ParcelFileDescriptor
-import android.provider.MediaStore
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -31,14 +23,13 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowContentResolver
 import java.io.File
-import java.io.FileNotFoundException
 
 /**
  * T4.7 export hygiene (N10, complaint #13): no silent copy into Documents/ScanWhirl,
  * replace-not-duplicate when the same name is saved again, Open/Undo Snackbar.
  *
- * A fake `media` ContentProvider stands in for MediaStore so every row the app
- * writes to Documents/ScanWhirl is observable (and deletable) from the test.
+ * Uses the shared [FakeMediaStore] so every row the app writes to
+ * Documents/ScanWhirl is observable (and deletable) from the test.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -280,122 +271,5 @@ class ExportHygieneTest {
         }
         shadowOf(android.os.Looper.getMainLooper()).idle()
         return condition()
-    }
-
-    /**
-     * In-memory stand-in for MediaStore (authority `media`): rows under
-     * `Documents/ScanWhirl` behave like real ones — queryable by
-     * relative_path + display_name, writable through openFile, deletable.
-     */
-    private class FakeMediaStore : ContentProvider() {
-
-        class Row(
-            val id: Long,
-            val values: ContentValues,
-            val file: File,
-            var writable: Boolean = true,
-            var writes: Int = 0
-        )
-
-        val rows = LinkedHashMap<Long, Row>()
-        private var nextId = 1L
-        private val workDir: File =
-            File.createTempFile("fake_media", null).let { it.delete(); it.apply { mkdirs() } }
-
-        fun close() {
-            workDir.deleteRecursively()
-        }
-
-        /** Rows that live in Documents/ScanWhirl (the folder T4.7 guards). */
-        fun scanwhirlPdfs(): List<Row> = rows.values.filter {
-            it.values.getAsString(MediaStore.MediaColumns.RELATIVE_PATH)?.trimEnd('/') ==
-                "${Environment.DIRECTORY_DOCUMENTS}/ScanWhirl"
-        }
-
-        fun totalWrites(): Int = rows.values.sumOf { it.writes }
-
-        override fun onCreate(): Boolean = true
-
-        override fun getType(uri: Uri): String? = "application/pdf"
-
-        override fun query(
-            uri: Uri,
-            projection: Array<String>?,
-            selection: String?,
-            selectionArgs: Array<out String>?,
-            sortOrder: String?
-        ): Cursor {
-            val proj: Array<String> = projection ?: arrayOf(
-                MediaStore.MediaColumns._ID,
-                MediaStore.MediaColumns.DISPLAY_NAME,
-                MediaStore.MediaColumns.RELATIVE_PATH
-            )
-            val args = selectionArgs ?: emptyArray()
-            val cursor = MatrixCursor(proj)
-            val matches = rows.values.filter { row ->
-                if (selection != null && selection.contains("relative_path") && args.size >= 2) {
-                    row.values.getAsString(MediaStore.MediaColumns.RELATIVE_PATH)?.trimEnd('/') ==
-                        args[0].trimEnd('/') &&
-                        row.values.getAsString(MediaStore.MediaColumns.DISPLAY_NAME) == args[1]
-                } else {
-                    true
-                }
-            }
-            for (row in matches) {
-                cursor.addRow(
-                    proj.map { col ->
-                        if (col == MediaStore.MediaColumns._ID) row.id
-                        else row.values.getAsString(col)
-                    }
-                )
-            }
-            return cursor
-        }
-
-        override fun insert(uri: Uri, values: ContentValues?): Uri {
-            val v = ContentValues(values ?: ContentValues())
-            val id = nextId++
-            v.put(MediaStore.MediaColumns._ID, id)
-            rows[id] = Row(id, v, File(workDir, "row_$id.pdf"))
-            return ContentUris.withAppendedId(uri, id)
-        }
-
-        override fun update(
-            uri: Uri,
-            values: ContentValues?,
-            selection: String?,
-            selectionArgs: Array<out String>?
-        ): Int {
-            val row = rows[ContentUris.parseId(uri)] ?: return 0
-            values?.let { row.values.putAll(it) }
-            return 1
-        }
-
-        override fun delete(
-            uri: Uri,
-            selection: String?,
-            selectionArgs: Array<out String>?
-        ): Int {
-            val row = rows.remove(ContentUris.parseId(uri)) ?: return 0
-            row.file.delete()
-            return 1
-        }
-
-        override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
-            val row = rows[ContentUris.parseId(uri)]
-                ?: throw FileNotFoundException("no row for $uri")
-            if (mode.contains("w")) {
-                if (!row.writable) throw FileNotFoundException("row not writable: $uri")
-                // "wt": truncate, then hand out a writable descriptor.
-                row.file.writeBytes(ByteArray(0))
-                row.writes++
-                return ParcelFileDescriptor.open(
-                    row.file,
-                    ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_CREATE
-                )
-            }
-            if (!row.file.exists()) row.file.writeBytes(ByteArray(0))
-            return ParcelFileDescriptor.open(row.file, ParcelFileDescriptor.MODE_READ_ONLY)
-        }
     }
 }

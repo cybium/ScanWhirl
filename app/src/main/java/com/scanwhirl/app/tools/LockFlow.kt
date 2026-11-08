@@ -185,7 +185,8 @@ class LockFlow(
                         width = 0,
                         height = 0,
                         title = activity.getString(R.string.lock_device_title),
-                        warning = activity.getString(R.string.lock_device_note)
+                        warning = activity.getString(R.string.lock_device_note),
+                        docId = locked.id // T4.8: record the saved copy on this document
                     )
                 )
             } catch (e: Exception) {
@@ -279,7 +280,8 @@ class LockFlow(
                         width = 0,
                         height = 0,
                         title = activity.getString(R.string.unlock_pdf_title),
-                        warning = activity.getString(R.string.unlock_device_note)
+                        warning = activity.getString(R.string.unlock_device_note),
+                        docId = doc.id // T4.8: record the saved copy on this document
                     )
                 )
             } catch (e: Exception) {
