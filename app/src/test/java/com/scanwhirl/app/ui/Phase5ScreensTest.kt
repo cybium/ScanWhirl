@@ -27,6 +27,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import java.io.File
 
 /**
@@ -86,6 +87,18 @@ class Phase5ScreensTest {
         }
         shadowOf(android.os.Looper.getMainLooper()).idle()
         return condition()
+    }
+
+    /** Taps the T4.2 picker row whose tag is [category] (local copy of the Home helper). */
+    private fun pickPickerRow(category: String) {
+        val dialog = ShadowDialog.getLatestDialog()
+        assertNotNull("the picker must be open", dialog)
+        val rows = dialog!!.findViewById<android.widget.LinearLayout>(R.id.pickerRows)
+        assertNotNull("the picker must have rows", rows)
+        val row = (0 until rows!!.childCount).map { rows.getChildAt(it) }
+            .firstOrNull { it.tag == category }
+        assertNotNull("row for $category must exist", row)
+        row!!.performClick()
     }
 
     private fun renderActivityPng(activity: android.app.Activity, outPath: String) {
@@ -375,6 +388,74 @@ class Phase5ScreensTest {
             }
             assertTrue("category chip shows ● STUDY after reload", shown)
             assertEquals(com.scanwhirl.app.util.CategoryStyle.COLOR_STUDY, chip!!.currentTextColor)
+        }
+    }
+
+    // --- T4.6: the header chip opens the picker -----------------------------
+    // Written before the fix against existing symbols only (R.id.docCategoryChip,
+    // R.id.pickerRows), so both cases run red first.
+
+    @Test
+    fun `document category chip opens the picker`() {
+        val id = seedDoc("Chip doc")
+        repo.setCategory(id, com.scanwhirl.app.util.CategoryRules.STUDY)
+        val intent = DocumentViewerActivity.intent(app, id)
+        var chip: TextView? = null
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                chip = activity.findViewById(R.id.docCategoryChip)
+            }
+            assertTrue(
+                "chip fills in after reload",
+                pollUntil { chip?.visibility == View.VISIBLE }
+            )
+
+            scenario.onActivity {
+                chip!!.performClick()
+                val dialog = ShadowDialog.getLatestDialog()
+                assertNotNull(
+                    "T4.6: the chip must open the category picker",
+                    dialog
+                )
+                assertNotNull(
+                    "the picker sheet must carry its rows (T4.2)",
+                    dialog!!.findViewById<View>(R.id.pickerRows)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `picker choice recategorises the document and repaints the chip`() {
+        val id = seedDoc("Chip doc")
+        repo.setCategory(id, com.scanwhirl.app.util.CategoryRules.STUDY)
+        val intent = DocumentViewerActivity.intent(app, id)
+        var chip: TextView? = null
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                chip = activity.findViewById(R.id.docCategoryChip)
+            }
+            assertTrue(
+                "chip fills in after reload",
+                pollUntil { chip?.visibility == View.VISIBLE }
+            )
+
+            scenario.onActivity {
+                chip!!.performClick()
+                pickPickerRow(com.scanwhirl.app.util.CategoryRules.RECEIPTS)
+            }
+
+            assertTrue(
+                "the pick must persist on the document",
+                pollUntil {
+                    repo.getDocument(id)?.category ==
+                        com.scanwhirl.app.util.CategoryRules.RECEIPTS
+                }
+            )
+            assertTrue(
+                "the chip repaints with the new category",
+                pollUntil { chip?.text?.toString() == "● RECEIPTS" }
+            )
         }
     }
 

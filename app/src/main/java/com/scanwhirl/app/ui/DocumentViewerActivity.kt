@@ -122,6 +122,9 @@ class DocumentViewerActivity : BaseActivity() {
         binding.btnOcr.setOnClickListener { runAndShowOcr() }
         binding.btnLongImage.setOnClickListener { shareLongImage() }
         binding.btnVaultDoc.setOnClickListener { toggleVaultDoc() }
+        // T4.6: the header category chip is tappable now — it opens the
+        // category picker (the old "Categorize" list dialog is gone).
+        binding.docCategoryChip.setOnClickListener { promptCategorize() }
 
         // First load (off the main thread), then start the pre-edit snapshot.
         lifecycleScope.launch {
@@ -696,29 +699,23 @@ class DocumentViewerActivity : BaseActivity() {
             .showSw(isSheet = false)
     }
 
-    /** Globe ring picker: Study / Receipts / IDs / Forms / Other. */
+    /**
+     * T4.6: the header category chip — and, until T5.2 removes it (D-F), the
+     * overflow `Categorize` item — open the T4.2 category picker. The old
+     * single-choice "Categorize this document" list dialog is gone; a pick
+     * saves on IO and repaints the chip through [reloadDocument] (the chip
+     * itself is the confirmation, no toast).
+     */
     private fun promptCategorize() {
         val doc = document ?: return
-        val cats = com.scanwhirl.app.util.CategoryRules.ALL.toTypedArray()
-        val current = cats.indexOf(doc.category).coerceAtLeast(0)
-        SwDialog.sheet(this)
-            .setTitle(R.string.categorize_title)
-            .setSingleChoiceItems(cats, current) { dialog, which ->
-                lifecycleScope.launch {
-                    withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        repo.setCategory(doc.id, cats[which])
-                    }
-                    reloadDocument()
-                    Toast.makeText(
-                        this@DocumentViewerActivity,
-                        getString(R.string.categorize_title) + ": " + cats[which],
-                        Toast.LENGTH_SHORT
-                    ).show()
+        CategoryPickerSheet.show(this, doc.category) { cat ->
+            lifecycleScope.launch {
+                withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    repo.setCategory(doc.id, cat)
                 }
-                dialog.dismiss()
+                reloadDocument()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+        }
     }
 
     private fun promptDownload() {

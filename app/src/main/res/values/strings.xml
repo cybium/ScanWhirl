@@ -395,7 +395,6 @@
     <string name="settings_globe_home">Globe home screen</string>
     <string name="settings_globe_home_summary">Open the rotating Earth home first; pinch in for the Shelf list</string>
     <string name="action_categorize">Categorize</string>
-    <string name="categorize_title">Categorize this document</string>
 
     <!-- Test25 Visual Overhaul & Architecture Strings -->
     <string name="globe_status_empty">AWAITING TRANSMISSION</string>
