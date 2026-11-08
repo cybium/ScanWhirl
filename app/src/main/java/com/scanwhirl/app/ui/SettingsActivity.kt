@@ -64,10 +64,6 @@ class SettingsActivity : BaseActivity() {
         binding.switchAutoCopyToDocuments.setOnCheckedChangeListener { _, checked ->
             Prefs.setAutoCopyToDocuments(this, checked)
         }
-        binding.switchGlobeHome.isChecked = Prefs.globeHomeEnabled(this)
-        binding.switchGlobeHome.setOnCheckedChangeListener { _, checked ->
-            Prefs.setGlobeHomeEnabled(this, checked)
-        }
         binding.rowWallpaper.setOnClickListener {
             pickWallpaper.launch(arrayOf("image/*"))
         }

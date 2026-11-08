@@ -219,57 +219,6 @@
                         android:background="@color/cyan_border_hair" />
 
                     <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="?attr/selectableItemBackground"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:padding="16dp">
-
-                        <ImageView
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="14dp"
-                            android:importantForAutofill="no"
-                            android:src="@drawable/ic_globe"
-                            app:tint="@color/cyan_primary" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/settings_globe_home"
-                                android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="@string/settings_globe_home_summary"
-                                android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?android:attr/textColorSecondary" />
-                        </LinearLayout>
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/switchGlobeHome"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            app:thumbTint="@color/sel_switch_thumb"
-                            app:trackTint="@color/sel_switch_track" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginStart="54dp"
-                        android:background="@color/cyan_border_hair" />
-
-                    <LinearLayout
                         android:id="@+id/rowWallpaper"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

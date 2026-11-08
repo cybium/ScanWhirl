@@ -2,12 +2,8 @@ package com.scanwhirl.app.util
 
 import android.content.Context
 import android.provider.Settings
-import android.view.View
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
-import com.scanwhirl.app.ui.globe.GlobeHomeActivity
-import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -88,25 +84,5 @@ class SwMotionTest {
             "the robolectric fingerprint must block ambient motion",
             SwMotion.ambientAllowed(app)
         )
-    }
-
-    @Test
-    fun `fab pulse stays static while ambient motion is off`() {
-        ActivityScenario.launch(GlobeHomeActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                // idleFor, never bare idle(): an ungated infinite animator
-                // would spin the scheduler forever (suite-hang mode).
-                shadowOf(android.os.Looper.getMainLooper())
-                    .idleFor(Duration.ofMillis(500))
-
-                val p1 = activity.findViewById<View>(R.id.fabPulse1)
-                val p2 = activity.findViewById<View>(R.id.fabPulse2)
-                assertEquals("pulse 1 must hold its XML alpha", 0.55f, p1.alpha, 0.001f)
-                assertEquals("pulse 2 must hold its XML alpha", 0.30f, p2.alpha, 0.001f)
-                assertEquals("pulse 1 must hold its scale", 1f, p1.scaleX, 0.001f)
-                assertEquals("pulse 2 must hold its scale", 1f, p2.scaleX, 0.001f)
-                assertEquals("pulse 1 must hold its scale Y", 1f, p1.scaleY, 0.001f)
-            }
-        }
     }
 }

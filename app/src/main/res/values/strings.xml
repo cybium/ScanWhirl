@@ -398,18 +398,6 @@
     <string name="preview_pro_ui">Preview Pro UI</string>
     <string name="preview_changed">Showing the %1$s UI (test preview)</string>
 
-    <!-- Globe home (test23): holographic Earth + category rings. -->
-    <string name="globe_pull_search">↓ Pull to Search</string>
-    <string name="globe_pull_release">↑ Release to Search</string>
-    <string name="globe_hint_home">Tap Earth to explore • Drag to spin</string>
-    <string name="globe_hint_rings">Drag rings to spin • Pinch in for List</string>
-    <string name="globe_search_hint">Search document names</string>
-    <string name="globe_match_all">Showing all %1$d documents</string>
-    <string name="globe_match_count">Found %1$d of %2$d matching</string>
-    <string name="globe_search_open">Search</string>
-    <string name="settings_globe_home">Globe home screen</string>
-    <string name="settings_globe_home_summary">Open the rotating Earth home first; pinch in for the Shelf list</string>
-
     <!-- test26 T5.2 (§4.5): document dock labels, More sheet, Select pages bar. -->
     <string name="btn_text">Text</string>
     <string name="more">More</string>
@@ -420,12 +408,6 @@
     <string name="group_danger">Danger</string>
     <string name="extracted">%1$d pages extracted to a new scan</string>
 
-    <!-- Test25 Visual Overhaul & Architecture Strings -->
-    <string name="globe_status_empty">AWAITING TRANSMISSION</string>
-    <string name="globe_empty_title">Awaiting transmission</string>
-    <string name="globe_empty_sub">Scan your first document to launch it into orbit.</string>
-    <string name="globe_search_pill">Search</string>
-    <string name="a11y_globe_summary">Document globe, %1$d documents</string>
     <string name="btn_list">List</string>
     <string name="btn_settings">Settings</string>
 
@@ -476,14 +458,5 @@
     <string name="dlg_eyebrow_tool">TOOL</string>
     <string name="dlg_eyebrow_security">SECURE ACCESS</string>
     <string name="dlg_eyebrow_recovery">RECOVERY</string>
-
-    <plurals name="globe_status_docs">
-        <item quantity="one">%1$d DOCUMENT</item>
-        <item quantity="other">%1$d DOCUMENTS</item>
-    </plurals>
-    <plurals name="globe_status_orbits">
-        <item quantity="one">%1$d ORBIT</item>
-        <item quantity="other">%1$d ORBITS</item>
-    </plurals>
 
 </resources>

@@ -218,10 +218,6 @@ class Phase5ScreensTest {
                     assertTrue("row $rowId icon matches ${app.resources.getResourceName(iconId)}",
                         iconMatches(icon, iconId))
                 }
-                // The globe row carries no locked ID; reach it via its switch.
-                val globeRow = activity.findViewById<View>(R.id.switchGlobeHome).parent as ViewGroup
-                val globeIcon = globeRow.getChildAt(0) as? ImageView
-                assertTrue("globe row icon matches ic_globe", iconMatches(globeIcon, R.drawable.ic_globe))
 
                 // Chevron rows end in a 20dp ic_chevron_right ImageView…
                 val chevronRows = intArrayOf(
@@ -256,7 +252,7 @@ class Phase5ScreensTest {
                 val expectedTrack = ContextCompat
                     .getColorStateList(activity, R.color.sel_switch_track)!!.defaultColor
                 val switches = intArrayOf(
-                    R.id.switchGreeting, R.id.switchGlobeHome,
+                    R.id.switchGreeting,
                     R.id.switchWallpaper, R.id.switchAutoEnhance
                 )
                 for (id in switches) {
@@ -280,7 +276,7 @@ class Phase5ScreensTest {
                 val density = activity.resources.displayMetrics.density
                 val oneDp = Math.round(1f * density)
 
-                // Appearance: theme, font, greeting, globe and wallpaper share one card.
+                // Appearance: theme, font, greeting and wallpaper share one card.
                 val rowFont = activity.findViewById<View>(R.id.rowFont)
                 val rowGreeting = activity.findViewById<View>(R.id.rowGreeting)
                 assertSame("font and greeting rows share a section container",

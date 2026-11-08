@@ -59,8 +59,6 @@
         <item name="colorOnSurface">@color/text_hologram_hi</item>
         <item name="android:textColorPrimary">@color/text_hologram_hi</item>
         <item name="android:textColorSecondary">@color/text_hologram_mid</item>
-        <item name="android:listChoiceIndicatorSingle">@drawable/sel_radio_orbital</item>
-        <item name="android:listChoiceIndicatorMultiple">@drawable/sel_check_orbital</item>
         <item name="buttonBarPositiveButtonStyle">@style/Widget.ScanWhirl.Button.DialogPositive</item>
         <item name="buttonBarNegativeButtonStyle">@style/Widget.ScanWhirl.Button.DialogNegative</item>
         <item name="buttonBarNeutralButtonStyle">@style/Widget.ScanWhirl.Button.DialogNegative</item>
