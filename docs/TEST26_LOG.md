@@ -626,8 +626,47 @@ in the file; en 356 / hi 76 now → legacy backlog for T8.6 = 280). No code. Sui
 (only the two documented TextFit reds). This closed the audit's immediate §3C check; the going-forward
 "same commit" rule is now in plan §6 legend + §8 gotchas + handoff §3.
 
-**Next:** Phase 4 in build mode (**T4.7 first** → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5) → T4.6)
-→ phase-end full build → **G2c**: `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP**
-(md-review, no screenshots).
+### T4.7 Export hygiene ✅ (`e518c75`)
+
+Complaint #13 / N10. **Red-proofed first:** `ExportHygieneTest` was written against the old API and
+run before any production change — both new tests failed exactly as designed:
+`scan save does not copy into Documents when auto copy is off` → row `Hygiene doc.pdf` existed
+(unconditional copy), and `downloading twice keeps a single row` → `Hygiene.pdf, Hygiene (2).pdf`.
+
+Built:
+- **`Prefs.autoCopyToDocuments`** (default **false**) gates the copy in
+  `ScanReviewActivity.saveAndFinish` (the same call site T4.1 edits — §8 gotcha: after T4.1 grep it
+  still there + rerun `ExportHygieneTest`). Off → toast is the new `scan_saved`; `save_inside_app`
+  deleted (en only, had no hi). en 357 / hi 78 now.
+- **`DownloadSaver.savePdfFile(...): SavedFile(uri, name)` replaces** an existing row of the same
+  name: `_ID` query by `relative_path + _display_name` → `openOutputStream(uri, "wt")`; if that row
+  cannot be written it falls back to the `uniqueName` insert (`Doc (2).pdf`). Pre-Q overwrites the
+  `File`. `savePdf(...)` stays the name-only wrapper (`DownloadSaverTest` untouched, green).
+  `deleteSaved(context, uri)` = Undo (content → `resolver.delete`, file → `File.delete`).
+- **Open/Undo Snackbar:** `DocumentViewerActivity.savePdfToDocuments` and
+  `ExportResultActivity.saveResult` (isPdf only — jpeg keeps its toast) show `SavedSnackbar` — a
+  Material Snackbar carrying a **custom view** `snackbar_saved.xml` (message + Open + Undo), because
+  Material allows only one action button. Open → `PdfOpener` (ACTION_VIEW; file:// via the existing
+  FileProvider) → toast `no_pdf_app` if nothing can open it; Undo → `deleteSaved`. Compress / Lock /
+  Unlock all funnel through `ExportResultActivity.saveResult`, so this one change covers all three.
+- **Strings** `open` (Open / खोलें) and `scan_saved` (Scan saved / स्कैन सहेजा गया) added en+hi in the
+  same commit (Rev 4 §3C rule).
+
+**Robolectric stream-routing outcome (the documented risk): worked on attempt 1.**
+`query/insert/update/delete` delegate to a registered provider; `openOutputStream(uri, "wt")` falls
+through to the real ContentResolver → shadowed `acquireUnstableProvider` →
+`ContentProvider.getIContentProvider()` → Transport → our `openFile`. One requirement discovered:
+the fake provider **must** call `attachInfo(context, ProviderInfo(authority = "media"))` — without it
+Transport's `enforceFilePermission` NPEs on the null context (and `mMyUid = 0` defeats the same-uid
+grant). With `attachInfo` the same-uid check grants immediately.
+
+Suite after: **272 tests / 2 failures = only the documented TextFit reds** (267 + 5 new: pref OFF →
+no row + default-off asserted · pref ON → exactly one row · download twice → one row and the
+snackbar's Open+Undo present · Undo click → row gone · unwritable row → `Doc (2).pdf` fallback with
+the old row's bytes untouched).
+
+**Next:** **T4.8** (record `exports=` in meta.txt, delete checkbox, `DeleteExportsTest`) → T4.1 →
+T4.2 → T4.3 → T4.4 → (T4.5) → T4.6 → phase-end full build → **G2c**: `alpha2c.apk` + source zip +
+3 mds → Downloads → **STOP** (md-review, no screenshots).
 
 ---

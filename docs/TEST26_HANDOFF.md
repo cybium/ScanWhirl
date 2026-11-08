@@ -20,7 +20,7 @@ categories, zero clipped text, OCR editor, Earth removed in P7), ship
 `versionCode 26` / `1.1.1-test26`. Owner installs each gate APK and sends screenshots
 before the next phase starts.
 
-**Current position (2026-11-08): G2b PASSED (sub-checks Home/Tools/Selection); plan Rev 4 adopted (D-A–D-H, OCR spec in §4.7, T5.1 sharpened, T5.2 rewritten with `Depends on: T4.6 + T4.8`, §3A–§3G findings, G2c = md-review). Next work = build mode: T3.14 (values-hi for the 23 test26 strings found missing) → Phase 4 in order T4.7 → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5 optional) → T4.6 → phase-end full build → G2c (`alpha2c` + source zip + 3 mds → Downloads → STOP, md-review no screenshots).**
+**Current position (2026-11-08): G2b PASSED → plan Rev 4 adopted → build mode underway: T3.14 (`abdbabd`, 23 hi strings) and T4.7 (`e518c75`, export hygiene: `Prefs.autoCopyToDocuments` gate default OFF, `savePdfFile` replace-not-duplicate, Open/Undo `SavedSnackbar`, `ExportHygieneTest` 5 tests red-proofed then green) are committed; suite 272 tests / 2 known-red TextFit. Next work = T4.8 (record `exports=` in meta.txt, delete checkbox, `DeleteExportsTest`) → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5 optional) → T4.6 → phase-end full build → G2c (`alpha2c` + source zip + 3 mds → Downloads → STOP, md-review no screenshots).**
 
 ## 2. Locations
 
@@ -172,7 +172,7 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
 2. ~~**G2b**~~ ✅ DONE — reviewed via `ScanWhirl-G2b-AuditAndNextSteps.md`, PASSED (sub-checks),
    **Rev 4 adopted** into the plan/log/handoff (one docs commit).
 3. **Phase 4 — plan review DONE (order re-confirmed Rev 4), now build mode:**
-   **T3.14** (values-hi, 23 strings — closes the G2b §3C finding) then **T4.7 → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5 optional) → T4.6**.
+   **T3.14** ✅ (`abdbabd`) and **T4.7** ✅ (`e518c75`) are done; then **T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5 optional) → T4.6**.
    After T4.1: grep `Prefs.autoCopyToDocuments` in `saveAndFinish` + rerun `ExportHygieneTest` (§8 gotcha).
    Any new string → `values-hi` in the same commit.
 4. **G2c (md-review, NO screenshots):** deliverables = `alpha2c.apk` + refreshed source zip + the three
