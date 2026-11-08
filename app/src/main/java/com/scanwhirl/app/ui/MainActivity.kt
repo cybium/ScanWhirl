@@ -73,7 +73,7 @@ class MainActivity : BaseActivity(), HomeHost {
 
     private lateinit var binding: ActivityMainBinding
     private val adapter by lazy {
-        ScanListAdapter(::onDocClick, ::onDocView, ::onDocEdit, ::onDocLongClick, ::onCategory)
+        ScanListAdapter(::onDocClick, ::onDocMore, ::onDocLongClick, ::onCategory)
     }
     private val repo by lazy { (application as ScanWhirlApp).repository }
 
@@ -476,9 +476,8 @@ class MainActivity : BaseActivity(), HomeHost {
         )
         val sorted = HomeFilter.apply(allDocs, state) { repo.ocrDoc(it) }
         adapter.selectedIds = selectedIds
-        adapter.submitList(sorted) {
-            adapter.notifyDataSetChanged()
-        }
+        adapter.snippets = emptyMap()
+        adapter.submitList(sorted)
         // A search that matches nothing leaves nothing to show; if `sorted`
         // is empty the name and OCR legs both came up empty, so no extra
         // ocrMatches bookkeeping is needed.
@@ -1074,12 +1073,8 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    private fun onDocView(doc: ScanDocument) {
-        if (!selectionMode) openViewer(doc)
-    }
-
-    private fun onDocEdit(doc: ScanDocument) {
-        if (!selectionMode) openEditor(doc)
+    private fun onDocMore(doc: ScanDocument) {
+        if (!selectionMode) showQuickActions(doc)
     }
 
     private fun onDocLongClick(doc: ScanDocument) {
@@ -1109,6 +1104,10 @@ class MainActivity : BaseActivity(), HomeHost {
         val view = layoutInflater.inflate(R.layout.sheet_quick_actions, null)
         sheet.setContentView(view)
         view.findViewById<TextView>(R.id.qaTitle).text = doc.name
+        view.findViewById<View>(R.id.qaEditPages).setOnClickListener {
+            sheet.dismiss()
+            openEditor(doc)
+        }
         view.findViewById<View>(R.id.qaRename).setOnClickListener {
             sheet.dismiss()
             promptRename(doc)

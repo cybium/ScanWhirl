@@ -12,5 +12,9 @@ data class ScanDocument(
     val isLocked: Boolean = false,
     val isVaulted: Boolean = false,
     /** Globe ring this scan belongs to: Study / Receipts / IDs / Forms / Other. */
-    val category: String = com.scanwhirl.app.util.CategoryRules.OTHER
+    val category: String = com.scanwhirl.app.util.CategoryRules.OTHER,
+    /** Revision: max lastModified of meta.txt, scan.pdf, locked.meta, vault.flag, page files. */
+    val revision: Long = 0L,
+    /** True when text_layer.flag exists in the document directory. */
+    val isSearchable: Boolean = false
 )

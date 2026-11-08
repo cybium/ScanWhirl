@@ -142,3 +142,27 @@
 9. ✅ `SelectionBarTest`: selection mode hides `dockRoot`, shows `selectionBar`.
 
 **Test count:** 624 → 630 (+6), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 7 — Document list item, header, touch targets, list animations
+
+**Changes:**
+- `ScanDocument`: added `revision: Long` (max lastModified of meta.txt, scan.pdf, locked.meta, vault.flag, page files) and `isSearchable: Boolean` (text_layer.flag exists).
+- `ScanRepository.loadDocument`: computes `revision` and `isSearchable` when loading documents.
+- `item_scan.xml` rewritten to U4 spec: 4dp category rail, 56×72 thumbnail (no vignette), name line (16sp sans-serif-medium) + "Locked" badge (11sp), meta line (12sp), search snippet line (12sp, gone by default), category chip (12sp sentence-case) + "Searchable" indicator (12sp), trailing `btnMore` (48×48) or checkbox in selection mode. Removed `btnView`/`btnEdit`.
+- `ScanListAdapter`: constructor drops `onView`/`onEdit`, gains `onMore`; `snippets: Map<String, CharSequence>` for search snippets (Task 10); bind per U4; DIFF `areContentsTheSame` sees `revision` and `isSearchable`.
+- `MainActivity`: `sortSelector`/`btnSelect` minHeight/minWidth 48dp; `proBadge` clickable=false/focusable=false; `btnSelClose` 48×48; `btnSelSelectAll` height 48; `btnVaultChangePin`/`btnVaultLock` height 48; list header paddingVertical 0; `btnMore` opens `showQuickActions(doc)`; `sheet_quick_actions.xml` gains `qaEditPages` row; removed `notifyDataSetChanged()` inside `submitList` callback.
+- Removed `onDocView`/`onDocEdit`, added `onDocMore`.
+- strings en + hi: `badge_searchable`, `doc_row_desc`, `doc_more_options`, `state_selected`, `edit_pages`.
+
+**Acceptance:**
+1. ✅ Touch targets ≥48×48 (excluding Chip, catChip, checkboxes).
+2. ✅ Row shows one trailing `btnMore` (48×48); `btnView`/`btnEdit` gone; tapping `btnMore` opens sheet with Edit pages, Rename, Move, Share, Delete.
+3. ✅ Row content description = "<name>, <n> pages, <category>"; `btnMore` description includes document name; selected row reports `stateDescription` "Selected".
+4. ✅ Row meta line is "3 pages · 243 KB · 6 Nov" on one line at font scale 1.3.
+5. ✅ DiffUtil rebinds on revision change (no `notifyDataSetChanged()` after `submitList`).
+6. ✅ `text_layer.flag` → "Searchable" indicator appears in row.
+7. ✅ No text <12sp in `item_scan.xml` except 11sp "Locked" badge.
+
+**Test count:** 630 total, 2 pre-existing failures in HomeCategoryActionsTest (chip click → picker dialog in Robolectric), 0 new failures. APK size: 6,590,865 bytes (unchanged).

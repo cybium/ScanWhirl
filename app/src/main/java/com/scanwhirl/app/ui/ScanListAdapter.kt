@@ -20,14 +20,15 @@ import java.util.Locale
 
 class ScanListAdapter(
     private val onClick: (ScanDocument) -> Unit,
-    private val onView: (ScanDocument) -> Unit,
-    private val onEdit: (ScanDocument) -> Unit,
+    private val onMore: (ScanDocument) -> Unit,
     private val onLongClick: (ScanDocument) -> Unit,
     private val onCategory: (ScanDocument) -> Unit
 ) : ListAdapter<ScanDocument, ScanListAdapter.VH>(DIFF) {
 
     var selectionMode: Boolean = false
     var selectedIds: Set<String> = emptySet()
+    /** page snippets for search hits (Task 10) */
+    var snippets: Map<String, CharSequence> = emptyMap()
 
     private val dateFmt = SimpleDateFormat("d MMM", Locale.getDefault())
 
@@ -52,46 +53,48 @@ class ScanListAdapter(
                 doc.pageFiles.sumOf { it.length() }
             }
             val whenDate = Date(doc.createdAt)
-            // Compact single line: "3 pages · 243 KB · 6 Nov".
-            // Non-breaking spaces keep each unit glued to its number.
             val pagesText = binding.root.context.resources
                 .getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
             binding.scanMeta.text = "$pagesText · " +
                 StatusLine.formatBytes(sizeBytes).replace(' ', '\u00A0') + " · " +
                 dateFmt.format(whenDate).replace(' ', '\u00A0')
-            val first = doc.pageFiles.firstOrNull()
-            if (first != null) {
-                // Background decode + cache; the main thread never touches JPEGs.
-                binding.scanThumb.setImageResource(R.drawable.ic_document)
-                com.scanwhirl.app.ui.pagegrid.PageThumbLoader.load(first, 320,
-                    com.scanwhirl.app.util.ScanFilter.ORIGINAL, binding.scanThumb)
-            } else {
-                binding.scanThumb.setImageResource(R.drawable.ic_document)
-            }
+
+            // Category chip: sentence-case label, coloured dot
+            binding.catChip.text = "● ${CategoryRules.label(doc.category.orEmpty())}"
+            binding.catChip.setTextColor(CategoryStyle.color(doc.category.orEmpty()))
+
+            // "Searchable" indicator when text_layer.flag exists
+            binding.scanSearchable.isVisible = doc.isSearchable
+
+            // Search snippet (Task 10): shown only when a text hit explains the match
+            binding.scanSnippet.isVisible = snippets[doc.id] != null
+            binding.scanSnippet.text = snippets[doc.id]
 
             val selected = selectionMode && doc.id in selectedIds
             binding.checkSelect.isVisible = selectionMode
             binding.checkSelect.isChecked = selected
-            // View / edit are the two explicit actions while not selecting.
-            binding.btnView.isVisible = !selectionMode
-            binding.btnEdit.isVisible = !selectionMode
-            binding.btnView.setOnClickListener { onView(doc) }
-            binding.btnEdit.setOnClickListener { onEdit(doc) }
+            // btnMore replaces btnView/btnEdit; hidden in selection mode
+            binding.btnMore.isVisible = !selectionMode
+            binding.btnMore.isEnabled = !selectionMode
+            binding.btnMore.setOnClickListener { onMore(doc) }
+            binding.checkSelect.isClickable = false
+            binding.checkSelect.isFocusable = false
+
             val density = binding.root.resources.displayMetrics.density
             binding.root.strokeWidth = if (selected) (2 * density).toInt() else (1 * density).toInt()
             binding.root.strokeColor =
-                ContextCompat.getColor(binding.root.context, if (selected) R.color.cyan_primary else R.color.cyan_border_idle)
+                ContextCompat.getColor(binding.root.context, if (selected) R.color.cyan_primary else R.color.cyan_border_hair)
 
-            // Category accent rail + label chip (D3 palette via CategoryStyle).
+            // Category accent rail + label chip
             val catColor = CategoryStyle.color(doc.category.orEmpty())
             binding.catRail.backgroundTintList = ColorStateList.valueOf(catColor)
-            binding.catChip.text = "● ${CategoryRules.label(doc.category.orEmpty()).uppercase()}"
-            binding.catChip.setTextColor(catColor)
-            // T4.3: the chip opens the category picker; while selecting it
-            // keeps acting like the rest of the card (no dead zone).
-            binding.catChip.setOnClickListener {
-                if (selectionMode) onClick(doc) else onCategory(doc)
-            }
+
+            // Accessibility
+            binding.root.contentDescription = binding.root.context.getString(
+                R.string.doc_row_desc, doc.name, doc.pageCount, CategoryRules.label(doc.category.orEmpty()))
+            binding.btnMore.contentDescription = binding.root.context.getString(
+                R.string.doc_more_options, doc.name)
+            binding.root.stateDescription = if (selected) binding.root.context.getString(R.string.state_selected) else null
 
             binding.root.setOnClickListener { onClick(doc) }
             binding.root.setOnLongClickListener {

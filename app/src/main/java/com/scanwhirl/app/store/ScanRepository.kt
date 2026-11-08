@@ -60,7 +60,6 @@ class ScanRepository(private val context: Context) {
         if (lines.isEmpty()) return null
         val name = lines[0].ifBlank { "Untitled scan" }
         val createdAt = lines.getOrNull(1)?.toLongOrNull() ?: dir.lastModified()
-        // Line 3 = category (test23+). Older scans simply read as Other.
         val category = lines.getOrNull(2)?.takeIf { CategoryRules.isValid(it) }
             ?: CategoryRules.OTHER
         val pdf = File(dir, "scan.pdf")
@@ -71,6 +70,17 @@ class ScanRepository(private val context: Context) {
         if (!pdf.exists() && pages.isEmpty()) return null
         val isLocked = File(dir, LOCK_FILE).exists()
         val isVaulted = File(dir, VAULT_FILE).exists()
+
+        // Revision: max lastModified of meta.txt, scan.pdf, locked.meta, vault.flag, page files.
+        val allFileTimes = listOf(meta, pdf, File(dir, LOCK_FILE), File(dir, VAULT_FILE))
+            .filter { it.exists() }
+            .map { it.lastModified() }
+            .plus(pages.map { it.lastModified() })
+        val revision = if (allFileTimes.isEmpty()) 0L else allFileTimes.maxOrNull() ?: 0L
+
+        // isSearchable: text_layer.flag exists.
+        val isSearchable = File(dir, "text_layer.flag").exists()
+
         return ScanDocument(
             id = dir.name,
             name = name,
@@ -80,7 +90,9 @@ class ScanRepository(private val context: Context) {
             pageFiles = pages,
             isLocked = isLocked,
             isVaulted = isVaulted,
-            category = category
+            category = category,
+            revision = revision,
+            isSearchable = isSearchable
         )
     }
 

@@ -26,6 +26,19 @@
         android:textStyle="bold" />
 
     <TextView
+        android:id="@+id/qaEditPages"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:text="@string/edit_pages"
+        android:textColor="@color/text_hologram_hi"
+        android:textSize="15sp" />
+
+    <TextView
         android:id="@+id/qaRename"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

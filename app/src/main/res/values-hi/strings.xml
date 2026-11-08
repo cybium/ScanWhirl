@@ -139,6 +139,11 @@
     <string name="badge_free"><!-- review -->FREE</string>
     <string name="badge_locked"><!-- review -->Locked</string>
     <string name="badge_pro"><!-- review -->PRO</string>
+    <string name="badge_searchable"><!-- review -->Searchable</string>
+    <string name="doc_row_desc">%1$s, %2$d पृष्ठ, %3$s</string>
+    <string name="doc_more_options">%1$s के लिए अधिक विकल्प</string>
+    <string name="state_selected"><!-- review -->Selected</string>
+    <string name="edit_pages"><!-- review -->पेज संपादित करें</string>
     <string name="badge_vault"><!-- review -->Vault</string>
     <string name="btn_change_pw"><!-- review -->Password</string>
     <string name="btn_list"><!-- review -->List</string>

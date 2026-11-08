@@ -264,6 +264,11 @@
     <string name="btn_vault_hide">Hide in Vault</string>
     <string name="btn_vault_unhide">Remove Vault</string>
     <string name="badge_locked">Locked</string>
+    <string name="badge_searchable">Searchable</string>
+    <string name="doc_row_desc">%1$s, %2$d pages, %3$s</string>
+    <string name="doc_more_options">More options for %1$s</string>
+    <string name="state_selected">Selected</string>
+    <string name="edit_pages">Edit pages</string>
     <string name="badge_vault">Vault</string>
     <string name="pro_suite_title">Pro Suite</string>
     <string name="pro_suite_sub">Vault · OCR · Lock · Long Image</string>

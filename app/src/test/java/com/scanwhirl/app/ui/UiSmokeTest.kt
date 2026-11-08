@@ -95,14 +95,11 @@ class UiSmokeTest {
                 forceLayout(list)
                 val row = list.findViewHolderForAdapterPosition(0)!!.itemView
 
-                // Explicit view icon -> real PDF viewer.
-                row.findViewById<android.view.View>(R.id.btnView).performClick()
-                val viewIntent = shadowOf(activity).nextStartedActivity
-                assertEquals(PdfViewerActivity::class.java.name, viewIntent?.component?.className)
-                assertEquals(id, viewIntent.getStringExtra("doc_id"))
-
-                // Explicit edit icon -> page-grid editor.
-                row.findViewById<android.view.View>(R.id.btnEdit).performClick()
+                // btnMore opens the quick-actions sheet.
+                row.findViewById<android.view.View>(R.id.btnMore).performClick()
+                val sheet = org.robolectric.shadows.ShadowDialog.getLatestDialog()
+                assertNotNull("quick actions sheet should open", sheet)
+                sheet!!.findViewById<android.view.View>(R.id.qaEditPages).performClick()
                 val editIntent = shadowOf(activity).nextStartedActivity
                 assertEquals(
                     DocumentViewerActivity::class.java.name,
