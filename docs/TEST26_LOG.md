@@ -946,3 +946,15 @@ block; NO screenshots — reviewer's md edits against the checklist *are* the re
 
 **Next:** Phase 5 under Rev 5 — **T5.1** (page-editor dock §5.4) → T5.2 (document screen rebuild,
 deps T4.6+T4.8 ✅) → T5.3 → T5.4 → T5.5 (TextFit sweep, the phase's test run).
+
+---
+
+### T5.5 — Phase-5 TextFit sweep ✅ (`docs commit`)
+
+**Root cause of `btnMore` red:** label wrapped mid-word at font scale 1.3 — horizontal text area too narrow (~69px vs ~72px needed for "More" at 15.6sp), not a vertical padding issue. Fix: `android:paddingHorizontal="2dp"` on all four document-dock buttons (`btnShare` w2, `btnEdit`, `btnText`, `btnMore`), mirroring the page editor dock (T5.1, already green). Dock `paddingVertical`, `minHeight 56dp`, and weights 2/1/1/1 unchanged.
+
+**Toolbar menu wiring:** added `onCreateOptionsMenu` (inflates `menu_document`) + `onOptionsItemSelected` (routes `action_save_pdf` → `savePdfToDocuments()`) to `DocumentViewerActivity` so Robolectric's `clickMenuItem` used by `ExportHygieneTest` reaches the save handler.
+
+**Settings subtitle:** shortened `settings_auto_copy_to_documents_summary` to "Copies saved to Documents/ScanWhirl." (en + hi, marked `<!-- review -->`) because the previous text measured 327px vs 324px available at scale 1.0. Viewing card now 5 children (3 rows + 2 dividers, incl. hairline divider after `switchAutoEnhance`).
+
+**Verification:** TextFitTest all 6 green (document + settings at scales 1.0 + 1.3), Phase5ScreensTest green, ExportHygieneTest green. Full phase-end run pending.

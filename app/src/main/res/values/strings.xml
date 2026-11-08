@@ -292,7 +292,7 @@
     <string name="settings_auto_enhance">Auto enhance scans</string>
     <string name="settings_auto_enhance_summary">Google processing is on when this is on. Off gives a fast, original-looking scan.</string>
     <string name="settings_auto_copy_to_documents">Also save a copy to Documents</string>
-    <string name="settings_auto_copy_to_documents_summary">A copy of each finished PDF is saved to Documents/ScanWhirl.</string>
+    <string name="settings_auto_copy_to_documents_summary">Copies saved to Documents/ScanWhirl.</string>
     <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>

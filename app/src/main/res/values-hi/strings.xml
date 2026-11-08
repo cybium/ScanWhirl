@@ -106,7 +106,7 @@
     <string name="settings_greeting">स्थिति पंक्ति</string>
     <string name="settings_greeting_summary">होम स्क्रीन पर स्थिति पंक्ति दिखाएँ</string>
     <string name="settings_auto_copy_to_documents">दस्तावेज़ों में एक प्रति भी सहेजें</string>
-    <string name="settings_auto_copy_to_documents_summary">प्रत्येक तैयार पीडीएफ की एक प्रति Documents/ScanWhirl में सहेजी जाती है।</string>
+    <string name="settings_auto_copy_to_documents_summary"><!-- review -->Documents/ScanWhirl में प्रतियाँ सहेजी गईं।</string>
     <string name="status_morning">सुप्रभात</string>
     <string name="status_afternoon">शुभ दोपहर</string>
     <string name="status_evening">शुभ संध्या</string>

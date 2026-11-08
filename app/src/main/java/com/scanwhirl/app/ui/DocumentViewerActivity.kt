@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
 import android.widget.Toast
@@ -174,6 +176,19 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 }
             }
         }
+    }
+
+    // test26 T5.2 (§4.5): the single Save-a-copy action is exposed both as a
+    // toolbar listener (real taps) and via onMenuItemSelected (Robolectric's
+    // clickMenuItem used by ExportHygieneTest dispatches through here).
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_document, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+        R.id.action_save_pdf -> { savePdfToDocuments(); true }
+        else -> super.onOptionsItemSelected(item)
     }
 
     override fun onDestroy() {
