@@ -957,4 +957,19 @@ deps T4.6+T4.8 ✅) → T5.3 → T5.4 → T5.5 (TextFit sweep, the phase's test 
 
 **Settings subtitle:** shortened `settings_auto_copy_to_documents_summary` to "Copies saved to Documents/ScanWhirl." (en + hi, marked `<!-- review -->`) because the previous text measured 327px vs 324px available at scale 1.0. Viewing card now 5 children (3 rows + 2 dividers, incl. hairline divider after `switchAutoEnhance`).
 
-**Verification:** TextFitTest all 6 green (document + settings at scales 1.0 + 1.3), Phase5ScreensTest green, ExportHygieneTest green. Full phase-end run pending.
+**Verification:** TextFitTest all 6 green (document + settings at scales 1.0 + 1.3), Phase5ScreensTest green, ExportHygieneTest green. Full phase-end run: **630 tests / 0 failures / 0 skipped** (debug + release), `assembleRelease` green → Phase 5 checkpoint GREEN.
+
+---
+
+### T6.1 — OCR Editor pure cleanup functions ✅
+
+**New files:** `app/src/main/java/com/scanwhirl/app/util/OcrCleanup.kt` + `app/src/test/java/com/scanwhirl/app/util/OcrCleanupTest.kt`.
+
+**Functions:**
+- `joinLines(text)`: joins single newlines within a paragraph to spaces, keeps blank-line paragraph breaks, de-hyphenates `exam-\nple` → `example` when next char is lowercase, never joins bullet/list lines (`-`, `•`, `*`, `N.`).
+- `fixSpaces(text)`: collapses space/tab runs to one, trims line ends, collapses 3+ newlines to 2.
+- `removeGaps(text)`: collapses every blank-line run to a single newline, trims.
+
+**Tests:** 12 cases covering hard-wrapped paragraphs, hyphenated words, dash-vs-hyphen distinction, bullet lists, numbered lists, paragraph-end hyphens, trailing spaces, multi-blank-line collapse, empty strings, and combined join→fix pipeline. All green.
+
+**Suite impact:** +12 tests (test count rises in Phase 6 per amendment).
