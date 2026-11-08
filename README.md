@@ -10,6 +10,10 @@ Fast, private document scanner for Android. Made for students who need small, cl
 - Page tools: drag to reorder, rotate, crop, per-page Original / Enhance / Clean / B&W filters, delete with Undo
 - Resize images (exact pixels) and compress scans/PDFs to a size you choose
 - Search and sort your scans; Light/Dark/Follow-system themes, font styles, app language, optional wallpaper
+- Categories: choose at save, filter by chip rail, bulk move, Quick Sort for unsorted pile
+- OCR Editor: extract text, clean up (join lines / fix spaces / remove gaps), edit, copy, share, save
+- Document screen: Share · Edit · Text · More dock; More sheet with Organize / Tools / Danger groups
+- Scan Review: choose category before saving; opt-in "Also save a copy to Documents"
 - Everything on-device: no accounts, no ads, no servers
 
 ## Download

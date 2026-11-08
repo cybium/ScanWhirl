@@ -1032,4 +1032,8 @@ deps T4.6+T4.8 ✅) → T5.3 → T5.4 → T5.5 (TextFit sweep, the phase's test 
 
 **T8.6:** Hindi backlog — 273 legacy strings added to `values-hi/strings.xml` (machine-translated, all marked `<!-- review -->`). Verified format placeholders and apostrophes match between values and values-hi for all common strings.
 
-**Phase-end full run pending.** Test count should be stable (Phase 8 adds no new tests — all UI-only changes).
+**Phase-end full run:** **594 tests / 0 failures / 0 skipped** (debug + release), `assembleRelease` green → Phase 8 checkpoint GREEN. Test count stable (594 → 594) — Phase 8 is UI-only, no new tests.
+
+---
+
+### Phase 9 — Release
