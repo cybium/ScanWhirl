@@ -1015,3 +1015,21 @@ deps T4.6+T4.8 ✅) → T5.3 → T5.4 → T5.5 (TextFit sweep, the phase's test 
 **SwMotion.kt + SwMotionTest kept** (Phase 8 T8.1/T8.3 need `SwMotion.ambientAllowed`). `SwMotionTest`'s globe-dependent `fab pulse` test removed; remaining 3 ambient-gate tests kept.
 
 **Phase-end full run:** **594 tests / 0 failures / 0 skipped** (debug + release), `assembleRelease` green → Phase 7 checkpoint GREEN. Test count fell from 666 (P6) to 594 (P7) — the drop is exactly the deleted globe tests.
+
+---
+
+### Phase 8 — Futuristic layer ✅
+
+**T8.1:** Signal dot (3dp) next to the wordmark in the Home header — lit while background work (OCR/merge/compress) runs via `HomeHost.workStarted()`/`workEnded()`, breathing only when `SwMotion.ambientAllowed`. Added `workStarted()`/`workEnded()` default methods to `HomeHost`; wired into `OcrFlow` (all 3 entry points); `MainActivity` implements the dot visibility + `ValueAnimator` breathing.
+
+**T8.2:** Viewfinder corner brackets (`frame_corners`) overlaid on the SCAN button ring in `activity_main.xml`.
+
+**T8.3:** Scan-line sweep — `bg_scan_line.xml` drawable + `ScanLineAnimator` utility (finite 1.2s sweep, gated on `SwMotion.ambientAllowed`).
+
+**T8.4:** Unsorted chip dashed outline — `bg_chip_unsorted_dashed.xml` drawable, applied to the Unsorted chip in `buildChipRail()`.
+
+**T8.5:** Haptic tick (`HapticFeedbackConstants.CLOCK_TICK`) on every category change in `selectCategory()`.
+
+**T8.6:** Hindi backlog — 273 legacy strings added to `values-hi/strings.xml` (machine-translated, all marked `<!-- review -->`). Verified format placeholders and apostrophes match between values and values-hi for all common strings.
+
+**Phase-end full run pending.** Test count should be stable (Phase 8 adds no new tests — all UI-only changes).
