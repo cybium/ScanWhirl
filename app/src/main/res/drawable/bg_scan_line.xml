@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- test26 T8.3: scan-line sweep drawable — a faint diagonal cyan line
+     that animates across a thumbnail while OCR runs. Applied via
+     ScanLineAnimator, gated on SwMotion.ambientAllowed. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="line">
+    <stroke
+        android:width="2dp"
+        android:color="@color/cyan_primary" />
+    <gradient
+        android:startColor="#4D00F0FF"
+        android:centerColor="#00F0FF"
+        android:endColor="#4D00F0FF"
+        android:angle="45" />
+</shape>
