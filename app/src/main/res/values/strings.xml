@@ -20,12 +20,6 @@
     <string name="review_discard_msg">Your scanned pages haven\'t been saved yet.</string>
     <string name="discard">Discard</string>
 
-    <string name="save_to_device">Save to device</string>
-    <string name="save_this_page">Save this page</string>
-    <string name="save_all_pages">Save all pages</string>
-    <string name="dl_saved">Saved to Downloads/ScanWhirl: %1$s</string>
-    <string name="dl_saved_all">Saved %1$d images to Downloads/ScanWhirl</string>
-    <string name="dl_failed">Could not save image: %1$s</string>
     <string name="storage_perm_needed">Allow storage access so files can be saved to your device</string>
     <string name="pdf_saved_docs">Saved to Documents/ScanWhirl: %1$s</string>
     <string name="pdf_save_failed">Could not save PDF: %1$s</string>
@@ -252,7 +246,6 @@
     <string name="protect_done">PDF is password-protected</string>
     <string name="menu_long_image">Long Image</string>
     <string name="menu_protect_pdf">Lock PDF</string>
-    <string name="btn_pro_tools">Pro Tools</string>
     <string name="btn_lock_pdf">Lock PDF</string>
     <string name="btn_change_pw">Password</string>
     <string name="btn_unlock_pdf">Unlock PDF</string>
@@ -394,7 +387,16 @@
     <string name="globe_search_open">Search</string>
     <string name="settings_globe_home">Globe home screen</string>
     <string name="settings_globe_home_summary">Open the rotating Earth home first; pinch in for the Shelf list</string>
-    <string name="action_categorize">Categorize</string>
+
+    <!-- test26 T5.2 (§4.5): document dock labels, More sheet, Select pages bar. -->
+    <string name="btn_text">Text</string>
+    <string name="more">More</string>
+    <string name="extract">Extract</string>
+    <string name="duplicate">Duplicate</string>
+    <string name="delete_document">Delete document</string>
+    <string name="group_organize">Organize</string>
+    <string name="group_danger">Danger</string>
+    <string name="extracted">%1$d pages extracted to a new scan</string>
 
     <!-- Test25 Visual Overhaul & Architecture Strings -->
     <string name="globe_status_empty">AWAITING TRANSMISSION</string>

@@ -477,4 +477,32 @@ class ScanRepositoryTest {
         assertEquals("Old receipt", doc?.name)
         assertEquals(CategoryRules.RECEIPTS, doc?.category)
     }
+
+    // ------------------------------------------------------------------
+    // test26 T5.2 (§4.5): Duplicate from the document's More sheet
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `duplicateDocument makes an independent copy`() = runBlocking {
+        val repo = ScanRepository(context)
+        val src = saveDoc(repo, "Original", pageCount = 2)
+        repo.setCategory(src.id, CategoryRules.STUDY)
+
+        val copy = repo.duplicateDocument(src.id, "${src.name} Copy")
+
+        assertNotEquals("the copy gets its own id", src.id, copy.id)
+        assertEquals("same page count", 2, copy.pageCount)
+        assertEquals("Original Copy", copy.name)
+        // The copy inherits the category (like T4.8 exports: it belongs to the original).
+        assertEquals(CategoryRules.STUDY, copy.category)
+
+        // …but the meta is independent: renaming one leaves the other alone.
+        repo.renameDocument(copy.id, "Renamed copy")
+        assertEquals("Original", repo.getDocument(src.id)?.name)
+        assertEquals("Renamed copy", repo.getDocument(copy.id)?.name)
+        assertEquals("the original keeps both pages", 2, repo.getDocument(src.id)?.pageCount)
+        assertTrue("page files are independent copies",
+            repo.getDocument(src.id)!!.pageFiles.first().canonicalPath !=
+                repo.getDocument(copy.id)!!.pageFiles.first().canonicalPath)
+    }
 }

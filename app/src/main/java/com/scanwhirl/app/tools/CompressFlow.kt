@@ -74,6 +74,13 @@ class CompressFlow(
             .showSw(isSheet = true)
     }
 
+    /**
+     * test26 T5.2 (§4.5): compress straight from a screen that already shows
+     * the scan (the document screen's More row) — no source chooser, no SAF
+     * picker needed.
+     */
+    fun startWith(doc: ScanDocument) = estimateForScan(doc)
+
     /** Compress sample pages at each level, then show the choice with sizes. */
     private fun estimateForScan(doc: ScanDocument) {
         val progress = host.showProgress(R.string.compress_estimating)

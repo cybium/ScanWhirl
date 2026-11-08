@@ -76,8 +76,9 @@ class DeleteExportsTest {
         ActivityScenario.launch<DocumentViewerActivity>(
             DocumentViewerActivity.intent(app, id)
         ).use { scenario ->
+            ensureLoaded(scenario)
             scenario.onActivity { activity ->
-                activity.findViewById<android.view.View>(R.id.btnDelete).performClick()
+                openDeleteDialog(activity)
                 val dialog = ShadowDialog.getLatestDialog() as AlertDialog
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             }
@@ -110,8 +111,9 @@ class DeleteExportsTest {
         ActivityScenario.launch<DocumentViewerActivity>(
             DocumentViewerActivity.intent(app, id)
         ).use { scenario ->
+            ensureLoaded(scenario)
             scenario.onActivity { activity ->
-                activity.findViewById<android.view.View>(R.id.btnDelete).performClick()
+                openDeleteDialog(activity)
                 val dialog = ShadowDialog.getLatestDialog() as AlertDialog
                 val box = dialog.window!!.decorView
                     .findViewById<android.widget.CheckBox>(R.id.deleteCopiesBox)
@@ -142,8 +144,9 @@ class DeleteExportsTest {
         ActivityScenario.launch<DocumentViewerActivity>(
             DocumentViewerActivity.intent(app, id)
         ).use { scenario ->
+            ensureLoaded(scenario)
             scenario.onActivity { activity ->
-                activity.findViewById<android.view.View>(R.id.btnDelete).performClick()
+                openDeleteDialog(activity)
                 val dialog = ShadowDialog.getLatestDialog() as AlertDialog
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             }
@@ -242,6 +245,34 @@ class DeleteExportsTest {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    /**
+     * T5.2 (§4.5): Delete moved off the dock into the document's More sheet —
+     * the test walks the same two taps a person makes.
+     */
+    private fun openDeleteDialog(activity: android.app.Activity) {
+        activity.findViewById<android.view.View>(R.id.btnMore).performClick()
+        val sheet = ShadowDialog.getLatestDialog()
+        assertNotNull("the More sheet must open", sheet)
+        val row = sheet!!.findViewById<android.view.View>(R.id.rowMoreDelete)
+        assertNotNull("the Danger row must exist", row)
+        row!!.performClick()
+    }
+
+    /** Waits for reloadDocument() to fill the header (the sheet needs a doc). */
+    private fun ensureLoaded(scenario: ActivityScenario<DocumentViewerActivity>) {
+        val deadline = System.currentTimeMillis() + 8000
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            var ready = false
+            scenario.onActivity { a ->
+                ready = a.findViewById<android.widget.TextView>(R.id.pageCount)
+                    ?.text?.isNotEmpty() == true
+            }
+            if (ready) return
+            Thread.sleep(50)
+        }
+    }
 
     private fun List<FakeMediaStore.Row>.names(): String =
         joinToString { it.values.getAsString("_display_name") }

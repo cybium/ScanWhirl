@@ -11,13 +11,16 @@ import android.widget.TextView
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
+import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -381,6 +384,26 @@ class Phase5ScreensTest {
                 val lp = dock.layoutParams as android.view.ViewGroup.MarginLayoutParams
                 assertEquals("dock is inset 8dp", margin, lp.leftMargin)
                 assertEquals("dock is inset 8dp", margin, lp.rightMargin)
+
+                // T5.2 (§5.4): one row of four DockItem buttons, 2/1/1/1 —
+                // Share is the wide one so its label never clips.
+                assertEquals("dock is one row of four", 4, dock.childCount)
+                val expectedLabels = listOf(
+                    R.string.share_pdf, R.string.edit, R.string.btn_text, R.string.more
+                )
+                for (i in 0 until dock.childCount) {
+                    val btn = dock.getChildAt(i)
+                        as com.google.android.material.button.MaterialButton
+                    assertEquals("button $i has no fixed height (wrap_content)",
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT, btn.layoutParams.height)
+                    assertEquals("button $i minHeight is 56dp (DockItem default)",
+                        Math.round(56f * activity.resources.displayMetrics.density),
+                        btn.minimumHeight)
+                    assertEquals("button $i is label ${activity.getString(expectedLabels[i])}",
+                        activity.getString(expectedLabels[i]), btn.text.toString())
+                    val w = (btn.layoutParams as android.widget.LinearLayout.LayoutParams).weight
+                    assertEquals("button $i weight", if (i == 0) 2f else 1f, w, 0f)
+                }
             }
             // reloadDocument() runs off the main thread; wait for the chip fill-in.
             val shown = pollUntil {
@@ -388,6 +411,9 @@ class Phase5ScreensTest {
             }
             assertTrue("category chip shows ● STUDY after reload", shown)
             assertEquals(com.scanwhirl.app.util.CategoryStyle.COLOR_STUDY, chip!!.currentTextColor)
+            // T5.2 (D-H): the chip label grew 10sp → 12sp.
+            val scaled = app.resources.displayMetrics.scaledDensity
+            assertEquals("category chip text is 12sp", 12f * scaled, chip!!.textSize, 0.5f)
         }
     }
 
@@ -457,6 +483,184 @@ class Phase5ScreensTest {
                 pollUntil { chip?.text?.toString() == "● RECEIPTS" }
             )
         }
+    }
+
+    // --- T5.2 (§4.5): toolbar, More sheet, Select pages ---------------------
+
+    @Test
+    fun `document toolbar carries exactly one save action and no overflow`() {
+        val id = seedDoc("Toolbar doc")
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val toolbar =
+                    activity.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar)
+                // One always-shown action: the Save-a-copy download icon (N10/T4.7).
+                assertEquals("exactly one toolbar action, no overflow (⋮)",
+                    1, toolbar.menu.size())
+                assertEquals("the action is the Save-a-copy icon",
+                    R.id.action_save_pdf, toolbar.menu.getItem(0).itemId)
+
+                // The old viewer menu and its drawer are deleted outright, not
+                // hidden: neither the actions nor the crown/tray buttons exist.
+                assertNull("the dock Delete button is gone",
+                    activity.findViewById(R.id.btnDelete))
+                for (view in listOf(
+                    "btnProTools", "proToolsPanel", "btnProtect", "btnUnlockPdf",
+                    "btnOcr", "btnLongImage", "btnVaultDoc"
+                )) {
+                    assertEquals("view $view must be gone from the layout", 0,
+                        activity.resources.getIdentifier(view, "id", activity.packageName))
+                }
+                for (name in listOf(
+                    "action_rename", "action_categorize", "action_save_device",
+                    "action_ocr_text", "action_protect_pdf", "action_long_image",
+                    "action_vault_doc", "action_save_page"
+                )) {
+                    assertEquals("$name must be gone with menu_viewer.xml", 0,
+                        activity.resources.getIdentifier(name, "id", activity.packageName))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `document more sheet is the single home for secondary actions`() {
+        val id = seedDoc("More sheet", pages = 1)
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            assertTrue("document must load before the sheet opens",
+                pollUntil { pageCountReady(scenario) })
+
+            scenario.onActivity { activity ->
+                activity.findViewById<View>(R.id.btnMore).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("the More sheet must open", sheet)
+
+                // §4.5: exactly these rows, in exactly these three groups.
+                for (row in listOf(
+                    R.id.rowMoreRename, R.id.rowMoreMove, R.id.rowMoreDuplicate,
+                    R.id.rowMoreCompress, R.id.rowMoreLock, R.id.rowMoreLongImage,
+                    R.id.rowMoreVault, R.id.rowMoreDelete
+                )) assertNotNull("row $row must exist", sheet!!.findViewById<View>(row))
+                for (hdr in listOf(R.id.hdrOrganize, R.id.hdrTools, R.id.hdrDanger)) {
+                    assertNotNull("header $hdr must exist", sheet!!.findViewById<View>(hdr))
+                }
+
+                // One home per action: no OCR row (D-E) and no save row — the
+                // toolbar's download icon is the only export left (§4.5).
+                val labels = allViews(sheet!!.window!!.decorView)
+                    .filterIsInstance<TextView>()
+                    .map { it.text?.toString() }
+                assertFalse("no OCR row in the sheet (D-E)",
+                    labels.contains(activity.getString(R.string.btn_ocr_text)))
+                assertFalse("no save row in the sheet (§4.5)",
+                    labels.contains(activity.getString(R.string.save_pdf_device)))
+                assertEquals("no OCR button in the sheet (D-E)", 0,
+                    activity.resources.getIdentifier("btnOcr", "id", activity.packageName))
+
+                // Pro (test-build default): the three locked rows carry no pill.
+                assertFalse("Pro sees no PRO pill",
+                    sheet.findViewById<View>(R.id.pillLock).isVisible)
+                assertFalse("Pro sees no PRO pill",
+                    sheet.findViewById<View>(R.id.pillLongImage).isVisible)
+                assertFalse("Pro sees no PRO pill",
+                    sheet.findViewById<View>(R.id.pillVault).isVisible)
+                // Labels follow the document state (unlocked, unvaulted here).
+                assertEquals(activity.getString(R.string.menu_protect_pdf),
+                    sheet.findViewById<TextView>(R.id.labelLock).text.toString())
+                assertEquals(activity.getString(R.string.btn_vault_hide),
+                    sheet.findViewById<TextView>(R.id.labelVault).text.toString())
+                sheet.dismiss()
+            }
+        }
+    }
+
+    @Test
+    fun `free users see pro pills and land on the pro panel`() {
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
+        val id = seedDoc("More sheet free", pages = 1)
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            assertTrue("document must load before the sheet opens",
+                pollUntil { pageCountReady(scenario) })
+
+            scenario.onActivity { activity ->
+                activity.findViewById<View>(R.id.btnMore).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("the More sheet must open", sheet)
+                for (pill in listOf(R.id.pillLock, R.id.pillLongImage, R.id.pillVault)) {
+                    assertTrue("Free sees the PRO pill on $pill",
+                        sheet!!.findViewById<View>(pill).isVisible)
+                }
+                // D-A: a locked row from Free opens the Pro pitch, not the tool.
+                sheet!!.findViewById<View>(R.id.rowMoreLock).performClick()
+                val panel = ShadowDialog.getLatestDialog()
+                assertNotNull("Free tap must open the Pro panel", panel)
+                assertNotNull("…which is the Pro suite dossier",
+                    panel!!.findViewById<View>(R.id.proDossierStatus))
+                panel.dismiss()
+            }
+        }
+    }
+
+    @Test
+    fun `select pages mode gates the checkboxes and the contextual bar`() {
+        val id = seedDoc("Select pages", pages = 2)
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            assertTrue("document must load first",
+                pollUntil { pageCountReady(scenario) })
+
+            scenario.onActivity { activity ->
+                val grid = activity.findViewById<
+                    com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                val ctx = activity.findViewById<View>(R.id.selContextRow)
+                val toggle =
+                    activity.findViewById<android.widget.Button>(R.id.btnSelectPages)
+
+                // Closed by default (D-D): no checkboxes, no contextual bar.
+                assertFalse("checkboxes hidden until Select", grid.checkboxesVisible)
+                assertEquals(View.GONE, ctx.visibility)
+                assertFalse("cell checkboxes hidden", cellCheckboxShown(grid))
+
+                toggle.performClick()
+                assertTrue("Select turns the checkboxes on", grid.checkboxesVisible)
+                assertEquals(View.VISIBLE, ctx.visibility)
+                assertEquals(activity.getString(R.string.select_done), toggle.text.toString())
+                assertTrue("cell checkboxes shown in Select mode", cellCheckboxShown(grid))
+
+                // Tapping Done leaves the mode and clears it.
+                toggle.performClick()
+                assertFalse("Done leaves Select mode", grid.checkboxesVisible)
+                assertEquals(View.GONE, ctx.visibility)
+                assertEquals(activity.getString(R.string.select_pages), toggle.text.toString())
+                assertFalse("cell checkboxes hidden again", cellCheckboxShown(grid))
+            }
+        }
+    }
+
+    /** Forces a measure/layout pass and reports cell 0's checkbox visibility. */
+    private fun cellCheckboxShown(
+        grid: com.scanwhirl.app.ui.pagegrid.PageGridView
+    ): Boolean {
+        val wSpec = View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY)
+        val hSpec = View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY)
+        grid.measure(wSpec, hSpec)
+        grid.layout(0, 0, 1080, 1920)
+        val vh = grid.findViewHolderForAdapterPosition(0) ?: return false
+        return vh.itemView.findViewById<View>(R.id.checkSelect).isVisible
+    }
+
+    /** True once reloadDocument() has pushed the page count into the header. */
+    private fun pageCountReady(
+        scenario: ActivityScenario<DocumentViewerActivity>
+    ): Boolean {
+        var ready = false
+        scenario.onActivity { a ->
+            ready = a.findViewById<TextView>(R.id.pageCount)?.text?.isNotEmpty() == true
+        }
+        return ready
     }
 
     // --- 5B/5D docks --------------------------------------------------------

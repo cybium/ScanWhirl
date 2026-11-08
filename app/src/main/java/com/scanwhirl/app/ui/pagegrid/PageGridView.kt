@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.scanwhirl.app.R
@@ -53,6 +54,18 @@ class PageGridView @JvmOverloads constructor(
 
     /** Set false to disable reordering (the grip simply stops responding). */
     var dragEnabled: Boolean = true
+
+    /**
+     * test26 T5.2 (§4.5): whether cells show their selection checkbox. The
+     * document viewer gates selection behind its Select pages button (false
+     * until tapped); Scan Review keeps the default `true`.
+     */
+    var checkboxesVisible: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            gridAdapter.notifyDataSetChanged()
+        }
 
     private val gridAdapter = GridAdapter()
 
@@ -312,7 +325,8 @@ class PageGridView @JvmOverloads constructor(
                 binding.pageThumb
             )
 
-            // Checkbox = selection only.
+            // Checkbox = selection only; visible only in Select pages mode (T5.2).
+            binding.checkSelect.isVisible = checkboxesVisible
             binding.checkSelect.isChecked = checkedAt(index)
             binding.checkSelect.setOnClickListener {
                 val pos = bindingAdapterPosition

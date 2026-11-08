@@ -6,22 +6,24 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
+import android.view.View
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityDocumentViewerBinding
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.tools.CompressFlow
+import com.scanwhirl.app.tools.HomeHost
+import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.PdfOpener
@@ -37,10 +39,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class DocumentViewerActivity : BaseActivity() {
+class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     private lateinit var binding: ActivityDocumentViewerBinding
     private val repo by lazy { (application as ScanWhirlApp).repository }
+
+    // test26 T5.2 (§4.5): the shared tool flows, hosted here (HomeHost).
+    private val ocrFlow: OcrFlow by lazy { OcrFlow(activity = this, repo = repo, host = this) }
+    private val compressFlow: CompressFlow by lazy {
+        CompressFlow(
+            activity = this, repo = repo, host = this,
+            // Unreachable from startWith(): this screen already shows the scan.
+            pickPdf = {},
+            docs = { listOfNotNull(document) }
+        )
+    }
     private var document: ScanDocument? = null
     private var docId: String? = null
 
@@ -114,17 +127,37 @@ class DocumentViewerActivity : BaseActivity() {
         }
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
 
+        // test26 T5.2 (§4.5): one home per action. Dock = Share · Edit · Text ·
+        // More; everything secondary lives in showMoreSheet(); page-level work
+        // lives in Select pages mode or the page editor.
         binding.btnShare.setOnClickListener { document?.let { ShareUtils.share(this, it) } }
-        binding.btnDelete.setOnClickListener { document?.let { confirmDelete(it) } }
-        binding.btnProTools.setOnClickListener { toggleProTools() }
-        binding.btnProtect.setOnClickListener { promptProtectPdf() }
-        binding.btnUnlockPdf.setOnClickListener { unlockCurrentPdf() }
-        binding.btnOcr.setOnClickListener { runAndShowOcr() }
-        binding.btnLongImage.setOnClickListener { shareLongImage() }
-        binding.btnVaultDoc.setOnClickListener { toggleVaultDoc() }
+        binding.btnEdit.setOnClickListener {
+            docId?.let { id -> startActivity(PageViewerActivity.intent(this, id, 0)) }
+        }
+        binding.btnText.setOnClickListener { runTextFlow() }
+        binding.btnMore.setOnClickListener { showMoreSheet() }
         // T4.6: the header category chip is tappable now — it opens the
         // category picker (the old "Categorize" list dialog is gone).
         binding.docCategoryChip.setOnClickListener { promptCategorize() }
+        // Select pages (§4.5): the toggle + its contextual bar.
+        binding.btnSelectPages.setOnClickListener { toggleSelectMode() }
+        binding.btnCtxRotate.setOnClickListener { rotateSelected(clockwise = true) }
+        binding.btnCtxExtract.setOnClickListener { extractSelected() }
+        binding.btnCtxDelete.setOnClickListener { deleteSelectedPages() }
+        // Title tappable → Rename (replaces the deleted toolbar rename icon).
+        binding.toolbar.setOnClickListener { promptRename() }
+        // The ONLY toolbar action: one always-shown download icon, no overflow (⋮).
+        binding.toolbar.inflateMenu(R.menu.menu_document)
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_save_pdf) {
+                savePdfToDocuments()
+                true
+            } else {
+                false
+            }
+        }
+        // Checkboxes stay hidden until Select pages is tapped (§4.5, D-D).
+        binding.pageList.checkboxesVisible = false
 
         // First load (off the main thread), then start the pre-edit snapshot.
         lifecycleScope.launch {
@@ -171,41 +204,8 @@ class DocumentViewerActivity : BaseActivity() {
         }
     }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_viewer, menu)
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-        R.id.action_rename -> { promptRename(); true }
-        R.id.action_categorize -> { promptCategorize(); true }
-        R.id.action_save_device -> { promptDownload(); true }
-        R.id.action_save_pdf -> { savePdfToDocuments(); true }
-        R.id.action_ocr_text -> { runAndShowOcr(); true }
-        R.id.action_long_image -> { shareLongImage(); true }
-        R.id.action_protect_pdf -> { promptProtectPdf(); true }
-        R.id.action_unlock_pdf -> { unlockCurrentPdf(); true }
-        R.id.action_vault_doc -> { toggleVaultDoc(); true }
-        R.id.action_rotate_left -> { rotateSelected(clockwise = false); true }
-        R.id.action_rotate_right -> { rotateSelected(clockwise = true); true }
-        R.id.action_delete_page -> { deleteSelectedPages(); true }
-        R.id.action_save_page -> { saveSelectedPages(); true }
-        else -> super.onOptionsItemSelected(item)
-    }
-
-    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        val doc = document
-        val pro = ProGate.isPro(this)
-        menu.findItem(R.id.action_ocr_text)?.isVisible = pro
-        menu.findItem(R.id.action_long_image)?.isVisible = pro
-        menu.findItem(R.id.action_protect_pdf)?.isVisible = pro
-        menu.findItem(R.id.action_unlock_pdf)?.isVisible = pro && (doc?.isLocked == true)
-        menu.findItem(R.id.action_vault_doc)?.let {
-            it.isVisible = pro
-            it.setTitle(if (doc?.isVaulted == true) R.string.btn_vault_unhide else R.string.btn_vault_hide)
-        }
-        return super.onPrepareOptionsMenu(menu)
-    }
+    // test26 T5.2: menu_viewer.xml + the whole overflow machinery are gone
+    // (D-A…D-F). The toolbar's single download icon is inflated in onCreate.
 
     /** Re-reads the document from disk and refreshes all UI. Returns false if it vanished. */
     private suspend fun reloadDocument(): Boolean {
@@ -230,16 +230,8 @@ class DocumentViewerActivity : BaseActivity() {
             com.scanwhirl.app.util.CategoryStyle.color(doc.category)
         )
         binding.docCategoryChip.isVisible = true
-        binding.btnUnlockPdf.isVisible = doc.isLocked
-        binding.btnProtect.setText(if (doc.isLocked) R.string.btn_change_pw else R.string.btn_lock_pdf)
-        binding.btnVaultDoc.setText(if (doc.isVaulted) R.string.btn_vault_unhide else R.string.btn_vault_hide)
-        // Free UI: the crown entry point is hidden together with its drawer.
-        val pro = ProGate.isPro(this)
-        binding.btnProTools.isVisible = pro
-        if (!pro) binding.proToolsPanel.isVisible = false
         refreshGrid()
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
-        invalidateOptionsMenu()
         return true
     }
 
@@ -272,8 +264,33 @@ class DocumentViewerActivity : BaseActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Selection (checkbox) + page actions (toolbar overflow)
+    // Select pages mode (§4.5) + page actions (contextual bar)
     // ------------------------------------------------------------------
+
+    /** True while the Select pages mode is on: checkboxes + contextual bar. */
+    private var selectMode = false
+
+    /** Enters or leaves Select pages mode; leaving clears the ticked set. */
+    private fun toggleSelectMode() {
+        if (selectMode) {
+            exitSelectMode()
+        } else {
+            selectMode = true
+            binding.pageList.checkboxesVisible = true
+            binding.selContextRow.isVisible = true
+            binding.btnSelectPages.setText(R.string.select_done)
+        }
+    }
+
+    private fun exitSelectMode() {
+        selectMode = false
+        selected.clear()
+        binding.pageList.checkboxesVisible = false
+        binding.selContextRow.isVisible = false
+        binding.btnSelectPages.setText(R.string.select_pages)
+        binding.pageList.refresh()
+        updateSelectionUi()
+    }
 
     /** Ticks/untick a page. Called by the grid checkbox. */
     internal fun toggleSelected(index: Int) {
@@ -352,10 +369,38 @@ class DocumentViewerActivity : BaseActivity() {
             .show()
     }
 
-    private fun saveSelectedPages() {
+    /**
+     * Extract (§4.5 contextual bar): the ticked pages become a NEW document —
+     * this one keeps every page, its exports and its category.
+     */
+    private fun extractSelected() {
         val paths = requireSelection() ?: return
-        val indices = visiblePages.indices.filter { visiblePages[it].path in paths }
-        if (indices.isNotEmpty()) downloadPages(indices)
+        val id = docId ?: return
+        lifecycleScope.launch {
+            try {
+                // Land pending deletes first so disk indices are stable.
+                withContext(Dispatchers.IO) { commitPendingDeletesNow() }
+                val fresh = repo.getDocument(id) ?: return@launch
+                val wanted = paths.toSet()
+                val indices = fresh.pageFiles.indices.filter {
+                    fresh.pageFiles[it].path in wanted
+                }
+                if (indices.isEmpty()) return@launch
+                withContext(Dispatchers.IO) { repo.extractPages(id, indices) }
+                exitSelectMode()
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.extracted, indices.size),
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     /** Deletes all Undo-pending pages for good. No-op when nothing is pending. */
@@ -479,17 +524,111 @@ class DocumentViewerActivity : BaseActivity() {
         }
     }
 
-    /** Expands or collapses the Pro Tools drawer right above the bottom bar. */
-    private fun toggleProTools() {
-        if (!ProGate.isPro(this)) {
-            val dossier = layoutInflater.inflate(R.layout.dialog_pro_panel, null)
-            SwDialog.sheet(this)
-                .setView(dossier)
-                .setPositiveButton(android.R.string.ok, null)
-                .showSw(isSheet = true)
-            return
+    /**
+     * test26 T5.2 (§4.5, D-A): the Free upgrade pitch — the Pro suite sheet.
+     * Every locked action funnels here from the More sheet's PRO pills.
+     */
+    private fun showProPanel() {
+        val dossier = layoutInflater.inflate(R.layout.dialog_pro_panel, null)
+        SwDialog.sheet(this)
+            .setView(dossier)
+            .setPositiveButton(android.R.string.ok, null)
+            .showSw(isSheet = true)
+    }
+
+    /**
+     * Dock "Text" (§4.5): OCR through the shared [OcrFlow] — one home per
+     * action; Free taps land on the Pro panel.
+     */
+    private fun runTextFlow() {
+        val doc = document ?: return
+        if (ProGate.isPro(this)) ocrFlow.runOcrForScan(doc) else showProPanel()
+    }
+
+    /**
+     * Dock "More" (§4.5): the single sheet for every secondary action, in
+     * exactly three groups. No OCR row (the dock's Text is its entry), no
+     * Categorize (the chip is its entry), no save rows (the toolbar's one
+     * download icon is the only export). Locked rows show a PRO pill to Free.
+     */
+    private fun showMoreSheet() {
+        val doc = document ?: return
+        val sheet = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_more_document, null)
+        sheet.setContentView(view)
+        val pro = ProGate.isPro(this)
+
+        // Tools labels that flip with the document's own state.
+        view.findViewById<android.widget.TextView>(R.id.labelLock).setText(
+            if (doc.isLocked) R.string.btn_unlock_pdf else R.string.menu_protect_pdf
+        )
+        view.findViewById<android.widget.TextView>(R.id.labelVault).setText(
+            if (doc.isVaulted) R.string.btn_vault_unhide else R.string.btn_vault_hide
+        )
+        // PRO pills: visible only to Free (D-A); Pro sees no badges.
+        for (pill in listOf(R.id.pillLock, R.id.pillLongImage, R.id.pillVault)) {
+            view.findViewById<android.widget.TextView>(pill).isVisible = !pro
         }
-        binding.proToolsPanel.isVisible = !binding.proToolsPanel.isVisible
+
+        fun locked(view: View, handler: () -> Unit) {
+            view.setOnClickListener {
+                sheet.dismiss()
+                if (pro) handler() else showProPanel()
+            }
+        }
+
+        // Organize
+        view.findViewById<View>(R.id.rowMoreRename).setOnClickListener {
+            sheet.dismiss()
+            promptRename()
+        }
+        view.findViewById<View>(R.id.rowMoreMove).setOnClickListener {
+            sheet.dismiss()
+            promptCategorize()
+        }
+        view.findViewById<View>(R.id.rowMoreDuplicate).setOnClickListener {
+            sheet.dismiss()
+            duplicateDocument()
+        }
+        // Tools
+        view.findViewById<View>(R.id.rowMoreCompress).setOnClickListener {
+            sheet.dismiss()
+            compressFlow.startWith(doc)
+        }
+        locked(view.findViewById(R.id.rowMoreLock)) {
+            if (doc.isLocked) unlockCurrentPdf() else promptProtectPdf()
+        }
+        locked(view.findViewById(R.id.rowMoreLongImage)) {
+            shareLongImage()
+        }
+        locked(view.findViewById(R.id.rowMoreVault)) {
+            toggleVaultDoc()
+        }
+        // Danger
+        view.findViewById<View>(R.id.rowMoreDelete).setOnClickListener {
+            sheet.dismiss()
+            confirmDelete(doc)
+        }
+        sheet.show()
+    }
+
+    /** More → Organize → Duplicate (§4.5): a copy stays put, Home refreshes. */
+    private fun duplicateDocument() {
+        val doc = document ?: return
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repo.duplicateDocument(doc.id, "${doc.name} Copy")
+                }
+                toast(R.string.saved_as_new, Toast.LENGTH_LONG)
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     /** Removes password protection from this scan and restores the clean PDF. */
@@ -507,56 +646,6 @@ class DocumentViewerActivity : BaseActivity() {
                     Toast.LENGTH_LONG
                 ).show()
                 reloadDocument()
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    /** Dedicated OCR action: extracts text from all pages and shows a Copy/Share dialog. */
-    private fun runAndShowOcr() {
-        if (!ProGate.isPro(this)) return
-        val doc = document ?: return
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val text = withContext(Dispatchers.IO) {
-                    if (!repo.hasOcr(doc.id) || repo.ocrDoc(doc.id).values.all { it.isBlank() }) {
-                        repo.buildOcr(doc.id)
-                    }
-                    repo.ocrDoc(doc.id).entries
-                        .sortedBy { it.key }
-                        .mapIndexedNotNull { idx, entry ->
-                            val clean = entry.value.trim()
-                            if (clean.isEmpty()) null else "--- Page ${idx + 1} ---\n$clean"
-                        }
-                        .joinToString("\n\n")
-                }
-                progress.dismiss()
-                val shown = text.ifBlank { getString(R.string.ocr_empty) }
-                SwDialog.sheet(this@DocumentViewerActivity)
-                    .setTitle(R.string.ocr_title)
-                    .setMessage(shown)
-                    .setPositiveButton(R.string.ocr_copy) { _, _ ->
-                        val cb = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                        cb?.setPrimaryClip(android.content.ClipData.newPlainText(doc.name, shown))
-                        Toast.makeText(this@DocumentViewerActivity, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
-                    }
-                    .setNeutralButton(R.string.share_pdf) { _, _ ->
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, doc.name)
-                            putExtra(Intent.EXTRA_TEXT, shown)
-                        }
-                        startActivity(Intent.createChooser(send, getString(R.string.share_pdf)))
-                    }
-                    .setNegativeButton(R.string.close, null)
-                    .showSw(isSheet = true)
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -718,64 +807,6 @@ class DocumentViewerActivity : BaseActivity() {
         }
     }
 
-    private fun promptDownload() {
-        val doc = document ?: return
-        if (visiblePages.isEmpty()) return
-        val current = binding.pageList.firstVisiblePosition().coerceAtLeast(0)
-        val items = arrayOf(
-            getString(R.string.save_this_page),
-            getString(R.string.save_all_pages)
-        )
-        SwDialog.sheet(this)
-            .setTitle(R.string.save_to_device)
-            .setItems(items) { _, which ->
-                val indices: List<Int> =
-                    if (which == 0) listOf(current.coerceAtMost(visiblePages.lastIndex))
-                    else visiblePages.indices.toList()
-                downloadPages(indices)
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
-    }
-
-    private fun downloadPages(indices: List<Int>) {
-        val doc = document ?: return
-        withStoragePermission {
-            lifecycleScope.launch {
-                var count = 0
-                var lastName = ""
-                var error: String? = null
-                for (i in indices) {
-                    if (i !in visiblePages.indices) continue
-                    val file = visiblePages[i]
-                    val name = DownloadSaver.fileNameFor(doc.name, i + 1, visiblePages.size)
-                    try {
-                        lastName = withContext(Dispatchers.IO) {
-                            DownloadSaver.saveJpeg(
-                                this@DocumentViewerActivity,
-                                file.readBytes(),
-                                name
-                            )
-                        }
-                        count++
-                    } catch (e: Exception) {
-                        error = e.message
-                    }
-                }
-                val toast = when {
-                    count == 1 -> getString(R.string.dl_saved, lastName)
-                    count > 1 -> getString(R.string.dl_saved_all, count)
-                    else -> getString(R.string.dl_failed, error)
-                }
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    toast,
-                    if (count > 0) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
     private fun withStoragePermission(action: () -> Unit) {
         val granted = Build.VERSION.SDK_INT >= 29 ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
@@ -880,9 +911,24 @@ class DocumentViewerActivity : BaseActivity() {
         }
     }
 
-    /** Simple determinate-free progress dialog for Pro export jobs. */
-    private fun showProgress(): androidx.appcompat.app.AlertDialog {
-        return SwDialog.progress(this, titleRes = R.string.progress_title)
+    // ------------------------------------------------------------------
+    // HomeHost (§4.5): the tool flows (OCR, Compress) ask the host for
+    // progress/toasts — DocumentViewer answers for itself.
+    // ------------------------------------------------------------------
+
+    override fun refreshList() {
+        lifecycleScope.launch { reloadDocument() }
+    }
+
+    override fun showProgress(titleRes: Int): androidx.appcompat.app.AlertDialog =
+        SwDialog.progress(this, titleRes = titleRes)
+
+    override fun toast(res: Int, duration: Int) {
+        Toast.makeText(this, res, duration).show()
+    }
+
+    override fun toast(message: CharSequence, duration: Int) {
+        Toast.makeText(this, message, duration).show()
     }
 
     private fun confirmDelete(doc: ScanDocument) {

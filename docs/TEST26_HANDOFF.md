@@ -237,3 +237,116 @@ sheet title. T3.12: `selectionBar` swaps with `bottomBar` inside `setSelectionMo
   `findViewHolderForAdapterPosition(n)` null until re-layout: `forceLayout(rv)` +
   `pollUntil { findViewHolderForAdapterPosition(n) != null }` before clicking a row.
 - aapt2 reports launcher `MainActivity` after T3.9; versionCode stays 25 until T9.1.
+
+---
+
+## T5.2 EXECUTION PLAN (locked — no open questions; write code directly from this)
+
+Task = ONE commit `test26 T5.2: document screen rebuild (§4.5)`; per-task cmd `./gradlew :app:compileDebugKotlin -PtestBuild --no-daemon`;
+tests written same commit, NOT run (Rev 5). Do not re-research — every decision below is final.
+
+### Decisions (final)
+1. **Download icon → `savePdfToDocuments()`** (the T4.7 SavedSnackbar Open/Undo + replace flow).
+   Plan's `promptDownload()` name is a slip: §4.5 says "= Save a copy, N10/T4.7", and `promptDownload()`
+   today is the JPEG chooser (Toast, Downloads/ScanWhirl) which §4.5 kills ("Save this page" removed).
+   Note the deviation + rationale in the log.
+2. **No Activity menu overrides.** Follow `ScanReviewActivity:161` pattern:
+   `binding.toolbar.inflateMenu(R.menu.menu_document)` + `binding.toolbar.setOnMenuItemClickListener { … }`.
+   New `menu/menu_document.xml` = ONE item, id `action_save_pdf` (KEEP id → `ExportHygieneTest`
+   `clickMenuItem(R.id.action_save_pdf)` keeps compiling/working), icon `ic_download`,
+   title `@string/save_pdf_device` (keeps string non-orphaned), `showAsAction="always"` → no ⋮.
+   Delete `menu_viewer.xml` + `onCreateOptionsMenu`/`onPrepareOptionsMenu`/`onOptionsItemSelected`
+   + `invalidateOptionsMenu()` call. `onOptionsItemSelected` branch for download moves into the listener.
+3. **Toolbar title tappable**: `binding.toolbar.setOnClickListener { promptRename() }` (nav icon +
+   menu items consume their own taps; non-clickable title TextView bubbles up). Test = `toolbar.performClick()`.
+4. **OCR**: implement `HomeHost` on `DocumentViewerActivity` (refreshList → `lifecycleScope.launch { reloadDocument() }`;
+   `override fun showProgress(titleRes: Int) = SwDialog.progress(this, titleRes)` — DELETE the private
+   no-arg `showProgress()` and keep its call sites calling `showProgress()`; `toast(res, duration)` +
+   `toast(msg, duration)` → Toast). Add `private val ocrFlow by lazy { OcrFlow(this, repo, this) }`.
+   Dock **Text** → `if (ProGate.isPro(this)) ocrFlow.runOcrForScan(document) else showProPanel()`.
+   DELETE `runAndShowOcr()` (duplicate of OcrFlow).
+5. **Compress**: add ONE public method to `tools/CompressFlow.kt`: `fun startWith(doc: ScanDocument) = estimateForScan(doc)`
+   (skips the source chooser; screen already shows the scan). DocumentViewer gets
+   `private val compressFlow by lazy { CompressFlow(this, repo, this, pickPdf = {}, docs = { listOfNotNull(document) }) }`
+   (pickPdf never reached from `startWith`; keep lambda). More→Compress → `compressFlow.startWith(doc)`.
+   Compress row = **no PRO pill** (MainActivity tile is `isPro=false`).
+6. **`showProPanel()`**: rename `toggleProTools()` → keep only its Free branch
+   (`inflate(R.layout.dialog_pro_panel)` + `SwDialog.sheet(...).setView(...).setPositiveButton(ok).showSw(true)`).
+   More-sheet Pro rows: `if (!ProGate.isPro) showProPanel() else handler()`.
+7. **Dock** (§5.4, doc dock minHeight 56 = DockItem default, no override):
+   `[btnShare w2][btnEdit w1][btnText w1][btnMore w1]`, all `Widget.ScanWhirl.Button.DockItem`,
+   `0dp`/`wrap_content`/weight, container = the glass LinearLayout itself (horizontal, marginH 8dp, padding 6dp).
+   Labels: `share_pdf` / `edit` / NEW `btn_text`("Text") / NEW `more`("More"); icons `ic_share`/`ic_edit`/`ic_ocr`/NEW `ic_more.xml` (more_horiz vector).
+   Listeners: Share = existing `ShareUtils.share(this, it)`; Edit = `startActivity(PageViewerActivity.intent(this, id, 0))`; Text/More per §4.
+   **Delete `btnDelete`, `btnProTools`, `proToolsPanel`** (and btnProtect/btnUnlockPdf/btnOcr/btnLongImage/btnVaultDoc views).
+   Keep `binding.btnShare.isVisible = …` line. Keep `updateSelectionUi()` subtitle.
+8. **Toolbar/`reloadDocument` cleanup**: remove `btnUnlockPdf/btnProtect/btnVaultDoc/btnProTools/proToolsPanel`
+   lines + `invalidateOptionsMenu()`. Add `binding.toolbar.setOnClickListener` wiring in onCreate.
+9. **Select pages** (2 rows above grid, after header row, before PageGridView):
+   - Row A: `btnSelectPages` MaterialButton, text `select_pages` ↔ `select_done` (toggles mode; exit clears selection).
+   - Row B `selContextRow` (default `gone`): `btnCtxRotate`(`action_rotate`) · `btnCtxExtract`(NEW `extract`) · `btnCtxDelete`(`delete`),
+     each `0dp` weight 1, wrap_content. Two rows (not one) → no 1.3-scale overflow.
+   - `PageGridView`: add `var checkboxesVisible: Boolean = true` with setter calling `gridAdapter.notifyDataSetChanged()`;
+     in bind: `binding.checkSelect.isVisible = checkboxesVisible`. DocViewer sets `false` at onCreate, `true` on Select.
+     ScanReview untouched (default true). Drag handle unchanged.
+   - Rotate → `rotateSelected(clockwise = true)`; Delete → `deleteSelectedPages()` (existing); Extract → new.
+10. **`ScanRepository.extractPages(id, pageIndices): ScanDocument`** (ScanRepository.kt, "extract only" per plan):
+    load doc → `indices = sorted().distinct()`, require non-empty + in range → `newDocDir()` → copy
+    `doc.pageFiles[src]` to `PAGE_FORMAT` renumbered → name: single `"$name (page N)"`, else `"$name (pages N–M)"` (en dash)
+    → `finalizeDoc(newId, dir, name, category)`; add `category: String? = null` param to `finalizeDoc` and pass `doc.category`
+    (inherit, like duplicate). PDF regenerated by finalizeDoc; original untouched; no exports copied.
+11. **Activity `extractSelected()`**: `requireSelection()` → on IO `commitPendingDeletesNow()` → re-resolve
+    paths against fresh `repo.getDocument(id).pageFiles` → `repo.extractPages` → `selected.clear()`, exit select mode,
+    Toast NEW `extracted` = "Extracted %1$d pages". Not dirty.
+12. **Duplicate** (More→Organize): `repo.duplicateDocument(doc.id, "${doc.name} Copy")` (plan literal), IO + Toast
+    existing `saved_as_new` ("Saved as a new document") — verify text first; if incompatible add NEW `duplicated` en+hi.
+    Stay on current doc; Home refreshes onResume.
+13. **`showMoreSheet()`**: `BottomSheetDialog` (mirror `CategoryPickerSheet`) + inflate NEW `layout/sheet_more_document.xml`
+    with **fixed ids**: headers `hdrOrganize`/`hdrTools`/`hdrDanger`; rows `rowMoreRename`, `rowMoreMove`,
+    `rowMoreDuplicate` | `rowMoreCompress`, `rowMoreLock`, `rowMoreLongImage`, `rowMoreVault` | `rowMoreDelete`.
+    Row texts: `rename`, `move_to_category`, `duplicate*`, `tool_compress`, `menu_protect_pdf`↔`btn_unlock_pdf` (by `doc.isLocked`),
+    `menu_long_image`, `btn_vault_hide`↔`btn_vault_unhide` (by `doc.isVaulted`), `delete_document*`.
+    PRO pill TextView (`badge_pro`) on Lock/Long/Vault rows: visible only when `!ProGate.isPro` (D-A).
+    Handlers: `promptRename`, `promptCategorize`, duplicate, compress, `promptProtectPdf`/`unlockCurrentPdf`,
+    `shareLongImage`, `toggleVaultDoc`, `confirmDelete(document)` (+T4.8 checkbox). Red-styled Danger row.
+    `*` = new strings. Sheet has NO OCR row (D-E), NO Categorize (D-F), NO save rows.
+14. **Chip 12sp (D-H)**: `docCategoryChip` `android:textSize` 10sp → 12sp, same commit.
+15. **Delete dead code in DocumentViewerActivity**: `promptDownload()`, `downloadPages()`, `saveSelectedPages()`,
+    `runAndShowOcr()`, `toggleProTools()`→renamed. Keep `withStoragePermission` (used by savePdfToDocuments + promptProtectPdf),
+    `saveSelectedPages`' helpers none. `saveJpeg` in DownloadSaver stays (DownloadSaverTest).
+16. **Strings** — NEW en+hi (same commit): `btn_text` "Text"/"टेक्स्ट", `more` "More"/"अधिक",
+    `extract` "Extract"/"निकालें", `duplicate` "Duplicate"/"डुप्लिकेट बनाएँ",
+    `delete_document` "Delete document"/"दस्तावेज़ हटाएँ", `group_organize` "Organize"/"प्रबंधन",
+    `group_tools` "Tools"/"उपकरण" (FIRST grep: if a "Tools" title string exists, reuse it),
+    `group_danger` "Danger"/"खतरा", `extracted` "%1$d pages extracted"/"%1$d पृष्ठ निकाले गए".
+    Orphaned → REMOVE from values/ (+ values-hi if present; `menu_review` uses rotate_left/rotate_right/action_delete_page → KEEP those):
+    `save_to_device`, `save_this_page`, `save_all_pages`, `dl_saved`, `dl_saved_all`, `action_categorize`,
+    `btn_pro_tools` (only consumers are the deleted layout/menu). KEEP: `save_pdf_device` (new menu title), `btn_ocr_text` (MainActivity tile).
+    Grep each before deleting. Drawables: NEW `ic_more.xml`.
+17. **Do NOT add**: sub-header "X MB" (not in T5.2 Do-list), row icons in the sheet, JPEG flow anywhere.
+
+### Tests (same commit, not run)
+- **Phase5ScreensTest**: keep chip+glass dock test, extend → dock `childCount == 4`, `btnShare` weight 2,
+  each button `WRAP_CONTENT` + minHeight 56dp, chip `textSize == 12sp`; NEW: `toolbar.menu.size() == 1`
+  (id `action_save_pdf`) + `btnProTools`/`proToolsPanel`/`btnDelete` absent (findViewById == null) + no
+  `getIdentifier("action_ocr_text"…)…` wait — menu ids: assert `getIdentifier("action_rename","id",pkg)==0` etc. (menu_viewer gone);
+  NEW More-sheet test: `btnMore.performClick()` → `ShadowDialog.getLatestDialog()` → row ids present exactly per §4.5,
+  OCR text absent, `badge_pro` pills visible (Free override) and hidden (Pro default);
+  NEW select-mode test: checkboxes hidden → Select → visible + row B visible + label "Done" → exit hidden.
+- **DeleteExportsTest** (3 sites): `btnDelete` gone → `btnMore.performClick()` → dialog `rowMoreDelete.performClick()` → confirm dialog positive (same as before).
+- **UiSmokeTest**: rewrite `document viewer exposes the pro actions on screen` and the proToolsPanel
+  expansion test (~line 1689) → More sheet rows (`rowMoreLock`/`rowMoreLongImage`/`rowMoreVault` + pills).
+  `btnDelete` refs at 494/509/777 = PageViewer (still exists) → untouched.
+- **ExportHygieneTest**: untouched (id `action_save_pdf` preserved by decision 2).
+- **ScanRepositoryTest**: +duplicate → distinct ids, same page count, independent meta (rename one, other unchanged).
+- **NEW `app/src/test/java/com/scanwhirl/app/store/PageSelectTest.kt`**: seed 3-page doc → `extractPages(id, [0,2])`
+  → new doc 2 pages + name `"<orig> (pages 1–3)"` + original still 3 pages + ids differ (+ category inherited).
+- **TextFitTest**: untouched; `document screen text fits` must go GREEN at phase end.
+
+### Order
+1) strings/drawable/menu + `sheet_more_document.xml` + `activity_document_viewer.xml` rewrite
+→ 2) `ScanRepository` (extractPages + finalizeDoc category) → 3) `PageGridView.checkboxesVisible`
+→ 4) `CompressFlow.startWith` → 5) `DocumentViewerActivity` rewrite → 6) tests → 7) compile → 8) one commit.
+Then T5.3 (Scan Review dock: btnSavePdf 48dp → DockItem minHeight 56dp, keep glass+margins; menu_review untouched),
+T5.4 (Settings "Also save a copy to Documents" switch → `Prefs.autoCopyToDocuments` + subtitle en/hi + TextFitTest),
+T5.5 phase-end run (expect 0 failures) → G3.

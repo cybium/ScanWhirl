@@ -42,6 +42,7 @@
                 android:textColor="?android:attr/textColorSecondary" />
 
             <!-- test25 Phase 5C: additive ID — category tag, filled in reloadDocument(). -->
+            <!-- test26 T5.2 (D-H): 10sp → 12sp, tappable (T4.6). -->
             <TextView
                 android:id="@+id/docCategoryChip"
                 android:layout_width="wrap_content"
@@ -53,7 +54,7 @@
                 android:paddingVertical="3dp"
                 android:textAllCaps="true"
                 android:textColor="@color/cyan_primary"
-                android:textSize="10sp"
+                android:textSize="12sp"
                 android:textStyle="bold"
                 android:visibility="gone" />
 
@@ -89,6 +90,68 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- test26 T5.2 (§4.5): Select pages — row A is the toggle; row B
+             (the contextual bar Rotate · Extract · Delete) only appears while
+             selection mode is on. Two rows on purpose: four buttons in one row
+             would clip at font scale 1.3. -->
+        <LinearLayout
+            android:id="@+id/selectRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSelectPages"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/select_pages" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/selContextRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:visibility="gone">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCtxRotate"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:text="@string/action_rotate"
+                android:textSize="13sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCtxExtract"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:text="@string/extract"
+                android:textSize="13sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCtxDelete"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/delete"
+                android:textSize="13sp" />
+        </LinearLayout>
+
         <com.scanwhirl.app.ui.pagegrid.PageGridView
             android:id="@+id/pageList"
             android:layout_width="match_parent"
@@ -97,185 +160,54 @@
             android:clipToPadding="false"
             android:padding="12dp" />
 
-        <!-- Expandable Pro Tools drawer: bunched into one expandable button -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/proToolsPanel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="12dp"
-            android:layout_marginBottom="4dp"
-            android:visibility="gone"
-            app:cardBackgroundColor="@color/sf_pro_bg"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp"
-            app:strokeColor="@color/pro_badge_stroke"
-            app:strokeWidth="1dp">
-
-            <!-- test25 Phase 5C: gold banner behind the Pro grid (Phase 2's
-                 inner-container trick — cardBackgroundColor can't take a
-                 drawable; the 1dp margin keeps the card's gold stroke visible). -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_margin="1dp"
-                android:background="@drawable/bg_pro_banner"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnProtect"
-                        style="@style/Widget.ScanWhirl.Button.Pro"
-                        android:layout_width="0dp"
-                        android:layout_height="42dp"
-                        android:layout_margin="3dp"
-                        android:layout_weight="1"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:maxLines="1"
-                        android:paddingHorizontal="8dp"
-                        android:text="@string/btn_lock_pdf"
-                        app:icon="@drawable/ic_lock"
-                        app:iconGravity="textStart"
-                        app:iconPadding="6dp"
-                        app:iconSize="16dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnUnlockPdf"
-                        style="@style/Widget.ScanWhirl.Button.Pro"
-                        android:layout_width="0dp"
-                        android:layout_height="42dp"
-                        android:layout_margin="3dp"
-                        android:layout_weight="1"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:maxLines="1"
-                        android:paddingHorizontal="8dp"
-                        android:text="@string/btn_unlock_pdf"
-                        android:visibility="gone"
-                        app:icon="@drawable/ic_unlock"
-                        app:iconGravity="textStart"
-                        app:iconPadding="6dp"
-                        app:iconSize="16dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnOcr"
-                        style="@style/Widget.ScanWhirl.Button.Pro"
-                        android:layout_width="0dp"
-                        android:layout_height="42dp"
-                        android:layout_margin="3dp"
-                        android:layout_weight="1"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:maxLines="1"
-                        android:paddingHorizontal="8dp"
-                        android:text="@string/btn_ocr_text"
-                        app:icon="@drawable/ic_ocr"
-                        app:iconGravity="textStart"
-                        app:iconPadding="6dp"
-                        app:iconSize="16dp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnLongImage"
-                        style="@style/Widget.ScanWhirl.Button.Pro"
-                        android:layout_width="0dp"
-                        android:layout_height="42dp"
-                        android:layout_margin="3dp"
-                        android:layout_weight="1"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:maxLines="1"
-                        android:paddingHorizontal="8dp"
-                        android:text="@string/btn_long_image"
-                        app:icon="@drawable/ic_long_image"
-                        app:iconGravity="textStart"
-                        app:iconPadding="6dp"
-                        app:iconSize="16dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnVaultDoc"
-                        style="@style/Widget.ScanWhirl.Button.Pro"
-                        android:layout_width="0dp"
-                        android:layout_height="42dp"
-                        android:layout_margin="3dp"
-                        android:layout_weight="1"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:maxLines="1"
-                        android:paddingHorizontal="8dp"
-                        android:text="@string/btn_vault_hide"
-                        app:icon="@drawable/ic_vault"
-                        app:iconGravity="textStart"
-                        app:iconPadding="6dp"
-                        app:iconSize="16dp" />
-                </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- test25 Phase 5C: inset floating glass dock. -->
+        <!-- test26 T5.2 (§4.5/§5.4): the bottom dock is [Share w2][Edit][Text]
+             [More] — four DockItem buttons, weighted 2/1/1/1, no fixed heights.
+             The gold Pro Tools tray, the crown button and the old
+             Delete/Share row are gone (N12: one home per action). -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="8dp"
             android:background="@drawable/bg_dock_glass"
-            android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="10dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnProTools"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:maxLines="1"
-                android:paddingHorizontal="14dp"
-                android:text="@string/btn_pro_tools"
-                android:textColor="@color/pro_gold"
-                android:textSize="13sp"
-                app:icon="@drawable/ic_crown"
-                app:iconSize="16dp"
-                app:iconTint="@color/pro_gold"
-                app:strokeColor="@color/pro_badge_stroke" />
-
-            <Space
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnDelete"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:maxLines="1"
-                android:text="@string/delete"
-                app:icon="@drawable/ic_delete" />
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="6dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnShare"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:layout_marginStart="6dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:maxLines="1"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
                 android:text="@string/share_pdf"
                 app:icon="@drawable/ic_share" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnEdit"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/edit"
+                app:icon="@drawable/ic_edit" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnText"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/btn_text"
+                app:icon="@drawable/ic_ocr" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMore"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/more"
+                app:icon="@drawable/ic_more" />
         </LinearLayout>
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

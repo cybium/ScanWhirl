@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- test26 T5.2 (§4.5): the More sheet — the single home for every secondary
+     document action, in exactly three groups (Organize / Tools / Danger).
+     Fixed ids per row so N12 tests can assert "rows == §4.5" and "nothing
+     twice": no OCR row (D-E, the dock's Text is its entry), no Categorize
+     (D-F, the chip is its entry), no save rows (the toolbar icon is the only
+     export). PRO pills (Free only, D-A) live in the three Tools rows. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet_glass"
+    android:orientation="vertical"
+    android:paddingStart="12dp"
+    android:paddingTop="20dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="24dp">
+
+    <TextView
+        android:id="@+id/sheetMoreTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:letterSpacing="0.04"
+        android:text="@string/more"
+        android:textColor="@color/text_hologram_hi"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/hdrOrganize"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:letterSpacing="0.08"
+        android:text="@string/group_organize"
+        android:textAllCaps="true"
+        android:textColor="@color/text_hologram_mid"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:id="@+id/rowMoreRename"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.02"
+            android:text="@string/rename"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowMoreMove"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.02"
+            android:text="@string/move_to_category"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowMoreDuplicate"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.02"
+            android:text="@string/duplicate"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/hdrTools"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:letterSpacing="0.08"
+        android:text="@string/bar_tools"
+        android:textAllCaps="true"
+        android:textColor="@color/text_hologram_mid"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:id="@+id/rowMoreCompress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.02"
+            android:text="@string/tool_compress"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowMoreLock"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/labelLock"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.02"
+            android:text="@string/menu_protect_pdf"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/pillLock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_lock_badge"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:text="@string/badge_pro"
+            android:textColor="@color/pro_gold"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowMoreLongImage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.02"
+            android:text="@string/menu_long_image"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/pillLongImage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_lock_badge"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:text="@string/badge_pro"
+            android:textColor="@color/pro_gold"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowMoreVault"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/labelVault"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.02"
+            android:text="@string/btn_vault_hide"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/pillVault"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_lock_badge"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:text="@string/badge_pro"
+            android:textColor="@color/pro_gold"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/hdrDanger"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:letterSpacing="0.08"
+        android:text="@string/group_danger"
+        android:textAllCaps="true"
+        android:textColor="@color/laser_danger"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:id="@+id/rowMoreDelete"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.02"
+            android:text="@string/delete_document"
+            android:textColor="@color/laser_danger"
+            android:textSize="15sp" />
+    </LinearLayout>
+</LinearLayout>

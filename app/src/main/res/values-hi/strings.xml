@@ -111,4 +111,14 @@
     <string name="status_night">शुभ रात्रि</string>
     <string name="pro_panel_home">ScanWhirl Pro Suite (टेस्ट में अनलॉक):\n\n• छिपा हुआ वॉल्ट — 4-अंक PIN वाला निजी फ़ोल्डर\n• OCR टेक्स्ट — पन्नों के अंदर से टेक्स्ट निकालें, कॉपी करें और खोजें\n• PDF लॉक / अनलॉक — किसी भी स्कैन को पासवर्ड से सुरक्षित करें या अनलॉक करें\n• लंबी छवि — सभी पन्नों को एक लंबी छवि में जोड़ें\n• ID / पासपोर्ट क्रॉप — क्रॉप के अंदर एस्पेक्ट प्रीसेट\n• बैच ZIP — बहु-चयन स्कैन → ZIP निर्यात\n\nशुरू करने के लिए होम पर \"Pro Suite\" या किसी भी स्कैन के अंदर \"Pro Tools\" टैप करें।</string>
     <string name="pro_panel_free">ScanWhirl मुफ़्त रहता है: स्कैन करें, संपादित करें, मर्ज करें, कंप्रेस करें और देखें — कोई खाता नहीं, कोई विज्ञापन नहीं, कोई सर्वर नहीं।\n\nPro एक-बार की खरीद है जो यह अनलॉक करती है:\n• छिपा हुआ वॉल्ट — 4-अंक PIN वाला निजी फ़ोल्डर\n• OCR टेक्स्ट — पन्नों के अंदर से टेक्स्ट निकालें, कॉपी करें और खोजें\n• PDF लॉक / अनलॉक — स्कैन और डिवाइस PDF को सुरक्षित करें\n• लंबी छवि — सभी पन्नों को एक लंबी छवि में जोड़ें\n• ID / पासपोर्ट क्रॉप प्रीसेट\n• बैच ZIP निर्यात\n\nPro अनलॉक करने के लिए क्राउन बैज टैप करें।</string>
+    <!-- test26 T5.2 (§4.5 document screen) — machine-translated batch, review at G3. -->
+    <string name="btn_text">टेक्स्ट</string>
+    <string name="more">अधिक</string>
+    <string name="extract">निकालें</string>
+    <string name="duplicate">डुप्लिकेट बनाएँ</string>
+    <string name="delete_document">दस्तावेज़ हटाएँ</string>
+    <string name="group_organize">प्रबंधन</string>
+    <string name="group_danger">खतरा</string>
+    <string name="extracted">%1$d पृष्ठ एक नए स्कैन में निकाले गए</string>
+
 </resources>

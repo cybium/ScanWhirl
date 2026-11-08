@@ -291,6 +291,34 @@ class ScanRepository(private val context: Context) {
             loadDocument(dest) ?: throw IllegalStateException("Copy could not be opened")
         }
 
+    /**
+     * test26 T5.2 (§4.5): Extract — saves the given pages as a brand-new
+     * document (new dir, pages renumbered, PDF regenerated from the subset).
+     * The original is untouched and keeps its exported copies; the category is
+     * inherited, like [duplicateDocument].
+     */
+    suspend fun extractPages(id: String, pageIndices: List<Int>): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val doc = loadDocument(File(docsDir, id))
+                ?: throw IllegalStateException("Scan not found")
+            val indices = pageIndices.distinct().sorted()
+            require(indices.isNotEmpty()) { "No pages selected" }
+            require(indices.all { it in doc.pageFiles.indices }) { "No such page" }
+
+            val (newId, dir) = newDocDir()
+            indices.forEachIndexed { i, srcIdx ->
+                doc.pageFiles[srcIdx].copyTo(
+                    File(dir, String.format(Locale.ROOT, PAGE_FORMAT, i)),
+                    overwrite = true
+                )
+            }
+            val first = indices.first() + 1
+            val last = indices.last() + 1
+            val name = if (first == last) "${doc.name} (page $first)"
+            else "${doc.name} (pages $first–$last)"
+            finalizeDoc(newId, dir, name, doc.category)
+        }
+
     suspend fun mergeDocuments(
         sourceIds: List<String>,
         suggestedName: String?
@@ -505,10 +533,15 @@ class ScanRepository(private val context: Context) {
     }
 
     /** Writes the name/meta, generates the PDF, and returns the listed document. */
-    private fun finalizeDoc(id: String, dir: File, suggestedName: String?): ScanDocument {
+    private fun finalizeDoc(
+        id: String,
+        dir: File,
+        suggestedName: String?,
+        category: String? = null
+    ): ScanDocument {
         val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
             ?: nextDocumentName()
-        writeMeta(dir, name)
+        writeMeta(dir, name, category)
         val pdfFile = File(dir, "scan.pdf")
         try {
             PdfGenerator.imagesToPdf(pageFilesIn(dir), pdfFile)

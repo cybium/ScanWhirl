@@ -1096,7 +1096,6 @@ class UiSmokeTest {
                 assertNotNull(menu.findItem(R.id.action_rotate_left))
                 assertNotNull(menu.findItem(R.id.action_rotate_right))
                 assertNotNull(menu.findItem(R.id.action_delete_page))
-                assertNotNull(menu.findItem(R.id.action_save_page))
 
                 // Ticking a page only selects it: no popup appears.
                 val grid = activity.findViewById<
@@ -1432,17 +1431,34 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `document viewer exposes the pro actions on screen`() {
+    fun `document viewer exposes the pro actions in the more sheet`() {
         val doc = seedDoc("Pro buttons", pages = 1)
         val intent = DocumentViewerActivity.intent(app, doc)
-        ActivityScenario.launch(DocumentViewerActivity::class.java).use { scenario ->
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            // reloadDocument() fills the header off the main thread; the More
+            // sheet needs a loaded document (T5.2 §4.5).
+            val loaded = pollUntil {
+                var ready = false
+                scenario.onActivity { a ->
+                    ready = a.findViewById<android.widget.TextView>(R.id.pageCount)
+                        ?.text?.isNotEmpty() == true
+                }
+                ready
+            }
+            assertTrue("document must load first", loaded)
             scenario.onActivity { activity ->
-                val protect = activity.findViewById<android.view.View>(R.id.btnProtect)
-                val longImage = activity.findViewById<android.view.View>(R.id.btnLongImage)
-                assertNotNull("Password button should be on screen", protect)
-                assertNotNull("Long image button should be on screen", longImage)
+                activity.findViewById<android.view.View>(R.id.btnMore).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("More sheet should open", sheet)
+                val protect = sheet!!.findViewById<android.view.View>(R.id.rowMoreLock)
+                val longImage = sheet.findViewById<android.view.View>(R.id.rowMoreLongImage)
+                assertNotNull("Lock PDF row should be in the sheet", protect)
+                assertNotNull("Long image row should be in the sheet", longImage)
                 assertTrue(protect.isVisible)
                 assertTrue(longImage.isVisible)
+                // Pro (test-build default): no PRO pills on the rows.
+                assertFalse(sheet.findViewById<android.view.View>(R.id.pillLock).isVisible)
+                assertFalse(sheet.findViewById<android.view.View>(R.id.pillLongImage).isVisible)
                 // The ZIP export lives in Home's selection header now (T3.7);
                 // the menu id it used to ride is gone everywhere.
                 assertEquals(
@@ -1450,6 +1466,7 @@ class UiSmokeTest {
                     0,
                     activity.resources.getIdentifier("action_export_zip", "id", activity.packageName)
                 )
+                sheet.dismiss()
             }
         }
     }
@@ -1686,14 +1703,20 @@ class UiSmokeTest {
                 ready
             }
             scenario.onActivity { activity ->
-                val panel = activity.findViewById<android.view.View>(R.id.proToolsPanel)
-                assertFalse("Editor Pro Tools starts collapsed", panel.isVisible)
-                activity.findViewById<android.view.View>(R.id.btnProTools).performClick()
-                assertTrue("Editor Pro Tools expands on tap", panel.isVisible)
-                assertTrue(activity.findViewById<android.view.View>(R.id.btnUnlockPdf).isVisible)
-                assertTrue(activity.findViewById<android.view.View>(R.id.btnOcr).isVisible)
-                assertTrue(activity.findViewById<android.view.View>(R.id.btnVaultDoc).isVisible)
+                // T5.2 (§4.5): the Pro tray is gone; the locked actions live in
+                // the More sheet with PRO pills for Free.
                 renderActivityPng(activity, "/tmp/opencode/ui_editor.png")
+                assertEquals("the Pro tray must be gone", 0,
+                    activity.resources.getIdentifier("proToolsPanel", "id", activity.packageName))
+                activity.findViewById<android.view.View>(R.id.btnMore).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("Editor More sheet should open", sheet)
+                assertNotNull(sheet!!.findViewById<android.view.View>(R.id.rowMoreLock))
+                assertNotNull(sheet.findViewById<android.view.View>(R.id.rowMoreLongImage))
+                assertNotNull(sheet.findViewById<android.view.View>(R.id.rowMoreVault))
+                // Test build is Pro: the locked rows show no PRO pill.
+                assertFalse(sheet.findViewById<android.view.View>(R.id.pillLock).isVisible)
+                sheet.dismiss()
             }
         }
         Unit
