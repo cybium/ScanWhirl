@@ -13,6 +13,7 @@ import android.view.HapticFeedbackConstants
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.animation.ValueAnimator
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -57,6 +58,7 @@ import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.QuickSortQueue
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
+import com.scanwhirl.app.util.SwMotion
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -122,6 +124,11 @@ class MainActivity : BaseActivity(), HomeHost {
     private val ocrFlow: OcrFlow by lazy {
         OcrFlow(activity = this, repo = repo, host = this)
     }
+
+    /** test26 T8.1: signal dot next to the wordmark. */
+    private lateinit var signalDot: View
+    private var backgroundWorkCount = 0
+    private var signalAnimator: ValueAnimator? = null
     private val scanLauncher: ScanLauncher by lazy {
         ScanLauncher(
             activity = this, repo = repo, host = this,
@@ -223,6 +230,9 @@ class MainActivity : BaseActivity(), HomeHost {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.root.applySystemBarsPadding()
+
+        // test26 T8.1: signal dot next to the wordmark.
+        signalDot = binding.signalDot
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
@@ -429,6 +439,47 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
+    override fun workStarted() {
+        backgroundWorkCount++
+        updateSignalDot()
+    }
+
+    override fun workEnded() {
+        backgroundWorkCount = maxOf(0, backgroundWorkCount - 1)
+        updateSignalDot()
+    }
+
+    /** test26 T8.1: light/dim the signal dot; breathe only when ambient allowed. */
+    private fun updateSignalDot() {
+        val active = backgroundWorkCount > 0
+        signalDot.visibility = if (active) View.VISIBLE else View.GONE
+        if (active) {
+            startSignalBreath()
+        } else {
+            stopSignalBreath()
+            signalDot.alpha = 1f
+        }
+    }
+
+    private fun startSignalBreath() {
+        if (!SwMotion.ambientAllowed(this)) return
+        signalAnimator?.cancel()
+        signalAnimator = ValueAnimator.ofFloat(0.4f, 1f, 0.4f).apply {
+            duration = 1500
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            addUpdateListener { anim ->
+                signalDot.alpha = anim.animatedValue as Float
+            }
+            start()
+        }
+    }
+
+    private fun stopSignalBreath() {
+        signalAnimator?.cancel()
+        signalAnimator = null
+    }
+
     /** In-memory filter + sort over [allDocs]; used by search and sort too. */
     private fun applyList() {
         // Pure logic lives in HomeFilter (T3.3); this just builds the state.
@@ -538,6 +589,10 @@ class MainActivity : BaseActivity(), HomeHost {
                 setOnClickListener {
                     selectCategory(if (key == selectedCategory) null else key)
                 }
+                // test26 T8.4: Unsorted chip gets a dashed outline.
+                if (key == CategoryRules.UNSORTED) {
+                    setBackgroundResource(R.drawable.bg_chip_unsorted_dashed)
+                }
             }
             rail.addView(chip)
         }
@@ -583,6 +638,8 @@ class MainActivity : BaseActivity(), HomeHost {
     /** Chip tap: filter to [key], or back to All when it is tapped twice. */
     private fun selectCategory(key: String?) {
         selectedCategory = key
+        // test26 T8.5: haptic tick on every category change.
+        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         updateChipRailChecked()
         applyList()
     }

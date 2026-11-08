@@ -67,6 +67,17 @@
                             android:textColor="@color/pro_gold"
                             android:textSize="11sp"
                             android:textStyle="bold" />
+
+                        <!-- test26 T8.1: signal dot — 3dp, lit while background work
+                             runs (OCR/merge/compress), breathing only when
+                             SwMotion.ambientAllowed. -->
+                        <View
+                            android:id="@+id/signalDot"
+                            android:layout_width="3dp"
+                            android:layout_height="3dp"
+                            android:layout_marginStart="8dp"
+                            android:background="@drawable/bg_signal_dot"
+                            android:visibility="gone" />
                     </LinearLayout>
 
                     <!-- test26 T3.2: HUD status line — 11sp caps + 0.12 tracking (R2
@@ -505,6 +516,12 @@
                     android:contentDescription="@null"
                     android:src="@drawable/ic_camera"
                     app:tint="@color/cyan_primary" />
+
+                <!-- test26 T8.2: viewfinder corner brackets on the SCAN ring. -->
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:src="@drawable/frame_corners" />
             </FrameLayout>
 
             <LinearLayout

@@ -20,4 +20,10 @@ interface HomeHost {
     fun toast(res: Int, duration: Int = Toast.LENGTH_SHORT)
 
     fun toast(message: CharSequence, duration: Int = Toast.LENGTH_SHORT)
+
+    /** Background work started (OCR/merge/compress) — host may light a signal dot. */
+    fun workStarted() = Unit
+
+    /** Background work ended — host may dim the signal dot. */
+    fun workEnded() = Unit
 }

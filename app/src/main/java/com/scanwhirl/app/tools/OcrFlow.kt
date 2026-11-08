@@ -30,6 +30,7 @@ class OcrFlow(
 ) {
 
     fun runOcrForScan(doc: ScanDocument) {
+        host.workStarted()
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
@@ -51,11 +52,14 @@ class OcrFlow(
                     activity.getString(R.string.page_op_failed, e.message),
                     Toast.LENGTH_LONG
                 ).show()
+            } finally {
+                host.workEnded()
             }
         }
     }
 
     fun runOcrForPdf(uri: Uri) {
+        host.workStarted()
         val progress = host.showProgress(R.string.ocr_running)
         activity.lifecycleScope.launch {
             try {
@@ -80,11 +84,14 @@ class OcrFlow(
                     activity.getString(R.string.page_op_failed, e.message),
                     Toast.LENGTH_LONG
                 ).show()
+            } finally {
+                host.workEnded()
             }
         }
     }
 
     fun runOcrForImage(uri: Uri) {
+        host.workStarted()
         val progress = host.showProgress(R.string.ocr_running)
         activity.lifecycleScope.launch {
             try {
@@ -105,6 +112,8 @@ class OcrFlow(
                     activity.getString(R.string.page_op_failed, e.message),
                     Toast.LENGTH_LONG
                 ).show()
+            } finally {
+                host.workEnded()
             }
         }
     }
