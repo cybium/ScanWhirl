@@ -1086,28 +1086,24 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `viewer toolbar offers rotate, delete and save page actions`() {
+    fun `viewer toolbar carries only save-pdf page actions live in select bar`() {
         val id = seedDoc("Menu doc", pages = 2)
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
+                // T5.2 (§4.5): the toolbar keeps exactly one action — Save-a-copy;
+                // no overflow, no page-actions menu.
                 val menu = activity.findViewById<
                     com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
-                assertNotNull(menu.findItem(R.id.action_rotate_left))
-                assertNotNull(menu.findItem(R.id.action_rotate_right))
-                assertNotNull(menu.findItem(R.id.action_delete_page))
+                assertEquals("toolbar has exactly one action, no overflow (⋮)", 1, menu.size())
+                assertEquals("the action is Save-a-copy",
+                    R.id.action_save_pdf, menu.getItem(0).itemId)
 
-                // Ticking a page only selects it: no popup appears.
-                val grid = activity.findViewById<
-                    com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
-                forceLayout(grid)
-                grid.findViewHolderForAdapterPosition(0)!!.itemView
-                    .findViewById<android.widget.CheckBox>(R.id.checkSelect).performClick()
-                assertEquals(
-                    app.resources.getQuantityString(R.plurals.selected_count, 1, 1),
-                    activity.supportActionBar?.subtitle
-                )
-                assertNull("selecting a page must not open a dialog", ShadowDialog.getLatestDialog())
+                // Page actions moved to the contextual select bar: the views exist
+                // (inflated) and stay hidden until Select pages mode is switched on.
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnCtxRotate))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnCtxExtract))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnCtxDelete))
             }
         }
     }
