@@ -2,7 +2,7 @@
 
 > Purpose: everything a fresh agent needs to continue the test26 redesign without this
 > conversation. Written 2026-11-07 at HEAD `fb96782`; **revised 2026-11-08 after the owner's G2 review (plan Rev 3)**;
-> **Phase 3b built 2026-11-08 (T3.10–T3.13) — stopped at G2b, waiting for the 4 owner screenshots (see §5).**
+> **Phase 3b built 2026-11-08 (T3.10–T3.13) — stopped at G2b. NO screenshots: the next session starts from the `ScanWhirl-test26-*.md` copies in Downloads, which the reviewer edits as the gate review (see §3/§5).**
 > **Authoritative plan:** `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` (Rev 3) — read §0
 > (rules), §4–§5 (target UI), §6 (tasks), §7 (tests), §8 (gotchas) before coding.
 > **As-run record:** `docs/TEST26_LOG.md` — per-task entries + phase-end tables here.
@@ -19,7 +19,7 @@ categories, zero clipped text, OCR editor, Earth removed in P7), ship
 `versionCode 26` / `1.1.1-test26`. Owner installs each gate APK and sends screenshots
 before the next phase starts.
 
-**Current position (2026-11-08): Phase 3b (T3.10–T3.13) is BUILT and committed (`49b1576` → `c9e329c`); phase-end build 267 tests / 2 known-red per variant; `alpha2b` + the three md copies are in Downloads. Next work = STOP at mini-gate G2b (wait for the owner's 4 screenshots), then plan-mode review of the revised Phase 4.**
+**Current position (2026-11-08): Phase 3b (T3.10–T3.13) is BUILT and committed (`49b1576` → `906d158`); phase-end build 267 tests / 2 known-red per variant; `alpha2b` + the three md copies + `ScanWhirl-1.1.1-test26-source.zip` are in Downloads. Next work = STOP at mini-gate G2b — NO screenshots: the next session starts from the md copies in Downloads (the reviewer edits them; those edits are the gate review), then plan-mode review of the revised Phase 4.**
 
 ## 2. Locations
 
@@ -74,9 +74,13 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
   → copy to `/mnt/c/Users/Cybium/Downloads/` → **STOP**, wait for owner screenshots.
   G2 screenshots required: Home 0 docs, Home with docs, chip selected, search focused,
   Tools sheet, selection mode.
-  **G2b (end of P3b, current):** `…-alpha2b.apk` → same folder → **STOP**, 4 screenshots:
-  Home with docs (status line right), Tools sheet, selection mode (1 and 2 selected),
-  search focused (missing at G2 — confirm the clear × and, on Pro, the `In text` chip).
+  **G2b (end of P3b, current) — NO screenshots (owner, 2026-11-08):** deliverables in
+  `/mnt/c/Users/Cybium/Downloads/` = `ScanWhirl-1.1.1-test26-alpha2b.apk` + the three
+  `ScanWhirl-test26-*.md` copies + `ScanWhirl-1.1.1-test26-source.zip`, then **STOP**.
+  The gate review happens in the *next* session: the reviewer (Claude) **edits the md
+  copies in Downloads** after seeing what was built — **those edits ARE the review**
+  (adopt them like Rev 3: diff Downloads vs repo `docs/`, apply, commit as docs).
+  If the copies are unchanged, treat G2b as passed and proceed to the Phase 4 review.
 - Design: D1 orbital-dark theme, D3 category colors, D4 system fonts only. No network/
   analytics/ads. New strings in `values/strings.xml` only (± `values-hi` where key exists).
   No emoji anywhere (`EmojiGuardTest` enforces). Every `INFINITE` animator gated on
@@ -133,8 +137,10 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
   documented TextFit known-reds; `home` flips **green outside afternoon hours** (shorter
   greeting string — time-of-day dependent, see log T3.12). aapt2 unchanged: test package ·
   `ScanWhirl Test` · launcher `MainActivity` · versionCode 25.
-- **G2b delivered:** `ScanWhirl-1.1.1-test26-alpha2b.apk` + the three md copies are in
-  `/mnt/c/Users/Cybium/Downloads/` — **session stopped here for the 4 owner screenshots.**
+- **G2b delivered:** `ScanWhirl-1.1.1-test26-alpha2b.apk` + the three md copies +
+  `ScanWhirl-1.1.1-test26-source.zip` (tracked tree at `906d158`) are in
+  `/mnt/c/Users/Cybium/Downloads/` — **session stopped here. NO screenshots: the next
+  session starts from the Downloads mds; the reviewer's edits to them are the review.**
 
 ## 5. Next steps (in order)
 
@@ -155,9 +161,12 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
 1. ~~**Phase 3b in build mode**~~ ✅ T3.10 `49b1576` → T3.11 `0172940` → T3.12 `ac8d267` → T3.13 `c9e329c`;
    every new test red-proofed first; the T3.7 amendment is noted in the log; phase-end build **267/2 per variant**
    (the 2 = documented TextFit reds; `home` is green outside afternoon hours — time-of-day dependent).
-2. **G2b — CURRENT STEP:** `ScanWhirl-1.1.1-test26-alpha2b.apk` + the three mds are already in
-   `/mnt/c/Users/Cybium/Downloads/` → **STOP**. Owner sends 4 screenshots (Home with
-   docs, Tools sheet, selection mode with 1 and 2 selected, search focused).
+2. **G2b — CURRENT STEP (NO screenshots — owner changed the process 2026-11-08):**
+   deliverables are already in `/mnt/c/Users/Cybium/Downloads/`: `ScanWhirl-1.1.1-test26-alpha2b.apk`,
+   the three `ScanWhirl-test26-*.md`, and `ScanWhirl-1.1.1-test26-source.zip` → **STOP**.
+   Next session starts by reading the **md copies in Downloads** — the reviewer (Claude) edits
+   them after seeing what was built; **the edits are the G2b review** (diff Downloads vs repo
+   `docs/`, adopt like Rev 3, commit). Unchanged mds = G2b passed.
 3. If G2b passes → **plan-mode review of the revised Phase 4**. Order is now **T4.7 → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5) → T4.6**.
 4. **G2c:** after Phase 4 build `alpha2c` and STOP: Phase 4 changes what is written to the phone's storage, so the owner verifies on the device
    (no new file in Files > Recent after saving; download twice = one file; delete with the checkbox removes the file).

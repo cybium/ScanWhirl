@@ -24,12 +24,16 @@
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
-> **STATUS (2026-11-08):** T0–T3.13 committed (HEAD `c9e329c` + docs). Phase-end build was 267 tests / 2 known-red TextFit
+> **STATUS (2026-11-08):** T0–T3.13 committed (HEAD `906d158`). Phase-end build was 267 tests / 2 known-red TextFit
 > (`home` flips green outside afternoon hours — its greeting string is shorter; see log T3.12). **Phase 3b fixed G2's
-> defects #14–#16 + polish.** Next: **STOP at G2b** (`alpha2b` delivered, waiting for the 4 owner screenshots) → then
-> plan-mode review of the *revised* Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → **G2c** (`alpha2c`) → Phase 5.
-> **How to continue in a new session:** read `docs/TEST26_HANDOFF.md` (or its copy in Downloads), then the
-> section **"PHASE 4"** below (order Rev 3), then §4.5 and T4.7/T4.8. As-run record: `docs/TEST26_LOG.md`.
+> defects #14–#16 + polish.** Next: **STOP at G2b — NO screenshots (owner, 2026-11-08).** Deliverables are in
+> `/mnt/c/Users/Cybium/Downloads/`: `ScanWhirl-1.1.1-test26-alpha2b.apk`, the three `ScanWhirl-test26-*.md`, and
+> `ScanWhirl-1.1.1-test26-source.zip`. The next session starts by reading the **md copies in Downloads** — the
+> reviewer (Claude) edits them after seeing what was built, and **those edits are the gate review** (adopt like Rev 3;
+> unchanged = passed) → then plan-mode review of the *revised* Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → **G2c** → Phase 5.
+> **How to continue in a new session:** read `docs/TEST26_HANDOFF.md` (or its copy in Downloads — check whether the
+> Downloads copy was edited, that is the review), then the section **"PHASE 4"** below (order Rev 3), then §4.5 and
+> T4.7/T4.8. As-run record: `docs/TEST26_LOG.md`.
 
 ---
 
@@ -889,7 +893,7 @@ Each line maps to a complaint in §2. All must pass on a real device.
 | Risk | Mitigation |
 |---|---|
 | P2 refactor breaks `ActivityResult` launchers or dialogs | One flow per commit, full tests after each, launchers stay in `MainActivity`. |
-| `TextFitTest` does not reproduce device clipping in Robolectric | Fallback XML-dimension assertions (T1.2); owner screenshots at every gate are the final check. |
+| `TextFitTest` does not reproduce device clipping in Robolectric | Fallback XML-dimension assertions (T1.2); the gate review (md edits in Downloads; screenshots were used up to G2) is the final check. |
 | Edge-to-edge changes layouts on older Android | Inset helper is applied uniformly; verify on the owner's device at G1. |
 | A small model rewrites big files badly | §0 rules: split tasks, new files over rewrites, stop after two failed attempts. |
 | New `Unsorted` value read by older builds | Old builds treat unknown meta values as `Other` (`isValid` fallback), so downgrade is safe. |

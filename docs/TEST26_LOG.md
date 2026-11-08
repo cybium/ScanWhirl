@@ -447,7 +447,8 @@ the `search focused` screenshot was never sent (re-requested at G2b).
   upgrade (same package). Verify only; existing users keep their pref.
 
 **Phase 3b order:** docs adopt Rev 3 → T3.10 → T3.11 → T3.12 → T3.13 →
-phase-end full build → **G2b** (`alpha2b`, STOP for 4 screenshots). Then
+phase-end full build → **G2b** (`alpha2b`, STOP for 4 screenshots — *superseded same day:
+no screenshots, review = md edits in Downloads, see the P3b delivery note*). Then
 plan-mode review of the revised Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → G2c.
 
 ---
@@ -539,13 +540,21 @@ plan-mode review of the revised Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → G2c.
 - `MainActivity.kt` = 1,132 lines (the <900 gate belonged to **P2**, met there at 890;
   P3 + 3b legitimately grew it — not a G2b item).
 - **APK delivered:** `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alpha2b.apk`.
-- **G2b owner check (4 screenshots):** Home with docs (status line right) · Tools sheet ·
-  selection mode (1 selected, and 2 selected) · **search focused** (missing at G2 —
-  confirm the clear × and, on Pro, the `In text` chip).
+- **G2b content checklist (what the review must confirm):** Home with docs (status line
+  right) · Tools sheet · selection mode (1 selected, and 2 selected) · **search focused**
+  (missing at G2 — the clear × and, on Pro, the `In text` chip).
+- **Process change (owner, 2026-11-08): G2b needs NO screenshots.** Deliverables in
+  Downloads = the APK + the three `ScanWhirl-test26-*.md` + **`ScanWhirl-1.1.1-test26-source.zip`**
+  (261 files, tracked tree at `906d158`). The next session starts from the **md copies in
+  Downloads**: the reviewer (Claude) edits them after seeing what was built and **the edits
+  are the gate review** (adopt like Rev 3; unchanged = passed). The checklist above is what
+  those edits should address.
 - Nothing pushed; commits T3.10 `49b1576` → T3.11 `0172940` → T3.12 `ac8d267` →
   T3.13 `c9e329c`.
 
-**Next:** **STOP at G2b** — wait for the 4 owner screenshots → then plan-mode review of
+**Next:** **STOP at G2b — no screenshots (owner, 2026-11-08):** APK + three mds + source
+zip are in `/mnt/c/Users/Cybium/Downloads/` → the next session starts from the **md copies
+in Downloads** (the reviewer edits them; the edits are the gate review) → then plan-mode review of
 the *revised* Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → G2c (`alpha2c`) → Phase 5.
 
 ---
