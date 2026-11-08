@@ -35,80 +35,63 @@
         android:textColor="#FFFFFFFF"
         android:textSize="14sp" />
 
-    <!-- test25 Phase 5B: inset floating glass dock (was a flat #99000000 bar). -->
+    <!-- test26 T5.1 (§4.6/§5.4): single-row glass dock — the container itself
+         is horizontal, four equal DockItem buttons. minHeight 64dp (not 56dp —
+         scale 1.3 pushes the icon+label stack to ~74dp; wrap_content handles
+         it), height wrap_content, no fixed heights. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:layout_marginHorizontal="8dp"
         android:background="@drawable/bg_dock_glass"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:paddingHorizontal="8dp"
         android:paddingVertical="6dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRotateRight"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:layout_weight="1"
+            android:minHeight="64dp"
+            android:paddingHorizontal="2dp"
+            android:text="@string/action_rotate"
+            app:icon="@drawable/ic_rotate" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnRotateRight"
-                style="@style/Widget.ScanWhirl.Button.Dock"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:paddingHorizontal="2dp"
-                android:text="@string/action_rotate"
-                app:icon="@drawable/ic_rotate"
-                app:iconPadding="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCrop"
-                style="@style/Widget.ScanWhirl.Button.Dock"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:paddingHorizontal="2dp"
-                android:text="@string/crop_action"
-                app:icon="@drawable/ic_crop"
-                app:iconPadding="4dp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCrop"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:layout_weight="1"
+            android:minHeight="64dp"
+            android:paddingHorizontal="2dp"
+            android:text="@string/crop_action"
+            app:icon="@drawable/ic_crop" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnFilter"
-                style="@style/Widget.ScanWhirl.Button.Dock"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:paddingHorizontal="2dp"
-                android:text="@string/filter_action"
-                app:icon="@drawable/ic_filter"
-                app:iconPadding="4dp" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFilter"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="64dp"
+            android:paddingHorizontal="2dp"
+            android:text="@string/filter_action"
+            app:icon="@drawable/ic_filter" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnDelete"
-                style="@style/Widget.ScanWhirl.Button.Dock"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:paddingHorizontal="2dp"
-                android:text="@string/delete"
-                app:icon="@drawable/ic_delete"
-                app:iconPadding="4dp" />
-        </LinearLayout>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDelete"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="64dp"
+            android:paddingHorizontal="2dp"
+            android:text="@string/delete"
+            app:icon="@drawable/ic_delete" />
     </LinearLayout>
 
     <FrameLayout

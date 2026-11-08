@@ -481,24 +481,34 @@ class Phase5ScreensTest {
             }
         }
 
-        // PageViewer: the rotate/crop/filter/delete dock, buttons on the .Dock style.
+        // PageViewer: T5.1 — one row of four DockItem buttons (§4.6/§5.4).
         val id = seedDoc("Dock doc", pages = 2)
         val viewerIntent = PageViewerActivity.intent(app, id, 0)
         ActivityScenario.launch<PageViewerActivity>(viewerIntent).use { scenario ->
             scenario.onActivity { activity ->
                 val rotate = activity.findViewById<
                     com.google.android.material.button.MaterialButton>(R.id.btnRotateRight)
-                val dockRow = rotate.parent as ViewGroup
-                val dock = dockRow.parent as ViewGroup
+                val dock = rotate.parent as ViewGroup
                 assertTrue("page viewer dock is bg_dock_glass",
                     sameDrawable(dock.background, R.drawable.bg_dock_glass))
                 val margin = Math.round(8f * activity.resources.displayMetrics.density)
                 val lp = dock.layoutParams as android.view.ViewGroup.MarginLayoutParams
                 assertEquals("dock is inset 8dp", margin, lp.leftMargin)
                 assertEquals("dock is inset 8dp", margin, lp.rightMargin)
-                // Widget.ScanWhirl.Button.Dock sets 11sp labels.
-                val expected = 11f * activity.resources.displayMetrics.scaledDensity
-                assertEquals("dock button label is 11sp", expected, rotate.textSize, 0.5f)
+                // Single row: the dock itself holds all four buttons (not nested rows).
+                assertEquals("dock is one row of four", 4, dock.childCount)
+                for (i in 0 until dock.childCount) {
+                    val btn = dock.getChildAt(i)
+                        as com.google.android.material.button.MaterialButton
+                    assertEquals("button $i has no fixed height (wrap_content)",
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT, btn.layoutParams.height)
+                    assertEquals("button $i minHeight is 64dp (§4.6, scale 1.3 floor)",
+                        Math.round(64f * activity.resources.displayMetrics.density),
+                        btn.minimumHeight)
+                }
+                // Widget.ScanWhirl.Button.DockItem sets 12sp labels.
+                val expected = 12f * activity.resources.displayMetrics.scaledDensity
+                assertEquals("dock button label is 12sp", expected, rotate.textSize, 0.5f)
             }
         }
     }
