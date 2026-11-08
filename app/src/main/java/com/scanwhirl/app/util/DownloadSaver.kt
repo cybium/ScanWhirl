@@ -1,5 +1,6 @@
 package com.scanwhirl.app.util
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -105,21 +106,73 @@ object DownloadSaver {
     }
 
     /**
-     * Writes PDF bytes into the user's Documents/ScanWhirl folder and returns the final
-     * name (renamed with " (n)" if one already exists).
+     * A saved export: the URI of the file that was written (for Open/Undo) and
+     * the final display name.
      */
-    fun savePdf(context: Context, bytes: ByteArray, displayName: String): String {
+    data class SavedFile(val uri: Uri, val name: String)
+
+    /**
+     * Writes PDF bytes into the user's Documents/ScanWhirl folder, **replacing**
+     * an existing file of the same name (T4.7: re-saving must not create
+     * " (2)" duplicates). On Android 10+ the existing MediaStore row is
+     * overwritten with `openOutputStream(uri, "wt")`; if that row cannot be
+     * written (e.g. it belongs to an older install) a fresh unique-named entry
+     * is created instead. Pre-Q overwrites the File when it exists.
+     * Throws on missing storage permission / unavailable storage.
+     */
+    fun savePdfFile(context: Context, bytes: ByteArray, displayName: String): SavedFile {
         if (Build.VERSION.SDK_INT >= 29) {
             return savePdfQ(context, bytes, displayName)
         }
         return savePdfPreQ(bytes, displayName)
     }
 
+    /**
+     * Name-only wrapper around [savePdfFile] for callers that do not need the
+     * URI (keeps the old String API, so `DownloadSaverTest` stays green).
+     */
+    fun savePdf(context: Context, bytes: ByteArray, displayName: String): String =
+        savePdfFile(context, bytes, displayName).name
+
+    /** Undo for a saved export (T4.7): removes the file this app just wrote. */
+    fun deleteSaved(context: Context, uri: Uri) {
+        try {
+            if (uri.scheme == "file") {
+                uri.path?.let { File(it).delete() }
+            } else {
+                context.contentResolver.delete(uri, null, null)
+            }
+        } catch (_: Exception) {
+            // Best effort: an already-gone file is the desired end state anyway.
+        }
+    }
+
     @androidx.annotation.RequiresApi(29)
-    private fun savePdfQ(context: Context, bytes: ByteArray, displayName: String): String {
+    private fun savePdfQ(context: Context, bytes: ByteArray, displayName: String): SavedFile {
         val resolver = context.contentResolver
         val collection = MediaStore.Files.getContentUri("external")
         val relPath = Environment.DIRECTORY_DOCUMENTS + "/" + SUBDIR
+
+        // T4.7: replace an existing file with the same name instead of "(2)"-ing it.
+        val existingId = resolver.query(
+            collection,
+            arrayOf(MediaStore.MediaColumns._ID),
+            "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=?",
+            arrayOf("$relPath/", displayName),
+            null
+        )?.use { c -> if (c.moveToFirst()) c.getLong(0) else null }
+        if (existingId != null) {
+            val existingUri = ContentUris.withAppendedId(collection, existingId)
+            try {
+                resolver.openOutputStream(existingUri, "wt")?.use { it.write(bytes) }
+                    ?: throw IllegalStateException("Could not open output stream")
+                return SavedFile(existingUri, displayName)
+            } catch (_: Exception) {
+                // Row not writable (older install / foreign owner): fall through
+                // and create a fresh entry with a unique name below.
+            }
+        }
+
         val name = uniqueName(displayName) { candidate ->
             resolver.query(
                 collection,
@@ -147,11 +200,11 @@ object DownloadSaver {
         values.clear()
         values.put(MediaStore.MediaColumns.IS_PENDING, 0)
         resolver.update(uri, values, null, null)
-        return name
+        return SavedFile(uri, name)
     }
 
     @Suppress("DEPRECATION")
-    private fun savePdfPreQ(bytes: ByteArray, displayName: String): String {
+    private fun savePdfPreQ(bytes: ByteArray, displayName: String): SavedFile {
         if (Environment.getExternalStorageState() != Environment.MEDIA_MOUNTED) {
             throw IllegalStateException("Storage unavailable")
         }
@@ -159,8 +212,9 @@ object DownloadSaver {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
             SUBDIR
         ).apply { mkdirs() }
-        val name = uniqueName(displayName) { File(dir, it).exists() }
-        File(dir, name).writeBytes(bytes)
-        return name
+        // T4.7: overwrite the file when it already exists (replace, not duplicate).
+        val file = File(dir, displayName)
+        file.writeBytes(bytes)
+        return SavedFile(Uri.fromFile(file), displayName)
     }
 }

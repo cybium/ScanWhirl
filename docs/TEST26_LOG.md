@@ -617,7 +617,17 @@ T4.7→T4.1 collision (§3G) · §10 checklist items 15/16/17 (O-IDs folded into
 would have duplicated it; new item 17 = Duplicate/Extract) · §11 write-on-PDF backlog row (§2E) ·
 G2c block rewritten (md-review + 9-point checklist).
 
-**Next:** build mode → **T3.14** (values-hi) → Phase 4 (T4.7 first) → phase-end full build →
-**G2c**: `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
+### T3.14 Hindi gap found at G2b ✅ (`abdbabd`)
+
+G2b §3C's "immediate check" found `move`/`export` missing from `values-hi` — and the sweep found
+**23 of the 27** test26 strings without hi entries (only `tool_lock`, `empty_first_scan_hint`,
+`search_hint`, `select_all` had them). Added all 23 (machine-translated, `<!-- review -->` comment
+in the file; en 356 / hi 76 now → legacy backlog for T8.6 = 280). No code. Suite after: **267 / 2**
+(only the two documented TextFit reds). This closed the audit's immediate §3C check; the going-forward
+"same commit" rule is now in plan §6 legend + §8 gotchas + handoff §3.
+
+**Next:** Phase 4 in build mode (**T4.7 first** → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5) → T4.6)
+→ phase-end full build → **G2c**: `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP**
+(md-review, no screenshots).
 
 ---

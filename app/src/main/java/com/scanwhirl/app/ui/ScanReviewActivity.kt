@@ -484,9 +484,12 @@ class ScanReviewActivity : BaseActivity() {
                     )
                     saved = true
 
-                    // Also place the finished PDF in Documents/ScanWhirl (Files app).
+                    // T4.7 (N10): only place a copy in Documents/ScanWhirl when the
+                    // owner opted in — no more silent copies on every save.
                     var exported: String? = null
-                    if (doc.pdfFile.exists() && doc.pdfFile.length() > 0) {
+                    if (Prefs.autoCopyToDocuments(this@ScanReviewActivity) &&
+                        doc.pdfFile.exists() && doc.pdfFile.length() > 0
+                    ) {
                         try {
                             exported = withContext(Dispatchers.IO) {
                                 DownloadSaver.savePdf(
@@ -505,7 +508,7 @@ class ScanReviewActivity : BaseActivity() {
                     val message = if (exported != null) {
                         getString(R.string.pdf_saved_docs, exported)
                     } else {
-                        getString(R.string.save_inside_app)
+                        getString(R.string.scan_saved)
                     }
                     Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
                     startActivity(DocumentViewerActivity.intent(this@ScanReviewActivity, doc.id))

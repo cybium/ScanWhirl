@@ -53,6 +53,9 @@
     <string name="save_changes_title">बदलाव सहेजें?</string>
     <string name="page_deleted">पेज हटाया गया</string>
     <string name="undo">पूर्ववत करें</string>
+    <!-- review: the 2 entries below were machine-translated at T4.7 — native review pending -->
+    <string name="open">खोलें</string>
+    <string name="scan_saved">स्कैन सहेजा गया</string>
     <!-- review: the 23 entries below were machine-translated at T3.14 (G2b §3C) — native review pending -->
     <string name="empty_first_scan">अपना पहला दस्तावेज़ स्कैन करें</string>
     <string name="empty_category">%1$s के अभी कोई दस्तावेज़ नहीं</string>

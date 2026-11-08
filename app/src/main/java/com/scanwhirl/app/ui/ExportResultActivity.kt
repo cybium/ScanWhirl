@@ -15,6 +15,8 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivityExportResultBinding
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.PdfOpener
+import com.scanwhirl.app.util.SavedSnackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -113,28 +115,42 @@ class ExportResultActivity : BaseActivity() {
         withStoragePermission {
             lifecycleScope.launch {
                 try {
-                    val finalName = withContext(Dispatchers.IO) {
-                        if (isPdf) {
-                            DownloadSaver.savePdf(
+                    if (isPdf) {
+                        // T4.7: replace-not-duplicate + Open/Undo (covers the
+                        // Compress / Lock / Unlock flows that land here).
+                        val saved = withContext(Dispatchers.IO) {
+                            DownloadSaver.savePdfFile(
                                 this@ExportResultActivity, file.readBytes(), displayName
                             )
-                        } else {
-                            // Resized images get their own folder in Downloads.
+                        }
+                        SavedSnackbar.show(
+                            binding.root,
+                            getString(R.string.result_saved_documents, saved.name),
+                            onOpen = { PdfOpener.open(this@ExportResultActivity, saved.uri) },
+                            onUndo = {
+                                lifecycleScope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        DownloadSaver.deleteSaved(
+                                            this@ExportResultActivity, saved.uri
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    } else {
+                        // Resized images get their own folder in Downloads.
+                        val finalName = withContext(Dispatchers.IO) {
                             DownloadSaver.saveJpeg(
                                 this@ExportResultActivity, file.readBytes(), displayName,
                                 subdir = "Resize"
                             )
                         }
+                        Toast.makeText(
+                            this@ExportResultActivity,
+                            getString(R.string.result_saved_downloads, finalName),
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
-                    Toast.makeText(
-                        this@ExportResultActivity,
-                        getString(
-                            if (isPdf) R.string.result_saved_documents
-                            else R.string.result_saved_downloads,
-                            finalName
-                        ),
-                        Toast.LENGTH_LONG
-                    ).show()
                 } catch (e: Exception) {
                     Toast.makeText(
                         this@ExportResultActivity,

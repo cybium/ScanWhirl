@@ -86,6 +86,13 @@ object Prefs {
 
     private const val KEY_VAULT_PIN = "vault_pin_sha256"
 
+    private const val KEY_AUTO_COPY = "auto_copy_to_documents"
+
+    /** T4.7 (N10): also copy the finished PDF into Documents/ScanWhirl. Off by default. */
+    fun autoCopyToDocuments(c: Context): Boolean = sp(c).getBoolean(KEY_AUTO_COPY, false)
+    fun setAutoCopyToDocuments(c: Context, v: Boolean) =
+        sp(c).edit().putBoolean(KEY_AUTO_COPY, v).apply()
+
     fun hasVaultPin(c: Context): Boolean =
         !sp(c).getString(KEY_VAULT_PIN, null).isNullOrBlank()
 

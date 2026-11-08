@@ -31,7 +31,7 @@
     <string name="pdf_save_failed">Could not save PDF: %1$s</string>
     <string name="save_pdf_device">Save PDF to Documents</string>
     <string name="pdf_missing">This scan has no PDF file yet</string>
-    <string name="save_inside_app">Scan saved in the app (storage permission not granted)</string>
+    <string name="scan_saved">Scan saved</string>
     <string name="filter_original">Original (as scanned)</string>
     <string name="filter_enhance">Enhance</string>
     <string name="filter_clean">Clean</string>
@@ -85,6 +85,7 @@
     <string name="page_op_failed">Page operation failed: %1$s</string>
     <string name="page_deleted">Page deleted</string>
     <string name="undo">Undo</string>
+    <string name="open">Open</string>
     <string name="last_page_guard">A document needs at least one page. Delete the document instead.</string>
     <string name="page_indicator">%1$d / %2$d</string>
     <string name="filter_action">Filter</string>

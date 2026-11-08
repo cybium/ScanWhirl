@@ -24,8 +24,10 @@ import com.scanwhirl.app.databinding.ActivityDocumentViewerBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.PdfOpener
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -429,7 +431,7 @@ class DocumentViewerActivity : BaseActivity() {
     // Document-level actions
     // ------------------------------------------------------------------
 
-    /** Copies the document PDF into Documents/ScanWhirl so it shows up in the Files app. */
+    /** Saves a copy of the document PDF into Documents/ScanWhirl (T4.7) with an Open/Undo Snackbar. */
     private fun savePdfToDocuments() {
         val doc = document ?: return
         if (!doc.pdfFile.exists() || doc.pdfFile.length() == 0L) {
@@ -439,18 +441,27 @@ class DocumentViewerActivity : BaseActivity() {
         withStoragePermission {
             lifecycleScope.launch {
                 try {
-                    val name = withContext(Dispatchers.IO) {
-                        DownloadSaver.savePdf(
+                    val saved = withContext(Dispatchers.IO) {
+                        DownloadSaver.savePdfFile(
                             this@DocumentViewerActivity,
                             doc.pdfFile.readBytes(),
                             DownloadSaver.pdfNameFor(doc.name)
                         )
                     }
-                    Toast.makeText(
-                        this@DocumentViewerActivity,
-                        getString(R.string.pdf_saved_docs, name),
-                        Toast.LENGTH_LONG
-                    ).show()
+                    SavedSnackbar.show(
+                        binding.root,
+                        getString(R.string.pdf_saved_docs, saved.name),
+                        onOpen = { PdfOpener.open(this@DocumentViewerActivity, saved.uri) },
+                        onUndo = {
+                            lifecycleScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    DownloadSaver.deleteSaved(
+                                        this@DocumentViewerActivity, saved.uri
+                                    )
+                                }
+                            }
+                        }
+                    )
                 } catch (e: Exception) {
                     Toast.makeText(
                         this@DocumentViewerActivity,
