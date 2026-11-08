@@ -454,9 +454,7 @@ class TextFitTest {
             repo.saveScan(listOf(contentUri(jpegBytes())), null, "OCR fit doc").id
         }
         runBlocking {
-            repo.buildOcr(docId) { _ ->
-                "This is some OCR text that needs editing before copying or saving.\nIt has multiple lines and paragraphs.\n\nA second paragraph here."
-            }
+            repo.updateOcrPages(docId, mapOf("page_000.jpg" to "This is some OCR text that needs editing before copying or saving.\nIt has multiple lines and paragraphs.\n\nA second paragraph here."))
         }
         atBothFontScales {
             ActivityScenario.launch<OcrEditorActivity>(

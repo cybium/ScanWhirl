@@ -316,7 +316,7 @@ class HomeScreenTest {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, true)
         val id = seed("Scanned bill", CategoryRules.OTHER)
         runBlocking {
-            repo.writeOcr(id, linkedMapOf("page_001.jpg" to "hologram invoice"))
+            repo.updateOcrPages(id, linkedMapOf("page_001.jpg" to "hologram invoice"))
         }
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->

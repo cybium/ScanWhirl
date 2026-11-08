@@ -1786,7 +1786,7 @@ class UiSmokeTest {
     fun `ocr store keeps every line, paragraph and tab of multi-page text`() = runBlocking {
         val id = seedDoc("OCR storage", pages = 2)
         val multi = "First line\nSecond line\n\nTabbed\tvalue & symbols"
-        repo.writeOcr(id, linkedMapOf("page_001.jpg" to multi, "page_002.jpg" to "Plain page"))
+        repo.updateOcrPages(id, linkedMapOf("page_001.jpg" to multi, "page_002.jpg" to "Plain page"))
         val read = repo.ocrDoc(id)
         assertEquals(multi, read["page_001.jpg"])
         assertEquals("Plain page", read["page_002.jpg"])
@@ -1795,11 +1795,11 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `buildOcr persists exactly what the recognizer returned`() = runBlocking {
+    fun `updateOcrPages persists every page's text`() = runBlocking {
         val id = seedDoc("Recognised", pages = 1)
-        val pages = repo.buildOcr(id) { _ -> "line one\nline two" }
-        assertEquals(1, pages)
-        assertEquals("line one\nline two", repo.ocrDoc(id).values.first())
+        repo.updateOcrPages(id, mapOf("page_000.jpg" to "line one\nline two"))
+        assertEquals("line one\nline two", repo.ocrDoc(id)["page_000.jpg"])
+        assertTrue("ocr.txt should exist", repo.hasOcr(id))
         Unit
     }
 

@@ -449,7 +449,7 @@ class ScanRepositoryTest {
     fun `updateOcrPage round-trips and the edit is what search finds`() = runBlocking {
         val repo = ScanRepository(context)
         val doc = saveDoc(repo, "ocr edit")
-        repo.buildOcr(doc.id) { "Teh quik brownn fox" }
+        repo.updateOcrPages(doc.id, mapOf("page_000.jpg" to "Teh quik brownn fox"))
         assertEquals("Teh quik brownn fox", repo.ocrDoc(doc.id)["page_000.jpg"])
 
         val updated = repo.updateOcrPage(doc.id, "page_000.jpg", "The quick brown fox")

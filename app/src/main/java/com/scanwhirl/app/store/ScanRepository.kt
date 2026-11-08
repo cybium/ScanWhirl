@@ -6,8 +6,9 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
-import android.util.Base64
+import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.store.OcrStore
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OcrEngine
@@ -30,6 +31,9 @@ class ScanRepository(private val context: Context) {
 
     private val docsDir: File
         get() = File(context.filesDir, "documents").apply { mkdirs() }
+
+    private val ocrStore: OcrStore
+        get() = OcrStore(docsDir)
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
         return docsDir.listFiles { f -> f.isDirectory }
@@ -255,7 +259,7 @@ class ScanRepository(private val context: Context) {
             pageCount = pages.size,
             pdfFile = pdfFile,
             pageFiles = pages
-        )
+        ).also { ocrStore.markPending(id) }
     }
 
     fun deleteDocument(id: String) {
@@ -431,6 +435,7 @@ class ScanRepository(private val context: Context) {
             origOf(victim).delete()
             victim.delete()
             renumberPages(dir)
+            ocrStore.afterDelete(id, pageIndex)
             regeneratePdf(dir)
 
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after delete")
@@ -447,6 +452,7 @@ class ScanRepository(private val context: Context) {
             // Keep the kept original aligned so a later filter re-apply
             // doesn't undo the rotation.
             origOf(file).takeIf { it.exists() }?.let { rotateFile90(it, clockwise) }
+            ocrStore.invalidate(id, file.name)
 
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rotate")
@@ -465,6 +471,7 @@ class ScanRepository(private val context: Context) {
             val file = doc.pageFiles[pageIndex]
             ImageTools.cropTo(file, rect)
             origOf(file).takeIf { it.exists() }?.let { ImageTools.cropTo(it, rect) }
+            ocrStore.invalidate(id, file.name)
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after crop")
         }
@@ -494,6 +501,7 @@ class ScanRepository(private val context: Context) {
                     tmp.renameTo(target)
                     origOf(tmp).takeIf { it.exists() }?.renameTo(origOf(target))
                 }
+                ocrStore.afterMove(id, fromIndex, toIndex)
                 regeneratePdf(dir)
             }
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after move")
@@ -560,7 +568,7 @@ class ScanRepository(private val context: Context) {
         } catch (e: Exception) {
             pdfFile.delete()
         }
-        return loadDocument(dir) ?: throw IllegalStateException("Scan could not be saved")
+        return loadDocument(dir) ?: throw IllegalStateException("Scan could not be saved").also { ocrStore.markPending(id) }
     }
 
     /** "Merged PDF <timestamp>" when no name is given. */
@@ -645,7 +653,6 @@ class ScanRepository(private val context: Context) {
     /** T4.8: prefix of the optional meta.txt line listing exported copies. */
     private val EXPORTS_KEY = "exports="
     private val LOCK_INDEX_FILE = "locked_pdfs.txt"
-    private val OCR_HEADER = "#scanwhirl-ocr-v2"
 
     /**
      * Rebuilds the document's PDF with the password-protection extra applied
@@ -770,80 +777,21 @@ class ScanRepository(private val context: Context) {
     }
 
     /** OCR text of a document, when it exists: lines keyed by the page file name. */
-    fun ocrDoc(id: String): Map<String, String> = try {
-        val file = File(File(docsDir, id), "ocr.txt")
-        if (!file.exists()) emptyMap()
-        else {
-            val lines = file.readLines()
-            if (lines.firstOrNull() == OCR_HEADER) {
-                lines.drop(1).mapNotNull { line ->
-                    val parts = line.split('\t', limit = 2)
-                    if (parts.size != 2) null
-                    else parts[0] to String(Base64.decode(parts[1], Base64.NO_WRAP), Charsets.UTF_8)
-                }.toMap()
-            } else {
-                // Legacy file (pre-test21): only the first line of each page survived.
-                lines.mapNotNull { line ->
-                    val parts = line.split('\t', limit = 2)
-                    if (parts.size == 2) parts[0] to parts[1] else null
-                }.toMap()
-            }
-        }
-    } catch (_: Exception) {
-        emptyMap()
-    }
+    fun ocrDoc(id: String): Map<String, String> = ocrStore.readText(id)
 
     /** True when this document has OCR text saved already. */
     fun hasOcr(id: String): Boolean = File(File(docsDir, id), "ocr.txt").exists()
 
     /**
-     * Runs OCR over every page (background) and stores docid/ocr.txt.
-     * [recognize] is injectable so the multi-line round-trip can be tested
-     * without Play services. The text is Base64-encoded: newlines, tabs and
-     * every paragraph survive intact instead of being cut at the first line.
-     */
-    suspend fun buildOcr(
-        id: String,
-        recognize: suspend (File) -> String = { OcrEngine.recognize(it) }
-    ): Int = withContext(Dispatchers.IO) {
-        val dir = File(docsDir, id)
-        val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-        val map = mutableMapOf<String, String>()
-        for (page in doc.pageFiles) {
-            try {
-                map[page.name] = recognize(page)
-            } catch (_: Exception) {
-                map[page.name] = "" // page unreadable: skip silently, honest
-            }
-        }
-        writeOcr(id, map)
-        map.size
-    }
-
-    /** Persists a page -> text map in the lossless Base64 OCR format. */
-    internal fun writeOcr(id: String, pages: Map<String, String>) {
-        val dir = File(docsDir, id)
-        dir.mkdirs()
-        File(dir, "ocr.txt").writeText(
-            (listOf(OCR_HEADER) + pages.map { (name, text) ->
-                "$name\t${Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)}"
-            }).joinToString("\n")
-        )
-    }
-
-    /**
      * Replaces one page's OCR text (the OCR Editor's Save, P6) and rewrites
-     * `ocr.txt` through the same lossless writer [writeOcr] uses, so
-     * [SearchMatcher] finds the edited text byte-for-byte as before. Returns
+     * `ocr.txt` through [OcrStore.putTexts]. Returns
      * the full updated page map, or null when the document does not exist.
      */
     fun updateOcrPage(id: String, pageKey: String, text: String): Map<String, String>? {
         val dir = File(docsDir, id)
         if (!dir.isDirectory) return null
-        val pages = ocrDoc(id).toMutableMap()
-        pages[pageKey] = text
-        writeOcr(id, pages)
-        return pages
+        ocrStore.putTexts(id, mapOf(pageKey to text))
+        return ocrStore.readText(id)
     }
 
     /**
@@ -854,8 +802,30 @@ class ScanRepository(private val context: Context) {
     fun updateOcrPages(id: String, pages: Map<String, String>): Map<String, String>? {
         val dir = File(docsDir, id)
         if (!dir.isDirectory) return null
-        writeOcr(id, pages)
-        return pages
+        ocrStore.putTexts(id, pages)
+        return ocrStore.readText(id)
+    }
+
+    /**
+     * Runs OCR over every page (background) and stores text + geometry through
+     * [OcrStore]. Returns the number of pages processed. A page the recognizer
+     * rejects is stored with empty text and no geometry.
+     */
+    suspend fun buildOcr(id: String): Int = withContext(Dispatchers.IO) {
+        val dir = File(docsDir, id)
+        val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+        var count = 0
+        for (page in doc.pageFiles) {
+            try {
+                val result = OcrEngine.recognizeFile(page)
+                ocrStore.putPage(id, page.name, result.text, result.page)
+                count++
+            } catch (_: Exception) {
+                // Page unreadable: store empty text, no geometry, honest.
+                ocrStore.putPage(id, page.name, "", null)
+            }
+        }
+        count
     }
 
     private fun renumberPages(dir: File) {

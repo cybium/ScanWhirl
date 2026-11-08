@@ -166,3 +166,23 @@
 7. ✅ No text <12sp in `item_scan.xml` except 11sp "Locked" badge.
 
 **Test count:** 630 total, 2 pre-existing failures in HomeCategoryActionsTest (chip click → picker dialog in Robolectric), 0 new failures. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 8 — OcrStore: one store for text and line geometry, correct across page operations
+
+**Changes:**
+- `model/OcrPage.kt` (new): `OcrLine(text, left, top, right, bottom)` and `OcrPage(width, height, lines)` data classes.
+- `util/OcrEngine.kt`: added `OcrResult(text, page)` and `suspend fun recognizeFile(page): OcrResult` — decodes the bitmap once, runs the recognizer once, builds `text` via `assemble` and `lines` from the same blocks in reading order (blocks sorted by top then left; boxless lines skipped). `recognize(page)` now delegates to `recognizeFile(page).text`. `assemble` unchanged.
+- `store/OcrStore.kt` (new): per-document `ocr.txt` (unchanged `#scanwhirl-ocr-v2` format, legacy no-header still readable), new `ocr_geo.txt` (`#scanwhirl-ocrgeo-v1`; `pageKey<TAB>Base64(payload)`; payload line 1 `<w> <h>`, then `<l> <t> <r> <b><TAB><text>` with tabs/CR/LF → spaces), `ocr_pending` marker. API: `readText`, `readGeo`, `putPage`, `putTexts`, `afterDelete`, `afterMove`, `invalidate`, `markPending`/`clearPending`/`isPending`, `hasText`. Keys are `page_%03d.jpg`. `afterDelete` drops the key and shifts every later key down by one (text + geometry); `afterMove` applies the move-page permutation; `invalidate` drops the key and marks pending. All writes go to `.tmp` then rename (copy-then-delete fallback); one process-wide `ReentrantLock`.
+- `store/ScanRepository.kt`: `ocrDoc`→`readText`; `hasOcr`→`ocr.txt` exists; `updateOcrPage`/`updateOcrPages`→`putTexts`; `buildOcr(id): Int` restored (no-lambda signature) because `MainActivity`, `ScanReviewActivity`, `OcrFlow` still call it — now delegates to `OcrEngine.recognizeFile` + `OcrStore.putPage`. `writeOcr`/`OCR_HEADER` removed (logic lives in `OcrStore`). Page ops wired: `deletePage`→`afterDelete`, `movePage`→`afterMove`, `rotatePage`/`cropPage`→`invalidate`; `setPageFilter` untouched. `saveScan`, `finalizeDoc`, `duplicateDocument` end with `markPending`.
+- Tests updated for removed `buildOcr`/`writeOcr` lambda: `OcrEditorTest`, `ScanRepositoryTest`, `TextFitTest`, `UiSmokeTest`, `HomeScreenTest` (references replaced with `updateOcrPages`).
+- New tests: `OcrStoreTest` (15), `OcrConsistencyTest` (5: delete/move/rotate/crop/save), `OcrEngineTest` (9: assemble/OcrPage/OcrResult).
+
+**Bug found and fixed during this task:** `OcrStore.afterDelete` started the shift loop at `i = index + 1`, dropping every page before `index` and overwriting `page_000` with `page_{index+1}`'s data. Fixed to iterate `i` from 0, skip `i == index`, and shift later pages down by one. Verified: delete page 2 of `{A,B,C}` → `{page_000:A, page_001:C}` in both text and geometry files.
+
+**Acceptance:** round-trip text+geometry (incl. empty line list and text with tabs/newlines → spaces); `ocr.txt` byte-identical to old writer output; delete/move/rotate/crop/save keep OCR consistent; legacy no-header `ocr.txt` read as before; two-thread `putPage` leaves valid entries and no `.tmp`; `saveScan` leaves `ocr_pending`; duplicate of an OCR'd doc carries the same entries, no marker.
+
+**Files:** `model/OcrPage.kt` (new), `store/OcrStore.kt` (new), `util/OcrEngine.kt`, `store/ScanRepository.kt`; tests: `store/OcrStoreTest.kt` (new), `store/OcrConsistencyTest.kt` (new), `util/OcrEngineTest.kt` (new), `store/ScanRepositoryTest.kt`, `util/OcrEditorTest.kt`, `ui/TextFitTest.kt`, `ui/UiSmokeTest.kt`, `ui/HomeScreenTest.kt`. Callers unchanged: `tools/OcrFlow.kt`, `ui/ScanReviewActivity.kt`, `ui/MainActivity.kt` still use restored `buildOcr` (removed in Task 9).
+
+**Test count:** 344 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).

@@ -56,7 +56,7 @@ class OcrEditorTest {
                 contentUri(fakePdf),
                 name
             )
-            repo.buildOcr(saved.id) { _ -> ocrText }
+            repo.updateOcrPages(saved.id, mapOf("page_000.jpg" to ocrText))
             saved.id
         }
 
