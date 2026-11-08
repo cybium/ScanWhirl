@@ -999,3 +999,19 @@ deps T4.6+T4.8 ✅) → T5.3 → T5.4 → T5.5 (TextFit sweep, the phase's test 
 **Strings:** added `share_text` = "Share text" (en + hi, `<!-- review -->`), used in `shareAllPages()` chooser title.
 
 **Phase-end full run:** **666 tests / 0 failures / 0 skipped** (debug + release), `assembleRelease` green → Phase 6 checkpoint GREEN. Test count rose from 630 (P5) to 666 (P6).
+
+---
+
+### Phase 7 — Remove the Earth ✅
+
+**Tag `pre-globe-removal` created before any deletion.**
+
+**T7.1:** Deleted `ui/globe/` (4 files: GlobeHomeActivity, GlobeScene, HolographicEarthView, GlobeRingShim), globe tests (GlobeSceneTest, GlobeHomeActivityTest), `SwTransitions.kt` + `SwTransitionsTest.kt`, GlobeHomeActivity manifest entry. −2,838 lines.
+
+**T7.2:** Removed `Prefs.globeHomeEnabled`/`setGlobeHomeEnabled` + `KEY_GLOBE_HOME`, Settings globe home row + switch, all `globe_*` and `settings_globe_home*` strings (en + hi). Also deleted globe-only resources that referenced deleted strings: `activity_globe_home.xml`, `globe_enter_warp.xml`, `globe_exit_warp.xml`, `ic_globe.xml`, `bg_hud_scrim.xml`, `sel_check_orbital.xml`, `bg_fab_orbital.xml`, `sel_radio_orbital.xml`, `sel_chip_orbital.xml`, `bg_orbit_dot.xml`. Replaced `sel_radio_orbital`/`sel_check_orbital` theme references. Replaced `bg_hud_scrim` in `item_scan.xml` with `@color/sf_appbar`. Removed `sel_radio_orbital`/`sel_check_orbital` from `Dialog` theme.
+
+**T7.3:** Removed `bg_fab_pulse.xml` (unused globe resource, lintDebug confirmed).
+
+**SwMotion.kt + SwMotionTest kept** (Phase 8 T8.1/T8.3 need `SwMotion.ambientAllowed`). `SwMotionTest`'s globe-dependent `fab pulse` test removed; remaining 3 ambient-gate tests kept.
+
+**Phase-end full run:** **594 tests / 0 failures / 0 skipped** (debug + release), `assembleRelease` green → Phase 7 checkpoint GREEN. Test count fell from 666 (P6) to 594 (P7) — the drop is exactly the deleted globe tests.
