@@ -71,6 +71,8 @@
     </plurals>
     <!-- review: the entry below was machine-translated at T4.1 — native review pending -->
     <string name="category_unsorted_hint">अभी तक छाँटा नहीं गया — कोई चुनें या छोड़ दें</string>
+    <!-- review: the entry below was machine-translated at T4.2 — native review pending -->
+    <string name="category_picker_title">श्रेणी चुनें</string>
     <!-- review: the 23 entries below were machine-translated at T3.14 (G2b §3C) — native review pending -->
     <string name="empty_first_scan">अपना पहला दस्तावेज़ स्कैन करें</string>
     <string name="empty_category">%1$s के अभी कोई दस्तावेज़ नहीं</string>
