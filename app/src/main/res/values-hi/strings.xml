@@ -81,6 +81,12 @@
     <string name="rename">नाम बदलें</string>
     <string name="rename_title">दस्तावेज़ का नाम बदलें</string>
     <string name="share_pdf">साझा करें</string>
+    <!-- review: the 5 entries below were machine-translated at T4.4 — native review pending -->
+    <string name="quick_sort">क्विक सॉर्ट</string>
+    <string name="quick_sort_nudge">%1$d अनसॉर्टेड · क्विक सॉर्ट ›</string>
+    <string name="qs_progress">%1$d / %2$d</string>
+    <string name="all_sorted">सभी क्रमबद्ध</string>
+    <string name="skip">छोड़ें</string>
     <!-- review: the 23 entries below were machine-translated at T3.14 (G2b §3C) — native review pending -->
     <string name="empty_first_scan">अपना पहला दस्तावेज़ स्कैन करें</string>
     <string name="empty_category">%1$s के अभी कोई दस्तावेज़ नहीं</string>

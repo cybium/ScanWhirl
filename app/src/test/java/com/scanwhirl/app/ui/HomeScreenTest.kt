@@ -649,7 +649,7 @@ class HomeScreenTest {
     }
 
     @Test
-    fun `tools sheet opens and holds eight tiles in two sections`() {
+    fun `tools sheet opens and holds nine tiles in two sections`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
@@ -659,8 +659,10 @@ class HomeScreenTest {
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("Tools sheet opens", sheet)
 
+                // T4.4: Quick sort joins the Free section as the 9th tile.
                 val freeIds = setOf(
-                    R.id.tile_edit, R.id.tile_merge, R.id.tile_compress, R.id.tile_resize
+                    R.id.tile_edit, R.id.tile_merge, R.id.tile_compress, R.id.tile_resize,
+                    R.id.tile_quick_sort
                 )
                 val proIds = setOf(
                     R.id.tile_ocr, R.id.tile_lock, R.id.tile_long_image, R.id.tile_vault
@@ -674,10 +676,10 @@ class HomeScreenTest {
 
                 // T3.11: rows are chunked per section (4 columns, or 3 when the
                 // longest word would not fit) — assert the section holds its
-                // four tiles, whatever the column count.
+                // tiles, whatever the column count.
                 val free = sheet.findViewById<android.view.ViewGroup>(R.id.sheetFree)
                 val pro = sheet.findViewById<android.view.ViewGroup>(R.id.sheetPro)
-                assertEquals("Free section holds 4 tiles", freeIds, tilesIn(free, freeIds))
+                assertEquals("Free section holds 5 tiles", freeIds, tilesIn(free, freeIds))
                 assertEquals("Pro section holds 4 tiles", proIds, tilesIn(pro, proIds))
 
                 sheet.dismiss()

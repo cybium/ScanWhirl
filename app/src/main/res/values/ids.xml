@@ -11,6 +11,8 @@
     <item name="tile_lock" type="id" />
     <item name="tile_long_image" type="id" />
     <item name="tile_vault" type="id" />
+    <!-- test26 T4.4: the Tools sheet's 9th tile (Quick sort). -->
+    <item name="tile_quick_sort" type="id" />
     <!-- test26 T4.8: the delete dialog's "also delete exported copies" row
          (built in code, so the id is declared here). -->
     <item name="deleteCopiesBox" type="id" />

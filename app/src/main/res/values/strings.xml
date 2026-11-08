@@ -419,6 +419,12 @@
     <!-- test26 T4.3: Home quick-actions sheet + bulk Move toast -->
     <string name="move_to_category">Move to category</string>
     <string name="moved_n_to_cat">Moved %1$d to %2$s</string>
+    <!-- test26 T4.4: Quick Sort — nudge, sheet header, Tools tile, end state -->
+    <string name="quick_sort">Quick sort</string>
+    <string name="quick_sort_nudge">%1$d unsorted · Quick sort ›</string>
+    <string name="qs_progress">%1$d of %2$d</string>
+    <string name="all_sorted">All sorted</string>
+    <string name="skip">Skip</string>
 
     <!-- Pro Feature Dossier -->
     <string name="pro_feat_vault_title">Hidden Vault</string>

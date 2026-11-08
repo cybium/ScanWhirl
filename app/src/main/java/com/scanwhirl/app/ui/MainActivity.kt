@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.ContextThemeWrapper
+import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -29,6 +31,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.android.material.snackbar.Snackbar
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
@@ -51,6 +54,7 @@ import com.scanwhirl.app.util.HomeFilter
 import com.scanwhirl.app.util.HomeState
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.QuickSortQueue
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
@@ -145,6 +149,9 @@ class MainActivity : BaseActivity(), HomeHost {
     /** Documents in the list as last submitted; drives the list header count. */
     private var shownCount = 0
 
+    /** T4.4 — the Quick Sort nudge's label (built once in onCreate). */
+    private lateinit var nudgeLabel: TextView
+
     /** Edit tool: pick one device PDF and open it as editable pages. */
     private val pickEditPdf =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -228,6 +235,30 @@ class MainActivity : BaseActivity(), HomeHost {
         // SCAN keeps the old FAB behaviour: add when the vault is open.
         binding.bottomBar.isVisible = true
         binding.btnTools.setOnClickListener { showToolsSheet() }
+        // T4.4: the Quick Sort nudge (T3.1 left the container GONE) — one
+        // glass-card label between the chip rail and the list header; it
+        // counts Unsorted/Other docs and opens the §4.8 sheet. updateNudge()
+        // (the renderHome path) keeps the count honest. The click target is
+        // the whole card (the label stays inert and lets taps bubble).
+        nudgeLabel = TextView(this).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            setBackgroundResource(R.drawable.bg_glass_card)
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, (14 * resources.displayMetrics.density).toInt(), pad,
+                (14 * resources.displayMetrics.density).toInt())
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.cyan_primary))
+            textSize = 13f
+            gravity = Gravity.CENTER_VERTICAL
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        binding.nudge.addView(nudgeLabel)
+        // R6: the card itself is the touch target (≥48dp with its padding).
+        binding.nudge.minimumHeight = (48 * resources.displayMetrics.density).toInt()
+        binding.nudge.setOnClickListener { showQuickSort() }
         binding.btnScan.setOnClickListener {
             if (vaultMode) vaultFlow.addToVault() else showScanChooser()
         }
@@ -360,6 +391,21 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
+    /**
+     * test26 T4.4 — the Quick Sort nudge: visible only while the queue has
+     * work (Unsorted + Other, §4.8), counting from the same unfiltered
+     * snapshot as the status line. Closing the sheet mid-queue (Rev 4 §3D)
+     * therefore never needs a manual refresh here: the next render shows
+     * whatever is still unsorted.
+     */
+    private fun updateNudge() {
+        val n = allDocs.count {
+            it.category == CategoryRules.UNSORTED || it.category == CategoryRules.OTHER
+        }
+        binding.nudge.isVisible = n > 0
+        if (n > 0) nudgeLabel.text = getString(R.string.quick_sort_nudge, n)
+    }
+
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
         return true
@@ -411,6 +457,9 @@ class MainActivity : BaseActivity(), HomeHost {
         // status line joins it here (from the unfiltered allDocs snapshot),
         // so the numbers on screen can never lag the list (complaint #14).
         updateStatusLine()
+        // test26 T4.4: the Quick Sort nudge is part of the same render —
+        // it counts Unsorted/Other from the same unfiltered snapshot.
+        updateNudge()
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
@@ -666,6 +715,97 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     /**
+     * test26 T4.4 — Quick Sort (§4.8): a [QuickSortQueue] over the library's
+     * Unsorted + Other docs, one document on screen with its thumbnail, five
+     * category chips and Skip. Picking saves immediately (plan) plus one
+     * CLOCK_TICK haptic; the X button top-right (Rev 4 §3D) just closes —
+     * whatever was never picked stays unsorted and the nudge keeps counting
+     * it. An empty queue opens straight onto "All sorted".
+     */
+    private fun showQuickSort() {
+        val queue = QuickSortQueue.from(allDocs)
+        val sheet = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_quick_sort, null)
+        sheet.setContentView(view)
+
+        val progress = view.findViewById<TextView>(R.id.qsProgress)
+        val thumb = view.findViewById<ImageView>(R.id.qsThumb)
+        val docLine = view.findViewById<TextView>(R.id.qsDoc)
+        val chips = view.findViewById<ChipGroup>(R.id.qsChips)
+        val done = view.findViewById<TextView>(R.id.qsDone)
+
+        fun render() {
+            val doc = queue.current()
+            if (doc == null) {
+                progress.isVisible = false
+                thumb.isVisible = false
+                docLine.isVisible = false
+                chips.isVisible = false
+                done.isVisible = true
+                return
+            }
+            val p = queue.progress()
+            progress.text = getString(R.string.qs_progress, p.position, p.total)
+            val pages = resources.getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
+            docLine.text = "${doc.name} · $pages"
+            val first = doc.pageFiles.firstOrNull()
+            if (first != null) {
+                thumb.scaleType = ImageView.ScaleType.CENTER_CROP
+                thumb.setImageResource(R.drawable.ic_document)
+                // Background decode + cache, same loader the list cards use.
+                com.scanwhirl.app.ui.pagegrid.PageThumbLoader.load(
+                    first, 640, com.scanwhirl.app.util.ScanFilter.ORIGINAL, thumb
+                )
+            } else {
+                thumb.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                thumb.setImageResource(R.drawable.ic_document)
+            }
+            progress.isVisible = true
+            thumb.isVisible = true
+            docLine.isVisible = true
+            chips.isVisible = true
+            done.isVisible = false
+        }
+
+        // Scoped context so the chips pick up Widget.ScanWhirl.Chip (the
+        // same overlay Home's rail and the review screen use).
+        val ctx = ContextThemeWrapper(this, R.style.ThemeOverlay_ScanWhirl_ChipRail)
+        for (cat in CategoryRules.ALL) {
+            val chip = Chip(ctx).apply {
+                id = android.view.View.generateViewId()
+                tag = cat
+                text = CategoryRules.label(cat)
+                setOnClickListener {
+                    val doc = queue.pick(cat) ?: return@setOnClickListener
+                    // Picking saves instantly + one tick of haptic (plan).
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    repo.setCategory(doc.id, cat)
+                    render()
+                    refreshList() // nudge, rail and list follow the new category
+                }
+            }
+            chips.addView(chip)
+        }
+        val skipChip = Chip(ctx).apply {
+            id = android.view.View.generateViewId()
+            tag = "skip"
+            text = getString(R.string.skip)
+            setOnClickListener {
+                queue.skip()
+                render() // nothing saved, nothing to refresh
+            }
+        }
+        chips.addView(skipChip)
+
+        view.findViewById<View>(R.id.qsClose).setOnClickListener { sheet.dismiss() }
+        sheet.show()
+        render()
+        // Open expanded, exactly like the Tools sheet: content taller than
+        // the collapsed peek would hang its excess below the screen edge.
+        sheet.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+    }
+
+    /**
      * T3.6 — the Tools sheet (§4.3): a Free section, a PRO divider and a Pro
      * section, every tile a [R.layout.view_tool_tile]. Core tiles call the
      * P2 flows directly; Pro tiles pass through [ProGate] first, so Free
@@ -695,6 +835,10 @@ class MainActivity : BaseActivity(), HomeHost {
             },
             Tile(R.id.tile_resize, R.string.tool_resize, R.drawable.ic_resize, false) {
                 pickResizeImage.launch("image/*")
+            },
+            // T4.4: the 9th tile (§4.3) — same sheet entry as the nudge.
+            Tile(R.id.tile_quick_sort, R.string.quick_sort, R.drawable.ic_sort, false) {
+                showQuickSort()
             }
         )
         val proTiles = listOf(
