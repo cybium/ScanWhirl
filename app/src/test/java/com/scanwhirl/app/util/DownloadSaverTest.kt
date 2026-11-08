@@ -1,15 +1,23 @@
 package com.scanwhirl.app.util
 
+import android.content.ContentResolver
+import android.content.Context
+import android.content.pm.ProviderInfo
+import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowContentResolver
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class DownloadSaverTest {
+
+    private val app: Context
+        get() = ApplicationProvider.getApplicationContext()
 
     @Test
     fun `single page file name has no page suffix`() {
@@ -75,5 +83,44 @@ class DownloadSaverTest {
     fun `pdf names are sanitized like image names`() {
         assertEquals("a_b_c.pdf", DownloadSaver.pdfNameFor("a/b:c"))
         assertEquals("Document.pdf", DownloadSaver.pdfNameFor("   "))
+    }
+
+    @Test
+    fun `saveText stores text_plain mime and _txt display name`() {
+        val media = FakeMediaStore().also { provider ->
+            provider.attachInfo(
+                app,
+                ProviderInfo().apply { authority = "media"; exported = true }
+            )
+            ShadowContentResolver.registerProviderInternal("media", provider)
+        }
+        try {
+            val saved = DownloadSaver.saveText(app, "hello", "My Doc")
+            assertTrue("display name ends _txt", saved.name.endsWith(".txt"))
+            assertEquals("My Doc.txt", saved.name)
+            val row = media.rows.values.first { it.values.getAsString("_display_name") == saved.name }
+            assertEquals("text/plain", row.values.getAsString("mime_type"))
+        } finally {
+            media.close()
+        }
+    }
+
+    @Test
+    fun `savePdfFile still stores application_pdf mime`() {
+        val media = FakeMediaStore().also { provider ->
+            provider.attachInfo(
+                app,
+                ProviderInfo().apply { authority = "media"; exported = true }
+            )
+            ShadowContentResolver.registerProviderInternal("media", provider)
+        }
+        try {
+            val saved = DownloadSaver.savePdfFile(app, byteArrayOf(1, 2, 3), "Doc.pdf")
+            assertEquals("Doc.pdf", saved.name)
+            val row = media.rows.values.first { it.values.getAsString("_display_name") == saved.name }
+            assertEquals("application/pdf", row.values.getAsString("mime_type"))
+        } finally {
+            media.close()
+        }
     }
 }

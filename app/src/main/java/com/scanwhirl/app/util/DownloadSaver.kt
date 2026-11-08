@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
+import java.nio.charset.StandardCharsets
 
 /** Saves page images into the user's own Downloads/ScanWhirl folder. */
 object DownloadSaver {
@@ -122,9 +123,22 @@ object DownloadSaver {
      */
     fun savePdfFile(context: Context, bytes: ByteArray, displayName: String): SavedFile {
         if (Build.VERSION.SDK_INT >= 29) {
-            return savePdfQ(context, bytes, displayName)
+            return savePdfQ(context, bytes, displayName, "application/pdf")
         }
-        return savePdfPreQ(bytes, displayName)
+        return savePdfPreQ(bytes, displayName, "application/pdf")
+    }
+
+    /**
+     * Writes plain text into the user's Documents/ScanWhirl folder as a `.txt`
+     * file, replacing an existing file of the same name. The [displayName] is
+     * sanitised and forced to end in `.txt` ("Document" when blank).
+     */
+    fun saveText(context: Context, text: String, displayName: String): SavedFile {
+        val name = sanitize(displayName).removeSuffix(".txt") + ".txt"
+        if (Build.VERSION.SDK_INT >= 29) {
+            return savePdfQ(context, text.toByteArray(StandardCharsets.UTF_8), name, "text/plain")
+        }
+        return savePdfPreQ(text.toByteArray(StandardCharsets.UTF_8), name, "text/plain")
     }
 
     /**
@@ -192,7 +206,7 @@ object DownloadSaver {
     }
 
     @androidx.annotation.RequiresApi(29)
-    private fun savePdfQ(context: Context, bytes: ByteArray, displayName: String): SavedFile {
+    private fun savePdfQ(context: Context, bytes: ByteArray, displayName: String, mime: String): SavedFile {
         val resolver = context.contentResolver
         val collection = MediaStore.Files.getContentUri("external")
         val relPath = Environment.DIRECTORY_DOCUMENTS + "/" + SUBDIR
@@ -228,7 +242,7 @@ object DownloadSaver {
         }
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
             put(MediaStore.MediaColumns.RELATIVE_PATH, relPath)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
@@ -248,7 +262,7 @@ object DownloadSaver {
     }
 
     @Suppress("DEPRECATION")
-    private fun savePdfPreQ(bytes: ByteArray, displayName: String): SavedFile {
+    private fun savePdfPreQ(bytes: ByteArray, displayName: String, mime: String): SavedFile {
         if (Environment.getExternalStorageState() != Environment.MEDIA_MOUNTED) {
             throw IllegalStateException("Storage unavailable")
         }

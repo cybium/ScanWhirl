@@ -288,7 +288,8 @@
     <string name="ocr_copied">Copied to clipboard</string>
     <string name="ocr_editor_title">Extracted text</string>
     <string name="ocr_page_label">Page %d</string>
-    <string name="ocr_word_count">%d words%s</string>
+    <string name="ocr_word_count">%d words</string>
+    <string name="ocr_word_count_edited">%d words · edited</string>
     <string name="ocr_share_text">Share text</string>
     <string name="ocr_saved">Saved</string>
     <string name="ocr_unsaved_title">Unsaved changes</string>
@@ -304,7 +305,6 @@
     <string name="ocr_copy_all">Copy all pages</string>
     <string name="ocr_share_all">Share all pages</string>
     <string name="ocr_save_txt">Save as .txt</string>
-    <string name="ocr_rescan">Re-scan</string>
     <string name="share_text">Share text</string>
     <string name="export_zip">Export ZIP</string>
     <string name="ocr_note">Text search works best on printed pages.</string>

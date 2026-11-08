@@ -224,7 +224,6 @@
     <string name="ocr_note"><!-- review -->Text search works best चालू printed पृष्ठ.</string>
     <string name="ocr_page_label"><!-- review -->Page %d</string>
     <string name="ocr_remove_gaps"><!-- review -->Remove gaps</string>
-    <string name="ocr_rescan"><!-- review -->Re-स्कैन</string>
     <string name="ocr_running"><!-- review -->Extracting पाठ से पृष्ठ…</string>
     <string name="ocr_save_btn"><!-- review -->Save</string>
     <string name="ocr_save_txt"><!-- review -->Save as .txt</string>
@@ -236,7 +235,8 @@
     <string name="ocr_undo"><!-- review -->Undo</string>
     <string name="ocr_unsaved_msg"><!-- review -->You have unsaved संपादित करेंs. Save before closing?</string>
     <string name="ocr_unsaved_title"><!-- review -->Unsaved परिवर्तन</string>
-    <string name="ocr_word_count"><!-- review -->%1$d शब्द%2$s</string>
+    <string name="ocr_word_count"><!-- review -->%1$d शब्द</string>
+    <string name="ocr_word_count_edited"><!-- review -->%1$d शब्द · edited</string>
     <string name="page_actions_title"><!-- review -->Page %1$d</string>
     <string name="page_indicator"><!-- review -->%1$d / %2$d</string>
     <string name="page_op_failed"><!-- review -->Page operatiचालू विफल: %1$s</string>

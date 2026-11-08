@@ -118,12 +118,13 @@ class OcrFlow(
         }
     }
 
-    /** Write OCR text to a cache file and launch the editor with EXTRA_TEXT_PATH. */
+    /** Write OCR text to a cache file and launch the editor with EXTRA_TEXT_PATH + EXTRA_TITLE. */
     private fun startEditorWithText(text: String, title: String) {
         val cacheFile = File(activity.cacheDir, "ocr_${System.currentTimeMillis()}.txt")
-        cacheFile.writeText(text.ifBlank { activity.getString(R.string.ocr_empty) })
+        cacheFile.writeText(text) // written as-is, possibly empty; never substituted with ocr_empty
         val intent = Intent(activity, OcrEditorActivity::class.java).apply {
             putExtra(OcrEditorActivity.EXTRA_TEXT_PATH, cacheFile.absolutePath)
+            putExtra(OcrEditorActivity.EXTRA_TITLE, title)
         }
         activity.startActivity(intent)
     }

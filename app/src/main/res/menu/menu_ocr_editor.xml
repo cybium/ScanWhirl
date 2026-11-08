@@ -17,9 +17,4 @@
         android:title="@string/ocr_save_txt"
         app:showAsAction="never" />
 
-    <item
-        android:id="@+id/ocr_rescan"
-        android:title="@string/ocr_rescan"
-        app:showAsAction="never" />
-
 </menu>

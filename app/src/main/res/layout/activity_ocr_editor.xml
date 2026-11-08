@@ -15,7 +15,7 @@
         app:title="@string/ocr_editor_title"
         app:titleTextColor="@color/text_hologram_hi" />
 
-    <!-- Page tabs: only visible when there is more than one page. -->
+    <!-- Page tabs: ChipGroup, only visible when there is more than one page. -->
     <HorizontalScrollView
         android:id="@+id/pageTabScroll"
         android:layout_width="match_parent"
@@ -23,11 +23,10 @@
         android:fillViewport="false"
         android:scrollbars="none">
 
-        <LinearLayout
+        <com.google.android.material.chip.ChipGroup
             android:id="@+id/pageTabs"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:paddingHorizontal="8dp"
             android:paddingVertical="4dp" />
     </HorizontalScrollView>
@@ -42,6 +41,8 @@
         android:gravity="top|start"
         android:textSize="14sp"
         android:fontFamily="sans-serif"
+        android:textColor="@color/text_hologram_hi"
+        android:textColorHint="@color/text_hologram_dim"
         android:overScrollMode="always"
         android:scrollbarStyle="outsideInset"
         android:padding="16dp" />
@@ -56,7 +57,7 @@
         android:textSize="12sp"
         android:textColor="?android:attr/textColorSecondary" />
 
-    <!-- Cleanup bar: Join lines · Fix spaces · Undo · Remove gaps. -->
+    <!-- Cleanup bar: Join lines · Fix spaces · Remove gaps. (Undo/Redo become ImageButtons in T3.) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -121,7 +122,7 @@
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
         android:paddingTop="8dp"
-        android:paddingBottom="16dp">
+        android:paddingBottom="8dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCopy"

@@ -834,6 +834,18 @@ class ScanRepository(private val context: Context) {
         return pages
     }
 
+    /**
+     * Replaces every given page's OCR text in one rewrite (the OCR Editor's
+     * Save-all, P6). Returns the full updated page map, or null when the
+     * document does not exist.
+     */
+    fun updateOcrPages(id: String, pages: Map<String, String>): Map<String, String>? {
+        val dir = File(docsDir, id)
+        if (!dir.isDirectory) return null
+        writeOcr(id, pages)
+        return pages
+    }
+
     private fun renumberPages(dir: File) {
         pageFilesIn(dir).forEachIndexed { i, f ->
             val target = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i))
