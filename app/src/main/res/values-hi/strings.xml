@@ -53,4 +53,28 @@
     <string name="save_changes_title">बदलाव सहेजें?</string>
     <string name="page_deleted">पेज हटाया गया</string>
     <string name="undo">पूर्ववत करें</string>
+    <!-- review: the 23 entries below were machine-translated at T3.14 (G2b §3C) — native review pending -->
+    <string name="empty_first_scan">अपना पहला दस्तावेज़ स्कैन करें</string>
+    <string name="empty_category">%1$s के अभी कोई दस्तावेज़ नहीं</string>
+    <string name="empty_no_match">आपकी खोज से मेल खाता कोई दस्तावेज़ नहीं</string>
+    <string name="show_all">सभी दिखाएँ</string>
+    <string name="move">ले जाएँ</string>
+    <string name="export">निर्यात</string>
+    <string name="sort_category">श्रेणी</string>
+    <string name="chip_all">सभी</string>
+    <string name="search_clear">खोज हटाएँ</string>
+    <string name="in_text_chip">टेक्स्ट में</string>
+    <string name="select">चुनें</string>
+    <string name="bar_tools">टूल</string>
+    <string name="bar_scan">स्कैन</string>
+    <string name="bar_vault">वॉल्ट</string>
+    <string name="list_count_category">%2$s में %1$d</string>
+    <string name="settings_greeting">स्थिति पंक्ति</string>
+    <string name="settings_greeting_summary">होम स्क्रीन पर स्थिति पंक्ति दिखाएँ</string>
+    <string name="status_morning">सुप्रभात</string>
+    <string name="status_afternoon">शुभ दोपहर</string>
+    <string name="status_evening">शुभ संध्या</string>
+    <string name="status_night">शुभ रात्रि</string>
+    <string name="pro_panel_home">ScanWhirl Pro Suite (टेस्ट में अनलॉक):\n\n• छिपा हुआ वॉल्ट — 4-अंक PIN वाला निजी फ़ोल्डर\n• OCR टेक्स्ट — पन्नों के अंदर से टेक्स्ट निकालें, कॉपी करें और खोजें\n• PDF लॉक / अनलॉक — किसी भी स्कैन को पासवर्ड से सुरक्षित करें या अनलॉक करें\n• लंबी छवि — सभी पन्नों को एक लंबी छवि में जोड़ें\n• ID / पासपोर्ट क्रॉप — क्रॉप के अंदर एस्पेक्ट प्रीसेट\n• बैच ZIP — बहु-चयन स्कैन → ZIP निर्यात\n\nशुरू करने के लिए होम पर \"Pro Suite\" या किसी भी स्कैन के अंदर \"Pro Tools\" टैप करें।</string>
+    <string name="pro_panel_free">ScanWhirl मुफ़्त रहता है: स्कैन करें, संपादित करें, मर्ज करें, कंप्रेस करें और देखें — कोई खाता नहीं, कोई विज्ञापन नहीं, कोई सर्वर नहीं।\n\nPro एक-बार की खरीद है जो यह अनलॉक करती है:\n• छिपा हुआ वॉल्ट — 4-अंक PIN वाला निजी फ़ोल्डर\n• OCR टेक्स्ट — पन्नों के अंदर से टेक्स्ट निकालें, कॉपी करें और खोजें\n• PDF लॉक / अनलॉक — स्कैन और डिवाइस PDF को सुरक्षित करें\n• लंबी छवि — सभी पन्नों को एक लंबी छवि में जोड़ें\n• ID / पासपोर्ट क्रॉप प्रीसेट\n• बैच ZIP निर्यात\n\nPro अनलॉक करने के लिए क्राउन बैज टैप करें।</string>
 </resources>
