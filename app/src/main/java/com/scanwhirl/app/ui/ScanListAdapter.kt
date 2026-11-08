@@ -22,7 +22,8 @@ class ScanListAdapter(
     private val onClick: (ScanDocument) -> Unit,
     private val onView: (ScanDocument) -> Unit,
     private val onEdit: (ScanDocument) -> Unit,
-    private val onLongClick: (ScanDocument) -> Unit
+    private val onLongClick: (ScanDocument) -> Unit,
+    private val onCategory: (ScanDocument) -> Unit
 ) : ListAdapter<ScanDocument, ScanListAdapter.VH>(DIFF) {
 
     var selectionMode: Boolean = false
@@ -86,6 +87,11 @@ class ScanListAdapter(
             binding.catRail.backgroundTintList = ColorStateList.valueOf(catColor)
             binding.catChip.text = "● ${CategoryRules.label(doc.category.orEmpty()).uppercase()}"
             binding.catChip.setTextColor(catColor)
+            // T4.3: the chip opens the category picker; while selecting it
+            // keeps acting like the rest of the card (no dead zone).
+            binding.catChip.setOnClickListener {
+                if (selectionMode) onClick(doc) else onCategory(doc)
+            }
 
             binding.root.setOnClickListener { onClick(doc) }
             binding.root.setOnLongClickListener {

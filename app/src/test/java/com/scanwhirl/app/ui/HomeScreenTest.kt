@@ -233,9 +233,12 @@ class HomeScreenTest {
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
                 forceLayout(list)
 
-                // Long-press a card -> selection mode (T3.7 will restyle the
-                // header; the rail must keep working through it).
-                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                // T4.3: long-press opens quick actions — `Select` + tap
+                // enters selection (the rail must keep working through it).
+                // Capture the card first: Select re-lays out the list.
+                val card = list.findViewHolderForAdapterPosition(0)!!.itemView
+                activity.findViewById<View>(R.id.btnSelect).performClick()
+                card.performClick()
 
                 chipFor(group, CategoryRules.RECEIPTS).performClick()
                 assertTrue(
@@ -427,10 +430,12 @@ class HomeScreenTest {
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
                 forceLayout(list)
 
-                // Long-press picks one doc -> 1 selected.
+                // `Select` + tap picks one doc -> 1 selected.
                 // Test builds are Pro by default — force the Free UI first.
                 com.scanwhirl.app.util.ProGate.setTestOverride(activity, false)
-                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                val card = list.findViewHolderForAdapterPosition(0)!!.itemView
+                activity.findViewById<android.view.View>(R.id.btnSelect).performClick()
+                card.performClick()
 
                 // T3.12: the actions live in the contextual bottom bar now —
                 // the header row keeps only X / count / Select all (the old
@@ -446,9 +451,9 @@ class HomeScreenTest {
                 val del = activity.findViewById<android.view.View>(R.id.btnSelDelete)
                 val export = activity.findViewById<android.view.View>(R.id.btnSelExport)
 
-                // Move exists but is dead until T4.3 (owner decision).
+                // T4.3: Move is live with a selection (was disabled until T4.3).
                 assertTrue("Move is visible", move.isVisible)
-                assertFalse("Move is disabled until T4.3", move.isEnabled)
+                assertTrue("Move enabled with 1 selected", move.isEnabled)
                 // Free build: no dead Export button.
                 assertFalse("Export hidden in Free", export.isVisible)
                 assertEquals(
@@ -482,7 +487,10 @@ class HomeScreenTest {
                     "row 0 is back after leaving selection",
                     pollUntil { list.findViewHolderForAdapterPosition(0) != null }
                 )
-                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                // Capture the card before Select re-lays out the list.
+                val card0 = list.findViewHolderForAdapterPosition(0)!!.itemView
+                activity.findViewById<android.view.View>(R.id.btnSelect).performClick()
+                card0.performClick()
                 assertTrue(
                     "Export visible for Pro",
                     pollUntil { export.isVisible }

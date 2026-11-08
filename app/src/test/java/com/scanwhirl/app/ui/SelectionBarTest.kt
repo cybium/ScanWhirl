@@ -113,7 +113,12 @@ class SelectionBarTest {
             scenario.onActivity { activity ->
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
                 forceLayout(list)
-                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                // T4.3: long-press opens quick actions now — `Select` enters
+                // selection mode, then a tap ticks the card. Capture the card
+                // first: entering selection re-lays out the list.
+                val card = list.findViewHolderForAdapterPosition(0)!!.itemView
+                activity.findViewById<View>(R.id.btnSelect).performClick()
+                card.performClick()
 
                 // The count is the whole point of the row: the exact, full
                 // string (complaint #15 clipped it to `1 sel…`).
@@ -145,8 +150,8 @@ class SelectionBarTest {
                     "Merge waits for 2",
                     bar.findViewById<View>(R.id.btnSelMerge).isEnabled
                 )
-                assertFalse(
-                    "Move is disabled until T4.3",
+                assertTrue(
+                    "Move is live with 1 selected (T4.3)",
                     bar.findViewById<View>(R.id.btnSelMove).isEnabled
                 )
                 assertTrue(
@@ -167,7 +172,12 @@ class SelectionBarTest {
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
                 forceLayout(list)
 
-                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                // T4.3: `Select` + tap picks doc 1 (long-press = quick actions).
+                // The card view is captured before Select: entering selection
+                // re-lays out the list and the holder lookup comes back null.
+                val card0 = list.findViewHolderForAdapterPosition(0)!!.itemView
+                activity.findViewById<View>(R.id.btnSelect).performClick()
+                card0.performClick()
                 assertTrue(
                     "row 1 is laid out",
                     pollUntil { list.findViewHolderForAdapterPosition(1) != null }
@@ -223,7 +233,9 @@ class SelectionBarTest {
             scenario.onActivity { activity ->
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
                 forceLayout(list)
-                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                val card = list.findViewHolderForAdapterPosition(0)!!.itemView
+                activity.findViewById<View>(R.id.btnSelect).performClick()
+                card.performClick()
 
                 val bar = activity.findViewById<View>(R.id.bottomBar)
                 val selBar = activity.findViewById<View>(R.id.selectionBar)

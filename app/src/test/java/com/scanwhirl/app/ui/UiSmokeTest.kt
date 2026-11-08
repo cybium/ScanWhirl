@@ -321,7 +321,7 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `long press enters selection mode and back exits it`() {
+    fun `select button enters selection mode and back exits it`() {
         seedDoc("Select me")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -341,8 +341,10 @@ class UiSmokeTest {
                 assertFalse("no selection header in normal mode", header.isVisible)
                 assertFalse("no selection bar in normal mode", selBar.isVisible)
 
-                // long press -> selection mode: contextual header replaces the toolbar
-                card.performLongClick()
+                // Select + tap -> selection mode: contextual header replaces
+                // the toolbar (T4.3: long-press opens quick actions instead).
+                activity.findViewById<android.view.View>(R.id.btnSelect).performClick()
+                card.performClick()
                 assertTrue("selection header takes over", header.isVisible)
                 assertFalse("toolbar hides while selecting", toolbar.isVisible)
                 assertEquals(
@@ -1460,7 +1462,9 @@ class UiSmokeTest {
             scenario.onActivity { activity ->
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
                 forceLayout(list)
-                list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                val card = list.findViewHolderForAdapterPosition(0)!!.itemView
+                activity.findViewById<android.view.View>(R.id.btnSelect).performClick()
+                card.performClick()
             }
             scenario.onActivity { activity ->
                 val export = activity.findViewById<android.view.View>(R.id.btnSelExport)

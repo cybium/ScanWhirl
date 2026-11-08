@@ -73,6 +73,14 @@
     <string name="category_unsorted_hint">अभी तक छाँटा नहीं गया — कोई चुनें या छोड़ दें</string>
     <!-- review: the entry below was machine-translated at T4.2 — native review pending -->
     <string name="category_picker_title">श्रेणी चुनें</string>
+    <!-- review: the 2 entries below were machine-translated at T4.3 — native review pending -->
+    <string name="move_to_category">श्रेणी में ले जाएँ</string>
+    <string name="moved_n_to_cat">%1$d को %2$s में ले जाया गया</string>
+    <!-- review: the 3 entries below were English-only before T4.3 (the
+         quick-actions sheet shows them) — native review pending -->
+    <string name="rename">नाम बदलें</string>
+    <string name="rename_title">दस्तावेज़ का नाम बदलें</string>
+    <string name="share_pdf">साझा करें</string>
     <!-- review: the 23 entries below were machine-translated at T3.14 (G2b §3C) — native review pending -->
     <string name="empty_first_scan">अपना पहला दस्तावेज़ स्कैन करें</string>
     <string name="empty_category">%1$s के अभी कोई दस्तावेज़ नहीं</string>

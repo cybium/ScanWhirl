@@ -51,6 +51,7 @@ import com.scanwhirl.app.util.HomeFilter
 import com.scanwhirl.app.util.HomeState
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +67,7 @@ class MainActivity : BaseActivity(), HomeHost {
 
     private lateinit var binding: ActivityMainBinding
     private val adapter by lazy {
-        ScanListAdapter(::onDocClick, ::onDocView, ::onDocEdit, ::onDocLongClick)
+        ScanListAdapter(::onDocClick, ::onDocView, ::onDocEdit, ::onDocLongClick, ::onCategory)
     }
     private val repo by lazy { (application as ScanWhirlApp).repository }
 
@@ -282,6 +283,11 @@ class MainActivity : BaseActivity(), HomeHost {
         // T3.7: contextual selection header. Move is wired in T4.3 (category
         // picker) — it exists disabled so the row never re-flows.
         binding.btnSelClose.setOnClickListener { setSelectionMode(false) }
+        // T4.3: Move opens the picker for the whole selection, then exits
+        // selection and confirms with a "Moved N to <cat>" toast.
+        binding.btnSelMove.setOnClickListener {
+            moveCategory(selectedIds.toList(), fromSelection = true, current = null)
+        }
         binding.btnSelMerge.setOnClickListener { mergeFlow.promptMerge(selectedIds.toList()) }
         binding.btnSelExport.setOnClickListener { exportSelectedZip() }
         binding.btnSelDelete.setOnClickListener { confirmDeleteSelected() }
@@ -582,6 +588,8 @@ class MainActivity : BaseActivity(), HomeHost {
                 resources.getQuantityString(R.plurals.selected_count, n, n)
             binding.btnSelMerge.isEnabled = n >= 2
             binding.btnSelDelete.isEnabled = n > 0
+            // T4.3: Move is live (was disabled until T4.3).
+            binding.btnSelMove.isEnabled = n > 0
             // Pro extras only appear in the Pro UI (Free keeps no dead buttons).
             val pro = ProGate.isPro(this)
             binding.btnSelExport.visibility = if (pro) View.VISIBLE else View.GONE
@@ -893,13 +901,87 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     private fun onDocLongClick(doc: ScanDocument) {
-        if (!selectionMode) {
-            setSelectionMode(true)
-            selectedIds.add(doc.id)
-            adapter.notifyDataSetChanged()
-            updateSelectionHeader()
-        } else {
-            toggleSelection(doc.id)
+        // T4.3 (owner decision): long-press opens the quick-actions sheet;
+        // `Select` is what enters selection mode now (T3.7 amended).
+        showQuickActions(doc)
+    }
+
+    /**
+     * T4.3: the card's category chip → picker → `setCategory`. The picker
+     * opens on the card's current category so its row carries the check.
+     */
+    private fun onCategory(doc: ScanDocument) {
+        CategoryPickerSheet.show(this, doc.category) { cat ->
+            repo.setCategory(doc.id, cat)
+            refreshList()
+        }
+    }
+
+    /**
+     * T4.3: long-press quick actions for one card — Rename, Move to
+     * category, Share, Delete (§4.x). Each action dismisses the sheet
+     * before opening its own dialog/flow.
+     */
+    private fun showQuickActions(doc: ScanDocument) {
+        val sheet = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_quick_actions, null)
+        sheet.setContentView(view)
+        view.findViewById<TextView>(R.id.qaTitle).text = doc.name
+        view.findViewById<View>(R.id.qaRename).setOnClickListener {
+            sheet.dismiss()
+            promptRename(doc)
+        }
+        view.findViewById<View>(R.id.qaMove).setOnClickListener {
+            sheet.dismiss()
+            moveCategory(listOf(doc.id), fromSelection = false, current = doc.category)
+        }
+        view.findViewById<View>(R.id.qaShare).setOnClickListener {
+            sheet.dismiss()
+            ShareUtils.share(this, doc)
+        }
+        view.findViewById<View>(R.id.qaDelete).setOnClickListener {
+            sheet.dismiss()
+            confirmDelete(listOf(doc.id))
+        }
+        sheet.show()
+    }
+
+    /** T4.3: rename dialog (same shape as the Document screen's prompt). */
+    private fun promptRename(doc: ScanDocument) {
+        val (builder, input) = SwDialog.input(
+            this, hint = getString(R.string.rename_title), initial = doc.name
+        )
+        builder
+            .setTitle(R.string.rename_title)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val newName = input.text?.toString()
+                if (!newName.isNullOrBlank()) {
+                    repo.renameDocument(doc.id, newName.trim())
+                    refreshList()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .showSw(isSheet = false)
+    }
+
+    /**
+     * T4.3: the category picker for one card (quick actions) or the whole
+     * selection (Move). Bulk moves exit selection and confirm with a
+     * "Moved N to <cat>" toast; a single-card move just refreshes.
+     */
+    private fun moveCategory(ids: List<String>, fromSelection: Boolean, current: String?) {
+        if (ids.isEmpty()) return
+        CategoryPickerSheet.show(this, current) { cat ->
+            repo.setCategory(ids, cat)
+            if (fromSelection && selectionMode) setSelectionMode(false)
+            refreshList()
+            if (fromSelection) {
+                Toast.makeText(
+                    this,
+                    getString(R.string.moved_n_to_cat, ids.size, cat),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
@@ -1006,8 +1088,10 @@ class MainActivity : BaseActivity(), HomeHost {
         }
     }
 
-    private fun confirmDeleteSelected() {
-        val ids = selectedIds.toList()
+    private fun confirmDeleteSelected() = confirmDelete(selectedIds.toList())
+
+    /** T4.3: the single-card quick action shares the bulk confirm (T4.8 box). */
+    private fun confirmDelete(ids: List<String>) {
         if (ids.isEmpty()) return
         // T4.8: find the Documents/ScanWhirl copies these documents own while
         // their meta.txt still exists (recorded exports + exact-name rows).
@@ -1015,8 +1099,15 @@ class MainActivity : BaseActivity(), HomeHost {
             .map { it to DeleteExports.copiesFor(this, repo, it.id, it.name) }
         val total = plan.sumOf { it.second.size }
         val builder = SwDialog.danger(this)
-            .setTitle(R.string.delete_selected_title)
-            .setMessage(resources.getQuantityString(R.plurals.delete_selected_message, ids.size, ids.size))
+            .setTitle(if (ids.size == 1) R.string.delete_title else R.string.delete_selected_title)
+            .setMessage(
+                if (ids.size == 1) {
+                    val name = repo.getDocument(ids[0])?.name ?: ""
+                    getString(R.string.delete_message, name)
+                } else {
+                    resources.getQuantityString(R.plurals.delete_selected_message, ids.size, ids.size)
+                }
+            )
         var box: android.widget.CheckBox? = null
         if (total > 0) {
             box = DeleteExports.checkboxRow(this, total)
@@ -1025,7 +1116,7 @@ class MainActivity : BaseActivity(), HomeHost {
         builder
             .setPositiveButton(R.string.delete) { _, _ ->
                 ids.forEach { repo.deleteDocument(it) } // never blocked by copy removal
-                setSelectionMode(false)
+                if (selectionMode) setSelectionMode(false)
                 refreshList()
                 if (box?.isChecked == true && total > 0) {
                     val (removed, failed) =
