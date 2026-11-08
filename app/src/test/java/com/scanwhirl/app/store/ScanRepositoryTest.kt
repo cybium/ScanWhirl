@@ -505,4 +505,32 @@ class ScanRepositoryTest {
             repo.getDocument(src.id)!!.pageFiles.first().canonicalPath !=
                 repo.getDocument(copy.id)!!.pageFiles.first().canonicalPath)
     }
+
+    // ------------------------------------------------------------------
+    // Task 5 — Unique default document names
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `nextDocumentName skips deleted numbers`() = runBlocking {
+        val repo = ScanRepository(context)
+        saveDoc(repo, "Document 1")
+        saveDoc(repo, "Document 2")
+        saveDoc(repo, "Document 3")
+        repo.deleteDocument(repo.listDocuments().first { it.name == "Document 2" }.id)
+        assertEquals("Document 4", repo.nextDocumentName())
+    }
+
+    @Test
+    fun `nextDocumentName ignores non-Document names`() = runBlocking {
+        val repo = ScanRepository(context)
+        saveDoc(repo, "Physics")
+        saveDoc(repo, "Receipt 9")
+        assertEquals("Document 1", repo.nextDocumentName())
+    }
+
+    @Test
+    fun `nextDocumentName with no documents returns Document 1`() = runBlocking {
+        val repo = ScanRepository(context)
+        assertEquals("Document 1", repo.nextDocumentName())
+    }
 }

@@ -99,3 +99,18 @@
 4. ✅ `PRIVACY_POLICY.md` contains no word "Camera"; `STORE_LISTING.md` contains none of "camera button", "FAB", "Downloads/ScanWhirl"
 
 **Test count:** 618 → 624 (+6: StringsParityTest 3), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 5 — Unique default document names
+
+**Changes:**
+- `ScanRepository.nextDocumentName()` rewritten: reads line 1 of every document's `meta.txt`, extracts N from names matching `^Document (\d+)$`, returns `"Document ${maxN + 1}"` (`"Document 1"` when none match). Non-matching names are ignored.
+- Tests added to `ScanRepositoryTest.kt`: deleted-number skip (Documents 1,2,3 with 2 deleted → 4), non-Document names (Physics + Receipt 9 → Document 1), no documents → Document 1.
+
+**Acceptance:**
+1. ✅ Documents "Document 1", "Document 2", "Document 3" with "Document 2" deleted → next is "Document 4".
+2. ✅ Documents named "Physics" and "Receipt 9" only → "Document 1".
+3. ✅ No documents → "Document 1".
+
+**Test count:** 624 → 630 (+6), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).

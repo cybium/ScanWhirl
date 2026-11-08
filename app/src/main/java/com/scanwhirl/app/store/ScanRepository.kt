@@ -874,8 +874,14 @@ class ScanRepository(private val context: Context) {
 
     /** Next default scan name: "Document 1", "Document 2", … */
     fun nextDocumentName(): String {
-        val count = docsDir.listFiles { f -> f.isDirectory }?.size ?: 0
-        return "Document ${count + 1}"
+        val docDirs = docsDir.listFiles { f -> f.isDirectory } ?: emptyArray()
+        val maxN = docDirs.mapNotNull { dir ->
+            val meta = File(dir, "meta.txt")
+            if (!meta.exists()) null
+            else meta.readLines().firstOrNull()
+                ?.let { Regex("^Document (\\d+)$").find(it)?.groupValues[1]?.toIntOrNull() }
+        }.maxOrNull() ?: 0
+        return "Document ${maxN + 1}"
     }
 
     fun displayNameOf(uri: Uri): String? {
