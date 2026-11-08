@@ -973,3 +973,29 @@ deps T4.6+T4.8 ✅) → T5.3 → T5.4 → T5.5 (TextFit sweep, the phase's test 
 **Tests:** 12 cases covering hard-wrapped paragraphs, hyphenated words, dash-vs-hyphen distinction, bullet lists, numbered lists, paragraph-end hyphens, trailing spaces, multi-blank-line collapse, empty strings, and combined join→fix pipeline. All green.
 
 **Suite impact:** +12 tests (test count rises in Phase 6 per amendment).
+
+---
+
+### T6.2 — OCR Editor activity + layout + OcrEditorTest ✅
+
+**New files:**
+- `app/src/main/java/com/scanwhirl/app/ui/OcrEditorActivity.kt` — full-screen OCR editor per §4.7. Doc-backed (EXTRA_DOC_ID → repo.ocrDoc) or temp (EXTRA_TEXT_PATH → cache file). Page tabs, editable EditText (14sp, multiline), word-count label, cleanup bar (Join lines/Fix spaces/Undo/Remove gaps via OcrCleanup), action bar (Copy/Share/Save). Dirty-state back confirm (Save/Discard/Cancel). `windowSoftInputMode="adjustResize"` in manifest. Cache file deleted in `onDestroy`.
+- `app/src/main/res/layout/activity_ocr_editor.xml` — toolbar, page tabs, EditText, word count, cleanup bar, action bar.
+- `app/src/main/res/menu/menu_ocr_editor.xml` — overflow (Copy all/Share all/Save as .txt/Re-scan).
+- `app/src/test/java/com/scanwhirl/app/util/OcrEditorTest.kt` — 4 tests: edit→Save→SearchMatcher finds corrected word; Back while dirty shows confirm dialog; empty OCR state; temp mode cache file read+cleanup.
+
+**Modified:** strings.xml/values-hi (OCR strings, `share_text` marked `<!-- review -->`), AndroidManifest.xml (OcrEditorActivity + adjustResize).
+
+**Suite impact:** +4 tests.
+
+---
+
+### T6.3 — Wire OcrEditorActivity into OcrFlow + TextFitTest ✅
+
+**OcrFlow.kt:** `runOcrForScan` now launches `OcrEditorActivity` with `EXTRA_DOC_ID` instead of `showOcrTextDialog`. `runOcrForPdf`/`runOcrForImage` write OCR text to `cacheDir/ocr_<ts>.txt` and launch with `EXTRA_TEXT_PATH` (never in an Intent extra). `showOcrTextDialog` deleted.
+
+**TextFitTest.kt:** added `ocr editor text fits` case (7 total, all green at scales 1.0 + 1.3).
+
+**Strings:** added `share_text` = "Share text" (en + hi, `<!-- review -->`), used in `shareAllPages()` chooser title.
+
+**Phase-end full run:** **666 tests / 0 failures / 0 skipped** (debug + release), `assembleRelease` green → Phase 6 checkpoint GREEN. Test count rose from 630 (P5) to 666 (P6).

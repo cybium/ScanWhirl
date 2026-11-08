@@ -34,12 +34,6 @@
         </activity>
 
         <activity
-            android:name=".ui.globe.GlobeHomeActivity"
-            android:exported="true"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.ScanWhirl" />
-
-        <activity
             android:name=".ui.DocumentViewerActivity"
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
