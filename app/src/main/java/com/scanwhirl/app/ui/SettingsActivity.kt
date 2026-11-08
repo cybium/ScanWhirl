@@ -60,6 +60,10 @@ class SettingsActivity : BaseActivity() {
         binding.switchAutoEnhance.setOnCheckedChangeListener { _, checked ->
             Prefs.setAutoEnhanceScan(this, checked)
         }
+        binding.switchAutoCopyToDocuments.isChecked = Prefs.autoCopyToDocuments(this)
+        binding.switchAutoCopyToDocuments.setOnCheckedChangeListener { _, checked ->
+            Prefs.setAutoCopyToDocuments(this, checked)
+        }
         binding.switchGlobeHome.isChecked = Prefs.globeHomeEnabled(this)
         binding.switchGlobeHome.setOnCheckedChangeListener { _, checked ->
             Prefs.setGlobeHomeEnabled(this, checked)

@@ -291,6 +291,8 @@
     <string name="pro_panel_home">ScanWhirl Pro Suite (Unlocked in Test):\n\n• Hidden Vault — 4-digit PIN private folder\n• OCR Text — Extract, copy &amp; search text inside pages\n• Lock / Unlock PDF — Password-protect or unlock any scan\n• Long Image — Stitch all pages into one tall image\n• ID / Passport Crop — Aspect presets inside Crop\n• Batch ZIP — Multi-select scans → Export ZIP\n\nTap \"Pro Suite\" on Home or \"Pro Tools\" inside any scan.</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
     <string name="settings_auto_enhance_summary">Google processing is on when this is on. Off gives a fast, original-looking scan.</string>
+    <string name="settings_auto_copy_to_documents">Also save a copy to Documents</string>
+    <string name="settings_auto_copy_to_documents_summary">A copy of each finished PDF is saved to Documents/ScanWhirl.</string>
     <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>
