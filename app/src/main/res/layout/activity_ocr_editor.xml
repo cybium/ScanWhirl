@@ -47,17 +47,45 @@
         android:scrollbarStyle="outsideInset"
         android:padding="16dp" />
 
-    <TextView
-        android:id="@+id/wordCount"
-        android:layout_width="wrap_content"
+    <!-- Word count + Undo/Redo row. -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:orientation="horizontal"
         android:paddingHorizontal="16dp"
         android:paddingTop="4dp"
-        android:paddingBottom="8dp"
-        android:textSize="12sp"
-        android:textColor="?android:attr/textColorSecondary" />
+        android:paddingBottom="8dp">
 
-    <!-- Cleanup bar: Join lines · Fix spaces · Remove gaps. (Undo/Redo become ImageButtons in T3.) -->
+        <TextView
+            android:id="@+id/wordCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary" />
+
+        <ImageButton
+            android:id="@+id/btnUndo"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_undo"
+            android:contentDescription="@string/ocr_undo_desc"
+            android:tint="@color/text_hologram_hi"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+
+        <ImageButton
+            android:id="@+id/btnRedo"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_redo"
+            android:contentDescription="@string/ocr_redo_desc"
+            android:tint="@color/text_hologram_hi"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+    </LinearLayout>
+
+    <!-- Cleanup bar: Join lines · Fix spaces · Remove gaps. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -89,18 +117,6 @@
             android:textSize="12sp"
             android:maxLines="2"
             android:text="@string/ocr_fix_spaces" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnUndo"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minHeight="48dp"
-            android:paddingHorizontal="8dp"
-            android:textSize="12sp"
-            android:maxLines="2"
-            android:text="@string/ocr_undo" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRemoveGaps"

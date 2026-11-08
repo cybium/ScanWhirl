@@ -9,6 +9,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -16,7 +17,6 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.scanwhirl.app.R
@@ -24,6 +24,7 @@ import com.scanwhirl.app.databinding.ActivityOcrEditorBinding
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.OcrCleanup
+import com.scanwhirl.app.util.TextHistory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
@@ -65,11 +66,16 @@ class OcrEditorActivity : BaseActivity() {
     private var currentPageKey: String = ""
     private var isDirty: Boolean = false
     private var cacheFileToDelete: File? = null
+    /** Per-page undo/redo history. */
+    private val pageHistories = mutableMapOf<String, TextHistory>()
+    /** Suppresses recording while the activity sets text programmatically. */
+    private var applyingHistory = false
 
     private lateinit var editText: EditText
     private lateinit var wordCount: TextView
     private lateinit var chipGroup: ChipGroup
-    private lateinit var btnUndo: MaterialButton
+    private lateinit var btnUndo: ImageButton
+    private lateinit var btnRedo: ImageButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,24 +93,33 @@ class OcrEditorActivity : BaseActivity() {
         docTitle = intent.getStringExtra(EXTRA_TITLE)
         val textPath = intent.getStringExtra(EXTRA_TEXT_PATH)
 
-        // Restore rotation state first (dirty pages + current page key).
-        var restoredDirty = false
+        // Restore rotation state: dirty pages and current page key come from
+        // the bundle; originalTexts are re-read from the repo/file so dirty
+        // detection works against the true baseline.
+        var hasSavedState = false
         savedInstanceState?.let { state ->
+            hasSavedState = true
             currentPageKey = state.getString("currentPageKey") ?: ""
             val dirtyPages = state.getBundle("dirtyPages") ?: Bundle()
             for (key in dirtyPages.keySet()) {
                 val text = dirtyPages.getString(key) ?: ""
                 pageTexts[key] = text
             }
-            restoredDirty = dirtyPages.size() > 0 || pageTexts.any { (k, v) ->
-                v != (originalTexts[k] ?: "")
-            }
         }
 
         if (docId != null) {
-            loadDocOcr(docId!!, restoreDirty = restoredDirty)
+            if (hasSavedState) {
+                originalTexts = repo.ocrDoc(docId!!).toMap()
+            } else {
+                loadDocOcr(docId!!)
+            }
         } else if (textPath != null) {
-            loadTempOcr(textPath, restoreDirty = restoredDirty)
+            if (hasSavedState) {
+                val file = File(textPath)
+                originalTexts = mapOf("temp" to (if (file.exists()) file.readText() else ""))
+            } else {
+                loadTempOcr(textPath)
+            }
         } else {
             finish()
             return
@@ -157,7 +172,7 @@ class OcrEditorActivity : BaseActivity() {
     // Loading
     // ------------------------------------------------------------------
 
-    private fun loadDocOcr(id: String, restoreDirty: Boolean) {
+    private fun loadDocOcr(id: String) {
         val pages = repo.ocrDoc(id)
         if (pages.isEmpty()) {
             // No OCR yet: single empty page so the editor still opens.
@@ -171,7 +186,7 @@ class OcrEditorActivity : BaseActivity() {
         }
     }
 
-    private fun loadTempOcr(path: String, restoreDirty: Boolean) {
+    private fun loadTempOcr(path: String) {
         val file = File(path)
         val text = if (file.exists()) file.readText() else ""
         cacheFileToDelete = file
@@ -221,14 +236,24 @@ class OcrEditorActivity : BaseActivity() {
 
     private fun setupEditText() {
         editText = binding.editText
+        var typingOld: String = ""
         editText.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+                if (!applyingHistory) typingOld = s?.toString() ?: ""
+            }
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
+                if (applyingHistory) return
                 val current = s?.toString() ?: ""
                 pageTexts[currentPageKey] = current
+                val history = pageHistories[currentPageKey] ?: TextHistory().also {
+                    pageHistories[currentPageKey] = it
+                }
+                history.record(typingOld, current, TextHistory.Kind.TYPING)
+                typingOld = current
                 recomputeDirty()
                 updateWordCount()
+                updateUndoRedoState()
             }
         })
     }
@@ -246,10 +271,14 @@ class OcrEditorActivity : BaseActivity() {
     private fun setupActionBar() {
         wordCount = binding.wordCount
         btnUndo = binding.btnUndo
+        btnRedo = binding.btnRedo
+        btnUndo.setOnClickListener { doUndo() }
+        btnRedo.setOnClickListener { doRedo() }
         binding.btnCopy.setOnClickListener { copyCurrent() }
         binding.btnShare.setOnClickListener { shareCurrent() }
         binding.btnSave.setOnClickListener { saveCurrent() }
         updateWordCount()
+        updateUndoRedoState()
     }
 
     // ------------------------------------------------------------------
@@ -262,6 +291,7 @@ class OcrEditorActivity : BaseActivity() {
         editText.setSelection(editText.text.length)
         updatePageTabs()
         updateWordCount()
+        updateUndoRedoState()
     }
 
     private fun updatePageTabs() {
@@ -297,10 +327,54 @@ class OcrEditorActivity : BaseActivity() {
         val snap = editText.text.toString()
         val newText = transform(snap)
         if (newText == snap) return // no-op: nothing changes, no history needed
+        val history = pageHistories[currentPageKey] ?: TextHistory().also {
+            pageHistories[currentPageKey] = it
+        }
+        history.record(snap, newText, TextHistory.Kind.ACTION)
+        applyingHistory = true
         editText.setText(newText)
         editText.setSelection(newText.length)
+        applyingHistory = false
+        pageTexts[currentPageKey] = newText
         recomputeDirty()
         updateWordCount()
+        updateUndoRedoState()
+    }
+
+    private fun doUndo() {
+        val history = pageHistories[currentPageKey] ?: return
+        val previous = history.undo(editText.text.toString()) ?: return
+        applyingHistory = true
+        editText.setText(previous)
+        editText.setSelection(previous.length)
+        applyingHistory = false
+        pageTexts[currentPageKey] = previous
+        recomputeDirty()
+        updateWordCount()
+        updateUndoRedoState()
+    }
+
+    private fun doRedo() {
+        val history = pageHistories[currentPageKey] ?: return
+        val next = history.redo(editText.text.toString()) ?: return
+        applyingHistory = true
+        editText.setText(next)
+        editText.setSelection(next.length)
+        applyingHistory = false
+        pageTexts[currentPageKey] = next
+        recomputeDirty()
+        updateWordCount()
+        updateUndoRedoState()
+    }
+
+    private fun updateUndoRedoState() {
+        val history = pageHistories[currentPageKey]
+        val canU = history?.canUndo == true
+        val canR = history?.canRedo == true
+        btnUndo.isEnabled = canU
+        btnUndo.alpha = if (canU) 1f else 0.38f
+        btnRedo.isEnabled = canR
+        btnRedo.alpha = if (canR) 1f else 0.38f
     }
 
     // ------------------------------------------------------------------

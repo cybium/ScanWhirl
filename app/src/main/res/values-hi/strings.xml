@@ -232,7 +232,10 @@
     <string name="ocr_share_btn"><!-- review -->Share</string>
     <string name="ocr_share_text"><!-- review -->Share पाठ</string>
     <string name="ocr_title"><!-- review -->Extracted Text (OCR)</string>
-    <string name="ocr_undo"><!-- review -->Undo</string>
+    <string name="ocr_undo"><!-- review -->पूर्ववत करें</string>
+    <string name="ocr_redo"><!-- review -->रद्द करें</string>
+    <string name="ocr_undo_desc"><!-- review -->पूर्ववत करें</string>
+    <string name="ocr_redo_desc"><!-- review -->रद्द करें</string>
     <string name="ocr_unsaved_msg"><!-- review -->You have unsaved संपादित करेंs. Save before closing?</string>
     <string name="ocr_unsaved_title"><!-- review -->Unsaved परिवर्तन</string>
     <string name="ocr_word_count"><!-- review -->%1$d शब्द</string>

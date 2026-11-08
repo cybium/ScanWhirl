@@ -52,3 +52,27 @@
 **Acceptance:** all 8 criteria verified green.
 
 **Test count:** 598 → 602 (+4), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 3 — OCR editor: real undo/redo
+
+**New files:**
+- `app/src/main/java/com/scanwhirl/app/util/TextHistory.kt` — `TextHistory(maxEntries=50, maxChars=200_000)` with `Kind { TYPING, ACTION }`, `record(old,new,kind)`, `undo(current)`, `redo(current)`, `canUndo`, `canRedo`, `clear()`. TYPING bursts within 1,000ms share one snapshot; ACTION always pushes. Eviction drops oldest when stack > maxEntries or summed chars > maxChars.
+- `app/src/test/java/com/scanwhirl/app/util/TextHistoryTest.kt` — 8 tests: undo/redo round-trip, burst grouping (within/over 1000ms), no-op record, cleanup-undo-undo, maxEntries/maxChars eviction.
+- `app/src/main/res/drawable/ic_undo.xml`, `ic_redo.xml` — 24dp vector icons, white fill, tinted in layout.
+
+**Modified:**
+- `OcrEditorActivity.kt`: `Map<String, TextHistory>` keyed by page key; `applyingHistory` flag suppresses recording during programmatic text changes. Typing recorded from `beforeTextChanged` (capture old) + `afterTextChanged`. Cleanup records `ACTION` only when text actually changes. Undo/Redo operate only on visible page. Undo/Redo buttons are 48×48 `ImageButton`s (`ic_undo`/`ic_redo`) in the word-count row; `isEnabled` and `alpha` (1.0/0.38) follow `canUndo`/`canRedo`. Content descriptions `ocr_undo_desc`/`ocr_redo_desc`.
+- `activity_ocr_editor.xml`: Removed `btnUndo` text button from cleanup bar (Join/Fix/Remove gaps remain, weight 1 each, minHeight 48). Word-count row is now a horizontal LinearLayout: `wordCount` (weight 1) · `btnUndo` (ImageButton) · `btnRedo` (ImageButton).
+- `strings.xml`/`values-hi/strings.xml`: `ocr_redo` ("Redo"), `ocr_undo_desc` ("Undo"/"पूर्ववत करें"), `ocr_redo_desc` ("Redo"/"रद्द करें"), all `<!-- review -->`. Hindi `ocr_undo` translated to "पूर्ववत करें".
+
+**Acceptance:**
+1. ✅ TextHistoryTest: 8 cases all green.
+2. ✅ Cross-page regression: cleanup on page 1, switch to page 2 → Undo disabled; switch back → Undo restores page 1.
+3. ✅ Join lines → Undo restores byte-identical text; Redo re-applies; no-op cleanup leaves Undo disabled.
+4. ✅ Undo/Redo buttons are 48×48 (covered by Task 2 inset test).
+5. ✅ `TextFitTest` "ocr editor text fits" green at font scale 1.0 and 1.3.
+6. ✅ Full suite green.
+
+**Test count:** 602 → 618 (+16), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).
