@@ -7,40 +7,32 @@ ScanWhirl – Doc Scanner PDF
 ScanWhirl – Document Scanner to PDF
 
 ## Short description (max 80 chars)
-Scan docs: auto crop, batch, compress PDF, resize, save images — private.
+Scan docs to searchable PDFs. Private, on-device, no account, no ads.
 
 ## Full description
-Scan receipts, notes, IDs, whiteboards, and papers with ScanWhirl — a fast, private document scanner.
+Scan receipts, notes, IDs, whiteboards, and papers with ScanWhirl — a fast, private document scanner whose PDFs are searchable.
 
 **How it works**
-1. Tap the camera button
-2. Google's on-device scanner opens: point at a document, edges are detected automatically
-3. Crop or adjust the corners, then confirm the page
-4. Add more pages (batch mode) or finish
-5. Review every page, rename the scan (default "Document N"), pick a look, then Save PDF or Save & share
+1. Tap Scan — Google's on-device scanner opens and captures your pages
+2. Review and save — pages become a PDF, text is read in the background
+3. Search — names and text inside your scans are found by search
 
 **Features**
-- Automatic document edge detection and perspective crop
-- Manual crop with adjustable corners (Google ML Kit document scanner, on device)
-- Multi-page batch scanning (up to 30 pages per scan)
+- Scan with Google's on-device scanner (auto edge detection, batch up to 30 pages)
+- Searchable PDFs — text is recognized on the phone and hidden inside the PDF so any PDF app can search it
+- Text search — names and text inside your scans, for everyone, ranked by relevance
+- Categories and Quick Sort — choose a category at save, filter by chip rail, bulk move, Quick Sort for unsorted pile
 - Merge several scans into a single PDF
+- Compress scans and PDFs with clear size estimates
+- Resize images: exact pixels or auto aspect ratio
 - Rotate, reorder, and delete pages inside a scan
-- Rename scans and multi-select to merge or delete
-- Resize any image: exact pixels or auto aspect ratio, DPI control, keep-original option
-- Compress an image to a target size (type e.g. 500 KB / 3 MB — it shrinks to fit)
-- Compress scans and PDF files with clear Low / Medium / High / Ultra levels, each showing the estimated result size
-- Post-scan review screen: see all pages, rename inline, pick Original / Enhance / Clean look
-- Save PDF or Save & share PDF; finished PDFs also go to Documents/ScanWhirl
-- Save any page image straight to Downloads/ScanWhirl with one tap
-- Dark look by default
-- Clean PDF export ready to share
-- Import images from your gallery to scan
-- All scans saved locally on your device
-- One-tap share to email, messaging, cloud drives, and more
-- Simple, ad-free interface
+- Read text editor — extract text, clean it up (join lines / fix spaces / remove gaps), edit, copy, share, save
+- Import photos or a PDF from your device
+- Hindi and English
+- Everything on-device: no accounts, no ads, no servers
 
 **Privacy first**
-Everything runs on your device. No accounts. No ads. No data leaves your phone unless you choose to share a file.
+Everything runs on your device. No accounts. No ads. No data leaves your phone unless you choose to share a file. ScanWhirl's own code makes no network requests. Google Play services, which provides the scanner and text recognition, may use the network to download or update its models.
 
 **Perfect for**
 - Students scanning notes and handouts
@@ -72,15 +64,14 @@ t.mecybium@gmail.com
 | Phone screenshots | min 2 | 1080×1920 or similar portrait |
 
 Screenshot ideas:
-1. Empty home screen with FAB + tools row (Resize / Compress)
+1. Empty home screen with Scan + Tools + Import dock
 2. Google scanner screen: crop view with detected page edges (take on your phone after install)
-3. Saved scans list
+3. Saved scans list with search results and snippets
 4. Multi-select mode (checkboxes + Merge button in toolbar)
 5. Document viewer with pages + Share button
-6. Page actions dialog (save to device / rotate / move / delete)
-7. Review screen after scanning: filter chips, page grid, editable title bar, Save PDF / Save & share
-8. Resize dialog with auto width/height, DPI, keep-aspect and target-size fields
-9. Compress level picker showing Low / Medium / High / Ultra with estimated sizes
+6. Read text editor with cleanup bar
+7. Categories and Quick Sort chip rail
+8. Compress level picker showing Low / Medium / High / Ultra with estimated sizes
 
 ---
 

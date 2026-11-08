@@ -53,7 +53,7 @@
                     android:id="@+id/proDossierStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="UNLOCKED IN TEST"
+                    android:text="@string/pro_status_unavailable"
                     android:textAppearance="@style/TextAppearance.SW.Section"
                     android:textColor="@color/text_hologram_mid"
                     android:textSize="11sp" />
@@ -66,6 +66,15 @@
             android:layout_marginTop="16dp"
             android:layout_marginBottom="16dp"
             android:background="@color/cyan_border_hair" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:gravity="center"
+            android:text="@string/pro_panel_note"
+            android:textAppearance="@style/TextAppearance.SW.Meta"
+            android:textSize="12sp" />
 
         <!-- Feature Rows -->
         <!-- 1. Vault -->

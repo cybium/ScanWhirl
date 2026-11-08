@@ -76,3 +76,26 @@
 6. ✅ Full suite green.
 
 **Test count:** 602 → 618 (+16), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 4 — Honest copy, Pro panel, Hindi parity, docs
+
+**Changes:**
+- `MainActivity.showProPanel()`: replaced hardcoded `"UNLOCKED IN TEST"` / `"ONE-TIME PURCHASE"` with strings `pro_status_test` ("Unlocked in this test build") and `pro_status_unavailable` ("Not available yet")
+- `dialog_pro_panel.xml`: status text uses `@string/pro_status_unavailable` (set dynamically in code); added `pro_panel_note` text view below the header divider; footer keeps existing text
+- Added strings `pro_status_test`, `pro_status_unavailable`, `pro_panel_note` (en + hi, `<!-- review -->`)
+- Deleted unreferenced strings `pro_panel_free`, `pro_panel_home`, `pro_panel_active` (en + hi)
+- Vault copy: `pro_feat_vault_sub` → "Hide scans behind a 4-digit PIN. Files are not encrypted on this phone."; `vault_set_pin_msg` → "Choose a 4-digit PIN. It hides private scans from the list. Files are not encrypted."; `vault_empty_subtitle` → "Tap Add to move a saved scan here or import a PDF. Scans stay hidden until you enter your PIN."; `vault_banner_sub` → "Hidden from the main list. Not encrypted." (en + hi, `<!-- review -->`)
+- Hindi: translated `ocr_undo` ("पूर्ववत करें"), `ocr_join_lines` ("पंक्तियाँ जोड़ें"), `ocr_fix_spaces` ("स्पेस ठीक करें"), `ocr_remove_gaps` ("खाली जगह हटाएँ") — all `<!-- review -->`
+- New `StringsParityTest.kt`: every translatable string has a Hindi entry; format specifiers match between values and values-hi; plurals quantities valid
+- `ProGate.kt`: removed "OCR text / in-page text search" from the Pro list header comment
+- Docs: `STORE_LISTING.md` rewritten (short description, how-it-works, feature list — no Pro mention); `PRIVACY_POLICY.md` (Last updated November 2026, no Camera bullet, Play services network bullets); `ANALYSIS_GUIDE.md` and `docs/TEST26_HANDOFF.md` marked as historical; `README.md` feature list replaced + Build and test block added
+
+**Acceptance:**
+1. ✅ `StringsParityTest` green; `EmojiGuardTest` green
+2. ✅ `grep -rn "ONE-TIME PURCHASE\|UNLOCKED IN TEST" app/src/main` → nothing; `grep -rn "Pro Suite\|Pro Tools\|crown badge" app/src/main/res` → nothing (only a comment and unused `pro_suite_title` string)
+3. ✅ Pro panel shows `pro_status_unavailable` / `pro_panel_note` in Free; `pro_status_test` in Pro (test build)
+4. ✅ `PRIVACY_POLICY.md` contains no word "Camera"; `STORE_LISTING.md` contains none of "camera button", "FAB", "Downloads/ScanWhirl"
+
+**Test count:** 618 → 624 (+6: StringsParityTest 3), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).

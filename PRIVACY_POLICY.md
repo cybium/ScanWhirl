@@ -1,6 +1,6 @@
 # Privacy Policy for ScanWhirl
 
-**Last updated: October 17, 2026**
+**Last updated: November 2026**
 
 ## Overview
 
@@ -15,12 +15,10 @@ ScanWhirl does **not** collect, transmit, store on external servers, sell, or sh
 - Documents you scan (photos and PDFs) are processed **entirely on your device**.
 - Scanned pages and PDFs are saved only in the App's private local storage on your device.
 - Edge detection and document scanning features are provided by Google's ML Kit Document Scanner, which runs on-device via Google Play services. Images are not uploaded to ScanWhirl's servers (ScanWhirl has no servers).
+- Text recognition runs on the phone through Google Play services, which downloads its model once. Recognized text stays in the App's private storage.
+- You can choose to save a copy of finished PDFs to Documents/ScanWhirl.
 - You can delete any scan at any time from within the App. Deleting removes the files permanently from your device.
-
-## Permissions
-
-- **Camera:** required to capture document pages. Camera access is only used while you are actively scanning.
-- **Photos / Media (gallery import):** optional. If you choose to import an image from your gallery to scan, the App reads only the image you select.
+- ScanWhirl's own code makes no network requests. Google Play services, which provides the scanner and text recognition, may use the network to download or update its models.
 
 ## Sharing
 

@@ -748,7 +748,7 @@ class MainActivity : BaseActivity(), HomeHost {
         val pro = ProGate.isPro(this)
         val view = layoutInflater.inflate(R.layout.dialog_pro_panel, null)
         view.findViewById<TextView>(R.id.proDossierStatus)?.text =
-            if (pro) "UNLOCKED IN TEST" else "ONE-TIME PURCHASE"
+            getString(if (pro) R.string.pro_status_test else R.string.pro_status_unavailable)
         val builder = SwDialog.sheet(this)
             .setView(view)
             .setPositiveButton(android.R.string.ok, null)

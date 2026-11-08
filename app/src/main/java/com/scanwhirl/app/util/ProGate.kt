@@ -12,7 +12,6 @@ import android.content.Context
  *  - Share as long image
  *  - Batch export all scans
  *  - Hidden Vault (4-digit PIN)
- *  - OCR text / in-page text search
  */
 object ProGate {
     private const val PREFS = "scanwhirl_prefs"

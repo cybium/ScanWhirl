@@ -1,3 +1,5 @@
+> Historical document. Superseded by SCANWHIRL_NEXT.md and docs/NEXT_LOG.md.
+
 # ScanWhirl — Source Analysis Guide (test22)
 
 Read this first. This bundle is the **full readable source** of ScanWhirl, an

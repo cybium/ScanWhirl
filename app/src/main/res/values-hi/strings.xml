@@ -110,8 +110,9 @@
     <string name="status_afternoon">शुभ दोपहर</string>
     <string name="status_evening">शुभ संध्या</string>
     <string name="status_night">शुभ रात्रि</string>
-    <string name="pro_panel_home">ScanWhirl Pro Suite (टेस्ट में अनलॉक):\n\n• छिपा हुआ वॉल्ट — 4-अंक PIN वाला निजी फ़ोल्डर\n• OCR टेक्स्ट — पन्नों के अंदर से टेक्स्ट निकालें, कॉपी करें और खोजें\n• PDF लॉक / अनलॉक — किसी भी स्कैन को पासवर्ड से सुरक्षित करें या अनलॉक करें\n• लंबी छवि — सभी पन्नों को एक लंबी छवि में जोड़ें\n• ID / पासपोर्ट क्रॉप — क्रॉप के अंदर एस्पेक्ट प्रीसेट\n• बैच ZIP — बहु-चयन स्कैन → ZIP निर्यात\n\nशुरू करने के लिए होम पर \"Pro Suite\" या किसी भी स्कैन के अंदर \"Pro Tools\" टैप करें।</string>
-    <string name="pro_panel_free">ScanWhirl मुफ़्त रहता है: स्कैन करें, संपादित करें, मर्ज करें, कंप्रेस करें और देखें — कोई खाता नहीं, कोई विज्ञापन नहीं, कोई सर्वर नहीं।\n\nPro एक-बार की खरीद है जो यह अनलॉक करती है:\n• छिपा हुआ वॉल्ट — 4-अंक PIN वाला निजी फ़ोल्डर\n• OCR टेक्स्ट — पन्नों के अंदर से टेक्स्ट निकालें, कॉपी करें और खोजें\n• PDF लॉक / अनलॉक — स्कैन और डिवाइस PDF को सुरक्षित करें\n• लंबी छवि — सभी पन्नों को एक लंबी छवि में जोड़ें\n• ID / पासपोर्ट क्रॉप प्रीसेट\n• बैच ZIP निर्यात\n\nPro अनलॉक करने के लिए क्राउन बैज टैप करें।</string>
+    <string name="pro_status_test"><!-- review -->इस टेस्ट बिल्ड में अनलॉक किया गया</string>
+    <string name="pro_status_unavailable"><!-- review -->अभी उपलब्ध नहीं है</string>
+    <string name="pro_panel_note"><!-- review -->स्कैनिंग, टेक्स्ट पहचान, खोज, मर्ज और कंप्रेस मुफ़्त हैं और हमेशा मुफ़्त रहेंगे। प्रो एक्सट्रा नीचे सूचीबद्ध हैं।</string>
     <!-- test26 T5.2 (§4.5 document screen) — machine-translated batch, review at G3. -->
     <string name="btn_text">टेक्स्ट</string>
     <string name="more">अधिक</string>
@@ -266,12 +267,11 @@
     <string name="pro_feat_ocr_sub"><!-- review -->Extract, copy and search पाठ inside स्कैन</string>
     <string name="pro_feat_ocr_title"><!-- review -->Lossless OCR Text</string>
     <string name="pro_feat_password"><!-- review -->Password-प्रोtect a PDF</string>
-    <string name="pro_feat_vault_sub"><!-- review -->4-digit PIN सुरक्षित local भंडारण</string>
+    <string name="pro_feat_vault_sub"><!-- review -->स्कैन को 4-अंक पिन के पीछे छिपाएं। फोन पर फाइलें एनक्रिप्टेड नहीं हैं।</string>
     <string name="pro_feat_vault_title"><!-- review -->Hidden Vault</string>
     <string name="pro_feat_zip"><!-- review -->Batch निर्यात करें ZIP</string>
     <string name="pro_feat_zip_sub"><!-- review -->Export multiple दस्तावेज़ at चालूce</string>
     <string name="pro_feat_zip_title"><!-- review -->Batch ZIP Archive</string>
-    <string name="pro_panel_active"><!-- review -->Every Pro extra is unलॉक किया गया in this test build — try them मुफ़्त. In the final ऐप this panel becomes the चालूe-time purchase screen:\n• Password-प्रोtect a PDF\n• ID/passport phoको आकारs\n• Share as lचालूg image\n• Batch निर्यात करें ZIP\n• Text search (OCR)</string>
     <string name="pro_suite_sub"><!-- review -->Vault · OCR · Lock · Lचालूg Image</string>
     <string name="pro_suite_title"><!-- review -->Pro Suite</string>
     <string name="pro_tile_lock_sub"><!-- review -->Password</string>
@@ -376,10 +376,10 @@
     <string name="vault_add_pdf"><!-- review -->Import a उपकरण PDF</string>
     <string name="vault_add_scan"><!-- review -->Move a सहेजा गया स्कैन here</string>
     <string name="vault_add_title"><!-- review -->Add को Hidden Vault</string>
-    <string name="vault_banner_sub"><!-- review -->Private स्कैन hidden से home सूची</string>
+    <string name="vault_banner_sub"><!-- review -->मुख्य सूची से छिपा हुआ। एनक्रिप्टेड नहीं।</string>
     <string name="vault_banner_title"><!-- review -->Hidden Vault (Unलॉक किया गया)</string>
     <string name="vault_change_pin"><!-- review -->PIN</string>
-    <string name="vault_empty_subtitle"><!-- review -->Tap + को move a सहेजा गया स्कैन here or import a उपकरण PDF. Everything inside stays hidden behind your 4-digit PIN.</string>
+    <string name="vault_empty_subtitle"><!-- review -->Add पर टैप करें एक सहेजा गया स्कैन यहाँ ले जाने के लिए या एक PDF आयात करें। पिन दर्ज करने तक स्कैन छिपे रहते हैं।</string>
     <string name="vault_empty_title"><!-- review -->Vault is खाली</string>
     <string name="vault_enter_pin_msg"><!-- review -->Enter your 4-digit PIN को access hidden स्कैन.</string>
     <string name="vault_enter_pin_title"><!-- review -->Unलॉक Hidden Vault</string>
@@ -391,7 +391,7 @@
     <string name="vault_pin_invalid"><!-- review -->Enter a 4-digit number</string>
     <string name="vault_pin_saved"><!-- review -->Vault PIN updated</string>
     <string name="vault_pin_wrong"><!-- review -->Incorrect 4-digit PIN</string>
-    <string name="vault_set_pin_msg"><!-- review -->Choose a 4-digit PIN को छिपाएं private स्कैन behind a लॉक.</string>
+    <string name="vault_set_pin_msg"><!-- review -->एक 4-अंक पिन चुनें। यह निजी स्कैन को सूची से छिपाता है। फाइलें एनक्रिप्टेड नहीं हैं।</string>
     <string name="vault_set_pin_title"><!-- review -->Set 4-Digit Vault PIN</string>
     <string name="vault_title"><!-- review -->Hidden Vault</string>
     <string name="wallpaper_off"><!-- review -->Off, चुनें a phoको</string>

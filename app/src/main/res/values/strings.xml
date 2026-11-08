@@ -233,7 +233,9 @@
     <string name="settings_pro">ScanWhirl Pro</string>
     <string name="settings_pro_summary">Password-protect a PDF, ID photo sizes, long-image share, ZIP export, text search. One payment.</string>
     <string name="settings_pro_title">ScanWhirl Pro</string>
-    <string name="pro_panel_active">Every Pro extra is unlocked in this test build — try them free. In the final app this panel becomes the one-time purchase screen:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export ZIP\n• Text search (OCR)</string>
+    <string name="pro_panel_note">Scanning, text recognition, search, merge and compress are free and stay free. Pro extras are listed below.</string>
+    <string name="pro_status_test">Unlocked in this test build</string>
+    <string name="pro_status_unavailable">Not available yet</string>
     <string name="pro_feat_password">Password-protect a PDF</string>
     <string name="pro_feat_id_sizes">ID / passport photo sizes</string>
     <string name="pro_feat_long_image">Share as long image</string>
@@ -260,11 +262,11 @@
     <string name="pro_suite_sub">Vault · OCR · Lock · Long Image</string>
     <string name="vault_title">Hidden Vault</string>
     <string name="vault_banner_title">Hidden Vault (Unlocked)</string>
-    <string name="vault_banner_sub">Private scans hidden from home list</string>
+    <string name="vault_banner_sub">Hidden from the main list. Not encrypted.</string>
     <string name="vault_exit">Lock</string>
     <string name="vault_change_pin">PIN</string>
     <string name="vault_set_pin_title">Set 4-Digit Vault PIN</string>
-    <string name="vault_set_pin_msg">Choose a 4-digit PIN to hide private scans behind a lock.</string>
+    <string name="vault_set_pin_msg">Choose a 4-digit PIN. It hides private scans from the list. Files are not encrypted.</string>
     <string name="vault_enter_pin_title">Unlock Hidden Vault</string>
     <string name="vault_enter_pin_msg">Enter your 4-digit PIN to access hidden scans.</string>
     <string name="vault_pin_hint">4-digit PIN (e.g. 1234)</string>
@@ -274,7 +276,7 @@
     <string name="vault_moved_in">Moved to Hidden Vault</string>
     <string name="vault_moved_out">Restored from Hidden Vault</string>
     <string name="vault_empty_title">Vault is empty</string>
-    <string name="vault_empty_subtitle">Tap + to move a saved scan here or import a device PDF. Everything inside stays hidden behind your 4-digit PIN.</string>
+    <string name="vault_empty_subtitle">Tap Add to move a saved scan here or import a PDF. Scans stay hidden until you enter your PIN.</string>
     <string name="unlock_pdf_title">Password-Protected PDF</string>
     <string name="unlock_pdf_msg">Enter password for \"%1$s\":</string>
     <string name="unlock_pdf_remove">Unlock permanently</string>
@@ -311,7 +313,6 @@
     <string name="share_text">Share text</string>
     <string name="export_zip">Export ZIP</string>
     <string name="ocr_note">Text search works best on printed pages.</string>
-    <string name="pro_panel_home">ScanWhirl Pro Suite (Unlocked in Test):\n\n• Hidden Vault — 4-digit PIN private folder\n• OCR Text — Extract, copy &amp; search text inside pages\n• Lock / Unlock PDF — Password-protect or unlock any scan\n• Long Image — Stitch all pages into one tall image\n• ID / Passport Crop — Aspect presets inside Crop\n• Batch ZIP — Multi-select scans → Export ZIP\n\nTap \"Pro Suite\" on Home or \"Pro Tools\" inside any scan.</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
     <string name="settings_auto_enhance_summary">Google processing is on when this is on. Off gives a fast, original-looking scan.</string>
     <string name="settings_auto_copy_to_documents">Also save a copy to Documents</string>
@@ -396,7 +397,6 @@
     <string name="vault_imported">Imported into Hidden Vault</string>
 
     <!-- Pro panel: pitch when free + test-only Free/Pro preview. -->
-    <string name="pro_panel_free">ScanWhirl stays free: scan, edit, merge, compress and view — no account, no ads, no server.\n\nPro is a one-time purchase that unlocks:\n• Hidden Vault — 4-digit PIN private folder\n• OCR Text — extract, copy &amp; search text inside pages\n• Lock / Unlock PDF — protect scans and device PDFs\n• Long Image — stitch all pages into one tall image\n• ID / Passport crop presets\n• Batch ZIP export\n\nTap the crown badge to unlock Pro.</string>
     <string name="preview_free_ui">Preview Free UI</string>
     <string name="preview_pro_ui">Preview Pro UI</string>
     <string name="preview_changed">Showing the %1$s UI (test preview)</string>
@@ -436,7 +436,7 @@
 
     <!-- Pro Feature Dossier -->
     <string name="pro_feat_vault_title">Hidden Vault</string>
-    <string name="pro_feat_vault_sub">4-digit PIN protected local storage</string>
+    <string name="pro_feat_vault_sub">Hide scans behind a 4-digit PIN. Files are not encrypted on this phone.</string>
     <string name="pro_feat_ocr_title">Lossless OCR Text</string>
     <string name="pro_feat_ocr_sub">Extract, copy and search text inside scans</string>
     <string name="pro_feat_lock_title">PDF Encryption</string>

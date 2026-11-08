@@ -1,3 +1,5 @@
+> Historical document. Superseded by SCANWHIRL_NEXT.md and docs/NEXT_LOG.md.
+
 # ScanWhirl test26 — Session Handoff (read this first in a new session)
 
 > Purpose: everything a fresh agent needs to continue the test26 redesign without this
