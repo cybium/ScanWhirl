@@ -558,3 +558,66 @@ in Downloads** (the reviewer edits them; the edits are the gate review) → then
 the *revised* Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → G2c (`alpha2c`) → Phase 5.
 
 ---
+
+## G2b review → plan Rev 4 adopted (2026-11-08)
+
+The reviewer wrote **`/mnt/c/Users/Cybium/Downloads/ScanWhirl-G2b-AuditAndNextSteps.md`**
+(a fourth md — the G2b review itself, updated once with Q&A). Adopted exactly like Rev 3.
+
+### Verdict (audit §5)
+
+| Area | Status |
+|---|---|
+| Home screen (P3 + P3b) | ✅ **PASSED** — #14/#15/#16 fixed, polish done |
+| Tools sheet | ✅ **PASSED** — no broken words, opens expanded |
+| Selection mode | ✅ **PASSED** — count unclipped, action bar correct |
+| Search focused (missing at G2) | ⚠️ source correct (`afterTextChanged`, T3.5) — no blocker |
+| Document screen | ⚠️ **DEFERRED to T5.2** — defects **D-A…D-H** catalogued in §2 |
+| OCR tool | ⚠️ **DEFERRED to P6** — spec block appended to §4.7 (O-1…O-7) |
+
+**G2b PASSED (sub-checks Home/Tools/Selection).** → Rev 4 applied → Phase 4 (order re-confirmed:
+T4.7 → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5 optional) → T4.6).
+
+### The two Q&A decisions (asked in plan mode, answered inside the audit)
+
+- **Q1 — T5.3 clash:** the audit's "new T5.3 page-editor task" would collide with the existing
+  T5.3 (= Scan Review dock). **Decision: merge into existing T5.1**, no renumbering. T5.1 sharpened:
+  single row (not 2×2), `minHeight 64dp`, `TextFitTest.page editor` must go green in T5.1.
+  *(Note: audit §2C's line "fix is in Phase 5 (T5.3, new task)" is superseded by this.)*
+- **Q2 — G2c process:** **md-review only, no screenshots** — same as G2b. The plan's old G2c
+  screenshot list is deleted and replaced by the md-review process + the audit's 9-point
+  device checklist (deduped — the audit file has points 1–4 duplicated, and two `## 6` headings;
+  adopt one clean 1–9 list).
+
+### Verification against the tree (3 corrections to the audit, baked into the plan)
+
+1. **§3A "Duplicate has zero hits" is wrong** — `ScanRepository.duplicateDocument(id, suggestedName)`
+   already exists (`ScanRepository.kt:219`), is called from `DocumentViewerActivity:811`, and is
+   covered by `CategoryPersistTest`. T5.2's Duplicate row now says *wire the existing method*, not
+   *write a new one*. **Extract**, however, is genuinely new: today's `saveSelectedPages()` →
+   `downloadPages()` **exports** to Documents; audit's "new doc from ticked pages" needs a new repo
+   method. Audit correct there.
+2. **§3C hi gap is bigger than stated** — `move`/`export` are indeed missing from `values-hi`, but
+   **23 of the 27** test26 strings lack hi entries (only `tool_lock`, `empty_first_scan_hint`,
+   `search_hint`, `select_all` have them), and the legacy backlog is **280** (en 356 / hi 53).
+   → **new task T3.14** (add the 23, one commit), the §6 legend **same-commit rule**, T8.6 rescoped
+   to the 280 legacy strings.
+3. **Menu facts check out** — `menu_viewer.xml` is inflated only by `DocumentViewerActivity`
+   (13 item IDs) → "delete the entire file" in T5.2 is safe.
+
+### What changed in the plan (Rev 4, one docs commit)
+
+Rev 4 header note + STATUS · §2 **D-A…D-H** rows · §4.5 rewritten (Rev 4 wireframe; title tappable
+→ Rename; explicit removed-ID list; `Depends on: T4.6 + T4.8`; R7 drag-handle bullet kept) · §4.6
+single-row 64dp page-editor dock · §4.7 OCR spec-additions block · §5.4 minHeight split (56dp
+Home/Document, 64dp page editor) · §6 legend hi-rule + **T3.14** + T4.4 X-close (§3D) + T5.1
+sharpened + T5.2 rewritten (incl. §3A duplicate/extract, §3E depends-on) + T6.2 manifest/keyboard/
+onDestroy (§3B) + T6.3 cache-file-always + `share_text` (§3B/§3F) + T8.6 rescoped · §8 gotchas
+T4.7→T4.1 collision (§3G) · §10 checklist items 15/16/17 (O-IDs folded into item 7 — audit's item 17
+would have duplicated it; new item 17 = Duplicate/Extract) · §11 write-on-PDF backlog row (§2E) ·
+G2c block rewritten (md-review + 9-point checklist).
+
+**Next:** build mode → **T3.14** (values-hi) → Phase 4 (T4.7 first) → phase-end full build →
+**G2c**: `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
+
+---
