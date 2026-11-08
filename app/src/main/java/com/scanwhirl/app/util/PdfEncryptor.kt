@@ -172,30 +172,78 @@ object PdfEncryptor {
     // ------------------------------------------------------------------
 
     /**
-     * Finds every `stream\n … \nendstream` body together with the number of
-     * the object it belongs to. Bodies are encrypted in place, so offsets
-     * before them remain valid.
+     * Finds every stream body together with the number of the object it
+     * belongs to, by walking the PDF's xref table (not by scanning for
+     * markers inside binary bodies).
+     *
+     * The generator writes xref entries as 20-byte records
+     * (`%010d 00000 n \n`), one per object, ending with the xref offset in
+     * `startxref`. For each in-use object we take the byte region from its
+     * offset to the next larger offset (the xref offset is the final bound),
+     * locate `\nstream\n` inside that region, and read `/Length <n>` from the
+     * dictionary text before `stream`. The body is exactly `length` bytes
+     * starting right after `\nstream\n`.
      */
-    private fun objectStreamBodies(raw: ByteArray): List<Pair<Int, IntRange>> {
+    internal fun objectStreamBodies(raw: ByteArray): List<Pair<Int, IntRange>> {
         val latin = String(raw, Charsets.ISO_8859_1)
         val ranges = mutableListOf<Pair<Int, IntRange>>()
-        var cursor = 0
-        while (true) {
-            val objStart = latin.indexOf(" 0 obj", cursor)
-            val streamStart = latin.indexOf("\nstream\n", objStart)
-            if (objStart < 0 || streamStart < 0) break
-            // Object number walks backwards from the marker to the start of a line.
-            var numStart = objStart - 1
-            while (numStart >= 0 && latin[numStart].isDigit()) numStart--
-            val objNum = latin.substring(numStart + 1, objStart).toIntOrNull()
-            val dataStart = streamStart + 8
-            val dataEnd = latin.indexOf("\nendstream", dataStart)
-            if (dataEnd < 0) break
-            if (objNum != null && dataEnd > dataStart) {
-                ranges += objNum to (dataStart until dataEnd)
+
+        // 1. Locate the xref offset via the last "startxref\n".
+        val sxMarker = "startxref\n"
+        val sxIdx = latin.lastIndexOf(sxMarker)
+        if (sxIdx < 0) return ranges
+        val numStart = sxIdx + sxMarker.length
+        var numEnd = numStart
+        while (numEnd < latin.length && latin[numEnd].isDigit()) numEnd++
+        val xrefOffset = latin.substring(numStart, numEnd).toIntOrNull() ?: return ranges
+
+        // 2. Read xref header: "xref\n0 <count>\n".
+        var p = latin.indexOf('\n', xrefOffset) + 1 // skip past "xref\n"
+        val countLineEnd = latin.indexOf('\n', p)
+        if (countLineEnd < 0) return ranges
+        val countLine = latin.substring(p, countLineEnd).trim()
+        val countParts = countLine.split(' ')
+        val objCount = countParts.last().toIntOrNull() ?: return ranges
+        p = countLineEnd + 1
+
+        // 3. Parse entries: 20 bytes each ("%010d 00000 n \n"). Entry i is
+        // object i; object 0 is always free. We only keep in-use ('n') ones.
+        val offsets = mutableListOf<Pair<Int, Long>>()
+        for (i in 0 until objCount) {
+            if (p + 20 > latin.length) break
+            val entry = latin.substring(p, p + 20)
+            val offStr = entry.substring(0, 10)
+            val useFlag = entry[17] // offset(10) + sp(1) + gen(5) + sp(1) = 17
+            if (i > 0 && useFlag == 'n') { // object 0 is always free
+                val off = offStr.toLongOrNull()
+                if (off != null) offsets += i to off
             }
-            cursor = dataEnd + 4
+            p += 20
         }
+
+        // 4. For each object, region = [offset, nextOffset); last ends at xrefOffset.
+        offsets.sortBy { it.second }
+        for (i in offsets.indices) {
+            val (objNum, startOff) = offsets[i]
+            val endOff = if (i + 1 < offsets.size) offsets[i + 1].second else xrefOffset
+            val regionStart = startOff.toInt().coerceAtLeast(0)
+            val regionEnd = endOff.toInt().coerceAtMost(latin.length)
+            if (regionStart >= regionEnd) continue
+
+            val region = latin.substring(regionStart, regionEnd)
+            val streamRel = region.indexOf("\nstream\n")
+            if (streamRel < 0) continue
+            val streamIdx = regionStart + streamRel
+
+            // /Length <n> in the dictionary text before stream.
+            val dictText = latin.substring(regionStart, streamIdx)
+            val lengthMatch = Regex("/Length\\s*(\\d+)").find(dictText)
+            val length = lengthMatch?.groupValues?.get(1)?.toIntOrNull() ?: continue
+
+            val dataStart = streamIdx + 8 // right after "\nstream\n"
+            ranges += objNum to (dataStart until dataStart + length)
+        }
+
         return ranges
     }
 
