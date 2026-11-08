@@ -781,3 +781,56 @@ Suite after: **286 tests / 2 failures = only the documented TextFit reds** (281 
 `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
 
 ---
+
+### T4.3 Change category from Home ✅ (`9e531ab`)
+
+**Plan conflict found & resolved (owner decision):** T3.7 says "Long-press or `Select` enters
+selection mode" (built, 8 green assertions) while T4.3 says "Long-press quick-actions sheet: Rename,
+Move to category, Share, Delete" — one gesture, two behaviors. Asked the owner mid-build: **the
+quick-actions sheet wins**; selection mode is entered via the `Select` button only. The 8 long-press
+assertions were updated in this same commit to `Select` + tap (plus `UiSmokeTest`'s test renamed to
+`select button enters selection mode…`, and the two "Move is disabled until T4.3" assertions flipped
+to enabled — §4.2's "Move disabled until T4.3" rule is now discharged).
+
+**Red-proof first** (test-only, existing symbols only so it compiled pre-fix): all 5 new
+`HomeCategoryActionsTest` cases failed exactly as designed — `T4.3: long-press must open the
+quick-actions sheet (not selection mode)`, `the category chip must open the picker`, NPE/no-dialog
+on `Move must open the category picker`, and the two full-flow cases died at the first missing
+dialog; `SelectionBarTest` baseline stayed 5/5 green.
+
+Built:
+- **Card chip → picker** (`ScanListAdapter` gets a 5th `onCategory` callback; `catChip` gets a click
+  listener that forwards to `onClick` while selecting so no dead zone appears) →
+  `CategoryPickerSheet.show(this, doc.category) { repo.setCategory(id, cat); refreshList() }`.
+- **Long-press → `sheet_quick_actions.xml`** (`BottomSheetDialog`, title = doc name, four static
+  rows: Rename / Move to category / Share in `text_hologram_hi`, Delete in `laser_danger`; each
+  dismisses the sheet first). Rename = `SwDialog.input` prompt → `repo.renameDocument` → refresh;
+  Share = `ShareUtils.share`; Delete = `confirmDelete` (the T4.8 copy-aware confirm, refactored from
+  `confirmDeleteSelected` to take an id list — single-doc confirm gets `delete_title` +
+  `delete_message`, bulk keeps the plurals); Move = `moveCategory`.
+- **Bulk Move** (`btnSelMove` wiring + `isEnabled = n > 0` per §4.2): picker (current = null, no
+  check row) → `repo.setCategory(ids, cat)` → exit selection → toast `moved_n_to_cat`
+  ("Moved 1 to Study"). Single-card moves skip the toast (the chip visibly changes).
+- **Strings:** `move_to_category` + `moved_n_to_cat` en+hi in the same commit; also filled the
+  pre-existing English-only hi gaps for `rename`, `rename_title`, `share_pdf` because the new sheet
+  shows them (hi review comment).
+
+**Test-run gotcha (§8-style):** entering selection via `btnSelect` re-lays out the list, so
+`list.findViewHolderForAdapterPosition(0)` right after the click returns **null** — every migrated
+site now captures the card view *before* clicking `Select` (the pattern the already-passing
+`UiSmokeTest.select button…` used). One iteration needed for HomeScreenTest's second entry point in
+the same test.
+
+**Tests:** `HomeCategoryActionsTest` (8): 5 red-proofed then green (long-press sheet · chip → picker ·
+Move → picker · bulk move = category Study + selection exited + toast "Moved 1 to Study" · chip move
+= Receipts) + 3 guards added with the fix (sheet rows carry `rename`/`move_to_category`/`share_pdf`/
+`delete` labels + Move row opens the picker · quick-action rename saves "Physics notes" ·
+quick-action delete removes the doc after confirm).
+
+Suite after: **294 tests / 2 failures = only the documented TextFit reds** (286 + 8 new).
+
+**Next:** **T4.4** (QuickSortQueue + sheet + X-close, `QuickSortQueueTest`: skip n → close →
+`remaining == total − n`) → (T4.5 optional) → T4.6 → phase-end full build → **G2c**:
+`alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
+
+---

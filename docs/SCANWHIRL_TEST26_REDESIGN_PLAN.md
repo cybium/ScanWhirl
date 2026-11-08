@@ -34,10 +34,11 @@
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
-> **STATUS (2026-11-08):** T0–T3.14 + **T4.7, T4.8, T4.1, T4.2** committed (`abdbabd`, `e518c75`, `2685ff5`, `b8e40c1`, `bb70f81`); **G2b PASSED; Rev 4 adopted.**
-> Suite now **286 tests / 2 known-red TextFit** (`home` flips green outside afternoon hours — see log T3.12).
-> Next: **build mode continues Phase 4** (order confirmed Rev 3/Rev 4: **T4.3 → T4.4 → T4.6**;
-> T4.5 optional/slip) →
+> **STATUS (2026-11-08):** T0–T3.14 + **T4.7, T4.8, T4.1, T4.2, T4.3** committed (`abdbabd`, `e518c75`, `2685ff5`, `b8e40c1`, `bb70f81`, `9e531ab`); **G2b PASSED; Rev 4 adopted.**
+> Suite now **294 tests / 2 known-red TextFit** (`home` flips green outside afternoon hours — see log T3.12).
+> Next: **build mode continues Phase 4** (order confirmed Rev 3/Rev 4: **T4.4 → T4.6**;
+> T4.5 optional/slip; T4.3 resolved the T3.7-vs-T4.3 long-press conflict — owner chose the
+> quick-actions sheet, selection enters via `Select`) →
 > **G2c = md-review only, NO screenshots** (deliverables `alpha2c.apk` + source zip + 3 mds → Downloads → STOP;
 > reviewer's md edits against the 9-point checklist embedded in the G2c block below are the review) → Phase 5.
 > **How to continue in a new session:** read `docs/TEST26_HANDOFF.md`, then this file's **PHASE 4** section, then §4.5
@@ -597,7 +598,8 @@ ring), `Vault` (right, lock vector). `Tools` opens `BottomSheetDialog` from `she
 `ProGate`. **Delete** the 4 tool cards, `proSuiteCard`, `proSuiteChevron` and their toggle
 code. `Vault` calls `VaultFlow.openWithPin()`.
 
-**T3.7 Selection mode.** Long-press or `Select` enters it. Contextual header:
+**T3.7 Selection mode.** Long-press or `Select` enters it. *(Amended at T4.3 by owner decision:
+long-press now opens the quick-actions sheet — `Select` alone enters selection.)* Contextual header:
 `X · N selected · Move · Merge · Export · Delete`. `Move` opens the category picker (P4 T4.3).
 Hide the bottom bar while selecting. Keep the existing Export-ZIP and delete-confirm logic.
 
@@ -690,7 +692,9 @@ Re-suggest live as the name changes **until the user taps a chip by hand**. Pass
 current, onPick)`: five coloured rows (+ Unsorted when current is Unsorted). Used by T4.3, T4.4, T4.6.
 
 **T4.3 Change category from Home.** Card category chip is clickable → picker → `repo.setCategory`.
-Long-press quick-actions sheet: Rename, Move to category, Share, Delete. Bulk `Move` in selection mode
+Long-press quick-actions sheet: Rename, Move to category, Share, Delete. *(Owner decision at build
+(Rev 4): this sheet **replaces** T3.7's long-press → selection entry — `Select` is what enters
+selection now; the 8 long-press test assertions were migrated in `9e531ab`.)* Bulk `Move` in selection mode
 → picker → `repo.setCategory(ids, cat)` → exit selection → toast "Moved N to Study".
 
 **T4.4 Quick Sort.** Pure `util/QuickSortQueue.kt` (`current()`, `pick(category)`, `skip()`,
