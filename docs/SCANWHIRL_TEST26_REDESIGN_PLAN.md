@@ -34,11 +34,11 @@
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
-> **STATUS (2026-11-08):** T0–T3.14 + **T4.7, T4.8, T4.1, T4.2, T4.3, T4.4** committed (`abdbabd`, `e518c75`, `2685ff5`, `b8e40c1`, `bb70f81`, `9e531ab`, `246a5ca`); **G2b PASSED; Rev 4 adopted.**
-> Suite now **305 tests / 2 known-red TextFit** (`home` flips green outside afternoon hours — see log T3.12).
-> Next: **build mode continues Phase 4** (order confirmed Rev 3/Rev 4: **T4.5 skipped [optional] → T4.6**;
-> T4.3 resolved the T3.7-vs-T4.3 long-press conflict — owner chose the
-> quick-actions sheet, selection enters via `Select`) →
+> **STATUS (2026-11-08):** T0–T3.14 + **T4.7, T4.8, T4.1, T4.2, T4.3, T4.4, T4.6** committed (`abdbabd`, `e518c75`, `2685ff5`, `b8e40c1`, `bb70f81`, `9e531ab`, `246a5ca`, `99fa701`); **G2b PASSED; Rev 4 adopted.**
+> Suite now **307 tests / 2 known-red TextFit** (`home` flips green outside afternoon hours — see log T3.12).
+> Next: **Phase 4 complete** (T4.5 skipped as optional per plan; T4.3 resolved the T3.7-vs-T4.3
+> long-press conflict — owner chose the quick-actions sheet, selection enters via `Select`) →
+> phase-end full build →
 > **G2c = md-review only, NO screenshots** (deliverables `alpha2c.apk` + source zip + 3 mds → Downloads → STOP;
 > reviewer's md edits against the 9-point checklist embedded in the G2c block below are the review) → Phase 5.
 > **How to continue in a new session:** read `docs/TEST26_HANDOFF.md`, then this file's **PHASE 4** section, then §4.5

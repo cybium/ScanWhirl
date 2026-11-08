@@ -20,7 +20,7 @@ categories, zero clipped text, OCR editor, Earth removed in P7), ship
 `versionCode 26` / `1.1.1-test26`. Owner installs each gate APK and sends screenshots
 before the next phase starts.
 
-**Current position (2026-11-08): G2b PASSED → plan Rev 4 adopted → build mode underway: T3.14 (`abdbabd`), T4.7 (`e518c75`), T4.8 (`2685ff5`), T4.1 (`b8e40c1`), T4.2 (`bb70f81`), T4.3 (`9e531ab`) and T4.4 (`246a5ca`, Quick Sort: pure `QuickSortQueue`, `sheet_quick_sort.xml` with the Rev 4 §3D X-close, Home nudge "N unsorted · Quick sort ›", 9th Tools tile, `QuickSortQueueTest` 6 + `QuickSortTest` 5) are committed; suite 305 tests / 2 known-red TextFit. Next work = **T4.5 skipped (optional per plan)** → T4.6 (doc chip → picker, remove the old "Categorize" dialog) → phase-end full build → G2c (`alpha2c` + source zip + 3 mds → Downloads → STOP, md-review no screenshots).**
+**Current position (2026-11-08): G2b PASSED → plan Rev 4 adopted → build mode underway: T3.14 (`abdbabd`), T4.7 (`e518c75`), T4.8 (`2685ff5`), T4.1 (`b8e40c1`), T4.2 (`bb70f81`), T4.3 (`9e531ab`), T4.4 (`246a5ca`) and T4.6 (`99fa701`, doc screen category chip → CategoryPickerSheet, old "Categorize" list dialog removed, D-F: overflow item stays till T5.2, `Phase5ScreensTest` 10) are committed; T4.5 skipped (optional per plan); suite 307 tests / 2 known-red TextFit. Next work = phase-end full build (`test assembleRelease -PtestBuild --no-daemon --continue`) → G2c (`alpha2c.apk` + refreshed source zip + 3 mds → Downloads → STOP, md-review no screenshots; the reviewer's md edits against the 9-point G2c checklist are the review).**
 
 ## 2. Locations
 
@@ -172,7 +172,7 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
 2. ~~**G2b**~~ ✅ DONE — reviewed via `ScanWhirl-G2b-AuditAndNextSteps.md`, PASSED (sub-checks),
    **Rev 4 adopted** into the plan/log/handoff (one docs commit).
 3. **Phase 4 — plan review DONE (order re-confirmed Rev 4), now build mode:**
-   **T3.14** ✅ (`abdbabd`), **T4.7** ✅ (`e518c75`), **T4.8** ✅ (`2685ff5`), **T4.1** ✅ (`b8e40c1`), **T4.2** ✅ (`bb70f81`), **T4.3** ✅ (`9e531ab`) and **T4.4** ✅ (`246a5ca`) are done; **T4.5 skipped** (optional per plan); then **T4.6**.
+   **T3.14** ✅ (`abdbabd`), **T4.7** ✅ (`e518c75`), **T4.8** ✅ (`2685ff5`), **T4.1** ✅ (`b8e40c1`), **T4.2** ✅ (`bb70f81`), **T4.3** ✅ (`9e531ab`), **T4.4** ✅ (`246a5ca`) and **T4.6** ✅ (`99fa701`) are done (**T4.5 skipped** as optional); then the **phase-end full build** and **G2c delivery** (STOP afterwards).
    After T4.1: grep `Prefs.autoCopyToDocuments` in `saveAndFinish` + rerun `ExportHygieneTest` (§8 gotcha).
    Any new string → `values-hi` in the same commit.
 4. **G2c (md-review, NO screenshots):** deliverables = `alpha2c.apk` + refreshed source zip + the three

@@ -887,9 +887,39 @@ sheet not showing). `HomeScreenTest`'s tools-sheet test updated 8 → 9 tiles in
 
 Suite after: **305 tests / 2 failures = only the documented TextFit reds** (294 + 11 new).
 
-**Next:** **T4.5 skipped** (optional per plan — "Skip if it slips; the rest of P4 stands alone";
-no OCR `Suggest` button in the queue) → **T4.6** (doc chip → picker, remove the old "Categorize"
-dialog in `DocumentViewerActivity`) → phase-end full build → **G2c**: `alpha2c.apk` + source zip +
-3 mds → Downloads → **STOP** (md-review, no screenshots).
+**Next:** **T4.6** (doc chip → picker, remove the old "Categorize" dialog) → phase-end full build →
+**G2c**: `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
+
+---
+
+### T4.6 Document screen chip ✅ (`99fa701`)
+
+**Red-proof first** (existing symbols only: `R.id.docCategoryChip`, `R.id.pickerRows`): both new
+cases failed exactly as designed — `T4.6: the chip must open the category picker` (the chip had no
+click listener) and `the picker must be open` on the full recategorise flow; the other 8
+`Phase5ScreensTest` cases stayed green throughout.
+
+Built:
+- `binding.docCategoryChip.setOnClickListener { promptCategorize() }` in `onCreate` (the chip has
+  been display-only since test25 Phase 5C).
+- `promptCategorize()` reimplemented on `CategoryPickerSheet.show(this, doc.category) { … }` — the
+  old `SwDialog.sheet(…).setSingleChoiceItems` list dialog is **gone**; a pick saves on IO +
+  `reloadDocument()` (the chip's repaint is the confirmation — no toast, same decision as T4.3's
+  single-card moves). Orphaned string `categorize_title` removed from `values` (it never had a hi
+  entry, so nothing to mirror).
+- **D-F respected:** the overflow `Categorize` item (`action_categorize`) *stays* and now opens the
+  picker too — a deliberate duplicate of the chip until **T5.2** removes the overflow entry (plan
+  D-F + T5.2; the More sheet keeps `promptCategorize` as its handler).
+
+**Tests:** `Phase5ScreensTest` +2 → 10 in the class: `document category chip opens the picker`
+(chip → dialog carrying `pickerRows`) · `picker choice recategorises the document and repaints the
+chip` (RECEIPTS pick persists on the doc + chip becomes "● RECEIPTS"). Both red first, green after.
+
+Suite after: **307 tests / 2 failures = only the documented TextFit reds** (305 + 2 new).
+
+**Next:** **Phase 4 complete** (T4.5 skipped as optional) → phase-end full build
+(`test assembleRelease -PtestBuild --continue`, both variants) → **G2c**: `alpha2c.apk` + refreshed
+source zip + 3 mds → Downloads → **STOP** (md-review only, no screenshots — the reviewer's md edits
+against the 9-point G2c checklist are the review).
 
 ---
