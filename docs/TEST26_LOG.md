@@ -752,4 +752,32 @@ Suite after: **281 tests / 2 failures = only the documented TextFit reds** (278 
 **Next:** **T4.2** (CategoryPickerSheet) → T4.3 → T4.4 → (T4.5) → T4.6 → phase-end full build →
 **G2c**: `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
 
+### T4.2 Category picker sheet ✅ (`bb70f81`)
+
+Additive (the sheet cannot compile pre-fix) → no runnable red-proof; guard = new
+`CategoryPickerSheetTest` + existing suite.
+
+Built:
+- **`sheet_category_picker.xml`**: title (`pickerTitle` → `category_picker_title`) + empty
+  `pickerRows` container on `bg_sheet_glass` (same shape as `sheet_tools`).
+- **`CategoryPickerSheet.show(activity, current, onPick)`**: a `BottomSheetDialog` whose rows are
+  built in code (the Unsorted row is conditional): **five coloured rows** from `CategoryRules.ALL`
+  (dot = `GradientDrawable` oval tinted `CategoryStyle.color`, label = `CategoryRules.label` = the
+  value itself per R9, `ic_check` visible only on the `current` row), plus **Unsorted first when
+  `current == UNSORTED`** (same order as Home's filter rail). Row `tag` = the stored value; tap →
+  `onPick(cat)` → `dismiss()`. No new behaviour wired yet — T4.3/T4.4/T4.6 are the consumers.
+- **Strings:** `category_picker_title` en + hi in the same commit (hi review comment).
+- **Tests** `CategoryPickerSheetTest` (5): current=Study → exactly `ALL` (no Unsorted) · current=
+  Unsorted → `[Unsorted] + ALL`, and `current = null` → no Unsorted row · check visible only on the
+  current row (all 6/5 rows) · tap Receipts → `onPick` reports it and the sheet closes · labels ==
+  `CategoryRules.label(tag)` and dot colour == `CategoryStyle.color(tag)` + title string matches.
+  (One iteration: the title assertion originally looked in the activity, not the dialog — fixed to
+  `dialog.findViewById`.)
+
+Suite after: **286 tests / 2 failures = only the documented TextFit reds** (281 + 5 new).
+
+**Next:** **T4.3** (Home chip → picker → `setCategory`; long-press quick-actions; bulk Move +
+"Moved N to Study" toast + Home test) → T4.4 → (T4.5) → T4.6 → phase-end full build → **G2c**:
+`alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
+
 ---

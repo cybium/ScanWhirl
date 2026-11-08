@@ -34,9 +34,9 @@
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
-> **STATUS (2026-11-08):** T0–T3.14 + **T4.7, T4.8, T4.1** committed (`abdbabd`, `e518c75`, `2685ff5`, `b8e40c1`); **G2b PASSED; Rev 4 adopted.**
-> Suite now **281 tests / 2 known-red TextFit** (`home` flips green outside afternoon hours — see log T3.12).
-> Next: **build mode continues Phase 4** (order confirmed Rev 3/Rev 4: **T4.2 → T4.3 → T4.4 → T4.6**;
+> **STATUS (2026-11-08):** T0–T3.14 + **T4.7, T4.8, T4.1, T4.2** committed (`abdbabd`, `e518c75`, `2685ff5`, `b8e40c1`, `bb70f81`); **G2b PASSED; Rev 4 adopted.**
+> Suite now **286 tests / 2 known-red TextFit** (`home` flips green outside afternoon hours — see log T3.12).
+> Next: **build mode continues Phase 4** (order confirmed Rev 3/Rev 4: **T4.3 → T4.4 → T4.6**;
 > T4.5 optional/slip) →
 > **G2c = md-review only, NO screenshots** (deliverables `alpha2c.apk` + source zip + 3 mds → Downloads → STOP;
 > reviewer's md edits against the 9-point checklist embedded in the G2c block below are the review) → Phase 5.
