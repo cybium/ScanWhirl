@@ -112,42 +112,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 2. OCR -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_ocr"
-                app:tint="@color/gold_pro_primary" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="14dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_ocr_title"
-                    android:textAppearance="@style/TextAppearance.SW.Card.Title"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_ocr_sub"
-                    android:textAppearance="@style/TextAppearance.SW.Meta" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 3. Lock / Unlock -->
+        <!-- 2. Lock / Unlock -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -29,10 +29,10 @@ import java.util.UUID
 
 class ScanRepository(private val context: Context) {
 
-    private val docsDir: File
+    internal val docsDir: File
         get() = File(context.filesDir, "documents").apply { mkdirs() }
 
-    private val ocrStore: OcrStore
+    internal val ocrStore: OcrStore
         get() = OcrStore(docsDir)
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
@@ -56,7 +56,7 @@ class ScanRepository(private val context: Context) {
     fun getDocument(id: String): ScanDocument? =
         loadDocument(File(docsDir, id))
 
-    private fun loadDocument(dir: File): ScanDocument? {
+    internal fun loadDocument(dir: File): ScanDocument? {
         if (!dir.exists() || !dir.isDirectory) return null
         val meta = File(dir, "meta.txt")
         if (!meta.exists()) return null

@@ -236,6 +236,7 @@
     <string name="ocr_fix_spaces"><!-- review -->Fix spaces</string>
     <string name="ocr_join_lines"><!-- review -->Join lines</string>
     <string name="ocr_note"><!-- review -->Text search works best चालू printed पृष्ठ.</string>
+    <string name="signal_reading_text"><!-- review -->आपके स्कैन पर पाठ पढ़ रहा है</string>
     <string name="ocr_page_label"><!-- review -->Page %d</string>
     <string name="ocr_remove_gaps"><!-- review -->Remove gaps</string>
     <string name="ocr_running"><!-- review -->Extracting पाठ से पृष्ठ…</string>
@@ -276,9 +277,6 @@
     <string name="pro_feat_long_image"><!-- review -->Share as lचालूg image</string>
     <string name="pro_feat_long_sub"><!-- review -->Export all पृष्ठ as a single tall image</string>
     <string name="pro_feat_long_title"><!-- review -->Lचालूg Image Stitching</string>
-    <string name="pro_feat_ocr"><!-- review -->Text search (OCR)</string>
-    <string name="pro_feat_ocr_sub"><!-- review -->Extract, copy and search पाठ inside स्कैन</string>
-    <string name="pro_feat_ocr_title"><!-- review -->Lossless OCR Text</string>
     <string name="pro_feat_password"><!-- review -->Password-प्रोtect a PDF</string>
     <string name="pro_feat_vault_sub"><!-- review -->स्कैन को 4-अंक पिन के पीछे छिपाएं। फोन पर फाइलें एनक्रिप्टेड नहीं हैं।</string>
     <string name="pro_feat_vault_title"><!-- review -->Hidden Vault</string>

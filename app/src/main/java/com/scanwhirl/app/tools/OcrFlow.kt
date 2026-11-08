@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.OcrEditorActivity
@@ -34,11 +35,7 @@ class OcrFlow(
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    if (!repo.hasOcr(doc.id) || repo.ocrDoc(doc.id).values.all { it.isBlank() }) {
-                        repo.buildOcr(doc.id)
-                    }
-                }
+                val failed = ScanWhirlApp.from(activity).indexer.indexNow(doc.id)
                 progress.dismiss()
                 // Doc-backed: editor reads/writes repo.ocrDoc(doc.id).
                 val intent = Intent(activity, OcrEditorActivity::class.java).apply {

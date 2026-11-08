@@ -582,12 +582,8 @@ class ScanReviewActivity : BaseActivity() {
                     }
                     Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
                     startActivity(DocumentViewerActivity.intent(this@ScanReviewActivity, doc.id))
-                    // Index the pages for Pro text search in the background.
-                    if (ProGate.isPro(this@ScanReviewActivity)) {
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            try { repo.buildOcr(doc.id) } catch (_: Exception) { }
-                        }
-                    }
+                    // Index the pages for text search in the background (Free, survives screen close).
+                    ScanWhirlApp.from(this@ScanReviewActivity).indexer.enqueue(doc.id)
                     finish()
                 } catch (e: Exception) {
                     saving = false

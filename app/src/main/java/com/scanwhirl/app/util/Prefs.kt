@@ -16,6 +16,7 @@ object Prefs {
     private const val KEY_WALLPAPER_URI = "wallpaper_uri"
     private const val KEY_WALLPAPER_ON = "wallpaper_on"
     private const val KEY_PICKED = "picked_pdfs"
+    private const val KEY_INDEX_BACKFILL_DONE = "index_backfill_done"
 
     const val THEME_LIGHT = "light"
     const val THEME_DARK = "dark"
@@ -77,6 +78,12 @@ object Prefs {
     fun addPickedPdf(c: Context, uri: String) {
         sp(c).edit().putStringSet(KEY_PICKED, pickedPdfs(c) + uri).apply()
     }
+
+    /** True once the one-time library OCR backfill has been enqueued. Default false. */
+    fun indexBackfillDone(c: Context): Boolean =
+        sp(c).getBoolean(KEY_INDEX_BACKFILL_DONE, false)
+    fun setIndexBackfillDone(c: Context, v: Boolean) =
+        sp(c).edit().putBoolean(KEY_INDEX_BACKFILL_DONE, v).apply()
 
     private const val KEY_VAULT_PIN = "vault_pin_sha256"
 

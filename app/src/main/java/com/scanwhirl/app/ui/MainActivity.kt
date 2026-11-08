@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.ContextThemeWrapper
+import android.os.PowerManager
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.Menu
@@ -27,7 +28,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -61,6 +64,7 @@ import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.SwMotion
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -236,6 +240,15 @@ class MainActivity : BaseActivity(), HomeHost {
 
         // test26 T8.1: signal dot next to the wordmark.
         signalDot = binding.signalDot
+
+        // T9: reflect the indexer state on the signal dot while the activity is started.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                ScanWhirlApp.from(this@MainActivity).indexer.state.collect {
+                    updateSignalDot()
+                }
+            }
+        }
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
@@ -420,7 +433,26 @@ class MainActivity : BaseActivity(), HomeHost {
             buildChipRail()
             applyList()
         }
+        // T9: resume indexing for any document left pending (e.g. after a process death).
+        val app = application as ScanWhirlApp
+        app.indexer.resumePending()
+        // Once-per-install library backfill: mark every document without ocr.txt,
+        // then resume the indexer, unless the device is in power-save mode.
+        if (!Prefs.indexBackfillDone(this) && !isPowerSaveMode()) {
+            val docsDir = app.repository.docsDir
+            docsDir.listFiles { f -> f.isDirectory }
+                ?.forEach { dir ->
+                    if (!File(dir, "ocr.txt").exists()) {
+                        app.repository.ocrStore.markPending(dir.name)
+                    }
+                }
+            app.indexer.resumePending()
+            Prefs.setIndexBackfillDone(this, true)
+        }
     }
+
+    private fun isPowerSaveMode(): Boolean =
+        (getSystemService(android.content.Context.POWER_SERVICE) as PowerManager).isPowerSaveMode
 
     override fun workStarted() {
         backgroundWorkCount++
@@ -432,9 +464,12 @@ class MainActivity : BaseActivity(), HomeHost {
         updateSignalDot()
     }
 
-    /** test26 T8.1: light/dim the signal dot; breathe only when ambient allowed. */
+    /** test26 T8.1 / T9: light/dim the signal dot; breathe only when ambient allowed.
+     *  Lit while any background work is running or the indexer has an active document. */
     private fun updateSignalDot() {
-        val active = backgroundWorkCount > 0
+        val indexing = ScanWhirlApp.from(this@MainActivity).indexer.state.value.docId != null
+        val active = backgroundWorkCount > 0 || indexing
+        signalDot.contentDescription = getString(R.string.signal_reading_text)
         signalDot.visibility = if (active) View.VISIBLE else View.GONE
         if (active) {
             startSignalBreath()

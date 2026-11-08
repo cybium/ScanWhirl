@@ -186,3 +186,27 @@
 **Files:** `model/OcrPage.kt` (new), `store/OcrStore.kt` (new), `util/OcrEngine.kt`, `store/ScanRepository.kt`; tests: `store/OcrStoreTest.kt` (new), `store/OcrConsistencyTest.kt` (new), `util/OcrEngineTest.kt` (new), `store/ScanRepositoryTest.kt`, `util/OcrEditorTest.kt`, `ui/TextFitTest.kt`, `ui/UiSmokeTest.kt`, `ui/HomeScreenTest.kt`. Callers unchanged: `tools/OcrFlow.kt`, `ui/ScanReviewActivity.kt`, `ui/MainActivity.kt` still use restored `buildOcr` (removed in Task 9).
 
 **Test count:** 344 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 9 — OcrIndexer: background text recognition that survives screens; OCR becomes Free
+
+**Changes:**
+- `store/OcrIndexer.kt` (new): `OcrIndexer(repo, scope, recognize, autoRun, afterIndexed)` with `StateFlow<IndexState>` (`IndexState(docId, done, total, failedPages)`; idle when `docId == null`). `enqueue(docId)` marks `ocr_pending` and queues (deduplicated against queue + in-flight); `resumePending()` re-enqueues every doc directory with `ocr_pending` marker, newest first; `indexNow(docId)` runs the processing pass under a `Mutex`, skipping pages already present in the store (resume-safe), calling `OcrStore.putPage` immediately per page (partial progress survives), counting page-level failures (keys stay absent, never stored as empty text), clearing `ocr_pending`, then invoking `afterIndexed(docId)`. Single consumer coroutine in `scope` processes one doc at a time; `autoRun = false` (Robolectric) makes `enqueue` write the marker only.
+- `ScanWhirlApp.kt`: added `appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)`, `lateinit var indexer: OcrIndexer` (public setter, replaced by tests), created in `onCreate` with `autoRun = Build.FINGERPRINT != "robolectric"`, plus `companion fun from(context: Context)`.
+- `ScanReviewActivity.saveAndFinish`: replaced `ProGate`-gated `lifecycleScope { repo.buildOcr(doc.id) }` with `ScanWhirlApp.from(this).indexer.enqueue(doc.id)` before `finish()`.
+- `MainActivity.refreshList()`: calls `indexer.resumePending()` at the end, plus once-per-install library backfill (when `Prefs.indexBackfillDone` is false and device not in power-save mode, mark pending for every doc without `ocr.txt`, then `resumePending()`, set flag; power-save leaves flag false for next launch). Collects `indexer.state` via `repeatOnLifecycle(STARTED)`; signal dot lit while `backgroundWorkCount > 0 || indexer.state.docId != null`; content description `signal_reading_text`.
+- `DocumentViewerActivity.runTextFlow()`: removed `ProGate.isPro` gate — OCR is Free, always calls `ocrFlow.runOcrForScan(doc)`.
+- `OcrFlow.runOcrForScan(doc)`: replaced `repo.buildOcr(doc.id)` with `ScanWhirlApp.from(activity).indexer.indexNow(doc.id)`; shows `ocr_pages_failed` toast when `failed > 0`.
+- `Prefs.kt`: added `indexBackfillDone` / `setIndexBackfillDone` (default false).
+- `dialog_pro_panel.xml`: removed the OCR feature row (2. OCR).
+- `strings.xml` / `values-hi/strings.xml`: removed `pro_feat_ocr`, `pro_feat_ocr_title`, `pro_feat_ocr_sub` (en + hi); added `signal_reading_text` and `ocr_pages_failed` (en + hi, `<!-- review -->`).
+- New tests: `store/OcrIndexerTest.kt` (6 tests: enqueue survives caller cancellation, resumePending recognizes only missing page, recognizer failure counts + clears marker, dedupe enqueue, autoRun=false marker-only, afterIndexed callback).
+
+**Bug found and fixed during this task:** none — all new indexer tests pass on first run. `buildOcr` callers (`MainActivity:1185`, `ScanReviewActivity:588`, `OcrFlow:39`) were updated in this task; `buildOcr` itself remains in `ScanRepository` (still used by `OcrFlow.runOcrForScan` via `indexer.indexNow` — no direct `buildOcr` callers remain in production code).
+
+**Acceptance:** enqueue completes even when caller scope is cancelled; resumePending recognizes only missing page; recognizer failure leaves page absent, counts failure, clears marker; enqueue twice = one pass; autoRun=false writes marker only; afterIndexed runs once per pass; no Activity/Context references in OcrIndexer fields (only Application context via ScanRepository).
+
+**Files:** `store/OcrIndexer.kt` (new), `ScanWhirlApp.kt`, `ui/ScanReviewActivity.kt`, `ui/MainActivity.kt`, `ui/DocumentViewerActivity.kt`, `tools/OcrFlow.kt`, `util/Prefs.kt`, `res/layout/dialog_pro_panel.xml`, `res/values/strings.xml`, `res/values-hi/strings.xml`; tests: `store/OcrIndexerTest.kt` (new).
+
+**Test count:** 350 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).

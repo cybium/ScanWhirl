@@ -557,7 +557,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      */
     private fun runTextFlow() {
         val doc = document ?: return
-        if (ProGate.isPro(this)) ocrFlow.runOcrForScan(doc) else showProPanel()
+        ocrFlow.runOcrForScan(doc)
     }
 
     /**
