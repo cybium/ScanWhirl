@@ -235,8 +235,10 @@ class TextFitTest {
     }
 
     private fun describe(v: View): String {
-        val text = (v as TextView).text?.toString().orEmpty()
-            .ifEmpty { v.hint?.toString().orEmpty() }
+        // Any view may land here when it overflows its parent (not just
+        // TextViews) — a blind cast masked real problems with a crash (T3.11).
+        val tv = v as? TextView
+        val text = tv?.text?.toString().orEmpty().ifEmpty { tv?.hint?.toString().orEmpty() }
         val shown = if (text.length > 40) text.take(40) + "…" else text
         return "[${v.javaClass.simpleName} id=${idName(v)} \"$shown\"]"
     }
@@ -310,6 +312,48 @@ class TextFitTest {
         assertTrue(message, problems.isEmpty())
     }
 
+    /**
+     * T3.11 (complaint #16): a tile label may wrap onto a second line but
+     * must never break **inside a word** (`Compres` / `s` happened on device
+     * while every check above stayed green — ellipsis/height checks cannot
+     * see a mid-word line break). Every `tile_*` label's longest word must
+     * fit between the view's paddings, measured with the label's own TextPaint
+     * at the current font scale. Zero width is reported, never passed.
+     */
+    private fun collectTileWordProblems(root: View, name: String) {
+        val scale = RuntimeEnvironment.getFontScale()
+        val label = "$name words @ scale $scale"
+        fun walk(v: View) {
+            if (v is TextView && v.id != View.NO_ID) {
+                val entry = try {
+                    v.resources.getResourceEntryName(v.id)
+                } catch (_: Exception) {
+                    ""
+                }
+                // All tile labels share the id `tileLabel` (the container ids
+                // are tile_edit, tile_ocr … — matching those on a TextView
+                // never fires; the forced-narrow red-proof caught exactly that).
+                if (entry == "tileLabel" && v.isShown) {
+                    if (v.width == 0) {
+                        problems += "$label: ${describe(v)} has zero width — longest-word check would be vacuous"
+                    } else {
+                        val avail = v.width - v.totalPaddingLeft - v.totalPaddingRight
+                        val longest = v.text.toString()
+                            .split(Regex("\\s+")).filter { it.isNotEmpty() }
+                            .maxOfOrNull { v.paint.measureText(it) } ?: 0f
+                        if (longest > avail + 0.5f) {
+                            problems +=
+                                "$label: ${describe(v)} longest word needs ${longest.toInt()}px but only " +
+                                "${avail}px fit between paddings (word would break across lines)"
+                        }
+                    }
+                }
+            }
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(root)
+    }
+
     // --- screens ------------------------------------------------------------
 
     @Test
@@ -335,7 +379,10 @@ class TextFitTest {
                     activity.findViewById<View>(R.id.btnTools).performClick()
                     val sheet = ShadowDialog.getLatestDialog()
                     assertNotNull("tools sheet should open", sheet)
-                    checkView(activity, sheet!!.window!!.decorView, "ToolsSheet")
+                    val decor = sheet!!.window!!.decorView
+                    checkView(activity, decor, "ToolsSheet")
+                    // T3.11: no tile label may break a word across lines.
+                    collectTileWordProblems(decor, "ToolsSheet")
                     sheet.dismiss()
                 }
             }

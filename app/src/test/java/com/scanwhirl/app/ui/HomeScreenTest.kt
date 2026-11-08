@@ -613,8 +613,21 @@ class HomeScreenTest {
 
     // ---- T3.6: bottom bar + Tools sheet ---------------------------------
 
+    /** Tile ids among [root]'s descendants that are in [ids] (T3.11: sections
+     *  chunk their tiles into rows of 4 or 3 columns, so count the section,
+     *  not one row). */
+    private fun tilesIn(root: android.view.View, ids: Set<Int>): Set<Int> = buildSet {
+        if (root is android.view.ViewGroup) {
+            for (i in 0 until root.childCount) {
+                val c = root.getChildAt(i)
+                if (c.id in ids) add(c.id)
+                addAll(tilesIn(c, ids))
+            }
+        }
+    }
+
     @Test
-    fun `tools sheet opens and lists eight tiles in two rows`() {
+    fun `tools sheet opens and holds eight tiles in two sections`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
@@ -624,21 +637,26 @@ class HomeScreenTest {
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("Tools sheet opens", sheet)
 
-                val all = listOf(
-                    R.id.tile_edit, R.id.tile_merge, R.id.tile_compress, R.id.tile_resize,
+                val freeIds = setOf(
+                    R.id.tile_edit, R.id.tile_merge, R.id.tile_compress, R.id.tile_resize
+                )
+                val proIds = setOf(
                     R.id.tile_ocr, R.id.tile_lock, R.id.tile_long_image, R.id.tile_vault
                 )
-                for (id in all) {
+                for (id in freeIds + proIds) {
                     assertNotNull(
                         "tile ${activity.resources.getResourceEntryName(id)} present",
                         sheet!!.findViewById<android.view.View>(id)
                     )
                 }
 
-                val row1 = sheet.findViewById<android.view.ViewGroup>(R.id.sheetRow1)
-                val row2 = sheet.findViewById<android.view.ViewGroup>(R.id.sheetRow2)
-                assertEquals("core row holds 4 tiles", 4, row1.childCount)
-                assertEquals("pro row holds 4 tiles", 4, row2.childCount)
+                // T3.11: rows are chunked per section (4 columns, or 3 when the
+                // longest word would not fit) — assert the section holds its
+                // four tiles, whatever the column count.
+                val free = sheet.findViewById<android.view.ViewGroup>(R.id.sheetFree)
+                val pro = sheet.findViewById<android.view.ViewGroup>(R.id.sheetPro)
+                assertEquals("Free section holds 4 tiles", freeIds, tilesIn(free, freeIds))
+                assertEquals("Pro section holds 4 tiles", proIds, tilesIn(pro, proIds))
 
                 sheet.dismiss()
                 assertFalse("sheet dismissed", sheet.isShowing)

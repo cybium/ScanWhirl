@@ -136,6 +136,10 @@
 
     <string name="tool_resize">Resize</string>
     <string name="tool_resize_sub">Scale PDF &amp; canvas</string>
+    <!-- T3.11 (§4.3): the tile says just "Lock" — it toggles by state and
+         "Lock / Unlock" broke across lines in the sheet (complaint #16).
+         LockFlow's dialog titles keep btn_lock_unlock. -->
+    <string name="tool_lock">Lock</string>
     <string name="tool_compress">Compress</string>
     <string name="tool_compress_sub">Lossless neural packing</string>
     <string name="tool_edit">Edit</string>

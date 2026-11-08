@@ -9,6 +9,7 @@
     <string name="sort_modified">अंतिम बदलाव</string>
     <string name="tool_resize">आकार</string>
     <string name="tool_compress">कंप्रेस</string>
+    <string name="tool_lock">लॉक</string>
     <string name="tool_merge">मर्ज</string>
     <string name="tool_settings">सेटिंग्स</string>
     <string name="empty_title">अभी कोई स्कैन नहीं</string>

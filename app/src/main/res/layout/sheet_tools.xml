@@ -1,68 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- test26 T3.6 (§4.3): the Tools sheet — 4-column grid over two rows with a
-     PRO divider. Rows are empty in XML; MainActivity.showToolsSheet() inflates
-     view_tool_tile.xml into them. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<!-- test26 T3.6 (§4.3), T3.11: the Tools sheet — Free section, PRO divider,
+     Pro section. Each section is a vertical container; MainActivity.showToolsSheet()
+     chunks its tiles into horizontal rows of 4 columns (or 3 when the longest
+     label word would not fit, §4.3 rule — complaint #16). T3.11: the content
+     scrolls (the BottomSheetDialog caps at the screen) so the 3-column layout
+     at large font scales can never push the sheet off-screen. -->
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_sheet_glass"
-    android:orientation="vertical"
-    android:paddingStart="16dp"
+    android:fillViewport="true"
+    android:paddingStart="12dp"
     android:paddingTop="20dp"
-    android:paddingEnd="16dp"
+    android:paddingEnd="12dp"
     android:paddingBottom="24dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="14dp"
-        android:letterSpacing="0.04"
-        android:text="@string/bar_tools"
-        android:textColor="@color/text_hologram_hi"
-        android:textSize="16sp"
-        android:textStyle="bold" />
-
-    <LinearLayout
-        android:id="@+id/sheetRow1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" />
-
-    <!-- PRO divider (§4.3): hairlines either side of the micro-caps label. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginVertical="12dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <View
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1"
-            android:background="@color/cyan_border_hair" />
+        android:orientation="vertical">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="10dp"
-            android:letterSpacing="0.12"
-            android:text="@string/badge_pro"
-            android:textColor="@color/pro_gold"
-            android:textSize="11sp"
+            android:layout_marginBottom="14dp"
+            android:letterSpacing="0.04"
+            android:text="@string/bar_tools"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="16sp"
             android:textStyle="bold" />
 
-        <View
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1"
-            android:background="@color/cyan_border_hair" />
-    </LinearLayout>
+        <LinearLayout
+            android:id="@+id/sheetFree"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
 
-    <LinearLayout
-        android:id="@+id/sheetRow2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" />
-</LinearLayout>
+        <!-- PRO divider (§4.3): hairlines either side of the micro-caps label. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginVertical="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:background="@color/cyan_border_hair" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="10dp"
+                android:letterSpacing="0.12"
+                android:text="@string/badge_pro"
+                android:textColor="@color/pro_gold"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:background="@color/cyan_border_hair" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/sheetPro"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

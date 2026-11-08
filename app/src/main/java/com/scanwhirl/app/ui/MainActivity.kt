@@ -26,6 +26,7 @@ import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.chip.Chip
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -646,10 +647,15 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * T3.6 — the Tools sheet (§4.3): two rows of four tiles over a PRO
-     * divider, every tile a [R.layout.view_tool_tile]. Core tiles call the
+     * T3.6 — the Tools sheet (§4.3): a Free section, a PRO divider and a Pro
+     * section, every tile a [R.layout.view_tool_tile]. Core tiles call the
      * P2 flows directly; Pro tiles pass through [ProGate] first, so Free
      * gets the pitch instead of the flow.
+     *
+     * T3.11 (complaint #16): each section is chunked into horizontal rows of
+     * [columns] — 4, or 3 when the longest label word would not fit the
+     * tile's inner width at this width/font scale, so a word is never broken
+     * across lines (§4.3 rule, measured with the tile's real TextPaint).
      */
     private fun showToolsSheet() {
         val sheet = BottomSheetDialog(this)
@@ -658,65 +664,100 @@ class MainActivity : BaseActivity(), HomeHost {
 
         class Tile(val id: Int, val label: Int, val icon: Int, val pro: Boolean, val run: () -> Unit)
 
-        fun addTiles(row: LinearLayout, tiles: List<Tile>) {
-            for (t in tiles) {
-                val tile = layoutInflater.inflate(R.layout.view_tool_tile, row, false)
-                tile.id = t.id
-                tile.findViewById<ImageView>(R.id.tileIcon).setImageResource(t.icon)
-                tile.findViewById<TextView>(R.id.tileLabel).setText(t.label)
-                tile.setOnClickListener {
-                    sheet.dismiss()
-                    if (t.pro && !ProGate.isPro(this@MainActivity)) showProPanel()
-                    else t.run()
+        val free = listOf(
+            Tile(R.id.tile_edit, R.string.tool_edit, R.drawable.ic_edit, false) {
+                pickEditPdf.launch(arrayOf("application/pdf"))
+            },
+            Tile(R.id.tile_merge, R.string.tool_merge, R.drawable.ic_merge, false) {
+                mergeFlow.showMergeChooser()
+            },
+            Tile(R.id.tile_compress, R.string.tool_compress, R.drawable.ic_compress, false) {
+                compressFlow.start()
+            },
+            Tile(R.id.tile_resize, R.string.tool_resize, R.drawable.ic_resize, false) {
+                pickResizeImage.launch("image/*")
+            }
+        )
+        val proTiles = listOf(
+            Tile(R.id.tile_ocr, R.string.btn_ocr_text, R.drawable.ic_ocr, true) {
+                chooseProSource(
+                    R.string.ocr_title,
+                    onScan = { doc -> ocrFlow.runOcrForScan(doc) },
+                    onPdf = { uri -> ocrFlow.runOcrForPdf(uri) },
+                    onImage = { uri -> ocrFlow.runOcrForImage(uri) }
+                )
+            },
+            Tile(R.id.tile_lock, R.string.tool_lock, R.drawable.ic_lock, true) {
+                lockFlow.chooseLockSource()
+            },
+            Tile(R.id.tile_long_image, R.string.btn_long_image, R.drawable.ic_long_image, true) {
+                chooseProSource(
+                    R.string.btn_long_image,
+                    onScan = { doc -> longImageFlow.runLongImageForScan(doc) },
+                    onPdf = { uri -> longImageFlow.runLongImageForPdf(uri) }
+                )
+            },
+            Tile(R.id.tile_vault, R.string.bar_vault, R.drawable.ic_vault, true) {
+                vaultFlow.openVaultWithPin()
+            }
+        )
+
+        // §4.3 column rule: probe one label (12sp, already font-scaled at
+        // inflation) and compare the longest word with the tile's inner width
+        // in the 4-column grid; a miss drops the whole sheet to 3 columns.
+        val columns = run {
+            val probe = layoutInflater.inflate(R.layout.view_tool_tile, null)
+                .findViewById<TextView>(R.id.tileLabel)
+            val longest = (free + proTiles).maxOf { t ->
+                getString(t.label)
+                    .split(Regex("\\s+")).filter { it.isNotEmpty() }
+                    .maxOf { probe.paint.measureText(it) }
+            }
+            val d = resources.displayMetrics.density
+            val content = resources.displayMetrics.widthPixels - 24f * d // 12dp sheet sides
+            fun inner(cols: Int): Float =
+                (content - cols * 6f * d) / cols - 4f * d // 3dp margins, 2dp pads
+            if (longest <= inner(4)) 4 else 3
+        }
+
+        fun addSection(section: LinearLayout, tiles: List<Tile>) {
+            section.removeAllViews()
+            for (rowTiles in tiles.chunked(columns)) {
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
                 }
-                row.addView(tile)
+                for (t in rowTiles) {
+                    val tile = layoutInflater.inflate(R.layout.view_tool_tile, row, false)
+                    tile.id = t.id
+                    tile.findViewById<ImageView>(R.id.tileIcon).setImageResource(t.icon)
+                    tile.findViewById<TextView>(R.id.tileLabel).setText(t.label)
+                    tile.setOnClickListener {
+                        sheet.dismiss()
+                        if (t.pro && !ProGate.isPro(this@MainActivity)) showProPanel()
+                        else t.run()
+                    }
+                    row.addView(tile)
+                }
+                section.addView(row)
             }
         }
 
-        addTiles(
-            view.findViewById(R.id.sheetRow1),
-            listOf(
-                Tile(R.id.tile_edit, R.string.tool_edit, R.drawable.ic_edit, false) {
-                    pickEditPdf.launch(arrayOf("application/pdf"))
-                },
-                Tile(R.id.tile_merge, R.string.tool_merge, R.drawable.ic_merge, false) {
-                    mergeFlow.showMergeChooser()
-                },
-                Tile(R.id.tile_compress, R.string.tool_compress, R.drawable.ic_compress, false) {
-                    compressFlow.start()
-                },
-                Tile(R.id.tile_resize, R.string.tool_resize, R.drawable.ic_resize, false) {
-                    pickResizeImage.launch("image/*")
-                }
-            )
-        )
-        addTiles(
-            view.findViewById(R.id.sheetRow2),
-            listOf(
-                Tile(R.id.tile_ocr, R.string.btn_ocr_text, R.drawable.ic_ocr, true) {
-                    chooseProSource(
-                        R.string.ocr_title,
-                        onScan = { doc -> ocrFlow.runOcrForScan(doc) },
-                        onPdf = { uri -> ocrFlow.runOcrForPdf(uri) },
-                        onImage = { uri -> ocrFlow.runOcrForImage(uri) }
-                    )
-                },
-                Tile(R.id.tile_lock, R.string.btn_lock_unlock, R.drawable.ic_lock, true) {
-                    lockFlow.chooseLockSource()
-                },
-                Tile(R.id.tile_long_image, R.string.btn_long_image, R.drawable.ic_long_image, true) {
-                    chooseProSource(
-                        R.string.btn_long_image,
-                        onScan = { doc -> longImageFlow.runLongImageForScan(doc) },
-                        onPdf = { uri -> longImageFlow.runLongImageForPdf(uri) }
-                    )
-                },
-                Tile(R.id.tile_vault, R.string.bar_vault, R.drawable.ic_vault, true) {
-                    vaultFlow.openVaultWithPin()
-                }
-            )
-        )
+        addSection(view.findViewById(R.id.sheetFree), free)
+        addSection(view.findViewById(R.id.sheetPro), proTiles)
         sheet.show()
+        // T3.11: open expanded, not at Material's default rest state
+        // (STATE_COLLAPSED). Collapsed equals "fully visible" only while the
+        // content is shorter than the 16:9-keyline peek; at large font scales
+        // this sheet is taller, and collapsed would hang its excess below the
+        // screen edge (the TextFit rig caught exactly that at scale 1.3).
+        // Expanded puts the sheet flush with the screen bottom
+        // (fitToContentsOffset) at every scale; it stays draggable and its
+        // content scrollable (NestedScrollView).
+        sheet.behavior.state = BottomSheetBehavior.STATE_EXPANDED
     }
 
     private fun setSelectionMode(enabled: Boolean) {
