@@ -330,6 +330,7 @@ class UiSmokeTest {
                 val card = list.findViewHolderForAdapterPosition(0)!!.itemView
                 val toolbar = activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
                 val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
+                val selBar = activity.findViewById<android.view.View>(R.id.selectionBar)
                 val header = activity.findViewById<android.view.View>(R.id.selectionHeader)
 
                 // normal mode: the custom title row carries the name now
@@ -338,6 +339,7 @@ class UiSmokeTest {
                 assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
                 assertTrue("bottom bar shows in normal mode", bar.isVisible)
                 assertFalse("no selection header in normal mode", header.isVisible)
+                assertFalse("no selection bar in normal mode", selBar.isVisible)
 
                 // long press -> selection mode: contextual header replaces the toolbar
                 card.performLongClick()
@@ -347,7 +349,10 @@ class UiSmokeTest {
                     app.resources.getQuantityString(R.plurals.selected_count, 1, 1),
                     activity.findViewById<android.widget.TextView>(R.id.selCount).text.toString()
                 )
+                // T3.12 (amends T3.7): the SCAN bar leaves, the contextual
+                // action bar takes its place (§4.2 Rev 3).
                 assertFalse("bottom bar hides while selecting", bar.isVisible)
+                assertTrue("selection action bar takes over", selBar.isVisible)
 
                 // back -> exits selection mode, title row comes back
                 activity.onBackPressed()
@@ -357,6 +362,7 @@ class UiSmokeTest {
                     activity.findViewById<android.widget.TextView>(R.id.appNameText).text.toString())
                 assertTrue(activity.findViewById<android.view.View>(R.id.titleRow).isVisible)
                 assertTrue("bottom bar returns with the list", bar.isVisible)
+                assertFalse("selection action bar leaves with back", selBar.isVisible)
             }
         }
     }

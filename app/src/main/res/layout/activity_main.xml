@@ -85,11 +85,11 @@
                 </LinearLayout>
             </com.google.android.material.appbar.MaterialToolbar>
 
-            <!-- test26 T3.7: contextual selection header — X · N selected ·
-                 Move · Merge · Export · Delete (§4.2). Replaces the toolbar
-                 row while selecting (gear hides with it). Move is visible but
-                 disabled until T4.3 wires the category picker; Export stays
-                 Pro-only (free keeps no dead buttons). -->
+            <!-- test26 T3.7/T3.12: contextual selection header — X · full
+                 `N selected` · Select all (§4.2 Rev 3). The four actions
+                 moved to selectionBar: four actions + count on this one row
+                 clipped the count (complaint #15). Replaces the toolbar row
+                 while selecting (gear hides with it). -->
             <LinearLayout
                 android:id="@+id/selectionHeader"
                 android:layout_width="match_parent"
@@ -110,6 +110,8 @@
                     android:src="@drawable/ic_close"
                     app:tint="@color/text_hologram_hi" />
 
+                <!-- T3.12: own space, never ellipsized — the count is the
+                     one thing this row exists to show. -->
                 <TextView
                     android:id="@+id/selCount"
                     android:layout_width="0dp"
@@ -117,76 +119,19 @@
                     android:layout_marginStart="6dp"
                     android:layout_marginEnd="4dp"
                     android:layout_weight="1"
-                    android:ellipsize="end"
                     android:maxLines="1"
                     android:textColor="@color/text_hologram_hi"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
                 <TextView
-                    android:id="@+id/btnSelMove"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:alpha="0.4"
-                    android:enabled="false"
-                    android:gravity="center"
-                    android:paddingHorizontal="8dp"
-                    android:text="@string/move"
-                    android:textColor="@color/text_hologram_mid"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/selSep1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="·"
-                    android:textColor="@color/cyan_border_hair"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/btnSelMerge"
+                    android:id="@+id/btnSelSelectAll"
                     android:layout_width="wrap_content"
                     android:layout_height="40dp"
                     android:gravity="center"
                     android:paddingHorizontal="8dp"
-                    android:text="@string/merge"
-                    android:textColor="@color/text_hologram_mid"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/selSep2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="·"
-                    android:textColor="@color/cyan_border_hair"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/btnSelExport"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:gravity="center"
-                    android:paddingHorizontal="8dp"
-                    android:text="@string/export"
-                    android:textColor="@color/text_hologram_mid"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/selSep3"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="·"
-                    android:textColor="@color/cyan_border_hair"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/btnSelDelete"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:gravity="center"
-                    android:paddingHorizontal="8dp"
-                    android:text="@string/delete"
-                    android:textColor="@color/text_hologram_mid"
+                    android:text="@string/select_all"
+                    android:textColor="@color/cyan_primary"
                     android:textSize="13sp" />
             </LinearLayout>
 
@@ -587,6 +532,66 @@
                     android:textSize="11sp"
                     android:textStyle="bold" />
             </LinearLayout>
+        </LinearLayout>
+
+        <!-- test26 T3.12 (§4.2 Rev 3): contextual action bar while selecting
+             — replaces the SCAN bar. This amends the approved T3.7 rule
+             "bottom bar hidden while selecting": same intent (no SCAN while
+             picking), better use of the space. §5.4 dock items (icon over
+             label, weight 1, minHeight 56dp); inset-aware because the screen
+             root already carries the system-bar padding (T1.1).
+             Enable rules: Move dead until T4.3, Merge needs ≥ 2, Export /
+             Delete ≥ 1 (Export stays Pro-only — Free keeps no dead buttons);
+             Delete is tinted with the danger colour. -->
+        <LinearLayout
+            android:id="@+id/selectionBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:background="@drawable/bg_dock_glass"
+            android:orientation="horizontal"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="6dp"
+            android:visibility="gone">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSelMove"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="@string/move"
+                app:icon="@drawable/ic_move" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSelMerge"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/merge"
+                app:icon="@drawable/ic_merge" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSelExport"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/export"
+                app:icon="@drawable/ic_download" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSelDelete"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/delete"
+                android:textColor="@color/laser_danger"
+                app:icon="@drawable/ic_delete"
+                app:iconTint="@color/laser_danger" />
         </LinearLayout>
     </LinearLayout>
 

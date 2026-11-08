@@ -15,6 +15,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -430,6 +431,15 @@ class HomeScreenTest {
                 // Test builds are Pro by default — force the Free UI first.
                 com.scanwhirl.app.util.ProGate.setTestOverride(activity, false)
                 list.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+
+                // T3.12: the actions live in the contextual bottom bar now —
+                // the header row keeps only X / count / Select all (the old
+                // one-row layout clipped the count, complaint #15).
+                val header = activity.findViewById<android.view.View>(R.id.selectionHeader)
+                val selBar = activity.findViewById<android.view.View>(R.id.selectionBar)
+                assertNull("header keeps no actions", header.findViewById<android.view.View>(R.id.btnSelMerge))
+                assertNotNull("actions sit in the selection bar", selBar.findViewById<android.view.View>(R.id.btnSelMerge))
+                assertTrue("selection bar visible while selecting", selBar.isVisible)
 
                 val move = activity.findViewById<android.view.View>(R.id.btnSelMove)
                 val merge = activity.findViewById<android.view.View>(R.id.btnSelMerge)

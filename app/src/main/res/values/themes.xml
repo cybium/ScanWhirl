@@ -150,6 +150,25 @@
         <item name="android:stateListAnimator">@animator/sw_press</item>
     </style>
 
+    <!-- test26 T3.12 (§5.4): icon-over-label dock item. The selection action
+         bar uses it now; T5.1 reuses it for the document screen dock. Width,
+         weight and height stay on the item in XML (repo convention). -->
+    <style name="Widget.ScanWhirl.Button.DockItem" parent="Widget.Material3.Button.TextButton">
+        <item name="android:minHeight">56dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">@color/text_hologram_hi</item>
+        <item name="iconTint">@color/cyan_primary</item>
+        <item name="iconGravity">textTop</item>
+        <item name="iconPadding">4dp</item>
+        <item name="iconSize">24dp</item>
+        <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
     <!-- FAB Styles -->
     <style name="Widget.ScanWhirl.Fab.Orbital" parent="Widget.Material3.FloatingActionButton.Surface">
         <item name="backgroundTint">@color/glass_surface_raised</item>

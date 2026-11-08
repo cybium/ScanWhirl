@@ -46,6 +46,7 @@
     <string name="delete">हटाएँ</string>
     <string name="save">सहेजें</string>
     <string name="close">बंद करें</string>
+    <string name="select_all">सभी चुनें</string>
     <string name="save_as_new">नए दस्तावेज़ के रूप में सहेजें</string>
     <string name="overwrite_pdf">सहेजी गई PDF बदलें</string>
     <string name="save_changes_title">बदलाव सहेजें?</string>

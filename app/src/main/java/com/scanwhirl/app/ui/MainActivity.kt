@@ -284,6 +284,13 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.btnSelMerge.setOnClickListener { mergeFlow.promptMerge(selectedIds.toList()) }
         binding.btnSelExport.setOnClickListener { exportSelectedZip() }
         binding.btnSelDelete.setOnClickListener { confirmDeleteSelected() }
+        // T3.12: Select all picks every card the list currently shows —
+        // the filtered (visible) set, never the hidden ones.
+        binding.btnSelSelectAll.setOnClickListener {
+            adapter.currentList.forEach { selectedIds.add(it.id) }
+            adapter.notifyDataSetChanged()
+            updateSelectionHeader()
+        }
 
         // Stale edit snapshots (cache) go; an unfinished scan is offered back to
         // the user instead of silently wiped (it survives in cacheDir).
@@ -553,11 +560,13 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * T3.7 — the contextual header replaces the toolbar row while selecting:
-     * the toolbar (wordmark, status line, gear) hides and `selectionHeader`
-     * shows `X · N selected · Move · Merge · Export · Delete`. Move stays
-     * visible-but-disabled until T4.3; Export only exists for Pro; Merge
-     * needs ≥ 2 picks; Delete needs ≥ 1. The menu is static now, so no
+     * T3.7/T3.12 — the contextual header replaces the toolbar row while
+     * selecting: the toolbar (wordmark, status line, gear) hides and
+     * `selectionHeader` shows `X · N selected · Select all`. The four
+     * actions live in `selectionBar` now (§4.2 Rev 3 — the one-row layout
+     * clipped the count, complaint #15). Move stays visible-but-disabled
+     * until T4.3; Export only exists for Pro; Merge needs ≥ 2 picks;
+     * Delete needs ≥ 1. The menu is static now, so no
      * `invalidateOptionsMenu` anywhere.
      */
     private fun updateSelectionHeader() {
@@ -572,8 +581,6 @@ class MainActivity : BaseActivity(), HomeHost {
             // Pro extras only appear in the Pro UI (Free keeps no dead buttons).
             val pro = ProGate.isPro(this)
             binding.btnSelExport.visibility = if (pro) View.VISIBLE else View.GONE
-            binding.selSep2.visibility = if (pro) View.VISIBLE else View.GONE
-            binding.selSep3.visibility = if (pro) View.VISIBLE else View.GONE
             binding.btnSelExport.isEnabled = pro && n > 0
         } else {
             binding.toolbar.visibility = View.VISIBLE
@@ -766,7 +773,11 @@ class MainActivity : BaseActivity(), HomeHost {
         if (!enabled) selectedIds.clear()
         adapter.selectionMode = enabled
         adapter.notifyDataSetChanged()
+        // T3.12 (amends T3.7's "bottom bar hidden while selecting"): the
+        // SCAN bar still leaves, but the contextual action bar takes its
+        // place instead of wasting the row (§4.2 Rev 3).
         binding.bottomBar.isVisible = !enabled
+        binding.selectionBar.isVisible = enabled
         updateSelectionHeader()
         updateStatusLine()
         updateListHeader()
