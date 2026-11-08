@@ -282,7 +282,7 @@ class Phase5ScreensTest {
                 assertSame("font and greeting rows share a section container",
                     rowFont.parent, rowGreeting.parent)
                 val appearance = rowFont.parent as ViewGroup
-                assertEquals("appearance card holds 5 rows + 4 dividers", 9, appearance.childCount)
+                assertEquals("appearance card holds 4 rows + 3 dividers", 7, appearance.childCount)
                 assertTrue("rows live inside a MaterialCardView",
                     appearance.parent is com.google.android.material.card.MaterialCardView)
 
@@ -290,7 +290,7 @@ class Phase5ScreensTest {
                 val dividers = (0 until appearance.childCount)
                     .map { appearance.getChildAt(it) }
                     .filter { it !is ViewGroup && it.layoutParams.height == oneDp }
-                assertEquals("four hairline dividers", 4, dividers.size)
+                assertEquals("three hairline dividers", 3, dividers.size)
 
                 // Viewing and About sections group their pairs the same way.
                 val rowViewer = activity.findViewById<View>(R.id.rowViewer)
