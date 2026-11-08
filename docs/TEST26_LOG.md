@@ -451,3 +451,101 @@ phase-end full build → **G2b** (`alpha2b`, STOP for 4 screenshots). Then
 plan-mode review of the revised Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → G2c.
 
 ---
+
+---
+## Phase 3b — fix-before-Phase-4 ✅ complete (G2b stop-gate reached)
+
+### T3.10 Status line tells the truth (complaint #14) ✅ (`49b1576`)
+
+- **Red proof:** new `StatusLineScreenTest` (4 cases) run on T3.9's code → **4/4 red**,
+  reproducing all three owner readings (stale `0 DOCS · 0 B` over a listed doc, `2 DOCS ·
+  0 B` over empty Home, correct only after leaving selection).
+- **Fix:** `updateStatusLine()` now reads the unfiltered `allDocs` snapshot (never
+  `adapter.currentList`) and is called from `applyList()` — the single render path —
+  so chips/adapter/status can never disagree (T1.2's "one renderHome" rule applied).
+- **4/4 green → suite 262/3** (258 + 4 new, known-reds intact).
+
+### T3.11 Tools sheet: no broken words (complaint #16) ✅ (`0172940`)
+
+- **Red proof:** `collectTileWordProblems()` added to `TextFitTest.tools sheet text
+  fits`, first made to fire for real by forcing a narrow tile: 40dp padding → zero-width
+  reports (and exposed a vacuous id-match bug — `tile_` prefix vs the real label id
+  `tileLabel` — plus a latent `describe()` ClassCastException, both fixed); 20dp →
+  `Compress needs 109px but only 48px fit` — the device defect verbatim.
+- **Fix:** tile `paddingHorizontal 2dp` / margin `3dp` / `hyphenationFrequency=none` /
+  `breakStrategy=simple`; sheet side padding 16→12dp; **runtime column rule** (probe the
+  tile's real `TextPaint`: longest label word vs inner width → 4 columns, else 3, rows
+  chunked per section); rows → `sheetFree`/`sheetPro` sections; new string
+  `tool_lock`="Lock"/"लॉक" (LockFlow titles keep `btn_lock_unlock`); sheet content
+  wrapped in `NestedScrollView`.
+- **Scale-1.3 height red found & root-caused in Material source:** the sheet rested in
+  `STATE_COLLAPSED` (a `BottomSheetDialog` never sets `STATE_EXPANDED` — verified in
+  `BottomSheetDialog.java`); `calculateCollapsedOffset()` = `max(parentH − peek,
+  fitToContentsOffset)` with `peek = min(16:9-keyline, childH) + insetBottom` → content
+  taller than the keyline deliberately hangs its excess below the screen (observed
+  bottom 1305 > 1280). **Fix: open the sheet `STATE_EXPANDED`** → `fitToContentsOffset`
+  puts it flush with the screen bottom at every scale; @1.0 unchanged (collapsed ==
+  expanded for short content); still draggable + scrollable. **Suite 262/3.**
+
+### T3.12 Selection: count never clipped, actions in a bottom bar (complaint #15) ✅ (`ac8d267`)
+
+- **Red proof:** new `SelectionBarTest` (5 cases) written first → **4/5 red** on the
+  shell-only code (bar swap ×2, Select all ×2); `HomeScreenTest` + `UiSmokeTest`
+  same-commit updates added 2 more reds. All green after the logic landed.
+- **Header** = `X · full "N selected" (own weight, no ellipsize) · Select all`.
+  **Actions** = new `selectionBar` (sibling of `bottomBar`): four
+  `Widget.ScanWhirl.Button.DockItem` buttons (§5.4 spec: icon over label, weight 1,
+  minHeight 56dp, inset-aware) — Move (new `ic_move`, dead until T4.3) · Merge (≥ 2) ·
+  Export (≥ 1, Pro-only) · Delete (≥ 1, `laser_danger` tint). `Select all` picks
+  `adapter.currentList` — the *visible* cards only (pinned by test with a category
+  filter: 2 of 3 selected).
+- **Rule amendment (as the plan directs):** T3.7's "bottom bar hidden while selecting"
+  → the SCAN bar still leaves, but the contextual action bar now takes its place
+  (§4.2 Rev 3 — same intent, the space works). Noted here per plan T3.12.
+- **Suite 267/2** — 262 + 5 new. The `home` known-red was **green at 17:18 PST**: its
+  status line reads `GOOD EVENING` (7) instead of `GOOD AFTERNOON` (9) and fits at 1.3.
+  The red is **time-of-day dependent** (worst case = afternoon); it will be red again in
+  afternoon runs. Not a regression, not a new red — documented so the G2b count (2 or 3)
+  is not misread.
+
+### T3.13 Home polish ✅ (`c9e329c`)
+
+- (a) Bottom bar: `layout_marginHorizontal 12dp` + `layout_marginBottom 8dp` — the
+  rounded corners no longer touch the screen edges / nav bar.
+- (b) **Verified only (no code):** fresh installs already default to `SORT_DATE` and
+  `HomeFilter` sorts it `sortedByDescending { createdAt }` = newest first (Q9 ✓). The
+  `Name ▾` in the alpha2 shots is the owner's **stored** preference surviving the
+  upgrade (same package) — existing users keep their pref, by design.
+- (c) Empty state: new string `empty_first_scan_hint` = "Tap the camera button to
+  start" / "कैमरा बटन दबाकर शुरू करें" shown in the muted `emptySubtitle` under the
+  fresh-library title (vault/filter states unchanged). **Red proof: 1 red first**
+  (subtitle hidden on T3.12 code) → green.
+- **Suite 267/2** (same time-of-day note as T3.12).
+
+### Phase-end full build — P3b (2026-11-08)
+
+`./gradlew test assembleRelease -PtestBuild --no-daemon --continue` (82 tasks; APK produced).
+
+| Variant | Tests | Failures | Red = subset of the documented TextFit 3? |
+|---------|------:|---------:|---|
+| testDebugUnitTest | 267 | 2 | ✅ page editor / document (`home` green — evening greeting, see T3.12 note) |
+| testReleaseUnitTest | 267 | 2 | ✅ same two |
+
+- `aapt2 dump badging` on alpha2b: `com.scanwhirl.app.test` · **`ScanWhirl Test`** ·
+  launcher **`com.scanwhirl.app.ui.MainActivity`** ✓ · versionCode 25 /
+  `1.1.1-test25` (bump in T9.1 — unchanged by design) ✓.
+- Gate checks: both variants **267**, failures ⊆ the documented 3 ✅ · no new reds ✅ ·
+  baseline (209) exceeded ✅ · every P3b test red-proofed before its fix ✅.
+- `MainActivity.kt` = 1,132 lines (the <900 gate belonged to **P2**, met there at 890;
+  P3 + 3b legitimately grew it — not a G2b item).
+- **APK delivered:** `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alpha2b.apk`.
+- **G2b owner check (4 screenshots):** Home with docs (status line right) · Tools sheet ·
+  selection mode (1 selected, and 2 selected) · **search focused** (missing at G2 —
+  confirm the clear × and, on Pro, the `In text` chip).
+- Nothing pushed; commits T3.10 `49b1576` → T3.11 `0172940` → T3.12 `ac8d267` →
+  T3.13 `c9e329c`.
+
+**Next:** **STOP at G2b** — wait for the 4 owner screenshots → then plan-mode review of
+the *revised* Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → G2c (`alpha2c`) → Phase 5.
+
+---

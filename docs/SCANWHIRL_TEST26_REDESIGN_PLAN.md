@@ -24,12 +24,12 @@
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
-> **STATUS (2026-11-08):** T0–T3.9 committed (HEAD `fb96782` + docs). Phase-end build was 258 tests / 3 known-red
-> TextFit. **G2 reviewed by the owner → not passed.** Next: **Phase 3b** (T3.10–T3.13, build mode, no extra plan review
-> needed — fully specified here) → build `alpha2b` → **STOP (G2b)** → then plan-mode review of the *revised* Phase 4
-> (T4.7 → T4.8 → T4.1–T4.6) → **G2c** (`alpha2c`) → Phase 5.
+> **STATUS (2026-11-08):** T0–T3.13 committed (HEAD `c9e329c` + docs). Phase-end build was 267 tests / 2 known-red TextFit
+> (`home` flips green outside afternoon hours — its greeting string is shorter; see log T3.12). **Phase 3b fixed G2's
+> defects #14–#16 + polish.** Next: **STOP at G2b** (`alpha2b` delivered, waiting for the 4 owner screenshots) → then
+> plan-mode review of the *revised* Phase 4 (T4.7 → T4.8 → T4.1–T4.6) → **G2c** (`alpha2c`) → Phase 5.
 > **How to continue in a new session:** read `docs/TEST26_HANDOFF.md` (or its copy in Downloads), then the
-> section **"PHASE 3b"** below, then §4.5 and T4.7/T4.8. As-run record: `docs/TEST26_LOG.md`.
+> section **"PHASE 4"** below (order Rev 3), then §4.5 and T4.7/T4.8. As-run record: `docs/TEST26_LOG.md`.
 
 ---
 

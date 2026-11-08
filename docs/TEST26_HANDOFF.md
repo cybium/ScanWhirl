@@ -1,9 +1,9 @@
 # ScanWhirl test26 — Session Handoff (read this first in a new session)
 
 > Purpose: everything a fresh agent needs to continue the test26 redesign without this
-> conversation. Written 2026-11-07 at HEAD `fb96782`; **revised 2026-11-08 after the owner's G2 review (plan Rev 3)**.
-> **Phase 3 is built but G2 is NOT passed: do Phase 3b first (see §5).**
-> **Authoritative plan:** `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` (Rev 2) — read §0
+> conversation. Written 2026-11-07 at HEAD `fb96782`; **revised 2026-11-08 after the owner's G2 review (plan Rev 3)**;
+> **Phase 3b built 2026-11-08 (T3.10–T3.13) — stopped at G2b, waiting for the 4 owner screenshots (see §5).**
+> **Authoritative plan:** `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` (Rev 3) — read §0
 > (rules), §4–§5 (target UI), §6 (tasks), §7 (tests), §8 (gotchas) before coding.
 > **As-run record:** `docs/TEST26_LOG.md` — per-task entries + phase-end tables here.
 > Owner reference copies (same content): `/mnt/c/Users/Cybium/Downloads/
@@ -19,7 +19,7 @@ categories, zero clipped text, OCR editor, Earth removed in P7), ship
 `versionCode 26` / `1.1.1-test26`. Owner installs each gate APK and sends screenshots
 before the next phase starts.
 
-**Current position (2026-11-08): G2 reviewed, 5 defects found, plan is now Rev 3. Next work = Phase 3b (T3.10–T3.13), then STOP at mini-gate G2b (`alpha2b`).**
+**Current position (2026-11-08): Phase 3b (T3.10–T3.13) is BUILT and committed (`49b1576` → `c9e329c`); phase-end build 267 tests / 2 known-red per variant; `alpha2b` + the three md copies are in Downloads. Next work = STOP at mini-gate G2b (wait for the owner's 4 screenshots), then plan-mode review of the revised Phase 4.**
 
 ## 2. Locations
 
@@ -27,7 +27,7 @@ before the next phase starts.
 |---|---|
 | Project root (git repo) | `/home/cybium/ScanWhirl` (WSL/Ubuntu) |
 | Branch / base | `test26-redesign`, from tag `test25-final` @ `1b7113c`. **Never `git push`.** |
-| Plan (authoritative, Rev 2) | `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` |
+| Plan (authoritative, Rev 3) | `docs/SCANWHIRL_TEST26_REDESIGN_PLAN.md` |
 | As-run log | `docs/TEST26_LOG.md` |
 | This handoff | `docs/TEST26_HANDOFF.md` |
 | Blockers file (2 failed attempts → write here + halt) | `docs/BLOCKERS.md` |
@@ -74,6 +74,9 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
   → copy to `/mnt/c/Users/Cybium/Downloads/` → **STOP**, wait for owner screenshots.
   G2 screenshots required: Home 0 docs, Home with docs, chip selected, search focused,
   Tools sheet, selection mode.
+  **G2b (end of P3b, current):** `…-alpha2b.apk` → same folder → **STOP**, 4 screenshots:
+  Home with docs (status line right), Tools sheet, selection mode (1 and 2 selected),
+  search focused (missing at G2 — confirm the clear × and, on Pro, the `In text` chip).
 - Design: D1 orbital-dark theme, D3 category colors, D4 system fonts only. No network/
   analytics/ads. New strings in `values/strings.xml` only (± `values-hi` where key exists).
   No emoji anywhere (`EmojiGuardTest` enforces). Every `INFINITE` animator gated on
@@ -114,6 +117,24 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
   · `ScanWhirl Test` · launcher `MainActivity` · versionCode 25/`1.1.1-test25` (T9.1 bumps).
 - **G2 delivered:** `ScanWhirl-1.1.1-test26-alpha2.apk` + the three md copies are in
   `/mnt/c/Users/Cybium/Downloads/` — **session stopped here for owner screenshots.**
+- **G2 reviewed → NOT passed (defects #14–#18, plan Rev 3 adopted).**
+- **Phase 3b BUILT** (one commit each, every new test red-proofed first): T3.10 `49b1576`
+  status line from the unfiltered list (`StatusLineScreenTest` 4/4 red → green) →
+  T3.11 `0172940` Tools-sheet words (forced-narrow red proof `Compress needs 109px but
+  only 48px fit`; runtime 4/3-column rule; sections `sheetFree`/`sheetPro`;
+  `tool_lock`; sheet `NestedScrollView`; **opens `STATE_EXPANDED`** — Material's
+  collapsed rest state hangs tall content below the screen, source-verified) →
+  T3.12 `ac8d267` selection bar (`SelectionBarTest` 5 cases, 4 red first; header =
+  X · full count · Select all; `selectionBar` + `Widget.ScanWhirl.Button.DockItem`;
+  **amends the T3.7 rule** — SCAN bar replaced by the contextual action bar) →
+  T3.13 `c9e329c` polish (dock margins12/8dp; sort default *verified* `SORT_DATE` +
+  newest-first — the shots' `Name ▾` was a stored pref; `empty_first_scan_hint` en+hi).
+- **Phase-end full build (P3b): both variants 267 tests / 2 failures** — the two are
+  documented TextFit known-reds; `home` flips **green outside afternoon hours** (shorter
+  greeting string — time-of-day dependent, see log T3.12). aapt2 unchanged: test package ·
+  `ScanWhirl Test` · launcher `MainActivity` · versionCode 25.
+- **G2b delivered:** `ScanWhirl-1.1.1-test26-alpha2b.apk` + the three md copies are in
+  `/mnt/c/Users/Cybium/Downloads/` — **session stopped here for the 4 owner screenshots.**
 
 ## 5. Next steps (in order)
 
@@ -129,13 +150,13 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
 | — | Home polish: bottom bar touches screen edges; default sort shows `Name`; empty state has no hint line | **T3.13** |
 | — | `search focused` screenshot was not sent | requested again at **G2b** |
 
-**Order now:**
+**Order now (Phase 3b is DONE — 2026-11-08):**
 
-1. **Phase 3b in build mode** (spec is in plan §"PHASE 3b"; no extra plan review): T3.10 → T3.11 → T3.12 → T3.13, one commit each,
-   tests in the same commit, red-proof the new tests first. Note in the log that T3.12 *amends* the approved T3.7 rule
-   ("bottom bar hidden while selecting" → "replaced by a contextual action bar"). Phase-end full build; expected: only the 3
-   documented TextFit reds (home / page editor / document) remain, plus the new tests green.
-2. **G2b:** build `ScanWhirl-1.1.1-test26-alpha2b.apk` → `/mnt/c/Users/Cybium/Downloads/` → **STOP**. Owner sends 4 screenshots (Home with
+1. ~~**Phase 3b in build mode**~~ ✅ T3.10 `49b1576` → T3.11 `0172940` → T3.12 `ac8d267` → T3.13 `c9e329c`;
+   every new test red-proofed first; the T3.7 amendment is noted in the log; phase-end build **267/2 per variant**
+   (the 2 = documented TextFit reds; `home` is green outside afternoon hours — time-of-day dependent).
+2. **G2b — CURRENT STEP:** `ScanWhirl-1.1.1-test26-alpha2b.apk` + the three mds are already in
+   `/mnt/c/Users/Cybium/Downloads/` → **STOP**. Owner sends 4 screenshots (Home with
    docs, Tools sheet, selection mode with 1 and 2 selected, search focused).
 3. If G2b passes → **plan-mode review of the revised Phase 4**. Order is now **T4.7 → T4.8 → T4.1 → T4.2 → T4.3 → T4.4 → (T4.5) → T4.6**.
 4. **G2c:** after Phase 4 build `alpha2c` and STOP: Phase 4 changes what is written to the phone's storage, so the owner verifies on the device
@@ -157,10 +178,14 @@ status-line styling now, `ExportHygieneTest`, checklist item 11. T3.5: `searchIn
 defaults **true** but consumed as `searchInText && ProGate.isPro`; In-text chip visible
 only on Pro + search focus; list header hidden at count 0 / selection; sort menu has 4
 items (Name/Date/Modified/Category), label composed `"<label> ▾"` in code. T3.6: sheet
-built in code (shell XML + `view_tool_tile` inflated into `sheetRow1/2`); tile labels
+built in code (shell XML + `view_tool_tile` inflated into section rows — T3.11 renamed
+the rows `sheetFree`/`sheetPro`, chunked at runtime into 4 columns or 3 when the longest
+label word does not fit; the sheet opens `STATE_EXPANDED` because Material's collapsed
+rest state hangs tall content below the screen); tile labels
 reuse existing strings; Pro gating at tile level (Free tap → `showProPanel()`); bottom
 bar needs no insets call (root has `applySystemBarsPadding()`); `bar_tools` doubles as
-sheet title. §5.3's 36dp chip beats R6's 48dp (no test enforces R6 — noted in log);
+sheet title. T3.12: `selectionBar` swaps with `bottomBar` inside `setSelectionMode`;
+`Select all` adds only `adapter.currentList` (visible) ids. §5.3's 36dp chip beats R6's 48dp (no test enforces R6 — noted in log);
 `bg_chip_unsorted_dashed` belongs to T8.4.
 
 ## 7. Gotchas learned this session (see also plan §8)
