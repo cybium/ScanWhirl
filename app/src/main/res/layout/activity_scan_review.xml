@@ -123,11 +123,12 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="10dp">
 
+        <!-- test26 T5.3: DockItem — minHeight 56dp, glass dock + 8dp margins kept. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSavePdf"
-            style="@style/Widget.ScanWhirl.Button.Primary"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:text="@string/review_save_pdf" />
     </LinearLayout>
 </LinearLayout>
