@@ -69,6 +69,8 @@
         <item quantity="one">हटाया गया। %1$d प्रति हटाई गई, %2$d हटाई नहीं जा सकी (Files में हटाएँ)।</item>
         <item quantity="other">हटाया गया। %1$d प्रतियाँ हटाई गईं, %2$d हटाई नहीं जा सकीं (Files में हटाएँ)।</item>
     </plurals>
+    <!-- review: the entry below was machine-translated at T4.1 — native review pending -->
+    <string name="category_unsorted_hint">अभी तक छाँटा नहीं गया — कोई चुनें या छोड़ दें</string>
     <!-- review: the 23 entries below were machine-translated at T3.14 (G2b §3C) — native review pending -->
     <string name="empty_first_scan">अपना पहला दस्तावेज़ स्कैन करें</string>
     <string name="empty_category">%1$s के अभी कोई दस्तावेज़ नहीं</string>

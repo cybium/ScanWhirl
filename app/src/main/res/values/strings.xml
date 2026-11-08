@@ -412,6 +412,8 @@
     <string name="cat_label_ids">IDs</string>
     <string name="cat_label_forms">Forms</string>
     <string name="cat_label_other">Other</string>
+    <!-- test26 T4.1: scan-review category rail hint while nothing is selected -->
+    <string name="category_unsorted_hint">Not sorted yet — pick one or skip</string>
 
     <!-- Pro Feature Dossier -->
     <string name="pro_feat_vault_title">Hidden Vault</string>

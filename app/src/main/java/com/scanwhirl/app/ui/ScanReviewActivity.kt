@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.ContextThemeWrapper
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.IntentSenderRequest
@@ -19,10 +22,12 @@ import com.google.android.gms.common.api.ApiException
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
+import com.google.android.material.chip.Chip
 import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityScanReviewBinding
+import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.Prefs
@@ -68,6 +73,12 @@ class ScanReviewActivity : BaseActivity() {
      * the scanner's PDF no longer matches and must be regenerated.
      */
     private var structureChanged = false
+
+    /** T4.1: the category the rail hands to saveScan. */
+    private var chosenCategory: String = CategoryRules.UNSORTED
+
+    /** T4.1: once the owner taps a chip by hand, the title stops re-suggesting. */
+    private var categoryPickedByHand = false
 
     /** name -> lastModified at load; a diff on resume means the pager edited files. */
     private var initialSnapshot: Map<String, Long> = emptyMap()
@@ -137,6 +148,7 @@ class ScanReviewActivity : BaseActivity() {
         defaultName = intent.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() } ?: "Document"
 
         binding.titleInput.setText(defaultName)
+        setupCategoryRail()
         loadFilters()
         initialSnapshot = snapshot()
 
@@ -196,6 +208,60 @@ class ScanReviewActivity : BaseActivity() {
 
     private fun currentTitle(): String =
         binding.titleInput.text?.toString()?.trim().orEmpty().ifBlank { defaultName }
+
+    // ------------------------------------------------------------------
+    // Category rail (T4.1)
+    // ------------------------------------------------------------------
+
+    /**
+     * Single-select chips under the title. Pre-selects
+     * [CategoryRules.classify] of the current name, re-suggests live as the
+     * name changes, and stops doing so the moment a chip is tapped by hand.
+     */
+    private fun setupCategoryRail() {
+        // Scoped context so only these chips pick up Widget.ScanWhirl.Chip
+        // (same pattern as Home's filter rail).
+        val ctx = ContextThemeWrapper(this, R.style.ThemeOverlay_ScanWhirl_ChipRail)
+        for (cat in CategoryRules.ALL) {
+            val chip = Chip(ctx).apply {
+                id = android.view.View.generateViewId()
+                tag = cat
+                text = CategoryRules.label(cat)
+                setOnClickListener { pickCategory(cat) }
+            }
+            binding.categoryRail.addView(chip)
+        }
+        binding.titleInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun afterTextChanged(s: Editable?) = suggestCategoryFromTitle()
+        })
+        suggestCategoryFromTitle()
+    }
+
+    /** Manual pick wins: the name stops re-suggesting (T4.1). */
+    private fun pickCategory(cat: String) {
+        categoryPickedByHand = true
+        chosenCategory = cat
+        paintCategoryRail()
+    }
+
+    /** Live suggestion from the title — until the owner picks by hand. */
+    private fun suggestCategoryFromTitle() {
+        if (categoryPickedByHand) return
+        chosenCategory = CategoryRules.classify(currentTitle())
+        paintCategoryRail()
+    }
+
+    /** One checked chip at a time; the hint shows while nothing is selected. */
+    private fun paintCategoryRail() {
+        val rail = binding.categoryRail
+        for (i in 0 until rail.childCount) {
+            val chip = rail.getChildAt(i) as Chip
+            chip.isChecked = chip.tag == chosenCategory
+        }
+        binding.categoryCaption.isVisible = chosenCategory == CategoryRules.UNSORTED
+    }
 
     // ------------------------------------------------------------------
     // Staging folder
@@ -480,7 +546,8 @@ class ScanReviewActivity : BaseActivity() {
                         uris,
                         if (structureChanged) null else pdfFile?.let { Uri.fromFile(it) },
                         currentTitle(),
-                        pageFilters = perPage
+                        pageFilters = perPage,
+                        category = chosenCategory
                     )
                     saved = true
 

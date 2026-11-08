@@ -40,6 +40,41 @@
         </com.google.android.material.appbar.MaterialToolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
+    <!-- test26 T4.1: pick the category before saving — a single-select chip
+         rail (chips built in code) under the title, with a hint while the
+         name has not suggested anything yet. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="12dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp">
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/categoryRail"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleLine="true"
+                app:singleSelection="true" />
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/categoryCaption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="2dp"
+            android:text="@string/category_unsorted_hint"
+            android:textColor="@color/text_hologram_dim"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
     <com.scanwhirl.app.ui.pagegrid.PageGridView
         android:id="@+id/pageGrid"
         android:layout_width="match_parent"
