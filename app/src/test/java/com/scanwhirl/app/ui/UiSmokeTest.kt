@@ -127,14 +127,14 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `bottom bar carries Tools, SCAN and Vault and settings lives in the toolbar`() {
+    fun `dock carries Tools, SCAN and Import and settings lives in the toolbar`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
-                assertTrue("bottom bar visible in normal mode", bar.isVisible)
+                val bar = activity.findViewById<android.view.View>(R.id.dockRoot)
+                assertTrue("dock visible in normal mode", bar.isVisible)
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnTools))
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnScan))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.btnVault))
+                assertNotNull(activity.findViewById<android.view.View>(R.id.btnImport))
 
                 val menu = activity.findViewById<
                     com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
@@ -144,15 +144,15 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `edit tile in the tools sheet opens the pdf picker`() {
+    fun `ocr tile in the tools sheet opens the source picker`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.findViewById<android.view.View>(R.id.btnTools).performClick()
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("tools sheet should open", sheet)
-                sheet!!.findViewById<android.view.View>(R.id.tile_edit).performClick()
-                val started = shadowOf(activity).nextStartedActivity
-                assertEquals(android.content.Intent.ACTION_OPEN_DOCUMENT, started?.action)
+                sheet!!.findViewById<android.view.View>(R.id.tile_ocr).performClick()
+                val sourceSheet = ShadowDialog.getLatestDialog()
+                assertNotNull("source picker should open", sourceSheet)
             }
         }
     }
@@ -329,7 +329,7 @@ class UiSmokeTest {
                 forceLayout(list)
                 val card = list.findViewHolderForAdapterPosition(0)!!.itemView
                 val toolbar = activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
-                val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
+                val bar = activity.findViewById<android.view.View>(R.id.dockRoot)
                 val selBar = activity.findViewById<android.view.View>(R.id.selectionBar)
                 val header = activity.findViewById<android.view.View>(R.id.selectionHeader)
 
@@ -387,7 +387,7 @@ class UiSmokeTest {
                 )
                 assertTrue(
                     "bottom bar replaces the tools row",
-                    activity.findViewById<android.view.View>(R.id.bottomBar).isVisible
+                    activity.findViewById<android.view.View>(R.id.dockRoot).isVisible
                 )
             }
         }
@@ -543,18 +543,18 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `scan button offers camera or gallery import without crashing`() {
+    fun `import button offers import sheet without crashing`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val scan = activity.findViewById<android.view.View>(R.id.btnScan)
-                assertNotNull("SCAN should be on screen", scan)
-                scan.performClick()
+                val imp = activity.findViewById<android.view.View>(R.id.btnImport)
+                assertNotNull("Import should be on screen", imp)
+                imp.performClick()
                 val dialog = ShadowDialog.getLatestDialog()
-                assertNotNull("Scan source chooser should open", dialog)
+                assertNotNull("Import sheet should open", dialog)
                 assertTrue((dialog as android.app.Dialog).isShowing)
                 val chooser = dialog as? androidx.appcompat.app.AlertDialog
                 assertEquals(
-                    "camera + gallery paths",
+                    "photos + PDF paths",
                     2,
                     chooser?.listView?.adapter?.count ?: -1
                 )
@@ -1735,13 +1735,9 @@ class UiSmokeTest {
                     app.getString(R.string.search_hint),
                     activity.findViewById<android.widget.EditText>(R.id.searchInput).hint.toString()
                 )
-                // T3.5: Free never gets the "In text" chip, even focused.
+                // T6: no "In text" chip in Free.
                 val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
                 search.requestFocus()
-                assertFalse(
-                    "no In text chip in Free",
-                    activity.findViewById<android.view.View>(R.id.chipInText).isVisible
-                )
                 search.clearFocus()
 
                 // T3.6: the Tools sheet itself is not gated — a Free tap on a
@@ -1749,7 +1745,7 @@ class UiSmokeTest {
                 activity.findViewById<android.view.View>(R.id.btnTools).performClick()
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("Tools sheet opens in Free too", sheet)
-                sheet!!.findViewById<android.view.View>(R.id.tile_ocr).performClick()
+                sheet!!.findViewById<android.view.View>(R.id.tile_lock).performClick()
                 val pitch = ShadowDialog.getLatestDialog()
                 assertNotNull("Free tap on a Pro tile shows the pitch", pitch)
                 assertNotNull(
@@ -1770,19 +1766,10 @@ class UiSmokeTest {
                     "PRO",
                     activity.findViewById<android.widget.TextView>(R.id.proBadge).text.toString()
                 )
-                // T3.5: the hint no longer changes with Pro — the "In text"
-                // chip under the field takes over that job, on focus only.
+                // T6: the "In text" chip is deleted — search covers names + text.
                 val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
                 assertEquals(app.getString(R.string.search_hint), search.hint.toString())
-                assertFalse(
-                    "chip waits for focus",
-                    activity.findViewById<android.view.View>(R.id.chipInText).isVisible
-                )
                 search.requestFocus()
-                assertTrue(
-                    "In text chip shows for Pro on focus",
-                    activity.findViewById<android.view.View>(R.id.chipInText).isVisible
-                )
                 search.clearFocus()
 
                 // T3.6: in Pro the same tile runs the flow — the source chooser.

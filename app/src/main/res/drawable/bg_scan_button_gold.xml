@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- test26 T6: Scan button disc in vault mode — vertical gradient gold. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:type="linear"
+        android:angle="270"
+        android:startColor="@color/scan_disc_gold_top"
+        android:endColor="@color/scan_disc_gold_bottom" />
+</shape>

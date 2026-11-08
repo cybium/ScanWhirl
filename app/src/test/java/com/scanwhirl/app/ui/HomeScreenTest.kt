@@ -277,11 +277,11 @@ class HomeScreenTest {
     // ---- T3.5: search bar + list header --------------------------------
 
     @Test
-    fun `search hint reads Search documents`() {
+    fun `search hint reads Search names and text`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
-                assertEquals("Search documents", search.hint.toString())
+                assertEquals("Search names and text", search.hint.toString())
             }
         }
     }
@@ -322,22 +322,17 @@ class HomeScreenTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
-                val chip = activity.findViewById<Chip>(R.id.chipInText)
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
 
+                // T6: search covers names + text — no chip needed.
                 search.requestFocus()
-                assertTrue("chip shows for Pro on focus", chip.isVisible)
-                assertTrue("OCR matching starts on", chip.isChecked)
-
                 search.setText("hologram")
                 assertTrue("matches OCR text", pollUntil { list.adapter!!.itemCount == 1 })
 
-                chip.performClick()
-                assertFalse("tap turns OCR matching off", chip.isChecked)
-                assertTrue("names only now", pollUntil { list.adapter!!.itemCount == 0 })
+                search.setText("")
+                assertTrue("back to all", pollUntil { list.adapter!!.itemCount >= 1 })
 
                 search.clearFocus()
-                assertFalse("chip follows focus out", chip.isVisible)
             }
         }
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
@@ -517,7 +512,7 @@ class HomeScreenTest {
                 assertTrue("hint shows for a fresh library",
                     activity.findViewById<View>(R.id.emptySubtitle).isVisible)
                 assertEquals(
-                    "Tap the camera button to start",
+                    "Everything stays on this phone.",
                     activity.findViewById<android.widget.TextView>(R.id.emptySubtitle).text.toString()
                 )
                 assertFalse("no Show all chip for a fresh library",
@@ -652,20 +647,20 @@ class HomeScreenTest {
     fun `tools sheet opens and holds nine tiles in two sections`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val bar = activity.findViewById<android.view.View>(R.id.bottomBar)
-                assertTrue("bottom bar shows in normal mode", bar.isVisible)
+                val bar = activity.findViewById<android.view.View>(R.id.dockRoot)
+                assertTrue("dock shows in normal mode", bar.isVisible)
 
                 activity.findViewById<android.view.View>(R.id.btnTools).performClick()
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("Tools sheet opens", sheet)
 
-                // T4.4: Quick sort joins the Free section as the 9th tile.
+                // T6: OCR tile is Free, Edit tile is gone.
                 val freeIds = setOf(
-                    R.id.tile_edit, R.id.tile_merge, R.id.tile_compress, R.id.tile_resize,
+                    R.id.tile_ocr, R.id.tile_merge, R.id.tile_compress, R.id.tile_resize,
                     R.id.tile_quick_sort
                 )
                 val proIds = setOf(
-                    R.id.tile_ocr, R.id.tile_lock, R.id.tile_long_image, R.id.tile_vault
+                    R.id.tile_lock, R.id.tile_long_image, R.id.tile_vault
                 )
                 for (id in freeIds + proIds) {
                     assertNotNull(

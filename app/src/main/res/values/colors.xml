@@ -56,6 +56,10 @@
     <color name="pro_badge_stroke">#80FFB800</color>
     <color name="free_badge_bg">#2E00F0FF</color>
     <color name="free_badge_stroke">#3800F0FF</color>
+    <color name="scan_disc_top">#00F0FF</color>
+    <color name="scan_disc_bottom">#00B8D4</color>
+    <color name="scan_disc_gold_top">#FFB800</color>
+    <color name="scan_disc_gold_bottom">#E0A000</color>
     <color name="sf_title_field">#D60F1F3D</color>
     <color name="sf_tool_bg">#C20A162B</color>
     <color name="sf_pro_bg">#CC1A1505</color>

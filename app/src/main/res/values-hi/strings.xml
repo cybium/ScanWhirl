@@ -2,7 +2,7 @@
 <resources>
     <string name="tab_my_scans">मेरे स्कैन</string>
     <string name="tab_device_pdfs">डिवाइस PDF</string>
-    <string name="search_hint">दस्तावेज़ खोजें</string>
+    <string name="search_hint"><!-- review -->नाम और पाठ खोजें</string>
     <string name="sort">क्रमबद्ध करें</string>
     <string name="sort_name">नाम</string>
     <string name="sort_date">बनाने की तारीख</string>
@@ -13,7 +13,7 @@
     <string name="tool_merge">मर्ज</string>
     <string name="tool_settings">सेटिंग्स</string>
     <string name="empty_title">अभी कोई स्कैन नहीं</string>
-    <string name="empty_first_scan_hint">कैमरा बटन दबाकर शुरू करें</string>
+    <string name="empty_first_scan_hint"><!-- review -->सब कुछ इस फोन पर रहता है।</string>
     <string name="view">देखें</string>
     <string name="edit">संपादित करें</string>
     <string name="pick_pdf">PDF चुनें</string>
@@ -101,7 +101,15 @@
     <string name="select">चुनें</string>
     <string name="bar_tools">टूल</string>
     <string name="bar_scan">स्कैन</string>
+    <string name="bar_add"><!-- review -->जोड़ें</string>
+    <string name="bar_import"><!-- review -->आयात करें</string>
     <string name="bar_vault">वॉल्ट</string>
+    <string name="import_title"><!-- review -->आयात करें</string>
+    <string name="import_photos"><!-- review -->गैलरी से फ़ोटो</string>
+    <string name="import_pdf"><!-- review -->PDF पन्नों के रूप में</string>
+    <string name="empty_scan_button"><!-- review -->एक दस्तावेज़ स्कैन करें</string>
+    <string name="empty_import_button"><!-- review -->फोटो या एक PDF आयात करें</string>
+    <string name="empty_no_match_hint"><!-- review -->आपके स्कैन में नाम और पाठ खोजे गए।</string>
     <string name="list_count_category">%2$s में %1$d</string>
     <string name="settings_greeting">स्थिति पंक्ति</string>
     <string name="settings_greeting_summary">होम स्क्रीन पर स्थिति पंक्ति दिखाएँ</string>
@@ -137,7 +145,7 @@
     <string name="btn_lock_pdf"><!-- review -->Lock PDF</string>
     <string name="btn_lock_unlock"><!-- review -->Lock / Unलॉक</string>
     <string name="btn_long_image"><!-- review -->Lचालूg Image</string>
-    <string name="btn_ocr_text"><!-- review -->OCR Text</string>
+    <string name="btn_ocr_text"><!-- review -->पाठ पढ़ें</string>
     <string name="btn_settings"><!-- review -->Settings</string>
     <string name="btn_unlock_pdf"><!-- review -->Unलॉक PDF</string>
     <string name="btn_vault_hide"><!-- review -->Hide in Vault</string>
@@ -327,11 +335,7 @@
     <string name="save_pdf_device"><!-- review -->Save PDF को Documents</string>
     <string name="saved_as_new"><!-- review -->Saved as a new दस्तावेज़</string>
     <string name="scan"><!-- review -->Scan दस्तावेज़</string>
-    <string name="scan_chooser_camera"><!-- review -->Camera स्कैनner</string>
-    <string name="scan_chooser_gallery"><!-- review -->Import से गैलरी</string>
-    <string name="scan_chooser_title"><!-- review -->Add पृष्ठ</string>
     <string name="scan_no_pages"><!-- review -->No पृष्ठ स्कैनned</string>
-    <string name="scan_tap_prompt"><!-- review -->TAP TO SCAN</string>
     <string name="scanner_failed"><!-- review -->Could नहीं start स्कैनner: %1$s</string>
     <string name="scanner_unavailable"><!-- review -->Scanner unavailable (code %1$d). Is Google Play services installed and up को date?</string>
     <string name="select_done"><!-- review -->Dचालूe</string>

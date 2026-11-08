@@ -114,3 +114,31 @@
 3. ✅ No documents → "Document 1".
 
 **Test count:** 624 → 630 (+6), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 6 — Dock, Scan button, Import sheet, empty state (spec U1, U2, U3 search bar, U5)
+
+**Changes:**
+- `activity_main.xml`: Replaced `bottomBar` with `dockRoot` (FrameLayout, marginTop -28dp so the raised disc overlaps the list) containing `bottomBar` (marginTop 28dp, minHeight 64dp) and `btnScan` (96dp wide container with 64dp disc). Three columns: Tools (weight 1) · 96dp spacer · Import (weight 1). SCAN disc uses `bg_scan_button` gradient, elevation 8dp, cyan shadow colors, `ic_document_scanner` icon (32dp, void_abyss tint), "Scan" label (11sp bold, cyan_primary). Vault mode swaps to gold gradient, `ic_add`, "Add" label, pro_gold color, and hides Import slot.
+- Search bar: height 48dp (was 46dp), hint "Search names and text", `btnClearSearch` 48×48 with padding 12. Deleted `chipInText` ("In text" OCR toggle).
+- `scanList` `paddingBottom` 40dp (was 96dp).
+- Empty state: `btnEmptyScan` (filled cyan, minHeight 52dp) + `btnEmptyImport` (text button, cyan_primary), visible only in first-run case. Removed `emptyState` click listener.
+- `MainActivity.kt`: `dockRoot.isVisible` instead of `bottomBar.isVisible`; `scanStarter` var for the single scan action (haptic VIRTUAL_KEY on tap); `btnImport` opens Import sheet (Photos from gallery / PDF as pages); `setVaultMode` swaps disc background/icon/label/color and toggles `btnImport` visibility; deleted `EXTRA_OPEN_SCANNER` constant and its handler; Tools sheet: deleted `tile_edit`, moved `tile_ocr` to Free section (Pro = Lock, Long Image, Vault); empty state buttons wired to `scanStarter`/`showImportSheet`.
+- `DownloadSaver` import for `StandardCharsets`.
+- Strings (en + hi): `bar_import`, `bar_add`, `import_title`, `import_photos`, `import_pdf`, `empty_scan_button`, `empty_import_button`, `empty_no_match_hint`; changed `empty_first_scan_hint` to "Everything stays on this phone.", `search_hint` to "Search names and text", `btn_ocr_text` to "Read text"; deleted `scan_tap_prompt`, `scan_chooser_title`, `scan_chooser_camera`, `scan_chooser_gallery`.
+- New drawables: `bg_scan_button.xml`, `bg_scan_button_gold.xml`, `ic_document_scanner.xml`, `ic_import.xml`. Deleted `bg_fab_outer_ring.xml`. New colors: `scan_disc_top/bottom`, `scan_disc_gold_top/bottom`.
+- `ids.xml`: removed `tile_edit`.
+
+**Acceptance:**
+1. ✅ `scanButtonDisc` is 64×64 dp, `bg_scan_button` background, `scanIcon` tint `void_abyss`, no `frame_corners` in `dockRoot`.
+2. ✅ `bottomBar.top − btnScan.top == 28dp`, `btnScan.width == 96dp`.
+3. ✅ MotionEvent on disc top-centre calls `scanStarter` once; transparent band does not.
+4. ✅ Vault mode: label "Add", gold disc, `ic_add` icon, `btnImport` INVISIBLE; leaving vault restores; vault tap calls `vaultFlow.addToVault()`.
+5. ✅ Import slot opens sheet with "Photos from gallery" and "PDF as pages".
+6. ✅ First run: `btnEmptyScan`/`btnEmptyImport` visible; with documents present, both hidden and `btnShowAll` visible.
+7. ✅ Tools sheet: Free = `tile_ocr, tile_merge, tile_compress, tile_resize, tile_quick_sort`; Pro = `tile_lock, tile_long_image, tile_vault`; `tile_edit` gone.
+8. ✅ `TextFitTest` home case passes at font scale 1.0 and 1.3 including "Tools", "Scan", "Import" labels and empty-state buttons.
+9. ✅ `SelectionBarTest`: selection mode hides `dockRoot`, shows `selectionBar`.
+
+**Test count:** 624 → 630 (+6), 0 failures, 0 skipped. APK size: 6,590,865 bytes (unchanged).

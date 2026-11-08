@@ -3,7 +3,6 @@
     <!-- test26 T3.6: Tools-sheet tile ids. The tiles are inflated from
          view_tool_tile.xml into sheet_tools.xml's two rows in code, so the
          ids are declared here rather than on any layout element. -->
-    <item name="tile_edit" type="id" />
     <item name="tile_merge" type="id" />
     <item name="tile_compress" type="id" />
     <item name="tile_resize" type="id" />

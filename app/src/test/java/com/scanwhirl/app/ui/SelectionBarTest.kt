@@ -142,7 +142,7 @@ class SelectionBarTest {
                 assertTrue("action bar replaces the SCAN bar", bar.isVisible)
                 assertFalse(
                     "SCAN bar leaves while selecting",
-                    activity.findViewById<View>(R.id.bottomBar).isVisible
+                    activity.findViewById<View>(R.id.dockRoot).isVisible
                 )
 
                 // Enable rules (§4.2).
@@ -237,7 +237,7 @@ class SelectionBarTest {
                 activity.findViewById<View>(R.id.btnSelect).performClick()
                 card.performClick()
 
-                val bar = activity.findViewById<View>(R.id.bottomBar)
+                val bar = activity.findViewById<View>(R.id.dockRoot)
                 val selBar = activity.findViewById<View>(R.id.selectionBar)
                 val header = activity.findViewById<View>(R.id.selectionHeader)
                 val toolbar =

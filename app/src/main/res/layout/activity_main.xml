@@ -23,11 +23,13 @@
                 android:layout_height="wrap_content"
                 android:minHeight="?attr/actionBarSize"
                 android:paddingVertical="6dp"
+                app:contentInsetStart="0dp"
+                app:contentInsetEnd="0dp"
                 app:titleTextColor="@color/text_hologram_hi">
 
                 <LinearLayout
                     android:id="@+id/titleBlock"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="vertical">
@@ -85,10 +87,9 @@
                          separators hairline-coloured via StatusLine.styled(). -->
                     <TextView
                         android:id="@+id/statusLine"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:ellipsize="end"
                         android:letterSpacing="0.12"
                         android:maxLines="1"
                         android:textColor="@color/cyan_dim"
@@ -148,7 +149,7 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="46dp"
+                android:layout_height="48dp"
                 android:layout_marginHorizontal="12dp"
                 android:layout_marginBottom="10dp"
                 android:background="@drawable/bg_search_bar"
@@ -182,35 +183,17 @@
                     android:textSize="14sp" />
 
                 <!-- test26 T3.5: clear (×) — appears only while there is text
-                     to clear. The sort pill left the bar (R7/Q7): sorting now
-                     lives in the list header. -->
+                     to clear. -->
                 <ImageView
                     android:id="@+id/btnClearSearch"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:contentDescription="@string/search_clear"
-                    android:padding="6dp"
+                    android:padding="12dp"
                     android:src="@drawable/ic_close"
                     android:visibility="gone"
                     app:tint="@color/cyan_dim" />
             </LinearLayout>
-
-            <!-- test26 T3.5: "In text" OCR toggle — only for Pro, only while
-                 the search field has focus (replaces the old long Pro hint,
-                 R7/Q7). Checked = OCR text may match too. -->
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipInText"
-                style="@style/Widget.ScanWhirl.Chip"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="start"
-                android:layout_marginStart="16dp"
-                android:layout_marginBottom="6dp"
-                android:checked="true"
-                android:text="@string/in_text_chip"
-                android:textColor="@color/chip_in_text_text"
-                android:visibility="gone"
-                app:chipStrokeColor="@color/chip_in_text_stroke" />
         </com.google.android.material.appbar.AppBarLayout>
 
         <!-- test26 T3.1/T3.4: category chip rail. Built in code by
@@ -391,18 +374,17 @@
                 android:paddingStart="8dp"
                 android:paddingTop="8dp"
                 android:paddingEnd="8dp"
-                android:paddingBottom="96dp" />
+                android:paddingBottom="40dp" />
 
             <LinearLayout
                 android:id="@+id/emptyState"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:gravity="center"
-                android:orientation="vertical"
-                android:padding="32dp">
+                android:orientation="vertical">
 
                 <!-- test26 T3.8: viewfinder brackets replace the orbit icon;
-                     the SCAN button in the bottom bar is the call to action. -->
+                     the SCAN button in the dock is the call to action. -->
                 <ImageView
                     android:id="@+id/emptyFrame"
                     android:layout_width="96dp"
@@ -423,12 +405,39 @@
 
                 <TextView
                     android:id="@+id/emptySubtitle"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:gravity="center"
+                    android:text="@string/empty_first_scan_hint"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     android:textColor="@color/text_hologram_mid"
+                    android:visibility="gone" />
+
+                <!-- First-run: filled cyan scan button + text import button. -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEmptyScan"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    android:minHeight="52dp"
+                    android:backgroundTint="@color/cyan_primary"
+                    android:text="@string/empty_scan_button"
+                    android:textColor="@color/void_abyss"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEmptyImport"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:minHeight="52dp"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:text="@string/empty_import_button"
+                    android:textColor="@color/cyan_primary"
+                    android:textSize="14sp"
                     android:visibility="gone" />
 
                 <!-- test26 T3.8: only in the filter-empty state — clears the
@@ -444,116 +453,142 @@
             </LinearLayout>
         </FrameLayout>
 
-        <!-- test26 T3.6: bottom bar (Tools · SCAN · Vault) — replaces the FAB
-             and the tool cards (R7/Q7). The screen root already carries the
-             system-bar padding (T1.1), so this needs no inset handling.
-             T3.13: 12dp side margins + 8dp above the navigation bar so the
-             rounded corners never touch the screen edges. -->
-        <LinearLayout
-            android:id="@+id/bottomBar"
+        <!-- test26 T6/U1-U2: Dock with raised Scan disc overlapping the list.
+             dockRoot top margin is -28dp so the disc protrudes above the dock;
+             touches in the transparent band fall through to the list. -->
+        <FrameLayout
+            android:id="@+id/dockRoot"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="12dp"
+            android:layout_marginTop="-28dp"
             android:layout_marginBottom="8dp"
-            android:background="@drawable/bg_dock_glass"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="6dp"
-            android:visibility="gone">
+            android:clipChildren="false"
+            android:clipToPadding="false">
 
             <LinearLayout
-                android:id="@+id/btnTools"
-                android:layout_width="0dp"
+                android:id="@+id/bottomBar"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:minHeight="56dp"
-                android:orientation="vertical"
-                android:paddingVertical="6dp">
+                android:layout_marginTop="28dp"
+                android:minHeight="64dp"
+                android:background="@drawable/bg_dock_glass"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp">
 
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_tools"
-                    app:tint="@color/cyan_primary" />
-
-                <TextView
-                    android:layout_width="wrap_content"
+                <!-- btnTools (weight 1) -->
+                <LinearLayout
+                    android:id="@+id/btnTools"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/bar_tools"
-                    android:textColor="@color/text_hologram_mid"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:minHeight="56dp"
+                    android:orientation="vertical"
+                    android:paddingVertical="6dp">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_tools"
+                        app:tint="@color/cyan_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/bar_tools"
+                        android:textColor="@color/text_hologram_mid"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Fixed 96dp spacer under the disc -->
+                <Space
+                    android:layout_width="96dp"
+                    android:layout_height="1dp" />
+
+                <!-- btnImport (weight 1) -->
+                <LinearLayout
+                    android:id="@+id/btnImport"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:minHeight="56dp"
+                    android:orientation="vertical"
+                    android:paddingVertical="6dp">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_import"
+                        app:tint="@color/cyan_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/bar_import"
+                        android:textColor="@color/text_hologram_mid"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
             </LinearLayout>
 
-            <!-- SCAN: 64dp viewfinder ring (§4.2), vault mode turns it to Add. -->
-            <FrameLayout
+            <!-- Scan disc: 96dp wide container, 64dp disc, top-aligned centered -->
+            <LinearLayout
                 android:id="@+id/btnScan"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:layout_marginHorizontal="12dp"
-                android:clickable="true"
-                android:contentDescription="@string/scan"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackgroundBorderless">
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_fab_outer_ring" />
-
-                <ImageView
-                    android:id="@+id/scanIcon"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_camera"
-                    app:tint="@color/cyan_primary" />
-
-                <!-- test26 T8.2: viewfinder corner brackets on the SCAN ring. -->
-                <ImageView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:src="@drawable/frame_corners" />
-            </FrameLayout>
-
-            <LinearLayout
-                android:id="@+id/btnVault"
-                android:layout_width="0dp"
+                android:layout_width="96dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
+                android:layout_gravity="top|center_horizontal"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
                 android:clickable="true"
                 android:focusable="true"
-                android:gravity="center"
-                android:minHeight="56dp"
-                android:orientation="vertical"
-                android:paddingVertical="6dp">
+                android:contentDescription="@string/scan">
 
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_lock"
-                    app:tint="@color/cyan_primary" />
+                <FrameLayout
+                    android:id="@+id/scanButtonDisc"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:background="@drawable/bg_scan_button"
+                    android:elevation="8dp"
+                    android:outlineSpotShadowColor="@color/cyan_primary"
+                    android:outlineAmbientShadowColor="@color/cyan_primary"
+                    android:stateListAnimator="@animator/sw_press"
+                    android:foreground="?attr/selectableItemBackgroundBorderless">
+
+                    <ImageView
+                        android:id="@+id/scanIcon"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_document_scanner"
+                        app:tint="@color/void_abyss" />
+                </FrameLayout>
 
                 <TextView
+                    android:id="@+id/scanLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="@string/bar_vault"
-                    android:textColor="@color/text_hologram_mid"
+                    android:text="@string/bar_scan"
                     android:textSize="11sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:textColor="@color/cyan_primary" />
             </LinearLayout>
-        </LinearLayout>
+        </FrameLayout>
 
         <!-- test26 T3.12 (§4.2 Rev 3): contextual action bar while selecting
              — replaces the SCAN bar. This amends the approved T3.7 rule

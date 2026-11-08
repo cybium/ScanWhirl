@@ -2,13 +2,12 @@
 <resources>
     <string name="app_name">ScanWhirl</string>
     <string name="scan">Scan document</string>
-    <string name="scan_tap_prompt">TAP TO SCAN</string>
     <string name="empty_title">No scans yet</string>
     <!-- test26 T3.8: the empty state speaks per situation; the old "+"-button
          subtitle died with the FAB in T3.6. -->
     <string name="empty_first_scan">Scan your first document</string>
     <!-- test26 T3.13: muted line under the title — names the call to action. -->
-    <string name="empty_first_scan_hint">Tap the camera button to start</string>
+    <string name="empty_first_scan_hint">Everything stays on this phone.</string>
     <string name="empty_category">No %1$s documents yet</string>
     <string name="empty_no_match">No documents match your search</string>
     <string name="show_all">Show all</string>
@@ -172,7 +171,7 @@
     <string name="remove">Remove</string>
     <string name="preview">Preview</string>
 
-    <string name="search_hint">Search documents</string>
+    <string name="search_hint">Search names and text</string>
     <string name="sort">Sort</string>
     <string name="sort_name">Name</string>
     <string name="sort_date">Date created</string>
@@ -189,7 +188,15 @@
     <!-- test26 T3.6: bottom bar + Tools sheet (bar_tools doubles as the sheet title). -->
     <string name="bar_tools">Tools</string>
     <string name="bar_scan">Scan</string>
+    <string name="bar_add">Add</string>
+    <string name="bar_import">Import</string>
     <string name="bar_vault">Vault</string>
+    <string name="import_title">Import</string>
+    <string name="import_photos">Photos from gallery</string>
+    <string name="import_pdf">PDF as pages</string>
+    <string name="empty_scan_button">Scan a document</string>
+    <string name="empty_import_button">Import photos or a PDF</string>
+    <string name="empty_no_match_hint">Names and text inside your scans were searched.</string>
     <string name="list_count_category">%1$d in %2$s</string>
     <plurals name="list_count">
         <item quantity="one">%1$d document</item>
@@ -252,7 +259,7 @@
     <string name="btn_change_pw">Password</string>
     <string name="btn_unlock_pdf">Unlock PDF</string>
     <string name="btn_lock_unlock">Lock / Unlock</string>
-    <string name="btn_ocr_text">OCR Text</string>
+    <string name="btn_ocr_text">Read text</string>
     <string name="btn_long_image">Long Image</string>
     <string name="btn_vault_hide">Hide in Vault</string>
     <string name="btn_vault_unhide">Remove Vault</string>
@@ -372,9 +379,6 @@
     <string name="progress_title">Working…</string>
 
     <!-- New pages: camera or a straight gallery import (no scanner crop). -->
-    <string name="scan_chooser_title">Add pages</string>
-    <string name="scan_chooser_camera">Camera scanner</string>
-    <string name="scan_chooser_gallery">Import from gallery</string>
     <string name="source_saved_scan">Saved scan</string>
     <string name="source_device_pdf">Device PDF</string>
     <string name="source_gallery_image">Gallery image</string>

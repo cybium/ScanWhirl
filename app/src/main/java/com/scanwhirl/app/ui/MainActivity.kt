@@ -138,6 +138,9 @@ class MainActivity : BaseActivity(), HomeHost {
         )
     }
 
+    /** The single scan action: direct launcher, or Add to vault in vault mode. */
+    internal var scanStarter: () -> Unit = { scanLauncher.launchScanner() }
+
     private var selectionMode = false
     private val selectedIds = LinkedHashSet<String>()
 
@@ -243,7 +246,7 @@ class MainActivity : BaseActivity(), HomeHost {
 
         // T3.6: the bottom bar replaces the FAB and the tool cards (R7/Q7).
         // SCAN keeps the old FAB behaviour: add when the vault is open.
-        binding.bottomBar.isVisible = true
+        binding.dockRoot.isVisible = true
         binding.btnTools.setOnClickListener { showToolsSheet() }
         // T4.4: the Quick Sort nudge (T3.1 left the container GONE) — one
         // glass-card label between the chip rail and the list header; it
@@ -270,18 +273,13 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.nudge.minimumHeight = (48 * resources.displayMetrics.density).toInt()
         binding.nudge.setOnClickListener { showQuickSort() }
         binding.btnScan.setOnClickListener {
-            if (vaultMode) vaultFlow.addToVault() else showScanChooser()
+            binding.btnScan.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            if (vaultMode) vaultFlow.addToVault() else scanStarter()
         }
-        binding.btnVault.setOnClickListener { vaultFlow.openVaultWithPin() }
-        // T3.8: tapping the empty state starts a scan only when there is
-        // truly nothing yet — a filtered-out library must not launch the
-        // scanner (its Show all chip is the action there).
-        binding.emptyState.setOnClickListener {
-            when {
-                vaultMode -> vaultFlow.addToVault()
-                allDocs.isEmpty() -> showScanChooser()
-            }
-        }
+        binding.btnImport.setOnClickListener { showImportSheet() }
+        // T6: empty-state buttons — visible only in the first-run case.
+        binding.btnEmptyScan.setOnClickListener { scanStarter() }
+        binding.btnEmptyImport.setOnClickListener { showImportSheet() }
         // T3.8: Show all drops every filter (query + category) in one tap.
         binding.btnShowAll.setOnClickListener {
             binding.searchInput.setText("")
@@ -307,16 +305,8 @@ class MainActivity : BaseActivity(), HomeHost {
             binding.searchInput.setText("")
             binding.searchInput.requestFocus()
         }
-        // T3.5: the "In text" chip exists only for Pro, only while the field
-        // has focus — it replaced the long Pro hint (R7/Q7).
-        binding.searchInput.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            binding.chipInText.isVisible = hasFocus && ProGate.isPro(this)
-        }
-        binding.chipInText.setOnClickListener {
-            // CompoundButton toggles checked before the click listener runs.
-            searchInText = binding.chipInText.isChecked
-            applyList()
-        }
+        // T6: the "In text" chip is deleted — search always covers names + text.
+        binding.searchInput.onFocusChangeListener = null
         // Tapping the crown badge (or the whole title block) opens the Pro panel.
         binding.proBadge.setOnClickListener { showProPanel() }
         binding.titleBlock.setOnClickListener { showProPanel() }
@@ -350,13 +340,6 @@ class MainActivity : BaseActivity(), HomeHost {
 
         updateSelectionHeader()
         refreshList()
-
-        // Launched from the globe home's scan button: jump straight into the
-        // camera/gallery chooser (cleared so recreation doesn't re-show it).
-        if (intent.getBooleanExtra(EXTRA_OPEN_SCANNER, false)) {
-            intent.removeExtra(EXTRA_OPEN_SCANNER)
-            showScanChooser()
-        }
     }
 
     override fun onResume() {
@@ -881,8 +864,14 @@ class MainActivity : BaseActivity(), HomeHost {
         class Tile(val id: Int, val label: Int, val icon: Int, val pro: Boolean, val run: () -> Unit)
 
         val free = listOf(
-            Tile(R.id.tile_edit, R.string.tool_edit, R.drawable.ic_edit, false) {
-                pickEditPdf.launch(arrayOf("application/pdf"))
+            // T6: OCR tile (id tile_ocr) is Free — no Pro gate.
+            Tile(R.id.tile_ocr, R.string.btn_ocr_text, R.drawable.ic_ocr, false) {
+                chooseProSource(
+                    R.string.ocr_title,
+                    onScan = { doc -> ocrFlow.runOcrForScan(doc) },
+                    onPdf = { uri -> ocrFlow.runOcrForPdf(uri) },
+                    onImage = { uri -> ocrFlow.runOcrForImage(uri) }
+                )
             },
             Tile(R.id.tile_merge, R.string.tool_merge, R.drawable.ic_merge, false) {
                 mergeFlow.showMergeChooser()
@@ -899,14 +888,6 @@ class MainActivity : BaseActivity(), HomeHost {
             }
         )
         val proTiles = listOf(
-            Tile(R.id.tile_ocr, R.string.btn_ocr_text, R.drawable.ic_ocr, true) {
-                chooseProSource(
-                    R.string.ocr_title,
-                    onScan = { doc -> ocrFlow.runOcrForScan(doc) },
-                    onPdf = { uri -> ocrFlow.runOcrForPdf(uri) },
-                    onImage = { uri -> ocrFlow.runOcrForImage(uri) }
-                )
-            },
             Tile(R.id.tile_lock, R.string.tool_lock, R.drawable.ic_lock, true) {
                 lockFlow.chooseLockSource()
             },
@@ -989,7 +970,7 @@ class MainActivity : BaseActivity(), HomeHost {
         // T3.12 (amends T3.7's "bottom bar hidden while selecting"): the
         // SCAN bar still leaves, but the contextual action bar takes its
         // place instead of wasting the row (§4.2 Rev 3).
-        binding.bottomBar.isVisible = !enabled
+        binding.dockRoot.isVisible = !enabled
         binding.selectionBar.isVisible = enabled
         updateSelectionHeader()
         updateStatusLine()
@@ -1005,13 +986,15 @@ class MainActivity : BaseActivity(), HomeHost {
         vaultMode = enabled
         backCallback.isEnabled = selectionMode || vaultMode
         binding.vaultBanner.isVisible = enabled
-        // In the vault SCAN becomes "add": move a scan in, or import a PDF.
-        binding.bottomBar.isVisible = !selectionMode
-        binding.scanIcon.setImageResource(if (enabled) R.drawable.ic_add else R.drawable.ic_camera)
-        binding.btnScan.contentDescription =
-            getString(if (enabled) R.string.vault_add_title else R.string.scan)
-        // T3.8: the empty-state copy belongs to updateEmptyState() now —
-        // refreshList() below lands in applyList() and sets it per situation.
+        // In the vault SCAN becomes "Add": gold disc, ic_add, "Add" label.
+        binding.dockRoot.isVisible = !selectionMode
+        val disc = binding.scanButtonDisc
+        disc.setBackgroundResource(if (enabled) R.drawable.bg_scan_button_gold else R.drawable.bg_scan_button)
+        binding.scanIcon.setImageResource(if (enabled) R.drawable.ic_add else R.drawable.ic_document_scanner)
+        binding.scanLabel.text = getString(if (enabled) R.string.bar_add else R.string.bar_scan)
+        binding.scanLabel.setTextColor(if (enabled) ContextCompat.getColor(this, R.color.pro_gold) else ContextCompat.getColor(this, R.color.cyan_primary))
+        binding.btnScan.contentDescription = getString(if (enabled) R.string.vault_add_title else R.string.scan)
+        binding.btnImport.visibility = if (enabled) View.INVISIBLE else View.VISIBLE
         refreshList()
     }
 
@@ -1020,23 +1003,21 @@ class MainActivity : BaseActivity(), HomeHost {
     // ------------------------------------------------------------------
 
     /**
-     * One entry point for new pages. The gallery path bypasses ML Kit's
-     * scanner on purpose: the scanner perspective-crops imported photos,
-     * which is what used to tilt them. Direct import only fixes EXIF
-     * rotation — the picture is otherwise exactly as taken.
+     * Import sheet: Photos from gallery / PDF as pages. Replaces the old
+     * camera/gallery chooser.
      */
-    private fun showScanChooser() {
+    private fun showImportSheet() {
         SwDialog.sheet(this)
-            .setTitle(R.string.scan_chooser_title)
+            .setTitle(R.string.import_title)
             .setItems(
                 arrayOf(
-                    getString(R.string.scan_chooser_camera),
-                    getString(R.string.scan_chooser_gallery)
+                    getString(R.string.import_photos),
+                    getString(R.string.import_pdf)
                 )
             ) { _, which ->
                 when (which) {
-                    0 -> scanLauncher.launchScanner()
-                    1 -> pickGalleryImages.launch("image/*")
+                    0 -> pickGalleryImages.launch("image/*")
+                    1 -> pickEditPdf.launch(arrayOf("application/pdf"))
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -1439,7 +1420,5 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     companion object {
-        /** Set by the globe home so the scan button lands on the chooser. */
-        const val EXTRA_OPEN_SCANNER = "open_scanner"
     }
 }
