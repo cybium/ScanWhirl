@@ -834,3 +834,62 @@ Suite after: **294 tests / 2 failures = only the documented TextFit reds** (286 
 `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
 
 ---
+
+### T4.4 Quick Sort ✅ (`246a5ca`)
+
+**Red-proof first** (existing symbols only: `R.id.nudge`, `R.id.btnTools`, the wireframe's literal
+labels, so it compiled pre-fix): both new-behavior cases failed exactly as designed — `T4.4: the
+nudge must be visible while an unsorted doc exists` (T3.1 left the container GONE by owner
+decision) and `T4.4: the Tools sheet must carry the Quick sort tile` (only 8 tiles existed); the
+absence-guard (`nudge stays hidden…`) passed pre-fix and still guards post-fix.
+
+Built:
+- **`util/QuickSortQueue.kt`** (pure): `from(docs)` keeps Unsorted + Other in library order;
+  `current()`, `pick(category)` (requires ∈ `CategoryRules.ALL`, returns the doc so the caller
+  saves it immediately), `skip()`, `remaining()`, `done()`, `progress()` → `Progress(done, total)`
+  with 1-based `position` ("2 of 7" in §4.8). The queue never writes storage.
+- **`sheet_quick_sort.xml`** (§4.8): header = `Quick sort` + `qsProgress` ("N of M") + **X close
+  button top-right** (48dp, `@string/close`; Rev 4 §3D — closing mid-queue just closes, no
+  confirmation), 180dp thumbnail (`PageThumbLoader`, 640px, `centerCrop`), doc line
+  "name · N pages", `qsChips` ChipGroup holding the five category chips + Skip (built in code with
+  `ThemeOverlay_ScanWhirl_ChipRail`, tag = stored value, skip chip tagged `"skip"`), and a `qsDone`
+  "All sorted" banner that replaces the queue UI when the queue empties. Pick → haptic
+  `CLOCK_TICK` (plan) + `repo.setCategory` + `render()` + `refreshList()`; Skip only advances; X
+  only dismisses.
+- **Home nudge** — T3.1's `R.id.nudge` container finally fills: a `bg_glass_card` label built in
+  onCreate, `updateNudge()` hooked into `applyList()` (the T3.10 renderHome path, unfiltered
+  snapshot) — visible only while Unsorted + Other > 0, text `quick_sort_nudge` =
+  "N unsorted · Quick sort ›". The click listener sits on the **whole card** (label inert so taps
+  bubble) — that is also the R6-sized target.
+- **Tools sheet 9th tile**: `tile_quick_sort` (ids.xml) + `Tile(..., R.drawable.ic_sort, free)` in
+  `showToolsSheet` — §4.3 "T4.4 adds a 9th tile"; the longest-word column probe sees its label
+  automatically.
+- **Strings:** `quick_sort`, `quick_sort_nudge`, `qs_progress`, `all_sorted`, `skip` en + hi in the
+  same commit (hi review comment).
+
+**Iterations (2, both caught before the commit):**
+1. `processDebugResources` — this Material version's ChipGroup wants
+   `app:chipSpacingHorizontal`/`chipSpacingVertical`, not `spacingHorizontal`/`spacingVertical`.
+2. Red → green run exposed the real design slip: the listener was on the nudge's *label*, so a tap
+   on the card (what the test drives via `nudge.performClick()`) did nothing — moved to the
+   container. Plus 3 self-inflicted pure-test bugs (message passed as `expected`, a "none
+   categorized" assertion that also counted the never-queued Study doc, `position` asserted on an
+   empty queue where it is undefined by design).
+
+**Tests:** `QuickSortQueueTest` (6, pure JUnit): only Unsorted/Other join · pick hands back +
+advances, empty = no-op · `pick` refuses non-categories · **plan case: skip n× → close →
+`remaining == total − n`, none categorized** · progress 1→2→3 of 3 · empty queue = "All sorted"
+state. `QuickSortTest` (5): 3 red-proofed (nudge count + opens the sheet · Tools sheet carries
+"Quick sort" by label · nudge hidden with nothing to sort) + 2 guards added with the fix (pick
+Receipts → saved instantly → advances "1 of 2" → "2 of 2" → Skip → "All sorted" banner + chips
+gone · X closes mid-queue → nudge back to "1 unsorted", exactly one doc still Unsorted, closed
+sheet not showing). `HomeScreenTest`'s tools-sheet test updated 8 → 9 tiles in the same commit.
+
+Suite after: **305 tests / 2 failures = only the documented TextFit reds** (294 + 11 new).
+
+**Next:** **T4.5 skipped** (optional per plan — "Skip if it slips; the rest of P4 stands alone";
+no OCR `Suggest` button in the queue) → **T4.6** (doc chip → picker, remove the old "Categorize"
+dialog in `DocumentViewerActivity`) → phase-end full build → **G2c**: `alpha2c.apk` + source zip +
+3 mds → Downloads → **STOP** (md-review, no screenshots).
+
+---
