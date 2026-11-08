@@ -20,7 +20,7 @@ categories, zero clipped text, OCR editor, Earth removed in P7), ship
 `versionCode 26` / `1.1.1-test26`. Owner installs each gate APK and sends screenshots
 before the next phase starts.
 
-**Current position (2026-11-08): G2b PASSED → plan Rev 4 adopted → build mode underway: T3.14 (`abdbabd`, 23 hi strings), T4.7 (`e518c75`, export hygiene) and T4.8 (`2685ff5`, delete removes exported copies: `exports=` meta line + `addExport`/`exportsOf`, `findCopies` exact-name owner match, checkbox row in both delete dialogs, `DeleteExportsTest` 6 tests red-proofed then green) are committed; suite 278 tests / 2 known-red TextFit. Next work = T4.1 → T4.2 → T4.3 → T4.4 → (T4.5 optional) → T4.6 → phase-end full build → G2c (`alpha2c` + source zip + 3 mds → Downloads → STOP, md-review no screenshots).**
+**Current position (2026-11-08): G2b PASSED → plan Rev 4 adopted → build mode underway: T3.14 (`abdbabd`), T4.7 (`e518c75`), T4.8 (`2685ff5`) and T4.1 (`b8e40c1`, category rail on Scan Review: preselect from name, live suggest until manual pick, `saveScan(category=…)`, `ScanReviewCategoryTest` 3 tests) are committed; suite 281 tests / 2 known-red TextFit. Next work = T4.2 (CategoryPickerSheet) → T4.3 → T4.4 → (T4.5 optional) → T4.6 → phase-end full build → G2c (`alpha2c` + source zip + 3 mds → Downloads → STOP, md-review no screenshots).**
 
 ## 2. Locations
 
@@ -172,7 +172,7 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
 2. ~~**G2b**~~ ✅ DONE — reviewed via `ScanWhirl-G2b-AuditAndNextSteps.md`, PASSED (sub-checks),
    **Rev 4 adopted** into the plan/log/handoff (one docs commit).
 3. **Phase 4 — plan review DONE (order re-confirmed Rev 4), now build mode:**
-   **T3.14** ✅ (`abdbabd`), **T4.7** ✅ (`e518c75`) and **T4.8** ✅ (`2685ff5`) are done; then **T4.1 → T4.2 → T4.3 → T4.4 → (T4.5 optional) → T4.6**.
+   **T3.14** ✅ (`abdbabd`), **T4.7** ✅ (`e518c75`), **T4.8** ✅ (`2685ff5`) and **T4.1** ✅ (`b8e40c1`) are done; then **T4.2 → T4.3 → T4.4 → (T4.5 optional) → T4.6**.
    After T4.1: grep `Prefs.autoCopyToDocuments` in `saveAndFinish` + rerun `ExportHygieneTest` (§8 gotcha).
    Any new string → `values-hi` in the same commit.
 4. **G2c (md-review, NO screenshots):** deliverables = `alpha2c.apk` + refreshed source zip + the three

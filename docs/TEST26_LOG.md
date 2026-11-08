@@ -719,4 +719,37 @@ Suite after: **278 tests / 2 failures = only the documented TextFit reds** (272 
 `ExportHygieneTest`) → T4.2 → T4.3 → T4.4 → (T4.5) → T4.6 → phase-end full build → **G2c**:
 `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
 
+### T4.1 Category rail on Scan Review ✅ (`b8e40c1`)
+
+Additive feature — nothing goes red before it exists (the new UI cannot compile pre-fix, and the
+default save path already classified the name the same way), so there is no runnable red-proof here;
+the guards are the existing suite (notably `scan review text fits`, already in `TextFitTest` — it must
+stay green with the new rail) plus the new `ScanReviewCategoryTest`.
+
+Built:
+- **Layout** `activity_scan_review.xml`: `categoryRail` (`ChipGroup`, `singleSelection`) in a
+  `HorizontalScrollView` between the app bar and the page grid, plus `categoryCaption` (starts GONE).
+  TextFitTest skips anything under a "Scroll" ancestor, so the scrolling chip row is safe; the caption
+  is short and wraps within the width.
+- **`ScanReviewActivity`**: five `Chip`s built in code under `ContextThemeWrapper(
+  ThemeOverlay_ScanWhirl_ChipRail)` (same pattern as Home's filter rail, same `Widget.ScanWhirl.Chip`
+  style, labels via `CategoryRules.label`). `setupCategoryRail()` pre-selects
+  `CategoryRules.classify(currentTitle())`; a `TextWatcher` re-suggests on every name change **until
+  `pickCategory` sets `categoryPickedByHand`**; `UNSORTED` → no chip checked + the caption
+  "Not sorted yet — pick one or skip". `saveAndFinish` now passes `category = chosenCategory` to
+  `repo.saveScan` (line≈ L478 — the call site T4.7 also edits).
+- **§8 gotcha checked:** `Prefs.autoCopyToDocuments` gate still present in `saveAndFinish`
+  (line 557) and `ExportHygieneTest` re-run green (5/5) after this task.
+- **Strings:** `category_unsorted_hint` en + hi in the same commit (hi review comment).
+- **Tests** `ScanReviewCategoryTest` (3): unsorted name → hint visible, exact caption text, zero
+  chips checked · typing "Invoice May" → Receipts preselected + hint hidden · tap Study by hand →
+  rename to "Invoice May" does not override → save → the opened document's `category == Study`.
+  (The plan's "Add ScanReviewActivity to TextFitTest" item was already done — `scan review text fits`
+  exists and passes with the rail.)
+
+Suite after: **281 tests / 2 failures = only the documented TextFit reds** (278 + 3 new).
+
+**Next:** **T4.2** (CategoryPickerSheet) → T4.3 → T4.4 → (T4.5) → T4.6 → phase-end full build →
+**G2c**: `alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
+
 ---
