@@ -20,7 +20,7 @@ categories, zero clipped text, OCR editor, Earth removed in P7), ship
 `versionCode 26` / `1.1.1-test26`. Owner installs each gate APK and sends screenshots
 before the next phase starts.
 
-**Current position (2026-11-08): G2b PASSED → plan Rev 4 adopted → build mode underway: T3.14 (`abdbabd`), T4.7 (`e518c75`), T4.8 (`2685ff5`), T4.1 (`b8e40c1`), T4.2 (`bb70f81`), T4.3 (`9e531ab`), T4.4 (`246a5ca`) and T4.6 (`99fa701`, doc screen category chip → CategoryPickerSheet, old "Categorize" list dialog removed, D-F: overflow item stays till T5.2, `Phase5ScreensTest` 10) are committed; T4.5 skipped (optional per plan); suite 307 tests / 2 known-red TextFit. Next work = phase-end full build (`test assembleRelease -PtestBuild --no-daemon --continue`) → G2c (`alpha2c.apk` + refreshed source zip + 3 mds → Downloads → STOP, md-review no screenshots; the reviewer's md edits against the 9-point G2c checklist are the review).**
+**Current position (2026-11-08): G2b PASSED → Phase 4 complete (T3.14 `abdbabd`, T4.7 `e518c75`, T4.8 `2685ff5`, T4.1 `b8e40c1`, T4.2 `bb70f81`, T4.3 `9e531ab`, T4.4 `246a5ca`, T4.6 `99fa701`; T4.5 skipped optional) → phase-end build green (both variants 307 tests / 2 known-red TextFit) → G2c DELIVERED (`ScanWhirl-1.1.1-test26-alpha2c.apk` + source zip + 3 mds in Downloads) → STOP for md-review → Rev 5 adopted (owner: tests run at PHASE END only; per task compile + write tests in same commit, no execution; red-proof-first suspended; 2-failed-attempts rule applies at run points).** Next work after the reviewer's md edits: **Phase 5** — T5.1 page-editor dock (§5.4) → T5.2 document screen rebuild (deps T4.6+T4.8 ✅) → T5.3 Scan Review dock → T5.4 Settings → T5.5 TextFit sweep (= the phase's test run).
 
 ## 2. Locations
 
@@ -45,9 +45,8 @@ before the next phase starts.
 
 ```bash
 cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk"
-./gradlew :app:compileDebugKotlin -PtestBuild --no-daemon          # after every task
-./gradlew :app:testDebugUnitTest -PtestBuild --no-daemon           # full suite after every task
-./gradlew test assembleRelease -PtestBuild --no-daemon --continue  # phase-end full build (--continue: known-reds)
+./gradlew :app:compileDebugKotlin -PtestBuild --no-daemon          # after every task (Rev 5: compile ONLY, no test run)
+./gradlew test assembleRelease -PtestBuild --no-daemon --continue  # PHASE-END full build + test, once per phase (Rev 5)
 ```
 
 Parse results:
@@ -172,7 +171,7 @@ print(t, f); [print(' RED:', x) for x in sorted(bad)]"
 2. ~~**G2b**~~ ✅ DONE — reviewed via `ScanWhirl-G2b-AuditAndNextSteps.md`, PASSED (sub-checks),
    **Rev 4 adopted** into the plan/log/handoff (one docs commit).
 3. **Phase 4 — plan review DONE (order re-confirmed Rev 4), now build mode:**
-   **T3.14** ✅ (`abdbabd`), **T4.7** ✅ (`e518c75`), **T4.8** ✅ (`2685ff5`), **T4.1** ✅ (`b8e40c1`), **T4.2** ✅ (`bb70f81`), **T4.3** ✅ (`9e531ab`), **T4.4** ✅ (`246a5ca`) and **T4.6** ✅ (`99fa701`) are done (**T4.5 skipped** as optional); then the **phase-end full build** and **G2c delivery** (STOP afterwards).
+   **T3.14** ✅ (`abdbabd`), **T4.7** ✅ (`e518c75`), **T4.8** ✅ (`2685ff5`), **T4.1** ✅ (`b8e40c1`), **T4.2** ✅ (`bb70f81`), **T4.3** ✅ (`9e531ab`), **T4.4** ✅ (`246a5ca`) and **T4.6** ✅ (`99fa701`) are done (**T4.5 skipped** as optional); the **phase-end full build** is green (307/2) and **G2c is DELIVERED** (STOP for md-review). After the review: **Phase 5** (T5.1 → T5.5) under **Rev 5** (tests run at phase end only).
    After T4.1: grep `Prefs.autoCopyToDocuments` in `saveAndFinish` + rerun `ExportHygieneTest` (§8 gotcha).
    Any new string → `values-hi` in the same commit.
 4. **G2c (md-review, NO screenshots):** deliverables = `alpha2c.apk` + refreshed source zip + the three

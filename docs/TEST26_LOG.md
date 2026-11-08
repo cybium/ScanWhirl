@@ -923,3 +923,26 @@ source zip + 3 mds → Downloads → **STOP** (md-review only, no screenshots �
 against the 9-point G2c checklist are the review).
 
 ---
+
+### Phase-end build + G2c delivered ✅ · Rev 5 adopted (`docs commit`)
+
+**Phase-end full build** (`test assembleRelease -PtestBuild --no-daemon --continue`, both
+variants): **307 tests / 2 failures = only the known-red TextFit pair** (`page editor`,
+`document screen`) on debug *and* release; `assembleRelease` green. One restart interruption
+re-ran cleanly (tree unchanged). Release APK: `app/build/outputs/apk/release/app-release.apk`
+(6.6 MB) → copied to `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alpha2c.apk`.
+
+**G2c deliverables complete:** `alpha2c.apk` + refreshed source zip (278 files @ `ce54f5a`) +
+3 md copies in sync → Downloads → **STOP for md-review** (9-point checklist in the plan's G2c
+block; NO screenshots — reviewer's md edits against the checklist *are* the review).
+
+**Rev 5 (owner decision, same day): testing strategy changed to phase-end runs.**
+- Per task: one commit, **compile** (`:app:compileDebugKotlin`) + **tests written** in the same
+  commit — but **not executed**. Red-proof-first suspended (impossible without running).
+- Full suite runs **once at the end of each phase** (+ T9.2), judged by XML parse.
+- 2-failed-attempts → `BLOCKERS.md` + halt now applies **at run points** (triage reds against the
+  phase's expected scope first).
+- §0 rules 4–5 rewritten in the plan; STATUS/handoff updated.
+
+**Next:** Phase 5 under Rev 5 — **T5.1** (page-editor dock §5.4) → T5.2 (document screen rebuild,
+deps T4.6+T4.8 ✅) → T5.3 → T5.4 → T5.5 (TextFit sweep, the phase's test run).

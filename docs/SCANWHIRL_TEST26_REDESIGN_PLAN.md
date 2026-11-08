@@ -34,15 +34,11 @@
 > **Full build + test:** `cd /home/cybium/ScanWhirl && export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk" && ./gradlew test assembleRelease -PtestBuild --no-daemon`
 > **One test class:** `./gradlew :app:testDebugUnitTest --tests "com.scanwhirl.app.ui.TextFitTest"` (plain `test` rejects `--tests`)
 
-> **STATUS (2026-11-08):** T0–T3.14 + **T4.7, T4.8, T4.1, T4.2, T4.3, T4.4, T4.6** committed (`abdbabd`, `e518c75`, `2685ff5`, `b8e40c1`, `bb70f81`, `9e531ab`, `246a5ca`, `99fa701`); **G2b PASSED; Rev 4 adopted.**
-> Suite now **307 tests / 2 known-red TextFit** (`home` flips green outside afternoon hours — see log T3.12).
-> Next: **Phase 4 complete** (T4.5 skipped as optional per plan; T4.3 resolved the T3.7-vs-T4.3
-> long-press conflict — owner chose the quick-actions sheet, selection enters via `Select`) →
-> phase-end full build →
-> **G2c = md-review only, NO screenshots** (deliverables `alpha2c.apk` + source zip + 3 mds → Downloads → STOP;
-> reviewer's md edits against the 9-point checklist embedded in the G2c block below are the review) → Phase 5.
-> **How to continue in a new session:** read `docs/TEST26_HANDOFF.md`, then this file's **PHASE 4** section, then §4.5
-> and T5.1/T5.2 (Rev 4 specs). As-run record: `docs/TEST26_LOG.md`.
+> **STATUS (2026-11-08):** T0–T3.14 + **T4.7, T4.8, T4.1, T4.2, T4.3, T4.4, T4.6** committed (`abdbabd`, `e518c75`, `2685ff5`, `b8e40c1`, `bb70f81`, `9e531ab`, `246a5ca`, `99fa701`); **G2b PASSED; Rev 4 adopted; phase-end build green; G2c DELIVERED; Rev 5 adopted.**
+> Phase-end build (`test assembleRelease --continue`): **both variants 307 tests / 2 failures = only the known-red TextFit pair**; `alpha2c.apk` copied to Downloads.
+> **Rev 5 (owner, 2026-11-08): tests run at PHASE END only** — per task: compile + write tests in the same commit, no execution; red-proof-first suspended; suite run once per phase (see §0 rules 4–5).
+> Next: **STOP for G2c md-review** (reviewer's md edits against the 9-point checklist embedded in the G2c block below are the review; NO screenshots) → **Phase 5** (T5.1 → T5.2 [deps T4.6+T4.8 ✅] → T5.3 → T5.4 → T5.5) under Rev 5.
+> **How to continue in a new session:** read `docs/TEST26_HANDOFF.md`, then this file's **PHASE 4/5** sections, then §4.5 and T5.1/T5.2 (Rev 4 specs). As-run record: `docs/TEST26_LOG.md`.
 
 ---
 
@@ -54,10 +50,18 @@ This plan is written for a fast, lightweight coding model. Follow these rules:
 2. **Keep every task small.** If a diff goes past ~150 lines, split it. Do not rewrite a whole
    file over 300 lines. Prefer *new files* plus small edits.
 3. **Never "improve" things outside the current task.**
-4. **Each commit must build.** After every task: `./gradlew :app:compileDebugKotlin -PtestBuild`.
-   After every phase: the full build + test command above.
+4. **Each commit must build; tests are written per task but run at phase end (Rev 5).**
+   After every task: `./gradlew :app:compileDebugKotlin -PtestBuild` — **compile only, no test
+   execution**. The task's tests are *written* in the same commit as the layout/ID change they
+   cover (rule from §0.1 still holds), but red-proof-first is suspended — a test cannot be
+   observed red without running it, so new tests are authored alongside the fix. Run the full
+   suite **once at the end of each phase** (plus T9.2 as always): `./gradlew test assembleRelease
+   -PtestBuild --no-daemon --continue`, then judge by parsing
+   `app/build/test-results/*/*.xml`, never by exit code.
 5. **Two failed attempts on the same problem → stop.** Write what you tried into
-   `docs/BLOCKERS.md` and wait. Do not thrash.
+   `docs/BLOCKERS.md` and wait. Do not thrash. *(Rev 5: this applies at the phase-end run points
+   too — first triage the reds against the phase's expected scope; anything unexplained, or any
+   problem already attempted twice, goes to `BLOCKERS.md` + halt.)*
 6. **Phase gates (G1–G5) are real.** At each gate, build the APK, copy it to
    `/mnt/c/Users/Cybium/Downloads/ScanWhirl-1.1.1-test26-alphaN.apk`, and **stop**.
    The owner installs it and sends screenshots. Do not start the next phase until they do.
