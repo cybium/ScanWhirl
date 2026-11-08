@@ -669,4 +669,54 @@ the old row's bytes untouched).
 T4.2 → T4.3 → T4.4 → (T4.5) → T4.6 → phase-end full build → **G2c**: `alpha2c.apk` + source zip +
 3 mds → Downloads → **STOP** (md-review, no screenshots).
 
+### T4.8 Delete removes exported copies ✅ (`2685ff5`)
+
+Complaint #18 / N11 / Q8. **Red-proofed first** (test-only changes: extracted `FakeMediaStore` from
+`ExportHygieneTest` into its own shared file, extended with `owner` + owner-scoped query + foreign-row
+`SecurityException`; new `DeleteExportsTest` written against the old API): the core test failed
+exactly as designed — `T4.8: deleting the document must also remove its recorded export — got
+DelEx.pdf` (the dialog deleted the doc and left the row), while the `old 2-line meta … survives
+setCategory` guard was green from the start, and all 5 `ExportHygieneTest` stayed green after the
+extraction.
+
+Built:
+- **`meta.txt` line 4 = `exports=<uri1>|<uri2>`** (optional, append-only): `ScanRepository.addExport`
+  (dedupes; pads old 2-line metas like `setCategory` does) + `exportsOf(id)`. `writeMeta` now
+  **preserves** an existing `exports=` line when it rewrites; `setCategory`/`renameDocument` already
+  survived via `joinToString("\n")` (§8: old metas are 2–3 lines, no trailing newline — the new key is
+  ignored by `loadDocument` and by old builds). `duplicateDocument` **strips** exports from the copy —
+  exported copies belong to the original.
+- **Recording at every `savePdfFile` call site on behalf of a document:** DocumentViewer download
+  button, ScanReview opt-in auto-copy (switched from `savePdf` → `savePdfFile` to get the uri), and
+  `ExportResultActivity` via new optional `EXTRA_DOC_ID` (`docId: String? = null`, default null so the
+  7 existing callers compile unchanged) passed by CompressFlow (`out.id`), LockFlow lock (`locked.id`)
+  and unlock (`doc.id`). ZIP/Resize/LongImage correctly pass nothing.
+- **`DownloadSaver.findCopies(context, docName)`** — legacy best effort, Q+ only: MediaStore query
+  `relative_path='Documents/ScanWhirl/' AND owner_package_name=<ours>`, then **exact** display-name
+  regex `^<sanitize(name)>( \(\d+\))?\.pdf$` — never looser; wrapped in try/catch (no provider /
+  no permission → empty). Pre-Q returns nothing rather than guessing.
+- **Delete flow (both dialogs, `MainActivity.confirmDeleteSelected` + `DocumentViewerActivity.
+  confirmDelete`):** copies are collected **before** the confirm (meta must still exist), N > 0 →
+  `DeleteExports.checkboxRow` (id `deleteCopiesBox` in `ids.xml`, **default checked** per Q8) via
+  `builder.setView` (SwDialog.danger is a plain `MaterialAlertDialogBuilder`). On confirm: document
+  delete first and **never blocked**, then `removeCopies` per uri in try/catch — `SecurityException`
+  (foreign/older-install row) counts as "could not be removed", no permission prompts, unchecked box
+  → nothing touched. Snackbar `deleted_copies_ok` / `deleted_copies_partial` plurals; the **viewer
+  defers `finish()` until the snackbar is dismissed** so the message is actually readable (bulk delete
+  on Home just shows it — Home stays open). Pre-Q `file://` copies are removed with `File.delete`.
+- **Strings:** 3 new plurals `delete_copies`, `deleted_copies_ok`, `deleted_copies_partial` en+hi in
+  the same commit (hi had no plurals before — these are its first; `<!-- review -->` comment).
+
+`DeleteExportsTest` 6 tests (plan §6): delete removes the recorded copy (+ message says "1 copy
+removed") · unchecked box keeps the row · foreign row skipped, doc still deleted, message says
+"could not be removed" · export twice → 1 row, same uri, `exportsOf` lists it once · legacy match
+hits only `Doc.pdf`/`Doc (2).pdf` owned by this package (not `Doc (3).pdf` foreign, not
+`Doc extra.pdf`, not `Other.pdf`) · old 2-line meta reads + survives `setCategory`.
+
+Suite after: **278 tests / 2 failures = only the documented TextFit reds** (272 + 6 new).
+
+**Next:** **T4.1** (then §8 gotcha: grep `Prefs.autoCopyToDocuments` in `saveAndFinish` + rerun
+`ExportHygieneTest`) → T4.2 → T4.3 → T4.4 → (T4.5) → T4.6 → phase-end full build → **G2c**:
+`alpha2c.apk` + source zip + 3 mds → Downloads → **STOP** (md-review, no screenshots).
+
 ---
