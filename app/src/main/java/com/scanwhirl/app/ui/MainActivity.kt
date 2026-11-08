@@ -428,7 +428,10 @@ class MainActivity : BaseActivity(), HomeHost {
             }
             allDocs.isEmpty() -> {
                 binding.emptyTitle.setText(R.string.empty_first_scan)
-                binding.emptySubtitle.isVisible = false
+                // T3.13: the muted hint names the call to action — the SCAN
+                // button in the bottom bar.
+                binding.emptySubtitle.setText(R.string.empty_first_scan_hint)
+                binding.emptySubtitle.isVisible = true
                 binding.btnShowAll.isVisible = false
             }
             else -> {

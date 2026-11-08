@@ -504,10 +504,14 @@ class HomeScreenTest {
                     "Scan your first document",
                     activity.findViewById<android.widget.TextView>(R.id.emptyTitle).text.toString()
                 )
-                // Fresh library: no subtitle, no Show all — the SCAN button
-                // in the bottom bar is the call to action.
-                assertFalse("no subtitle for a fresh library",
+                // T3.13: one muted line under the title names the call to
+                // action (the SCAN button in the bottom bar).
+                assertTrue("hint shows for a fresh library",
                     activity.findViewById<View>(R.id.emptySubtitle).isVisible)
+                assertEquals(
+                    "Tap the camera button to start",
+                    activity.findViewById<android.widget.TextView>(R.id.emptySubtitle).text.toString()
+                )
                 assertFalse("no Show all chip for a fresh library",
                     activity.findViewById<View>(R.id.btnShowAll).isVisible)
                 // The orbit icon died with T3.8.

@@ -435,11 +435,15 @@
 
         <!-- test26 T3.6: bottom bar (Tools · SCAN · Vault) — replaces the FAB
              and the tool cards (R7/Q7). The screen root already carries the
-             system-bar padding (T1.1), so this needs no inset handling. -->
+             system-bar padding (T1.1), so this needs no inset handling.
+             T3.13: 12dp side margins + 8dp above the navigation bar so the
+             rounded corners never touch the screen edges. -->
         <LinearLayout
             android:id="@+id/bottomBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="8dp"
             android:background="@drawable/bg_dock_glass"
             android:gravity="center_vertical"
             android:orientation="horizontal"

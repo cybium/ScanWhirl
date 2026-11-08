@@ -7,6 +7,8 @@
     <!-- test26 T3.8: the empty state speaks per situation; the old "+"-button
          subtitle died with the FAB in T3.6. -->
     <string name="empty_first_scan">Scan your first document</string>
+    <!-- test26 T3.13: muted line under the title — names the call to action. -->
+    <string name="empty_first_scan_hint">Tap the camera button to start</string>
     <string name="empty_category">No %1$s documents yet</string>
     <string name="empty_no_match">No documents match your search</string>
     <string name="show_all">Show all</string>
