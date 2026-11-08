@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- test26 P6 OCR Editor (§4.7): editable OCR text with per-page tabs,
+     cleanup bar and Copy/Share/Save actions. adjustResize is declared in
+     the manifest so the keyboard never covers the EditText. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        app:title="@string/ocr_editor_title"
+        app:titleTextColor="@color/text_hologram_hi" />
+
+    <!-- Page tabs: only visible when there is more than one page. -->
+    <HorizontalScrollView
+        android:id="@+id/pageTabScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fillViewport="false"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/pageTabs"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp" />
+    </HorizontalScrollView>
+
+    <EditText
+        android:id="@+id/editText"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:inputType="textMultiLine|textNoSuggestions"
+        android:minLines="10"
+        android:gravity="top|start"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif"
+        android:overScrollMode="always"
+        android:scrollbarStyle="outsideInset"
+        android:padding="16dp" />
+
+    <TextView
+        android:id="@+id/wordCount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <!-- Cleanup bar: Join lines · Fix spaces · Undo · Remove gaps. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnJoinLines"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ocr_join_lines" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFixSpaces"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ocr_fix_spaces" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnUndo"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ocr_undo" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRemoveGaps"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ocr_remove_gaps" />
+    </LinearLayout>
+
+    <!-- Action bar: Copy · Share · Save. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="16dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCopy"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ocr_copy_btn" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnShare"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ocr_share_btn" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSave"
+            style="@style/Widget.ScanWhirl.Button.DockItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ocr_save_btn" />
+    </LinearLayout>
+
+</LinearLayout>

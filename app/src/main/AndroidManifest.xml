@@ -75,6 +75,13 @@
             android:parentActivityName=".ui.MainActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- test26 P6 OCR Editor (§4.7): adjustResize keeps the keyboard off the EditText. -->
+        <activity
+            android:name=".ui.OcrEditorActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/ocr_copy_all"
+        android:title="@string/ocr_copy_all"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/ocr_share_all"
+        android:title="@string/ocr_share_all"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/ocr_save_txt"
+        android:title="@string/ocr_save_txt"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/ocr_rescan"
+        android:title="@string/ocr_rescan"
+        app:showAsAction="never" />
+
+</menu>

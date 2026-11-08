@@ -122,5 +122,23 @@
     <string name="group_organize">प्रबंधन</string>
     <string name="group_danger">खतरा</string>
     <string name="extracted">%1$d पृष्ठ एक नए स्कैन में निकाले गए</string>
-
+    <string name="ocr_editor_title"><!-- review -->निकाला गया पाठ</string>
+    <string name="ocr_page_label"><!-- review -->पृष्ठ %d</string>
+    <string name="ocr_word_count"><!-- review -->%d शब्द%s</string>
+    <string name="ocr_share_text"><!-- review -->पाठ साझा करें</string>
+    <string name="ocr_saved"><!-- review -->सहेजा गया</string>
+    <string name="ocr_unsaved_title"><!-- review -->असहेजे गए परिवर्तन</string>
+    <string name="ocr_unsaved_msg"><!-- review -->बंद करने से पहले परिवर्तन सहेजें?</string>
+    <string name="ocr_save_btn"><!-- review -->सहेजें</string>
+    <string name="ocr_discard_btn"><!-- review -->हटाएँ</string>
+    <string name="ocr_join_lines"><!-- review -->लाइनें जोड़ें</string>
+    <string name="ocr_fix_spaces"><!-- review -->रिक्त स्थान ठीक करें</string>
+    <string name="ocr_undo"><!-- review -->पूर्ववत करें</string>
+    <string name="ocr_remove_gaps"><!-- review -->अंतर हटाएँ</string>
+    <string name="ocr_copy_btn"><!-- review -->कॉपी करें</string>
+    <string name="ocr_share_btn"><!-- review -->साझा करें</string>
+    <string name="ocr_copy_all"><!-- review -->सभी पृष्ठ कॉपी करें</string>
+    <string name="ocr_share_all"><!-- review -->सभी पृष्ठ साझा करें</string>
+    <string name="ocr_save_txt"><!-- review -->.txt के रूप में सहेजें</string>
+    <string name="ocr_rescan"><!-- review -->फिर से स्कैन करें</string>
 </resources>
