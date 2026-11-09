@@ -7,6 +7,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import com.scanwhirl.app.model.OcrLine
+import com.scanwhirl.app.model.OcrPage
 import java.io.File
 import java.security.MessageDigest
 import java.util.Locale
@@ -235,5 +237,53 @@ class PdfEncryptorTest {
             encBytes.copyOfRange(wrongBody.second.first, wrongBody.second.last + 1))
         assertTrue("wrong password does not produce valid content",
             String(wrongDec.copyOfRange(0, 2), Charsets.ISO_8859_1) != "q\n")
+    }
+
+    @Test
+    fun `encrypting a PDF with a text layer and decrypting restores the exact text`() {
+        val dir = tempDir("pdfenc-textlayer")
+        val jpg = makeJpeg(dir, "a.jpg", 620, 877)
+        val src = File(dir, "src.pdf")
+        val layer = OcrPage(620, 877,
+            listOf(
+                OcrLine("Hello World", 10, 20, 50, 40),
+                OcrLine("Second line", 10, 60, 60, 80)
+            )
+        )
+        PdfGenerator.imagesToPdf(listOf(jpg), src, mapOf(0 to layer))
+
+        val encrypted = File(dir, "enc.pdf")
+        PdfEncryptor.encrypt(src, encrypted, "pw1234")
+
+        val encBytes = encrypted.readBytes()
+        val encText = String(encBytes, Charsets.ISO_8859_1)
+
+        // Parse trailer.
+        val oHex = Regex("/O <([0-9A-F]+)>").find(encText)!!.groupValues[1]
+        val pStr = Regex("/P (-?\\d+)").find(encText)!!.groupValues[1]
+        val idHex = Regex("/ID \\[<([0-9A-F]+)> <([0-9A-F]+)>\\]")
+            .find(encText)!!
+            .groupValues[1]
+        val o = oHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val fileId = idHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val permissions = pStr.toInt()
+
+        val paddedUser = pad("pw1234".toByteArray(Charsets.ISO_8859_1))
+        val fileKey = computeFileKey(paddedUser, o, permissions, fileId)
+        val bodies = PdfEncryptor.objectStreamBodies(encBytes)
+
+        // Content stream object is 4 (page 0 content). Decrypt it independently.
+        val contentBody = bodies.first { it.first == 4 }
+        val contentKey = objectKey(fileKey, contentBody.first)
+        val contentDec = rc4(contentKey,
+            encBytes.copyOfRange(contentBody.second.first, contentBody.second.last + 1))
+        val contentText = String(contentDec, Charsets.ISO_8859_1)
+
+        assertTrue("content stream contains 3 Tr", contentText.contains("3 Tr"))
+        assertTrue("content stream contains Hello", contentText.contains("Hello"))
+        assertTrue("content stream contains World", contentText.contains("World"))
+        assertTrue("content stream contains Second", contentText.contains("Second"))
+        assertTrue("encrypted file starts with %PDF-", encText.startsWith("%PDF-"))
+        assertTrue("encrypted file ends with %%EOF", encText.endsWith("%%EOF\n"))
     }
 }

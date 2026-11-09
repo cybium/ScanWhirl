@@ -232,3 +232,31 @@
 **Files:** `util/SearchMatcher.kt`, `util/HomeFilter.kt`, `store/OcrTextCache.kt` (new), `ui/MainActivity.kt`, `res/values/strings.xml`, `res/values-hi/strings.xml`; tests: `util/SearchMatcherTest.kt` (rewritten), `util/HomeFilterTest.kt` (updated), `store/ScanRepositoryTest.kt`, `util/OcrEditorTest.kt`, `ui/HomeScreenTest.kt`, `ui/UiSmokeTest.kt`.
 
 **Test count:** 362 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 11 — PdfGenerator: streaming, atomic, invisible text layer
+
+**Changes:**
+- `util/PdfGenerator.kt` (rewritten):
+  - `imagesToPdf(images, outFile, textLayers: Map<Int, OcrPage> = emptyMap()): Set<Int>` — returns the set of page indices that received a text layer. All existing 2-arg callers still compile (default empty map).
+  - Streaming: each page JPEG is read, written, and dropped before the next — no whole-image list held in memory.
+  - Atomicity: output goes to `<outFile>.tmp`; after `verifyPdf` passes, renamed over `outFile` (copy-then-delete fallback). On failure, `.tmp` is deleted and an existing `outFile` is left untouched. `outFile` is never deleted before writing.
+  - `verifyPdf` reads only the first 4,096 bytes (`%PDF-`, `/Count n`) and last 2,048 bytes (`%%EOF\n`, `startxref`) — never the whole file.
+- `util/PdfTextLayer.kt` (new): `contentFor(page, pageW, pageH): String` builds per-line `BT /F1 <fs> Tf 3 Tr <tz> Tz 1 0 0 1 <x> <y> Tm (<text>) Tj ET` operations. Sanitises text (keeps ASCII + Latin-1, maps curly quotes/dashes/ellipsis/bullet, octal-escapes other high chars, escapes `\` `(` `)` for PDF), collapses spaces, truncates long lines, caps at 600 lines / 400 chars per line. Font size clamped 4–72, text scale clamped 20–300. Inline font dictionary `FONT_DICT` added to page `/Resources` when a layer is present.
+- `ScanRepository.kt` and `PdfViewerActivity.kt`: unchanged (they call `imagesToPdf` with 2 args — works via default parameter).
+
+**Acceptance:**
+- All existing `PdfGeneratorTest` cases pass unchanged (kids list, `/Count`, `/MediaBox`, DCT embedding, xref offsets).
+- With no layers, output equals previous output structurally (no `3 Tr`, no `BT /F1`).
+- With a layer, content stream contains `3 Tr` and escaped text; test-side extractor returns original lines in order; `/Count`, `startxref`, xref offsets stay valid; size growth ≤ 2 KB for 20 lines.
+- Layer with mismatched dimensions is skipped (returned set excludes that page).
+- Layer with blank lines is skipped.
+- Characters: "Café (10) \ "x" — ok" round-trips correctly through sanitize.
+- Encrypting a layered PDF and independently decrypting restores exact text content stream.
+- Failure atomicity: corrupt JPEG leaves pre-existing `outFile` intact, no `.tmp` behind.
+- Memory: 40 × 3 MB JPEGs, peak heap growth under 64 MB (streaming, one page at a time).
+
+**Files:** `util/PdfGenerator.kt`, `util/PdfTextLayer.kt` (new); tests: `util/PdfGeneratorTest.kt` (+8 text layer tests), `util/PdfEncryptorTest.kt` (+1 text layer encryption test), `util/PdfTextLayerTest.kt` (new, 14 tests).
+
+**Test count:** 383 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).
