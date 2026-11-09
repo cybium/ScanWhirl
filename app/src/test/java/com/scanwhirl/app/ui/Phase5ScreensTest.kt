@@ -297,7 +297,7 @@ class Phase5ScreensTest {
                 val rowAuto = activity.findViewById<View>(R.id.rowAutoEnhance)
                 assertSame("viewer and auto-enhance share a section container",
                     rowViewer.parent, rowAuto.parent)
-                assertEquals("viewing card: 3 rows + 2 dividers", 5, (rowViewer.parent as ViewGroup).childCount)
+                assertEquals("viewing card: 4 rows + 3 dividers", 7, (rowViewer.parent as ViewGroup).childCount)
                 val rowAbout = activity.findViewById<View>(R.id.rowAbout)
                 val rowPrivacy = activity.findViewById<View>(R.id.rowPrivacy)
                 assertSame("about and privacy share a section container",

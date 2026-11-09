@@ -260,3 +260,27 @@
 **Files:** `util/PdfGenerator.kt`, `util/PdfTextLayer.kt` (new); tests: `util/PdfGeneratorTest.kt` (+8 text layer tests), `util/PdfEncryptorTest.kt` (+1 text layer encryption test), `util/PdfTextLayerTest.kt` (new, 14 tests).
 
 **Test count:** 383 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 12 — Wire the text layer into documents; Settings switch; "Searchable" indicator
+
+**Changes:**
+- `util/Prefs.kt`: added `makeSearchable(c)` / `setMakeSearchable(c, v)`, default **true**.
+- `store/ScanRepository.kt`:
+  - Added `companion object { val PDF_LOCK = Any() }` — process-wide lock for PDF regeneration.
+  - Added `private fun writePdf(dir: File, out: File): Boolean` — writes the PDF through `PdfGenerator.imagesToPdf(pages, out, textLayers)`, building `textLayers` from `OcrStore.readGeo(id)` mapped to page indices when `Prefs.makeSearchable` is on (empty map otherwise). Always writes the PDF (even without layers); returns true when at least one page received a layer.
+  - `regeneratePdf(dir)`: writes through `writePdf` (atomic `.tmp`+rename, no `delete()` before generating), then maintains `text_layer.flag`: present exactly when `searchable` holds (at least one page got a layer AND every page file has a key in `ocr_geo.txt`); otherwise the flag is deleted. All under `synchronized(PDF_LOCK)`.
+  - `finalizeDoc`, `protectPdf` (source PDF before encryption), `unlockedPreviewPdf`: now use `writePdf` instead of calling `PdfGenerator.imagesToPdf` directly.
+  - `fun refreshPdfAfterIndex(id: String)`: no-op when `Prefs.makeSearchable` is false, when the document is locked (`locked.meta` exists), or when the directory is gone; otherwise calls `regeneratePdf`.
+- `ScanWhirlApp.kt`: passes `afterIndexed = { id -> repository.refreshPdfAfterIndex(id) }` to the `OcrIndexer`.
+- `ui/SettingsActivity.kt` + `res/layout/activity_settings.xml`: added `switchSearchablePdf` row (title `settings_searchable_pdf`, summary `settings_searchable_pdf_summary`), bound to `Prefs.makeSearchable`.
+- `strings.xml` / `values-hi/strings.xml`: added `settings_searchable_pdf` and `settings_searchable_pdf_summary` (en + hi, `<!-- review -->`).
+
+**Bug found and fixed during this task:** `finalizeDoc` and `protectPdf` initially deleted the output file when `writePdf` returned false (no layers), destroying the PDF. Fixed to always keep the written PDF; layers are additive.
+
+**Acceptance:** searchable PDFs written through `writePdf`; `text_layer.flag` present exactly when searchable holds; locked documents never have their flag dropped by `refreshPdfAfterIndex`; settings switch persists `makeSearchable`; "Searchable" indicator appears in list rows because `text_layer.flag` exists.
+
+**Files:** `util/Prefs.kt`, `store/ScanRepository.kt`, `ScanWhirlApp.kt`, `ui/SettingsActivity.kt`, `res/layout/activity_settings.xml`, `res/values/strings.xml`, `res/values-hi/strings.xml`; tests: `ui/Phase5ScreensTest.kt` (updated row count), `ui/TextFitTest.kt` (settings case already existed).
+
+**Test count:** 383 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).

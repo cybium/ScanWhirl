@@ -94,6 +94,13 @@ object Prefs {
     fun setAutoCopyToDocuments(c: Context, v: Boolean) =
         sp(c).edit().putBoolean(KEY_AUTO_COPY, v).apply()
 
+    private const val KEY_MAKE_SEARCHABLE = "make_searchable"
+
+    /** Make PDFs searchable: embed a hidden OCR text layer. Default ON. */
+    fun makeSearchable(c: Context): Boolean = sp(c).getBoolean(KEY_MAKE_SEARCHABLE, true)
+    fun setMakeSearchable(c: Context, v: Boolean) =
+        sp(c).edit().putBoolean(KEY_MAKE_SEARCHABLE, v).apply()
+
     fun hasVaultPin(c: Context): Boolean =
         !sp(c).getString(KEY_VAULT_PIN, null).isNullOrBlank()
 

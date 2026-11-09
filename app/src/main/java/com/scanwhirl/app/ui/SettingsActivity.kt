@@ -64,6 +64,10 @@ class SettingsActivity : BaseActivity() {
         binding.switchAutoCopyToDocuments.setOnCheckedChangeListener { _, checked ->
             Prefs.setAutoCopyToDocuments(this, checked)
         }
+        binding.switchSearchablePdf.isChecked = Prefs.makeSearchable(this)
+        binding.switchSearchablePdf.setOnCheckedChangeListener { _, checked ->
+            Prefs.setMakeSearchable(this, checked)
+        }
         binding.rowWallpaper.setOnClickListener {
             pickWallpaper.launch(arrayOf("image/*"))
         }

@@ -35,6 +35,11 @@ class ScanRepository(private val context: Context) {
     internal val ocrStore: OcrStore
         get() = OcrStore(docsDir)
 
+    /** Process-wide lock for PDF regeneration — several ScanRepository instances exist at once. */
+    companion object {
+        val PDF_LOCK = Any()
+    }
+
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
         return docsDir.listFiles { f -> f.isDirectory }
             ?.sortedByDescending { it.lastModified() }
@@ -564,8 +569,8 @@ class ScanRepository(private val context: Context) {
         writeMeta(dir, name, category)
         val pdfFile = File(dir, "scan.pdf")
         try {
-            PdfGenerator.imagesToPdf(pageFilesIn(dir), pdfFile)
-        } catch (e: Exception) {
+            writePdf(dir, pdfFile) // PDF is always written; layers may be empty
+        } catch (_: Exception) {
             pdfFile.delete()
         }
         return loadDocument(dir) ?: throw IllegalStateException("Scan could not be saved").also { ocrStore.markPending(id) }
@@ -669,7 +674,7 @@ class ScanRepository(private val context: Context) {
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             val src = File(dir, "plain.pdf")
             if (doc.pageFiles.isNotEmpty()) {
-                PdfGenerator.imagesToPdf(doc.pageFiles, src)
+                writePdf(dir, src) // plain PDF is always written for encryption
             } else {
                 require(doc.pdfFile.exists() && doc.pdfFile.length() > 0L) { "PDF missing" }
                 doc.pdfFile.copyTo(src, overwrite = true)
@@ -759,7 +764,7 @@ class ScanRepository(private val context: Context) {
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             val outDir = File(context.cacheDir, "documents").apply { mkdirs() }
             val preview = File(outDir, "preview_$id.pdf")
-            PdfGenerator.imagesToPdf(doc.pageFiles, preview)
+            writePdf(dir, preview)
             preview
         }
 
@@ -841,17 +846,56 @@ class ScanRepository(private val context: Context) {
         }
     }
 
-    private fun regeneratePdf(dir: File) {
+    /** Writes the document's PDF through [writePdf], then maintains `text_layer.flag`. */
+    private fun regeneratePdf(dir: File) = synchronized(PDF_LOCK) {
         val pdfFile = File(dir, "scan.pdf")
-        pdfFile.delete()
+        val id = dir.name
         val pages = pageFilesIn(dir)
-        if (pages.isNotEmpty()) {
-            try {
-                PdfGenerator.imagesToPdf(pages, pdfFile)
-            } catch (_: Exception) {
-                pdfFile.delete()
-            }
+        val layered = if (pages.isNotEmpty()) writePdf(dir, pdfFile) else false
+        val searchable = layered && pages.all {
+            ocrStore.readGeo(id).containsKey("page_%03d.jpg".format(pages.indexOf(it)))
         }
+        val flag = File(dir, "text_layer.flag")
+        if (searchable) {
+            flag.writeText("")
+        } else {
+            flag.delete()
+        }
+    }
+
+    /**
+     * Writes [out] from [dir]'s page files, with an invisible text layer built from
+     * `OcrStore.readGeo(id)` when `Prefs.makeSearchable` is on. Returns true when at
+     * least one page received a layer. Atomic via `.tmp` + rename inside the generator.
+     */
+    private fun writePdf(dir: File, out: File): Boolean = synchronized(PDF_LOCK) {
+        val pages = pageFilesIn(dir)
+        if (pages.isEmpty()) {
+            false
+        } else {
+            val id = dir.name
+            val textLayers = if (Prefs.makeSearchable(context)) {
+                val geo = ocrStore.readGeo(id)
+                pages.indices.filter { geo.containsKey("page_%03d.jpg".format(it)) }
+                    .associate { i -> i to geo["page_%03d.jpg".format(i)]!! }
+            } else {
+                emptyMap()
+            }
+            PdfGenerator.imagesToPdf(pages, out, textLayers).isNotEmpty()
+        }
+    }
+
+    /**
+     * Regenerates the document's PDF with a text layer after indexing completes.
+     * No-op when searchable PDFs are off, when the document is locked, or when the
+     * directory is gone — the lock must never be dropped.
+     */
+    fun refreshPdfAfterIndex(id: String) {
+        if (!Prefs.makeSearchable(context)) return
+        val dir = File(docsDir, id)
+        if (!dir.exists() || !dir.isDirectory) return
+        if (File(dir, LOCK_FILE).exists()) return
+        regeneratePdf(dir)
     }
 
     /** Next default scan name: "Document 1", "Document 2", … */

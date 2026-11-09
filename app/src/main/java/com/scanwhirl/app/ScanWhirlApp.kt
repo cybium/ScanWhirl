@@ -40,7 +40,8 @@ class ScanWhirlApp : Application() {
         indexer = OcrIndexer(
             repository,
             appScope,
-            autoRun = Build.FINGERPRINT != "robolectric"
+            autoRun = Build.FINGERPRINT != "robolectric",
+            afterIndexed = { id -> repository.refreshPdfAfterIndex(id) }
         )
     }
 }
