@@ -293,6 +293,7 @@ class HomeScreenTest {
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
+                (activity as MainActivity).searchDebounceMs = 0
                 val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)
                 val clear = activity.findViewById<android.view.View>(R.id.btnClearSearch)
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
@@ -564,6 +565,7 @@ class HomeScreenTest {
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
+                (activity as MainActivity).searchDebounceMs = 0
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
                 val state = activity.findViewById<View>(R.id.emptyState)
                 val search = activity.findViewById<android.widget.EditText>(R.id.searchInput)

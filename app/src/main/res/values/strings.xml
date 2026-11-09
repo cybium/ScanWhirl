@@ -181,7 +181,6 @@
     <string name="chip_all">All</string>
     <!-- test26 T3.5: search bar + list header. -->
     <string name="search_clear">Clear search</string>
-    <string name="in_text_chip">In text</string>
     <string name="select">Select</string>
     <!-- test26 T3.12: selection header — picks every visible card. -->
     <string name="select_all">Select all</string>

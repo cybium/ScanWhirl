@@ -172,6 +172,7 @@ class UiSmokeTest {
         seedDoc("Beta receipt")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
+                (activity as MainActivity).searchDebounceMs = 0
                 val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.scanList)
                 forceLayout(list)
                 assertEquals(2, list.adapter!!.itemCount)

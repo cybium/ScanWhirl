@@ -7,9 +7,9 @@ import org.junit.Test
 import java.io.File
 
 /**
- * test26 T3.3 — the Home screen's whole decision surface: which documents
- * show for a category, for a search, for both at once, in each of the four
- * sort orders, and what the chip rail counts.
+ * test26 T3.3 / T10 — the Home screen's whole decision surface: which
+ * documents show for a category, for a search, for both at once, in each of
+ * the four sort orders, and what the chip rail counts.
  */
 class HomeFilterTest {
 
@@ -50,7 +50,7 @@ class HomeFilterTest {
     fun `each category narrows to only that category`() {
         for (cat in CategoryRules.ALL_WITH_UNSORTED) {
             val state = HomeState(category = cat)
-            val out = HomeFilter.apply(library, state)
+            val out = HomeFilter.apply(library, state, { "" }, { "" })
             assertTrue(
                 "category $cat -> ${out.map { it.name }}",
                 out.isNotEmpty() && out.all { it.category == cat }
@@ -60,13 +60,13 @@ class HomeFilterTest {
 
     @Test
     fun `null category shows everything`() {
-        val out = HomeFilter.apply(library, HomeState(category = null))
+        val out = HomeFilter.apply(library, HomeState(category = null), { "" }, { "" })
         assertEquals(library.size, out.size)
     }
 
     @Test
     fun `category filter is case exact against the stored value`() {
-        val out = HomeFilter.apply(library, HomeState(category = "study"))
+        val out = HomeFilter.apply(library, HomeState(category = "study"), { "" }, { "" })
         assertTrue("lowercase must not match", out.isEmpty())
     }
 
@@ -76,42 +76,35 @@ class HomeFilterTest {
     fun `search and category combine with AND`() {
         // "Rent receipt" is the only RECEIPTS doc and the only "receipt" name.
         val state = HomeState(query = "receipt", category = CategoryRules.RECEIPTS)
-        assertEquals(listOf("Rent receipt"), HomeFilter.apply(library, state).map { it.name })
+        assertEquals(listOf("Rent receipt"), HomeFilter.apply(library, state, { "" }, { "" }).map { it.name })
 
         // Same query but a category that holds no match -> nothing.
         val miss = HomeState(query = "receipt", category = CategoryRules.STUDY)
-        assertTrue(HomeFilter.apply(library, miss).isEmpty())
+        assertTrue(HomeFilter.apply(library, miss, { "" }, { "" }).isEmpty())
     }
 
     @Test
     fun `a query that matches no name in the chosen category empties the list`() {
         val state = HomeState(query = "zzz-not-a-document", category = CategoryRules.OTHER)
-        assertTrue(HomeFilter.apply(library, state).isEmpty())
+        assertTrue(HomeFilter.apply(library, state, { "" }, { "" }).isEmpty())
     }
 
     @Test
-    fun `ocr text matches only when inText is on`() {
+    fun `search matches text content`() {
         val docs = listOf(doc("Alpha", CategoryRules.OTHER))
-        val ocr: (String) -> Map<String, String> = { emptyMap() }
-        val lookup: (String) -> Map<String, String> =
-            { id -> if (docs.first().id == id) mapOf("p1.jpg" to "hologram invoice") else emptyMap() }
+        val texts = mapOf(docs.first().id to "hologram invoice")
+        val normalized = { id: String -> SearchMatcher.normalize(texts[id] ?: "") }
+        val original = { id: String -> texts[id] ?: "" }
 
-        val on = HomeFilter.apply(docs, HomeState(query = "hologram", inText = true), lookup)
+        val on = HomeFilter.apply(docs, HomeState(query = "hologram"), normalized, original)
         assertEquals(listOf("Alpha"), on.map { it.name })
-
-        val off = HomeFilter.apply(docs, HomeState(query = "hologram", inText = false), lookup)
-        assertTrue("inText off must ignore OCR text", off.isEmpty())
-
-        // and the default state never reaches for OCR at all
-        val default = HomeFilter.apply(docs, HomeState(query = "hologram"), ocr)
-        assertTrue(default.isEmpty())
     }
 
     @Test
     fun `vaulted documents stay hidden unless the state says otherwise`() {
         val docs = listOf(doc("Visible"), doc("Secret", vaulted = true))
-        assertTrue(HomeFilter.apply(docs, HomeState()).none { it.name == "Secret" })
-        val inVault = HomeFilter.apply(docs, HomeState(includeVaulted = true))
+        assertTrue(HomeFilter.apply(docs, HomeState(), { "" }, { "" }).none { it.name == "Secret" })
+        val inVault = HomeFilter.apply(docs, HomeState(includeVaulted = true), { "" }, { "" })
         assertEquals(2, inVault.size)
     }
 

@@ -52,6 +52,7 @@ import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.tools.VaultFlow
+import com.scanwhirl.app.store.OcrTextCache
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.HomeFilter
@@ -63,7 +64,10 @@ import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.SwMotion
 import com.scanwhirl.app.util.ZipExporter
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -80,6 +84,7 @@ class MainActivity : BaseActivity(), HomeHost {
         ScanListAdapter(::onDocClick, ::onDocMore, ::onDocLongClick, ::onCategory)
     }
     private val repo by lazy { (application as ScanWhirlApp).repository }
+    private val ocrTextCache by lazy { OcrTextCache(repo) }
 
     /** Tool flows extracted in Phase 2; launchers stay in this Activity. */
     private val resizeFlow by lazy { ResizeFlow(this, repo, this) }
@@ -157,8 +162,10 @@ class MainActivity : BaseActivity(), HomeHost {
     /** T3.4 — active chip-rail filter; `null` means the "All" chip. */
     private var selectedCategory: String? = null
 
-    /** T3.5 — OCR "In text" toggle; gated by Pro inside HomeState.inText. */
-    private var searchInText = true
+    /** T10: dispatchers and debounce for search; tests override both. */
+    internal var searchDispatcher: CoroutineDispatcher = Dispatchers.Default
+    internal var searchDebounceMs = 120L
+    private var searchJob: Job? = null
 
     /** Documents in the list as last submitted; drives the list header count. */
     private var shownCount = 0
@@ -309,7 +316,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 query = s?.toString()?.trim().orEmpty()
                 // T3.5: the clear (×) lives only while there is text to clear.
                 binding.btnClearSearch.isVisible = !s.isNullOrEmpty()
-                applyList()
+                renderHome(fromKeystroke = true)
             }
         })
         binding.sortSelector.setOnClickListener { showSortMenu() }
@@ -378,7 +385,7 @@ class MainActivity : BaseActivity(), HomeHost {
      *
      * test26 T3.10 (complaint #14): derives from the **unfiltered** [allDocs],
      * so a category/search filter never changes the readout, and it is
-     * refreshed from the single render path in [applyList] — first load, add,
+     * refreshed from the single render path in [renderHome] — first load, add,
      * delete and import all land there. Direct calls remain only for
      * show/hide transitions (selection mode, resume).
      */
@@ -431,7 +438,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 if (vaultMode) repo.listVaultDocuments() else repo.listDocuments()
             }
             buildChipRail()
-            applyList()
+            renderHome()
         }
         // T9: resume indexing for any document left pending (e.g. after a process death).
         val app = application as ScanWhirlApp
@@ -498,35 +505,77 @@ class MainActivity : BaseActivity(), HomeHost {
         signalAnimator = null
     }
 
-    /** In-memory filter + sort over [allDocs]; used by search and sort too. */
-    private fun applyList() {
-        // Pure logic lives in HomeFilter (T3.3); this just builds the state.
-        // Vault mode passes includeVaulted so the PIN'd list is the list.
+    /**
+     * T10: render the home list. Blank query is computed synchronously on the
+     * main thread (no OCR access). Non-blank query is debounced and run off
+     * the main thread via [searchDispatcher].
+     */
+    private fun renderHome(fromKeystroke: Boolean = false) {
+        if (query.isBlank()) {
+            renderHomeSync()
+            return
+        }
+        val context = this@MainActivity
+        searchJob?.cancel()
+        searchJob = lifecycleScope.launch {
+            if (fromKeystroke) {
+                delay(searchDebounceMs)
+            }
+            val state = HomeState(
+                query = query,
+                category = selectedCategory,
+                sort = Prefs.sortMode(context),
+                includeVaulted = vaultMode
+            )
+            val result = withContext(searchDispatcher) {
+                HomeFilter.applyDetailed(
+                    allDocs,
+                    state,
+                    normalizedText = { ocrTextCache.normalized(it) },
+                    originalText = { ocrTextCache.original(it) }
+                )
+            }
+            adapter.selectedIds = selectedIds
+            adapter.snippets = result.snippets
+            adapter.submitList(result.docs)
+            binding.emptyState.isVisible = result.docs.isEmpty()
+            if (result.docs.isEmpty()) updateEmptyState()
+            binding.scanList.isVisible = true
+            shownCount = result.docs.size
+            updateListHeader()
+            updateStatusLine()
+            updateNudge()
+            if (selectionMode && allDocs.none { it.id in selectedIds }) {
+                setSelectionMode(false)
+            }
+        }
+    }
+
+    /** Synchronous render for a blank query — no OCR access, no coroutines. */
+    private fun renderHomeSync() {
+        searchJob?.cancel()
+        searchJob = null
         val state = HomeState(
             query = query,
             category = selectedCategory,
             sort = Prefs.sortMode(this),
-            inText = searchInText && ProGate.isPro(this),
             includeVaulted = vaultMode
         )
-        val sorted = HomeFilter.apply(allDocs, state) { repo.ocrDoc(it) }
+        val result = HomeFilter.applyDetailed(
+            allDocs,
+            state,
+            normalizedText = { ocrTextCache.normalized(it) },
+            originalText = { ocrTextCache.original(it) }
+        )
         adapter.selectedIds = selectedIds
-        adapter.snippets = emptyMap()
-        adapter.submitList(sorted)
-        // A search that matches nothing leaves nothing to show; if `sorted`
-        // is empty the name and OCR legs both came up empty, so no extra
-        // ocrMatches bookkeeping is needed.
-        binding.emptyState.isVisible = sorted.isEmpty()
-        if (sorted.isEmpty()) updateEmptyState()
+        adapter.snippets = result.snippets
+        adapter.submitList(result.docs)
+        binding.emptyState.isVisible = result.docs.isEmpty()
+        if (result.docs.isEmpty()) updateEmptyState()
         binding.scanList.isVisible = true
-        shownCount = sorted.size
+        shownCount = result.docs.size
         updateListHeader()
-        // test26 T3.10: the render path above feeds chips + adapter; the
-        // status line joins it here (from the unfiltered allDocs snapshot),
-        // so the numbers on screen can never lag the list (complaint #14).
         updateStatusLine()
-        // test26 T4.4: the Quick Sort nudge is part of the same render —
-        // it counts Unsorted/Other from the same unfiltered snapshot.
         updateNudge()
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
@@ -658,7 +707,7 @@ class MainActivity : BaseActivity(), HomeHost {
         // test26 T8.5: haptic tick on every category change.
         binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         updateChipRailChecked()
-        applyList()
+        renderHome()
     }
 
     /**
@@ -1254,7 +1303,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 else -> Prefs.SORT_CATEGORY
             }
             Prefs.setSortMode(this, mode)
-            applyList()
+            renderHome()
             true
         }
         popup.show()

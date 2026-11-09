@@ -87,13 +87,14 @@ class OcrEditorTest {
         // 4. SearchMatcher should find the corrected word via OCR lookup.
         val repo = ScanRepository(context)
         val docs = repo.listDocuments()
-        val (shown, _) = SearchMatcher.match(
+        val hits = SearchMatcher.search(
             "Receipt",
             docs,
-            ocrEnabled = true,
-            ocrLookup = { id -> repo.ocrDoc(id) }
+            includeVaulted = false,
+            normalizedText = { id -> repo.ocrDoc(id).values.joinToString("\n") },
+            originalText = { id -> repo.ocrDoc(id).values.joinToString("\n") }
         )
-        assertTrue("corrected word should be findable via OCR search", shown.any { it.id == docId })
+        assertTrue("corrected word should be findable via OCR search", hits.any { it.doc.id == docId })
     }
 
     @Test

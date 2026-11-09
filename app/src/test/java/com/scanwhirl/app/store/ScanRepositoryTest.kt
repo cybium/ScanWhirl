@@ -457,10 +457,12 @@ class ScanRepositoryTest {
         assertEquals("The quick brown fox", repo.ocrDoc(doc.id)["page_000.jpg"])
 
         // P6 requirement: a corrected word must be what the search box finds.
-        val (hits, _) = com.scanwhirl.app.util.SearchMatcher.match(
-            "brown fox", repo.listDocuments(), ocrEnabled = true
-        ) { repo.ocrDoc(it) }
-        assertTrue("edited text is searchable", hits.any { it.id == doc.id })
+        val hits = com.scanwhirl.app.util.SearchMatcher.search(
+            "brown fox", repo.listDocuments(), includeVaulted = false,
+            normalizedText = { id -> repo.ocrDoc(id).values.joinToString("\n") },
+            originalText = { id -> repo.ocrDoc(id).values.joinToString("\n") }
+        )
+        assertTrue("edited text is searchable", hits.any { it.doc.id == doc.id })
 
         // Unknown document → null, and no directory gets created for it.
         assertEquals(null, repo.updateOcrPage("nope42", "page_000.jpg", "x"))

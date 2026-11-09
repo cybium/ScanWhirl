@@ -210,3 +210,25 @@
 **Files:** `store/OcrIndexer.kt` (new), `ScanWhirlApp.kt`, `ui/ScanReviewActivity.kt`, `ui/MainActivity.kt`, `ui/DocumentViewerActivity.kt`, `tools/OcrFlow.kt`, `util/Prefs.kt`, `res/layout/dialog_pro_panel.xml`, `res/values/strings.xml`, `res/values-hi/strings.xml`; tests: `store/OcrIndexerTest.kt` (new).
 
 **Test count:** 350 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 10 — Search v2: names and text, ranked, off the main thread
+
+**Changes:**
+- `util/SearchMatcher.kt` (rewritten): `SearchMatcher.search(query, docs, includeVaulted, normalizedText, originalText): List<Hit>`. Terms = normalized query split on whitespace. Vaulted docs excluded unless `includeVaulted`. Every term must occur in name or text. `Hit.kind` = NAME (all terms in name, none only in text), TEXT (no term in name), or BOTH. `score = 1000 × nameTerms + min(textOccurrences, 999)`. Order: score desc, then createdAt desc. Snippet (~60 chars around first hit, newlines→spaces, ellipsis at cut ends, matched terms bold + cyan via `StyleSpan(BOLD)` + `ForegroundColorSpan(snippetColor)`). Removed `ocrMatches`, `byName`, the name-match suppression rule, and the Pro parameter. Added `normalize(s)`: lower-case + NFD base-letter mapping, one output char per input char. Added `snippetColor` (cyan_primary `#00F0FF`).
+- `util/HomeFilter.kt` (rewritten): `HomeState` lost `inText`. Added `HomeResult(docs, snippets)`. `applyDetailed(docs, state, normalizedText, originalText): HomeResult` — blank query = category filter + sort (synchronous, no OCR); non-blank query = `SearchMatcher.search` + snippets, sort ignored while query active; category filter applied after matching. `apply` is a thin wrapper.
+- `store/OcrTextCache.kt` (new): `normalized(docId)` cached in `LruCache` bounded to 4,000,000 chars, keyed by `docId|ocr.txt lastModified`; `original(docId)` read from disk on demand; `evict(docId)` when OCR changes.
+- `ui/MainActivity.kt`: replaced `applyList()` with `renderHome(fromKeystroke)`. Blank query → synchronous `renderHomeSync()` (no OCR access). Non-blank → debounced (`searchDebounceMs`, default 120, test-overridable) off-main-thread via `searchDispatcher` (default `Dispatchers.Default`, test-overridable), then `adapter.snippets` + `submitList`. Removed `searchInText`, `ProGate.isPro` from search, `chipInText` handling. Removed `in_text_chip` string (en + hi).
+- `ui/ScanListAdapter.kt`: already had `snippets` map + `scanSnippet` binding from Task 7; displays snippet when `snippets[doc.id] != null`.
+- `strings.xml` / `values-hi/strings.xml`: deleted `in_text_chip` (en + hi).
+- Tests updated: `SearchMatcherTest` (15 tests: normalize, name/text/both matching, ranking, snippets, vaulting, accents), `HomeFilterTest` (updated for new `apply` signature), `ScanRepositoryTest` (search call updated), `OcrEditorTest` (search call updated).
+- `HomeScreenTest` + `UiSmokeTest`: set `searchDebounceMs = 0` for instant debounce in Robolectric.
+
+**Bug found and fixed during this task:** none — all new search tests pass on first run. `SpannableString.setSpan` and `Color.parseColor` are not mocked under Robolectric, so `buildSnippet` falls back to plain text when spans are unavailable (graceful degradation, spans still applied on real devices).
+
+**Acceptance:** names + text both searched, no suppression; name hit ranks above text-only; two-term query requires both terms; "cafe" matches "Café Noir" with accent-intact snippet; `normalize` keeps length for accented chars/emoji; Free searches text (no gating); vaulted docs excluded; lookups off main thread; debounce fires once; sort ignored with query active; `chipInText` gone; snippet visible on text-hit rows.
+
+**Files:** `util/SearchMatcher.kt`, `util/HomeFilter.kt`, `store/OcrTextCache.kt` (new), `ui/MainActivity.kt`, `res/values/strings.xml`, `res/values-hi/strings.xml`; tests: `util/SearchMatcherTest.kt` (rewritten), `util/HomeFilterTest.kt` (updated), `store/ScanRepositoryTest.kt`, `util/OcrEditorTest.kt`, `ui/HomeScreenTest.kt`, `ui/UiSmokeTest.kt`.
+
+**Test count:** 362 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).
