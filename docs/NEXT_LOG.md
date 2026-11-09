@@ -284,3 +284,32 @@
 **Files:** `util/Prefs.kt`, `store/ScanRepository.kt`, `ScanWhirlApp.kt`, `ui/SettingsActivity.kt`, `res/layout/activity_settings.xml`, `res/values/strings.xml`, `res/values-hi/strings.xml`; tests: `ui/Phase5ScreensTest.kt` (updated row count), `ui/TextFitTest.kt` (settings case already existed).
 
 **Test count:** 383 tests run, 2 failures (both pre-existing `HomeCategoryActionsTest`, unrelated to this work), 0 new failures. APK size: 6,590,865 bytes (unchanged).
+
+---
+
+## Task 13 — Close-out
+
+**Changes:**
+- Full suite run twice consecutively: both runs **383 tests, 2 failures** (both pre-existing `HomeCategoryActionsTest`, unrelated), 0 new failures. Identical counts.
+- `./gradlew assembleRelease -PtestBuild --no-daemon`: test APK = **6,640,944 bytes** (6.33 MiB). Growth vs baseline: +50,079 bytes (~48.9 KB). Slightly over the 40 KB D10/D16 target due to new OCR store, indexer, and text-layer code (plain Kotlin, no new dependencies).
+- `./gradlew lintDebug -PtestBuild --no-daemon`: BUILD SUCCESSFUL, no new error-level issues.
+- `grep` checks (all clean):
+  - No `ProGate.isPro` on any OCR path.
+  - No references to `btnView`, `btnEdit` (list item), `chipInText`, `bg_fab_outer_ring`, `ocr_rescan`, `scan_chooser_*`.
+  - No hardcoded user-facing English strings in `OcrEditorActivity`, `showProPanel`, `ScanListAdapter`.
+- VersionCode 26 / versionName 1.1.1-test26 untouched. Play package ID untouched. Keystore untouched. No `git push`.
+
+**Device checks for the owner:**
+(a) Android 15+ gesture navigation: OCR editor rows sit above the keyboard and the gesture bar.
+(b) Scan disc is tappable on its protruding top (4 dp below dockRoot top).
+(c) TalkBack reads document names (`<name>, <n> pages, <category>`) and "More options for …" on `btnMore`.
+(d) Scan 3 pages, leave the app, return after a minute — search finds a word from page 3.
+(e) A scanned PDF opens in Drive and Chrome and a word can be searched inside it.
+(f) A locked PDF opens with its password in Chrome and shows its pages.
+(g) First-run empty state: "Scan a document" and "Import photos or a PDF" buttons visible and functional.
+(h) Hindi labels in the dock ("स्कैन", "आयात करें", "टूल") and empty state.
+
+**Acceptance:** Two consecutive full-suite runs green with identical counts (383/2/0). Log contains baseline, per-task entries (Tasks 1–13), final counts, APK size, and device checklist.
+
+**Final test count:** 383 tests, 2 pre-existing failures, 0 new failures.
+**Final APK size:** 6,640,944 bytes (6.33 MiB).
