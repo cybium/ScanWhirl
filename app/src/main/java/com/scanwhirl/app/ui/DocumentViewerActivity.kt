@@ -674,44 +674,18 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
     }
 
-    /** Moves this scan into or out of the 4-digit PIN Hidden Vault. */
+    /** Moves this scan out of the 4-digit PIN Hidden Vault (free, WP-22-6).
+     *  Moving INTO vault is disabled until encrypted Private ships (WP-14). */
     private fun toggleVaultDoc() {
-        if (!ProGate.isPro(this)) return
         val doc = document ?: return
         if (doc.isVaulted) {
+            // Removing from vault is always free — users can always access their own files.
             repo.setVaulted(doc.id, false)
             Toast.makeText(this, R.string.vault_moved_out, Toast.LENGTH_SHORT).show()
             lifecycleScope.launch { reloadDocument() }
-            return
-        }
-        if (!Prefs.hasVaultPin(this)) {
-            val (builder, input) = SwDialog.input(
-                this,
-                hint = getString(R.string.vault_pin_hint),
-                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            )
-            input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-            builder
-                .setTitle(R.string.vault_set_pin_title)
-                .setMessage(R.string.vault_set_pin_msg)
-                .setPositiveButton(R.string.save) { _, _ ->
-                    val pin = input.text?.toString()?.trim().orEmpty()
-                    if (pin.length != 4 || !pin.all { it.isDigit() }) {
-                        Toast.makeText(this, R.string.vault_pin_invalid, Toast.LENGTH_SHORT).show()
-                    } else {
-                        Prefs.setVaultPin(this, pin)
-                        repo.setVaulted(doc.id, true)
-                        Toast.makeText(this, R.string.vault_moved_in, Toast.LENGTH_LONG).show()
-                        finish()
-                    }
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .showSw(isSheet = false)
         } else {
-            repo.setVaulted(doc.id, true)
-            Toast.makeText(this, R.string.vault_moved_in, Toast.LENGTH_LONG).show()
-            finish()
+            // New vault additions disabled until WP-14 encrypted Private ships.
+            showProPanel()
         }
     }
 

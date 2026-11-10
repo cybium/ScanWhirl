@@ -10,7 +10,6 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.Prefs
-import com.scanwhirl.app.util.ProGate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,12 +34,10 @@ class VaultFlow(
 ) {
 
     fun openVaultWithPin() {
-        if (!ProGate.isPro(activity)) {
-            onProRequired()
-            return
-        }
+        // WP-22-6 (interim): opening an existing vault is free; new vault
+        // setup is disabled until encrypted Private ships (WP-14).
         if (!Prefs.hasVaultPin(activity)) {
-            promptSetVaultPin { setVaultMode(true) }
+            onProRequired()
             return
         }
         val (builder, input) = SwDialog.input(
@@ -91,36 +88,9 @@ class VaultFlow(
     }
 
     fun addToVault() {
-        if (!ProGate.isPro(activity)) {
-            onProRequired()
-            return
-        }
-        SwDialog.sheet(activity)
-            .setTitle(R.string.vault_add_title)
-            .setItems(
-                arrayOf(
-                    activity.getString(R.string.vault_add_scan),
-                    activity.getString(R.string.vault_add_pdf)
-                )
-            ) { _, which ->
-                if (which == 0) {
-                    activity.lifecycleScope.launch {
-                        // Vault mode lists vault contents; moving in needs the home list.
-                        val docs = withContext(Dispatchers.IO) { repo.listDocuments() }
-                        if (docs.isEmpty()) {
-                            Toast.makeText(activity, R.string.empty_title, Toast.LENGTH_SHORT).show()
-                        } else {
-                            FlowUtil.pickScan(activity, R.string.vault_add_scan, docs) { doc ->
-                                moveDocToVault(doc)
-                            }
-                        }
-                    }
-                } else {
-                    pickPdf { uri -> importPdfToVault(uri) }
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+        // WP-22-6 (interim): new vault additions disabled until WP-14 encrypted
+        // Private ships. Existing vault items remain readable and removable.
+        onProRequired()
     }
 
     private fun moveDocToVault(doc: ScanDocument) {
