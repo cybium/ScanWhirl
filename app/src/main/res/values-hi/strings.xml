@@ -405,4 +405,25 @@
     <string name="wallpaper_off"><!-- review -->Off, चुनें a phoको</string>
     <string name="wallpaper_on"><!-- review -->On, tap को बदलें the phoको</string>
     <string name="zoom_page"><!-- review -->Page pसमीक्षा, पिनch को ज़ूम</string>
+    <!-- review: the 5 plurals below were machine-translated at WP-02 — native review pending -->
+    <plurals name="delete_selected_message">
+        <item quantity="one">%1$d स्कैन और उसके सभी पेज स्थायी रूप से हटा दिए जाएंगे।</item>
+        <item quantity="other">%1$d स्कैन और उनके सभी पेज स्थायी रूप से हटा दिए जाएंगे।</item>
+    </plurals>
+    <plurals name="pages">
+        <item quantity="one">%1$d पेज</item>
+        <item quantity="other">%1$d पेज</item>
+    </plurals>
+    <plurals name="page_count_and_date">
+        <item quantity="one">%1$d पेज · %2$s</item>
+        <item quantity="other">%1$d पेज · %2$s</item>
+    </plurals>
+    <plurals name="list_count">
+        <item quantity="one">%1$d दस्तावेज़</item>
+        <item quantity="other">%1$d दस्तावेज़</item>
+    </plurals>
+    <plurals name="status_docs">
+        <item quantity="one">%d दस्तावेज़</item>
+        <item quantity="other">%d दस्तावेज़</item>
+    </plurals>
 </resources>

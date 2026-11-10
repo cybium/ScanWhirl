@@ -71,7 +71,7 @@
             android:layout_marginStart="8dp"
             android:src="@drawable/ic_undo"
             android:contentDescription="@string/ocr_undo_desc"
-            android:tint="@color/text_hologram_hi"
+            app:tint="@color/text_hologram_hi"
             android:background="?attr/selectableItemBackgroundBorderless" />
 
         <ImageButton
@@ -81,7 +81,7 @@
             android:layout_marginStart="8dp"
             android:src="@drawable/ic_redo"
             android:contentDescription="@string/ocr_redo_desc"
-            android:tint="@color/text_hologram_hi"
+            app:tint="@color/text_hologram_hi"
             android:background="?attr/selectableItemBackgroundBorderless" />
     </LinearLayout>
 

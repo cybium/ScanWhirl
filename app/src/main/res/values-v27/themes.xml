@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 27+ shell: extends Base.Theme.ScanWhirl and adds windowLightNavigationBar
+     which is only available from API 27. -->
+<resources>
+    <style name="Theme.ScanWhirl" parent="Base.Theme.ScanWhirl">
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

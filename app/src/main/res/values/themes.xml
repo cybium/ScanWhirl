@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Base Orbital Dark Theme (Universal dark universe; no DayNight drift) -->
-    <style name="Theme.ScanWhirl" parent="Theme.Material3.Dark.NoActionBar">
+    <!-- Base holds all items; Theme.ScanWhirl (here and in values-v27/) is the
+         qualifier-specific shell so we can add windowLightNavigationBar on API 27+
+         without a ResourceCycle lint error. -->
+    <style name="Base.Theme.ScanWhirl" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/sf_primary</item>
         <item name="colorOnPrimary">@color/sf_on_primary</item>
         <item name="colorPrimaryContainer">@color/sf_primary_container</item>
@@ -27,7 +30,6 @@
         <item name="android:statusBarColor">@color/sf_surface</item>
         <item name="android:navigationBarColor">@color/sf_background</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:textColorPrimary">@color/text_hologram_hi</item>
         <item name="android:textColorSecondary">@color/text_hologram_mid</item>
 
@@ -39,6 +41,8 @@
         <item name="materialCardViewStyle">@style/Widget.ScanWhirl.Card</item>
         <item name="switchStyle">@style/Widget.ScanWhirl.Switch</item>
     </style>
+    <!-- Shell for API < 27: inherits all base items, no windowLightNavigationBar -->
+    <style name="Theme.ScanWhirl" parent="Base.Theme.ScanWhirl" />
 
     <!-- Dialog & Sheet Window Animations -->
     <style name="Animation.ScanWhirl.Card" parent="android:Animation.Dialog">
