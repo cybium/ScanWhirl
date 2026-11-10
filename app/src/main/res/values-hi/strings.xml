@@ -119,7 +119,7 @@
     <string name="status_night">शुभ रात्रि</string>
     <string name="pro_status_test"><!-- review -->इस टेस्ट बिल्ड में अनलॉक किया गया</string>
     <string name="pro_status_unavailable"><!-- review -->अभी उपलब्ध नहीं है</string>
-    <string name="pro_panel_note"><!-- review -->स्कैनिंग, टेक्स्ट पहचान, खोज, मर्ज और कंप्रेस मुफ़्त हैं और हमेशा मुफ़्त रहेंगे। प्रो एक्सट्रा नीचे सूचीबद्ध हैं।</string>
+    <string name="pro_panel_note"><!-- review -->स्कैनिंग, टेक्स्ट पहचान, खोज, निर्यात, मर्ज और कंप्रेस मुफ़्त हैं और हमेशा मुफ़्त रहेंगे।</string>
     <!-- test26 T5.2 (§4.5 document screen) — machine-translated batch, review at G3. -->
     <string name="btn_text">टेक्स्ट</string>
     <string name="more">अधिक</string>
@@ -352,8 +352,8 @@
     <string name="settings_privacy"><!-- review -->Privacy policy</string>
     <string name="settings_privacy_summary"><!-- review -->Opens the policy in your browser</string>
     <string name="settings_pro"><!-- review -->ScanWhirl Pro</string>
-    <string name="settings_pro_message"><!-- review -->Extras come as a चालूe-time purchase:\n• Password-प्रोtect a PDF\n• ID/passport phoको आकारs\n• Share as lचालूg image\n• Batch निर्यात करें\n\nThe मुफ़्त ऐप stays मुफ़्त.</string>
-    <string name="settings_pro_summary"><!-- review -->Password-प्रोtect a PDF, ID phoको आकारs, lचालूg-image साझा करें, ZIP निर्यात करें, पाठ search. One payment.</string>
+    <string name="settings_pro_message"><!-- review -->ScanWhirl Pro अभी उपलब्ध नहीं है।</string>
+    <string name="settings_pro_summary"><!-- review -->उन्नत एक्सट्रा। Pro अभी उपलब्ध नहीं है।</string>
     <string name="settings_pro_title"><!-- review -->ScanWhirl Pro</string>
     <string name="settings_wallpaper"><!-- review -->Wallpaper</string>
     <string name="settings_wallpaper_summary"><!-- review -->Use a phoको behind your PDFs</string>

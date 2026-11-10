@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- WP-22b: Until G5 the panel only states Pro is not available yet.
+     No Buy button, no price, no feature dossier. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -76,188 +78,12 @@
             android:textAppearance="@style/TextAppearance.SW.Meta"
             android:textSize="12sp" />
 
-        <!-- Feature Rows -->
-        <!-- 1. Vault -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_vault"
-                app:tint="@color/gold_pro_primary" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="14dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_vault_title"
-                    android:textAppearance="@style/TextAppearance.SW.Card.Title"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_vault_sub"
-                    android:textAppearance="@style/TextAppearance.SW.Meta" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 2. Lock / Unlock -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_lock"
-                app:tint="@color/gold_pro_primary" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="14dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_lock_title"
-                    android:textAppearance="@style/TextAppearance.SW.Card.Title"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_lock_sub"
-                    android:textAppearance="@style/TextAppearance.SW.Meta" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 4. Long Image -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_long_image"
-                app:tint="@color/gold_pro_primary" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="14dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_long_title"
-                    android:textAppearance="@style/TextAppearance.SW.Card.Title"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_long_sub"
-                    android:textAppearance="@style/TextAppearance.SW.Meta" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 5. ID Crop -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_crop"
-                app:tint="@color/gold_pro_primary" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="14dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_crop_title"
-                    android:textAppearance="@style/TextAppearance.SW.Card.Title"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_crop_sub"
-                    android:textAppearance="@style/TextAppearance.SW.Meta" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 6. Batch ZIP -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_download"
-                app:tint="@color/gold_pro_primary" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="14dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_zip_title"
-                    android:textAppearance="@style/TextAppearance.SW.Card.Title"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pro_feat_zip_sub"
-                    android:textAppearance="@style/TextAppearance.SW.Meta" />
-            </LinearLayout>
-        </LinearLayout>
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:gravity="center"
-            android:text="Offline only • No accounts • One-time purchase"
+            android:text="Offline only • No accounts"
             android:textAppearance="@style/TextAppearance.SW.Meta"
             android:textSize="11sp" />
     </LinearLayout>

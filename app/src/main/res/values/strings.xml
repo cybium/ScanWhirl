@@ -237,9 +237,9 @@
     <string name="settings_privacy_summary">Opens the policy in your browser</string>
     <string name="privacy_open_failed">No browser available</string>
     <string name="settings_pro">ScanWhirl Pro</string>
-    <string name="settings_pro_summary">Password-protect a PDF, ID photo sizes, long-image share, ZIP export, text search. One payment.</string>
+    <string name="settings_pro_summary">Advanced extras. Pro is not available yet.</string>
     <string name="settings_pro_title">ScanWhirl Pro</string>
-    <string name="pro_panel_note">Scanning, text recognition, search, merge and compress are free and stay free. Pro extras are listed below.</string>
+    <string name="pro_panel_note">Scanning, text recognition, search, export, merge and compress are free and stay free.</string>
     <string name="pro_status_test">Unlocked in this test build</string>
     <string name="pro_status_unavailable">Not available yet</string>
     <string name="pro_feat_password">Password-protect a PDF</string>
@@ -330,7 +330,7 @@
     <string name="settings_searchable_pdf_summary">Hides OCR text in the PDF so any PDF app can search it.</string>
     <string name="settings_auto_copy_to_documents">Also save a copy to Documents</string>
     <string name="settings_auto_copy_to_documents_summary">Copies saved to Documents/ScanWhirl.</string>
-    <string name="settings_pro_message">Extras come as a one-time purchase:\n• Password-protect a PDF\n• ID/passport photo sizes\n• Share as long image\n• Batch export\n\nThe free app stays free.</string>
+    <string name="settings_pro_message">ScanWhirl Pro is not available yet.</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>
     <string name="language_system">System default</string>
