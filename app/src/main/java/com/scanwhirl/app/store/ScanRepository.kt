@@ -898,16 +898,23 @@ class ScanRepository(private val context: Context) {
         regeneratePdf(dir)
     }
 
-    /** Next default scan name: "Document 1", "Document 2", … */
+    /** Next default scan name: "Document 1", "Document 2", …
+     *  Starts at max(existing Document-N)+1 so the sequence is predictable
+     *  and already-deleted numbers are not reused.  Then advances further
+     *  if that name is already taken by a document that was explicitly
+     *  renamed to "Document N", making it collision-proof in all cases. */
     fun nextDocumentName(): String {
         val docDirs = docsDir.listFiles { f -> f.isDirectory } ?: emptyArray()
-        val maxN = docDirs.mapNotNull { dir ->
+        val existingNames = docDirs.mapNotNull { dir ->
             val meta = File(dir, "meta.txt")
-            if (!meta.exists()) null
-            else meta.readLines().firstOrNull()
-                ?.let { Regex("^Document (\\d+)$").find(it)?.groupValues[1]?.toIntOrNull() }
-        }.maxOrNull() ?: 0
-        return "Document ${maxN + 1}"
+            if (meta.exists()) meta.readLines().firstOrNull() else null
+        }.toHashSet()
+        val pattern = Regex("^Document (\\d+)$")
+        val maxN = existingNames.mapNotNull { pattern.find(it)?.groupValues?.get(1)?.toIntOrNull() }
+            .maxOrNull() ?: 0
+        var n = maxN + 1
+        while (existingNames.contains("Document $n")) n++
+        return "Document $n"
     }
 
     fun displayNameOf(uri: Uri): String? {

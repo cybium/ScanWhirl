@@ -100,6 +100,7 @@ class ScanListAdapter(
                 if (selected) binding.root.context.getString(R.string.state_selected) else null
             )
 
+            binding.catChip.setOnClickListener { onCategory(doc) }
             binding.root.setOnClickListener { onClick(doc) }
             binding.root.setOnLongClickListener {
                 onLongClick(doc)
