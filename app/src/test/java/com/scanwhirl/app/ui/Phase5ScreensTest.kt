@@ -536,7 +536,7 @@ class Phase5ScreensTest {
                 // §4.5: exactly these rows, in exactly these three groups.
                 for (row in listOf(
                     R.id.rowMoreRename, R.id.rowMoreMove, R.id.rowMoreDuplicate,
-                    R.id.rowMoreCompress, R.id.rowMoreLock, R.id.rowMoreLongImage,
+                    R.id.rowMoreCompress, R.id.rowMoreLock,
                     R.id.rowMoreVault, R.id.rowMoreDelete
                 )) assertNotNull("row $row must exist", sheet!!.findViewById<View>(row))
                 for (hdr in listOf(R.id.hdrOrganize, R.id.hdrTools, R.id.hdrDanger)) {
@@ -555,11 +555,9 @@ class Phase5ScreensTest {
                 assertEquals("no OCR button in the sheet (D-E)", 0,
                     activity.resources.getIdentifier("btnOcr", "id", activity.packageName))
 
-                // Pro (test-build default): the three locked rows carry no pill.
+                // Pro (test-build default): the locked rows carry no pill.
                 assertFalse("Pro sees no PRO pill",
                     sheet.findViewById<View>(R.id.pillLock).isVisible)
-                assertFalse("Pro sees no PRO pill",
-                    sheet.findViewById<View>(R.id.pillLongImage).isVisible)
                 assertFalse("Pro sees no PRO pill",
                     sheet.findViewById<View>(R.id.pillVault).isVisible)
                 // Labels follow the document state (unlocked, unvaulted here).
@@ -585,7 +583,7 @@ class Phase5ScreensTest {
                 activity.findViewById<View>(R.id.btnMore).performClick()
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("the More sheet must open", sheet)
-                for (pill in listOf(R.id.pillLock, R.id.pillLongImage)) {
+                for (pill in listOf(R.id.pillLock)) {
                     assertTrue("Free sees the PRO pill on $pill",
                         sheet!!.findViewById<View>(pill).isVisible)
                 }

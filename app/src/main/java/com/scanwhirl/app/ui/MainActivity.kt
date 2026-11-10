@@ -46,7 +46,6 @@ import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
-import com.scanwhirl.app.tools.LongImageFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.tools.ResizeFlow
@@ -128,9 +127,6 @@ class MainActivity : BaseActivity(), HomeHost {
                 Toast.makeText(this, R.string.vault_new_unavailable, Toast.LENGTH_LONG).show()
             }
         )
-    }
-    private val longImageFlow: LongImageFlow by lazy {
-        LongImageFlow(activity = this, repo = repo, host = this)
     }
     private val ocrFlow: OcrFlow by lazy {
         OcrFlow(activity = this, repo = repo, host = this)
@@ -215,7 +211,7 @@ class MainActivity : BaseActivity(), HomeHost {
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { compressFlow.startFromFile(it) } }
 
-    /** Pending action for a Pro device-PDF picker (OCR, Lock, Long Image…). */
+    /** Pending action for a Pro device-PDF picker (OCR, Lock…). */
     private var pendingUriAction: ((Uri) -> Unit)? = null
 
     private val pickProPdf = registerForActivityResult(
@@ -975,13 +971,6 @@ class MainActivity : BaseActivity(), HomeHost {
             Tile(R.id.tile_lock, R.string.tool_lock, R.drawable.ic_lock, true) {
                 lockFlow.chooseLockSource()
             },
-            Tile(R.id.tile_long_image, R.string.btn_long_image, R.drawable.ic_long_image, true) {
-                chooseProSource(
-                    R.string.btn_long_image,
-                    onScan = { doc -> longImageFlow.runLongImageForScan(doc) },
-                    onPdf = { uri -> longImageFlow.runLongImageForPdf(uri) }
-                )
-            },
             // WP-22 repair: opening an EXISTING PIN vault is Free, so this tile
             // must not pass the generic Pro guard. VaultFlow itself refuses new
             // vault setup (no PIN) in Free and Pro alike.
@@ -1065,7 +1054,7 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     // ------------------------------------------------------------------
-    // Pro Suite: Hidden Vault (4-digit PIN), OCR, Lock/Unlock, Long Image
+    // Pro Suite: Hidden Vault (4-digit PIN), OCR, Lock/Unlock
     // ------------------------------------------------------------------
 
 

@@ -37,7 +37,7 @@ export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk"
 
 | Area | File(s) |
 |---|---|
-| Home: list, search, sort, selection, scan/gallery chooser, Pro Suite, Vault, compress/resize/merge, source choosers for OCR/Lock/Long Image | `app/src/main/java/com/scanwhirl/app/ui/MainActivity.kt` |
+| Home: list, search, sort, selection, scan/gallery chooser, Pro Suite, Vault, compress/resize/merge, source choosers for OCR/Lock | `app/src/main/java/com/scanwhirl/app/ui/MainActivity.kt` |
 | Page editor (reorder/rotate/crop/delete/filter), Pro Tools drawer | `ui/DocumentViewerActivity.kt` |
 | Full-screen page view, per-page filter preview, crop + ID/passport presets | `ui/PageViewerActivity.kt` |
 | Post-scan staging (review, add pages, per-page filters) | `ui/ScanReviewActivity.kt` |
@@ -48,7 +48,7 @@ export ANDROID_HOME="$HOME/android-sdk" ANDROID_SDK_ROOT="$HOME/android-sdk"
 | Seekable-PDF cache copy (fixes SAF pipe failures) | `util/PdfPageRenderer.kt` |
 | Pro gate + test Free/Pro preview override | `util/ProGate.kt` |
 | EXIF-only orientation, atomic crop/rotate, bounded decodes | `util/ImageTools.kt` |
-| Long-image stitch, ZIP export, greetings, prefs | `util/LongImage.kt`, `ZipExporter.kt`, `Greeting.kt`, `Prefs.kt`, `Sha256.kt` |
+| ZIP export, greetings, prefs | `ZipExporter.kt`, `Greeting.kt`, `Prefs.kt`, `Sha256.kt` |
 | Layouts / strings / drawables | `app/src/main/res/` |
 | Test suite (UI smoke + store + utils) | `app/src/test/` |
 

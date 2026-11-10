@@ -148,7 +148,6 @@
     <string name="btn_list"><!-- review -->List</string>
     <string name="btn_lock_pdf"><!-- review -->Lock PDF</string>
     <string name="btn_lock_unlock"><!-- review -->Lock / Unलॉक</string>
-    <string name="btn_long_image"><!-- review -->Lचालूg Image</string>
     <string name="btn_ocr_text"><!-- review -->पाठ पढ़ें</string>
     <string name="btn_settings"><!-- review -->Settings</string>
     <string name="btn_unlock_pdf"><!-- review -->Unलॉक PDF</string>
@@ -208,7 +207,6 @@
     <string name="lock_device_title"><!-- review -->Lock a उपकरण PDF</string>
     <string name="lock_source_lock_device"><!-- review -->Lock a उपकरण PDF</string>
     <string name="lock_source_unlock_device"><!-- review -->Unलॉक a लॉक किया गया PDF फ़ाइल</string>
-    <string name="menu_long_image"><!-- review -->Lचालूg Image</string>
     <string name="menu_protect_pdf"><!-- review -->Lock PDF</string>
     <string name="merge"><!-- review -->Merge</string>
     <string name="merge_action"><!-- review -->Merge</string>
@@ -273,19 +271,15 @@
     <string name="pro_feat_id_sizes"><!-- review -->ID / passport phoको आकारs</string>
     <string name="pro_feat_lock_sub"><!-- review -->Password-प्रोtect and अनलॉक दस्तावेज़</string>
     <string name="pro_feat_lock_title"><!-- review -->PDF Encryptiचालू</string>
-    <string name="pro_feat_long_image"><!-- review -->Share as lचालूg image</string>
-    <string name="pro_feat_long_sub"><!-- review -->Export all पृष्ठ as a single tall image</string>
-    <string name="pro_feat_long_title"><!-- review -->Lचालूg Image Stitching</string>
     <string name="pro_feat_password"><!-- review -->Password-प्रोtect a PDF</string>
     <string name="pro_feat_vault_sub"><!-- review -->स्कैन को 4-अंक पिन के पीछे छिपाएं। फोन पर फाइलें एनक्रिप्टेड नहीं हैं।</string>
     <string name="pro_feat_vault_title"><!-- review -->Hidden Vault</string>
     <string name="pro_feat_zip"><!-- review -->Batch निर्यात करें ZIP</string>
     <string name="pro_feat_zip_sub"><!-- review -->Export multiple दस्तावेज़ at चालूce</string>
     <string name="pro_feat_zip_title"><!-- review -->Batch ZIP Archive</string>
-    <string name="pro_suite_sub"><!-- review -->Vault · OCR · Lock · Lचालूg Image</string>
+    <string name="pro_suite_sub"><!-- review -->Vault · OCR · Lock</string>
     <string name="pro_suite_title"><!-- review -->Pro Suite</string>
     <string name="pro_tile_lock_sub"><!-- review -->Password</string>
-    <string name="pro_tile_long_sub"><!-- review -->Stitch पृष्ठ</string>
     <string name="pro_tile_ocr_sub"><!-- review -->Extract पाठ</string>
     <string name="pro_tile_vault_sub"><!-- review -->PIN folder</string>
     <string name="progress_title"><!-- review -->Working…</string>

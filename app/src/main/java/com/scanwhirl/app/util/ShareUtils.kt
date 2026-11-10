@@ -24,7 +24,7 @@ object ShareUtils {
         }
     }
 
-    /** Shares any file with an explicit MIME type (long image, ZIP, …). */
+    /** Shares any file with an explicit MIME type (ZIP, PDF, image, …). */
     fun shareFile(context: Context, file: File, mime: String) {
         shareSingle(context, file, mime)
     }

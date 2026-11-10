@@ -27,7 +27,6 @@ import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.util.DownloadSaver
-import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.PdfOpener
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
@@ -584,15 +583,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // PDF's row is Unlock (Free, WP-22-5) and the vault row is never Pro
         // (remove is Free, new additions are unavailable), so neither is badged.
         view.findViewById<android.widget.TextView>(R.id.pillLock).isVisible = !pro && !doc.isLocked
-        view.findViewById<android.widget.TextView>(R.id.pillLongImage).isVisible = !pro
         view.findViewById<android.widget.TextView>(R.id.pillVault).isVisible = false
-
-        fun locked(view: View, handler: () -> Unit) {
-            view.setOnClickListener {
-                sheet.dismiss()
-                if (pro) handler() else showProPanel()
-            }
-        }
 
         // Organize
         view.findViewById<View>(R.id.rowMoreRename).setOnClickListener {
@@ -617,9 +608,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             sheet.dismiss()
             if (doc.isLocked) unlockCurrentPdf()
             else if (pro) promptProtectPdf() else showProPanel()
-        }
-        locked(view.findViewById(R.id.rowMoreLongImage)) {
-            shareLongImage()
         }
         // Vault row is NOT Pro-guarded (WP-22): removing an existing vaulted
         // doc is Free; adding is unavailable and says so (no Pro redirect).
@@ -691,33 +679,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         } else {
             // New vault additions disabled until WP-14 encrypted Private ships.
             Toast.makeText(this, R.string.vault_new_unavailable, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /** Stitches the document's pages into one tall image (Pro) and shares it. */
-    private fun shareLongImage() {
-        if (!ProGate.isPro(this)) return
-        val doc = document ?: return
-        if (doc.pageFiles.isEmpty()) return
-        val progress = showProgress()
-        lifecycleScope.launch {
-            try {
-                val out = withContext(Dispatchers.IO) {
-                    val dir = File(cacheDir, "documents/share").apply { mkdirs() }
-                    val file = File(dir, ShareUtils.sanitizeName(doc.name) + " - long.jpg")
-                    LongImage.stitch(doc.pageFiles, file)
-                    file
-                }
-                progress.dismiss()
-                ShareUtils.shareFile(this@DocumentViewerActivity, out, "image/jpeg")
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
         }
     }
 

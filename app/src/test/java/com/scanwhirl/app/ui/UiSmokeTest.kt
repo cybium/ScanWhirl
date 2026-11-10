@@ -1445,14 +1445,10 @@ class UiSmokeTest {
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("More sheet should open", sheet)
                 val protect = sheet!!.findViewById<android.view.View>(R.id.rowMoreLock)
-                val longImage = sheet.findViewById<android.view.View>(R.id.rowMoreLongImage)
                 assertNotNull("Lock PDF row should be in the sheet", protect)
-                assertNotNull("Long image row should be in the sheet", longImage)
                 assertTrue(protect.isVisible)
-                assertTrue(longImage.isVisible)
                 // Pro (test-build default): no PRO pills on the rows.
                 assertFalse(sheet.findViewById<android.view.View>(R.id.pillLock).isVisible)
-                assertFalse(sheet.findViewById<android.view.View>(R.id.pillLongImage).isVisible)
                 // The ZIP export lives in Home's selection header now (T3.7);
                 // the menu id it used to ride is gone everywhere.
                 assertEquals(
@@ -1553,23 +1549,6 @@ class UiSmokeTest {
         val crop = view.getCropRect()
         assertEquals(crop.width(), crop.height(), 6f)
         bmp.recycle()
-    }
-
-    @Test
-    fun `long image stitches pages into one tall jpeg`() {
-        val dir = java.io.File(app.cacheDir, "long_${System.nanoTime()}").apply { mkdirs() }
-        val pages = (0 until 2).map { i ->
-            val f = java.io.File(dir, "p$i.jpg")
-            f.writeBytes(jpegBytes())
-            f
-        }
-        val out = java.io.File(dir, "long.jpg")
-        com.scanwhirl.app.util.LongImage.stitch(pages, out)
-        assertTrue("stitch produced a file", out.exists() && out.length() > 0)
-        val dims = com.scanwhirl.app.util.ImageTools.imageSize(out.readBytes())!!
-        assertEquals(310, dims.first)
-        assertEquals("taller than one page", 888, dims.second)
-        dir.deleteRecursively()
     }
 
     @Test
@@ -1680,7 +1659,6 @@ class UiSmokeTest {
                 assertNotNull("tools sheet should open", sheet)
                 assertNotNull(sheet!!.findViewById<android.view.View>(R.id.tile_ocr))
                 assertNotNull(sheet.findViewById<android.view.View>(R.id.tile_lock))
-                assertNotNull(sheet.findViewById<android.view.View>(R.id.tile_long_image))
                 assertNotNull(sheet.findViewById<android.view.View>(R.id.tile_vault))
                 renderActivityPng(activity, "/tmp/opencode/ui_home.png")
                 sheet.dismiss()
@@ -1706,7 +1684,6 @@ class UiSmokeTest {
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("Editor More sheet should open", sheet)
                 assertNotNull(sheet!!.findViewById<android.view.View>(R.id.rowMoreLock))
-                assertNotNull(sheet.findViewById<android.view.View>(R.id.rowMoreLongImage))
                 assertNotNull(sheet.findViewById<android.view.View>(R.id.rowMoreVault))
                 // Test build is Pro: the locked rows show no PRO pill.
                 assertFalse(sheet.findViewById<android.view.View>(R.id.pillLock).isVisible)

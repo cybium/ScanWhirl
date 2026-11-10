@@ -8,7 +8,6 @@
     <item name="tile_resize" type="id" />
     <item name="tile_ocr" type="id" />
     <item name="tile_lock" type="id" />
-    <item name="tile_long_image" type="id" />
     <item name="tile_vault" type="id" />
     <!-- test26 T4.4: the Tools sheet's 9th tile (Quick sort). -->
     <item name="tile_quick_sort" type="id" />

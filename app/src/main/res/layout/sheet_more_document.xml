@@ -168,40 +168,6 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/rowMoreLongImage"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="?attr/selectableItemBackground"
-        android:clickable="true"
-        android:focusable="true"
-        android:gravity="center_vertical"
-        android:minHeight="56dp"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:letterSpacing="0.02"
-            android:text="@string/menu_long_image"
-            android:textColor="@color/text_hologram_hi"
-            android:textSize="15sp" />
-
-        <TextView
-            android:id="@+id/pillLongImage"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_lock_badge"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="2dp"
-            android:text="@string/badge_pro"
-            android:textColor="@color/pro_gold"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/rowMoreVault"

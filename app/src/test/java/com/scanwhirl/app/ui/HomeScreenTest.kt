@@ -632,7 +632,7 @@ class HomeScreenTest {
     }
 
     @Test
-    fun `tools sheet opens and holds nine tiles in two sections`() {
+    fun `tools sheet opens and holds seven tiles in two sections`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val bar = activity.findViewById<android.view.View>(R.id.dockRoot)
@@ -648,7 +648,7 @@ class HomeScreenTest {
                     R.id.tile_quick_sort
                 )
                 val proIds = setOf(
-                    R.id.tile_lock, R.id.tile_long_image, R.id.tile_vault
+                    R.id.tile_lock, R.id.tile_vault
                 )
                 for (id in freeIds + proIds) {
                     assertNotNull(
@@ -663,7 +663,7 @@ class HomeScreenTest {
                 val free = sheet.findViewById<android.view.ViewGroup>(R.id.sheetFree)
                 val pro = sheet.findViewById<android.view.ViewGroup>(R.id.sheetPro)
                 assertEquals("Free section holds 5 tiles", freeIds, tilesIn(free, freeIds))
-                assertEquals("Pro section holds 4 tiles", proIds, tilesIn(pro, proIds))
+                assertEquals("Pro section holds 2 tiles", proIds, tilesIn(pro, proIds))
 
                 sheet.dismiss()
                 assertFalse("sheet dismissed", sheet.isShowing)
