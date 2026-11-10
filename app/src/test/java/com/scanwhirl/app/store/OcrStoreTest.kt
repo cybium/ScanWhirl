@@ -34,6 +34,23 @@ class OcrStoreTest {
         assertEquals(0, storeFor(freshId()).readText("nope").size)
     }
 
+    // WP-04 regression: OcrStore previously used java.util.Base64 (API 26+),
+    // which crashed on Android 7/8 (API 24/25). It now uses android.util.Base64.
+    @Test
+    fun `putTexts round-trips non-ASCII text including Hindi and symbols`() {
+        val id = freshId()
+        val store = storeFor(id)
+        val hindiText = "नमस्ते दुनिया — ₹100 · © 2026"
+        val multiScript = "日本語テスト\nكلمة عربية\nΕλληνικά"
+        store.putTexts(id, mapOf(
+            "page_000.jpg" to hindiText,
+            "page_001.jpg" to multiScript
+        ))
+        val read = store.readText(id)
+        assertEquals(hindiText, read["page_000.jpg"])
+        assertEquals(multiScript, read["page_001.jpg"])
+    }
+
     @Test
     fun `putTexts then readText round-trips`() {
         val id = freshId()

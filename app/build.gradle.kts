@@ -64,7 +64,10 @@ android {
     }
 
     lint {
-        abortOnError = false
+        // WP-04: all 13 known errors fixed; now enforce lint gate.
+        // checkReleaseBuilds=false keeps lint out of assembleRelease path
+        // so it remains a deliberate manual gate (./gradlew lintDebug).
+        abortOnError = true
         checkReleaseBuilds = false
     }
 

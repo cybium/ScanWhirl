@@ -58,7 +58,7 @@ class OcrStore(private val docsDir: File) {
         android.util.Base64.encodeToString(text.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
 
     private fun decodeText(b64: String): String =
-        String(java.util.Base64.getDecoder().decode(b64), Charsets.UTF_8)
+        String(android.util.Base64.decode(b64, android.util.Base64.NO_WRAP), Charsets.UTF_8)
 
     private fun encodeGeo(page: OcrPage): String = buildString {
         append("${page.width} ${page.height}\n")

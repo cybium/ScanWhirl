@@ -4,6 +4,7 @@ import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -94,7 +95,10 @@ class ScanListAdapter(
                 R.string.doc_row_desc, doc.name, doc.pageCount, CategoryRules.label(doc.category.orEmpty()))
             binding.btnMore.contentDescription = binding.root.context.getString(
                 R.string.doc_more_options, doc.name)
-            binding.root.stateDescription = if (selected) binding.root.context.getString(R.string.state_selected) else null
+            ViewCompat.setStateDescription(
+                binding.root,
+                if (selected) binding.root.context.getString(R.string.state_selected) else null
+            )
 
             binding.root.setOnClickListener { onClick(doc) }
             binding.root.setOnLongClickListener {
