@@ -20,7 +20,6 @@ import com.scanwhirl.app.databinding.ActivityPageViewerBinding
 import com.scanwhirl.app.databinding.ItemPagerPageBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.ImageTools
-import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ScanFilter
 import androidx.core.view.isVisible
 import android.view.View
@@ -388,8 +387,8 @@ class PageViewerActivity : BaseActivity() {
         cropPath = file.path
         binding.cropView.clearImage()
         binding.cropOverlay.visibility = View.VISIBLE
-        // ID/passport size presets are a Pro extra; only Pro sees the chips.
-        binding.cropPresets.isVisible = ProGate.isPro(this)
+        // WP-22-7: ID/passport crop presets are free.
+        binding.cropPresets.isVisible = true
         binding.chipCropFree.isChecked = true
 
         // Display-size copy only (max 2048px) — the full-res file is read on Apply.
