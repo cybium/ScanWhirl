@@ -762,10 +762,9 @@ class MainActivity : BaseActivity(), HomeHost {
             binding.btnSelDelete.isEnabled = n > 0
             // T4.3: Move is live (was disabled until T4.3).
             binding.btnSelMove.isEnabled = n > 0
-            // Pro extras only appear in the Pro UI (Free keeps no dead buttons).
-            val pro = ProGate.isPro(this)
-            binding.btnSelExport.visibility = if (pro) View.VISIBLE else View.GONE
-            binding.btnSelExport.isEnabled = pro && n > 0
+            // Ordinary ZIP export is free; always visible in selection mode.
+            binding.btnSelExport.visibility = View.VISIBLE
+            binding.btnSelExport.isEnabled = n > 0
         } else {
             binding.toolbar.visibility = View.VISIBLE
             binding.selectionHeader.visibility = View.GONE
@@ -1263,11 +1262,9 @@ class MainActivity : BaseActivity(), HomeHost {
                     ?.removeSuffix(".pdf")?.removeSuffix(".PDF")
                     ?.takeIf { it.isNotBlank() } ?: "Imported PDF"
                 val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
-                // Imported pages index into Pro text search too.
-                if (ProGate.isPro(this@MainActivity)) {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        try { repo.buildOcr(doc.id) } catch (_: Exception) { }
-                    }
+                // Index imported PDF pages into free text search.
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try { repo.buildOcr(doc.id) } catch (_: Exception) { }
                 }
                 progress.dismiss()
                 startActivity(DocumentViewerActivity.intent(this@MainActivity, doc.id))
@@ -1309,9 +1306,8 @@ class MainActivity : BaseActivity(), HomeHost {
         popup.show()
     }
 
-    /** Pro extra: pack every ticked scan's PDF into one ZIP, then show the result. */
+    /** Pack every ticked scan's PDF into one ZIP, then show the result. */
     private fun exportSelectedZip() {
-        if (!ProGate.isPro(this)) return
         val ids = selectedIds.toList()
         if (ids.isEmpty()) return
         val progress = showProgress()

@@ -450,8 +450,8 @@ class HomeScreenTest {
                 // T4.3: Move is live with a selection (was disabled until T4.3).
                 assertTrue("Move is visible", move.isVisible)
                 assertTrue("Move enabled with 1 selected", move.isEnabled)
-                // Free build: no dead Export button.
-                assertFalse("Export hidden in Free", export.isVisible)
+                // WP-22-3: ordinary ZIP export is free — Export always visible.
+                assertTrue("Export visible in Free (WP-22-3)", export.isVisible)
                 assertEquals(
                     "1 selected",
                     activity.findViewById<android.widget.TextView>(R.id.selCount).text.toString()
@@ -475,22 +475,8 @@ class HomeScreenTest {
                     activity.findViewById<android.widget.TextView>(R.id.selCount).text.toString()
                 )
 
-                // Pro: Export appears (the header re-reads Pro on every toggle).
-                com.scanwhirl.app.util.ProGate.setTestOverride(activity, true)
-                activity.findViewById<android.view.View>(R.id.btnSelClose).performClick()
-                forceLayout(list)
-                assertTrue(
-                    "row 0 is back after leaving selection",
-                    pollUntil { list.findViewHolderForAdapterPosition(0) != null }
-                )
-                // Capture the card before Select re-lays out the list.
-                val card0 = list.findViewHolderForAdapterPosition(0)!!.itemView
-                activity.findViewById<android.view.View>(R.id.btnSelect).performClick()
-                card0.performClick()
-                assertTrue(
-                    "Export visible for Pro",
-                    pollUntil { export.isVisible }
-                )
+                // Export remains visible whether Free or Pro (WP-22-3: free export).
+                assertTrue("Export still visible after 2 selected", export.isVisible)
             }
         }
     }
