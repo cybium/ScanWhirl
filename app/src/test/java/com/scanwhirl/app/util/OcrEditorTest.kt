@@ -39,7 +39,7 @@ class OcrEditorTest {
         return uri
     }
 
-    private val fakeJpeg = ByteArray(2048) { (it % 251).toByte() }
+    private val fakeJpeg get() = ImportFixtures.image()
     private val fakePdf = ByteArray(4096) { (it % 199).toByte() }
 
     @Before

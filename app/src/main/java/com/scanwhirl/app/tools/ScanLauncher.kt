@@ -109,11 +109,10 @@ class ScanLauncher(
                     val staging = File(activity.cacheDir, "pending_${System.currentTimeMillis()}")
                     staging.mkdirs()
                     uris.forEachIndexed { index, uri ->
-                        val bytes = activity.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: throw IllegalStateException("could not read a scanned page")
-                        if (bytes.isEmpty()) throw IllegalStateException("a scanned page was empty")
+                        val bytes = activity.contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
+                            ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
                         File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
-                            // EXIF rotation only: gallery photos are never cropped or tilted.
+                            // Real JPEG, white alpha and EXIF orientation; no perspective crop.
                             .writeBytes(ImageTools.normalizePage(bytes))
                     }
                     staging

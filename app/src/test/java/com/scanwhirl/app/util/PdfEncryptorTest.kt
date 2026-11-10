@@ -28,7 +28,7 @@ class PdfEncryptorTest {
         0x64.toByte(), 0x53.toByte(), 0x69.toByte(), 0x7A.toByte()
     )
 
-    /** Minimal valid JPEG: SOI + SOF0 + EOI. */
+    /** Actual decodable image: a SOI + SOF0 + EOI stub has no scan data. */
     private fun makeJpeg(dir: File, name: String, w: Int, h: Int): File {
         val bytes = buildJpeg(w, h)
         val f = File(dir, name)
@@ -37,17 +37,7 @@ class PdfEncryptorTest {
     }
 
     private fun buildJpeg(w: Int, h: Int): ByteArray =
-        byteArrayOf(
-            0xFF.toByte(), 0xD8.toByte(), // SOI
-            0xFF.toByte(), 0xC0.toByte(), // SOF0
-            0x00.toByte(), 0x0B.toByte(), // length 11
-            0x08.toByte(), // precision
-            (h shr 8).toByte(), (h and 0xFF).toByte(), // height
-            (w shr 8).toByte(), (w and 0xFF).toByte(), // width
-            0x01.toByte(), // components
-            0x01.toByte(), 0x22.toByte(), 0x00.toByte(), // component 1
-            0xFF.toByte(), 0xD9.toByte() // EOI
-        )
+        ImportFixtures.image(width = w, height = h)
 
     private fun pad(bytes: ByteArray): ByteArray {
         val out = bytes.copyOf(32)

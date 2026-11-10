@@ -32,7 +32,7 @@ class ScanRepositoryTest {
         return uri
     }
 
-    private val fakeJpeg = ByteArray(2048) { (it % 251).toByte() }
+    private val fakeJpeg get() = com.scanwhirl.app.util.ImportFixtures.image()
     private val fakePdf = ByteArray(4096) { (it % 199).toByte() }
 
     @Test

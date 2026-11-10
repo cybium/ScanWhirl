@@ -69,7 +69,10 @@ object PdfGenerator {
         // Validate every JPEG up front, before touching outFile or the tmp file.
         images.forEach { file ->
             require(file.exists() && file.length() > 0L) { "Missing page image: ${file.name}" }
-            readJpegInfo(file.readBytes())
+            val bytes = file.readBytes()
+            val info = readJpegInfo(bytes)
+            PageImageFormat.checkJpeg(bytes)
+            require(info.components == 1 || info.components == 3) { "Page must be grayscale or RGB JPEG: ${file.name}" }
         }
 
         val tmp = File(outFile.parentFile ?: outFile, "${outFile.name}.tmp")

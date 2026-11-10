@@ -4,7 +4,14 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ImageDecoder
+import android.graphics.Matrix
+import android.os.Build
+import androidx.annotation.RequiresApi
+import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.nio.ByteBuffer
 import java.util.zip.CRC32
 import kotlin.math.max
 import kotlin.math.min
@@ -74,7 +81,9 @@ object ImageTools {
 
     fun encodeJpeg(bitmap: Bitmap, quality: Int): ByteArray {
         val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), out)
+        check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), out)) {
+            "Could not encode the page as JPEG. Try importing it again."
+        }
         return out.toByteArray()
     }
 
@@ -89,58 +98,120 @@ object ImageTools {
     /** Working cap so rotate/crop/re-encode never decode a monster file full-res. */
     private const val WORK_DIM = 3000
 
-    /**
-     * Normalises a page JPEG's orientation: applies the EXIF rotation tag if
-     * one is present, then optionally straightens a perspectived paper quad.
-     * Gallery photos carry orientation tags that plain decodes ignore — this
-     * is why "picked from the gallery" pages came out tilted. Both steps are
-     * geometric only: no brightness, contrast or color is ever touched.
-     */
-    /**
-     * Normalises a page JPEG's orientation using only the EXIF 90°/180°/270°
-     * rotation tag. Never applies perspective warping so straight gallery
-     * images and scanner pages are never tilted.
-     */
-    fun normalizePage(bytes: ByteArray): ByteArray = try {
-        orientJpeg(bytes)
-    } catch (_: Exception) {
-        bytes
+    internal const val MAX_PAGE_BYTES = 32 * 1024 * 1024
+    internal const val MAX_PAGE_PIXELS = 6_000_000L
+
+    /** Bound encoded input too: a provider need not expose its size or a seekable file. */
+    fun readPageBytes(input: InputStream): ByteArray {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            require(out.size().toLong() + count <= MAX_PAGE_BYTES) {
+                "This image exceeds 32 MB. Export a smaller PNG, JPEG or WebP image and try again."
+            }
+            out.write(buffer, 0, count)
+        }
+        return out.toByteArray()
     }
 
-    /** Applies the EXIF orientation tag of a JPEG, when present. */
-    fun orientJpeg(bytes: ByteArray): ByteArray {
-        val orientation = try {
-            val stream = java.io.ByteArrayInputStream(bytes)
-            val exif = androidx.exifinterface.media.ExifInterface(stream)
-            when (exif.getAttributeInt(
-                androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
-                androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
-            )) {
-                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-                androidx.exifinterface.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> 0f
-                androidx.exifinterface.media.ExifInterface.ORIENTATION_FLIP_VERTICAL -> 0f
-                else -> 0f
-            }
-        } catch (_: Exception) {
-            0f
+    /**
+     * Content-based PNG/JPEG/WebP import. No raw-byte fallback on failure.
+     * Decode one page at a time, at most 3000 px per side / 6 MP (24 MB ARGB).
+     * Apply all eight EXIF transforms, composite alpha onto white BEFORE filters,
+     * then encode once at quality 95. Ordinary unfiltered JPEGs stay byte-identical.
+     * No perspective correction or changes to provider-owned input.
+     */
+    fun normalizePage(bytes: ByteArray, filter: ScanFilter = ScanFilter.ORIGINAL): ByteArray {
+        require(bytes.size <= MAX_PAGE_BYTES) {
+            "This image exceeds 32 MB. Export a smaller image and try again."
         }
-        if (orientation == 0f) return bytes
-        return try {
-            val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                ?: return bytes
-            val matrix = android.graphics.Matrix().apply { postRotate(orientation) }
-            val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
-            val aliased = rotated === src
-            val result = encodeJpeg(rotated, 95)
-            if (!rotated.isRecycled) rotated.recycle()
-            if (!aliased && !src.isRecycled) src.recycle()
-            result
-        } catch (_: Exception) {
-            bytes
+        val format = PageImageFormat.check(bytes)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) {
+            "Cannot decode this image. Download it again or choose another PNG, JPEG or WebP image."
+        }
+        val sample = pageSampleSize(bounds.outWidth, bounds.outHeight)
+        val orientation = try {
+            bytes.inputStream().use {
+                ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            }
+        } catch (e: java.io.IOException) {
+            throw IllegalArgumentException("Cannot read image orientation. Export the image again and retry.", e)
+        }
+        require(orientation in 0..8) { "Invalid image orientation. Export the image again and retry." }
+        val matrix = Matrix().apply {
+            when (orientation) {
+                2 -> setScale(-1f, 1f)
+                3 -> setRotate(180f)
+                4 -> setScale(1f, -1f)
+                5 -> { setRotate(90f); postScale(-1f, 1f) }
+                6 -> setRotate(90f)
+                7 -> { setRotate(90f); postScale(1f, -1f) }
+                8 -> setRotate(270f)
+            }
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inMutable = true
+        }
+        // ImageDecoder applies JPEG EXIF itself. For PNG/WebP use the explicit
+        // matrix: platform support for EXIF in these containers is inconsistent.
+        val decoderOrients = Build.VERSION.SDK_INT >= 28 && format == PageImageFormat.Format.JPEG
+        var bitmap = if (Build.VERSION.SDK_INT >= 28 && decoderOrients) decodePage28(bytes, sample) else
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+            ?: throw IllegalArgumentException("Cannot decode this image. Download it again or choose another image.")
+        fun replace(next: Bitmap) {
+            if (next !== bitmap) bitmap.recycle()
+            bitmap = next
+        }
+        try {
+            require(bitmap.width <= WORK_DIM && bitmap.height <= WORK_DIM &&
+                bitmap.width.toLong() * bitmap.height <= MAX_PAGE_PIXELS) {
+                "This image is too large to decode safely. Export a smaller image and try again."
+            }
+            // Decode even the fast path: SOI/SOF alone is not evidence of a usable JPEG.
+            val jpegInfo = if (format == PageImageFormat.Format.JPEG) PdfGenerator.readJpegInfo(bytes) else null
+            if (jpegInfo?.components in listOf(1, 3) && matrix.isIdentity && sample == 1 && filter == ScanFilter.ORIGINAL) {
+                return bytes
+            }
+            if (!decoderOrients && !matrix.isIdentity) {
+                replace(Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true))
+            }
+            replace(flatten(bitmap))
+            replace(filter.applyTo(bitmap))
+            return encodeJpeg(bitmap, 95).also { PageImageFormat.checkJpeg(it) }
+        } finally {
+            bitmap.recycle()
         }
     }
+
+    internal fun pageSampleSize(width: Int, height: Int): Int {
+        require(width > 0 && height > 0)
+        var sample = 1
+        fun side(size: Int) = (size.toLong() + sample - 1) / sample
+        while (side(width) > WORK_DIM || side(height) > WORK_DIM ||
+            side(width) * side(height) > MAX_PAGE_PIXELS) sample *= 2
+        return sample
+    }
+
+    @RequiresApi(28)
+    private fun decodePage28(bytes: ByteArray, sample: Int): Bitmap = try {
+        ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes))) { decoder, _, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            decoder.isMutableRequired = true
+            decoder.setTargetSampleSize(sample)
+            decoder.setOnPartialImageListener { false }
+        }
+    } catch (e: java.io.IOException) {
+        throw IllegalArgumentException("This image is damaged or incomplete. Download it again or choose another image.", e)
+    }
+
+    /** Kept for callers that historically requested orientation-only JPEG import. */
+    fun orientJpeg(bytes: ByteArray): ByteArray = normalizePage(bytes)
 
     /**
      * Conservative perspective straighten for a photographed paper quad.

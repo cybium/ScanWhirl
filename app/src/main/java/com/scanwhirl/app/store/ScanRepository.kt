@@ -191,80 +191,77 @@ class ScanRepository(private val context: Context) {
         pageFilters: Map<Int, ScanFilter>? = null,
         category: String? = null
     ): ScanDocument = withContext(Dispatchers.IO) {
-        val id = UUID.randomUUID().toString().take(8)
-        val dir = File(docsDir, id).apply { mkdirs() }
-
-        // Per-page filters win over the document-wide one. The scanner's PDF
-        // only still matches the pages when every page ends up untouched.
+        require(imageUris.isNotEmpty()) { "Choose at least one PNG, JPEG or WebP image." }
         val effective: (Int) -> ScanFilter = { i -> pageFilters?.get(i) ?: filter }
-        val allOriginal = imageUris.indices.all { effective(it) == ScanFilter.ORIGINAL }
+        // Image-only preflight: reject bad inputs before creating a document.
+        // Scratch files bound memory and avoid reopening a possibly one-shot provider.
+        // This is NOT a document transaction: PDF/metadata publication remains WP-05.
+        val prepared = mutableListOf<File>()
+        var pagesUnchanged = true
+        try {
+            imageUris.forEachIndexed { index, uri ->
+                try {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
+                        ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
+                    val normalized = ImageTools.normalizePage(bytes, effective(index))
+                    if (normalized !== bytes) pagesUnchanged = false
+                    val scratch = File.createTempFile("normalized_page_", ".jpg", context.cacheDir)
+                    prepared.add(scratch)
+                    scratch.writeBytes(normalized)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("Page ${index + 1}: ${e.message}", e)
+                }
+            }
 
-        val pageFiles = imageUris.mapIndexed { index, uri ->
-            val pageFilter = effective(index)
-            val out = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index))
-            val input = context.contentResolver.openInputStream(uri)
-                ?: throw IllegalStateException("Could not read scanned page ${index + 1}")
-            input.use { i ->
-                val bytes = i.readBytes()
-                if (pageFilter == ScanFilter.ORIGINAL) {
-                    out.writeBytes(ImageTools.normalizePage(bytes))
-                } else {
-                    val oriented = ImageTools.orientJpeg(bytes)
-                    val bitmap = BitmapFactory.decodeByteArray(
-                        oriented, 0, oriented.size
-                    ) ?: throw IllegalStateException("Page ${index + 1} is not an image")
-                    val processed = pageFilter.applyTo(bitmap)
-                    FileOutputStream(out).use { o ->
-                        processed.compress(Bitmap.CompressFormat.JPEG, 92, o)
+            val id = UUID.randomUUID().toString().take(8)
+            val dir = File(docsDir, id)
+            check(dir.mkdir()) { "Could not create a new document. Try saving again." }
+            val pageFiles = prepared.mapIndexed { index, scratch ->
+                scratch.copyTo(File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index)))
+            }
+
+            val pdfFile = File(dir, "scan.pdf")
+            // Filters, conversion, sampling and EXIF transforms invalidate PDF reuse.
+            if (pdfUri != null && pagesUnchanged) {
+                try {
+                    context.contentResolver.openInputStream(pdfUri)?.use { input ->
+                        FileOutputStream(pdfFile).use { output -> input.copyTo(output) }
                     }
-                    if (processed !== bitmap) processed.recycle()
-                    bitmap.recycle()
+                    if (pdfFile.length() == 0L) pdfFile.delete()
+                } catch (_: Exception) {
+                    pdfFile.delete()
                 }
             }
-            if (!out.exists() || out.length() == 0L) {
-                throw IllegalStateException("Scanned page ${index + 1} is empty")
-            }
-            out
-        }
 
-        val pdfFile = File(dir, "scan.pdf")
-        if (pdfUri != null && allOriginal) {
-            try {
-                context.contentResolver.openInputStream(pdfUri)?.use { input ->
-                    FileOutputStream(pdfFile).use { output -> input.copyTo(output) }
+            if (!pdfFile.exists() || pdfFile.length() == 0L) {
+                try {
+                    regeneratePdf(dir)
+                } catch (_: Exception) {
+                    pdfFile.delete()
                 }
-                if (pdfFile.length() == 0L) pdfFile.delete()
-            } catch (_: Exception) {
-                pdfFile.delete()
             }
+
+            val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
+                ?: nextDocumentName()
+
+            writeMeta(dir, name, category)
+
+            val pages = dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
+                ?.sortedBy { it.nameWithoutExtension }
+                ?.toList()
+                ?: pageFiles
+
+            ScanDocument(
+                id = id,
+                name = name,
+                createdAt = System.currentTimeMillis(),
+                pageCount = pages.size,
+                pdfFile = pdfFile,
+                pageFiles = pages
+            ).also { ocrStore.markPending(id) }
+        } finally {
+            prepared.forEach { it.delete() } // Only this invocation's owned scratch files.
         }
-
-        if (!pdfFile.exists() || pdfFile.length() == 0L) {
-            try {
-                regeneratePdf(dir)
-            } catch (_: Exception) {
-                pdfFile.delete()
-            }
-        }
-
-        val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
-            ?: nextDocumentName()
-
-        writeMeta(dir, name, category)
-
-        val pages = dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
-            ?.sortedBy { it.nameWithoutExtension }
-            ?.toList()
-            ?: pageFiles
-
-        ScanDocument(
-            id = id,
-            name = name,
-            createdAt = System.currentTimeMillis(),
-            pageCount = pages.size,
-            pdfFile = pdfFile,
-            pageFiles = pages
-        ).also { ocrStore.markPending(id) }
     }
 
     fun deleteDocument(id: String) {

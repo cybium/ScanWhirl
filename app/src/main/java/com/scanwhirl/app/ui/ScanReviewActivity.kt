@@ -496,31 +496,36 @@ class ScanReviewActivity : BaseActivity() {
     /** Copies [uris] into the staging folder with continuing page numbers. */
     internal fun appendStagedPages(uris: List<Uri>) {
         lifecycleScope.launch {
+            var appended = false
             try {
                 withContext(Dispatchers.IO) {
                     var next = (stagingDir.listFiles { f -> f.extension.equals("jpg", true) }
                         ?.mapNotNull { it.nameWithoutExtension.removePrefix("page_").toIntOrNull() }
                         ?.maxOrNull() ?: 0)
                     uris.forEach { uri ->
-                        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: throw IllegalStateException("could not read a scanned page")
-                        if (bytes.isEmpty()) throw IllegalStateException("a scanned page was empty")
+                        val bytes = contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
+                            ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
                         next += 1
                         File(stagingDir, String.format(Locale.ROOT, "page_%03d.jpg", next))
-                            // EXIF rotation only: never perspective-crop added photos.
+                            // Real JPEG, white alpha and EXIF orientation; no perspective crop.
                             .writeBytes(ImageTools.normalizePage(bytes))
+                        appended = true
                     }
                 }
-                // The scanner's PDF no longer covers the full page set.
-                pdfFile = null
-                structureChanged = true
-                reloadFromDisk()
             } catch (e: Exception) {
                 Toast.makeText(
                     this@ScanReviewActivity,
                     getString(R.string.stage_failed, e.message),
                     Toast.LENGTH_LONG
                 ).show()
+            } finally {
+                // Even when a later input is invalid, earlier added pages invalidate
+                // the scanner PDF and must remain visible/recoverable in review.
+                if (appended) {
+                    pdfFile = null
+                    structureChanged = true
+                    reloadFromDisk()
+                }
             }
         }
     }

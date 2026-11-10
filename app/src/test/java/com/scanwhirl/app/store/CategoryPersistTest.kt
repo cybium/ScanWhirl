@@ -24,7 +24,7 @@ class CategoryPersistTest {
         get() = ApplicationProvider.getApplicationContext()
 
     private var uriCounter = 0
-    private val fakeJpeg = ByteArray(2048) { (it % 251).toByte() }
+    private val fakeJpeg get() = com.scanwhirl.app.util.ImportFixtures.image()
 
     private fun contentUri(bytes: ByteArray): Uri {
         val uri = Uri.parse("content://cat/fake_${uriCounter++}.jpg")
