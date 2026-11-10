@@ -580,10 +580,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         view.findViewById<android.widget.TextView>(R.id.labelVault).setText(
             if (doc.isVaulted) R.string.btn_vault_unhide else R.string.btn_vault_hide
         )
-        // PRO pills: visible only to Free (D-A); Pro sees no badges.
-        for (pill in listOf(R.id.pillLock, R.id.pillLongImage, R.id.pillVault)) {
-            view.findViewById<android.widget.TextView>(pill).isVisible = !pro
-        }
+        // PRO pills: visible only to Free (D-A); Pro sees no badges. A locked
+        // PDF's row is Unlock (Free, WP-22-5) and the vault row is never Pro
+        // (remove is Free, new additions are unavailable), so neither is badged.
+        view.findViewById<android.widget.TextView>(R.id.pillLock).isVisible = !pro && !doc.isLocked
+        view.findViewById<android.widget.TextView>(R.id.pillLongImage).isVisible = !pro
+        view.findViewById<android.widget.TextView>(R.id.pillVault).isVisible = false
 
         fun locked(view: View, handler: () -> Unit) {
             view.setOnClickListener {
@@ -619,7 +621,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         locked(view.findViewById(R.id.rowMoreLongImage)) {
             shareLongImage()
         }
-        locked(view.findViewById(R.id.rowMoreVault)) {
+        // Vault row is NOT Pro-guarded (WP-22): removing an existing vaulted
+        // doc is Free; adding is unavailable and says so (no Pro redirect).
+        view.findViewById<View>(R.id.rowMoreVault).setOnClickListener {
+            sheet.dismiss()
             toggleVaultDoc()
         }
         // Danger
@@ -685,7 +690,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             lifecycleScope.launch { reloadDocument() }
         } else {
             // New vault additions disabled until WP-14 encrypted Private ships.
-            showProPanel()
+            Toast.makeText(this, R.string.vault_new_unavailable, Toast.LENGTH_LONG).show()
         }
     }
 

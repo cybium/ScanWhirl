@@ -395,6 +395,7 @@
     <string name="vault_imported"><!-- review -->Imported inको Hidden Vault</string>
     <string name="vault_moved_in"><!-- review -->Moved को Hidden Vault</string>
     <string name="vault_moved_out"><!-- review -->Resकोred से Hidden Vault</string>
+    <string name="vault_new_unavailable"><!-- review -->Hidden Vault में नया जोड़ना अभी उपलब्ध नहीं है। मौजूदा वॉल्ट आइटम पहले की तरह उपलब्ध रहेंगे।</string>
     <string name="vault_pin_hint"><!-- review -->4-digit PIN (e.g. 1234)</string>
     <string name="vault_pin_invalid"><!-- review -->Enter a 4-digit number</string>
     <string name="vault_pin_saved"><!-- review -->Vault PIN updated</string>

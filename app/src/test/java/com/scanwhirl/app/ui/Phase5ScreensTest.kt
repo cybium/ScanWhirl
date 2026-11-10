@@ -585,10 +585,14 @@ class Phase5ScreensTest {
                 activity.findViewById<View>(R.id.btnMore).performClick()
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("the More sheet must open", sheet)
-                for (pill in listOf(R.id.pillLock, R.id.pillLongImage, R.id.pillVault)) {
+                for (pill in listOf(R.id.pillLock, R.id.pillLongImage)) {
                     assertTrue("Free sees the PRO pill on $pill",
                         sheet!!.findViewById<View>(pill).isVisible)
                 }
+                // WP-22: the vault row is never Pro (remove is Free, add is
+                // unavailable) — it must not carry a misleading PRO pill.
+                assertFalse("vault row has no PRO pill",
+                    sheet!!.findViewById<View>(R.id.pillVault).isVisible)
                 // D-A: a locked row from Free opens the Pro pitch, not the tool.
                 sheet!!.findViewById<View>(R.id.rowMoreLock).performClick()
                 val panel = ShadowDialog.getLatestDialog()

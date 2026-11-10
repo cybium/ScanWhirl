@@ -124,7 +124,9 @@ class MainActivity : BaseActivity(), HomeHost {
                 pickProPdf.launch(arrayOf("application/pdf"))
             },
             setVaultMode = { enabled -> setVaultMode(enabled) },
-            onProRequired = { showProPanel() }
+            onNewVaultUnavailable = {
+                Toast.makeText(this, R.string.vault_new_unavailable, Toast.LENGTH_LONG).show()
+            }
         )
     }
     private val longImageFlow: LongImageFlow by lazy {
@@ -980,7 +982,10 @@ class MainActivity : BaseActivity(), HomeHost {
                     onPdf = { uri -> longImageFlow.runLongImageForPdf(uri) }
                 )
             },
-            Tile(R.id.tile_vault, R.string.bar_vault, R.drawable.ic_vault, true) {
+            // WP-22 repair: opening an EXISTING PIN vault is Free, so this tile
+            // must not pass the generic Pro guard. VaultFlow itself refuses new
+            // vault setup (no PIN) in Free and Pro alike.
+            Tile(R.id.tile_vault, R.string.bar_vault, R.drawable.ic_vault, false) {
                 vaultFlow.openVaultWithPin()
             }
         )

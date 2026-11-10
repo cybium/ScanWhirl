@@ -22,7 +22,8 @@ import kotlinx.coroutines.withContext
  * @param pickPdf seam for the Pro device-PDF picker (launcher stays in the
  *   Activity via `pendingUriAction` + `pickProPdf`).
  * @param setVaultMode enters/leaves vault mode on the Home screen.
- * @param onProRequired shows the Pro panel when the feature is gated.
+ * @param onNewVaultUnavailable tells the user new vault setup / additions are
+ *   unavailable (interim, until encrypted Private ships). Not a Pro upsell.
  */
 class VaultFlow(
     private val activity: AppCompatActivity,
@@ -30,14 +31,14 @@ class VaultFlow(
     private val host: HomeHost,
     private val pickPdf: ((Uri) -> Unit) -> Unit,
     private val setVaultMode: (Boolean) -> Unit,
-    private val onProRequired: () -> Unit
+    private val onNewVaultUnavailable: () -> Unit
 ) {
 
     fun openVaultWithPin() {
         // WP-22-6 (interim): opening an existing vault is free; new vault
         // setup is disabled until encrypted Private ships (WP-14).
         if (!Prefs.hasVaultPin(activity)) {
-            onProRequired()
+            onNewVaultUnavailable()
             return
         }
         val (builder, input) = SwDialog.input(
@@ -90,7 +91,7 @@ class VaultFlow(
     fun addToVault() {
         // WP-22-6 (interim): new vault additions disabled until WP-14 encrypted
         // Private ships. Existing vault items remain readable and removable.
-        onProRequired()
+        onNewVaultUnavailable()
     }
 
     private fun moveDocToVault(doc: ScanDocument) {

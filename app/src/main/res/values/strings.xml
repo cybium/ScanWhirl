@@ -285,6 +285,7 @@
     <string name="vault_pin_saved">Vault PIN updated</string>
     <string name="vault_moved_in">Moved to Hidden Vault</string>
     <string name="vault_moved_out">Restored from Hidden Vault</string>
+    <string name="vault_new_unavailable">Adding to Hidden Vault is unavailable. Existing vault items stay accessible.</string>
     <string name="vault_empty_title">Vault is empty</string>
     <string name="vault_empty_subtitle">Tap Add to move a saved scan here or import a PDF. Scans stay hidden until you enter your PIN.</string>
     <string name="unlock_pdf_title">Password-Protected PDF</string>
