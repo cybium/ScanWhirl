@@ -610,8 +610,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             sheet.dismiss()
             compressFlow.startWith(doc)
         }
-        locked(view.findViewById(R.id.rowMoreLock)) {
-            if (doc.isLocked) unlockCurrentPdf() else promptProtectPdf()
+        // Unlock is free (WP-22-5); protect remains Pro-gated.
+        view.findViewById<View>(R.id.rowMoreLock).setOnClickListener {
+            sheet.dismiss()
+            if (doc.isLocked) unlockCurrentPdf()
+            else if (pro) promptProtectPdf() else showProPanel()
         }
         locked(view.findViewById(R.id.rowMoreLongImage)) {
             shareLongImage()
@@ -648,7 +651,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** Removes password protection from this scan and restores the clean PDF. */
     private fun unlockCurrentPdf() {
-        if (!ProGate.isPro(this)) return
         val doc = document ?: return
         lifecycleScope.launch {
             val progress = showProgress()
