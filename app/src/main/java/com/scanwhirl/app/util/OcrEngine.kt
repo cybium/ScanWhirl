@@ -1,5 +1,6 @@
 package com.scanwhirl.app.util
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -105,6 +106,9 @@ object OcrEngine {
             if (!bitmap.isRecycled) bitmap.recycle()
         }
     }
+
+    /** OCR a bitmap the caller owns (it is not recycled here). */
+    suspend fun recognizeBitmap(bitmap: Bitmap): String = recognize(InputImage.fromBitmap(bitmap, 0))
 
     suspend fun recognize(image: InputImage): String = withContext(Dispatchers.IO) {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)

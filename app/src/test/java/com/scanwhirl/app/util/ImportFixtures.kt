@@ -32,8 +32,9 @@ object ImportFixtures {
         }
     }
 
-    fun oriented(file: File, orientation: Int, format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG): ByteArray {
-        file.writeBytes(image(format))
+    fun oriented(file: File, orientation: Int, format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
+                 width: Int = 120, height: Int = 80): ByteArray {
+        file.writeBytes(image(format, width, height))
         ExifInterface(file).apply {
             setAttribute(ExifInterface.TAG_ORIENTATION, orientation.toString())
             saveAttributes()

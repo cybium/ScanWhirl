@@ -73,6 +73,41 @@ class PageNormalizationTest {
     @Test fun `EXIF transverse`() = checkOrientation(7, listOf(Color.YELLOW, Color.GREEN, Color.BLUE, Color.RED))
     @Test fun `EXIF rotation 270`() = checkOrientation(8, listOf(Color.GREEN, Color.YELLOW, Color.RED, Color.BLUE))
 
+    @Test fun `12 MP phone JPEG with EXIF rotation 90 is sampled upright and portrait`() {
+        val source = ImportFixtures.oriented(File(tmp.root, "phone.jpg"), 6, width = 4000, height = 3000)
+        val before = source.copyOf()
+        val bitmap = ImportFixtures.assertJpeg(ImageTools.normalizePage(source))
+        try {
+            // 4000x3000 exceeds 3000 px, so it is sampled to 2000x1500 and then rotated.
+            assertEquals(1500, bitmap.width)
+            assertEquals(2000, bitmap.height)
+            val corners = listOf(Color.BLUE, Color.RED, Color.YELLOW, Color.GREEN)
+            listOf(15 to 15, bitmap.width - 16 to 15, 15 to bitmap.height - 16,
+                bitmap.width - 16 to bitmap.height - 16).forEachIndexed { i, (x, y) ->
+                ImportFixtures.assertColor(corners[i], bitmap.getPixel(x, y))
+            }
+        } finally { bitmap.recycle() }
+        assertArrayEquals(before, source)
+    }
+
+    @Suppress("DEPRECATION")
+    @Test fun `invalid EXIF orientation is identity not a rejection`() {
+        for (value in listOf(9, 255, 65535)) {
+            val jpeg = ImportFixtures.oriented(File(tmp.root, "bad-$value.jpg"), value)
+            assertArrayEquals("orientation $value", jpeg, ImageTools.normalizePage(jpeg))
+            for (format in listOf(Bitmap.CompressFormat.PNG, Bitmap.CompressFormat.WEBP)) {
+                val source = ImportFixtures.oriented(File(tmp.root, "bad-$value-$format"), value, format)
+                val bitmap = ImportFixtures.assertJpeg(ImageTools.normalizePage(source))
+                try {
+                    assertEquals("$format $value", 120, bitmap.width)
+                    assertEquals("$format $value", 80, bitmap.height)
+                    ImportFixtures.assertColor(Color.RED, bitmap.getPixel(15, 15))
+                    ImportFixtures.assertColor(Color.YELLOW, bitmap.getPixel(104, 64))
+                } finally { bitmap.recycle() }
+            }
+        }
+    }
+
     @Test fun `empty garbage and unsupported image are rejected`() {
         listOf(byteArrayOf(), "not an image".toByteArray(), "GIF89a".toByteArray()).forEach { bytes ->
             assertThrows(IllegalArgumentException::class.java) { ImageTools.normalizePage(bytes) }

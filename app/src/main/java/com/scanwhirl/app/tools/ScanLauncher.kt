@@ -100,22 +100,42 @@ class ScanLauncher(
         }
     }
 
+    /** A brand-new folder: an existing one (same millisecond) is never reused or deleted. */
+    private fun createStagingDir(): File {
+        val stamp = System.currentTimeMillis()
+        for (attempt in 0 until 100) {
+            val name = if (attempt == 0) "pending_$stamp" else "pending_${stamp}_$attempt"
+            val candidate = File(activity.cacheDir, name)
+            if (candidate.mkdirs()) return candidate
+        }
+        throw IllegalStateException("Could not create a staging folder. Free some space and try again.")
+    }
+
     /** Copies the scanned page URIs into a staging folder, then opens the review screen. */
     fun stageAndReview(uris: List<Uri>) {
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
                 val dir = withContext(Dispatchers.IO) {
-                    val staging = File(activity.cacheDir, "pending_${System.currentTimeMillis()}")
-                    staging.mkdirs()
-                    uris.forEachIndexed { index, uri ->
-                        val bytes = activity.contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
-                            ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
-                        File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
-                            // Real JPEG, white alpha and EXIF orientation; no perspective crop.
-                            .writeBytes(ImageTools.normalizePage(bytes))
+                    val staging = createStagingDir()
+                    try {
+                        uris.forEachIndexed { index, uri ->
+                            try {
+                                val bytes = activity.contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
+                                    ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
+                                File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
+                                    // Real JPEG, white alpha and EXIF orientation; no perspective crop.
+                                    .writeBytes(ImageTools.normalizePage(bytes))
+                            } catch (e: Exception) {
+                                throw IllegalArgumentException("Page ${index + 1}: ${e.message}", e)
+                            }
+                        }
+                        staging
+                    } catch (t: Throwable) {
+                        // Only the folder created above; never resumable as a half-import.
+                        staging.deleteRecursively()
+                        throw t
                     }
-                    staging
                 }
                 activity.startActivity(
                     ScanReviewActivity.intent(

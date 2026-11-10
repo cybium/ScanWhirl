@@ -102,15 +102,17 @@ object ImageTools {
     internal const val MAX_PAGE_PIXELS = 6_000_000L
 
     /** Bound encoded input too: a provider need not expose its size or a seekable file. */
-    fun readPageBytes(input: InputStream): ByteArray {
+    fun readPageBytes(input: InputStream): ByteArray = readBounded(
+        input, "This image exceeds 32 MB. Export a smaller PNG, JPEG or WebP image and try again."
+    )
+
+    internal fun readBounded(input: InputStream, tooLargeMessage: String): ByteArray {
         val out = ByteArrayOutputStream()
         val buffer = ByteArray(8192)
         while (true) {
             val count = input.read(buffer)
             if (count < 0) break
-            require(out.size().toLong() + count <= MAX_PAGE_BYTES) {
-                "This image exceeds 32 MB. Export a smaller PNG, JPEG or WebP image and try again."
-            }
+            require(out.size().toLong() + count <= MAX_PAGE_BYTES) { tooLargeMessage }
             out.write(buffer, 0, count)
         }
         return out.toByteArray()
@@ -141,18 +143,8 @@ object ImageTools {
         } catch (e: java.io.IOException) {
             throw IllegalArgumentException("Cannot read image orientation. Export the image again and retry.", e)
         }
-        require(orientation in 0..8) { "Invalid image orientation. Export the image again and retry." }
-        val matrix = Matrix().apply {
-            when (orientation) {
-                2 -> setScale(-1f, 1f)
-                3 -> setRotate(180f)
-                4 -> setScale(1f, -1f)
-                5 -> { setRotate(90f); postScale(-1f, 1f) }
-                6 -> setRotate(90f)
-                7 -> { setRotate(90f); postScale(1f, -1f) }
-                8 -> setRotate(270f)
-            }
-        }
+        // An out-of-range tag is not a damaged image: Android decoders treat it as identity.
+        val matrix = orientationMatrix(orientation)
         val options = BitmapFactory.Options().apply {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.ARGB_8888
@@ -186,6 +178,19 @@ object ImageTools {
             return encodeJpeg(bitmap, 95).also { PageImageFormat.checkJpeg(it) }
         } finally {
             bitmap.recycle()
+        }
+    }
+
+    /** EXIF orientation 2..8 as a transform; 0, 1 and any invalid value are identity. */
+    internal fun orientationMatrix(orientation: Int): Matrix = Matrix().apply {
+        when (orientation) {
+            2 -> setScale(-1f, 1f)
+            3 -> setRotate(180f)
+            4 -> setScale(1f, -1f)
+            5 -> { setRotate(90f); postScale(-1f, 1f) }
+            6 -> setRotate(90f)
+            7 -> { setRotate(90f); postScale(1f, -1f) }
+            8 -> setRotate(270f)
         }
     }
 

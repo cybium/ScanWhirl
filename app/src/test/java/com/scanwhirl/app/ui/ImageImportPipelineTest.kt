@@ -260,6 +260,49 @@ class ImageImportPipelineTest {
         assertTrue(app.cacheDir.walkTopDown().none { it.name.startsWith("page_") && it.extension == "jpg" })
     }
 
+    private fun pendingDirs() = app.cacheDir.listFiles { f -> f.isDirectory && f.name.startsWith("pending_") }!!.map { it.name }.toSet()
+
+    @Test fun `failed second image removes its new staging folder reports Page 2 and leaves no resume offer`() {
+        Prefs.setAutoCopyToDocuments(app, false)
+        val bytes = listOf(ImportFixtures.image(Bitmap.CompressFormat.PNG), byteArrayOf(1, 2, 3), ImportFixtures.image())
+        val uris = providerUris(bytes)
+        assertTrue(pendingDirs().isEmpty())
+        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+            scenario.onActivity { activity -> ScanLauncher(activity, repo, activity) {}.stageAndReview(uris) }
+            await { ShadowToast.getTextOfLatestToast()?.contains("Page 2") == true }
+            val message = ShadowToast.getTextOfLatestToast()!!
+            assertTrue(message, message.contains("Page 2: "))
+            assertTrue(message, message.contains("Choose"))
+            scenario.onActivity { activity ->
+                assertNull(shadowOf(activity).nextStartedActivity)
+                // No ghost: nothing for the next launch to offer as an unfinished scan.
+                assertTrue(pendingDirs().isEmpty())
+                assertEquals(0, app.cacheDir.walkTopDown().count { it.name.startsWith("page_") && it.extension == "jpg" })
+                val dialogBefore = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+                ScanLauncher(activity, repo, activity) {}.offerUnfinishedScan()
+                assertSame(dialogBefore, org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog())
+            }
+        }
+        assertTrue(repo.listDocuments().isEmpty())
+        assertOriginals(bytes)
+    }
+
+    @Test fun `failed staging deletes only its own folder and keeps an earlier unfinished scan`() {
+        val earlier = File(app.cacheDir, "pending_1000").apply { mkdirs() }
+        val earlierPage = File(earlier, "page_001.jpg").apply { writeBytes(ImportFixtures.image()) }
+        val earlierBytes = earlierPage.readBytes()
+        val bytes = listOf(ImportFixtures.image(), ImportFixtures.image(Bitmap.CompressFormat.PNG).copyOf(40))
+        val uris = providerUris(bytes)
+        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+            scenario.onActivity { activity -> ScanLauncher(activity, repo, activity) {}.stageAndReview(uris) }
+            await { ShadowToast.getTextOfLatestToast()?.contains("Page 2") == true }
+            scenario.onActivity { assertNull(shadowOf(it).nextStartedActivity) }
+        }
+        assertEquals(setOf("pending_1000"), pendingDirs())
+        assertArrayEquals(earlierBytes, earlierPage.readBytes())
+        assertOriginals(bytes)
+    }
+
     @Test fun `scanner PDF reuse requires unchanged normalized JPEG pages`() = runBlocking {
         val source = File(tmp.root, "scanner.jpg").apply { writeBytes(ImportFixtures.image()) }
         val scannerPdf = File(tmp.root, "scanner.pdf")
