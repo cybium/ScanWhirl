@@ -27,6 +27,15 @@
             android:scaleType="centerCrop"
             android:src="@drawable/ic_document" />
 
+        <!-- Review slice 1: current-page ring over the thumb (gone unless Review sets it). -->
+        <View
+            android:id="@+id/currentRing"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/fg_rv_current_ring"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/pageNum"
             android:layout_width="wrap_content"

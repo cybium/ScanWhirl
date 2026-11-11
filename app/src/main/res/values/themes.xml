@@ -230,4 +230,70 @@
     <style name="ThemeOverlay.ScanWhirl.ChipRail" parent="">
         <item name="chipStyle">@style/Widget.ScanWhirl.Chip</item>
     </style>
+    <!-- Review slice 1: labelled photo-editor tools (icon over label, 60dp tall,
+         one line; the row scrolls at large font sizes, never ellipsized). -->
+    <style name="Widget.ScanWhirl.Button.ReviewTool" parent="Widget.Material3.Button.TextButton">
+        <item name="android:minHeight">60dp</item>
+        <item name="android:minWidth">60dp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:paddingLeft">8dp</item>
+        <item name="android:paddingRight">8dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">@color/rv_tool_text</item>
+        <item name="iconTint">@color/rv_tool_text</item>
+        <item name="iconGravity">textTop</item>
+        <item name="iconPadding">4dp</item>
+        <item name="iconSize">24dp</item>
+        <item name="cornerRadius">12dp</item>
+        <item name="rippleColor">@color/rv_accent_fill</item>
+        <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
+    <style name="Widget.ScanWhirl.Button.ReviewTool.Danger">
+        <item name="android:textColor">@color/rv_tool_danger</item>
+        <item name="iconTint">@color/rv_tool_danger</item>
+    </style>
+
+    <!-- Ink means commit: the one Save action. -->
+    <style name="Widget.ScanWhirl.Button.Commit" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/rv_commit</item>
+        <item name="android:textColor">@color/rv_on_commit</item>
+        <item name="iconTint">@color/rv_on_commit</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconSize">24dp</item>
+        <item name="iconPadding">10dp</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="cornerRadius">16dp</item>
+        <item name="android:minHeight">56dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
+    <!-- Focus / Arrange segmented switch: ink segment = current mode. -->
+    <style name="Widget.ScanWhirl.Button.ModeToggle" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="backgroundTint">@color/rv_toggle_bg</item>
+        <item name="android:textColor">@color/rv_toggle_text</item>
+        <item name="iconTint">@color/rv_toggle_text</item>
+        <item name="strokeColor">@color/rv_hairline</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="iconSize">20dp</item>
+        <item name="iconPadding">6dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
 </resources>

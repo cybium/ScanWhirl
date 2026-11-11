@@ -4,14 +4,28 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.TextWatcher
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.view.ContextThemeWrapper
+import android.view.GestureDetector
+import android.view.HapticFeedbackConstants
+import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.IntentSenderRequest
@@ -20,6 +34,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.gms.common.api.ApiException
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
@@ -29,10 +45,13 @@ import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityScanReviewBinding
+import com.scanwhirl.app.databinding.ItemReviewFilmBinding
+import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
 import com.scanwhirl.app.store.SavedCopyPolicy
 import com.scanwhirl.app.store.SavedReviewConflictException
 import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.util.CategoryRules
+import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.Prefs
@@ -44,13 +63,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.Executors
+import kotlin.math.abs
 
 /**
- * Shown after the scanner finishes: the captured pages in the shared page grid
- * (tap = full-screen page view, checkbox = multi-select, grip = reorder), an
- * editable title, "Add pages" for another scanner batch, and one primary
- * "Save as PDF" action. Rotate/Delete for the ticked pages live in the toolbar
- * overflow. Back/discard asks for confirmation while pages exist.
+ * Shown after the scanner or a photo import: one review screen with two modes
+ * (Review slice 1, "Index + Focus").
+ *
+ *  - FOCUS: one large page with "Page N of M", a numbered filmstrip, swipe or
+ *    48dp arrows between pages, and labelled Crop / Rotate / Filter / Add page /
+ *    Delete. Tapping the page (or Crop) opens the existing [PageViewerActivity]
+ *    for zoom and crop; Focus comes back to the page that was on screen.
+ *  - ARRANGE: the shared [com.scanwhirl.app.ui.pagegrid.PageGridView] with its
+ *    2D grip drag, real page numbers, the selected page ringed, and Earlier /
+ *    Later / Move to… which run the very same staging rename as a drag.
+ *    Ticking checkboxes still selects several pages for bulk Rotate / Delete.
+ *
+ * One commit action, "Save N pages", runs the unchanged transactional
+ * [saveAndFinish]. Nothing here says "saved" before that verified commit.
+ * Back/discard asks for confirmation while pages exist.
  *
  * Pages live in a staging directory that is cleaned up on save or discard.
  * Per-page filters default to Enhance and are kept in `filters.txt` so the
@@ -93,6 +124,50 @@ class ScanReviewActivity : BaseActivity() {
     private var initialSnapshot: Map<String, Long> = emptyMap()
 
     private val selected = linkedSetOf<String>()
+
+    /** Review slice 1: the page shown in Focus and ringed in Arrange (index into [pages]). */
+    internal var currentIndex = 0
+        private set
+
+    /** True while the Arrange grid is the visible mode. */
+    internal var arrangeMode = false
+        private set
+
+    /** The owner confirmed the page order ("Order looks right") in this session. */
+    private var orderChecked = false
+
+    /** A filter was changed here (filters live in filters.txt, not in file mtimes). */
+    private var filtersEdited = false
+
+    /** Pages were already edited before a configuration change re-created this screen. */
+    private var editedBeforeRecreate = false
+
+    private fun isEdited() = structureChanged || filtersEdited || editedBeforeRecreate
+
+    /**
+     * A rotate or staging rename pass is running. Page indices and file names are
+     * not stable until it lands, so new page operations, the viewer and Save wait.
+     */
+    internal var pageOpBusy = false
+        private set
+
+    private var applyingMode = false
+
+    /** Page name reported by the viewer on return; resolved against the fresh list on reload. */
+    private var returnedPageName: String? = null
+
+    private val filmAdapter = FilmAdapter()
+
+    /** One full-size decode at a time for the Focus page (bounded memory). */
+    private val focusExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "review-focus").apply { isDaemon = true }
+    }
+
+    /** The existing full-screen viewer (zoom, crop); reports the page it closed on. */
+    private val viewerLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            result.data?.getStringExtra(PageViewerActivity.RESULT_PAGE_NAME)?.let { returnedPageName = it }
+        }
 
     private var pendingDownload: (() -> Unit)? = null
     private val permissionLauncher =
@@ -171,11 +246,30 @@ class ScanReviewActivity : BaseActivity() {
         loadFilters()
         initialSnapshot = snapshot()
 
+        savedInstanceState?.let {
+            currentIndex = it.getInt(STATE_CURRENT, 0)
+            arrangeMode = it.getBoolean(STATE_ARRANGE, false)
+            orderChecked = it.getBoolean(STATE_ORDER_OK, false)
+            filtersEdited = it.getBoolean(STATE_FILTERS_EDITED, false)
+            editedBeforeRecreate = it.getBoolean(STATE_EDITED, false)
+        }
+        currentIndex = currentIndex.coerceIn(0, pages.lastIndex)
+
         binding.pageGrid.filterFor = { f -> filters[f.path] ?: ScanFilter.ORIGINAL }
         binding.pageGrid.checkedAt = { i -> selected.contains(pages.getOrNull(i)?.path) }
-        binding.pageGrid.onTap = { i -> openPageViewer(i) }
+        binding.pageGrid.currentAt = { i -> i == currentIndex }
+        binding.pageGrid.spanCount = if (resources.configuration.screenWidthDp >= 360) 3 else 2
+        binding.pageGrid.onTap = { i -> onGridTap(i) }
         binding.pageGrid.onCheckToggle = { i -> toggleSelect(i) }
-        binding.pageGrid.onDropped = { from, to -> reorderStaging(from, to) }
+        binding.pageGrid.onDropped = { from, to -> reorderStaging(from, to, announce = true) }
+
+        setupFocus()
+        setupArrange()
+        binding.modeToggle.addOnButtonCheckedListener { _, id, checked ->
+            if (checked && !applyingMode) setMode(arrange = id == R.id.btnModeArrange)
+        }
+        applyMode(animate = false)
+        binding.toolbar.setNavigationOnClickListener { if (!saving) confirmDiscard() }
 
         binding.toolbar.inflateMenu(R.menu.menu_review)
         binding.toolbar.setOnMenuItemClickListener { item ->
@@ -205,7 +299,10 @@ class ScanReviewActivity : BaseActivity() {
         }
 
         binding.btnSelClear.setOnClickListener { clearSelection() }
-        binding.btnSavePdf.setOnClickListener { saveAndFinish() }
+        binding.btnSelRotate.setOnClickListener { rotateSelected(clockwise = true) }
+        binding.btnSelDelete.setOnClickListener { deleteSelected() }
+        // Same transactional save as ever; it only waits for a running rename to land.
+        binding.btnSavePdf.setOnClickListener { if (!refuseWhileBusy()) saveAndFinish() }
     }
 
     override fun onResume() {
@@ -220,6 +317,7 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        focusExecutor.shutdown()
         reviewStateHandler.removeCallbacks(persistReviewStateTask)
         // Leaving the screen makes any pending page delete permanent.
         if (!saved) commitPendingDeletes(pendingDeletes.toList())
@@ -267,6 +365,11 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt(STATE_CURRENT, currentIndex)
+        outState.putBoolean(STATE_ARRANGE, arrangeMode)
+        outState.putBoolean(STATE_ORDER_OK, orderChecked)
+        outState.putBoolean(STATE_FILTERS_EDITED, filtersEdited)
+        outState.putBoolean(STATE_EDITED, isEdited())
         if (reviewStateReady) {
             outState.putString(REVIEW_STATE, PendingScans.encodeReviewState(stagingDir, reviewState()))
             persistReviewState()
@@ -322,14 +425,41 @@ class ScanReviewActivity : BaseActivity() {
         paintCategoryRail()
     }
 
-    /** One checked chip at a time; the hint shows while nothing is selected. */
+    /**
+     * One checked chip at a time; the hint shows while nothing is selected.
+     * The chosen chip is painted in its category colour with a tick, so the
+     * choice is visible on screen (WP-05 gate caveat 1), not only in the saved badge.
+     */
     private fun paintCategoryRail() {
         val rail = binding.categoryRail
         for (i in 0 until rail.childCount) {
             val chip = rail.getChildAt(i) as Chip
-            chip.isChecked = chip.tag == chosenCategory
+            val active = chip.tag == chosenCategory
+            chip.isChecked = active
+            paintCategoryChip(chip, chip.tag as String, active)
         }
         binding.categoryCaption.isVisible = chosenCategory == CategoryRules.UNSORTED
+        if (::stagingDir.isInitialized) renderStatus()
+    }
+
+    private fun paintCategoryChip(chip: Chip, cat: String, active: Boolean) {
+        val color = CategoryStyle.color(cat)
+        val density = resources.displayMetrics.density
+        chip.chipBackgroundColor = ColorStateList.valueOf(
+            if (active) (color and 0x00FFFFFF) or (0x33 shl 24)
+            else ContextCompat.getColor(this, R.color.rv_surface)
+        )
+        chip.chipStrokeColor = ColorStateList.valueOf(
+            if (active) color else ContextCompat.getColor(this, R.color.rv_hairline)
+        )
+        chip.chipStrokeWidth = (if (active) 2f else 1f) * density
+        chip.setTextColor(if (active) color else ContextCompat.getColor(this, R.color.rv_ink_2))
+        chip.setTypeface(null, if (active) Typeface.BOLD else Typeface.NORMAL)
+        chip.isCheckedIconVisible = active
+        if (active) {
+            chip.setCheckedIconResource(R.drawable.ic_check)
+            chip.checkedIconTint = ColorStateList.valueOf(color)
+        }
     }
 
     // ------------------------------------------------------------------
@@ -355,8 +485,15 @@ class ScanReviewActivity : BaseActivity() {
         if (snapshot() != initialSnapshot) structureChanged = true
         loadFilters()
         selected.retainAll(pages.map { it.path }.toSet())
+        // Back from the viewer: Focus returns to the page that was on screen there.
+        returnedPageName?.let { name ->
+            pages.indexOfFirst { it.name == name }.takeIf { it >= 0 }?.let { currentIndex = it }
+        }
+        returnedPageName = null
+        currentIndex = currentIndex.coerceIn(0, pages.lastIndex)
         binding.pageGrid.submit(pages)
         updateSelectionUi()
+        renderPages()
     }
 
     /** Rebuilds the filter map: file entries win, missing pages default to Enhance. */
@@ -376,8 +513,17 @@ class ScanReviewActivity : BaseActivity() {
     // Grid interactions: tap / multi-select / drag
     // ------------------------------------------------------------------
 
-    private fun openPageViewer(index: Int) {
-        startActivity(PageViewerActivity.stagingIntent(this, stagingDir.path, index))
+    private fun openPageViewer(index: Int, crop: Boolean = false) {
+        if (refuseWhileBusy() || index !in pages.indices) return
+        viewerLauncher.launch(
+            if (crop) PageViewerActivity.stagingCropIntent(this, stagingDir.path, index)
+            else PageViewerActivity.stagingIntent(this, stagingDir.path, index)
+        )
+    }
+
+    /** Arrange: tap selects a page; tapping the selected page again opens it in Focus. */
+    private fun onGridTap(index: Int) {
+        if (index == currentIndex) setMode(arrange = false) else showPage(index)
     }
 
     /** Ticks/untick a page. Called by the grid checkbox. */
@@ -396,12 +542,23 @@ class ScanReviewActivity : BaseActivity() {
 
     private fun updateSelectionUi() {
         binding.selectBar.isVisible = selected.isNotEmpty()
+        binding.arrangeTools.isVisible = selected.isEmpty()
         binding.selCount.text = getString(R.string.selected_count, selected.size)
     }
 
-    /** Persists a finished drag: the grid's new order becomes the staging order. */
-    private fun reorderStaging(from: Int, to: Int) {
+    /**
+     * Persists a move (grip drag, Earlier / Later / Move to…, or its Undo): the new
+     * order becomes the staging order through the same rename pass in every case.
+     */
+    internal fun reorderStaging(from: Int, to: Int, announce: Boolean = false) {
         if (from !in pages.indices || to !in pages.indices || from == to) return
+        if (refuseWhileBusy()) {
+            reloadFromDisk() // a drag already moved the cell on screen: put it back
+            return
+        }
+        pageOpBusy = true
+        val newCurrent = movedIndex(currentIndex, from, to)
+        val countAtMove = pages.size
         lifecycleScope.launch {
             try {
                 val moved = pages.toMutableList().apply { add(to, removeAt(from)) }
@@ -431,8 +588,17 @@ class ScanReviewActivity : BaseActivity() {
                 File(stagingDir, FILTERS_FILE).writeText(
                     renumbered.joinToString("\n") { (name, filter) -> "$name=${filter.id}" }
                 )
+                pageOpBusy = false
+                currentIndex = newCurrent
                 reloadFromDisk()
+                if (announce) {
+                    haptic(confirmHaptic())
+                    snack(getString(R.string.review_moved, to + 1)) {
+                        if (pages.size == countAtMove) reorderStaging(to, from)
+                    }
+                }
             } catch (e: Exception) {
+                pageOpBusy = false
                 Toast.makeText(
                     this@ScanReviewActivity,
                     getString(R.string.page_op_failed, e.message),
@@ -447,23 +613,41 @@ class ScanReviewActivity : BaseActivity() {
     // Multi-select: rotate / delete
     // ------------------------------------------------------------------
 
+    /** The ticked pages, or — with nothing ticked — the current page. */
+    private fun actionTargets(): List<File> =
+        if (selected.isNotEmpty()) pages.filter { it.path in selected }
+        else listOfNotNull(pages.getOrNull(currentIndex))
+
     private fun rotateSelected(clockwise: Boolean) {
-        if (selected.isEmpty()) {
-            Toast.makeText(this, R.string.select_pages_first, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val targets = pages.filter { it.path in selected }
+        rotatePages(actionTargets(), clockwise, announce = selected.isEmpty())
+    }
+
+    /** Rotates real page files in place (ImageTools.rotate90); Undo turns them back. */
+    private fun rotatePages(targets: List<File>, clockwise: Boolean, announce: Boolean) {
+        if (targets.isEmpty() || refuseWhileBusy()) return
+        pageOpBusy = true
+        val shownIndex = currentIndex
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) { targets.forEach { ImageTools.rotate90(it, clockwise) } }
+                targets.forEach { PageThumbLoader.invalidate(it) }
                 structureChanged = true
+                pageOpBusy = false
                 reloadFromDisk()
+                if (announce) {
+                    haptic(confirmHaptic())
+                    snack(getString(R.string.review_rotated, shownIndex + 1)) {
+                        if (targets.all { it.exists() }) rotatePages(targets, !clockwise, announce = false)
+                    }
+                }
             } catch (e: Exception) {
+                pageOpBusy = false
                 Toast.makeText(
                     this@ScanReviewActivity,
                     getString(R.string.page_op_failed, e.message),
                     Toast.LENGTH_LONG
                 ).show()
+                reloadFromDisk()
             }
         }
     }
@@ -475,24 +659,26 @@ class ScanReviewActivity : BaseActivity() {
      * page means discarding the scan — confirmed first.
      */
     internal fun deleteSelected() {
-        if (selected.isEmpty()) {
-            Toast.makeText(this, R.string.select_pages_first, Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (selected.size >= pages.size) {
+        val victims = actionTargets()
+        if (victims.isEmpty()) return
+        if (victims.size >= pages.size) {
             confirmDiscard()
             return
         }
+        if (refuseWhileBusy()) return
         // This snackbar replaces any previous one: the old Undo window is over.
         commitPendingDeletes(pendingDeletes.toList())
-        val victims = pages.filter { it.path in selected }
+        val firstVictim = pages.indexOf(victims.first())
         pendingDeletes.addAll(victims.map { it.path })
         victims.forEach { it.renameTo(File(it.path + DEL_SUFFIX)) }
         selected.clear()
+        // Stay at the same place: the next page slides into view.
+        currentIndex = firstVictim.coerceIn(0, (pages.size - victims.size - 1).coerceAtLeast(0))
         reloadFromDisk()
+        haptic(rejectHaptic())
 
         val batch = victims.map { it.path }
-        Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
+        styled(Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG))
             .setAction(R.string.undo) { undoDeletes(batch) }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
@@ -515,6 +701,369 @@ class ScanReviewActivity : BaseActivity() {
         paths.forEach { path ->
             pendingDeletes.remove(path)
             File(path + DEL_SUFFIX).takeIf { it.exists() }?.delete()
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Review slice 1: Focus + Arrange
+    // ------------------------------------------------------------------
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility") // taps re-dispatch performClick()
+    private fun setupFocus() {
+        binding.filmstrip.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        binding.filmstrip.adapter = filmAdapter
+        binding.filmstrip.itemAnimator = null
+
+        binding.btnPrevPage.setOnClickListener { showPage(currentIndex - 1) }
+        binding.btnNextPage.setOnClickListener { showPage(currentIndex + 1) }
+        binding.focusImage.setOnClickListener { openPageViewer(currentIndex) }
+        val swipeMin = 48f * resources.displayMetrics.density
+        val gestures = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent) = true
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean =
+                binding.focusImage.performClick()
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+                val dx = e2.x - (e1?.x ?: e2.x)
+                if (abs(dx) < swipeMin || abs(vx) < abs(vy)) return false
+                showPage(if (dx < 0) currentIndex + 1 else currentIndex - 1)
+                return true
+            }
+        })
+        // Swipe = next/previous page, tap = open the zoomable viewer (also via TalkBack click).
+        binding.focusImage.setOnTouchListener { _, e -> gestures.onTouchEvent(e) }
+
+        binding.btnToolCrop.setOnClickListener { openPageViewer(currentIndex, crop = true) }
+        binding.btnToolRotate.setOnClickListener {
+            rotatePages(listOfNotNull(pages.getOrNull(currentIndex)), clockwise = true, announce = true)
+        }
+        binding.btnToolFilter.setOnClickListener { chooseFilterForCurrent() }
+        binding.btnToolAdd.setOnClickListener { showAddMenu(it) }
+        binding.btnToolDelete.setOnClickListener {
+            pages.getOrNull(currentIndex)?.let { deletePage(it) }
+        }
+        binding.orderLink.setOnClickListener { setMode(arrange = true) }
+    }
+
+    private fun setupArrange() {
+        binding.orderText.text = SpannableStringBuilder().apply {
+            append(getString(R.string.review_order_title), StyleSpan(Typeface.BOLD), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            append(' ')
+            append(getString(R.string.review_order_body))
+        }
+        binding.btnOrderOk.setOnClickListener {
+            orderChecked = true
+            haptic(confirmHaptic())
+            renderPages()
+        }
+        binding.btnArrEarlier.setOnClickListener {
+            reorderStaging(currentIndex, currentIndex - 1, announce = true)
+        }
+        binding.btnArrLater.setOnClickListener {
+            reorderStaging(currentIndex, currentIndex + 1, announce = true)
+        }
+        binding.btnArrMove.setOnClickListener { showMoveTo() }
+        binding.btnArrEdit.setOnClickListener { setMode(arrange = false) }
+        binding.btnArrDelete.setOnClickListener {
+            pages.getOrNull(currentIndex)?.let { deletePage(it) }
+        }
+    }
+
+    /** Switches Focus <-> Arrange; the current page and the order carry across. */
+    internal fun setMode(arrange: Boolean) {
+        if (arrangeMode == arrange) return
+        arrangeMode = arrange
+        haptic(HapticFeedbackConstants.CLOCK_TICK)
+        applyMode(animate = true)
+    }
+
+    private fun applyMode(animate: Boolean) {
+        applyingMode = true
+        binding.modeToggle.check(if (arrangeMode) R.id.btnModeArrange else R.id.btnModeFocus)
+        applyingMode = false
+        val show = if (arrangeMode) binding.arrangePanel else binding.focusPanel
+        val hide = if (arrangeMode) binding.focusPanel else binding.arrangePanel
+        hide.animate().cancel()
+        hide.isVisible = false
+        hide.alpha = 1f
+        show.isVisible = true
+        binding.categoryBlock.isVisible = !arrangeMode
+        if (animate) {
+            show.alpha = 0f
+            show.animate().alpha(1f).setDuration(180L).start()
+        }
+        if (arrangeMode) binding.pageGrid.scrollToPage(currentIndex)
+        else if (pages.isNotEmpty()) renderCurrent()
+    }
+
+    /** Makes [index] the current page (Focus page, filmstrip ring, Arrange ring). */
+    internal fun showPage(index: Int) {
+        if (index !in pages.indices || index == currentIndex) return
+        val old = currentIndex
+        currentIndex = index
+        filmAdapter.notifyItemChanged(old)
+        filmAdapter.notifyItemChanged(index)
+        binding.pageGrid.refresh()
+        haptic(HapticFeedbackConstants.CLOCK_TICK)
+        renderCurrent()
+    }
+
+    /** Everything that depends on the page list (after any reload). */
+    private fun renderPages() {
+        if (pages.isEmpty()) return
+        currentIndex = currentIndex.coerceIn(0, pages.lastIndex)
+        filmAdapter.notifyDataSetChanged()
+        binding.btnSavePdf.text =
+            resources.getQuantityString(R.plurals.review_save_pages, pages.size, pages.size)
+        val needsOrderCheck = pages.size > 1 && !orderChecked
+        binding.orderLink.isVisible = needsOrderCheck
+        binding.orderCard.isVisible = needsOrderCheck
+        // The card already says what to do; one instruction at a time keeps the grid tall.
+        binding.arrangeHint.isVisible = !needsOrderCheck
+        renderStatus()
+        renderCurrent()
+    }
+
+    private fun renderCurrent() {
+        val n = pages.size
+        val i = currentIndex
+        binding.pageStatus.text = getString(R.string.review_page_of, i + 1, n)
+        binding.btnPrevPage.isVisible = n > 1
+        binding.btnNextPage.isVisible = n > 1
+        binding.btnPrevPage.isEnabled = i > 0
+        binding.btnNextPage.isEnabled = i < n - 1
+        binding.btnPrevPage.alpha = if (i > 0) 1f else 0.3f
+        binding.btnNextPage.alpha = if (i < n - 1) 1f else 0.3f
+        binding.btnArrEarlier.isEnabled = i > 0
+        binding.btnArrLater.isEnabled = i < n - 1
+        binding.btnArrMove.isEnabled = n > 1
+        binding.focusImage.contentDescription = getString(R.string.review_preview_desc, i + 1, n)
+        binding.filmstrip.scrollToPosition(i)
+        if (arrangeMode) binding.pageGrid.scrollToPage(i)
+        pages.getOrNull(i)?.let { loadFocusImage(it) }
+    }
+
+    /** "5 pages · Forms · Not saved yet" — the status always names the unsaved state. */
+    private fun renderStatus() {
+        val text = SpannableStringBuilder()
+        text.append(resources.getQuantityString(R.plurals.review_page_count, pages.size, pages.size))
+        if (chosenCategory != CategoryRules.UNSORTED) {
+            text.append(" · ").append(CategoryRules.label(chosenCategory))
+        }
+        text.append(" · ")
+        text.append(
+            getString(
+                if (isEdited()) R.string.review_status_edited
+                else R.string.review_status_unsaved
+            ),
+            ForegroundColorSpan(ContextCompat.getColor(this, R.color.rv_warn)),
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        binding.reviewStatus.text = text
+    }
+
+    /**
+     * Shows the current page large. A cached filmstrip thumb appears at once; one
+     * display-size decode (never the raw file at full size) replaces it. A tag guard
+     * drops late results when the owner has already moved on.
+     */
+    private fun loadFocusImage(file: File) {
+        val filter = filters[file.path] ?: ScanFilter.ORIGINAL
+        val key = "${file.path}|${file.lastModified()}|${file.length()}|${filter.id}"
+        val view = binding.focusImage
+        if (view.tag == key) return
+        view.tag = key
+        view.setImageBitmap(PageThumbLoader.cached(file, FILM_THUMB_PX, filter))
+        binding.focusError.isVisible = false
+        binding.focusLoading.isVisible = true
+        val target = focusTargetPx()
+        try {
+            focusExecutor.execute {
+                val shown: Bitmap? = try {
+                    decodeFocus(file, target, filter)
+                } catch (_: Throwable) {
+                    null // unreadable or out of memory: say so, never crash Review
+                }
+                runOnUiThread {
+                    if (isDestroyed || view.tag != key) return@runOnUiThread
+                    binding.focusLoading.isVisible = false
+                    if (shown != null) {
+                        view.setImageBitmap(shown)
+                    } else {
+                        view.setImageDrawable(null)
+                        binding.focusError.isVisible = true
+                    }
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Screen is closing.
+        }
+    }
+
+    private fun focusTargetPx(): Int {
+        val v = binding.focusImage
+        val longest = maxOf(v.width, v.height).takeIf { it > 0 }
+            ?: maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) / 2
+        return longest.coerceIn(800, 1600)
+    }
+
+    private fun decodeFocus(file: File, target: Int, filter: ScanFilter): Bitmap? {
+        var bmp = ImageTools.decodeThumb(file, target) ?: return null
+        val longest = maxOf(bmp.width, bmp.height)
+        if (longest > target * 5 / 4) {
+            val k = target.toFloat() / longest
+            val scaled = Bitmap.createScaledBitmap(
+                bmp, (bmp.width * k).toInt().coerceAtLeast(1), (bmp.height * k).toInt().coerceAtLeast(1), true
+            )
+            if (scaled !== bmp) bmp.recycle()
+            bmp = scaled
+        }
+        if (filter == ScanFilter.ORIGINAL) return bmp
+        val filtered = filter.applyTo(bmp)
+        if (filtered !== bmp) bmp.recycle()
+        return filtered
+    }
+
+    /** Filter sheet for the current page; the choice lives in filters.txt like the viewer's. */
+    private fun chooseFilterForCurrent() {
+        val file = pages.getOrNull(currentIndex) ?: return
+        if (refuseWhileBusy()) return
+        val all = ScanFilter.entries
+        val index = currentIndex
+        SwDialog.sheet(this)
+            .setTitle(R.string.filter_title)
+            .setSingleChoiceItems(
+                all.map { getString(it.labelRes) }.toTypedArray(),
+                all.indexOf(filters[file.path] ?: ScanFilter.ORIGINAL)
+            ) { dialog, which ->
+                dialog.dismiss()
+                val chosen = all[which]
+                if (chosen == (filters[file.path] ?: ScanFilter.ORIGINAL) || !file.exists()) return@setSingleChoiceItems
+                filters[file.path] = chosen
+                filtersEdited = true
+                writeFilters()
+                binding.pageGrid.refresh()
+                renderPages()
+                snack(getString(R.string.review_filter_set, index + 1, getString(chosen.labelRes)), null)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .showSw(isSheet = true)
+    }
+
+    /** Rewrites filters.txt; entries for pages hidden by a pending delete are kept for Undo. */
+    private fun writeFilters() {
+        val file = File(stagingDir, FILTERS_FILE)
+        val merged = LinkedHashMap<String, String>()
+        file.takeIf { it.exists() }?.readText()?.lineSequence()?.forEach { line ->
+            val parts = line.split('=', limit = 2)
+            if (parts.size == 2) merged[parts[0]] = parts[1]
+        }
+        pages.forEach { merged[it.name] = (filters[it.path] ?: ScanFilter.ORIGINAL).id }
+        file.writeText(merged.entries.joinToString("\n") { "${it.key}=${it.value}" })
+    }
+
+    private fun showAddMenu(anchor: View) {
+        PopupMenu(this, anchor).apply {
+            menu.add(0, R.id.action_add_pages, 0, R.string.add_pages)
+            menu.add(0, R.id.action_add_gallery, 1, R.string.add_from_gallery)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_add_pages -> launchAddPages()
+                    R.id.action_add_gallery -> galleryPagesLauncher.launch("image/*")
+                }
+                true
+            }
+        }.show()
+    }
+
+    /** Move to…: an explicit numbered position, the accessible alternative to dragging. */
+    private fun showMoveTo() {
+        if (pages.size < 2 || refuseWhileBusy()) return
+        val from = currentIndex
+        val labels = pages.indices.map { getString(R.string.review_move_position, it + 1) }.toTypedArray()
+        SwDialog.sheet(this)
+            .setTitle(getString(R.string.review_move_title, from + 1))
+            .setSingleChoiceItems(labels, from) { dialog, which ->
+                dialog.dismiss()
+                if (which != from) reorderStaging(from, which, announce = true)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .showSw(isSheet = true)
+    }
+
+    private fun deletePage(file: File) {
+        selected.clear()
+        selected.add(file.path)
+        deleteSelected()
+    }
+
+    /** True (with a short note) while a rename/rotate is still landing. */
+    private fun refuseWhileBusy(): Boolean {
+        if (!pageOpBusy) return false
+        Toast.makeText(this, R.string.review_busy, Toast.LENGTH_SHORT).show()
+        return true
+    }
+
+    private fun haptic(kind: Int) {
+        binding.root.performHapticFeedback(kind)
+    }
+
+    private fun confirmHaptic(): Int =
+        if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM
+        else HapticFeedbackConstants.VIRTUAL_KEY
+
+    private fun rejectHaptic(): Int =
+        if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT
+        else HapticFeedbackConstants.LONG_PRESS
+
+    /** Result snackbar with Undo when [undo] is given. */
+    private fun snack(text: CharSequence, undo: (() -> Unit)?) {
+        val bar = styled(Snackbar.make(binding.root, text, Snackbar.LENGTH_LONG))
+        if (undo != null) bar.setAction(R.string.undo) { undo() }
+        bar.show()
+    }
+
+    /**
+     * Floats above the visible tool row (never over Earlier / Later, so repeated
+     * taps keep working) in the review's dark ink style.
+     */
+    private fun styled(bar: Snackbar): Snackbar {
+        val anchor: View = when {
+            !arrangeMode -> binding.focusTools.parent as View
+            binding.selectBar.isVisible -> binding.selectBar
+            else -> binding.arrangeTools.parent as View
+        }
+        return bar.setAnchorView(anchor)
+            .setBackgroundTint(ContextCompat.getColor(this, R.color.rv_surface_2))
+            .setTextColor(ContextCompat.getColor(this, R.color.rv_ink))
+            .setActionTextColor(ContextCompat.getColor(this, R.color.rv_accent))
+    }
+
+    private inner class FilmAdapter : RecyclerView.Adapter<FilmVH>() {
+        override fun getItemCount() = pages.size
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+            FilmVH(ItemReviewFilmBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+        override fun onBindViewHolder(holder: FilmVH, position: Int) = holder.bind(position)
+    }
+
+    private inner class FilmVH(private val b: ItemReviewFilmBinding) : RecyclerView.ViewHolder(b.root) {
+        fun bind(index: Int) {
+            val file = pages[index]
+            val current = index == currentIndex
+            b.filmNum.text = String.format(Locale.ROOT, "%d", index + 1)
+            b.filmNum.setBackgroundResource(if (current) R.drawable.bg_rv_num_current else R.drawable.bg_rv_num)
+            b.filmNum.setTextColor(
+                ContextCompat.getColor(this@ScanReviewActivity, if (current) R.color.rv_on_commit else R.color.rv_ink)
+            )
+            b.root.isSelected = current
+            b.root.contentDescription = getString(
+                if (current) R.string.review_film_page_current else R.string.review_film_page, index + 1
+            )
+            PageThumbLoader.load(file, FILM_THUMB_PX, filters[file.path] ?: ScanFilter.ORIGINAL, b.filmThumb)
+            b.root.setOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION) showPage(pos)
+            }
         }
     }
 
@@ -593,6 +1142,8 @@ class ScanReviewActivity : BaseActivity() {
                 if (appended) {
                     pdfFile = null
                     structureChanged = true
+                    // Land on the first added page so the owner sees what came in.
+                    currentIndex = pages.size
                     reloadFromDisk()
                 }
             }
@@ -776,6 +1327,22 @@ class ScanReviewActivity : BaseActivity() {
         private const val FILTERS_FILE = "filters.txt"
         private const val DEL_SUFFIX = ".del"
         private const val REVIEW_STATE = "review_state"
+        private const val STATE_CURRENT = "review_current_page"
+        private const val STATE_ARRANGE = "review_arrange_mode"
+        private const val STATE_ORDER_OK = "review_order_checked"
+        private const val STATE_FILTERS_EDITED = "review_filters_edited"
+        private const val STATE_EDITED = "review_edited"
+
+        /** Filmstrip thumb decode target (px); also the instant Focus placeholder. */
+        private const val FILM_THUMB_PX = 200
+
+        /** Where page [current] ends up after a move of [from] to [to]. */
+        internal fun movedIndex(current: Int, from: Int, to: Int): Int = when {
+            current == from -> to
+            from < current && to >= current -> current - 1
+            from > current && to <= current -> current + 1
+            else -> current
+        }
 
         fun intent(context: Context, stagingDir: String, pdfPath: String?, defaultName: String): Intent =
             Intent(context, ScanReviewActivity::class.java)

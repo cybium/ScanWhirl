@@ -69,6 +69,10 @@ object PageThumbLoader {
         }
     }
 
+    /** The cached thumb for this exact request, or null (never decodes). */
+    fun cached(file: File, targetPx: Int, filter: ScanFilter): Bitmap? =
+        cache.get(keyFor(file, targetPx, filter))?.takeIf { !it.isRecycled }
+
     /**
      * Decodes a thumb off the main thread and hands it back on the main
      * thread (canvas UIs — the globe home — draw into bitmaps, not ImageViews).

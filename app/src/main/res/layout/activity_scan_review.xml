@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Review slice 1 (Index + Focus): one review screen, two modes.
+     FOCUS   = one large page, Page N of M, numbered filmstrip, labelled tools.
+     ARRANGE = the shared PageGridView (2D drag kept), real page numbers,
+               Earlier / Later / Move to… on the selected page.
+     Save is the single ink-filled commit action in the inset dock. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_space"
+    android:background="@color/rv_bg"
     android:focusable="true"
     android:focusableInTouchMode="true"
     android:importantForAccessibility="no"
@@ -15,23 +21,29 @@
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/sf_appbar"
+        android:background="@color/rv_bg"
         app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
+            app:contentInsetStartWithNavigation="0dp"
+            app:navigationContentDescription="@string/close"
+            app:navigationIcon="@drawable/ic_close"
+            app:navigationIconTint="@color/rv_ink"
             app:title="@string/scan"
-            app:titleTextColor="@color/text_hologram_hi">
+            app:titleTextColor="@color/rv_ink">
 
             <EditText
                 android:id="@+id/titleInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:layout_marginEnd="48dp"
+                android:layout_marginEnd="8dp"
                 android:background="@drawable/bg_title_input"
+                android:fontFamily="serif"
                 android:hint="@string/name_hint"
                 android:importantForAutofill="no"
                 android:inputType="textCapWords"
@@ -40,16 +52,29 @@
                 android:paddingVertical="8dp"
                 android:selectAllOnFocus="true"
                 android:singleLine="true"
-                android:textColor="@color/text_hologram_hi"
-                android:textColorHint="@color/text_hologram_dim"
-                android:textSize="18sp" />
+                android:textColor="@color/rv_ink"
+                android:textColorHint="@color/rv_ink_3"
+                android:textSize="18sp"
+                android:textStyle="bold" />
         </com.google.android.material.appbar.MaterialToolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
+    <!-- "5 pages · Forms · Not saved yet": what is on disk, never "Saved". -->
+    <TextView
+        android:id="@+id/reviewStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:textColor="@color/rv_ink_3"
+        android:textSize="13sp"
+        tools:text="5 pages · Forms · Not saved yet" />
+
     <!-- test26 T4.1: pick the category before saving — a single-select chip
          rail (chips built in code) under the title, with a hint while the
-         name has not suggested anything yet. -->
+         name has not suggested anything yet. Hidden in Arrange so the grid
+         gets the room (the chosen category stays in the status line). -->
     <LinearLayout
+        android:id="@+id/categoryBlock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -76,65 +101,416 @@
             android:layout_height="wrap_content"
             android:paddingTop="2dp"
             android:text="@string/category_unsorted_hint"
-            android:textColor="@color/text_hologram_dim"
+            android:textColor="@color/rv_ink_3"
             android:textSize="12sp"
             android:visibility="gone" />
     </LinearLayout>
 
-    <com.scanwhirl.app.ui.pagegrid.PageGridView
-        android:id="@+id/pageGrid"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:padding="8dp" />
-
+    <!-- Mode switch + "Page N of M". -->
     <LinearLayout
-        android:id="@+id/selectBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="4dp"
-        android:visibility="gone">
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp">
 
-        <TextView
-            android:id="@+id/selCount"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textColor="@color/text_hologram_hi"
-            android:textSize="14sp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSelClear"
-            style="@style/Widget.Material3.Button.TextButton"
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/modeToggle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/clear_selection"
-            android:textColor="@color/text_hologram_mid"
-            app:icon="@drawable/ic_close"
-            app:iconTint="@color/text_hologram_mid" />
+            android:contentDescription="@string/review_mode_label"
+            app:selectionRequired="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnModeFocus"
+                style="@style/Widget.ScanWhirl.Button.ModeToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/review_mode_focus"
+                app:icon="@drawable/ic_sw_focus_page" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnModeArrange"
+                style="@style/Widget.ScanWhirl.Button.ModeToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/review_mode_arrange"
+                app:icon="@drawable/ic_sw_arrange" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <TextView
+            android:id="@+id/pageStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:accessibilityLiveRegion="polite"
+            android:gravity="end"
+            android:textColor="@color/rv_ink_2"
+            android:textSize="14sp"
+            tools:text="Page 4 of 5" />
     </LinearLayout>
 
-    <!-- test25 Phase 5B: inset floating glass dock. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- ================= FOCUS ================= -->
+        <LinearLayout
+            android:id="@+id/focusPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/orderLink"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical"
+                android:minHeight="40dp"
+                android:paddingHorizontal="16dp"
+                android:text="@string/review_order_link"
+                android:textColor="@color/rv_warn"
+                android:textSize="13sp"
+                android:visibility="gone"
+                app:drawableEndCompat="@drawable/ic_sw_later"
+                app:drawableTint="@color/rv_warn" />
+
+            <FrameLayout
+                android:id="@+id/focusStage"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <ImageView
+                    android:id="@+id/focusImage"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="12dp"
+                    android:layout_marginVertical="6dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:scaleType="fitCenter" />
+
+                <ProgressBar
+                    android:id="@+id/focusLoading"
+                    style="?android:attr/progressBarStyleSmall"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/review_page_loading"
+                    android:indeterminateTint="@color/rv_ink_3"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/focusError"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:gravity="center"
+                    android:padding="24dp"
+                    android:text="@string/review_page_unreadable"
+                    android:textColor="@color/rv_ink_2"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+
+                <ImageButton
+                    android:id="@+id/btnPrevPage"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="start|center_vertical"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_rv_round"
+                    android:contentDescription="@string/review_prev_page"
+                    android:src="@drawable/ic_sw_earlier"
+                    app:tint="@color/rv_ink" />
+
+                <ImageButton
+                    android:id="@+id/btnNextPage"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/bg_rv_round"
+                    android:contentDescription="@string/review_next_page"
+                    android:src="@drawable/ic_sw_later"
+                    app:tint="@color/rv_ink" />
+            </FrameLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/filmstrip"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp" />
+
+            <!-- fillViewport: equal tools at normal sizes; at 200 % text the
+                 single-line labels scroll instead of breaking mid-word. -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fadingEdgeLength="32dp"
+                android:fillViewport="true"
+                android:requiresFadingEdge="horizontal"
+                android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/focusTools"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="6dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToolCrop"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/crop_action"
+                    app:icon="@drawable/ic_sw_crop" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToolRotate"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/review_tool_rotate"
+                    app:icon="@drawable/ic_sw_rotate" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToolFilter"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/filter_action"
+                    app:icon="@drawable/ic_sw_filter" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToolAdd"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/review_tool_add"
+                    app:icon="@drawable/ic_sw_add_page" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToolDelete"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool.Danger"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/delete"
+                    app:icon="@drawable/ic_sw_delete" />
+            </LinearLayout>
+            </HorizontalScrollView>
+        </LinearLayout>
+
+        <!-- ================= ARRANGE ================= -->
+        <LinearLayout
+            android:id="@+id/arrangePanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/orderCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="12dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/bg_rv_order_card"
+                android:orientation="vertical"
+                android:paddingHorizontal="14dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="4dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/orderText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/rv_ink"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnOrderOk"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/review_order_ok"
+                    android:textColor="@color/rv_warn"
+                    app:icon="@drawable/ic_check"
+                    app:iconTint="@color/rv_warn" />
+            </LinearLayout>
+
+            <com.scanwhirl.app.ui.pagegrid.PageGridView
+                android:id="@+id/pageGrid"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:padding="8dp" />
+
+            <TextView
+                android:id="@+id/arrangeHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="2dp"
+                android:text="@string/review_arrange_hint"
+                android:textColor="@color/rv_ink_3"
+                android:textSize="12sp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fadingEdgeLength="32dp"
+                android:fillViewport="true"
+                android:requiresFadingEdge="horizontal"
+                android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/arrangeTools"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="6dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArrEarlier"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/review_tool_earlier"
+                    app:icon="@drawable/ic_sw_earlier" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArrLater"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/review_tool_later"
+                    app:icon="@drawable/ic_sw_later" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArrMove"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/review_tool_move"
+                    app:icon="@drawable/ic_sw_move_page" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArrEdit"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/review_tool_edit"
+                    app:icon="@drawable/ic_sw_focus_page" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArrDelete"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool.Danger"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/delete"
+                    app:icon="@drawable/ic_sw_delete" />
+            </LinearLayout>
+            </HorizontalScrollView>
+
+            <!-- Multi-select (ticked checkboxes): bulk Rotate / Delete, labelled. -->
+            <HorizontalScrollView
+                android:id="@+id/selectBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fillViewport="true"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp">
+
+                <TextView
+                    android:id="@+id/selCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:textColor="@color/rv_ink"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelRotate"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="10dp"
+                    android:text="@string/review_tool_rotate"
+                    app:icon="@drawable/ic_sw_rotate" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelDelete"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool.Danger"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="10dp"
+                    android:text="@string/delete"
+                    app:icon="@drawable/ic_sw_delete" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelClear"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="10dp"
+                    android:text="@string/clear_selection"
+                    app:icon="@drawable/ic_close" />
+            </LinearLayout>
+            </HorizontalScrollView>
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- test25 Phase 5B: inset floating dock; the commit action is ink-filled. -->
     <LinearLayout
+        android:id="@+id/saveDock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="8dp"
         android:background="@drawable/bg_dock_glass"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="10dp">
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="8dp">
 
-        <!-- test26 T5.3: DockItem — minHeight 56dp, glass dock + 8dp margins kept. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSavePdf"
-            style="@style/Widget.ScanWhirl.Button.DockItem"
+            style="@style/Widget.ScanWhirl.Button.Commit"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/review_save_pdf" />
+            android:text="@string/review_save_pdf"
+            app:icon="@drawable/ic_sw_saved" />
     </LinearLayout>
 </LinearLayout>

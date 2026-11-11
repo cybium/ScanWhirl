@@ -119,6 +119,31 @@ class PageViewerActivity : BaseActivity() {
                 else finish()
             }
         })
+
+        // Review slice 1: Review's labelled "Crop" lands straight in the existing crop
+        // overlay (same CropView + ImageTools.cropTo; nothing is duplicated).
+        if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_START_CROP, false)) {
+            binding.pager.post { if (!isFinishing) startCrop() }
+        }
+    }
+
+    /**
+     * Review slice 1: tell the caller which page was on screen, so Review's Focus
+     * comes back to the page the owner was looking at. Callers that ignore results
+     * (the saved-document grid) are unaffected.
+     */
+    override fun finish() {
+        if (::binding.isInitialized && ::snapHelper.isInitialized) {
+            val snapped = currentPosition()
+            if (snapped in pages.indices) currentPos = snapped
+            pages.getOrNull(currentPos)?.let { shown ->
+                setResult(
+                    RESULT_OK,
+                    Intent().putExtra(RESULT_PAGE_NAME, shown.name).putExtra(EXTRA_PAGE, currentPos)
+                )
+            }
+        }
+        super.finish()
     }
 
     override fun onDestroy() {
@@ -368,7 +393,8 @@ class PageViewerActivity : BaseActivity() {
     // ------------------------------------------------------------------
 
     private fun startCrop() {
-        val pos = currentPosition()
+        // Before the first snap settles there is no snap view yet: use the start page.
+        val pos = currentPosition().takeIf { it in pages.indices } ?: currentPos
         val file = pages.getOrNull(pos) ?: return
         if (binding.cropOverlay.visibility == android.view.View.VISIBLE) return
         lifecycleScope.launch {
@@ -593,6 +619,10 @@ class PageViewerActivity : BaseActivity() {
     companion object {
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_PAGE = "page_index"
+        private const val EXTRA_START_CROP = "start_crop"
+
+        /** Result extra: file name of the page on screen when the viewer closed. */
+        const val RESULT_PAGE_NAME = "result_page_name"
         private const val EXTRA_STAGING = "staging_dir"
         private const val FILTERS_FILE = "filters.txt"
         private const val DEL_SUFFIX = ".del"
@@ -607,5 +637,9 @@ class PageViewerActivity : BaseActivity() {
             Intent(context, PageViewerActivity::class.java)
                 .putExtra(EXTRA_STAGING, stagingDir)
                 .putExtra(EXTRA_PAGE, pageIndex)
+
+        /** As [stagingIntent], opening directly in the crop overlay for that page. */
+        fun stagingCropIntent(context: Context, stagingDir: String, pageIndex: Int): Intent =
+            stagingIntent(context, stagingDir, pageIndex).putExtra(EXTRA_START_CROP, true)
     }
 }

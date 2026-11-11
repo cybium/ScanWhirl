@@ -475,4 +475,44 @@
     <string name="dlg_eyebrow_recovery">RECOVERY</string>
 
     <string name="review_state_failed">Could not keep the review name and category. Keep this screen open and try Save again.</string>
+    <!-- Review slice 1: Focus + Arrange (one review screen, two modes). -->
+    <string name="review_mode_focus">Focus</string>
+    <string name="review_mode_arrange">Arrange</string>
+    <string name="review_mode_label">Review mode</string>
+    <string name="review_page_of">Page %1$d of %2$d</string>
+    <string name="review_status_unsaved">Not saved yet</string>
+    <string name="review_status_edited">Edited · not saved</string>
+    <string name="review_tool_rotate">Rotate</string>
+    <string name="review_tool_add">Add page</string>
+    <string name="review_tool_earlier">Earlier</string>
+    <string name="review_tool_later">Later</string>
+    <string name="review_tool_move">Move to…</string>
+    <string name="review_tool_edit">Edit page</string>
+    <string name="review_prev_page">Previous page</string>
+    <string name="review_next_page">Next page</string>
+    <string name="review_preview_desc">Page %1$d of %2$d. Opens full screen to zoom and crop.</string>
+    <string name="review_page_unreadable">This page can\'t be shown. It is still in the scan.</string>
+    <string name="review_page_loading">Loading page</string>
+    <string name="review_order_title">Check the page order.</string>
+    <string name="review_order_body">Gallery photos can arrive out of order.</string>
+    <string name="review_order_ok">Order looks right</string>
+    <string name="review_order_link">Check page order before saving</string>
+    <string name="review_arrange_hint">Tap a page to select it. Drag the handle to move it.</string>
+    <string name="review_rotated">Page %1$d rotated</string>
+    <string name="review_moved">Page moved to position %1$d</string>
+    <string name="review_filter_set">Page %1$d: %2$s</string>
+    <string name="review_move_title">Move page %1$d</string>
+    <string name="review_move_position">Position %1$d</string>
+    <string name="review_busy">One moment, still updating the pages</string>
+    <plurals name="review_page_count">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <plurals name="review_save_pages">
+        <item quantity="one">Save %d page</item>
+        <item quantity="other">Save %d pages</item>
+    </plurals>
+    <string name="review_select_page">Select page %1$d</string>
+    <string name="review_film_page">Page %1$d</string>
+    <string name="review_film_page_current">Page %1$d, shown</string>
 </resources>

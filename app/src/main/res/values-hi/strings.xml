@@ -431,4 +431,44 @@
         <item quantity="other">%d दस्तावेज़</item>
     </plurals>
     <string name="review_state_failed">समीक्षा का नाम और श्रेणी सुरक्षित नहीं हुए। यह स्क्रीन खुली रखें और फिर से सहेजें।</string>
+    <!-- review: Review slice 1 strings below are machine-translated — native review pending -->
+    <string name="review_mode_focus"><!-- review -->फ़ोकस</string>
+    <string name="review_mode_arrange"><!-- review -->क्रम</string>
+    <string name="review_mode_label"><!-- review -->समीक्षा मोड</string>
+    <string name="review_page_of"><!-- review -->पेज %1$d / %2$d</string>
+    <string name="review_status_unsaved"><!-- review -->अभी सहेजा नहीं गया</string>
+    <string name="review_status_edited"><!-- review -->बदला गया · सहेजा नहीं गया</string>
+    <string name="review_tool_rotate"><!-- review -->घुमाएँ</string>
+    <string name="review_tool_add"><!-- review -->पेज जोड़ें</string>
+    <string name="review_tool_earlier"><!-- review -->पहले</string>
+    <string name="review_tool_later"><!-- review -->बाद में</string>
+    <string name="review_tool_move"><!-- review -->यहाँ ले जाएँ…</string>
+    <string name="review_tool_edit"><!-- review -->पेज बदलें</string>
+    <string name="review_prev_page"><!-- review -->पिछला पेज</string>
+    <string name="review_next_page"><!-- review -->अगला पेज</string>
+    <string name="review_preview_desc"><!-- review -->पेज %1$d / %2$d. ज़ूम और क्रॉप के लिए पूरी स्क्रीन पर खुलता है।</string>
+    <string name="review_page_unreadable"><!-- review -->यह पेज दिखाया नहीं जा सकता। यह स्कैन में अब भी है।</string>
+    <string name="review_page_loading"><!-- review -->पेज लोड हो रहा है</string>
+    <string name="review_order_title"><!-- review -->पेजों का क्रम जाँचें।</string>
+    <string name="review_order_body"><!-- review -->गैलरी की फ़ोटो गलत क्रम में आ सकती हैं।</string>
+    <string name="review_order_ok"><!-- review -->क्रम सही है</string>
+    <string name="review_order_link"><!-- review -->सहेजने से पहले पेजों का क्रम जाँचें</string>
+    <string name="review_arrange_hint"><!-- review -->पेज चुनने के लिए टैप करें। ले जाने के लिए हैंडल खींचें।</string>
+    <string name="review_rotated"><!-- review -->पेज %1$d घुमाया गया</string>
+    <string name="review_moved"><!-- review -->पेज को स्थान %1$d पर ले जाया गया</string>
+    <string name="review_filter_set"><!-- review -->पेज %1$d: %2$s</string>
+    <string name="review_move_title"><!-- review -->पेज %1$d ले जाएँ</string>
+    <string name="review_move_position"><!-- review -->स्थान %1$d</string>
+    <string name="review_busy"><!-- review -->एक पल, पेज अभी अपडेट हो रहे हैं</string>
+    <plurals name="review_page_count">
+        <item quantity="one">%d पेज</item>
+        <item quantity="other">%d पेज</item>
+    </plurals>
+    <plurals name="review_save_pages">
+        <item quantity="one">%d पेज सहेजें</item>
+        <item quantity="other">%d पेज सहेजें</item>
+    </plurals>
+    <string name="review_select_page"><!-- review -->पेज %1$d चुनें</string>
+    <string name="review_film_page"><!-- review -->पेज %1$d</string>
+    <string name="review_film_page_current"><!-- review -->पेज %1$d, दिखाया गया</string>
 </resources>

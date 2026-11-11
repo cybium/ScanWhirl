@@ -619,10 +619,9 @@ class UiSmokeTest {
         val intent = ScanReviewActivity.intent(app, staging.path, null, "Doc")
         ActivityScenario.launch<ScanReviewActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                val grid =
-                    activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageGrid)
-                forceLayout(grid)
-                grid.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+                // Review slice 1: the large Focus page opens the zoomable viewer
+                // (Arrange-grid taps select pages instead).
+                activity.findViewById<android.view.View>(R.id.focusImage).performClick()
 
                 val started = shadowOf(activity).nextStartedActivity
                 assertEquals(

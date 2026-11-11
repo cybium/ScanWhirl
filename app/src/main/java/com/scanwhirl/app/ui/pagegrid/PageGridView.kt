@@ -67,6 +67,23 @@ class PageGridView @JvmOverloads constructor(
             gridAdapter.notifyDataSetChanged()
         }
 
+    /**
+     * Review slice 1: the page shown in Review's Focus mode. It wears the
+     * accent ring (`state_activated`) and an accent number badge. The saved-
+     * document viewer never sets this, so its cells are unchanged.
+     */
+    var currentAt: (Int) -> Boolean = { false }
+
+    /** Columns in the grid (2 by default; Review's Arrange uses 3 on wide phones). */
+    var spanCount: Int
+        get() = (layoutManager as GridLayoutManager).spanCount
+        set(value) {
+            val lm = layoutManager as GridLayoutManager
+            if (lm.spanCount == value) return
+            lm.spanCount = value.coerceAtLeast(1)
+            gridAdapter.notifyDataSetChanged()
+        }
+
     private val gridAdapter = GridAdapter()
 
     // --- 2D drag state -------------------------------------------------
@@ -114,10 +131,15 @@ class PageGridView @JvmOverloads constructor(
     fun firstVisiblePosition(): Int =
         (layoutManager as GridLayoutManager).findFirstVisibleItemPosition()
 
+    /** Brings the cell at [index] on screen (no animation; cheap for 30+ pages). */
+    fun scrollToPage(index: Int) {
+        if (index in 0 until gridAdapter.itemCount) scrollToPosition(index)
+    }
+
     /** Cell width in px, used as the thumbnail decode target. */
     private fun thumbTargetPx(): Int {
         val usable = if (width > 0) width else resources.displayMetrics.widthPixels
-        val cell = (usable - paddingLeft - paddingRight) / 2
+        val cell = (usable - paddingLeft - paddingRight) / spanCount
         return (cell * 3 / 2).coerceAtLeast(160)
     }
 
@@ -318,6 +340,19 @@ class PageGridView @JvmOverloads constructor(
 
         fun bind(file: File, index: Int) {
             binding.pageNum.text = String.format(java.util.Locale.ROOT, "%d", index + 1)
+            val current = currentAt(index)
+            binding.root.isActivated = current
+            binding.currentRing.isVisible = current
+            binding.pageNum.setBackgroundResource(
+                if (current) R.drawable.bg_rv_num_current else R.drawable.bg_chip_void
+            )
+            binding.pageNum.setTextColor(
+                if (current) context.getColor(R.color.rv_on_commit) else 0xFFFFFFFF.toInt()
+            )
+            binding.root.contentDescription =
+                context.getString(R.string.review_film_page, index + 1)
+            binding.checkSelect.contentDescription =
+                context.getString(R.string.review_select_page, index + 1)
             PageThumbLoader.load(
                 file,
                 thumbTargetPx(),

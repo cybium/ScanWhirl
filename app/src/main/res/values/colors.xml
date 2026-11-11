@@ -73,4 +73,22 @@
     <color name="sf_toolbar">#050A14</color>
     <color name="sf_ic_camera">#FFFFFF</color>
     <color name="sf_launcher_bg">#050A14</color>
+    <!-- Review slice 1 (Index + Focus, dark set). The app theme is fixed dark
+         ("no DayNight drift"), so these have no values-night twin by design.
+         Ink = commit (Save); cyan stays reserved for capture. -->
+    <color name="rv_bg">#0E1316</color>
+    <color name="rv_surface">#161D21</color>
+    <color name="rv_surface_2">#1C252A</color>
+    <color name="rv_hairline">#2C383F</color>
+    <color name="rv_ink">#ECEFF1</color>
+    <color name="rv_ink_2">#B3BCC2</color>
+    <color name="rv_ink_3">#8D979E</color>
+    <color name="rv_accent">#62E1F1</color>
+    <color name="rv_accent_fill">#2462E1F1</color>
+    <color name="rv_commit">#ECEFF1</color>
+    <color name="rv_on_commit">#0E1316</color>
+    <color name="rv_danger">#FF8C82</color>
+    <color name="rv_warn">#F2B654</color>
+    <color name="rv_warn_fill">#1FF2B654</color>
+    <color name="rv_scrim_badge">#E60E1316</color>
 </resources>
