@@ -143,6 +143,11 @@
     <string name="resume_saved_msg">This scan was already saved as \"%1$s\", but the screen closed before it finished. Open the saved document, or remove the leftover pages.</string>
     <string name="resume_saved_open">Open saved document</string>
     <string name="resume_saved_remove">Remove leftover pages</string>
+    <string name="review_conflict_title">Saved earlier</string>
+    <string name="review_conflict_changed">An earlier save of this scan finished, but you have changed its pages, order or filters since. Your changes are not in that document. Save the current version as a new document, or open the earlier one. Nothing has been replaced or deleted.</string>
+    <string name="review_conflict_modified">An earlier save of this scan exists, but that document was edited afterwards or can no longer be verified. Save the current version as a new document, or open the earlier one. Nothing has been replaced or deleted.</string>
+    <string name="review_conflict_save_new">Save as new document</string>
+    <string name="review_conflict_open">Open earlier document</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>

@@ -324,6 +324,11 @@
     <string name="resume_saved_msg"><!-- review -->यह स्कैन \"%1$s\" के रूप में पहले ही सहेजा जा चुका है, लेकिन स्क्रीन पूरी होने से पहले बंद हो गई। सहेजा हुआ दस्तावेज़ खोलें, या बचे हुए पृष्ठ हटा दें।</string>
     <string name="resume_saved_open"><!-- review -->सहेजा हुआ दस्तावेज़ खोलें</string>
     <string name="resume_saved_remove"><!-- review -->बचे हुए पृष्ठ हटाएं</string>
+    <string name="review_conflict_title"><!-- review -->पहले सहेजा जा चुका है</string>
+    <string name="review_conflict_changed"><!-- review -->इस स्कैन का पिछला सहेजना पूरा हो चुका था, लेकिन तब से आपने इसके पृष्ठ, क्रम या फ़िल्टर बदले हैं। आपके बदलाव उस दस्तावेज़ में नहीं हैं। मौजूदा संस्करण को नए दस्तावेज़ के रूप में सहेजें, या पहले वाला खोलें। कुछ भी बदला या हटाया नहीं गया है।</string>
+    <string name="review_conflict_modified"><!-- review -->इस स्कैन का पिछला सहेजा हुआ दस्तावेज़ मौजूद है, लेकिन उसे बाद में बदला गया है या अब उसकी जाँच नहीं हो पा रही। मौजूदा संस्करण को नए दस्तावेज़ के रूप में सहेजें, या पहले वाला खोलें। कुछ भी बदला या हटाया नहीं गया है।</string>
+    <string name="review_conflict_save_new"><!-- review -->नए दस्तावेज़ के रूप में सहेजें</string>
+    <string name="review_conflict_open"><!-- review -->पहले वाला दस्तावेज़ खोलें</string>
     <string name="resume_scan_title"><!-- review -->Resume unसहेजा गया स्कैन?</string>
     <string name="review_discard_msg"><!-- review -->Your स्कैनned पृष्ठ haven\'t been saved yet.</string>
     <string name="review_discard_title"><!-- review -->Discard this स्कैन?</string>

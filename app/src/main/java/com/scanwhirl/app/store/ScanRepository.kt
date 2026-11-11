@@ -257,9 +257,25 @@ class ScanRepository(private val context: Context) {
      *
      * [reviewDir] is the review staging folder. When given, a stable token and the
      * chosen target id are persisted there BEFORE anything is reserved, so a retry
-     * after process death reuses the same identity and recognises an already
-     * committed document instead of creating a duplicate. The staging pages are only
+     * after process death reuses the same identity. The staging pages are only
      * read, never modified or deleted — the caller deletes them after this returns.
+     *
+     * Replay (R1/R2). What sits at the journalled target decides the outcome, and it is
+     * judged against the review's [SaveFormat.Identity] (staged page bytes, order, filters):
+     *
+     *  - published by this token AND identical review → returned as-is (idempotent, no
+     *    regeneration; title and category of the saved document are never rewritten);
+     *  - published by this token but the review changed, or the saved copy was edited or
+     *    no longer verifies → [SavedReviewConflictException]; nothing is saved or touched.
+     *    The owner can then choose [SavedCopyPolicy.SAVE_AS_NEW], which journals a brand new
+     *    token + target before building and leaves the earlier document alone;
+     *  - hidden, owned, fully prepared and verified for this same review → published as is
+     *    (journal-linked recovery, no rebuild);
+     *  - hidden and owned but complete and verified for a DIFFERENT (superseded) review → kept
+     *    untouched; the changed review is saved to a new target persisted in the journal;
+     *  - hidden and owned but incomplete or unverifiable → rebuilt in place from the review
+     *    staging, which is the authoritative source;
+     *  - anything else (foreign token, unprovable marker, unknown) → never touched.
      *
      * [pdfUri] is retained for source compatibility and is ignored: a foreign PDF
      * cannot be tied to the saved pages, so the PDF is always generated from them.
@@ -271,11 +287,12 @@ class ScanRepository(private val context: Context) {
         filter: ScanFilter = ScanFilter.ORIGINAL,
         pageFilters: Map<Int, ScanFilter>? = null,
         category: String? = null,
-        reviewDir: File? = null
+        reviewDir: File? = null,
+        ifSavedCopyDiffers: SavedCopyPolicy = SavedCopyPolicy.ASK
     ): ScanDocument = withContext(Dispatchers.IO) {
         require(imageUris.isNotEmpty()) { "Choose at least one PNG, JPEG or WebP image." }
         SAVE_LOCK.withLock {
-            runSaveTransaction(imageUris, suggestedName, filter, pageFilters, category, reviewDir)
+            runSaveTransaction(imageUris, suggestedName, filter, pageFilters, category, reviewDir, ifSavedCopyDiffers)
         }
     }
 
@@ -285,16 +302,23 @@ class ScanRepository(private val context: Context) {
         filter: ScanFilter,
         pageFilters: Map<Int, ScanFilter>?,
         category: String?,
-        reviewDir: File?
+        reviewDir: File?,
+        policy: SavedCopyPolicy
     ): ScanDocument {
         val effective: (Int) -> ScanFilter = { i -> pageFilters?.get(i) ?: filter }
+        val filterIds = imageUris.indices.map { effective(it).id }
 
         // 1. Identity: token + target id are durable BEFORE any directory is reserved.
-        val journal = reviewDir?.let { SaveFormat.loadJournal(it) }
+        var journal = reviewDir?.let { SaveFormat.loadJournal(it) }
             ?: SaveFormat.Journal(SaveFormat.newToken(), SaveFormat.newDocId())
                 .also { fresh -> reviewDir?.let { SaveFormat.persistJournal(it, fresh) } }
         SaveFaults.at("journaled")
         checkFreeSpace(imageUris)
+
+        // The review's identity is only needed when something already sits at the target;
+        // a fresh save derives it from the very bytes it normalizes instead.
+        var inputIdentity: SaveFormat.Identity? = null
+        val identityNow = { inputIdentity ?: identityOfInputs(imageUris, filterIds).also { inputIdentity = it } }
 
         // 2. Exclusive reservation. Never replaces, deletes or repurposes a foreign directory.
         var owned: File? = null
@@ -308,23 +332,35 @@ class ScanRepository(private val context: Context) {
                 break
             }
             if (!candidate.exists()) throw IOException("Could not create a new document. Try saving again.")
-            when (classifyExisting(candidate, journal.token, imageUris.size)) {
-                Existing.COMMITTED -> {
-                    // Replay of a save that already published: same document, no duplicate.
+            when (val state = classifyExisting(candidate, journal.token, identityNow)) {
+                is Existing.Committed -> {
+                    // Replay of a save that already published, for an unchanged review: same
+                    // document, no duplicate, nothing rewritten.
                     val doc = loadDocument(candidate)
                         ?: throw IllegalStateException("Saved document could not be reopened")
                     markPendingAfterPublish(doc)
                     return doc
                 }
-                Existing.OWNED_INCOMPLETE -> {
-                    // Our own abandoned attempt (marker carries our token): safe to rebuild.
+                is Existing.Prepared -> return publishPrepared(candidate)
+                is Existing.OwnedStale -> {
+                    // Our own incomplete / unverifiable / superseded attempt (marker carries our
+                    // token); the review staging still holds the source, so rebuild it.
                     candidate.deleteRecursively()
                     if (!candidate.exists() && candidate.mkdir()) {
                         owned = candidate
                         break
                     }
                 }
-                Existing.FOREIGN -> Unit // never touched
+                is Existing.Conflict -> {
+                    if (policy == SavedCopyPolicy.ASK) throw SavedReviewConflictException(candidate.name, state.reason)
+                    // Explicit owner choice: a NEW identity, durable before anything is reserved.
+                    // The earlier document keeps its own token and is never touched.
+                    journal = SaveFormat.Journal(SaveFormat.newToken(), SaveFormat.newDocId())
+                    reviewDir?.let { SaveFormat.persistJournal(it, journal) }
+                    target = journal.target
+                    continue
+                }
+                is Existing.Foreign -> Unit // never touched
             }
             if (++attempts >= RESERVE_ATTEMPTS) {
                 throw IOException("Could not reserve a new document. Try saving again.")
@@ -336,21 +372,24 @@ class ScanRepository(private val context: Context) {
         }
         SaveFaults.at("reserved")
         val dir: File = checkNotNull(owned)
+        val token = journal.token
 
         // 3. Build everything inside the hidden directory. Any ordinary failure or
         //    cancellation removes only this directory (positively owned via its token).
         try {
-            SaveFormat.createMarker(dir, journal.token, System.currentTimeMillis())
+            SaveFormat.createMarker(dir, token, System.currentTimeMillis())
             Durable.syncDir(dir)
             Durable.syncDir(docsDir) // best effort: see Durable
             SaveFaults.at("marked")
 
             val pageFiles = ArrayList<File>(imageUris.size)
+            val sourceDigests = ArrayList<String>(imageUris.size)
             imageUris.forEachIndexed { index, uri ->
                 currentCoroutineContext().ensureActive()
                 val normalized = try {
                     val bytes = context.contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
                         ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
+                    sourceDigests.add(Sha256.of(bytes)) // identity = the exact bytes this save consumed
                     ImageTools.normalizePage(bytes, effective(index))
                 } catch (e: CancellationException) {
                     throw e
@@ -373,12 +412,15 @@ class ScanRepository(private val context: Context) {
             PdfGenerator.imagesToPdf(pageFiles, pdfFile)
             SaveFaults.at("pdf")
 
+            val review = SaveFormat.identity(sourceDigests, filterIds)
             val txn = SaveFormat.Txn(
-                token = journal.token,
+                token = token,
                 pages = pageFiles.size,
                 pagesSha256 = SaveFormat.pagesDigest(pageFiles),
                 pdfSha256 = Sha256.of(pdfFile),
-                pdfBytes = pdfFile.length()
+                pdfBytes = pdfFile.length(),
+                sourceSha256 = review.source,
+                filtersSha256 = review.filters
             )
             Durable.atomicWriteText(File(dir, SaveFormat.TXN), txn.serialize())
             SaveFaults.at("txn")
@@ -393,13 +435,20 @@ class ScanRepository(private val context: Context) {
             SaveFaults.at("verified")
             SaveFaults.at("before_publish")
         } catch (e: Exception) {
-            discardOwned(dir, journal.token)
+            discardOwned(dir, token)
             throw e
         }
 
-        // 4. COMMIT: one atomic unlink. Nothing below ever deletes the document.
+        return publishPrepared(dir)
+    }
+
+    /**
+     * COMMIT: one atomic unlink of the marker of a verified, prepared directory. Nothing here
+     * ever deletes the document — if the unlink fails the fully prepared directory is left
+     * exactly as it is, so a later replay can publish it instead of rebuilding it.
+     */
+    private fun publishPrepared(dir: File): ScanDocument {
         if (!File(dir, SaveFormat.MARKER).delete()) {
-            discardOwned(dir, journal.token)
             throw IOException("Could not publish the new document. Try saving again.")
         }
         Durable.syncDir(dir)
@@ -411,32 +460,56 @@ class ScanRepository(private val context: Context) {
         return doc
     }
 
-    private enum class Existing { COMMITTED, OWNED_INCOMPLETE, FOREIGN }
+    private sealed interface Existing {
+        /** Published by our token for exactly this review. */
+        object Committed : Existing
 
-    /** What already sits at a path `mkdir` refused: ours (committed / abandoned) or somebody else's. */
-    private fun classifyExisting(dir: File, token: String, expectedPages: Int): Existing {
+        /** Hidden, owned, verified, prepared for exactly this review: publish it as is. */
+        object Prepared : Existing
+
+        /** Hidden and ours, but incomplete or unverifiable: rebuild in place from the review staging. */
+        object OwnedStale : Existing
+
+        /** Published by our token, yet not a faithful save of this review: the owner must choose. */
+        class Conflict(val reason: SavedReviewConflictException.Reason) : Existing
+
+        /** Somebody else's (or unprovable): never touched. */
+        object Foreign : Existing
+    }
+
+    /** What already sits at a path `mkdir` refused: ours (committed / prepared / abandoned) or somebody else's. */
+    private fun classifyExisting(dir: File, token: String, identity: () -> SaveFormat.Identity): Existing {
         val owner = SaveFormat.ownerOf(dir)
         if (owner != null) {
-            return if (owner.token == token) Existing.OWNED_INCOMPLETE else Existing.FOREIGN
+            if (owner.token != token) return Existing.Foreign
+            val txn = SaveFormat.readTxn(dir) ?: return Existing.OwnedStale // never reached provenance
+            if (txn.token != token) return Existing.Foreign // contradictory provenance: not ours to judge
+            if (!isVerifiedPrepared(dir, txn)) return Existing.OwnedStale
+            // Complete, verified output of this transaction. Same review → publish it as is.
+            // A DIFFERENT review → keep it untouched (it is complete data, and after a lost
+            // unlink it may even have been a document the owner saw) and save the changed
+            // review to a new, journalled target instead.
+            return if (txn.matches(identity())) Existing.Prepared else Existing.Foreign
         }
-        if (SaveFormat.isIncomplete(dir)) return Existing.FOREIGN // marker we cannot prove is ours
-        return if (isVerifiedCommit(dir, token, expectedPages)) Existing.COMMITTED else Existing.FOREIGN
+        if (SaveFormat.isIncomplete(dir)) return Existing.Foreign // marker we cannot prove is ours
+        val txn = SaveFormat.readTxn(dir) ?: return Existing.Foreign
+        if (txn.token != token || !File(dir, "meta.txt").isFile) return Existing.Foreign
+        if (!isVerifiedCommit(dir, txn)) return Existing.Conflict(SavedReviewConflictException.Reason.SAVED_COPY_CHANGED)
+        return if (txn.matches(identity())) Existing.Committed
+        else Existing.Conflict(SavedReviewConflictException.Reason.REVIEW_CHANGED)
     }
 
     /**
-     * True only when [dir] is a published document produced by transaction [token]:
-     * provenance token matches, page count and ordered page digest match, and the PDF
-     * is either byte-identical to the recorded hash or (after legitimate regeneration,
-     * e.g. a text layer added by indexing) still passes structural verification with
-     * the same page count.
+     * True only when the published [dir] is internally consistent with its own provenance:
+     * page count and ordered page digest match, and the PDF is either byte-identical to the
+     * recorded hash or (after legitimate regeneration, e.g. a text layer added by indexing)
+     * still passes structural verification with the same page count. Says nothing about WHICH
+     * review it was built from — that is [SaveFormat.Txn.matches].
      */
-    private fun isVerifiedCommit(dir: File, token: String, expectedPages: Int?): Boolean {
-        val txn = SaveFormat.readTxn(dir) ?: return false
-        if (txn.token != token) return false
+    private fun isVerifiedCommit(dir: File, txn: SaveFormat.Txn): Boolean {
         if (!File(dir, "meta.txt").isFile) return false
         val pages = pageFilesIn(dir)
         if (pages.size != txn.pages) return false
-        if (expectedPages != null && pages.size != expectedPages) return false
         if (SaveFormat.pagesDigest(pages) != txn.pagesSha256) return false
         val pdf = File(dir, "scan.pdf")
         if (!pdf.isFile) return false
@@ -453,16 +526,46 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
-     * The verified committed document a review staging folder already produced, if
-     * any — used to offer "Open saved document" instead of saving a second copy.
-     * Read-only; never deletes anything.
+     * Content half of the journal-linked recovery gate for a HIDDEN directory: pages, bounded PDF
+     * verification, hashes and metadata — exactly what publication itself requires. Ownership
+     * (marker token == journal token == txn token) and review identity are checked by the caller.
+     */
+    private fun isVerifiedPrepared(dir: File, txn: SaveFormat.Txn): Boolean = try {
+        verifyPrepared(dir, txn)
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    /** Streams every page's bytes through SHA-256 (no whole-file allocation) to identify the review. */
+    private fun identityOfInputs(imageUris: List<Uri>, filterIds: List<String>): SaveFormat.Identity {
+        val digests = imageUris.mapIndexed { index, uri ->
+            try {
+                context.contentResolver.openInputStream(uri)?.use { Sha256.of(it) }
+                    ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Page ${index + 1}: ${e.message}", e)
+            }
+        }
+        return SaveFormat.identity(digests, filterIds)
+    }
+
+    /**
+     * The verified committed document a review staging folder already produced, if any —
+     * used to offer "Open saved document" instead of saving a second copy. It must be the
+     * save of exactly THIS staging (page bytes, order and persisted filters); a staging that
+     * was edited since is not offered as saved. Read-only; never deletes anything.
      */
     fun committedDocumentFor(reviewDir: File): ScanDocument? {
         val journal = SaveFormat.loadJournal(reviewDir) ?: return null
         val dir = File(docsDir, journal.target)
         if (!dir.isDirectory || SaveFormat.isIncomplete(dir)) return null
-        val staged = reviewDir.listFiles { f -> f.extension.equals("jpg", true) }?.size ?: return null
-        return if (isVerifiedCommit(dir, journal.token, staged)) loadDocument(dir) else null
+        val identity = PendingScans.identity(reviewDir) ?: return null
+        val txn = SaveFormat.readTxn(dir) ?: return null
+        if (txn.token != journal.token || !txn.matches(identity)) return null
+        return if (isVerifiedCommit(dir, txn)) loadDocument(dir) else null
     }
 
     /** Independent re-read of the prepared (still hidden) document before it may be published. */
@@ -508,12 +611,23 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
-     * Deletes hidden save directories that were abandoned (marker older than
-     * [minAgeMs], e.g. after a process death with the review staging discarded).
-     * Only directories whose marker proves they belong to a save transaction are
-     * touched; published documents, legacy documents, unknown directories and review
-     * staging are never swept. Takes the same lock as [saveScan], so it cannot run
-     * against an active transaction.
+     * Deletes ONLY disposable hidden save output: a directory whose marker proves it belongs
+     * to a save transaction, is older than [minAgeMs], and never reached the provenance stage
+     * (no `txn.txt` and no `meta.txt`) — i.e. a partial build that holds nothing the review
+     * staging cannot rebuild.
+     *
+     * Never deleted, however old the marker:
+     *  - an owned directory that reached `txn.txt` or `meta.txt`. That is either a fully
+     *    prepared document (pages + verified PDF + provenance + metadata, e.g. a crash just
+     *    before publication or a marker that reappeared after power loss) or provenance we
+     *    cannot verify; both are kept as they are, and a journal-linked replay of the same
+     *    unchanged review publishes the prepared one ([saveScan]). The reaper itself never
+     *    publishes: it cannot know the review's filters, nor that the owner did not discard it;
+     *  - published and legacy documents, directories without a provable marker (foreign or
+     *    unknown, even empty), and review staging.
+     *
+     * It never removes a `.incomplete` marker. Takes the same lock as [saveScan], so it cannot
+     * run against an active transaction.
      */
     suspend fun reapAbandonedSaves(
         minAgeMs: Long = ABANDONED_SAVE_AGE_MS,
@@ -523,7 +637,9 @@ class ScanRepository(private val context: Context) {
             var removed = 0
             docsDir.listFiles { f -> f.isDirectory }?.forEach { dir ->
                 val owner = SaveFormat.ownerOf(dir) ?: return@forEach
-                if (now - owner.startedAt >= minAgeMs && dir.deleteRecursively()) removed++
+                if (now - owner.startedAt < minAgeMs) return@forEach
+                if (SaveFormat.reachedProvenance(dir)) return@forEach // complete or unverifiable: preserved
+                if (dir.deleteRecursively()) removed++
             }
             removed
         }

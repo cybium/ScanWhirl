@@ -27,6 +27,8 @@ import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityScanReviewBinding
+import com.scanwhirl.app.store.SavedCopyPolicy
+import com.scanwhirl.app.store.SavedReviewConflictException
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
@@ -535,7 +537,7 @@ class ScanReviewActivity : BaseActivity() {
     // Save / discard
     // ------------------------------------------------------------------
 
-    private fun saveAndFinish() {
+    private fun saveAndFinish(policy: SavedCopyPolicy = SavedCopyPolicy.ASK) {
         if (saving) return
         if (pages.isEmpty()) return
         withStoragePermission {
@@ -558,7 +560,8 @@ class ScanReviewActivity : BaseActivity() {
                         currentTitle(),
                         pageFilters = perPage,
                         category = chosenCategory,
-                        reviewDir = stagingDir
+                        reviewDir = stagingDir,
+                        ifSavedCopyDiffers = policy
                     )
                     saved = true
 
@@ -612,6 +615,12 @@ class ScanReviewActivity : BaseActivity() {
                     saving = false
                     progress.dismiss()
                     throw e
+                } catch (e: SavedReviewConflictException) {
+                    // An earlier save of this review exists but is not a faithful save of what is
+                    // on screen now. Nothing was saved, replaced or deleted; the owner chooses.
+                    saving = false
+                    progress.dismiss()
+                    confirmSavedCopyConflict(e)
                 } catch (e: Exception) {
                     saving = false
                     progress.dismiss()
@@ -623,6 +632,24 @@ class ScanReviewActivity : BaseActivity() {
                 }
             }
         }
+    }
+
+    /** Explicit choice after a replay conflict: a separate new document, or the earlier one. Staging is kept. */
+    private fun confirmSavedCopyConflict(conflict: SavedReviewConflictException) {
+        val message = if (conflict.reason == SavedReviewConflictException.Reason.REVIEW_CHANGED) {
+            R.string.review_conflict_changed
+        } else {
+            R.string.review_conflict_modified
+        }
+        SwDialog.card(this)
+            .setTitle(R.string.review_conflict_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.review_conflict_save_new) { _, _ -> saveAndFinish(SavedCopyPolicy.SAVE_AS_NEW) }
+            .setNeutralButton(R.string.review_conflict_open) { _, _ ->
+                startActivity(DocumentViewerActivity.intent(this, conflict.documentId))
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .showSw(isSheet = false)
     }
 
     private fun confirmDiscard() {

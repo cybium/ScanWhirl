@@ -308,7 +308,19 @@ class SaveTransactionTest {
         victim.writeBytes(ImportFixtures.image(width = 300))
         val tamperedBefore = snapshot(first.pdfFile.parentFile!!)
         assertNull(repo.committedDocumentFor(staged.dir))
-        val second = save(staged)
+        // WP-05 R1: a tampered earlier copy is never returned as success and never silently
+        // duplicated either — the refusal is explicit, and a new document needs an explicit choice.
+        try {
+            save(staged)
+            fail("expected an explicit conflict")
+        } catch (e: SavedReviewConflictException) {
+            assertEquals(first.id, e.documentId)
+            assertEquals(SavedReviewConflictException.Reason.SAVED_COPY_CHANGED, e.reason)
+        }
+        assertEquals(listOf(first.id), docDirs())
+        val second = runBlocking {
+            repo.saveScan(staged.uris, null, "Doc", reviewDir = staged.dir, ifSavedCopyDiffers = SavedCopyPolicy.SAVE_AS_NEW)
+        }
         assertNotEquals(first.id, second.id)
         assertEquals(tamperedBefore, snapshot(first.pdfFile.parentFile!!))
         assertPublishedAndVerified(second, 2)
