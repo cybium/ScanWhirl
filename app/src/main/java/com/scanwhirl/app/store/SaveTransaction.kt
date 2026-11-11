@@ -159,11 +159,10 @@ internal object SaveFormat {
      *  - [source]: the ordered SHA-256 of every staged page's bytes (content AND order);
      *  - [filters]: the effective filter of every page, in the same order.
      *
-     * Deliberately NOT part of it: title and category. They are not persisted in the review
-     * staging (a resumed review re-derives a default title and an auto-suggested category),
-     * and they stay freely editable on the saved document. Letting a resumed review overwrite
-     * them would clobber a user's choice with a default; letting them veto a replay would
-     * duplicate a document over a rename. The committed document's metadata always wins.
+     * Deliberately NOT part of it: title and category. PendingScans persists them as
+     * independent optional review state; they remain freely editable on the saved document.
+     * Letting draft metadata veto a replay would duplicate a document over a rename.
+     * The committed document's metadata always wins, including for older drafts without state.
      *
      * Derived from source bytes, never from the saved pages or PDF, so legitimate post-save
      * work (OCR text layer, PDF regeneration) cannot change it.

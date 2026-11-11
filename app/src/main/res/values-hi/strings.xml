@@ -430,4 +430,5 @@
         <item quantity="one">%d दस्तावेज़</item>
         <item quantity="other">%d दस्तावेज़</item>
     </plurals>
+    <string name="review_state_failed">समीक्षा का नाम और श्रेणी सुरक्षित नहीं हुए। यह स्क्रीन खुली रखें और फिर से सहेजें।</string>
 </resources>

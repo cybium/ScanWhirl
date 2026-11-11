@@ -474,4 +474,5 @@
     <string name="dlg_eyebrow_security">SECURE ACCESS</string>
     <string name="dlg_eyebrow_recovery">RECOVERY</string>
 
+    <string name="review_state_failed">Could not keep the review name and category. Keep this screen open and try Save again.</string>
 </resources>

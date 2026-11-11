@@ -386,7 +386,12 @@ class SaveReviewIdentityTest {
                 activity.findViewById<android.view.View>(com.scanwhirl.app.R.id.btnSavePdf).performClick()
             }
             var dialog: AlertDialog? = null
-            await { dialog = ShadowDialog.getLatestDialog() as? AlertDialog; dialog?.isShowing == true }
+            await {
+                dialog = ShadowDialog.getLatestDialog() as? AlertDialog
+                // Saving is also an AlertDialog. Wait for the actual conflict choice.
+                dialog?.isShowing == true && dialog?.getButton(AlertDialog.BUTTON_POSITIVE)?.text?.toString() ==
+                    app.getString(com.scanwhirl.app.R.string.review_conflict_save_new)
+            }
             assertEquals(app.getString(com.scanwhirl.app.R.string.review_conflict_save_new), dialog!!.getButton(AlertDialog.BUTTON_POSITIVE).text.toString())
             assertEquals(app.getString(com.scanwhirl.app.R.string.review_conflict_open), dialog!!.getButton(AlertDialog.BUTTON_NEUTRAL).text.toString())
             assertEquals("nothing saved, replaced or deleted yet", listOf(first.id), docDirs())
@@ -405,7 +410,11 @@ class SaveReviewIdentityTest {
             scenario.onActivity { activity ->
                 activity.findViewById<android.view.View>(com.scanwhirl.app.R.id.btnSavePdf).performClick()
             }
-            await { dialog = ShadowDialog.getLatestDialog() as? AlertDialog; dialog?.isShowing == true }
+            await {
+                dialog = ShadowDialog.getLatestDialog() as? AlertDialog
+                dialog?.isShowing == true && dialog?.getButton(AlertDialog.BUTTON_POSITIVE)?.text?.toString() ==
+                    app.getString(com.scanwhirl.app.R.string.review_conflict_save_new)
+            }
             dialog!!.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             shadowOf(Looper.getMainLooper()).idle()
             await { repo.listDocuments().size == 2 }

@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.ContextThemeWrapper
@@ -29,6 +31,7 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityScanReviewBinding
 import com.scanwhirl.app.store.SavedCopyPolicy
 import com.scanwhirl.app.store.SavedReviewConflictException
+import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
@@ -82,6 +85,9 @@ class ScanReviewActivity : BaseActivity() {
 
     /** T4.1: once the owner taps a chip by hand, the title stops re-suggesting. */
     private var categoryPickedByHand = false
+    private var reviewStateReady = false
+    private val reviewStateHandler = Handler(Looper.getMainLooper())
+    private val persistReviewStateTask = Runnable { persistReviewState() }
 
     /** name -> lastModified at load; a diff on resume means the pager edited files. */
     private var initialSnapshot: Map<String, Long> = emptyMap()
@@ -149,9 +155,19 @@ class ScanReviewActivity : BaseActivity() {
             File(path).takeIf { it.exists() && it.length() > 0 }?.let { pdfFile = it }
         }
         defaultName = intent.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() } ?: "Document"
-
-        binding.titleInput.setText(defaultName)
+        val restored = savedInstanceState?.getString(REVIEW_STATE)?.let {
+            PendingScans.decodeReviewState(stagingDir, it)
+        } ?: PendingScans.latestReviewState(stagingDir)
+        restored?.let {
+            defaultName = it.defaultName
+            chosenCategory = it.category
+            categoryPickedByHand = it.categoryPickedByHand
+        }
+        binding.titleInput.setText(restored?.title ?: defaultName)
         setupCategoryRail()
+        paintCategoryRail()
+        reviewStateReady = true
+        scheduleReviewState()
         loadFilters()
         initialSnapshot = snapshot()
 
@@ -194,7 +210,7 @@ class ScanReviewActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (saved) return
+        if (saved || !::stagingDir.isInitialized) return
         // The full-screen view may have discarded the scan (last page deleted).
         if (!stagingDir.exists()) {
             finish()
@@ -204,6 +220,7 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        reviewStateHandler.removeCallbacks(persistReviewStateTask)
         // Leaving the screen makes any pending page delete permanent.
         if (!saved) commitPendingDeletes(pendingDeletes.toList())
         super.onDestroy()
@@ -211,6 +228,51 @@ class ScanReviewActivity : BaseActivity() {
 
     private fun currentTitle(): String =
         binding.titleInput.text?.toString()?.trim().orEmpty().ifBlank { defaultName }
+
+    private fun reviewState() = PendingScans.ReviewState(
+        binding.titleInput.text?.toString().orEmpty(), defaultName, chosenCategory, categoryPickedByHand
+    )
+
+    private fun scheduleReviewState() {
+        if (!reviewStateReady || saved || saving) return
+        reviewStateHandler.removeCallbacks(persistReviewStateTask)
+        reviewStateHandler.postDelayed(persistReviewStateTask, 350)
+    }
+
+    /** Lifecycle flush is submitted immediately and outlives this Activity.
+     * Force-kill before the debounce/flush completes can still lose the last characters.
+     */
+    private fun persistReviewState() {
+        reviewStateHandler.removeCallbacks(persistReviewStateTask)
+        if (!reviewStateReady || saved || saving) return
+        // Discarded elsewhere (the viewer deleted the last page): nothing left to describe,
+        // and a failed write there must not be reported as lost metadata.
+        if (!stagingDir.isDirectory) return
+        val write = PendingScans.queueReviewState(stagingDir, reviewState())
+        (application as ScanWhirlApp).appScope.launch {
+            try {
+                withContext(Dispatchers.IO) { write.get() }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    if (!isDestroyed && !saved && stagingDir.isDirectory) Toast.makeText(this@ScanReviewActivity,
+                        R.string.review_state_failed, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    override fun onPause() {
+        persistReviewState()
+        super.onPause()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (reviewStateReady) {
+            outState.putString(REVIEW_STATE, PendingScans.encodeReviewState(stagingDir, reviewState()))
+            persistReviewState()
+        }
+        super.onSaveInstanceState(outState)
+    }
 
     // ------------------------------------------------------------------
     // Category rail (T4.1)
@@ -237,7 +299,10 @@ class ScanReviewActivity : BaseActivity() {
         binding.titleInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
-            override fun afterTextChanged(s: Editable?) = suggestCategoryFromTitle()
+            override fun afterTextChanged(s: Editable?) {
+                suggestCategoryFromTitle()
+                scheduleReviewState()
+            }
         })
         suggestCategoryFromTitle()
     }
@@ -247,6 +312,7 @@ class ScanReviewActivity : BaseActivity() {
         categoryPickedByHand = true
         chosenCategory = cat
         paintCategoryRail()
+        scheduleReviewState()
     }
 
     /** Live suggestion from the title — until the owner picks by hand. */
@@ -541,10 +607,30 @@ class ScanReviewActivity : BaseActivity() {
         if (saving) return
         if (pages.isEmpty()) return
         withStoragePermission {
+            reviewStateHandler.removeCallbacks(persistReviewStateTask)
             saving = true
+            val state = reviewState()
             val progress = showProgress()
             lifecycleScope.launch {
                 try {
+                    val written = try {
+                        withContext(Dispatchers.IO) {
+                            PendingScans.queueReviewState(stagingDir, state).get()
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        false
+                    }
+                    if (!written) {
+                        // Name/category not committed (disk fault, or superseded): nothing is
+                        // saved, staged pages are untouched, and the owner can retry.
+                        saving = false
+                        progress.dismiss()
+                        Toast.makeText(this@ScanReviewActivity, R.string.review_state_failed,
+                            Toast.LENGTH_LONG).show()
+                        return@launch
+                    }
                     val uris = pages.map { Uri.fromFile(it) }
                     // Complete map: every page defaults to Original unless changed.
                     val perPage = pages.mapIndexed { i, f ->
@@ -557,9 +643,9 @@ class ScanReviewActivity : BaseActivity() {
                     val doc = repo.saveScan(
                         uris,
                         null,
-                        currentTitle(),
+                        state.title.trim().ifBlank { state.defaultName },
                         pageFilters = perPage,
-                        category = chosenCategory,
+                        category = state.category,
                         reviewDir = stagingDir,
                         ifSavedCopyDiffers = policy
                     )
@@ -689,6 +775,7 @@ class ScanReviewActivity : BaseActivity() {
         private const val EXTRA_NAME = "default_name"
         private const val FILTERS_FILE = "filters.txt"
         private const val DEL_SUFFIX = ".del"
+        private const val REVIEW_STATE = "review_state"
 
         fun intent(context: Context, stagingDir: String, pdfPath: String?, defaultName: String): Intent =
             Intent(context, ScanReviewActivity::class.java)
