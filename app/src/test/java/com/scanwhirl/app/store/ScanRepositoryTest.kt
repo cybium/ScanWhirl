@@ -352,7 +352,7 @@ class ScanRepositoryTest {
     }
 
     @Test
-    fun `saveScan copies the scanner pdf only when every page is original`() = runBlocking {
+    fun `saveScan never trusts a supplied scanner pdf and always generates a verified one`() = runBlocking {
         val repo = ScanRepository(context)
         // A real generated PDF stands in for the scanner's output.
         val seed = repo.saveScan(
@@ -362,29 +362,25 @@ class ScanRepositoryTest {
         )
         val scannerPdf = seed.pdfFile.readBytes()
 
-        // All-original pages: the scanner's PDF is copied as-is.
-        val untouched = repo.saveScan(
-            listOf(contentUri(realJpegBytes(320, 240, android.graphics.Color.BLUE))),
-            contentUri(scannerPdf),
-            "untouched",
-            pageFilters = mapOf(0 to com.scanwhirl.app.util.ScanFilter.ORIGINAL)
-        )
-        assertTrue(
-            "scanner pdf should be copied when nothing was filtered",
-            scannerPdf.contentEquals(untouched.pdfFile.readBytes())
-        )
-
-        // A filtered page forces a regeneration instead of the stale copy.
-        val filtered = repo.saveScan(
-            listOf(contentUri(realJpegBytes(320, 240, android.graphics.Color.BLUE))),
-            contentUri(scannerPdf),
-            "filtered",
-            pageFilters = mapOf(0 to com.scanwhirl.app.util.ScanFilter.ENHANCE)
-        )
-        assertTrue(
-            "scanner pdf must not be copied when a page is filtered",
-            !scannerPdf.contentEquals(filtered.pdfFile.readBytes())
-        )
+        // WP-05: a foreign PDF cannot be tied to the saved pages, so it is never copied,
+        // whether or not pages were filtered. The PDF is always generated from the pages
+        // and structurally verified against them.
+        for ((name, filters) in listOf(
+            "untouched" to mapOf(0 to com.scanwhirl.app.util.ScanFilter.ORIGINAL),
+            "filtered" to mapOf(0 to com.scanwhirl.app.util.ScanFilter.ENHANCE)
+        )) {
+            val doc = repo.saveScan(
+                listOf(contentUri(realJpegBytes(320, 240, android.graphics.Color.BLUE))),
+                contentUri(scannerPdf),
+                name,
+                pageFilters = filters
+            )
+            assertTrue(
+                "$name: scanner pdf must not be copied",
+                !scannerPdf.contentEquals(doc.pdfFile.readBytes())
+            )
+            com.scanwhirl.app.util.PdfVerifier.verify(doc.pdfFile, expectedImages = doc.pageFiles)
+        }
     }
 
     @Test

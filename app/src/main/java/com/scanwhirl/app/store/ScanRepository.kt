@@ -10,18 +10,26 @@ import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.OcrStore
 import com.scanwhirl.app.util.CategoryRules
+import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
+import com.scanwhirl.app.util.PdfVerifier
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -35,9 +43,40 @@ class ScanRepository(private val context: Context) {
     internal val ocrStore: OcrStore
         get() = OcrStore(docsDir)
 
-    /** Process-wide lock for PDF regeneration — several ScanRepository instances exist at once. */
     companion object {
+        /** Process-wide lock for PDF regeneration — several ScanRepository instances exist at once. */
         val PDF_LOCK = Any()
+
+        /**
+         * Serialises new-scan save transactions and the abandoned-save reaper, so a
+         * cleanup can never race an active transaction (several ScanRepository
+         * instances exist at once, hence process-wide).
+         */
+        private val SAVE_LOCK = Mutex()
+
+        /** Serialises metadata read-modify-write cycles (no lost updates between instances). */
+        private val META_LOCK = Any()
+
+        /** A hidden save directory untouched for this long is considered abandoned. */
+        const val ABANDONED_SAVE_AGE_MS = 24L * 60 * 60 * 1000
+
+        private const val RESERVE_ATTEMPTS = 8
+        private const val SPACE_MARGIN_BYTES = 1L shl 20
+
+        /**
+         * Advisory free-space probe. `usableSpace` can over- or under-estimate (quota, reserved
+         * blocks, clearable cache), so it only gates an early, friendly failure — real ENOSPC is
+         * still handled by every write and fsync.
+         */
+        @android.annotation.SuppressLint("UsableSpace")
+        private fun probeUsableSpace(dir: File): Long = dir.usableSpace
+
+        /** Free-space probe (advisory only); replaceable in tests. */
+        @Volatile internal var usableSpace: (File) -> Long = ::probeUsableSpace
+
+        internal fun resetTestSeams() {
+            usableSpace = ::probeUsableSpace
+        }
     }
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
@@ -65,8 +104,12 @@ class ScanRepository(private val context: Context) {
         if (!dir.exists() || !dir.isDirectory) return null
         val meta = File(dir, "meta.txt")
         if (!meta.exists()) return null
-        val lines = meta.readLines()
+        val lines = try { meta.readLines() } catch (_: IOException) { return null }
         if (lines.isEmpty()) return null
+        // Visibility rule (WP-05): meta.txt is read FIRST, the marker SECOND. meta.txt is
+        // only ever written after the save's marker exists and its content is complete,
+        // so "meta present + marker absent" can only mean a published document.
+        if (SaveFormat.isIncomplete(dir)) return null
         val name = lines[0].ifBlank { "Untitled scan" }
         val createdAt = lines.getOrNull(1)?.toLongOrNull() ?: dir.lastModified()
         val category = lines.getOrNull(2)?.takeIf { CategoryRules.isValid(it) }
@@ -110,20 +153,39 @@ class ScanRepository(private val context: Context) {
      * guessed from the name unless one is given, so every document lands on
      * a globe ring without the user having to tag anything.
      */
-    private fun writeMeta(dir: File, name: String, category: String? = null) {
+    private fun writeMeta(dir: File, name: String, category: String? = null) = synchronized(META_LOCK) {
         val cat = category?.takeIf { CategoryRules.isValid(it) }
             ?: CategoryRules.classify(name)
-        // T4.8: a recorded `exports=` line (copies in Documents/ScanWhirl)
-        // survives a rewrite instead of being silently dropped.
-        val exports = File(dir, "meta.txt").takeIf { it.exists() }
-            ?.readLines()?.firstOrNull { it.startsWith(EXPORTS_KEY) }
-        File(dir, "meta.txt").writeText(buildString {
+        val meta = File(dir, "meta.txt")
+        // Everything after the three fixed lines (T4.8 `exports=` and any unknown
+        // lines written by other builds) survives a rewrite.
+        val extras = if (meta.exists()) meta.readLines().drop(3).dropLastWhile { it.isBlank() } else emptyList()
+        Durable.atomicWriteText(meta, buildString {
             append(name).append('\n')
             append(System.currentTimeMillis()).append('\n')
-            append(cat)
-            if (exports != null) append('\n').append(exports)
-            append('\n')
+            append(cat).append('\n')
+            extras.forEach { append(it).append('\n') }
         })
+    }
+
+    /**
+     * Atomic read-modify-write of meta.txt: the whole file is rewritten to a
+     * synced `.tmp` and renamed over the original, so a crash leaves either the
+     * old or the new content, never a torn file. Line 2 (createdAt), the
+     * category and unknown lines pass through untouched unless [change] edits them.
+     * Returns false when the document has no meta.txt.
+     */
+    private fun updateMeta(dir: File, change: (MutableList<String>) -> Unit): Boolean = synchronized(META_LOCK) {
+        val meta = File(dir, "meta.txt")
+        if (!meta.exists()) return false
+        val lines = meta.readLines().toMutableList()
+        change(lines)
+        Durable.atomicWriteText(meta, lines.joinToString("\n") + "\n")
+        true
+    }
+
+    private fun padMeta(lines: MutableList<String>) {
+        while (lines.size < 3) lines.add(if (lines.size == 1) "" else CategoryRules.OTHER)
     }
 
     /**
@@ -134,19 +196,17 @@ class ScanRepository(private val context: Context) {
      * the whole file line-by-line, so it survives those.
      */
     fun addExport(id: String, uri: Uri) {
-        val meta = File(File(docsDir, id), "meta.txt")
-        if (!meta.exists()) return
-        val lines = meta.readLines().toMutableList()
-        while (lines.size < 3) lines.add(CategoryRules.OTHER)
-        val entry = lines.indexOfFirst { it.startsWith(EXPORTS_KEY) }
-        val recorded = if (entry >= 0) {
-            lines[entry].removePrefix(EXPORTS_KEY).split("|").filter { it.isNotBlank() }
-        } else {
-            emptyList()
+        updateMeta(File(docsDir, id)) { lines ->
+            padMeta(lines)
+            val entry = lines.indexOfFirst { it.startsWith(EXPORTS_KEY) }
+            val recorded = if (entry >= 0) {
+                lines[entry].removePrefix(EXPORTS_KEY).split("|").filter { it.isNotBlank() }
+            } else {
+                emptyList()
+            }
+            val merged = (recorded + uri.toString()).distinct().joinToString("|")
+            if (entry >= 0) lines[entry] = EXPORTS_KEY + merged else lines.add(EXPORTS_KEY + merged)
         }
-        val merged = (recorded + uri.toString()).distinct().joinToString("|")
-        if (entry >= 0) lines[entry] = EXPORTS_KEY + merged else lines.add(EXPORTS_KEY + merged)
-        meta.writeText(lines.joinToString("\n"))
     }
 
     /** T4.8: PDF copies of this document recorded in Documents/ScanWhirl. */
@@ -166,12 +226,11 @@ class ScanRepository(private val context: Context) {
     fun setCategory(id: String, category: String): ScanDocument? {
         require(CategoryRules.isValid(category)) { "Unknown category: $category" }
         val dir = File(docsDir, id)
-        val meta = File(dir, "meta.txt")
-        if (!meta.exists()) return null
-        val lines = meta.readLines().toMutableList()
-        while (lines.size < 3) lines.add(CategoryRules.OTHER)
-        lines[2] = category
-        meta.writeText(lines.joinToString("\n"))
+        val changed = updateMeta(dir) { lines ->
+            padMeta(lines)
+            lines[2] = category
+        }
+        if (!changed) return null
         return loadDocument(dir)
     }
 
@@ -183,84 +242,290 @@ class ScanRepository(private val context: Context) {
         ids.forEach { id -> setCategory(id, category) }
     }
 
+    /**
+     * Transactional new-scan save (WP-05). A scan becomes a visible document only
+     * when ALL pages, a structurally verified PDF and consistent metadata exist.
+     *
+     * State machine (see [SaveFormat]):
+     *
+     *   journaled → reserved (exclusive `mkdir`) → marked (`.incomplete`) → pages →
+     *   pdf → txn.txt → meta.txt → verified → **published (unlink `.incomplete`)**
+     *
+     * The unlink is the single commit point. Before it nothing is visible to any
+     * reader; after it nothing is ever deleted by this call. Existing directories
+     * are never replaced: `mkdir` fails on any existing path, including an empty one.
+     *
+     * [reviewDir] is the review staging folder. When given, a stable token and the
+     * chosen target id are persisted there BEFORE anything is reserved, so a retry
+     * after process death reuses the same identity and recognises an already
+     * committed document instead of creating a duplicate. The staging pages are only
+     * read, never modified or deleted — the caller deletes them after this returns.
+     *
+     * [pdfUri] is retained for source compatibility and is ignored: a foreign PDF
+     * cannot be tied to the saved pages, so the PDF is always generated from them.
+     */
     suspend fun saveScan(
         imageUris: List<Uri>,
-        pdfUri: Uri?,
+        @Suppress("UNUSED_PARAMETER") pdfUri: Uri?,
         suggestedName: String?,
         filter: ScanFilter = ScanFilter.ORIGINAL,
         pageFilters: Map<Int, ScanFilter>? = null,
-        category: String? = null
+        category: String? = null,
+        reviewDir: File? = null
     ): ScanDocument = withContext(Dispatchers.IO) {
         require(imageUris.isNotEmpty()) { "Choose at least one PNG, JPEG or WebP image." }
+        SAVE_LOCK.withLock {
+            runSaveTransaction(imageUris, suggestedName, filter, pageFilters, category, reviewDir)
+        }
+    }
+
+    private suspend fun runSaveTransaction(
+        imageUris: List<Uri>,
+        suggestedName: String?,
+        filter: ScanFilter,
+        pageFilters: Map<Int, ScanFilter>?,
+        category: String?,
+        reviewDir: File?
+    ): ScanDocument {
         val effective: (Int) -> ScanFilter = { i -> pageFilters?.get(i) ?: filter }
-        // Image-only preflight: reject bad inputs before creating a document.
-        // Scratch files bound memory and avoid reopening a possibly one-shot provider.
-        // This is NOT a document transaction: PDF/metadata publication remains WP-05.
-        val prepared = mutableListOf<File>()
-        var pagesUnchanged = true
+
+        // 1. Identity: token + target id are durable BEFORE any directory is reserved.
+        val journal = reviewDir?.let { SaveFormat.loadJournal(it) }
+            ?: SaveFormat.Journal(SaveFormat.newToken(), SaveFormat.newDocId())
+                .also { fresh -> reviewDir?.let { SaveFormat.persistJournal(it, fresh) } }
+        SaveFaults.at("journaled")
+        checkFreeSpace(imageUris)
+
+        // 2. Exclusive reservation. Never replaces, deletes or repurposes a foreign directory.
+        var owned: File? = null
+        var attempts = 0
+        var target = journal.target
+        while (owned == null) {
+            currentCoroutineContext().ensureActive()
+            val candidate = File(docsDir, target)
+            if (candidate.mkdir()) {
+                owned = candidate
+                break
+            }
+            if (!candidate.exists()) throw IOException("Could not create a new document. Try saving again.")
+            when (classifyExisting(candidate, journal.token, imageUris.size)) {
+                Existing.COMMITTED -> {
+                    // Replay of a save that already published: same document, no duplicate.
+                    val doc = loadDocument(candidate)
+                        ?: throw IllegalStateException("Saved document could not be reopened")
+                    markPendingAfterPublish(doc)
+                    return doc
+                }
+                Existing.OWNED_INCOMPLETE -> {
+                    // Our own abandoned attempt (marker carries our token): safe to rebuild.
+                    candidate.deleteRecursively()
+                    if (!candidate.exists() && candidate.mkdir()) {
+                        owned = candidate
+                        break
+                    }
+                }
+                Existing.FOREIGN -> Unit // never touched
+            }
+            if (++attempts >= RESERVE_ATTEMPTS) {
+                throw IOException("Could not reserve a new document. Try saving again.")
+            }
+            // Genuine collision: persist the new target BEFORE retrying.
+            target = SaveFormat.newDocId()
+            journal.target = target
+            reviewDir?.let { SaveFormat.persistJournal(it, journal) }
+        }
+        SaveFaults.at("reserved")
+        val dir: File = checkNotNull(owned)
+
+        // 3. Build everything inside the hidden directory. Any ordinary failure or
+        //    cancellation removes only this directory (positively owned via its token).
         try {
+            SaveFormat.createMarker(dir, journal.token, System.currentTimeMillis())
+            Durable.syncDir(dir)
+            Durable.syncDir(docsDir) // best effort: see Durable
+            SaveFaults.at("marked")
+
+            val pageFiles = ArrayList<File>(imageUris.size)
             imageUris.forEachIndexed { index, uri ->
-                try {
+                currentCoroutineContext().ensureActive()
+                val normalized = try {
                     val bytes = context.contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
                         ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
-                    val normalized = ImageTools.normalizePage(bytes, effective(index))
-                    if (normalized !== bytes) pagesUnchanged = false
-                    val scratch = File.createTempFile("normalized_page_", ".jpg", context.cacheDir)
-                    prepared.add(scratch)
-                    scratch.writeBytes(normalized)
+                    ImageTools.normalizePage(bytes, effective(index))
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     throw IllegalArgumentException("Page ${index + 1}: ${e.message}", e)
                 }
+                val file = File(dir, String.format(Locale.ROOT, PAGE_FORMAT, index))
+                Durable.writeFile(file, normalized)
+                if (file.length() != normalized.size.toLong()) {
+                    throw IOException("Page ${index + 1} was not written completely")
+                }
+                pageFiles.add(file)
+                SaveFaults.at("page:$index")
             }
+            Durable.syncDir(dir)
 
-            val id = UUID.randomUUID().toString().take(8)
-            val dir = File(docsDir, id)
-            check(dir.mkdir()) { "Could not create a new document. Try saving again." }
-            val pageFiles = prepared.mapIndexed { index, scratch ->
-                scratch.copyTo(File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index)))
-            }
-
+            currentCoroutineContext().ensureActive()
             val pdfFile = File(dir, "scan.pdf")
-            // Filters, conversion, sampling and EXIF transforms invalidate PDF reuse.
-            if (pdfUri != null && pagesUnchanged) {
-                try {
-                    context.contentResolver.openInputStream(pdfUri)?.use { input ->
-                        FileOutputStream(pdfFile).use { output -> input.copyTo(output) }
-                    }
-                    if (pdfFile.length() == 0L) pdfFile.delete()
-                } catch (_: Exception) {
-                    pdfFile.delete()
-                }
-            }
+            // Throws (never swallowed) when the PDF cannot be written, synced or verified.
+            PdfGenerator.imagesToPdf(pageFiles, pdfFile)
+            SaveFaults.at("pdf")
 
-            if (!pdfFile.exists() || pdfFile.length() == 0L) {
-                try {
-                    regeneratePdf(dir)
-                } catch (_: Exception) {
-                    pdfFile.delete()
-                }
-            }
+            val txn = SaveFormat.Txn(
+                token = journal.token,
+                pages = pageFiles.size,
+                pagesSha256 = SaveFormat.pagesDigest(pageFiles),
+                pdfSha256 = Sha256.of(pdfFile),
+                pdfBytes = pdfFile.length()
+            )
+            Durable.atomicWriteText(File(dir, SaveFormat.TXN), txn.serialize())
+            SaveFaults.at("txn")
 
             val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
                 ?: nextDocumentName()
+            writeMeta(dir, name, category) // atomic + synced; written LAST (content is complete)
+            SaveFaults.at("meta")
+            Durable.syncDir(dir)
 
-            writeMeta(dir, name, category)
+            verifyPrepared(dir, txn)
+            SaveFaults.at("verified")
+            SaveFaults.at("before_publish")
+        } catch (e: Exception) {
+            discardOwned(dir, journal.token)
+            throw e
+        }
 
-            val pages = dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
-                ?.sortedBy { it.nameWithoutExtension }
-                ?.toList()
-                ?: pageFiles
+        // 4. COMMIT: one atomic unlink. Nothing below ever deletes the document.
+        if (!File(dir, SaveFormat.MARKER).delete()) {
+            discardOwned(dir, journal.token)
+            throw IOException("Could not publish the new document. Try saving again.")
+        }
+        Durable.syncDir(dir)
+        Durable.syncDir(docsDir) // best effort; durability of the entry itself is not guaranteed
+        SaveFaults.at("after_publish")
 
-            ScanDocument(
-                id = id,
-                name = name,
-                createdAt = System.currentTimeMillis(),
-                pageCount = pages.size,
-                pdfFile = pdfFile,
-                pageFiles = pages
-            ).also { ocrStore.markPending(id) }
-        } finally {
-            prepared.forEach { it.delete() } // Only this invocation's owned scratch files.
+        val doc = loadDocument(dir) ?: throw IllegalStateException("Saved document could not be reopened")
+        markPendingAfterPublish(doc)
+        return doc
+    }
+
+    private enum class Existing { COMMITTED, OWNED_INCOMPLETE, FOREIGN }
+
+    /** What already sits at a path `mkdir` refused: ours (committed / abandoned) or somebody else's. */
+    private fun classifyExisting(dir: File, token: String, expectedPages: Int): Existing {
+        val owner = SaveFormat.ownerOf(dir)
+        if (owner != null) {
+            return if (owner.token == token) Existing.OWNED_INCOMPLETE else Existing.FOREIGN
+        }
+        if (SaveFormat.isIncomplete(dir)) return Existing.FOREIGN // marker we cannot prove is ours
+        return if (isVerifiedCommit(dir, token, expectedPages)) Existing.COMMITTED else Existing.FOREIGN
+    }
+
+    /**
+     * True only when [dir] is a published document produced by transaction [token]:
+     * provenance token matches, page count and ordered page digest match, and the PDF
+     * is either byte-identical to the recorded hash or (after legitimate regeneration,
+     * e.g. a text layer added by indexing) still passes structural verification with
+     * the same page count.
+     */
+    private fun isVerifiedCommit(dir: File, token: String, expectedPages: Int?): Boolean {
+        val txn = SaveFormat.readTxn(dir) ?: return false
+        if (txn.token != token) return false
+        if (!File(dir, "meta.txt").isFile) return false
+        val pages = pageFilesIn(dir)
+        if (pages.size != txn.pages) return false
+        if (expectedPages != null && pages.size != expectedPages) return false
+        if (SaveFormat.pagesDigest(pages) != txn.pagesSha256) return false
+        val pdf = File(dir, "scan.pdf")
+        if (!pdf.isFile) return false
+        return try {
+            if (pdf.length() == txn.pdfBytes && Sha256.of(pdf) == txn.pdfSha256) {
+                true
+            } else {
+                PdfVerifier.verify(pdf, expectedPages = txn.pages)
+                true
+            }
+        } catch (_: IOException) {
+            false
+        }
+    }
+
+    /**
+     * The verified committed document a review staging folder already produced, if
+     * any — used to offer "Open saved document" instead of saving a second copy.
+     * Read-only; never deletes anything.
+     */
+    fun committedDocumentFor(reviewDir: File): ScanDocument? {
+        val journal = SaveFormat.loadJournal(reviewDir) ?: return null
+        val dir = File(docsDir, journal.target)
+        if (!dir.isDirectory || SaveFormat.isIncomplete(dir)) return null
+        val staged = reviewDir.listFiles { f -> f.extension.equals("jpg", true) }?.size ?: return null
+        return if (isVerifiedCommit(dir, journal.token, staged)) loadDocument(dir) else null
+    }
+
+    /** Independent re-read of the prepared (still hidden) document before it may be published. */
+    private fun verifyPrepared(dir: File, txn: SaveFormat.Txn) {
+        val pages = pageFilesIn(dir)
+        if (pages.size != txn.pages) throw IOException("Saved page count ${pages.size} != ${txn.pages}")
+        pages.forEachIndexed { i, f ->
+            if (f.name != String.format(Locale.ROOT, PAGE_FORMAT, i)) throw IOException("Page order check failed")
+        }
+        if (SaveFormat.pagesDigest(pages) != txn.pagesSha256) throw IOException("Saved pages do not match what was written")
+        val pdf = File(dir, "scan.pdf")
+        PdfVerifier.verify(pdf, expectedImages = pages)
+        if (Sha256.of(pdf) != txn.pdfSha256) throw IOException("Saved PDF changed after it was written")
+        val meta = File(dir, "meta.txt").readLines()
+        if (meta.size < 3 || meta[0].isBlank() || meta[1].toLongOrNull() == null) throw IOException("Metadata check failed")
+        if (SaveFormat.readTxn(dir)?.token != txn.token) throw IOException("Provenance check failed")
+    }
+
+    /** Removes [dir] only if it is still a hidden directory this transaction owns. */
+    private fun discardOwned(dir: File, token: String) {
+        if (SaveFormat.ownerOf(dir)?.token == token) dir.deleteRecursively()
+    }
+
+    /** OCR/indexing is queued only after a verified publish and can never undo or fail the save. */
+    private fun markPendingAfterPublish(doc: ScanDocument) {
+        try {
+            if (!File(doc.pdfFile.parentFile, "ocr.txt").exists()) ocrStore.markPending(doc.id)
+        } catch (_: Exception) {
+            // The indexer backfill finds the document later; the saved PDF stays valid.
+        }
+    }
+
+    /** Advisory: the extra bytes this save writes (pages + PDF ≈ 2x the staged pages). */
+    private fun checkFreeSpace(imageUris: List<Uri>) {
+        val sources = imageUris.sumOf { uri ->
+            if (uri.scheme == "file") uri.path?.let { File(it).length() } ?: 0L else 0L
+        }
+        if (sources <= 0L) return // content:// sizes are unknown; real ENOSPC is still handled
+        val needed = sources * 2 + SPACE_MARGIN_BYTES
+        if (usableSpace(docsDir) < needed) {
+            throw IOException("Not enough storage space to save this scan. Free some space and try again.")
+        }
+    }
+
+    /**
+     * Deletes hidden save directories that were abandoned (marker older than
+     * [minAgeMs], e.g. after a process death with the review staging discarded).
+     * Only directories whose marker proves they belong to a save transaction are
+     * touched; published documents, legacy documents, unknown directories and review
+     * staging are never swept. Takes the same lock as [saveScan], so it cannot run
+     * against an active transaction.
+     */
+    suspend fun reapAbandonedSaves(
+        minAgeMs: Long = ABANDONED_SAVE_AGE_MS,
+        now: Long = System.currentTimeMillis()
+    ): Int = withContext(Dispatchers.IO) {
+        SAVE_LOCK.withLock {
+            var removed = 0
+            docsDir.listFiles { f -> f.isDirectory }?.forEach { dir ->
+                val owner = SaveFormat.ownerOf(dir) ?: return@forEach
+                if (now - owner.startedAt >= minAgeMs && dir.deleteRecursively()) removed++
+            }
+            removed
         }
     }
 
@@ -270,13 +535,10 @@ class ScanRepository(private val context: Context) {
     }
 
     fun renameDocument(id: String, newName: String) {
-        val dir = File(docsDir, id)
-        val meta = File(dir, "meta.txt")
-        if (!meta.exists()) return
-        val lines = meta.readLines().toMutableList()
-        while (lines.size < 2) lines.add("")
-        lines[0] = newName.trim().ifBlank { lines[0] }
-        meta.writeText(lines.joinToString("\n"))
+        updateMeta(File(docsDir, id)) { lines ->
+            while (lines.size < 2) lines.add("")
+            lines[0] = newName.trim().replace('\n', ' ').ifBlank { lines[0] }
+        }
     }
 
     /** Copies a document (pages + PDF) into a brand-new one. Used by "Save as new". */
@@ -901,7 +1163,7 @@ class ScanRepository(private val context: Context) {
      *  if that name is already taken by a document that was explicitly
      *  renamed to "Document N", making it collision-proof in all cases. */
     fun nextDocumentName(): String {
-        val docDirs = docsDir.listFiles { f -> f.isDirectory } ?: emptyArray()
+        val docDirs = docsDir.listFiles { f -> f.isDirectory && !SaveFormat.isIncomplete(f) } ?: emptyArray()
         val existingNames = docDirs.mapNotNull { dir ->
             val meta = File(dir, "meta.txt")
             if (meta.exists()) meta.readLines().firstOrNull() else null

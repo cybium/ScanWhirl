@@ -357,6 +357,9 @@ class MainActivity : BaseActivity(), HomeHost {
         }
         stale?.forEach { it.deleteRecursively() }
         scanLauncher.offerUnfinishedScan()
+        // Abandoned, never-published save directories (hidden by their .incomplete marker and
+        // older than a day) are reclaimed; published, legacy and unknown directories never are.
+        lifecycleScope.launch { runCatching { repo.reapAbandonedSaves() } }
 
         updateSelectionHeader()
         refreshList()
@@ -447,7 +450,7 @@ class MainActivity : BaseActivity(), HomeHost {
         // then resume the indexer, unless the device is in power-save mode.
         if (!Prefs.indexBackfillDone(this) && !isPowerSaveMode()) {
             val docsDir = app.repository.docsDir
-            docsDir.listFiles { f -> f.isDirectory }
+            docsDir.listFiles { f -> f.isDirectory && !com.scanwhirl.app.store.SaveFormat.isIncomplete(f) }
                 ?.forEach { dir ->
                     if (!File(dir, "ocr.txt").exists()) {
                         app.repository.ocrStore.markPending(dir.name)

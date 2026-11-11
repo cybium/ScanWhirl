@@ -349,10 +349,15 @@ class OcrStore(private val docsDir: File) {
     // Pending marker
     // ------------------------------------------------------------------
 
+    /**
+     * Marks an EXISTING, visible document for indexing. It never creates a
+     * directory and never touches a directory a save transaction still owns
+     * (`.incomplete`), so it cannot resurrect a deleted or unpublished document.
+     */
     fun markPending(id: String) {
         lock.withLock {
             val dir = docDir(id)
-            dir.mkdirs()
+            if (!dir.isDirectory || SaveFormat.isIncomplete(dir)) return
             File(dir, PENDING_FILE).writeText("")
         }
     }

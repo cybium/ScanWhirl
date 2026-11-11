@@ -81,7 +81,7 @@ class OcrIndexer(
     /** Re-enqueues every document directory that carries an `ocr_pending` marker, newest first. */
     fun resumePending() {
         val pending = docsDir.listFiles { f ->
-            f.isDirectory && File(f, "ocr_pending").exists()
+            f.isDirectory && !SaveFormat.isIncomplete(f) && File(f, "ocr_pending").exists()
         }
             ?.sortedByDescending { it.lastModified() }
             ?.mapNotNull { it.name }

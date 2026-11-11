@@ -139,6 +139,10 @@
     <string name="resume_scan_title">Resume unsaved scan?</string>
     <string name="resume_scan_msg">You have %1$d unsaved page(s) from last time. Resume, or delete them?</string>
     <string name="resume_scan_resume">Resume</string>
+    <string name="resume_saved_title">Scan already saved</string>
+    <string name="resume_saved_msg">This scan was already saved as \"%1$s\", but the screen closed before it finished. Open the saved document, or remove the leftover pages.</string>
+    <string name="resume_saved_open">Open saved document</string>
+    <string name="resume_saved_remove">Remove leftover pages</string>
 
     <string name="rename">Rename</string>
     <string name="rename_title">Rename document</string>

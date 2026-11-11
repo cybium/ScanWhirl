@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
+import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 
 /** Saves page images into the user's own Downloads/ScanWhirl folder. */
@@ -121,11 +122,22 @@ object DownloadSaver {
      * is created instead. Pre-Q overwrites the File when it exists.
      * Throws on missing storage permission / unavailable storage.
      */
-    fun savePdfFile(context: Context, bytes: ByteArray, displayName: String): SavedFile {
+    fun savePdfFile(context: Context, bytes: ByteArray, displayName: String): SavedFile =
+        savePdfFile(context, { out -> out.write(bytes) }, displayName)
+
+    /**
+     * Streams [source] into Documents/ScanWhirl in bounded chunks — the PDF is never
+     * loaded into memory and [source] is only ever opened for reading, so a failed
+     * export cannot touch the saved original.
+     */
+    fun savePdfFile(context: Context, source: File, displayName: String): SavedFile =
+        savePdfFile(context, { out -> source.inputStream().use { it.copyTo(out, 64 * 1024) } }, displayName)
+
+    private fun savePdfFile(context: Context, write: (OutputStream) -> Unit, displayName: String): SavedFile {
         if (Build.VERSION.SDK_INT >= 29) {
-            return savePdfQ(context, bytes, displayName, "application/pdf")
+            return savePdfQ(context, write, displayName, "application/pdf")
         }
-        return savePdfPreQ(bytes, displayName, "application/pdf")
+        return savePdfPreQ(write, displayName, "application/pdf")
     }
 
     /**
@@ -135,10 +147,12 @@ object DownloadSaver {
      */
     fun saveText(context: Context, text: String, displayName: String): SavedFile {
         val name = sanitize(displayName).removeSuffix(".txt") + ".txt"
+        val bytes = text.toByteArray(StandardCharsets.UTF_8)
+        val write: (OutputStream) -> Unit = { out -> out.write(bytes) }
         if (Build.VERSION.SDK_INT >= 29) {
-            return savePdfQ(context, text.toByteArray(StandardCharsets.UTF_8), name, "text/plain")
+            return savePdfQ(context, write, name, "text/plain")
         }
-        return savePdfPreQ(text.toByteArray(StandardCharsets.UTF_8), name, "text/plain")
+        return savePdfPreQ(write, name, "text/plain")
     }
 
     /**
@@ -206,7 +220,7 @@ object DownloadSaver {
     }
 
     @androidx.annotation.RequiresApi(29)
-    private fun savePdfQ(context: Context, bytes: ByteArray, displayName: String, mime: String): SavedFile {
+    private fun savePdfQ(context: Context, write: (OutputStream) -> Unit, displayName: String, mime: String): SavedFile {
         val resolver = context.contentResolver
         val collection = MediaStore.Files.getContentUri("external")
         val relPath = Environment.DIRECTORY_DOCUMENTS + "/" + SUBDIR
@@ -222,7 +236,7 @@ object DownloadSaver {
         if (existingId != null) {
             val existingUri = ContentUris.withAppendedId(collection, existingId)
             try {
-                resolver.openOutputStream(existingUri, "wt")?.use { it.write(bytes) }
+                resolver.openOutputStream(existingUri, "wt")?.use(write)
                     ?: throw IllegalStateException("Could not open output stream")
                 return SavedFile(existingUri, displayName)
             } catch (_: Exception) {
@@ -249,7 +263,7 @@ object DownloadSaver {
         val uri: Uri = resolver.insert(collection, values)
             ?: throw IllegalStateException("Could not create document entry")
         try {
-            resolver.openOutputStream(uri)?.use { it.write(bytes) }
+            resolver.openOutputStream(uri)?.use(write)
                 ?: throw IllegalStateException("Could not open output stream")
         } catch (e: Exception) {
             resolver.delete(uri, null, null)
@@ -262,7 +276,7 @@ object DownloadSaver {
     }
 
     @Suppress("DEPRECATION")
-    private fun savePdfPreQ(bytes: ByteArray, displayName: String, mime: String): SavedFile {
+    private fun savePdfPreQ(write: (OutputStream) -> Unit, displayName: String, mime: String): SavedFile {
         if (Environment.getExternalStorageState() != Environment.MEDIA_MOUNTED) {
             throw IllegalStateException("Storage unavailable")
         }
@@ -272,7 +286,17 @@ object DownloadSaver {
         ).apply { mkdirs() }
         // T4.7: overwrite the file when it already exists (replace, not duplicate).
         val file = File(dir, displayName)
-        file.writeBytes(bytes)
+        // Written beside the target and renamed, so a failure never leaves a partial copy.
+        val part = File(dir, "$displayName.part")
+        try {
+            part.outputStream().use(write)
+            if (!part.renameTo(file)) {
+                throw java.io.IOException("Could not finish saving $displayName")
+            }
+        } catch (e: Exception) {
+            part.delete()
+            throw e
+        }
         return SavedFile(Uri.fromFile(file), displayName)
     }
 }

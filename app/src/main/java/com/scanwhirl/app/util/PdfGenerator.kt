@@ -3,6 +3,7 @@ package com.scanwhirl.app.util
 import com.scanwhirl.app.model.OcrPage
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -11,8 +12,9 @@ import kotlin.math.roundToInt
  * Pure Kotlin: no android.graphics.pdf (native, untestable off-device),
  * and lossless — JPEG bytes are embedded as-is, never re-encoded.
  *
- * Task 11: streaming (one page at a time), atomic output via `.tmp` + rename,
- * optional invisible text layer, and a cheap `verifyPdf`.
+ * Streaming (one page at a time), atomic output via `.tmp` + fsync + rename,
+ * optional invisible text layer, and bounded structural verification by
+ * [PdfVerifier] before the output is ever published.
  */
 object PdfGenerator {
 
@@ -55,9 +57,13 @@ object PdfGenerator {
      *
      * Streaming: each page JPEG is read, written, and dropped before the next
      * page is processed — no whole-image list is held in memory.
-     * Atomicity: output goes to `<outFile>.tmp`; after successful verification
-     * it is renamed over `outFile` (copy-then-delete fallback). On failure the
-     * `.tmp` is deleted and an existing `outFile` is left untouched.
+     * Atomicity: output goes to `<outFile>.tmp`, is fsynced, structurally verified
+     * against [images] by [PdfVerifier], and only then renamed over `outFile`.
+     * There is no copy fallback: if the rename fails the call fails. On any failure
+     * the `.tmp` is deleted and an existing `outFile` is left untouched.
+     *
+     * @throws java.io.IOException (incl. [Durable.SyncException], [PdfVerifier.InvalidPdfException])
+     *   when the PDF cannot be written, synced or verified.
      */
     fun imagesToPdf(
         images: List<File>,
@@ -132,9 +138,12 @@ object PdfGenerator {
                             layeredPages.add(i)
                             append(PdfTextLayer.contentFor(layer, pageW, pageH))
                         }
-                    }
+                    }.toByteArray(Charsets.ISO_8859_1)
                     offsets[contentObj] = position
-                    w("$contentObj 0 obj\n<< /Length ${content.length} >>\nstream\n${content}endstream\nendobj\n")
+                    // /Length is the encoded byte count, never the character count.
+                    w("$contentObj 0 obj\n<< /Length ${content.size} >>\nstream\n")
+                    w(content)
+                    w("endstream\nendobj\n")
 
                     val colorSpace = if (info.components == 1) "/DeviceGray" else "/DeviceRGB"
                     offsets[imageObj] = position
@@ -154,40 +163,21 @@ object PdfGenerator {
                 }
                 w(xref.toString())
                 w("trailer\n<< /Size ${total + 1} /Root 1 0 R >>\nstartxref\n$xrefOffset\n%%EOF\n")
+                Durable.syncStream(out, tmp)
             }
 
-            verifyPdf(tmp, images.size)
+            PdfVerifier.verify(tmp, expectedImages = images)
 
-            // Atomic publish: rename tmp over outFile (fall back to copy-then-delete).
+            // Atomic publish: file rename replaces outFile atomically. No fallback copy.
             if (!tmp.renameTo(outFile)) {
-                outFile.writeBytes(tmp.readBytes())
-                tmp.delete()
+                throw IOException("Could not publish ${outFile.name}")
             }
+            outFile.parentFile?.let { Durable.syncDir(it) } // best effort; see Durable
 
             return layeredPages
         } catch (e: Exception) {
             tmp.delete()
             throw e
         }
-    }
-
-    /**
-     * Cheap validity check: first 4 KiB for `%PDF-` and `/Count n`, last 2 KiB
-     * for `%%EOF\n` and `startxref`. Never reads the whole file.
-     */
-    private fun verifyPdf(file: File, expectedPages: Int) {
-        require(file.length() > 0L) { "PDF write produced empty file" }
-        val all = file.readBytes()
-        val size = all.size
-        val headLen = minOf(4096, size)
-        val tailStart = maxOf(0, size - 2048)
-        val headText = String(all.copyOfRange(0, headLen), Charsets.ISO_8859_1)
-        require(headText.startsWith("%PDF-")) { "Not a PDF" }
-        val count = Regex("/Count (\\d+)").find(headText)?.groupValues?.get(1)?.toIntOrNull()
-        require(count == expectedPages) { "Page count mismatch: $count != $expectedPages" }
-
-        val tailText = String(all.copyOfRange(tailStart, size), Charsets.ISO_8859_1)
-        require(tailText.endsWith("%%EOF\n")) { "PDF not terminated" }
-        require(Regex("startxref\\n(\\d+)").find(tailText) != null) { "Missing startxref" }
     }
 }

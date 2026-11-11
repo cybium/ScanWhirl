@@ -257,10 +257,16 @@ class ImageImportPipelineTest {
         }
         assertTrue(repo.listDocuments().isEmpty())
         assertOriginals(bytes)
-        assertTrue(app.cacheDir.walkTopDown().none { it.name.startsWith("page_") && it.extension == "jpg" })
+        assertEquals(0, stagedPageCount())
     }
 
-    private fun pendingDirs() = app.cacheDir.listFiles { f -> f.isDirectory && f.name.startsWith("pending_") }!!.map { it.name }.toSet()
+    /** Every review session, in the durable root AND the legacy cache location. */
+    private fun pendingDirs() = listOf(File(app.filesDir, "pending_scans"), app.cacheDir)
+        .flatMap { parent -> parent.listFiles { f -> f.isDirectory && f.name.startsWith("pending_") }?.toList().orEmpty() }
+        .map { it.name }.toSet()
+
+    private fun stagedPageCount() = listOf(File(app.filesDir, "pending_scans"), app.cacheDir)
+        .sumOf { root -> root.walkTopDown().count { it.name.startsWith("page_") && it.extension == "jpg" } }
 
     @Test fun `failed second image removes its new staging folder reports Page 2 and leaves no resume offer`() {
         Prefs.setAutoCopyToDocuments(app, false)
@@ -277,10 +283,9 @@ class ImageImportPipelineTest {
                 assertNull(shadowOf(activity).nextStartedActivity)
                 // No ghost: nothing for the next launch to offer as an unfinished scan.
                 assertTrue(pendingDirs().isEmpty())
-                assertEquals(0, app.cacheDir.walkTopDown().count { it.name.startsWith("page_") && it.extension == "jpg" })
-                val dialogBefore = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
-                ScanLauncher(activity, repo, activity) {}.offerUnfinishedScan()
-                assertSame(dialogBefore, org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog())
+                assertEquals(0, stagedPageCount())
+                // Deterministic (not timing-dependent): the launcher finds nothing to offer.
+                assertNull(ScanLauncher(activity, repo, activity) {}.findUnfinished())
             }
         }
         assertTrue(repo.listDocuments().isEmpty())
@@ -303,24 +308,27 @@ class ImageImportPipelineTest {
         assertOriginals(bytes)
     }
 
-    @Test fun `scanner PDF reuse requires unchanged normalized JPEG pages`() = runBlocking {
+    @Test fun `supplied scanner PDF is never copied and the saved PDF is generated and verified`() = runBlocking {
         val source = File(tmp.root, "scanner.jpg").apply { writeBytes(ImportFixtures.image()) }
         val scannerPdf = File(tmp.root, "scanner.pdf")
         PdfGenerator.imagesToPdf(listOf(source), scannerPdf)
         scannerPdf.appendText("scanner sentinel")
         val pdfBefore = scannerPdf.readBytes()
-        val unchanged = repo.saveScan(listOf(Uri.fromFile(source)), Uri.fromFile(scannerPdf), "Unchanged")
-        assertArrayEquals(pdfBefore, unchanged.pdfFile.readBytes())
         val png = File(tmp.root, "png.jpg").apply { writeBytes(ImportFixtures.image(Bitmap.CompressFormat.PNG)) }
         val rotated = File(tmp.root, "rotated.jpg")
         ImportFixtures.oriented(rotated, 6)
-        for (file in listOf(png, rotated)) {
-            val doc = repo.saveScan(listOf(Uri.fromFile(file)), Uri.fromFile(scannerPdf), "Changed")
-            assertFalse(pdfBefore.contentEquals(doc.pdfFile.readBytes()))
+        for ((name, file, filter) in listOf(
+            Triple("Unchanged", source, ScanFilter.ORIGINAL),
+            Triple("Png", png, ScanFilter.ORIGINAL),
+            Triple("Rotated", rotated, ScanFilter.ORIGINAL),
+            Triple("Filtered", source, ScanFilter.ENHANCE)
+        )) {
+            val doc = repo.saveScan(listOf(Uri.fromFile(file)), Uri.fromFile(scannerPdf), name, filter)
+            assertFalse(name, pdfBefore.contentEquals(doc.pdfFile.readBytes()))
+            assertFalse(name, doc.pdfFile.readText(Charsets.ISO_8859_1).contains("scanner sentinel"))
             assertTrue(doc.pdfFile.readText(Charsets.ISO_8859_1).endsWith("%%EOF\n"))
+            PdfVerifier.verify(doc.pdfFile, expectedImages = doc.pageFiles)
         }
-        val filtered = repo.saveScan(listOf(Uri.fromFile(source)), Uri.fromFile(scannerPdf), "Filtered", ScanFilter.ENHANCE)
-        assertFalse(pdfBefore.contentEquals(filtered.pdfFile.readBytes()))
         assertArrayEquals(pdfBefore, scannerPdf.readBytes())
     }
 

@@ -33,6 +33,7 @@ import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ScanFilter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -547,37 +548,52 @@ class ScanReviewActivity : BaseActivity() {
                     val perPage = pages.mapIndexed { i, f ->
                         i to (filters[f.path] ?: ScanFilter.ORIGINAL)
                     }.toMap()
+                    // Transactional (WP-05): returns only once the document is published and
+                    // verified. The staging folder carries the stable transaction identity, so
+                    // a retry after process death resumes this save instead of duplicating it.
+                    // The staging pages stay untouched until the verified document is in hand.
                     val doc = repo.saveScan(
                         uris,
-                        if (structureChanged) null else pdfFile?.let { Uri.fromFile(it) },
+                        null,
                         currentTitle(),
                         pageFilters = perPage,
-                        category = chosenCategory
+                        category = chosenCategory,
+                        reviewDir = stagingDir
                     )
                     saved = true
 
                     // T4.7 (N10): only place a copy in Documents/ScanWhirl when the
-                    // owner opted in — no more silent copies on every save.
+                    // owner opted in — no more silent copies on every save. Streamed from
+                    // the saved PDF (never loaded whole); the original is only read.
                     var exported: String? = null
                     if (Prefs.autoCopyToDocuments(this@ScanReviewActivity) &&
                         doc.pdfFile.exists() && doc.pdfFile.length() > 0
                     ) {
                         try {
                             exported = withContext(Dispatchers.IO) {
-                                DownloadSaver.savePdfFile(
+                                val copy = DownloadSaver.savePdfFile(
                                     this@ScanReviewActivity,
-                                    doc.pdfFile.readBytes(),
+                                    doc.pdfFile,
                                     DownloadSaver.pdfNameFor(doc.name)
-                                ).also {
-                                    // T4.8: remember the copy so delete can remove it.
-                                    repo.addExport(doc.id, it.uri)
-                                }.name
+                                )
+                                // T4.8: remember the copy so delete can remove it. A failure to
+                                // record it must not turn a finished export into a failed one.
+                                try {
+                                    repo.addExport(doc.id, copy.uri)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (_: Exception) {
+                                }
+                                copy.name
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             exported = null
                         }
                     }
 
+                    // Verified committed document in hand: only now is the staging source released.
                     stagingDir.deleteRecursively()
                     progress.dismiss()
                     val message = if (exported != null) {
@@ -588,8 +604,14 @@ class ScanReviewActivity : BaseActivity() {
                     Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
                     startActivity(DocumentViewerActivity.intent(this@ScanReviewActivity, doc.id))
                     // Index the pages for text search in the background (Free, survives screen close).
+                    // Indexing failure can never invalidate the saved PDF.
                     ScanWhirlApp.from(this@ScanReviewActivity).indexer.enqueue(doc.id)
                     finish()
+                } catch (e: CancellationException) {
+                    // Not a failed save: the transaction already cleaned up (or had committed).
+                    saving = false
+                    progress.dismiss()
+                    throw e
                 } catch (e: Exception) {
                     saving = false
                     progress.dismiss()

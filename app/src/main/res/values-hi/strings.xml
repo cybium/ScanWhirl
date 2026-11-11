@@ -320,6 +320,10 @@
     <string name="result_title"><!-- review -->Result</string>
     <string name="resume_scan_msg"><!-- review -->You have %1$d unsaved पृष्ठ(s) से अंतिम time. Resume, or हटाएं them?</string>
     <string name="resume_scan_resume"><!-- review -->Resume</string>
+    <string name="resume_saved_title"><!-- review -->स्कैन पहले ही सहेजा जा चुका है</string>
+    <string name="resume_saved_msg"><!-- review -->यह स्कैन \"%1$s\" के रूप में पहले ही सहेजा जा चुका है, लेकिन स्क्रीन पूरी होने से पहले बंद हो गई। सहेजा हुआ दस्तावेज़ खोलें, या बचे हुए पृष्ठ हटा दें।</string>
+    <string name="resume_saved_open"><!-- review -->सहेजा हुआ दस्तावेज़ खोलें</string>
+    <string name="resume_saved_remove"><!-- review -->बचे हुए पृष्ठ हटाएं</string>
     <string name="resume_scan_title"><!-- review -->Resume unसहेजा गया स्कैन?</string>
     <string name="review_discard_msg"><!-- review -->Your स्कैनned पृष्ठ haven\'t been saved yet.</string>
     <string name="review_discard_title"><!-- review -->Discard this स्कैन?</string>

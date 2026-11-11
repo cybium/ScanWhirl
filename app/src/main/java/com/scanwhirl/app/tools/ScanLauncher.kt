@@ -9,7 +9,10 @@ import com.google.android.gms.common.api.ApiException
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.scanwhirl.app.R
+import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.ScanReviewActivity
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.showSw
@@ -36,20 +39,50 @@ class ScanLauncher(
     private val startScanning: (IntentSender) -> Unit
 ) {
 
+    /** An unfinished review session and, when its save already committed, that document. */
+    internal class Unfinished(val dir: File, val pageCount: Int, val committed: ScanDocument?)
+
+    /**
+     * Newest unfinished review session (durable `filesDir/pending_scans` first-class,
+     * legacy `cacheDir/pending_*` still honoured). Runs file hashing for the
+     * "already saved" check, so call it off the main thread.
+     */
+    internal fun findUnfinished(): Unfinished? {
+        val pending = PendingScans.all(activity).firstOrNull() ?: return null
+        return Unfinished(pending, PendingScans.pageCount(pending), repo.committedDocumentFor(pending))
+    }
+
     /**
      * A review screen that died mid-edit leaves its staging folder behind.
-     * Offer to resume it; deleting is the user's explicit choice.
+     * Offer to resume it; deleting is the user's explicit choice. When the save
+     * had already committed, offer to open that document instead of saving again.
      */
     fun offerUnfinishedScan() {
-        val pending = activity.cacheDir.listFiles { f ->
-            f.isDirectory &&
-                f.name.startsWith("pending_") &&
-                !f.listFiles { p -> p.extension.equals("jpg", true) }.isNullOrEmpty()
-        }?.maxByOrNull { it.lastModified() } ?: return
-        val count = pending.listFiles { p -> p.extension.equals("jpg", true) }?.size ?: 0
+        activity.lifecycleScope.launch {
+            val found = withContext(Dispatchers.IO) { findUnfinished() } ?: return@launch
+            show(found)
+        }
+    }
+
+    private fun show(found: Unfinished) {
+        val pending = found.dir
+        val committed = found.committed
+        if (committed != null) {
+            SwDialog.card(activity)
+                .setTitle(R.string.resume_saved_title)
+                .setMessage(activity.getString(R.string.resume_saved_msg, committed.name))
+                .setPositiveButton(R.string.resume_saved_open) { _, _ ->
+                    activity.startActivity(DocumentViewerActivity.intent(activity, committed.id))
+                    // The committed document was verified above; only now do the leftovers go.
+                    pending.deleteRecursively()
+                }
+                .setNegativeButton(R.string.resume_saved_remove) { _, _ -> pending.deleteRecursively() }
+                .showSw(isSheet = false)
+            return
+        }
         SwDialog.card(activity)
             .setTitle(R.string.resume_scan_title)
-            .setMessage(activity.getString(R.string.resume_scan_msg, count))
+            .setMessage(activity.getString(R.string.resume_scan_msg, found.pageCount))
             .setPositiveButton(R.string.resume_scan_resume) { _, _ ->
                 activity.startActivity(
                     ScanReviewActivity.intent(activity, pending.path, null, repo.nextDocumentName())
@@ -100,24 +133,13 @@ class ScanLauncher(
         }
     }
 
-    /** A brand-new folder: an existing one (same millisecond) is never reused or deleted. */
-    private fun createStagingDir(): File {
-        val stamp = System.currentTimeMillis()
-        for (attempt in 0 until 100) {
-            val name = if (attempt == 0) "pending_$stamp" else "pending_${stamp}_$attempt"
-            val candidate = File(activity.cacheDir, name)
-            if (candidate.mkdirs()) return candidate
-        }
-        throw IllegalStateException("Could not create a staging folder. Free some space and try again.")
-    }
-
     /** Copies the scanned page URIs into a staging folder, then opens the review screen. */
     fun stageAndReview(uris: List<Uri>) {
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
                 val dir = withContext(Dispatchers.IO) {
-                    val staging = createStagingDir()
+                    val staging = PendingScans.create(activity)
                     try {
                         uris.forEachIndexed { index, uri ->
                             try {

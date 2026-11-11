@@ -212,11 +212,26 @@ class OcrStoreTest {
     fun `markPending isPending clearPending cycle`() {
         val id = freshId()
         val store = storeFor(id)
+        // WP-05: markPending only marks an existing document; it never creates a directory.
+        File(root, id).mkdirs()
         assertFalse(store.isPending(id))
         store.markPending(id)
         assertTrue(store.isPending(id))
         store.clearPending(id)
         assertFalse(store.isPending(id))
+    }
+
+    @Test
+    fun `markPending never creates a missing directory or touches an incomplete save`() {
+        val missing = freshId()
+        storeFor(missing).markPending(missing)
+        assertFalse("must not resurrect an absent document", File(root, missing).exists())
+
+        val hidden = freshId()
+        File(root, hidden).mkdirs()
+        File(File(root, hidden), ".incomplete").writeText("owned by a save")
+        storeFor(hidden).markPending(hidden)
+        assertFalse(storeFor(hidden).isPending(hidden))
     }
 
     @Test
