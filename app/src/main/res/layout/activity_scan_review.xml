@@ -4,7 +4,13 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_space"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:importantForAccessibility="no"
     android:orientation="vertical">
+    <!-- G2: root takes the initial focus so the title field does not — otherwise the
+         IME opens on entry (API 24/25) and covers Save. Tapping the title still focuses
+         it, selects all and opens the keyboard. -->
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"

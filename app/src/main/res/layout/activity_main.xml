@@ -4,7 +4,14 @@
     android:id="@+id/homeRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_space">
+    android:background="@drawable/bg_space"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:importantForAccessibility="no">
+    <!-- G2: the root holds the initial focus so the first EditText (search) does not
+         grab it — on API 24/25 a focused field made the IME open on launch. The root
+         is not an accessibility stop (importantForAccessibility=no); tapping search
+         still focuses it and opens the keyboard normally. -->
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -91,7 +98,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:letterSpacing="0.12"
-                        android:maxLines="1"
+                        android:maxLines="3"
                         android:textColor="@color/cyan_dim"
                         android:textSize="11sp" />
                 </LinearLayout>
@@ -229,7 +236,7 @@
         <!-- test26 T3.1/T3.5: list header — "N documents"/"N in Category",
              sort selector (PopupMenu), Select. Built in code; GONE in XML
              until the first updateListHeader() runs. -->
-        <LinearLayout
+        <com.scanwhirl.app.ui.AdaptiveHeaderRow
             android:id="@+id/listHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -245,44 +252,55 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:ellipsize="end"
-                android:maxLines="1"
+                android:maxLines="3"
                 android:textColor="@color/cyan_dim"
                 android:textSize="12sp" />
 
-            <TextView
-                android:id="@+id/sortSelector"
+            <!-- G2: sort + Select stay together; AdaptiveHeaderRow drops them onto their
+                 own end-aligned row when the count cannot fit beside them (large font). -->
+            <LinearLayout
+                android:id="@+id/headerActions"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="20dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:minHeight="48dp"
-                android:minWidth="48dp"
-                android:paddingHorizontal="4dp"
-                android:paddingVertical="2dp"
-                android:textColor="@color/cyan_primary"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/btnSelect"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:minHeight="48dp"
-                android:minWidth="48dp"
-                android:paddingHorizontal="4dp"
-                android:paddingVertical="2dp"
-                android:text="@string/select"
-                android:textColor="@color/cyan_primary"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-        </LinearLayout>
+                <TextView
+                    android:id="@+id/sortSelector"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="20dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:minHeight="48dp"
+                    android:maxLines="2"
+                    android:minWidth="48dp"
+                    android:paddingHorizontal="4dp"
+                    android:paddingVertical="2dp"
+                    android:textColor="@color/cyan_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btnSelect"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:minHeight="48dp"
+                    android:minWidth="48dp"
+                    android:paddingHorizontal="4dp"
+                    android:paddingVertical="2dp"
+                    android:text="@string/select"
+                    android:textColor="@color/cyan_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.scanwhirl.app.ui.AdaptiveHeaderRow>
 
         <!-- Hidden Vault active banner (shown only when 4-digit PIN Vault is open) -->
         <com.google.android.material.card.MaterialCardView

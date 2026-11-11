@@ -101,7 +101,7 @@
                     android:layout_weight="1"
                     android:ellipsize="end"
                     android:fontFamily="sans-serif-medium"
-                    android:maxLines="1"
+                    android:maxLines="2"
                     android:textAppearance="?attr/textAppearanceTitleMedium"
                     android:textColor="@color/text_hologram_hi"
                     android:textSize="16sp" />
@@ -131,7 +131,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
-                android:maxLines="1"
+                android:maxLines="3"
                 android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="@color/text_hologram_mid"
                 android:textSize="12sp" />

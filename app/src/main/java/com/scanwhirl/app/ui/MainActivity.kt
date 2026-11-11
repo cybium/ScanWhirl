@@ -317,6 +317,8 @@ class MainActivity : BaseActivity(), HomeHost {
                 renderHome(fromKeystroke = true)
             }
         })
+        // G2: the header reflows (count above, sort + Select below) when the count would clip.
+        binding.listHeader.labelId = R.id.headerCount
         binding.sortSelector.setOnClickListener { showSortMenu() }
         binding.btnSelect.setOnClickListener { setSelectionMode(true) }
         binding.btnClearSearch.setOnClickListener {

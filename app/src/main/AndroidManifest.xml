@@ -26,7 +26,7 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="stateHidden|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -67,7 +67,7 @@
             android:name=".ui.ScanReviewActivity"
             android:exported="false"
             android:parentActivityName=".ui.MainActivity"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="stateHidden|adjustResize" />
 
         <!-- test26 P6 OCR Editor (§4.7): adjustResize keeps the keyboard off the EditText. -->
         <activity

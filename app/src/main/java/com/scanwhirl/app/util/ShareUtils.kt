@@ -1,6 +1,7 @@
 package com.scanwhirl.app.util
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -37,6 +38,15 @@ object ShareUtils {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = mime
             putExtra(Intent.EXTRA_STREAM, uri)
+            // G2: EXTRA_STREAM alone is not enough for the Android 12+ sharesheet — it
+            // reads the grant from ClipData to preview the file, and without it logs
+            // "Permission Denial ... call Intent#setClipData()". The ClipData carries the
+            // same URI and MIME as EXTRA_STREAM so the chooser (which migrates both the
+            // ClipData and the read-grant flag onto its own intent) keeps read access.
+            clipData = ClipData(
+                ClipDescription(file.name, arrayOf(mime)),
+                ClipData.Item(uri)
+            )
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
