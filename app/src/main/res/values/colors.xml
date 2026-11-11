@@ -91,4 +91,14 @@
     <color name="rv_warn">#F2B654</color>
     <color name="rv_warn_fill">#1FF2B654</color>
     <color name="rv_scrim_badge">#E60E1316</color>
+    <!-- Home slice 2 (Index, dark set). Shares the rv_* surfaces/inks above; these
+         add the capture accent and the paper tones. Paper is dimmed, never inverted. -->
+    <color name="sw_scan">#35D9EE</color>
+    <color name="sw_on_scan">#03252B</color>
+    <color name="sw_paper">#E9E8E3</color>
+    <color name="sw_paper_line">#C9CBC6</color>
+    <color name="sw_paper_back">#7E878C</color>
+    <color name="sw_paper_fold">#C3C7C4</color>
+    <color name="sw_page_dim">#FFEDEDED</color>
+    <color name="sw_ok">#5ED39A</color>
 </resources>

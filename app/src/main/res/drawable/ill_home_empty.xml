@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home slice 2 empty state: two paper sheets inside the Scan brackets, one found
+     word highlighted, a search pill. Original artwork; decorative (no content description). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="160dp"
+    android:viewportWidth="200"
+    android:viewportHeight="160">
+    <!-- back sheet -->
+    <group android:pivotX="96" android:pivotY="80" android:rotation="-8">
+        <path android:fillColor="@color/sw_paper_back" android:pathData="M56 28h64v98h-64z" />
+    </group>
+    <!-- front sheet with the folded corner -->
+    <path android:fillColor="@color/sw_paper" android:pathData="M74 20h58l12 12v100h-70z" />
+    <path android:fillColor="@color/sw_paper_fold" android:pathData="M132 20v12h12z" />
+    <path android:fillColor="@color/sw_paper_line" android:pathData="M84 38h34v5h-34z" />
+    <path android:fillColor="@color/sw_paper_line" android:pathData="M84 50h50v3h-50z" />
+    <path android:fillColor="@color/sw_paper_line" android:pathData="M84 58h44v3h-44z" />
+    <path android:fillColor="@color/sw_paper_line" android:pathData="M84 66h50v3h-50z" />
+    <path android:fillColor="#E6F3C640" android:pathData="M82 73h30v8h-30z" />
+    <path android:fillColor="@color/sw_paper_line" android:pathData="M115 75h18v3h-18z" />
+    <path android:fillColor="@color/sw_paper_line" android:pathData="M84 86h40v3h-40z" />
+    <path android:fillColor="@color/sw_paper_line" android:pathData="M84 94h48v3h-48z" />
+    <path android:fillColor="@color/sw_paper_line" android:pathData="M84 102h30v3h-30z" />
+    <!-- scan brackets + scan line (cyan = capture) -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M30 30V14a6 6 0 0 1 6 -6h16M148 8h16a6 6 0 0 1 6 6v16M170 126v16a6 6 0 0 1 -6 6h-16M52 148h-16a6 6 0 0 1 -6 -6v-16"
+        android:strokeColor="@color/sw_scan"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="4" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M44 116h112"
+        android:strokeColor="@color/sw_scan"
+        android:strokeLineCap="round"
+        android:strokeWidth="3" />
+    <!-- search pill -->
+    <path
+        android:fillColor="@color/rv_surface_2"
+        android:pathData="M128 124h52a12 12 0 0 1 12 12v0a12 12 0 0 1 -12 12h-52a12 12 0 0 1 -12 -12v0a12 12 0 0 1 12 -12z"
+        android:strokeColor="@color/rv_hairline"
+        android:strokeWidth="1.5" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M126 136a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0zM135.5 140l4 4"
+        android:strokeColor="@color/rv_ink"
+        android:strokeLineCap="round"
+        android:strokeWidth="2.2" />
+    <path android:fillColor="#E6F3C640" android:pathData="M148 131h30a3 3 0 0 1 3 3v4a3 3 0 0 1 -3 3h-30a3 3 0 0 1 -3 -3v-4a3 3 0 0 1 3 -3z" />
+</vector>

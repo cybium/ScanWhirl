@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home slice 2: the honest placeholder while a first page decodes — blank
+     paper with faint text bars. Never a photo of another document. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/sw_paper" />
+        </shape>
+    </item>
+    <item android:left="8dp" android:right="16dp" android:top="12dp" android:gravity="top|fill_horizontal" android:height="3dp">
+        <shape android:shape="rectangle"><solid android:color="@color/sw_paper_line" /></shape>
+    </item>
+    <item android:left="8dp" android:right="10dp" android:top="20dp" android:gravity="top|fill_horizontal" android:height="2dp">
+        <shape android:shape="rectangle"><solid android:color="@color/sw_paper_line" /></shape>
+    </item>
+    <item android:left="8dp" android:right="14dp" android:top="26dp" android:gravity="top|fill_horizontal" android:height="2dp">
+        <shape android:shape="rectangle"><solid android:color="@color/sw_paper_line" /></shape>
+    </item>
+    <item android:left="8dp" android:right="20dp" android:top="32dp" android:gravity="top|fill_horizontal" android:height="2dp">
+        <shape android:shape="rectangle"><solid android:color="@color/sw_paper_line" /></shape>
+    </item>
+</layer-list>

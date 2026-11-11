@@ -7,7 +7,8 @@
          gear remains; it hides while selecting (the header takes the row). -->
     <item
         android:id="@+id/action_settings"
-        android:icon="@drawable/ic_settings"
+        android:icon="@drawable/ic_sw_settings"
+        app:iconTint="@color/rv_ink_2"
         android:title="@string/settings_title"
         app:showAsAction="ifRoom" />
 </menu>

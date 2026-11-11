@@ -52,6 +52,10 @@ import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.tools.VaultFlow
 import com.scanwhirl.app.store.OcrTextCache
+import com.scanwhirl.app.ui.home.HomeDocInfo
+import com.scanwhirl.app.ui.home.HomeDocInfoReader
+import com.scanwhirl.app.ui.home.HomeRow
+import com.scanwhirl.app.ui.home.HomeRowDivider
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.HomeFilter
@@ -193,6 +197,9 @@ class MainActivity : BaseActivity(), HomeHost {
     /** All documents on disk; refreshed off the main thread, queried in memory. */
     private var allDocs: List<ScanDocument> = emptyList()
 
+    /** Home slice 2: per-document disk facts (size, text status), read with [allDocs]. */
+    private var rowInfo: Map<String, HomeDocInfo> = emptyMap()
+
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             if (selectionMode) {
@@ -249,8 +256,13 @@ class MainActivity : BaseActivity(), HomeHost {
         // T9: reflect the indexer state on the signal dot while the activity is started.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                ScanWhirlApp.from(this@MainActivity).indexer.state.collect {
+                ScanWhirlApp.from(this@MainActivity).indexer.state.collect { state ->
                     updateSignalDot()
+                    // Home slice 2: live "Reading text n/m" on the row being indexed; when
+                    // a document finishes, re-read the statuses (its marker is gone now).
+                    val finished = adapter.indexState?.docId
+                    adapter.indexState = state
+                    if (finished != null && finished != state.docId) reloadDocs()
                 }
             }
         }
@@ -261,6 +273,11 @@ class MainActivity : BaseActivity(), HomeHost {
 
         binding.scanList.layoutManager = LinearLayoutManager(this)
         binding.scanList.adapter = adapter
+        // Home slice 2: quiet inset hairlines; no whole-row cross-fade when a status or
+        // search result changes (thumbnails fade on their own, only after a fresh decode).
+        binding.scanList.addItemDecoration(HomeRowDivider(this))
+        (binding.scanList.itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)
+            ?.supportsChangeAnimations = false
 
         // T3.6: the bottom bar replaces the FAB and the tool cards (R7/Q7).
         // SCAN keeps the old FAB behaviour: add when the vault is open.
@@ -271,20 +288,22 @@ class MainActivity : BaseActivity(), HomeHost {
         // counts Unsorted/Other docs and opens the §4.8 sheet. updateNudge()
         // (the renderHome path) keeps the count honest. The click target is
         // the whole card (the label stays inert and lets taps bubble).
+        // Home slice 2: calmer — one quiet row (folder glyph + accent text), no glass card.
         nudgeLabel = TextView(this).apply {
-            layoutParams = android.view.ViewGroup.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            setBackgroundResource(R.drawable.bg_glass_card)
-            val pad = (16 * resources.displayMetrics.density).toInt()
-            setPadding(pad, (14 * resources.displayMetrics.density).toInt(), pad,
-                (14 * resources.displayMetrics.density).toInt())
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.cyan_primary))
-            textSize = 13f
+            val d = resources.displayMetrics.density
+            setPadding((6 * d).toInt(), (10 * d).toInt(), (6 * d).toInt(), (10 * d).toInt())
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.rv_accent))
+            textSize = 14f
             gravity = Gravity.CENTER_VERTICAL
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
+            setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_sw_category, 0, 0, 0)
+            compoundDrawablePadding = (10 * d).toInt()
+            compoundDrawableTintList = ColorStateList.valueOf(
+                ContextCompat.getColor(this@MainActivity, R.color.rv_accent)
+            )
         }
         binding.nudge.addView(nudgeLabel)
         // R6: the card itself is the touch target (≥48dp with its padding).
@@ -327,9 +346,8 @@ class MainActivity : BaseActivity(), HomeHost {
         }
         // T6: the "In text" chip is deleted — search always covers names + text.
         binding.searchInput.onFocusChangeListener = null
-        // Tapping the crown badge (or the whole title block) opens the Pro panel.
+        // The (demoted) Pro/Free tag opens the Pro panel — still the Home path to Pro.
         binding.proBadge.setOnClickListener { showProPanel() }
-        binding.titleBlock.setOnClickListener { showProPanel() }
 
         // T3.7: contextual selection header. Move is wired in T4.3 (category
         // picker) — it exists disabled so the row never re-flows.
@@ -375,10 +393,12 @@ class MainActivity : BaseActivity(), HomeHost {
             val background = withContext(Dispatchers.IO) {
                 com.scanwhirl.app.util.Wallpaper.drawable(this@MainActivity)
             }
+            // Home slice 2: no starfield. A wallpaper the user chose in Settings still
+            // applies; otherwise the plain ink desk.
             if (background != null) {
                 binding.root.background = background
             } else {
-                binding.root.background = null
+                binding.root.setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.rv_bg))
             }
         }
     }
@@ -436,13 +456,7 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     override fun refreshList() {
-        lifecycleScope.launch {
-            allDocs = withContext(Dispatchers.IO) {
-                if (vaultMode) repo.listVaultDocuments() else repo.listDocuments()
-            }
-            buildChipRail()
-            renderHome()
-        }
+        reloadDocs()
         // T9: resume indexing for any document left pending (e.g. after a process death).
         val app = application as ScanWhirlApp
         app.indexer.resumePending()
@@ -458,6 +472,25 @@ class MainActivity : BaseActivity(), HomeHost {
                 }
             app.indexer.resumePending()
             Prefs.setIndexBackfillDone(this, true)
+        }
+    }
+
+    /**
+     * Re-reads the library (and each row's size + text status) off the main thread,
+     * then renders. Normal Home lists only non-vaulted documents (repository filter).
+     */
+    private fun reloadDocs() {
+        lifecycleScope.launch {
+            val vault = vaultMode
+            val (docs, info) = withContext(Dispatchers.IO) {
+                val docs = if (vault) repo.listVaultDocuments() else repo.listDocuments()
+                docs to HomeDocInfoReader.readAll(repo.docsDir, docs)
+            }
+            if (vault != vaultMode) return@launch // vault toggled mid-read; a newer load follows
+            allDocs = docs
+            rowInfo = info
+            buildChipRail()
+            renderHome()
         }
     }
 
@@ -538,19 +571,7 @@ class MainActivity : BaseActivity(), HomeHost {
                     originalText = { ocrTextCache.original(it) }
                 )
             }
-            adapter.selectedIds = selectedIds
-            adapter.snippets = result.snippets
-            adapter.submitList(result.docs)
-            binding.emptyState.isVisible = result.docs.isEmpty()
-            if (result.docs.isEmpty()) updateEmptyState()
-            binding.scanList.isVisible = true
-            shownCount = result.docs.size
-            updateListHeader()
-            updateStatusLine()
-            updateNudge()
-            if (selectionMode && allDocs.none { it.id in selectedIds }) {
-                setSelectionMode(false)
-            }
+            showResult(result)
         }
     }
 
@@ -570,9 +591,14 @@ class MainActivity : BaseActivity(), HomeHost {
             normalizedText = { ocrTextCache.normalized(it) },
             originalText = { ocrTextCache.original(it) }
         )
+        showResult(result)
+    }
+
+    /** One render path for both the sync and the debounced search result. */
+    private fun showResult(result: com.scanwhirl.app.util.HomeResult) {
         adapter.selectedIds = selectedIds
         adapter.snippets = result.snippets
-        adapter.submitList(result.docs)
+        adapter.submitList(result.docs.map { HomeRow(it, rowInfo[it.id] ?: HomeDocInfo.UNKNOWN) })
         binding.emptyState.isVisible = result.docs.isEmpty()
         if (result.docs.isEmpty()) updateEmptyState()
         binding.scanList.isVisible = true
@@ -597,21 +623,26 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.emptyFrame.isVisible = true
         when {
             vaultMode && allDocs.isEmpty() -> {
+                binding.emptyFrame.setImageResource(R.drawable.ic_sw_private)
                 binding.emptyTitle.setText(R.string.vault_empty_title)
                 binding.emptySubtitle.setText(R.string.vault_empty_subtitle)
                 binding.emptySubtitle.isVisible = true
+                binding.emptyNote.isVisible = false
                 binding.btnShowAll.isVisible = false
             }
             allDocs.isEmpty() -> {
-                binding.emptyTitle.setText(R.string.empty_first_scan)
-                // T3.13: the muted hint names the call to action — the SCAN
-                // button in the bottom bar.
-                binding.emptySubtitle.setText(R.string.empty_first_scan_hint)
+                // Home slice 2: the owner's positioning, said honestly — the labelled
+                // Scan / Import in the dock are the call to action.
+                binding.emptyFrame.setImageResource(R.drawable.ill_home_empty)
+                binding.emptyTitle.setText(R.string.empty_home_title)
+                binding.emptySubtitle.setText(R.string.empty_home_body)
                 binding.emptySubtitle.isVisible = true
+                binding.emptyNote.isVisible = true
                 binding.btnShowAll.isVisible = false
             }
             else -> {
                 // The library exists; only the active filter hides it all.
+                binding.emptyFrame.setImageResource(R.drawable.ic_sw_search_pages)
                 val cat = selectedCategory
                 binding.emptyTitle.text =
                     if (cat != null) {
@@ -620,8 +651,21 @@ class MainActivity : BaseActivity(), HomeHost {
                         getString(R.string.empty_no_match)
                     }
                 binding.emptySubtitle.isVisible = false
+                binding.emptyNote.isVisible = false
                 binding.btnShowAll.isVisible = true
             }
+        }
+        // Glyph states draw small and dim; the illustration keeps its own colours.
+        val glyph = !(allDocs.isEmpty() && !vaultMode)
+        val d = resources.displayMetrics.density
+        binding.emptyFrame.layoutParams = binding.emptyFrame.layoutParams.apply {
+            width = ((if (glyph) 56 else 200) * d).toInt()
+            height = ((if (glyph) 56 else 160) * d).toInt()
+        }
+        binding.emptyFrame.imageTintList = if (glyph) {
+            ColorStateList.valueOf(ContextCompat.getColor(this, R.color.rv_ink_3))
+        } else {
+            null
         }
     }
 
@@ -648,19 +692,21 @@ class MainActivity : BaseActivity(), HomeHost {
 
         // Scoped context so only these chips pick up Widget.ScanWhirl.Chip;
         // the resize dialog and page viewer style their own chips inline.
-        val ctx = ContextThemeWrapper(this, R.style.ThemeOverlay_ScanWhirl_ChipRail)
+        val ctx = ContextThemeWrapper(this, R.style.ThemeOverlay_ScanWhirl_HomeChipRail)
         for ((key, label) in entries) {
             val count = if (key == null) allDocs.size else counts[key] ?: 0
             val chip = Chip(ctx).apply {
                 tag = key
                 text = "$label $count"
+                // Home slice 2: a category swatch instead of a dashed outline / glow.
+                if (key != null) {
+                    chipIcon = ContextCompat.getDrawable(context, R.drawable.bg_home_swatch)
+                    chipIconTint = ColorStateList.valueOf(CategoryStyle.color(key))
+                    isChipIconVisible = true
+                }
                 // Tapping the chip that is already active falls back to All.
                 setOnClickListener {
                     selectCategory(if (key == selectedCategory) null else key)
-                }
-                // test26 T8.4: Unsorted chip gets a dashed outline.
-                if (key == CategoryRules.UNSORTED) {
-                    setBackgroundResource(R.drawable.bg_chip_unsorted_dashed)
                 }
             }
             rail.addView(chip)
@@ -681,27 +727,18 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * Checked chips take their category colour: a dark tint behind, the full
-     * colour on the border (2dp) and label. Unchecked chips keep the plain
-     * hairline look from [R.style.Widget_ScanWhirl_Chip].
+     * Home slice 2: chips are tonal tabs at rest; the checked one takes an accent
+     * wash, accent label and a 1dp accent edge (the category swatch stays visible).
      */
-    private fun paintChip(chip: Chip, key: String?, active: Boolean) {
-        // "All" has no category, so it borrows the app accent.
-        val color = if (key == null) ContextCompat.getColor(this, R.color.cyan_primary)
-        else CategoryStyle.color(key)
+    private fun paintChip(chip: Chip, @Suppress("UNUSED_PARAMETER") key: String?, active: Boolean) {
         val density = resources.displayMetrics.density
-
+        val accent = ContextCompat.getColor(this, R.color.rv_accent)
         chip.chipBackgroundColor = ColorStateList.valueOf(
-            if (active) (color and 0x00FFFFFF) or (0x33 shl 24)
-            else ContextCompat.getColor(this, R.color.chip_void)
+            ContextCompat.getColor(this, if (active) R.color.rv_accent_fill else R.color.rv_surface)
         )
-        chip.chipStrokeColor = ColorStateList.valueOf(
-            if (active) color else ContextCompat.getColor(this, R.color.cyan_border_idle)
-        )
-        chip.chipStrokeWidth = (if (active) 2f else 1f) * density  // §5.2: 1dp hairline, 2dp selected
-        chip.setTextColor(
-            if (active) color else ContextCompat.getColor(this, R.color.text_hologram_mid)
-        )
+        chip.chipStrokeColor = ColorStateList.valueOf(accent)
+        chip.chipStrokeWidth = if (active) 1f * density else 0f
+        chip.setTextColor(if (active) accent else ContextCompat.getColor(this, R.color.rv_ink_2))
     }
 
     /** Chip tap: filter to [key], or back to All when it is tapped twice. */
@@ -789,22 +826,13 @@ class MainActivity : BaseActivity(), HomeHost {
      * chip.
      */
     private fun updateProBadge() {
+        // Home slice 2: demoted to a neutral tag — no crown, no gold on Home. The
+        // label stays truthful (PRO / FREE) and the tag still opens the Pro panel.
         val pro = ProGate.isPro(this)
-        if (pro) {
-            binding.proBadge.text = getString(R.string.badge_pro)
-            binding.proBadge.setTextColor(ContextCompat.getColor(this, R.color.pro_gold))
-            binding.proBadge.compoundDrawableTintList =
-                android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.pro_gold))
-            binding.proBadge.setBackgroundResource(R.drawable.bg_pro_badge)
-        } else {
-            binding.proBadge.text = getString(R.string.badge_free)
-            binding.proBadge.setTextColor(ContextCompat.getColor(this, R.color.sf_on_surface_variant))
-            binding.proBadge.compoundDrawableTintList =
-                android.content.res.ColorStateList.valueOf(
-                    ContextCompat.getColor(this, R.color.sf_on_surface_variant)
-                )
-            binding.proBadge.setBackgroundResource(R.drawable.bg_free_badge)
-        }
+        binding.proBadge.text = getString(if (pro) R.string.badge_pro else R.string.badge_free)
+        binding.proBadge.contentDescription = getString(
+            R.string.home_pro_tag_desc, binding.proBadge.text
+        )
     }
 
     /**
@@ -1069,11 +1097,14 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.vaultBanner.isVisible = enabled
         // In the vault SCAN becomes "Add": gold disc, ic_add, "Add" label.
         binding.dockRoot.isVisible = !selectionMode
+        // Home slice 2: Add is an ink (commit) pill; Scan the cyan (capture) pill.
         val disc = binding.scanButtonDisc
-        disc.setBackgroundResource(if (enabled) R.drawable.bg_scan_button_gold else R.drawable.bg_scan_button)
-        binding.scanIcon.setImageResource(if (enabled) R.drawable.ic_add else R.drawable.ic_document_scanner)
+        disc.setBackgroundResource(if (enabled) R.drawable.bg_home_add_pill else R.drawable.bg_home_scan_pill)
+        binding.scanIcon.setImageResource(if (enabled) R.drawable.ic_sw_add_page else R.drawable.ic_sw_scan)
+        val onPill = ContextCompat.getColor(this, if (enabled) R.color.rv_on_commit else R.color.sw_on_scan)
+        binding.scanIcon.imageTintList = ColorStateList.valueOf(onPill)
         binding.scanLabel.text = getString(if (enabled) R.string.bar_add else R.string.bar_scan)
-        binding.scanLabel.setTextColor(if (enabled) ContextCompat.getColor(this, R.color.pro_gold) else ContextCompat.getColor(this, R.color.cyan_primary))
+        binding.scanLabel.setTextColor(onPill)
         binding.btnScan.contentDescription = getString(if (enabled) R.string.vault_add_title else R.string.scan)
         binding.btnImport.visibility = if (enabled) View.INVISIBLE else View.VISIBLE
         refreshList()

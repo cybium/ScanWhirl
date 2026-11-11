@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ScanWhirl brand mark: cyan tile + folded page + a "whirl" scan sweep.
+     Original artwork ported 1:1 from visual/src/icons.js mark(); decorative (no tint). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    <path
+        android:fillColor="@color/sw_scan"
+        android:pathData="M9 0h14a9 9 0 0 1 9 9v14a9 9 0 0 1 -9 9h-14a9 9 0 0 1 -9 -9v-14a9 9 0 0 1 9 -9z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M5.5 10V7.3A1.8 1.8 0 0 1 7.3 5.5H10M22 5.5h2.7a1.8 1.8 0 0 1 1.8 1.8V10M26.5 22v2.7a1.8 1.8 0 0 1 -1.8 1.8H22M10 26.5H7.3a1.8 1.8 0 0 1 -1.8 -1.8V22"
+        android:strokeColor="@color/sw_on_scan"
+        android:strokeLineCap="round"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M10.5 8.5h7.6l4.4 4.4v10.6h-12z" />
+    <path
+        android:fillColor="#FFBFEFF6"
+        android:pathData="M18.1 8.5v4.4h4.4" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M8 17.2h13.2a2.6 2.6 0 1 0 -2.6 -2.6"
+        android:strokeColor="@color/sw_on_scan"
+        android:strokeLineCap="round"
+        android:strokeWidth="2" />
+</vector>

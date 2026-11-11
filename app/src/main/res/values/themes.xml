@@ -296,4 +296,41 @@
         <item name="android:insetBottom">0dp</item>
         <item name="android:letterSpacing">0</item>
     </style>
+    <!-- Home slice 2: paper thumbnail = 3dp corners with the folded (cut) top-right
+         corner every ScanWhirl page glyph shares. -->
+    <style name="ShapeAppearance.ScanWhirl.Paper" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">3dp</item>
+        <item name="cornerFamilyTopRight">cut</item>
+        <item name="cornerSizeTopRight">9dp</item>
+    </style>
+
+    <!-- Home slice 2: filter chips are 10dp-radius tabs, not pills; tonal at rest,
+         accent-washed when checked (colours applied in MainActivity.paintChip). -->
+    <style name="Widget.ScanWhirl.Chip.Home" parent="Widget.ScanWhirl.Chip">
+        <item name="chipMinHeight">40dp</item>
+        <item name="chipCornerRadius">10dp</item>
+        <item name="chipStrokeWidth">0dp</item>
+        <item name="chipBackgroundColor">@color/rv_surface</item>
+        <item name="android:textColor">@color/rv_ink_2</item>
+        <item name="android:textSize">14sp</item>
+        <item name="chipIconSize">8dp</item>
+        <item name="iconStartPadding">4dp</item>
+        <item name="textStartPadding">6dp</item>
+    </style>
+
+    <style name="ThemeOverlay.ScanWhirl.HomeChipRail" parent="">
+        <item name="chipStyle">@style/Widget.ScanWhirl.Chip.Home</item>
+    </style>
+
+    <!-- Home dock side actions (Tools / Import): glyph over a visible label. -->
+    <style name="Widget.ScanWhirl.HomeDockLabel" parent="">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">@color/rv_ink</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
 </resources>

@@ -484,24 +484,27 @@ class HomeScreenTest {
     // ---- T3.8: empty states ----------------------------------------------
 
     @Test
-    fun `empty library shows the viewfinder frame and first-scan copy`() {
+    fun `empty library shows the illustration and first-run copy`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val state = activity.findViewById<View>(R.id.emptyState)
                 assertTrue("empty state shows", state.isVisible)
-                assertTrue("viewfinder brackets show", activity.findViewById<View>(R.id.emptyFrame).isVisible)
+                assertTrue("empty illustration shows", activity.findViewById<View>(R.id.emptyFrame).isVisible)
+                // Home slice 2: the owner-approved positioning replaces "Scan your
+                // first document"; the body names both dock actions and stays honest
+                // (document-level search, no "exact page", no "nothing leaves").
                 assertEquals(
-                    "Scan your first document",
+                    "Scan. Search. Keep control.",
                     activity.findViewById<android.widget.TextView>(R.id.emptyTitle).text.toString()
                 )
-                // T3.13: one muted line under the title names the call to
-                // action (the SCAN button in the bottom bar).
-                assertTrue("hint shows for a fresh library",
+                assertTrue("body shows for a fresh library",
                     activity.findViewById<View>(R.id.emptySubtitle).isVisible)
                 assertEquals(
-                    "Everything stays on this phone.",
+                    activity.getString(R.string.empty_home_body),
                     activity.findViewById<android.widget.TextView>(R.id.emptySubtitle).text.toString()
                 )
+                assertTrue("privacy note shows for a fresh library",
+                    activity.findViewById<View>(R.id.emptyNote).isVisible)
                 assertFalse("no Show all chip for a fresh library",
                     activity.findViewById<View>(R.id.btnShowAll).isVisible)
                 // The orbit icon died with T3.8.

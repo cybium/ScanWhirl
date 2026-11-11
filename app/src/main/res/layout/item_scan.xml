@@ -1,202 +1,229 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- test26 T7 — Document list item (spec U4).
-     Card: margins 6/4, radius 14, glass_surface, stroke 1 cyan_border_hair at rest;
-     selected: stroke 2 cyan_primary. Min height 88dp.
-     Thumbnail: 56×72, radius 8, no stroke, no vignette.
-     Line 1: name (16sp, sans-serif-medium) · "Locked" badge (11sp, gold).
-     Line 2: meta (12sp). Line 3: search snippet (12sp, gone by default).
-     Line 4: category chip + "Searchable" when isSearchable.
-     Trailing: btnMore (48×48) or checkbox in selection mode.
--->
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Home slice 2 — one document in the Index.
+     The document is the content: a real first-page paper thumbnail (folded corner,
+     category index tab, a second sheet behind multi-page documents), a serif name,
+     one meta line and one honest status line. No card, no glow stroke; rows are
+     separated by a quiet inset hairline (HomeRowDivider). Selected rows take an
+     accent wash (state_activated) and show the checkbox instead of More.
+     Thumbnail binding lives in DocThumbBinder (PageThumbLoader underneath). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginHorizontal="6dp"
-    android:layout_marginVertical="4dp"
-    android:minHeight="88dp"
+    android:background="@drawable/bg_home_row"
     android:clickable="true"
     android:focusable="true"
-    android:foreground="?attr/selectableItemBackground"
-    app:cardBackgroundColor="@color/glass_surface"
-    app:cardCornerRadius="14dp"
-    app:cardElevation="0dp"
-    app:strokeColor="@color/cyan_border_hair"
-    app:strokeWidth="1dp">
+    android:gravity="center_vertical"
+    android:minHeight="104dp"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingTop="10dp"
+    android:paddingEnd="0dp"
+    android:paddingBottom="10dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="8dp">
+    <!-- Paper thumbnail: 60×80dp page, plus room for the stacked sheet and the tab.
+         Decorative for TalkBack — the row description names the document. -->
+    <FrameLayout
+        android:id="@+id/thumbFrame"
+        android:layout_width="66dp"
+        android:layout_height="88dp"
+        android:importantForAccessibility="noHideDescendants">
 
-        <!-- Category colour rail: 4dp wide, full height -->
         <View
-            android:id="@+id/catRail"
-            android:layout_width="4dp"
-            android:layout_height="0dp"
-            android:layout_gravity="fill_vertical"
-            android:backgroundTint="@color/cyan_primary" />
+            android:id="@+id/thumbBack"
+            android:layout_width="60dp"
+            android:layout_height="80dp"
+            android:layout_marginStart="5dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_thumb_sheet_back"
+            android:visibility="gone" />
 
-        <!-- Thumbnail: 56×72, radius 8 -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/scanThumb"
-            android:layout_width="56dp"
-            android:layout_height="72dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="12dp"
-            android:layout_marginVertical="8dp"
-            app:cardBackgroundColor="@color/void_abyss"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="0dp"
-            app:strokeColor="@color/cyan_border_idle"
-            app:strokeWidth="0dp">
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/thumbImage"
+            android:layout_width="60dp"
+            android:layout_height="80dp"
+            android:layout_marginTop="4dp"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop"
+            android:src="@drawable/bg_thumb_paper"
+            app:shapeAppearance="@style/ShapeAppearance.ScanWhirl.Paper" />
 
-            <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:contentDescription="@null"
-                android:scaleType="centerCrop"
-                android:src="@drawable/ic_document" />
+        <ImageView
+            android:id="@+id/thumbFold"
+            android:layout_width="9dp"
+            android:layout_height="9dp"
+            android:layout_marginStart="51dp"
+            android:layout_marginTop="4dp"
+            android:contentDescription="@null"
+            android:src="@drawable/bg_thumb_fold" />
 
-            <!-- Page count badge: top-start -->
+        <View
+            android:id="@+id/thumbTab"
+            android:layout_width="16dp"
+            android:layout_height="5dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_thumb_tab" />
+
+        <!-- Why there is no picture: lock (password), private (vault), PDF-only, unreadable. -->
+        <ImageView
+            android:id="@+id/thumbGlyph"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="18dp"
+            android:layout_marginTop="32dp"
+            android:contentDescription="@null"
+            android:visibility="gone"
+            app:tint="@color/rv_ink_2" />
+
+        <!-- Page count on the paper (multi-page documents only). -->
+        <TextView
+            android:id="@+id/pageBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="4dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_home_page_badge"
+            android:fontFeatureSettings="tnum"
+            android:gravity="center"
+            android:minWidth="20dp"
+            android:paddingHorizontal="5dp"
+            android:paddingVertical="1dp"
+            android:textColor="@color/rv_ink"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            tools:text="5" />
+    </FrameLayout>
+
+    <!-- Text column -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- Line 1: name (serif = paper) + "Locked" -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
             <TextView
-                android:id="@+id/pageBadge"
+                android:id="@+id/scanName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:fontFamily="serif"
+                android:maxLines="2"
+                android:textColor="@color/rv_ink"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                tools:text="Scholarship application" />
+
+            <TextView
+                android:id="@+id/lockBadge"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="top|start"
-                android:layout_margin="4dp"
-                android:background="@drawable/bg_chip_void"
-                android:gravity="center"
-                android:minWidth="20dp"
-                android:paddingHorizontal="5dp"
-                android:paddingVertical="1dp"
-                android:textColor="@color/text_hologram_hi"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Text column -->
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:orientation="vertical"
-            android:paddingVertical="4dp">
-
-            <!-- Line 1: document name + "Locked" badge -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:drawableStart="@drawable/ic_sw_lock"
+                android:drawablePadding="3dp"
+                android:drawableTint="@color/rv_ink_2"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/scanName"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:ellipsize="end"
-                    android:fontFamily="sans-serif-medium"
-                    android:maxLines="2"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="@color/text_hologram_hi"
-                    android:textSize="16sp" />
-
-                <TextView
-                    android:id="@+id/lockBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:background="@drawable/bg_lock_badge"
-                    android:drawableStart="@drawable/ic_lock_small"
-                    android:drawablePadding="2dp"
-                    android:drawableTint="@color/pro_gold"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="4dp"
-                    android:paddingVertical="1dp"
-                    android:text="@string/badge_locked"
-                    android:textColor="@color/pro_gold"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- Line 2: meta -->
-            <TextView
-                android:id="@+id/scanMeta"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:ellipsize="end"
-                android:maxLines="3"
-                android:textAppearance="?attr/textAppearanceBodySmall"
-                android:textColor="@color/text_hologram_mid"
+                android:maxLines="1"
+                android:text="@string/badge_locked"
+                android:textColor="@color/rv_ink_2"
                 android:textSize="12sp" />
-
-            <!-- Line 3: search snippet (gone by default) -->
-            <TextView
-                android:id="@+id/scanSnippet"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textAppearance="?attr/textAppearanceBodySmall"
-                android:textColor="@color/text_hologram_mid"
-                android:textSize="12sp"
-                android:visibility="gone" />
-
-            <!-- Line 4: category chip + "Searchable" indicator -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/catChip"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:textColor="@color/cyan_primary"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/scanSearchable"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/badge_searchable"
-                    android:textColor="@color/text_hologram_mid"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
-            </LinearLayout>
         </LinearLayout>
 
-        <!-- Trailing: btnMore (or checkbox in selection mode) -->
-        <ImageButton
-            android:id="@+id/btnMore"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/doc_more_options"
-            android:src="@drawable/ic_more"
-            app:tint="@color/text_hologram_mid" />
+        <!-- Line 2: pages · size · date -->
+        <TextView
+            android:id="@+id/scanMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:fontFeatureSettings="tnum"
+            android:maxLines="3"
+            android:textColor="@color/rv_ink_2"
+            android:textSize="13sp"
+            tools:text="5 pages · 1.4 MB · 11 Nov" />
 
-        <CheckBox
-            android:id="@+id/checkSelect"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_gravity="center_vertical"
-            android:clickable="false"
-            android:focusable="false"
-            android:visibility="gone"
-            app:buttonTint="@color/cyan_primary" />
+        <!-- Search hit: why this document matched (document-level, not a page jump). -->
+        <TextView
+            android:id="@+id/scanSnippet"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="@color/rv_ink_2"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <!-- Line 3: category (tap = move) + honest text status. A flow row: the
+             status sits beside the category and drops below it at large font sizes. -->
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/statusRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="-6dp"
+            android:layout_marginBottom="-6dp"
+            app:chipSpacingHorizontal="6dp"
+            app:chipSpacingVertical="0dp"
+            app:singleLine="false">
+
+            <TextView
+                android:id="@+id/catChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:drawableStart="@drawable/bg_home_swatch"
+                android:drawablePadding="6dp"
+                android:focusable="true"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center_vertical"
+                android:maxLines="1"
+                android:minHeight="48dp"
+                android:paddingEnd="8dp"
+                android:textSize="13sp"
+                tools:text="Forms" />
+
+            <TextView
+                android:id="@+id/scanTextStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:drawablePadding="4dp"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:textSize="13sp"
+                android:visibility="gone"
+                tools:text="Search ready" />
+        </com.google.android.material.chip.ChipGroup>
     </LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+
+    <ImageButton
+        android:id="@+id/btnMore"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="2dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/doc_more_options"
+        android:src="@drawable/ic_sw_more"
+        app:tint="@color/rv_ink_2" />
+
+    <CheckBox
+        android:id="@+id/checkSelect"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center_vertical"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no"
+        android:visibility="gone"
+        app:buttonTint="@color/rv_accent" />
+</LinearLayout>

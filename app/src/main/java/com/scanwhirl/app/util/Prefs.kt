@@ -58,7 +58,8 @@ object Prefs {
     fun localeTag(c: Context): String = sp(c).getString(KEY_LOCALE, "") ?: ""
     fun setLocaleTag(c: Context, v: String) = sp(c).edit().putString(KEY_LOCALE, v).apply()
 
-    fun showGreeting(c: Context): Boolean = sp(c).getBoolean(KEY_GREETING, true)
+    /** Home status line (count · size). Opt-in since Home slice 2: no greeting noise by default. */
+    fun showGreeting(c: Context): Boolean = sp(c).getBoolean(KEY_GREETING, false)
     fun setShowGreeting(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_GREETING, v).apply()
 
     fun showWallpaper(c: Context): Boolean = sp(c).getBoolean(KEY_WALLPAPER_ON, false)

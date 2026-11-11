@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Locked / Private / PDF-only placeholder: a dark sheet; the glyph says why. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/rv_surface_2" />
+</shape>

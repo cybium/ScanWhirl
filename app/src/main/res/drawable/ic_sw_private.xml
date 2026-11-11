@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ScanWhirl icon family: "private". Original 24x24 glyph, 1.75 stroke, round caps;
+     pathData ported 1:1 from visual/src/icons.js (circles/rects as arcs). Tinted by the host. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12 3.3l7.5 2.9v5.3c0 4.5-3.1 8-7.5 9.2-4.4-1.2-7.5-4.7-7.5-9.2V6.2z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M10.1 10.7a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0 -3.8 0z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M12 12.6v3.2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

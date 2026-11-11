@@ -41,32 +41,98 @@ object PageThumbLoader {
         "${file.path}|${file.lastModified()}|${file.length()}|$targetPx|${filter.id}"
 
     /**
+     * Unreadable files, remembered by request key (path + mtime + length, so an
+     * edited page is retried) — a broken page is not re-read on every bind.
+     */
+    private val failed = LruCache<String, Boolean>(256)
+
+    /**
      * Shows the cached thumb immediately, or decodes [file] on a background
      * thread and applies it only if [into] still shows the same request key.
+     *
+     * Home slice 2 additions (all optional, defaults keep the grid unchanged):
+     * - [fitExactly] scales the sampled decode down so its longer side is
+     *   [targetPx] (power-of-two sampling alone can leave it up to 2× larger),
+     *   which keeps 100 list thumbs well inside the shared LRU budget;
+     * - [placeholder] is shown while decoding (and kept on failure);
+     * - [onLoaded] replaces the plain `setImageBitmap` (the Home row cross-fades
+     *   only a fresh decode — `fromCache` rows appear instantly);
+     * - [onFailed] runs, still key-guarded, when the file cannot be decoded;
+     * - [skipStale] drops a queued job whose view was re-bound before it ran
+     *   (Home flings queue far more rows than they show). Off by default: the
+     *   review screen relies on scrolled-past film thumbs still filling the cache.
      */
-    fun load(file: File, targetPx: Int, filter: ScanFilter, into: ImageView) {
-        val key = keyFor(file, targetPx, filter)
+    fun load(
+        file: File,
+        targetPx: Int,
+        filter: ScanFilter,
+        into: ImageView,
+        fitExactly: Boolean = false,
+        placeholder: Int = com.scanwhirl.app.R.drawable.ic_document,
+        onLoaded: ((Bitmap, fromCache: Boolean) -> Unit)? = null,
+        onFailed: (() -> Unit)? = null,
+        skipStale: Boolean = false
+    ) {
+        val key = keyFor(file, targetPx, filter) + if (fitExactly) "|fit" else ""
         into.tag = key
 
         val cached = cache.get(key)
         if (cached != null && !cached.isRecycled) {
-            into.setImageBitmap(cached)
+            if (onLoaded != null) onLoaded(cached, true) else into.setImageBitmap(cached)
             return
         }
-        into.setImageResource(com.scanwhirl.app.R.drawable.ic_document)
+        into.setImageResource(placeholder)
+        if (failed.get(key) == true) {
+            onFailed?.invoke()
+            return
+        }
 
         executor.execute {
-            val decoded = ImageTools.decodeThumb(file, targetPx) ?: return@execute
-            val thumb = if (filter == ScanFilter.ORIGINAL) decoded else {
-                val filtered = filter.applyTo(decoded)
-                if (filtered !== decoded) decoded.recycle()
-                filtered
+            // The row was recycled for another document before this job started.
+            if (skipStale && into.tag != key) return@execute
+            val thumb = decode(file, targetPx, filter, fitExactly)
+            if (thumb == null) {
+                failed.put(key, true)
+                mainHandler.post { if (into.tag == key) onFailed?.invoke() }
+                return@execute
             }
             cache.put(key, thumb)
             mainHandler.post {
-                if (into.tag == key) into.setImageBitmap(thumb)
+                if (into.tag == key) {
+                    if (onLoaded != null) onLoaded(thumb, false) else into.setImageBitmap(thumb)
+                }
             }
         }
+    }
+
+    /**
+     * Forgets whatever request [into] was waiting for, so a late decode for the
+     * document this recycled view showed before can never land on it.
+     */
+    fun cancel(into: ImageView) {
+        into.tag = null
+    }
+
+    private fun decode(file: File, targetPx: Int, filter: ScanFilter, fitExactly: Boolean): Bitmap? {
+        val decoded = ImageTools.decodeThumb(file, targetPx) ?: return null
+        val sized = if (!fitExactly) decoded else {
+            val longest = maxOf(decoded.width, decoded.height)
+            if (longest <= targetPx) decoded else {
+                val scale = targetPx.toFloat() / longest
+                val scaled = Bitmap.createScaledBitmap(
+                    decoded,
+                    maxOf(1, (decoded.width * scale).toInt()),
+                    maxOf(1, (decoded.height * scale).toInt()),
+                    true
+                )
+                if (scaled !== decoded) decoded.recycle()
+                scaled
+            }
+        }
+        if (filter == ScanFilter.ORIGINAL) return sized
+        val filtered = filter.applyTo(sized)
+        if (filtered !== sized) sized.recycle()
+        return filtered
     }
 
     /** The cached thumb for this exact request, or null (never decodes). */
@@ -86,12 +152,7 @@ object PageThumbLoader {
             return
         }
         executor.execute {
-            val decoded = ImageTools.decodeThumb(file, targetPx) ?: return@execute
-            val thumb = if (filter == ScanFilter.ORIGINAL) decoded else {
-                val filtered = filter.applyTo(decoded)
-                if (filtered !== decoded) decoded.recycle()
-                filtered
-            }
+            val thumb = decode(file, targetPx, filter, fitExactly = false) ?: return@execute
             cache.put(key, thumb)
             mainHandler.post { onResult(thumb) }
         }
@@ -104,6 +165,9 @@ object PageThumbLoader {
         synchronized(cache) {
             val snapshot = cache.snapshot().keys.filter { it.startsWith(prefix) }
             snapshot.forEach { cache.remove(it) }
+        }
+        synchronized(failed) {
+            failed.snapshot().keys.filter { it.startsWith(prefix) }.forEach { failed.remove(it) }
         }
     }
 }

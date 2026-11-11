@@ -515,4 +515,15 @@
     <string name="review_select_page">Select page %1$d</string>
     <string name="review_film_page">Page %1$d</string>
     <string name="review_film_page_current">Page %1$d, shown</string>
+    <!-- Home slice 2: the Index. Status copy is evidence-based (ocr_pending marker,
+         stored page text, live indexer state); search is document-level, never a page jump. -->
+    <string name="empty_home_title">Scan. Search. Keep control.</string>
+    <string name="empty_home_body">Scan paper or import photos. Text is recognised on this phone, so you can find a document by any word in it.</string>
+    <string name="empty_home_note">No account. Files leave ScanWhirl only when you share or export them.</string>
+    <string name="text_status_ready">Search ready</string>
+    <string name="text_status_partial">Text on %1$d of %2$d pages</string>
+    <string name="text_status_waiting">Waiting to read text</string>
+    <string name="text_status_reading">Reading text %1$d/%2$d</string>
+    <string name="doc_category_action">Category %1$s. Change category</string>
+    <string name="home_pro_tag_desc">%1$s. Open ScanWhirl Pro details</string>
 </resources>

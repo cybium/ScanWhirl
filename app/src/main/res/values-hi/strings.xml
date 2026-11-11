@@ -471,4 +471,13 @@
     <string name="review_select_page"><!-- review -->पेज %1$d चुनें</string>
     <string name="review_film_page"><!-- review -->पेज %1$d</string>
     <string name="review_film_page_current"><!-- review -->पेज %1$d, दिखाया गया</string>
+    <string name="empty_home_title"><!-- review -->स्कैन करें। खोजें। नियंत्रण रखें।</string>
+    <string name="empty_home_body"><!-- review -->काग़ज़ स्कैन करें या फ़ोटो इंपोर्ट करें। पाठ की पहचान इसी फ़ोन पर होती है, ताकि आप किसी भी शब्द से दस्तावेज़ ढूँढ सकें।</string>
+    <string name="empty_home_note"><!-- review -->कोई खाता नहीं। फ़ाइलें ScanWhirl से तभी बाहर जाती हैं जब आप उन्हें साझा या निर्यात करते हैं।</string>
+    <string name="text_status_ready"><!-- review -->खोज के लिए तैयार</string>
+    <string name="text_status_partial"><!-- review -->%2$d में से %1$d पृष्ठों पर पाठ</string>
+    <string name="text_status_waiting"><!-- review -->पाठ पढ़ा जाना बाकी है</string>
+    <string name="text_status_reading"><!-- review -->पाठ पढ़ा जा रहा है %1$d/%2$d</string>
+    <string name="doc_category_action"><!-- review -->श्रेणी %1$s। श्रेणी बदलें</string>
+    <string name="home_pro_tag_desc"><!-- review -->%1$s. ScanWhirl Pro का विवरण खोलें</string>
 </resources>
