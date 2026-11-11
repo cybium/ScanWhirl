@@ -647,7 +647,7 @@ class ScanRepository(private val context: Context) {
 
     fun deleteDocument(id: String) {
         val dir = File(docsDir, id)
-        dir.deleteRecursively()
+        OcrStore.locked { dir.deleteRecursively() }
     }
 
     fun renameDocument(id: String, newName: String) {
@@ -807,15 +807,16 @@ class ScanRepository(private val context: Context) {
     suspend fun deletePage(id: String, pageIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
-            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            require(pageIndex in doc.pageFiles.indices) { "No such page" }
-            require(doc.pageFiles.size > 1) { "Can't delete the last page" }
-
-            val victim = doc.pageFiles[pageIndex]
-            origOf(victim).delete()
-            victim.delete()
-            renumberPages(dir)
-            ocrStore.afterDelete(id, pageIndex)
+            OcrStore.locked {
+                val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+                require(pageIndex in doc.pageFiles.indices) { "No such page" }
+                require(doc.pageFiles.size > 1) { "Can't delete the last page" }
+                val victim = doc.pageFiles[pageIndex]
+                origOf(victim).delete()
+                victim.delete()
+                renumberPages(dir)
+                ocrStore.afterDelete(id, pageIndex)
+            }
             regeneratePdf(dir)
 
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after delete")
@@ -824,15 +825,15 @@ class ScanRepository(private val context: Context) {
     suspend fun rotatePage(id: String, pageIndex: Int, clockwise: Boolean = true): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
-            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            require(pageIndex in doc.pageFiles.indices) { "No such page" }
-
-            val file = doc.pageFiles[pageIndex]
-            rotateFile90(file, clockwise)
-            // Keep the kept original aligned so a later filter re-apply
-            // doesn't undo the rotation.
-            origOf(file).takeIf { it.exists() }?.let { rotateFile90(it, clockwise) }
-            ocrStore.invalidate(id, file.name)
+            OcrStore.locked {
+                val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+                require(pageIndex in doc.pageFiles.indices) { "No such page" }
+                val file = doc.pageFiles[pageIndex]
+                rotateFile90(file, clockwise)
+                // Keep the original aligned for later filter re-application.
+                origOf(file).takeIf { it.exists() }?.let { rotateFile90(it, clockwise) }
+                ocrStore.invalidate(id, file.name)
+            }
 
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rotate")
@@ -846,12 +847,14 @@ class ScanRepository(private val context: Context) {
     suspend fun cropPage(id: String, pageIndex: Int, rect: android.graphics.RectF): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
-            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            require(pageIndex in doc.pageFiles.indices) { "No such page" }
-            val file = doc.pageFiles[pageIndex]
-            ImageTools.cropTo(file, rect)
-            origOf(file).takeIf { it.exists() }?.let { ImageTools.cropTo(it, rect) }
-            ocrStore.invalidate(id, file.name)
+            OcrStore.locked {
+                val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+                require(pageIndex in doc.pageFiles.indices) { "No such page" }
+                val file = doc.pageFiles[pageIndex]
+                ImageTools.cropTo(file, rect)
+                origOf(file).takeIf { it.exists() }?.let { ImageTools.cropTo(it, rect) }
+                ocrStore.invalidate(id, file.name)
+            }
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after crop")
         }
@@ -861,29 +864,30 @@ class ScanRepository(private val context: Context) {
     suspend fun movePage(id: String, fromIndex: Int, toIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
-            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            require(fromIndex in doc.pageFiles.indices) { "No such page" }
-            require(toIndex in doc.pageFiles.indices) { "No such position" }
-
-            if (fromIndex != toIndex) {
-                val reordered = doc.pageFiles.toMutableList().apply {
-                    add(toIndex, removeAt(fromIndex))
+            OcrStore.locked {
+                val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+                require(fromIndex in doc.pageFiles.indices) { "No such page" }
+                require(toIndex in doc.pageFiles.indices) { "No such position" }
+                if (fromIndex != toIndex) {
+                    val reordered = doc.pageFiles.toMutableList().apply {
+                        add(toIndex, removeAt(fromIndex))
+                    }
+                    val tmpNames = mutableListOf<File>()
+                    reordered.forEachIndexed { i, f ->
+                        val tmp = File(dir, String.format(Locale.ROOT, "tmp_%03d.jpg", i))
+                        f.renameTo(tmp)
+                        origOf(f).takeIf { it.exists() }?.renameTo(origOf(tmp))
+                        tmpNames.add(tmp)
+                    }
+                    tmpNames.forEachIndexed { i, tmp ->
+                        val target = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i))
+                        tmp.renameTo(target)
+                        origOf(tmp).takeIf { it.exists() }?.renameTo(origOf(target))
+                    }
+                    ocrStore.afterMove(id, fromIndex, toIndex)
                 }
-                val tmpNames = mutableListOf<File>()
-                reordered.forEachIndexed { i, f ->
-                    val tmp = File(dir, String.format(Locale.ROOT, "tmp_%03d.jpg", i))
-                    f.renameTo(tmp)
-                    origOf(f).takeIf { it.exists() }?.renameTo(origOf(tmp))
-                    tmpNames.add(tmp)
-                }
-                tmpNames.forEachIndexed { i, tmp ->
-                    val target = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i))
-                    tmp.renameTo(target)
-                    origOf(tmp).takeIf { it.exists() }?.renameTo(origOf(target))
-                }
-                ocrStore.afterMove(id, fromIndex, toIndex)
-                regeneratePdf(dir)
             }
+            if (fromIndex != toIndex) regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after move")
         }
 
@@ -1164,14 +1168,13 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Replaces one page's OCR text (the OCR Editor's Save, P6) and rewrites
-     * `ocr.txt` through [OcrStore.putTexts]. Returns
+     * `ocr.txt` through [OcrStore.updateTexts]. Returns
      * the full updated page map, or null when the document does not exist.
      */
     fun updateOcrPage(id: String, pageKey: String, text: String): Map<String, String>? {
         val dir = File(docsDir, id)
         if (!dir.isDirectory) return null
-        ocrStore.putTexts(id, mapOf(pageKey to text))
-        return ocrStore.readText(id)
+        return ocrStore.updateTexts(id, mapOf(pageKey to text))
     }
 
     /**
@@ -1182,8 +1185,7 @@ class ScanRepository(private val context: Context) {
     fun updateOcrPages(id: String, pages: Map<String, String>): Map<String, String>? {
         val dir = File(docsDir, id)
         if (!dir.isDirectory) return null
-        ocrStore.putTexts(id, pages)
-        return ocrStore.readText(id)
+        return ocrStore.updateTexts(id, pages)
     }
 
     /**

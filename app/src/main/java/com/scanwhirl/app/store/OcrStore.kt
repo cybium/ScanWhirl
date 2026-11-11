@@ -2,8 +2,11 @@ package com.scanwhirl.app.store
 
 import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
+import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.Sha256
 import kotlin.concurrent.withLock
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
 
 /**
@@ -21,8 +24,9 @@ import java.util.concurrent.locks.ReentrantLock
  *
  * All methods synchronise on one process-wide lock because several
  * [ScanRepository] instances exist at once. Every write goes to `<file>.tmp`
- * and is renamed over the target (fall back to copy-then-delete when
- * `renameTo` returns false).
+ * and is fsynced and renamed over the target. Failed replacement never
+ * truncates the previous file. Geometry payloads may carry a text digest;
+ * this binds geometry to the text it describes across interrupted edits.
  */
 class OcrStore(private val docsDir: File) {
 
@@ -32,7 +36,12 @@ class OcrStore(private val docsDir: File) {
     private val TEXT_FILE = "ocr.txt"
     private val GEO_FILE = "ocr_geo.txt"
 
-    private val lock = ReentrantLock()
+    companion object {
+        private val lock = ReentrantLock()
+
+        // Never acquire the repository PDF lock while holding this lock.
+        internal fun <T> locked(action: () -> T): T = lock.withLock(action)
+    }
 
     private fun docDir(id: String): File = File(docsDir, id)
 
@@ -44,15 +53,12 @@ class OcrStore(private val docsDir: File) {
 
     /** Writes [content] to [target] atomically via `.tmp` + rename. */
     private fun atomicWrite(target: File, content: String) {
-        target.parentFile?.mkdirs()
-        val tmp = File(target.parentFile ?: target, "${target.name}.tmp")
-        tmp.writeText(content)
-        if (!tmp.renameTo(target)) {
-            // Fall back to copy-then-delete when renameTo returns false.
-            target.writeText(content)
-            tmp.delete()
-        }
+        Durable.atomicWriteText(target, content)
+        target.parentFile?.let { Durable.syncDir(it) }
     }
+
+    private fun digest(text: String): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
     private fun encodeText(text: String): String =
         android.util.Base64.encodeToString(text.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
@@ -105,15 +111,20 @@ class OcrStore(private val docsDir: File) {
 
     /** Reads both the v2 format and the legacy no-header format exactly as
      *  [ScanRepository.ocrDoc] does today. */
-    fun readText(id: String): Map<String, String> {
+    fun readText(id: String): Map<String, String> = lock.withLock {
+        try { readTextStrict(id) } catch (_: Exception) { emptyMap() }
+    }
+
+    private fun readTextStrict(id: String): Map<String, String> {
         val file = File(docDir(id), TEXT_FILE)
         if (!file.exists()) return emptyMap()
-        return try {
+        return run {
             val lines = file.readLines()
             if (lines.firstOrNull() == OCR_HEADER) {
                 lines.drop(1).mapNotNull { line ->
                     val parts = line.split('\t', limit = 2)
-                    if (parts.size != 2) null else parts[0] to decodeText(parts[1])
+                    if (parts.size != 2) throw IOException("Malformed OCR text")
+                    parts[0] to decodeText(parts[1])
                 }.toMap()
             } else {
                 // Legacy file (pre-test21): only the first line of each page survived.
@@ -122,16 +133,15 @@ class OcrStore(private val docsDir: File) {
                     if (parts.size == 2) parts[0] to parts[1] else null
                 }.toMap()
             }
-        } catch (_: Exception) {
-            emptyMap()
         }
     }
 
-    /** Replaces every given page's text in one rewrite through [atomicWrite]. */
+    /** Intentional replace-all operation. Editors must use [updateTexts] instead. */
     fun putTexts(id: String, pages: Map<String, String>) {
         lock.withLock {
             val dir = docDir(id)
             dir.mkdirs()
+            bindGeometry(id, readTextStrict(id))
             atomicWrite(
                 File(dir, TEXT_FILE),
                 (listOf(OCR_HEADER) + pages.map { (name, text) ->
@@ -141,22 +151,68 @@ class OcrStore(private val docsDir: File) {
         }
     }
 
+    /** Merge only changed keys. The single text rename is the edit commit point.
+     * Bind legacy geometry before committing text, so an interrupted edit leaves
+     * old text readable and never presents old coordinates for corrected text.
+     * Geometry for untouched pages remains valid; pending status is unchanged.
+     */
+    fun updateTexts(id: String, changes: Map<String, String>): Map<String, String> = lock.withLock {
+        if (!docDir(id).isDirectory) throw IOException("Document no longer exists")
+        val before = readTextStrict(id)
+        if (changes.isEmpty()) return@withLock before
+        bindGeometry(id, before)
+        val merged = before + changes
+        writeTexts(id, merged)
+        merged
+    }
+
+    private fun writeTexts(id: String, texts: Map<String, String>) = atomicWrite(
+        File(docDir(id), TEXT_FILE),
+        (listOf(OCR_HEADER) + texts.map { (key, text) -> "$key\t${encodeText(text)}" }).joinToString("\n")
+    )
+
+    private fun writeGeometry(
+        id: String,
+        geo: Map<String, OcrPage>,
+        texts: Map<String, String>,
+        previous: Map<String, Pair<String, OcrPage>> = emptyMap()
+    ) {
+        fun record(key: String, text: String, page: OcrPage): String {
+            val payload = encodeGeo(page) + "#text-sha256 ${digest(text)}\n"
+            return "$key\t${encodeText(payload)}"
+        }
+        atomicWrite(File(docDir(id), GEO_FILE),
+            (listOf(OCR_GEO_HEADER) + previous.map { (key, old) -> record(key, old.first, old.second) } +
+                geo.map { (key, page) -> record(key, texts[key].orEmpty(), page) }).joinToString("\n"))
+    }
+
+    private fun bindGeometry(id: String, texts: Map<String, String>) {
+        if (File(docDir(id), GEO_FILE).exists()) writeGeometry(id, readGeoStrict(id, texts), texts)
+    }
+
     // ------------------------------------------------------------------
     // Geometry (ocr_geo.txt)
     // ------------------------------------------------------------------
 
-    fun readGeo(id: String): Map<String, OcrPage> {
+    fun readGeo(id: String): Map<String, OcrPage> = lock.withLock {
+        try { readGeoStrict(id, readTextStrict(id)) } catch (_: Exception) { emptyMap() }
+    }
+
+    private fun readGeoStrict(id: String, texts: Map<String, String>): Map<String, OcrPage> {
         val file = File(docDir(id), GEO_FILE)
         if (!file.exists()) return emptyMap()
-        return try {
+        return run {
             val lines = file.readLines()
-            if (lines.firstOrNull() != OCR_GEO_HEADER) emptyMap()
+            if (lines.firstOrNull() != OCR_GEO_HEADER) throw IOException("Malformed OCR geometry")
             else lines.drop(1).mapNotNull { line ->
                 val parts = line.split('\t', limit = 2)
-                if (parts.size != 2) null else decodeGeo(decodeText(parts[1]))?.let { parts[0] to it }
+                if (parts.size != 2) throw IOException("Malformed OCR geometry")
+                val payload = decodeText(parts[1])
+                val bound = payload.lineSequence().firstOrNull { it.startsWith("#text-sha256 ") }
+                    ?.removePrefix("#text-sha256 ")
+                if (bound != null && (parts[0] !in texts || bound != digest(texts.getValue(parts[0])))) null
+                else (decodeGeo(payload) ?: throw IOException("Malformed OCR geometry")).let { parts[0] to it }
             }.toMap()
-        } catch (_: Exception) {
-            emptyMap()
         }
     }
 
@@ -166,34 +222,33 @@ class OcrStore(private val docsDir: File) {
             val dir = docDir(id)
             dir.mkdirs()
 
-            // Text
-            val currentText = readText(id).toMutableMap()
+            val before = readTextStrict(id)
+            val currentGeo = readGeoStrict(id, before).toMutableMap()
+            // Keep the previous geometry candidate until the text commit. A
+            // failed/cancelled text write can still resolve the old pair.
+            val previous = currentGeo[key]?.takeIf { before[key] != text }
+                ?.let { mapOf(key to (before[key].orEmpty() to it)) } ?: emptyMap()
+            val currentText = before.toMutableMap()
             currentText[key] = text
-            atomicWrite(
-                File(dir, TEXT_FILE),
-                (listOf(OCR_HEADER) + currentText.map { (name, t) ->
-                    "$name\t${encodeText(t)}"
-                }).joinToString("\n")
-            )
-
-            // Geometry
-            val currentGeo = readGeo(id).toMutableMap()
             if (page == null) {
                 currentGeo.remove(key)
             } else {
                 currentGeo[key] = page
             }
-            if (currentGeo.isEmpty()) {
-                File(dir, GEO_FILE).delete()
-            } else {
-                atomicWrite(
-                    File(dir, GEO_FILE),
-                    (listOf(OCR_GEO_HEADER) + currentGeo.map { (name, p) ->
-                        "$name\t${encodeText(encodeGeo(p))}"
-                    }).joinToString("\n")
-                )
-            }
+            writeGeometry(id, currentGeo, currentText, previous)
+            writeTexts(id, currentText)
         }
+    }
+
+    /** Recognition runs outside all file locks. Recheck under the shared lock:
+     * an editor, delete, rotation or reorder may have superseded this result.
+     */
+    internal fun putRecognizedPage(id: String, key: String, sourceHash: String, text: String, page: OcrPage?): Boolean = lock.withLock {
+        val source = File(docDir(id), key)
+        if (!source.isFile || Sha256.of(source) != sourceHash) return@withLock false
+        if (key in readTextStrict(id)) return@withLock true
+        putPage(id, key, text, page)
+        true
     }
 
     // ------------------------------------------------------------------
@@ -214,22 +269,11 @@ class OcrStore(private val docsDir: File) {
             // page at `index`, and shift every page after it down by one.
             val newText = mutableMapOf<String, String>()
             val newGeo = mutableMapOf<String, OcrPage>()
-            var newIndex = 0
-            var i = 0
-            while (true) {
-                if (i == index) {
-                    i++
-                    continue
-                }
-                val oldKey = pageKeyFor(i)
-                val hasText = currentText.containsKey(oldKey)
-                val hasGeo = currentGeo.containsKey(oldKey)
-                if (!hasText && !hasGeo) break
-                val newKey = pageKeyFor(newIndex)
-                if (hasText) newText[newKey] = currentText[oldKey]!!
-                if (hasGeo) newGeo[newKey] = currentGeo[oldKey]!!
-                newIndex++
-                i++
+            for (oldKey in currentText.keys + currentGeo.keys) {
+                val i = oldKey.removePrefix("page_").removeSuffix(".jpg").toIntOrNull()
+                val newKey = if (i != null && i > index) pageKeyFor(i - 1) else oldKey
+                currentText[oldKey]?.let { newText[newKey] = it }
+                currentGeo[oldKey]?.let { newGeo[newKey] = it }
             }
 
             if (newText.isEmpty()) {
@@ -259,34 +303,17 @@ class OcrStore(private val docsDir: File) {
     fun afterMove(id: String, from: Int, to: Int) {
         lock.withLock {
             val dir = docDir(id)
-            val fromKey = pageKeyFor(from)
-            val toKey = pageKeyFor(to)
-            val currentText = readText(id).toMutableMap()
-            val currentGeo = readGeo(id).toMutableMap()
-
-            val textValue = currentText.remove(fromKey)
-            val geoValue = currentGeo.remove(fromKey)
-
-            if (from < to) {
-                // Moving down: shift keys from+1..to down by one.
-                for (i in (from + 1)..to) {
-                    val oldKey = pageKeyFor(i)
-                    val newKey = pageKeyFor(i - 1)
-                    currentText[oldKey]?.let { currentText[newKey] = it; currentText.remove(oldKey) }
-                    currentGeo[oldKey]?.let { currentGeo[newKey] = it; currentGeo.remove(oldKey) }
-                }
-            } else {
-                // Moving up: shift keys to..from-1 up by one.
-                for (i in (to until from).reversed()) {
-                    val oldKey = pageKeyFor(i)
-                    val newKey = pageKeyFor(i + 1)
-                    currentText[oldKey]?.let { currentText[newKey] = it; currentText.remove(oldKey) }
-                    currentGeo[oldKey]?.let { currentGeo[newKey] = it; currentGeo.remove(oldKey) }
-                }
+            fun remap(key: String): String {
+                val index = key.removePrefix("page_").removeSuffix(".jpg").toIntOrNull() ?: return key
+                return pageKeyFor(when {
+                    index == from -> to
+                    from < to && index in (from + 1)..to -> index - 1
+                    from > to && index in to until from -> index + 1
+                    else -> index
+                })
             }
-
-            textValue?.let { currentText[toKey] = it }
-            geoValue?.let { currentGeo[toKey] = it }
+            val currentText = readText(id).mapKeys { remap(it.key) }
+            val currentGeo = readGeo(id).mapKeys { remap(it.key) }
 
             if (currentText.isEmpty()) {
                 File(dir, TEXT_FILE).delete()

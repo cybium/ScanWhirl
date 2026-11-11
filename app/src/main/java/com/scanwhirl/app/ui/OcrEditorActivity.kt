@@ -26,6 +26,7 @@ import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.OcrCleanup
 import com.scanwhirl.app.util.TextHistory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,6 +71,7 @@ class OcrEditorActivity : BaseActivity() {
     private val pageHistories = mutableMapOf<String, TextHistory>()
     /** Suppresses recording while the activity sets text programmatically. */
     private var applyingHistory = false
+    private var saving = false
 
     private lateinit var editText: EditText
     private lateinit var wordCount: TextView
@@ -398,28 +400,41 @@ class OcrEditorActivity : BaseActivity() {
         startActivity(Intent.createChooser(send, getString(R.string.ocr_share_text)))
     }
 
-    private fun saveCurrent() {
+    private fun saveCurrent(finishAfterSave: Boolean = false) {
+        if (saving) return
         val text = editText.text.toString()
         if (docId != null) {
             // Persist every page whose text differs from originalTexts, in one
             // rewrite, then update originals for exactly the pages written.
             val changedPages = pageTexts.filter { (k, v) -> v != (originalTexts[k] ?: "") }
             if (changedPages.isNotEmpty()) {
+                saving = true
+                binding.btnSave.isEnabled = false
                 lifecycleScope.launch {
-                    withContext(NonCancellable + Dispatchers.IO) {
-                        repo.updateOcrPages(docId!!, changedPages.toMap())
-                    }
-                    // Update originals on the main thread after the write completes.
-                    withContext(Dispatchers.Main.immediate) {
+                    try {
+                        withContext(NonCancellable + Dispatchers.IO) {
+                            checkNotNull(repo.updateOcrPages(docId!!, changedPages.toMap())) {
+                                "Document no longer exists"
+                            }
+                        }
                         for ((key, value) in changedPages) {
                             originalTexts = originalTexts + (key to value)
                         }
-                        isDirty = false
+                        recomputeDirty()
                         updateWordCount()
                         Toast.makeText(this@OcrEditorActivity, R.string.ocr_saved, Toast.LENGTH_SHORT).show()
+                        if (finishAfterSave && !isDirty) finish()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Toast.makeText(this@OcrEditorActivity,
+                            getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
+                    } finally {
+                        saving = false
+                        binding.btnSave.isEnabled = true
                     }
                 }
-            }
+            } else if (finishAfterSave) finish()
         } else {
             // Temp mode: save as .txt via DownloadSaver.
             val title = docTitle ?: "Document"
@@ -437,6 +452,7 @@ class OcrEditorActivity : BaseActivity() {
                     isDirty = false
                     updateWordCount()
                     Toast.makeText(this@OcrEditorActivity, R.string.ocr_saved, Toast.LENGTH_SHORT).show()
+                    if (finishAfterSave) finish()
                 }
             }
         }
@@ -511,8 +527,7 @@ class OcrEditorActivity : BaseActivity() {
             .setTitle(R.string.ocr_unsaved_title)
             .setMessage(R.string.ocr_unsaved_msg)
             .setPositiveButton(R.string.ocr_save_btn) { _, _ ->
-                saveCurrent()
-                finish()
+                saveCurrent(finishAfterSave = true)
             }
             .setNegativeButton(R.string.ocr_discard_btn) { _, _ ->
                 finish()

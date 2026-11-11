@@ -1,6 +1,7 @@
 package com.scanwhirl.app.store
 
 import com.scanwhirl.app.util.OcrEngine
+import com.scanwhirl.app.util.Sha256
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -101,6 +102,7 @@ class OcrIndexer(
     suspend fun indexNow(docId: String): Int = mutex.withLock {
         _state.value = IndexState(docId, 0, 0, 0)
         var failedPages = 0
+        var superseded = false
 
         val doc = repo.loadDocument(File(docsDir, docId)) ?: return@withLock 0
 
@@ -116,8 +118,12 @@ class OcrIndexer(
             _state.value = IndexState(docId, done, total, failedPages)
 
             try {
+                val sourceHash = OcrStore.locked { Sha256.of(page) }
                 val result = recognize(page)
-                store.putPage(docId, key, result.text, result.page)
+                if (!store.putRecognizedPage(docId, key, sourceHash, result.text, result.page)) {
+                    superseded = true
+                    failedPages++
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -127,7 +133,8 @@ class OcrIndexer(
             done++
         }
 
-        store.clearPending(docId)
+        // Do not erase an invalidation raised while this pass was recognizing.
+        if (!superseded) store.clearPending(docId)
         _state.value = IndexState(null, done, total, failedPages)
 
         afterIndexed(docId)
