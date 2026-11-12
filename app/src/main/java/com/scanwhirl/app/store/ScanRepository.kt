@@ -14,6 +14,7 @@ import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
@@ -1172,9 +1173,9 @@ class ScanRepository(private val context: Context) {
                 val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
                 require(pageIndex in doc.pageFiles.indices) { "No such page" }
                 val file = doc.pageFiles[pageIndex]
-                rotateFile90(file, clockwise)
-                // Keep the original aligned for later filter re-application.
-                origOf(file).takeIf { it.exists() }?.let { rotateFile90(it, clockwise) }
+                // M08 P0: the page and its kept original turn together or not at all;
+                // a failure leaves both, and the committed PDF, byte-identical.
+                editPageAndOriginal(file) { target -> ImageTools.stageRotate90(target, clockwise) }
                 ocrStore.invalidate(id, file.name)
             }
 
@@ -1194,15 +1195,31 @@ class ScanRepository(private val context: Context) {
                 val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
                 require(pageIndex in doc.pageFiles.indices) { "No such page" }
                 val file = doc.pageFiles[pageIndex]
-                ImageTools.cropTo(file, rect)
-                origOf(file).takeIf { it.exists() }?.let { ImageTools.cropTo(it, rect) }
+                editPageAndOriginal(file) { target -> ImageTools.stageCrop(target, rect) }
                 ocrStore.invalidate(id, file.name)
             }
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after crop")
         }
 
-    private fun rotateFile90(file: File, clockwise: Boolean = true) = ImageTools.rotate90(file, clockwise)
+    /**
+     * Stages [edit] for [page] and, when present, its kept original; only when every
+     * staged copy verifies are they swapped in together ([PageReplace.commit]).
+     */
+    private fun editPageAndOriginal(page: File, edit: (File) -> PageReplace.Staged) {
+        val orig = origOf(page).takeIf { it.exists() }
+        val staged = try {
+            PageReplace.stageAll(listOfNotNull({ edit(page) }, orig?.let { o -> { edit(o) } }))
+        } catch (e: Exception) {
+            if (orig != null && PageReplace.bounds(orig) == null) {
+                throw IllegalStateException(
+                    "This page's kept original can't be read, so nothing was changed.", e
+                )
+            }
+            throw e
+        }
+        PageReplace.commit(staged)
+    }
 
     suspend fun movePage(id: String, fromIndex: Int, toIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
@@ -1255,19 +1272,25 @@ class ScanRepository(private val context: Context) {
             require(pageIndex in doc.pageFiles.indices) { "No such page" }
             val file = doc.pageFiles[pageIndex]
             val orig = origOf(file)
+            // M08 P0: never truncate the page in place. Every new version is staged,
+            // fsynced and verified first; the original is removed only after the
+            // restored page has been swapped in.
             if (filter == ScanFilter.ORIGINAL) {
                 if (orig.exists()) {
-                    orig.copyTo(file, overwrite = true)
+                    PageReplace.commit(PageReplace.stageCopy(file, orig))
                     orig.delete()
                 }
             } else {
-                if (!orig.exists()) file.copyTo(orig, overwrite = true)
+                if (!orig.exists()) PageReplace.commit(PageReplace.stageCopy(orig, file))
                 val src = BitmapFactory.decodeFile(orig.path)
-                    ?: throw IllegalStateException("Unreadable page")
+                    ?: throw IllegalStateException("This page's kept original can't be read, so nothing was changed.")
                 val out = filter.applyTo(src)
-                FileOutputStream(file).use { o -> out.compress(Bitmap.CompressFormat.JPEG, 92, o) }
-                if (out !== src) out.recycle()
-                src.recycle()
+                try {
+                    PageReplace.commit(PageReplace.stageJpeg(file, out, 92))
+                } finally {
+                    if (out !== src) out.recycle()
+                    src.recycle()
+                }
             }
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after filter")

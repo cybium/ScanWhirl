@@ -250,65 +250,45 @@ object ImageTools {
      */
     fun orientDeskew(bytes: ByteArray): ByteArray = orientJpeg(bytes)
 
-    /**
-     * Writes [writer]'s output to a temp file next to [target] and swaps it in
-     * with an atomic rename. A failure therefore can never leave the page
-     * truncated/blank — the original file survives untouched.
-     */
-    private inline fun atomicWrite(target: java.io.File, writer: (java.io.File) -> Unit) {
-        val tmp = java.io.File(target.parentFile, target.name + ".tmp")
-        try {
-            writer(tmp)
-            if (!tmp.renameTo(target)) {
-                target.delete()
-                if (!tmp.renameTo(target)) {
-                    throw IllegalStateException("Could not replace ${target.name}")
-                }
-            }
-        } finally {
-            if (tmp.exists() && tmp.exists()) tmp.delete()
-        }
-    }
+    /** Rotates a JPEG file 90° in place, non-destructively ([PageReplace]). [clockwise] = right. */
+    fun rotate90(file: java.io.File, clockwise: Boolean = true) =
+        PageReplace.commit(stageRotate90(file, clockwise))
 
-    /** Rotates a JPEG file 90° in place. [clockwise] = right, false = left. */
-    fun rotate90(file: java.io.File, clockwise: Boolean = true) {
-        val src = decodeSampled(file.readBytes(), WORK_DIM)
-            ?: throw IllegalStateException("Unreadable page")
+    /** The rotated page, staged next to [file] and verified; [file] itself is untouched. */
+    fun stageRotate90(file: java.io.File, clockwise: Boolean = true): PageReplace.Staged {
+        val src = decodeSampledFile(file, WORK_DIM)
         val matrix = android.graphics.Matrix().apply {
             postRotate(if (clockwise) 90f else -90f)
         }
         val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
         if (rotated !== src) src.recycle()
-        atomicWrite(file) { tmp ->
-            if (rotated.isRecycled) throw IllegalStateException("Rotated page is gone")
-            java.io.FileOutputStream(tmp).use { out ->
-                rotated.compress(Bitmap.CompressFormat.JPEG, 95, out)
-            }
+        try {
+            return PageReplace.stageJpeg(file, rotated, 95)
+        } finally {
+            rotated.recycle()
         }
-        if (!rotated.isRecycled) rotated.recycle()
     }
 
-    /** Crops a JPEG file to [rect] (full-file pixel coordinates) in place. */
-    fun cropTo(file: java.io.File, rect: android.graphics.RectF) {
-        val src = decodeSampled(file.readBytes(), WORK_DIM)
-            ?: throw IllegalStateException("Unreadable page")
+    /** Crops a JPEG file to [rect] (full-file pixel coordinates) in place, non-destructively. */
+    fun cropTo(file: java.io.File, rect: android.graphics.RectF) =
+        PageReplace.commit(stageCrop(file, rect))
+
+    /** The cropped page, staged next to [file] and verified; [file] itself is untouched. */
+    fun stageCrop(file: java.io.File, rect: android.graphics.RectF): PageReplace.Staged {
+        val src = decodeSampledFile(file, WORK_DIM)
         val left = rect.left.roundToInt().coerceIn(0, src.width - 1)
         val top = rect.top.roundToInt().coerceIn(0, src.height - 1)
         val w = rect.width().roundToInt().coerceIn(1, src.width - left)
         val h = rect.height().roundToInt().coerceIn(1, src.height - top)
         // Framework quirk caught by test: for a full-page rect this returns the
-        // SAME object, so recycling src would kill the crop too. (This is the
-        // real cause of the "can't compress a recycled bitmap" crash.)
+        // SAME object, so recycling src would kill the crop too.
         val cropped = Bitmap.createBitmap(src, left, top, w, h)
-        val aliased = cropped === src
-        if (!aliased) src.recycle()
-        atomicWrite(file) { tmp ->
-            if (cropped.isRecycled) throw IllegalStateException("Cropped page is gone")
-            java.io.FileOutputStream(tmp).use { fos ->
-                cropped.compress(Bitmap.CompressFormat.JPEG, 95, fos)
-            }
+        if (cropped !== src) src.recycle()
+        try {
+            return PageReplace.stageJpeg(file, cropped, 95)
+        } finally {
+            cropped.recycle()
         }
-        if (!cropped.isRecycled) cropped.recycle()
     }
 
     fun encodePng(bitmap: Bitmap): ByteArray {

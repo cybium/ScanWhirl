@@ -31,9 +31,13 @@ object Durable {
     /** Directory-sync strategy; replaceable in tests. Returns true when the sync really happened. */
     @Volatile internal var dirSyncer: (File) -> Boolean = ::osSyncDirectory
 
+    /** Fault-injection seam (tests only): the file rename used by page replacement. */
+    @Volatile internal var renameSeam: (File, File) -> Boolean = { from, to -> from.renameTo(to) }
+
     internal fun resetForTests() {
         beforeFileSync = {}
         dirSyncer = ::osSyncDirectory
+        renameSeam = { from, to -> from.renameTo(to) }
     }
 
     /** Flushes and `fsync`s [out]; throws [SyncException] when the data cannot be forced to disk. */
