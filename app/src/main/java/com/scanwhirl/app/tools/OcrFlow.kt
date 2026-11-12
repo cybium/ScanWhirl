@@ -38,20 +38,18 @@ class OcrFlow(
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
-                val failed = ScanWhirlApp.from(activity).indexer.indexNow(doc.id)
+                val report = ScanWhirlApp.from(activity).indexer.index(doc.id)
                 progress.dismiss()
-                // Doc-backed: editor reads/writes repo.ocrDoc(doc.id).
+                // Doc-backed: editor reads/writes repo.ocrDoc(doc.id). M06: it is told
+                // why pages are missing, so it can say so instead of showing a blank page.
                 val intent = Intent(activity, OcrEditorActivity::class.java).apply {
                     putExtra(OcrEditorActivity.EXTRA_DOC_ID, doc.id)
+                    putExtra(OcrEditorActivity.EXTRA_READ_PROBLEM, OcrEditorActivity.problemOf(report))
                 }
                 activity.startActivity(intent)
             } catch (e: Exception) {
                 progress.dismiss()
-                Toast.makeText(
-                    activity,
-                    activity.getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
+                showFailure(e)
             } finally {
                 host.workEnded()
             }
@@ -79,11 +77,7 @@ class OcrFlow(
                 startEditorWithText(text, FlowUtil.devicePdfName(repo, uri))
             } catch (e: Exception) {
                 progress.dismiss()
-                Toast.makeText(
-                    activity,
-                    activity.getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
+                showFailure(e)
             } finally {
                 host.workEnded()
             }
@@ -113,15 +107,21 @@ class OcrFlow(
                 startEditorWithText(text, title)
             } catch (e: Exception) {
                 progress.dismiss()
-                Toast.makeText(
-                    activity,
-                    activity.getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
+                showFailure(e)
             } finally {
                 host.workEnded()
             }
         }
+    }
+
+    /** M06: "recognition unavailable" is explained, not shown as a raw ML Kit error. */
+    private fun showFailure(e: Exception) {
+        val text = if (OcrEngine.isUnavailable(e)) {
+            activity.getString(R.string.ocr_unavailable_toast)
+        } else {
+            activity.getString(R.string.page_op_failed, e.message)
+        }
+        Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
     }
 
     /** Write OCR text to a cache file and launch the editor with EXTRA_TEXT_PATH + EXTRA_TITLE. */

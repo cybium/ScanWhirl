@@ -24,6 +24,9 @@ import kotlinx.coroutines.withContext
  */
 object SavedSnackbar {
 
+    /** M06: how long an export result with Open/Undo stays up. */
+    const val ACTION_DURATION_MS = 6000
+
     /** [onUndo] null hides Undo. */
     fun show(
         root: View,
@@ -31,7 +34,8 @@ object SavedSnackbar {
         onOpen: () -> Unit,
         onUndo: (() -> Unit)?
     ): Snackbar {
-        val snackbar = Snackbar.make(root, "", Snackbar.LENGTH_LONG)
+        // M06: two-line outcome + actions need longer than LENGTH_LONG (~2.75 s) to read and act on.
+        val snackbar = Snackbar.make(root, "", Snackbar.LENGTH_LONG).setDuration(ACTION_DURATION_MS)
         val layout = snackbar.view
         layout.findViewById<View>(com.google.android.material.R.id.snackbar_text)
             ?.visibility = View.GONE

@@ -19,13 +19,16 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityOcrEditorBinding
+import com.scanwhirl.app.store.OcrIndexer
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.OcrCleanup
@@ -72,6 +75,11 @@ class OcrEditorActivity : BaseActivity() {
     private var currentPageKey: String = ""
     private var isDirty: Boolean = false
     private var cacheFileToDelete: File? = null
+    /** M06: pages with no stored text entry ("not read"), as opposed to read-but-empty. */
+    private val unreadKeys = linkedSetOf<String>()
+    /** Why pages are unread, from the last indexing pass: [PROBLEM_UNAVAILABLE] / [PROBLEM_FAILED]. */
+    private var readProblem: String? = null
+    private var retrying = false
     /** Per-page undo/redo history. */
     private val pageHistories = mutableMapOf<String, TextHistory>()
     /** Suppresses recording while the activity sets text programmatically. */
@@ -97,39 +105,32 @@ class OcrEditorActivity : BaseActivity() {
 
         val intent = intent
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        // M06 (found on device): doc mode never received a title, so every
+        // document's text export was named "Document.txt".
         docTitle = intent.getStringExtra(EXTRA_TITLE)
+            ?: docId?.let { id -> repo.getDocument(id)?.name }
         val textPath = intent.getStringExtra(EXTRA_TEXT_PATH)
 
-        // Restore rotation state: dirty pages and current page key come from
-        // the bundle; originalTexts are re-read from the repo/file so dirty
-        // detection works against the true baseline.
-        var hasSavedState = false
-        savedInstanceState?.let { state ->
-            hasSavedState = true
-            currentPageKey = state.getString("currentPageKey") ?: ""
-            val dirtyPages = state.getBundle("dirtyPages") ?: Bundle()
-            for (key in dirtyPages.keySet()) {
-                val text = dirtyPages.getString(key) ?: ""
-                pageTexts[key] = text
-            }
-        }
+        readProblem = savedInstanceState?.getString(STATE_PROBLEM, null)
+            ?: intent.getStringExtra(EXTRA_READ_PROBLEM)
 
+        // Originals are always (re)loaded from the repo/file so dirty detection
+        // works against the true baseline and every page is present. On
+        // recreation, the bundle's dirty pages and current page key go on top.
         if (docId != null) {
-            if (hasSavedState) {
-                originalTexts = repo.ocrDoc(docId!!).toMap()
-            } else {
-                loadDocOcr(docId!!)
-            }
+            loadDocOcr(docId!!)
         } else if (textPath != null) {
-            if (hasSavedState) {
-                val file = File(textPath)
-                originalTexts = mapOf("temp" to (if (file.exists()) file.readText() else ""))
-            } else {
-                loadTempOcr(textPath)
-            }
+            loadTempOcr(textPath)
         } else {
             finish()
             return
+        }
+        savedInstanceState?.let { state ->
+            val dirtyPages = state.getBundle("dirtyPages") ?: Bundle()
+            for (key in dirtyPages.keySet()) {
+                pageTexts[key] = dirtyPages.getString(key) ?: ""
+            }
+            state.getString("currentPageKey")?.takeIf { it in pageTexts }?.let { currentPageKey = it }
         }
 
         // Recompute dirty from restored state.
@@ -140,6 +141,7 @@ class OcrEditorActivity : BaseActivity() {
         setupEditText()
         setupCleanupBar()
         setupActionBar()
+        binding.btnOcrRetry.setOnClickListener { retryReading() }
         showPage(currentPageKey)
 
         // Dirty-state back handling.
@@ -161,6 +163,7 @@ class OcrEditorActivity : BaseActivity() {
             if (value != orig) dirtyPages.putString(key, value)
         }
         outState.putBundle("dirtyPages", dirtyPages)
+        outState.putString(STATE_PROBLEM, readProblem)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -179,18 +182,24 @@ class OcrEditorActivity : BaseActivity() {
     // Loading
     // ------------------------------------------------------------------
 
+    /**
+     * M06: every page of the document gets a tab. A page with stored text
+     * (possibly empty: read, nothing recognised) shows it. A page with no stored
+     * entry was *not read* (failed, unavailable or not yet). It is shown as such,
+     * never as an ordinary empty page, and it is never written back as "" unless the
+     * person types into it.
+     */
     private fun loadDocOcr(id: String) {
-        val pages = repo.ocrDoc(id)
-        if (pages.isEmpty()) {
-            // No OCR yet: single empty page so the editor still opens.
-            pageTexts["page_000.jpg"] = ""
-            originalTexts = mapOf("page_000.jpg" to "")
-            currentPageKey = "page_000.jpg"
-        } else {
-            pageTexts.putAll(pages)
-            originalTexts = pages.toMap()
-            currentPageKey = pages.keys.first()
-        }
+        val texts = repo.ocrDoc(id)
+        val pageKeys = repo.getDocument(id)?.pageFiles?.map { it.name } ?: emptyList()
+        val keys = (pageKeys + texts.keys).distinct().sorted()
+            .ifEmpty { listOf("page_000.jpg") }
+        unreadKeys.clear()
+        unreadKeys.addAll(keys.filter { it !in texts })
+        originalTexts = keys.associateWith { texts[it] ?: "" }
+        pageTexts.clear()
+        pageTexts.putAll(originalTexts)
+        currentPageKey = keys.first()
     }
 
     private fun loadTempOcr(path: String) {
@@ -230,7 +239,11 @@ class OcrEditorActivity : BaseActivity() {
 
         for (key in pageTexts.keys.sorted()) {
             val chip = Chip(this).apply {
-                text = pageLabel(key)
+                text = if (key in unreadKeys) {
+                    getString(R.string.ocr_page_label_unread, pageNumberOf(key))
+                } else {
+                    pageLabel(key)
+                }
                 tag = key
                 setCheckable(true)
                 isChecked = (key == currentPageKey)
@@ -294,12 +307,98 @@ class OcrEditorActivity : BaseActivity() {
 
     private fun showPage(key: String) {
         currentPageKey = key
+        editText.hint = if (key in unreadKeys) getString(R.string.ocr_page_not_read_hint) else null
         editText.setText(pageTexts[key] ?: "")
         editText.setSelection(editText.text.length)
         updatePageTabs()
         updateWordCount()
         updateUndoRedoState()
+        updateStatus()
     }
+
+    // ------------------------------------------------------------------
+    // M06: honest recognition status
+    // ------------------------------------------------------------------
+
+    /**
+     * One banner, one truth:
+     *  - every page read but nothing recognised → "No text was found" (no Retry)
+     *  - recognition unavailable on this device → explain it, offer Retry
+     *  - no page could be read → say so, offer Retry
+     *  - some pages not read → "Text on n of m pages; page x, y not read", Retry
+     *  - otherwise nothing.
+     * Typing is always possible: text you type for a page is saved as that page's
+     * text and becomes searchable, which is real manual entry, not fake OCR.
+     */
+    private fun updateStatus() {
+        val total = pageTexts.size
+        val unread = unreadKeys.size
+        val message: String? = when {
+            retrying -> getString(R.string.ocr_status_retrying)
+            docId == null ->
+                if ((originalTexts["temp"] ?: "").isBlank()) getString(R.string.ocr_status_no_text_temp) else null
+            unread == 0 ->
+                if (originalTexts.values.all { it.isBlank() }) getString(R.string.ocr_status_no_text) else null
+            readProblem == PROBLEM_UNAVAILABLE -> getString(R.string.ocr_status_unavailable)
+            unread >= total -> getString(R.string.ocr_status_not_read)
+            else -> resources.getQuantityString(
+                R.plurals.ocr_status_partial, total,
+                total - unread, total,
+                unreadKeys.sorted().joinToString(", ") { pageNumberOf(it).toString() }
+            )
+        }
+        binding.ocrStatus.isVisible = message != null
+        binding.ocrStatusText.text = message
+        val canRetry = docId != null && unread > 0 && !retrying
+        binding.btnOcrRetry.isVisible = canRetry
+    }
+
+    /**
+     * Reads the unread pages again. Already stored pages, including corrected
+     * text, are never re-read or overwritten. A page the person has typed into
+     * keeps their text.
+     */
+    private fun retryReading() {
+        val id = docId ?: return
+        if (retrying || unreadKeys.isEmpty()) return
+        retrying = true
+        updateStatus()
+        lifecycleScope.launch {
+            val report = try {
+                ScanWhirlApp.from(this@OcrEditorActivity).indexer.index(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            val texts = withContext(Dispatchers.IO) { repo.ocrDoc(id) }
+            retrying = false
+            var newlyRead = 0
+            for (key in unreadKeys.toList()) {
+                val text = texts[key] ?: continue
+                unreadKeys.remove(key)
+                newlyRead++
+                originalTexts = originalTexts + (key to text)
+                if ((pageTexts[key] ?: "").isEmpty()) pageTexts[key] = text
+            }
+            readProblem = report?.let { problemOf(it) } ?: PROBLEM_FAILED
+            recomputeDirty()
+            setupPageTabs()
+            applyingHistory = true
+            showPage(currentPageKey)
+            applyingHistory = false
+            if (newlyRead > 0) {
+                Toast.makeText(
+                    this@OcrEditorActivity,
+                    resources.getQuantityString(R.plurals.ocr_retry_read, newlyRead, newlyRead),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun pageNumberOf(key: String): Int =
+        (key.substringAfterLast("_").substringBefore(".").toIntOrNull() ?: 0) + 1
 
     private fun updatePageTabs() {
         if (chipGroup.visibility == View.GONE) return
@@ -312,7 +411,12 @@ class OcrEditorActivity : BaseActivity() {
 
     private fun updateWordCount() {
         val text = editText.text.toString()
-        val words = if (text.isBlank()) 0 else text.split(Regex("\\s+")).size
+        if (text.isBlank() && currentPageKey in unreadKeys) {
+            // Not "0 words": nothing was read here.
+            wordCount.text = getString(R.string.ocr_page_not_read)
+            return
+        }
+        val words = if (text.isBlank()) 0 else text.trim().split(Regex("\\s+")).size
         val resId = if (isDirty) R.string.ocr_word_count_edited else R.string.ocr_word_count
         wordCount.text = getString(resId, words)
     }
@@ -425,8 +529,11 @@ class OcrEditorActivity : BaseActivity() {
                         for ((key, value) in changedPages) {
                             originalTexts = originalTexts + (key to value)
                         }
+                        // Typed text for an unread page is now that page's stored text.
+                        if (unreadKeys.removeAll(changedPages.keys)) setupPageTabs()
                         recomputeDirty()
                         updateWordCount()
+                        updateStatus()
                         Toast.makeText(this@OcrEditorActivity, R.string.ocr_saved, Toast.LENGTH_SHORT).show()
                         if (finishAfterSave && !isDirty) finish()
                     } catch (e: CancellationException) {
@@ -551,17 +658,17 @@ class OcrEditorActivity : BaseActivity() {
         return if (entries.size <= 1) {
             entries.firstOrNull()?.value ?: ""
         } else {
+            // M06 (found on device): headings are 1-based like the tabs (they said
+            // "Page 0"), and a page that was never read says so in the export
+            // instead of looking like a page with no text.
             entries.joinToString("\n\n") { (key, text) ->
-                "${getString(R.string.ocr_page_label, pageNumber(key))}\n$text"
+                val heading = if (key in unreadKeys && text.isBlank()) {
+                    getString(R.string.ocr_page_label_unread, pageNumberOf(key))
+                } else {
+                    getString(R.string.ocr_page_label, pageNumberOf(key))
+                }
+                "$heading\n$text"
             }
-        }
-    }
-
-    private fun pageNumber(key: String): Int {
-        return if (key.startsWith("page_")) {
-            key.substringAfterLast("_").substringBefore(".").toIntOrNull() ?: 0
-        } else {
-            0
         }
     }
 
@@ -597,5 +704,16 @@ class OcrEditorActivity : BaseActivity() {
         const val EXTRA_DOC_ID = "com.scanwhirl.app.extra.DOC_ID"
         const val EXTRA_TEXT_PATH = "com.scanwhirl.app.extra.TEXT_PATH"
         const val EXTRA_TITLE = "com.scanwhirl.app.extra.TITLE"
+        /** M06: why some pages have no text after the last pass (doc mode). */
+        const val EXTRA_READ_PROBLEM = "com.scanwhirl.app.extra.READ_PROBLEM"
+        const val PROBLEM_UNAVAILABLE = "unavailable"
+        const val PROBLEM_FAILED = "failed"
+        private const val STATE_PROBLEM = "readProblem"
+
+        fun problemOf(report: OcrIndexer.IndexReport): String? = when {
+            report.unavailable -> PROBLEM_UNAVAILABLE
+            report.failedPages > 0 -> PROBLEM_FAILED
+            else -> null
+        }
     }
 }

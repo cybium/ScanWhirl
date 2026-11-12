@@ -99,12 +99,41 @@ class OcrIndexer(
      * exceptions leave the key absent and increment the failure count;
      * [CancellationException] is rethrown.
      */
-    suspend fun indexNow(docId: String): Int = mutex.withLock {
+    suspend fun indexNow(docId: String): Int = index(docId).failedPages
+
+    /**
+     * M06: what one indexing pass achieved, so the UI can tell "no text on the
+     * page" (stored, empty) from "could not read" (absent) and from
+     * "recognition unavailable on this device" (retry later).
+     */
+    data class IndexReport(
+        /** Pages in the document. */
+        val totalPages: Int,
+        /** Pages with stored text after the pass (including ones stored earlier). */
+        val pagesWithText: Int,
+        /** Pages this pass attempted but could not store. */
+        val failedPages: Int,
+        /** Recognition itself was unavailable (e.g. text model not downloaded). */
+        val unavailable: Boolean
+    )
+
+    /**
+     * Runs the indexing pass for [docId] in the caller's coroutine under the
+     * [mutex]. A page whose key is already present in the store is skipped
+     * (resume-safe, and it never overwrites corrected text). Page-level
+     * exceptions leave the key absent. When recognition is unavailable the
+     * pass stops early: the remaining pages would fail the same way. They stay
+     * absent ("not read") and are counted as failed. [CancellationException]
+     * is rethrown.
+     */
+    suspend fun index(docId: String): IndexReport = mutex.withLock {
         _state.value = IndexState(docId, 0, 0, 0)
         var failedPages = 0
         var superseded = false
+        var unavailable = false
 
-        val doc = repo.loadDocument(File(docsDir, docId)) ?: return@withLock 0
+        val doc = repo.loadDocument(File(docsDir, docId))
+            ?: return@withLock IndexReport(0, 0, 0, false)
 
         val existingText = store.readText(docId)
         val existingGeo = store.readGeo(docId)
@@ -114,6 +143,10 @@ class OcrIndexer(
         for (page in doc.pageFiles) {
             val key = page.name
             if (key in existingText || key in existingGeo) continue
+            if (unavailable) {
+                failedPages++
+                continue
+            }
 
             _state.value = IndexState(docId, done, total, failedPages)
 
@@ -126,20 +159,24 @@ class OcrIndexer(
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // Page unreadable: key stays absent ("not read"), never stored as empty text.
                 failedPages++
+                if (OcrEngine.isUnavailable(e)) unavailable = true
             }
             done++
         }
 
-        // Do not erase an invalidation raised while this pass was recognizing.
-        if (!superseded) store.clearPending(docId)
+        // Do not erase an invalidation raised while this pass was recognizing. When
+        // recognition was unavailable the document stays pending, so a later
+        // launch retries it (resumePending) and Home keeps saying "waiting".
+        if (!superseded && !unavailable) store.clearPending(docId)
         _state.value = IndexState(null, done, total, failedPages)
 
         afterIndexed(docId)
 
-        return@withLock failedPages
+        val stored = store.readText(docId).keys.count { k -> doc.pageFiles.any { it.name == k } }
+        return@withLock IndexReport(total, stored, failedPages, unavailable)
     }
 
     private suspend fun consumerLoop() {

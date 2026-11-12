@@ -234,6 +234,24 @@ class ExportTransactionTest {
         assertOldSurvives("delete failed")
     }
 
+    @Test
+    fun `test-build device trigger fails one save mid-write and is consumed`() {
+        assertTrue("trigger exists only in test builds", com.scanwhirl.app.BuildConfig.TEST_BUILD)
+        DownloadSaver.savePdfFile(app, oldBytes, "Bill.pdf")
+        val trigger = File(app.getExternalFilesDir(null), DownloadSaver.DEVICE_FAULT_FILE)
+        trigger.writeText("writing\n")
+        try {
+            DownloadSaver.savePdfFile(app, newBytes, "Bill.pdf")
+            fail("armed trigger must fail the save")
+        } catch (e: DownloadSaver.ExportException) {
+            assertTrue(e.message!!.contains("WRITING"))
+        }
+        assertFalse("one shot: the trigger is consumed", trigger.exists())
+        assertOldSurvives("device trigger")
+        assertTrue(media.pendingRows().isEmpty())
+        assertEquals("next save works", "Bill (2).pdf", DownloadSaver.savePdfFile(app, newBytes, "Bill.pdf").name)
+    }
+
     // ------------------------------------------------------------------
     // Undo
     // ------------------------------------------------------------------

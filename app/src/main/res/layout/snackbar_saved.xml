@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- T4.7: Snackbar content with Open + Undo (Material allows only one action
-     button, so both live here as a custom view inside the snackbar). -->
+     button, so both live here as a custom view inside the snackbar).
+     M06 (found on device): Material 3 draws snackbars on colorSurfaceInverse, so
+     text and actions use the inverse colours like the stock snackbar does. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -19,7 +21,7 @@
         android:layout_weight="1"
         android:ellipsize="end"
         android:maxLines="2"
-        android:textColor="?attr/colorOnSurface"
+        android:textColor="?attr/colorOnSurfaceInverse"
         android:textSize="14sp" />
 
     <com.google.android.material.button.MaterialButton
@@ -29,7 +31,7 @@
         android:layout_height="wrap_content"
         android:minHeight="48dp"
         android:text="@string/open"
-        android:textColor="?attr/colorOnSurface" />
+        android:textColor="?attr/colorPrimaryInverse" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/snackUndo"
@@ -38,5 +40,5 @@
         android:layout_height="wrap_content"
         android:minHeight="48dp"
         android:text="@string/undo"
-        android:textColor="?attr/colorOnSurface" />
+        android:textColor="?attr/colorPrimaryInverse" />
 </LinearLayout>

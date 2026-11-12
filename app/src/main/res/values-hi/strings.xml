@@ -523,4 +523,26 @@
     <string name="reader_find_excerpt_page"><!-- review -->पेज %1$d</string>
     <string name="reader_find_excerpt_desc"><!-- review -->पेज %1$d: %2$s. पेज पर जाएँ</string>
     <string name="reader_start_changed"><!-- review -->खोज के बाद यह दस्तावेज़ बदल गया, इसलिए यह पेज 1 पर खुला।</string>
+    <!-- M06: honest recognition status in the Text editor. -->
+    <string name="ocr_unavailable_toast">इस डिवाइस पर टेक्स्ट पहचान अभी उपलब्ध नहीं है। Google Play services को टेक्स्ट मॉडल डाउनलोड करना होगा (इंटरनेट चाहिए)। बाद में फिर कोशिश करें।</string>
+    <string name="ocr_status_unavailable">इस डिवाइस पर टेक्स्ट पहचान अभी उपलब्ध नहीं है: Google Play services ने टेक्स्ट मॉडल डाउनलोड नहीं किया है (इंटरनेट चाहिए)। बाद में फिर कोशिश करें, या टेक्स्ट खुद लिखें।</string>
+    <string name="ocr_status_not_read">इन पृष्ठों से टेक्स्ट पढ़ा नहीं जा सका। फिर कोशिश करें, या टेक्स्ट खुद लिखें।</string>
+    <plurals name="ocr_status_partial">
+        <item quantity="one">%2$d में से %1$d पृष्ठ पर टेक्स्ट पढ़ा गया। नहीं पढ़ा गया: पृष्ठ %3$s।</item>
+        <item quantity="other">%2$d में से %1$d पृष्ठों पर टेक्स्ट पढ़ा गया। नहीं पढ़ा गया: पृष्ठ %3$s।</item>
+    </plurals>
+    <string name="ocr_status_no_text">इन पृष्ठों पर कोई टेक्स्ट नहीं मिला। हस्तलेख और फ़ोटो में अक्सर नहीं होता; आप टेक्स्ट खुद लिख सकते हैं।</string>
+    <string name="ocr_status_no_text_temp">कोई टेक्स्ट नहीं मिला। आप इसे खुद लिख सकते हैं।</string>
+    <string name="ocr_status_retrying">टेक्स्ट फिर से पढ़ा जा रहा है…</string>
+    <string name="ocr_retry">फिर कोशिश करें</string>
+    <string name="ocr_page_label_unread">पृष्ठ %1$d · नहीं पढ़ा गया</string>
+    <string name="ocr_page_not_read">नहीं पढ़ा गया</string>
+    <string name="ocr_page_not_read_hint">इस पृष्ठ का टेक्स्ट नहीं पढ़ा गया। फिर कोशिश करें दबाएँ, या यहाँ लिखें।</string>
+    <plurals name="ocr_retry_read">
+        <item quantity="one">%1$d और पृष्ठ पर टेक्स्ट पढ़ा गया</item>
+        <item quantity="other">%1$d और पृष्ठों पर टेक्स्ट पढ़ा गया</item>
+    </plurals>
+    <!-- M06: newly saved document on Home. -->
+    <string name="home_new_doc_shown">सहेजा गया: %1$s</string>
+    <string name="home_new_doc_hidden">%1$s सहेजा गया, लेकिन आपकी खोज या फ़िल्टर इसे छिपा रहा है।</string>
 </resources>

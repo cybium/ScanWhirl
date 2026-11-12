@@ -168,11 +168,19 @@ class TextFitTest {
     private fun collectProblems(root: View, label: String) {
         // Views under a scrolling ancestor are cropped on purpose — skipping
         // them keeps below-the-fold list rows from looking like defects.
+        // M06: content under a collapsing AppBarLayout (ScrollingViewBehavior) is taller
+        // than its coordinator by the header's scroll range by design. It is what scrolls
+        // under the header, so it is part of the scroll chain too.
+        fun scrollsUnderAppBar(v: View): Boolean =
+            (v.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)
+                ?.behavior is com.google.android.material.appbar.AppBarLayout.ScrollingViewBehavior
+
         fun inScrollChain(v: View): Boolean {
+            if (scrollsUnderAppBar(v)) return true
             var p = v.parent as? View
             while (p != null && p != root) {
                 val n = p.javaClass.simpleName
-                if (n.contains("Scroll") || n.contains("ViewPager")) return true
+                if (n.contains("Scroll") || n.contains("ViewPager") || scrollsUnderAppBar(p)) return true
                 p = p.parent as? View
             }
             return false

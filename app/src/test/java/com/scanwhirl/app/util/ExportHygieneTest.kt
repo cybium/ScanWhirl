@@ -3,6 +3,7 @@ package com.scanwhirl.app.util
 import android.app.Application
 import android.content.pm.ProviderInfo
 import android.net.Uri
+import android.util.TypedValue
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -138,6 +139,19 @@ class ExportHygieneTest {
                 android.view.View.GONE,
                 again!!.findViewById<android.view.View>(R.id.snackUndo).visibility
             )
+            // M06 device finding: the message was light-on-light (colorOnSurface on
+            // Material 3's inverse-surface snackbar). It must use the inverse text colour.
+            scenario.onActivity { activity ->
+                val tv = TypedValue()
+                activity.theme.resolveAttribute(
+                    com.google.android.material.R.attr.colorOnSurfaceInverse, tv, true
+                )
+                assertEquals(
+                    "snackbar message uses colorOnSurfaceInverse",
+                    tv.data,
+                    again!!.findViewById<android.widget.TextView>(R.id.snackMessage).currentTextColor
+                )
+            }
         }
 
         val rows = media.scanwhirlPdfs()
@@ -194,9 +208,13 @@ class ExportHygieneTest {
             val kept = media.scanwhirlPdfs().single()
             assertEquals("Changed.pdf", kept.values.getAsString("_display_name"))
             assertTrue("earlier export bytes unchanged", original.contentEquals(kept.file.readBytes()))
-            assertEquals("its record survives", listOf(kept.id), repo.exportsOf(id).map {
-                android.content.ContentUris.parseId(it)
-            })
+            // Undo forgets the removed copy's record right after deleting it (same IO task).
+            assertTrue(
+                "only the earlier copy stays recorded — got ${repo.exportsOf(id)}",
+                pollUntil {
+                    repo.exportsOf(id).map { android.content.ContentUris.parseId(it) } == listOf(kept.id)
+                }
+            )
         }
     }
 

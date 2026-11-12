@@ -210,6 +210,15 @@ abstract class HomeFontScaleBase {
                         "list bottom padding ${list.paddingBottom}px covers the ${protrusion}px disc @ $scale",
                         list.paddingBottom >= protrusion
                     )
+                    // M06: at large text the header scrolls away with the list. Scrolling
+                    // down collapses it first (a programmatic scrollBy does not), so the end
+                    // of the list is measured in the collapsed state a person actually sees.
+                    val bar = activity.findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.homeAppBar)
+                    val collapsible = (bar.getChildAt(0).layoutParams as
+                        com.google.android.material.appbar.AppBarLayout.LayoutParams).scrollFlags != 0
+                    if (scale < 1.3f) assertTrue("100% header never collapses", !collapsible)
+                    if (scale >= 2.0f) assertTrue("200% header scrolls away on this phone", collapsible)
+                    if (collapsible) bar.setExpanded(false, false)
                     list.scrollToPosition(list.adapter!!.itemCount - 1)
                     layoutAs(root, activity)
                     list.scrollBy(0, 100000) // to the very end

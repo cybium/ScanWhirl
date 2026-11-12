@@ -73,6 +73,42 @@ object DownloadSaver {
 
     internal fun resetForTests() {
         faultAt = {}
+        deviceFault = null
+    }
+
+    /** Test builds only: a one-shot failpoint armed on the device by [armDeviceFault]. */
+    @Volatile private var deviceFault: Stage? = null
+
+    private fun hit(stage: Stage) {
+        faultAt(stage)
+        if (deviceFault == stage) {
+            deviceFault = null
+            throw ExportException("Injected test fault at ${stage.name}")
+        }
+    }
+
+    /** Trigger file name for [armDeviceFault]. */
+    internal const val DEVICE_FAULT_FILE = "m06_export_fault"
+
+    /**
+     * M06 device acceptance, **TEST builds only** (`BuildConfig.TEST_BUILD`; inert in
+     * production). If `<app external files>/m06_export_fault` exists and names a
+     * [Stage] (e.g. `WRITING`), the next save fails at that stage. The file is
+     * consumed, so it fires once. This lets an emulator prove, against the real
+     * provider, that a failed save keeps the earlier export and leaves nothing partial.
+     */
+    private fun armDeviceFault(context: Context) {
+        if (!com.scanwhirl.app.BuildConfig.TEST_BUILD) return
+        val dir = try { context.getExternalFilesDir(null) } catch (_: Exception) { null } ?: return
+        val trigger = File(dir, DEVICE_FAULT_FILE)
+        if (!trigger.isFile) return
+        val stage = try {
+            Stage.valueOf(trigger.readText().trim().uppercase())
+        } catch (_: Exception) {
+            null
+        }
+        trigger.delete()
+        deviceFault = stage
     }
 
     /** A save could not complete. Earlier exports are untouched. */
@@ -331,7 +367,11 @@ object DownloadSaver {
     private fun downloads(subdir: String?): Target {
         val sub = if (subdir.isNullOrBlank()) SUBDIR else "$SUBDIR/$subdir"
         return Target(
-            collection = { downloadsCollection() },
+            // Only exportQ (Android 10+) asks for the collection; the guard makes that explicit.
+            collection = {
+                if (Build.VERSION.SDK_INT >= 29) downloadsCollection()
+                else throw ExportException("MediaStore Downloads needs Android 10")
+            },
             relPath = Environment.DIRECTORY_DOWNLOADS + "/" + sub,
             legacyDir = { publicDir(Environment.DIRECTORY_DOWNLOADS, sub) },
             mime = "image/jpeg",
@@ -352,12 +392,17 @@ object DownloadSaver {
         requested: String,
         target: Target
     ): SavedFile = synchronized(EXPORT_LOCK) {
-        // Read the source once to learn what a complete copy must look like.
-        val expected = source().use { fingerprint(it) }
-        if (Build.VERSION.SDK_INT >= 29) {
-            exportQ(context, source, requested, target, expected)
-        } else {
-            exportLegacy(context, source, requested, target, expected)
+        armDeviceFault(context)
+        try {
+            // Read the source once to learn what a complete copy must look like.
+            val expected = source().use { fingerprint(it) }
+            if (Build.VERSION.SDK_INT >= 29) {
+                exportQ(context, source, requested, target, expected)
+            } else {
+                exportLegacy(context, source, requested, target, expected)
+            }
+        } finally {
+            deviceFault = null
         }
     }
 
@@ -431,12 +476,12 @@ object DownloadSaver {
         val uri: Uri = resolver.insert(collection, values)
             ?: throw ExportException("Could not create $name")
         try {
-            faultAt(Stage.STAGED)
+            hit(Stage.STAGED)
             val pfd = resolver.openFileDescriptor(uri, "w")
                 ?: throw ExportException("Could not open $name for writing")
             val written = writeAll(ParcelFileDescriptor.AutoCloseOutputStream(pfd), source)
             verify(name, expected, written) { resolver.openInputStream(uri) }
-            faultAt(Stage.PUBLISHING)
+            hit(Stage.PUBLISHING)
             val publish = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
             if (resolver.update(uri, publish, null, null) != 1) {
                 throw ExportException("Could not finish saving $name")
@@ -490,10 +535,10 @@ object DownloadSaver {
         // Unique per save: two saves can never share a staging file.
         val temp = File.createTempFile(TEMP_PREFIX, TEMP_SUFFIX, dir)
         val dest: File = try {
-            faultAt(Stage.STAGED)
+            hit(Stage.STAGED)
             val written = writeAll(FileOutputStream(temp), source)
             verify(requested, expected, written) { FileInputStream(temp) }
-            faultAt(Stage.PUBLISHING)
+            hit(Stage.PUBLISHING)
             // No-clobber publish: the name is chosen under EXPORT_LOCK and checked
             // again just before the rename, so this app never renames over a file.
             // (Another app creating that exact name in the same instant is the one
@@ -547,12 +592,12 @@ object DownloadSaver {
                     out.write(buf, 0, n)
                     digest.update(buf, 0, n)
                     total += n
-                    faultAt(Stage.WRITING)
+                    hit(Stage.WRITING)
                 }
             }
             out.flush()
             out.fd.sync()
-            faultAt(Stage.CLOSING)
+            hit(Stage.CLOSING)
         } catch (e: Throwable) {
             failure = e
         }
@@ -580,7 +625,7 @@ object DownloadSaver {
     /** Best-effort cleanup that never masks the original failure. */
     private inline fun discard(cause: Throwable, remove: () -> Unit) {
         try {
-            faultAt(Stage.DISCARDING)
+            hit(Stage.DISCARDING)
             remove()
         } catch (e: Throwable) {
             cause.addSuppressed(e)

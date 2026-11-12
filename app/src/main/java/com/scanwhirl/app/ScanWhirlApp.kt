@@ -19,9 +19,9 @@ class ScanWhirlApp : Application() {
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** Public setter so tests can replace it with a fake-recognizer instance. */
+    /** Module-visible setter so tests can replace it with a fake-recognizer instance. */
     lateinit var indexer: OcrIndexer
-        private set
+        @androidx.annotation.VisibleForTesting internal set
 
     companion object {
         fun from(context: Context): ScanWhirlApp =

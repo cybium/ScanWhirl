@@ -60,6 +60,7 @@ import com.scanwhirl.app.ui.home.HomeDocInfo
 import com.scanwhirl.app.ui.home.HomeDocInfoReader
 import com.scanwhirl.app.ui.home.HomeRow
 import com.scanwhirl.app.ui.home.HomeRowDivider
+import com.scanwhirl.app.ui.home.HomeReveal
 import com.scanwhirl.app.util.BrandWhirl
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
@@ -176,6 +177,10 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** Documents in the list as last submitted; drives the list header count. */
     private var shownCount = 0
+    /** M06: a just-saved document to scroll into view on the next render. */
+    private var revealTarget: String? = null
+    /** M06: whether the header currently scrolls away with the list. */
+    private var headerCollapsible = false
 
     /** T4.4 — the Quick Sort nudge's label (built once in onCreate). */
     private lateinit var nudgeLabel: TextView
@@ -286,6 +291,13 @@ class MainActivity : BaseActivity(), HomeHost {
         binding.scanList.addItemDecoration(HomeRowDivider(this))
         (binding.scanList.itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)
             ?.supportsChangeAnimations = false
+        // M06: re-decide whether the header may scroll away whenever the list area or
+        // the header changes size (font scale, keyboard, rotation, banners).
+        val sizeWatcher = View.OnLayoutChangeListener { v, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) v.post { updateHeaderCollapse() }
+        }
+        binding.homeContent.addOnLayoutChangeListener(sizeWatcher)
+        binding.homeAppBar.addOnLayoutChangeListener(sizeWatcher)
 
         // T3.6: the bottom bar replaces the FAB and the tool cards (R7/Q7).
         // SCAN keeps the old FAB behaviour: add when the vault is open.
@@ -502,6 +514,9 @@ class MainActivity : BaseActivity(), HomeHost {
             if (vault != vaultMode) return@launch // vault toggled mid-read; a newer load follows
             allDocs = docs
             rowInfo = info
+            // M06: a just-saved document is revealed by the render below, when this
+            // fresh library actually contains it (otherwise there is nothing to show here).
+            HomeReveal.take()?.let { id -> if (docs.any { it.id == id }) revealTarget = id }
             buildChipRail()
             renderHome()
             if (brandWhirl.onLibraryLoaded(docs.mapTo(HashSet()) { it.id }, vault)) playBrandWhirl()
@@ -639,9 +654,15 @@ class MainActivity : BaseActivity(), HomeHost {
         adapter.selectedIds = selectedIds
         adapter.snippets = result.snippets
         adapter.externalViewer = Prefs.defaultViewer(this) == Prefs.VIEWER_SYSTEM
+        val reveal = revealTarget
+        revealTarget = null
+        val revealAt = reveal?.let { id -> result.docs.indexOfFirst { it.id == id } } ?: -1
         adapter.submitList(result.docs.map {
             HomeRow(it, rowInfo[it.id] ?: HomeDocInfo.UNKNOWN, matches[it.id])
-        })
+        }) {
+            if (revealAt >= 0) revealRow(revealAt)
+        }
+        if (reveal != null && revealAt < 0) announceHiddenNewDoc(reveal)
         binding.emptyState.isVisible = result.docs.isEmpty()
         if (result.docs.isEmpty()) updateEmptyState()
         binding.scanList.isVisible = true
@@ -652,6 +673,71 @@ class MainActivity : BaseActivity(), HomeHost {
         if (selectionMode && allDocs.none { it.id in selectedIds }) {
             setSelectionMode(false)
         }
+    }
+
+    /**
+     * M06: scrolls a just-saved document's row into view. The list, its order and
+     * every filter stay as they are. The header expands only when the row is
+     * the first one, so the reveal never hides search.
+     */
+    private fun revealRow(position: Int) {
+        val lm = binding.scanList.layoutManager as? LinearLayoutManager ?: return
+        if (position == 0) binding.homeAppBar.setExpanded(true, false)
+        lm.scrollToPositionWithOffset(position, 0)
+        val name = adapter.currentList.getOrNull(position)?.doc?.name ?: return
+        binding.scanList.announceForAccessibility(getString(R.string.home_new_doc_shown, name))
+    }
+
+    /**
+     * M06: the user's search or category filter hides the document they just
+     * saved. Say so, and let them choose to Show all. The filter is never cleared
+     * behind their back.
+     */
+    private fun announceHiddenNewDoc(id: String) {
+        val doc = allDocs.firstOrNull { it.id == id } ?: return
+        Snackbar.make(
+            binding.root,
+            getString(R.string.home_new_doc_hidden, doc.name),
+            Snackbar.LENGTH_LONG
+        ).setDuration(com.scanwhirl.app.util.SavedSnackbar.ACTION_DURATION_MS).setAction(R.string.show_all) {
+            // Same as the empty state's Show all: drop the query and the category,
+            // then render once more with the reveal armed.
+            binding.searchInput.setText("")
+            selectCategory(null)
+            revealTarget = id
+            renderHome()
+        }.show()
+    }
+
+    /**
+     * M06: the header (title, search, filters, Quick sort, list header) scrolls
+     * away with the list only when it takes more than [HEADER_COLLAPSE_FRACTION]
+     * of the list area: 200% text, a short screen, or the keyboard open. Any
+     * upward scroll brings it straight back (enterAlways + snap). At normal sizes
+     * the header is fixed exactly as before.
+     */
+    private fun updateHeaderCollapse() {
+        val area = binding.homeContent.height
+        val header = binding.homeAppBar.height
+        if (area <= 0 || header <= 0) return
+        val largeText = resources.configuration.fontScale >= LARGE_TEXT_SCALE
+        val collapsible = largeText && header > area * HEADER_COLLAPSE_FRACTION
+        if (collapsible == headerCollapsible) return
+        headerCollapsible = collapsible
+        val flags = if (collapsible) {
+            com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL or
+                com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_ENTER_ALWAYS or
+                com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_SNAP
+        } else {
+            0
+        }
+        val bar = binding.homeAppBar
+        for (i in 0 until bar.childCount) {
+            (bar.getChildAt(i).layoutParams as? com.google.android.material.appbar.AppBarLayout.LayoutParams)
+                ?.scrollFlags = flags
+        }
+        if (!collapsible) bar.setExpanded(true, false)
+        bar.requestLayout()
     }
 
     /**
@@ -697,6 +783,14 @@ class MainActivity : BaseActivity(), HomeHost {
                 binding.emptyNote.isVisible = false
                 binding.btnShowAll.isVisible = true
             }
+        }
+        // M06: a filter/search that hides everything shows its message right under the
+        // header, not centred where the keyboard covers it; first-run stays centred.
+        val filterEmpty = allDocs.isNotEmpty()
+        binding.emptyContent.gravity = if (filterEmpty) {
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        } else {
+            Gravity.CENTER
         }
         // Glyph states draw small and dim; the illustration keeps its own colours.
         val glyph = !(allDocs.isEmpty() && !vaultMode)
@@ -1598,5 +1692,9 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     companion object {
+        /** M06: at large text, the header may scroll away once it takes more than this share of the list area. */
+        internal const val HEADER_COLLAPSE_FRACTION = 0.3f
+        /** M06: system font scale from which Home's header may collapse; 100% Home never changes. */
+        internal const val LARGE_TEXT_SCALE = 1.3f
     }
 }

@@ -26,6 +26,26 @@ import kotlin.coroutines.resumeWithException
  */
 object OcrEngine {
 
+    /**
+     * M06: true when recognition itself is not available on this device, as
+     * opposed to a page failing. This is ML Kit's `UNAVAILABLE` (e.g. Play
+     * services has not downloaded the text model yet, as on an emulator without
+     * the vision.ocr module). It is retryable later and is not the page's fault.
+     */
+    fun isUnavailable(error: Throwable): Boolean {
+        var e: Throwable? = error
+        var depth = 0
+        while (e != null && depth++ < 8) {
+            if (e is com.google.mlkit.common.MlKitException &&
+                e.errorCode == com.google.mlkit.common.MlKitException.UNAVAILABLE
+            ) return true
+            val msg = e.message.orEmpty()
+            if (msg.contains("model to be downloaded", ignoreCase = true)) return true
+            e = e.cause
+        }
+        return false
+    }
+
     /** One recognised text block, reduced to what reading order needs. */
     data class OcrBlock(val top: Int, val left: Int, val lines: List<String>)
 

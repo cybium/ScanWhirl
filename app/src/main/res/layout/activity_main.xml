@@ -23,11 +23,25 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+        <!-- M06: the list area is its own CoordinatorLayout so the whole header
+             (title, search, filters, Quick sort, list header) can scroll away with
+             the list when it is tall (200% text, keyboard open) and come straight
+             back on any upward scroll. MainActivity enables the scroll flags only
+             then; at normal sizes the header stays put as before. The labelled dock
+             below is outside and never moves. -->
+        <androidx.coordinatorlayout.widget.CoordinatorLayout
+            android:id="@+id/homeContent"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
         <com.google.android.material.appbar.AppBarLayout
+            android:id="@+id/homeAppBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@color/sf_appbar"
-            app:elevation="0dp">
+            app:elevation="0dp"
+            app:liftOnScroll="false">
 
             <com.google.android.material.appbar.MaterialToolbar
                 android:id="@+id/toolbar"
@@ -219,7 +233,6 @@
                     android:visibility="gone"
                     app:tint="@color/rv_ink_2" />
             </LinearLayout>
-        </com.google.android.material.appbar.AppBarLayout>
 
         <!-- test26 T3.1/T3.4: category filter rail, built in code
              (MainActivity.buildChipRail); GONE until the first render. -->
@@ -399,11 +412,13 @@
                 android:textSize="12sp"
                 app:strokeColor="@color/rv_hairline" />
         </LinearLayout>
+        </com.google.android.material.appbar.AppBarLayout>
 
         <FrameLayout
+            android:id="@+id/listFrame"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1">
+            android:layout_height="match_parent"
+            app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/scanList"
@@ -426,6 +441,7 @@
                 android:fillViewport="true">
 
                 <LinearLayout
+                    android:id="@+id/emptyContent"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
@@ -520,6 +536,7 @@
                 </LinearLayout>
             </ScrollView>
         </FrameLayout>
+        </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
         <!-- Dock: Tools · Scan · Import, each labelled. Scan is a cyan pill inside the
              dock (no protruding disc, so nothing overlaps the list). Restrained press

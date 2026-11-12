@@ -1249,6 +1249,8 @@ class ScanReviewActivity : BaseActivity() {
                         getString(R.string.scan_saved)
                     }
                     Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
+                    // M06: back on Home, the new document is scrolled into view.
+                    com.scanwhirl.app.ui.home.HomeReveal.request(doc.id)
                     startActivity(DocumentViewerActivity.intent(this@ScanReviewActivity, doc.id))
                     // Index the pages for text search in the background (Free, survives screen close).
                     // Indexing failure can never invalidate the saved PDF.

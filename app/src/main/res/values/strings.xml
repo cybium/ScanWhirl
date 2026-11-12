@@ -572,4 +572,26 @@
     <string name="reader_find_excerpt_page">Page %1$d</string>
     <string name="reader_find_excerpt_desc">Page %1$d: %2$s. Go to page</string>
     <string name="reader_start_changed">This document changed since your search, so it opened at page 1.</string>
+    <!-- M06: honest recognition status in the Text editor. -->
+    <string name="ocr_unavailable_toast">Text recognition is not available on this device yet. Google Play services must download its text model (needs internet). Try again later.</string>
+    <string name="ocr_status_unavailable">Text recognition is not available on this device yet: Google Play services has not downloaded its text model (it needs an internet connection). Try again later, or type the text yourself.</string>
+    <string name="ocr_status_not_read">Text could not be read from these pages. Try again, or type the text yourself.</string>
+    <plurals name="ocr_status_partial">
+        <item quantity="one">Text read on %1$d of %2$d page. Not read: page %3$s.</item>
+        <item quantity="other">Text read on %1$d of %2$d pages. Not read: page %3$s.</item>
+    </plurals>
+    <string name="ocr_status_no_text">No text was found on these pages. Handwriting and photos often have none; you can type the text yourself.</string>
+    <string name="ocr_status_no_text_temp">No text was found. You can type it yourself.</string>
+    <string name="ocr_status_retrying">Reading text again…</string>
+    <string name="ocr_retry">Try again</string>
+    <string name="ocr_page_label_unread">Page %1$d · not read</string>
+    <string name="ocr_page_not_read">Not read</string>
+    <string name="ocr_page_not_read_hint">The text on this page was not read. Tap Try again, or type it here.</string>
+    <plurals name="ocr_retry_read">
+        <item quantity="one">Text read on %1$d more page</item>
+        <item quantity="other">Text read on %1$d more pages</item>
+    </plurals>
+    <!-- M06: newly saved document on Home. -->
+    <string name="home_new_doc_shown">Saved: %1$s</string>
+    <string name="home_new_doc_hidden">Saved %1$s, but your search or filter hides it.</string>
 </resources>
