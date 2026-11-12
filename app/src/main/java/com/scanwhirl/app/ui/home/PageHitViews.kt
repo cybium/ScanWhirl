@@ -46,30 +46,41 @@ object PageHitViews {
         externalViewer: Boolean,
         onOpen: (ScanDocument, PageLink) -> Unit
     ): Boolean {
-        val showPages = enabled && match != null && match.isPageEvidence
-        scope.isVisible = enabled && match != null && !match.isPageEvidence
+        // A locked document never shows page evidence, even if a caller hands one in.
+        val usable = match.takeIf { !doc.isLocked }
+        val showPages = enabled && usable != null && usable.isPageEvidence
+        scope.isVisible = enabled && usable != null && !usable.isPageEvidence
         note.isVisible = showPages && externalViewer
         container.isVisible = showPages
-        if (!showPages || match == null) {
-            for (i in 0 until container.childCount) container.getChildAt(i).setOnClickListener(null)
+        if (!showPages || usable == null) {
+            for (i in 0 until container.childCount) {
+                val child = container.getChildAt(i)
+                child.setOnClickListener(null)
+                if (doc.isLocked) {
+                    // Hidden strips must not keep a previous row's text either.
+                    child.findViewById<TextView>(R.id.hitLabel)?.text = null
+                    child.findViewById<TextView>(R.id.hitExcerpt)?.text = null
+                    child.contentDescription = null
+                }
+            }
             return false
         }
         val context = container.context
         val res = context.resources
         val strips = ArrayList<Strip>()
-        for (p in match.pages) {
+        for (p in usable.pages) {
             val label = res.getQuantityString(R.plurals.page_hit_label, p.count, p.pageIndex + 1, p.count)
             val desc = context.getString(R.string.page_hit_open_desc, doc.name, p.pageIndex + 1) +
                 ". " + label
-            strips += Strip(label, p.excerpt, desc, PageLink(doc.id, match.revision, p.pageIndex, p.pageKey, match.query))
+            strips += Strip(label, p.excerpt, desc, PageLink(doc.id, usable.revision, p.pageIndex, p.pageKey, usable.query))
         }
-        val firstKey = match.firstPageKey
-        if (match.pageHitCount > match.pages.size && firstKey != null) {
+        val firstKey = usable.firstPageKey
+        if (usable.pageHitCount > usable.pages.size && firstKey != null) {
             strips += Strip(
-                res.getQuantityString(R.plurals.page_hit_see_all, match.pageHitCount, match.pageHitCount),
+                res.getQuantityString(R.plurals.page_hit_see_all, usable.pageHitCount, usable.pageHitCount),
                 null,
-                context.getString(R.string.page_hit_see_all_desc, doc.name, match.pageHitCount),
-                PageLink(doc.id, match.revision, match.firstPageIndex, firstKey, match.query)
+                context.getString(R.string.page_hit_see_all_desc, doc.name, usable.pageHitCount),
+                PageLink(doc.id, usable.revision, usable.firstPageIndex, firstKey, usable.query)
             )
         }
         while (container.childCount < strips.size) {

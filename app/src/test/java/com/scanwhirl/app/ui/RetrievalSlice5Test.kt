@@ -296,20 +296,88 @@ class RetrievalSlice5Test {
     }
 
     @Test
-    fun `locked document page link asks for the password first and shows no page excerpt`() {
+    fun `locked document is not found by its content and shows no page count or link`() {
+        fixture("Locked pay slip", 3, text(3, mapOf(1 to "gratuity")), locked = true)
+        fixture("Open memo", 2, text(2, mapOf(0 to "gratuity")))
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue(pollUntil { list(activity).adapter!!.itemCount == 2 })
+                search(activity, "gratuity")
+                // Only the ordinary document is a hit; the locked one is not even listed.
+                assertTrue(pollUntil {
+                    (list(activity).adapter as ScanListAdapter).currentList.map { it.doc.name } == listOf("Open memo")
+                })
+                val rows = (list(activity).adapter as ScanListAdapter).currentList
+                assertTrue(rows.none { it.doc.isLocked })
+                assertTrue(pollUntil { strips(row(activity, 0)).isNotEmpty() })
+            }
+        }
+    }
+
+    @Test
+    fun `locked document found by name carries no OCR hint, count, link or snippet and still needs the password`() {
         fixture("Locked pay slip", 3, text(3, mapOf(1 to "gratuity")), locked = true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 assertTrue(pollUntil { list(activity).adapter!!.itemCount == 1 })
-                search(activity, "gratuity")
-                assertTrue(pollUntil { strips(row(activity, 0)).isNotEmpty() })
-                val strip = strips(row(activity, 0)).single()
-                assertFalse(strip.findViewById<View>(R.id.hitExcerpt).isVisible)
-                strip.performClick()
+                // name term + a content-only word: no oracle
+                search(activity, "locked gratuity")
+                assertTrue(pollUntil { list(activity).adapter!!.itemCount == 0 })
+                search(activity, "pay slip")
+                assertTrue(pollUntil {
+                    list(activity).adapter!!.itemCount == 1 &&
+                        (list(activity).adapter as ScanListAdapter).currentList.single().doc.isLocked
+                })
+                val r = row(activity, 0)
+                assertTrue(strips(r).isEmpty())
+                assertFalse(r.findViewById<View>(R.id.matchScope).isVisible)
+                assertFalse(r.findViewById<View>(R.id.scanSnippet).isVisible)
+                assertNull((list(activity).adapter as ScanListAdapter).currentList.single().match)
+                r.performClick()
                 assertNull("never routed around the unlock", shadowOf(activity).nextStartedActivity)
                 val dialog = ShadowDialog.getLatestDialog()
                 assertNotNull(dialog)
                 assertTrue(dialog!!.isShowing)
+            }
+        }
+    }
+
+    @Test
+    fun `a recycled or stale row never shows OCR hints for a document that is locked now`() {
+        val open = fixture("Payroll", 3, text(3, mapOf(1 to "gratuity")))
+        val lockedNow = open.copy(isLocked = true)
+        val match = HomePageMatches.build("gratuity", listOf(open), setOf(open.id)) { id ->
+            repo.ocrDoc(id)
+        }.getValue(open.id)
+        assertTrue(match.isPageEvidence)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val adapter = ScanListAdapter({}, {}, {}, {})
+                val holder = adapter.onCreateViewHolder(FrameLayout(activity), 0)
+                adapter.snippets = mapOf(open.id to "…secret gratuity…")
+                // 1) bound while unlocked: page evidence appears
+                adapter.submitList(listOf(HomeRow(open, HomeDocInfo.UNKNOWN, match)))
+                assertTrue(pollUntil { adapter.currentList.size == 1 })
+                adapter.onBindViewHolder(holder, 0)
+                assertTrue(strips(holder.itemView).isNotEmpty())
+                // 2) the SAME holder is re-bound to the now-locked document, with the stale
+                //    match AND the stale snippet map still in place
+                adapter.submitList(listOf(HomeRow(lockedNow, HomeDocInfo.UNKNOWN, match)))
+                assertTrue(pollUntil { adapter.currentList.singleOrNull()?.doc?.isLocked == true })
+                adapter.onBindViewHolder(holder, 0)
+                val v = holder.itemView
+                assertTrue(strips(v).isEmpty())
+                assertFalse(v.findViewById<View>(R.id.pageHits).isVisible)
+                assertFalse(v.findViewById<View>(R.id.matchScope).isVisible)
+                assertFalse(v.findViewById<View>(R.id.scanSnippet).isVisible)
+                assertEquals("", v.findViewById<TextView>(R.id.scanSnippet).text.toString())
+                val box = v.findViewById<LinearLayout>(R.id.pageHits)
+                for (i in 0 until box.childCount) {
+                    val c = box.getChildAt(i)
+                    assertFalse(c.hasOnClickListeners())
+                    assertEquals("", c.findViewById<TextView>(R.id.hitLabel).text.toString())
+                    assertEquals("", c.findViewById<TextView>(R.id.hitExcerpt).text.toString())
+                }
             }
         }
     }

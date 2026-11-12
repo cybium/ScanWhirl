@@ -62,7 +62,9 @@ object HomeFilter {
             val hits = SearchMatcher.search(
                 state.query, visible, state.includeVaulted, normalizedText, originalText
             )
-            val snippets = hits.filter { it.snippet != null }.associate { it.doc.id to it.snippet!! }
+            // Defence in depth: a locked document never carries an OCR snippet.
+            val snippets = hits.filter { it.snippet != null && !it.doc.isLocked }
+                .associate { it.doc.id to it.snippet!! }
             HomeResult(hits.map { it.doc }, snippets)
         }
 

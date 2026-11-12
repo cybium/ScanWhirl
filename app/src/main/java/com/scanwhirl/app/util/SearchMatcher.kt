@@ -52,7 +52,8 @@ object SearchMatcher {
      * Searches [docs] for [query]. Terms are the normalised query split on
      * whitespace. Vaulted documents are excluded unless [includeVaulted].
      * A document matches when every term occurs in its normalised name or
-     * its normalised text (from [normalizedText]).
+     * its normalised text (from [normalizedText]). Locked documents match on
+     * their name alone: neither callback is invoked for them.
      *
      * [kind] is NAME when all terms occur in the name and none only in the
      * text; TEXT when no term occurs in the name; otherwise BOTH.
@@ -77,7 +78,10 @@ object SearchMatcher {
 
         val hits = visible.mapNotNull { doc ->
             val normName = normalize(doc.name)
-            val normText = normalizedText(doc.id)
+            // Privacy: a password-locked document is searchable by its (already visible)
+            // name only. Its OCR is never read here, so no term can be probed against it —
+            // not even a term that also appears in the name — and no snippet can exist.
+            val normText = if (doc.isLocked) "" else normalizedText(doc.id)
 
             val nameTerms = terms.count { normName.contains(it) }
             val textTerms = terms.count { normText.contains(it) }
@@ -94,7 +98,7 @@ object SearchMatcher {
             val textOccurrences = countOccurrences(normText, terms)
             val score = 1000 * nameTerms + minOf(textOccurrences, 999)
 
-            val snippet = if (textTerms > 0) buildSnippet(originalText(doc.id), terms) else null
+            val snippet = if (!doc.isLocked && textTerms > 0) buildSnippet(originalText(doc.id), terms) else null
 
             Hit(doc, kind, snippet, score)
         }

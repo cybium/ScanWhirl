@@ -119,7 +119,12 @@ class ScanListAdapter(
 
             // Retrieval slice 5: page links, only for a match computed for THIS document at
             // its current revision (a recycled or edited row never inherits another's pages).
-            val match = row.match?.takeIf { it.docId == doc.id && it.revision == doc.revision }
+            // A locked document never shows OCR-derived hints, whatever a stale row, a
+            // recycled holder or a late snippet map carries: it is judged by the document
+            // bound NOW.
+            val match = row.match?.takeIf {
+                !doc.isLocked && it.docId == doc.id && it.revision == doc.revision
+            }
             val pagesShown = PageHitViews.bind(
                 binding.pageHits, binding.matchScope, binding.pageHitNote, doc, match,
                 enabled = !selectionMode, externalViewer = externalViewer, onOpen = onPageLink
@@ -127,7 +132,7 @@ class ScanListAdapter(
 
             // Search snippet: shown only when a text hit explains the match (page
             // links carry their own per-page excerpts instead).
-            val snippet = snippets[doc.id]?.takeIf { !pagesShown }
+            val snippet = snippets[doc.id]?.takeIf { !pagesShown && !doc.isLocked }
             binding.scanSnippet.isVisible = snippet != null
             binding.scanSnippet.text = snippet
 

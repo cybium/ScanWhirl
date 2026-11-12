@@ -34,7 +34,7 @@ data class RowMatch(
     val isPageEvidence: Boolean get() = pages.isNotEmpty()
 }
 
-/** One matching page as shown in a Home row. [excerpt] is null for locked documents. */
+/** One matching page as shown in a Home row. Never built for a locked document. */
 data class PagePreview(
     val pageIndex: Int,
     val pageKey: String,
@@ -62,6 +62,9 @@ object HomePageMatches {
         val out = LinkedHashMap<String, RowMatch>()
         for (doc in docs) {
             if (doc.id !in textHitIds) continue
+            // Privacy: a locked document's OCR is never read, so Home can show no page
+            // number, count, link or "matches across" note for it.
+            if (doc.isLocked) continue
             val text = pages(doc.id)
             val result = PageTextMatches.find(query, doc.pageFiles.map { it.name }, text)
             val previews = result.hits.take(MAX_PREVIEWS).map { hit ->
@@ -69,7 +72,7 @@ object HomePageMatches {
                     pageIndex = hit.pageIndex,
                     pageKey = hit.pageKey,
                     count = hit.count,
-                    excerpt = if (doc.isLocked) null else text[hit.pageKey]?.let {
+                    excerpt = text[hit.pageKey]?.let {
                         PageTextMatches.excerpt(it, hit.ranges.first(), result.terms)
                     }
                 )
