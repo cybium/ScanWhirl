@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Retrieval slice 5: the reader's Find panel — the Index/Focus ink surface with a
+     top hairline, docked under the pages so it never covers them. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="@color/rv_surface" />
+    </item>
+    <item android:gravity="top" android:height="1dp">
+        <color android:color="@color/rv_hairline" />
+    </item>
+</layer-list>

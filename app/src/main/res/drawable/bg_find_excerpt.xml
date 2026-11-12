@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Retrieval slice 5: recognised-text excerpt in the reader's Find panel (tap = go to page). -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/rv_accent_fill">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/rv_surface_2" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+</ripple>

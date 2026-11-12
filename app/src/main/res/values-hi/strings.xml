@@ -484,4 +484,35 @@
     <string name="text_status_reading"><!-- review -->पाठ पढ़ा जा रहा है %1$d/%2$d</string>
     <string name="doc_category_action"><!-- review -->श्रेणी %1$s। श्रेणी बदलें</string>
     <string name="home_pro_tag_desc"><!-- review -->%1$s. ScanWhirl Pro का विवरण खोलें</string>
+    <plurals name="page_hit_label">
+        <item quantity="one">पेज %1$d · %2$d मिलान</item>
+        <item quantity="other">पेज %1$d · %2$d मिलान</item>
+    </plurals>
+    <string name="page_hit_open_desc"><!-- review -->%1$s खोलें, पेज %2$d</string>
+    <plurals name="page_hit_see_all">
+        <item quantity="one">Find में %1$d मिलता पेज देखें</item>
+        <item quantity="other">Find में सभी %1$d मिलते पेज देखें</item>
+    </plurals>
+    <string name="page_hit_see_all_desc"><!-- review -->%1$s खोलें और सभी %2$d मिलते पेज ढूँढें</string>
+    <string name="page_hit_across"><!-- review -->मिलान पूरे दस्तावेज़ में है, किसी एक पेज पर नहीं</string>
+    <string name="page_hit_reader_note"><!-- review -->पेज लिंक ScanWhirl रीडर में खुलते हैं</string>
+    <string name="reader_find"><!-- review -->पाठ में ढूँढें</string>
+    <string name="reader_find_hint"><!-- review -->पहचाने गए पाठ में ढूँढें</string>
+    <string name="reader_find_prev"><!-- review -->पिछला</string>
+    <string name="reader_find_next"><!-- review -->अगला</string>
+    <string name="reader_find_prev_desc"><!-- review -->पिछला मिलान</string>
+    <string name="reader_find_next_desc"><!-- review -->अगला मिलान</string>
+    <string name="reader_find_close"><!-- review -->Find बंद करें</string>
+    <string name="reader_find_position"><!-- review -->मिलान %1$d / %2$d · पेज %3$d</string>
+    <string name="reader_find_type"><!-- review -->इस स्कैन के पहचाने गए पाठ में ढूँढने के लिए कोई शब्द लिखें।</string>
+    <string name="reader_find_none"><!-- review -->पहचाने गए पाठ में “%1$s” नहीं मिला।</string>
+    <string name="reader_find_partial"><!-- review -->%2$d में से %1$d पेजों पर पाठ पहचाना गया है; बाकी पेज अभी नहीं ढूँढे जा सकते।</string>
+    <string name="reader_find_pending"><!-- review -->ScanWhirl अभी इस स्कैन का पाठ पढ़ रहा है, इसलिए नतीजे बढ़ सकते हैं।</string>
+    <string name="reader_find_no_text"><!-- review -->इस स्कैन में अभी कोई पहचाना गया पाठ नहीं है, इसलिए Find के पास खोजने को कुछ नहीं है।</string>
+    <string name="reader_find_external"><!-- review -->Find पहचाने गए पाठ वाले ScanWhirl स्कैन पर काम करता है। यह PDF आपके डिवाइस से खोली गई है, इसलिए इसका पाठ यहाँ इंडेक्स नहीं है।</string>
+    <string name="reader_find_out_of_step"><!-- review -->इस दस्तावेज़ के पेज और इसकी PDF अभी मेल नहीं खाते, इसलिए Find पेज नहीं दिखा सकता।</string>
+    <string name="reader_find_note"><!-- review -->मिलान पहचाने गए पाठ से आते हैं। पेज की छवि पर निशान नहीं लगाया जाता।</string>
+    <string name="reader_find_excerpt_page"><!-- review -->पेज %1$d</string>
+    <string name="reader_find_excerpt_desc"><!-- review -->पेज %1$d: %2$s. पेज पर जाएँ</string>
+    <string name="reader_start_changed"><!-- review -->खोज के बाद यह दस्तावेज़ बदल गया, इसलिए यह पेज 1 पर खुला।</string>
 </resources>

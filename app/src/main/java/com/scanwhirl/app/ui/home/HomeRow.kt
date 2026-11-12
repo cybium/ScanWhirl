@@ -34,8 +34,11 @@ data class HomeDocInfo(
     }
 }
 
-/** One Home list item. Equality covers both, so DiffUtil re-binds when either changes. */
-data class HomeRow(val doc: ScanDocument, val info: HomeDocInfo) {
+/**
+ * One Home list item. Equality covers every field, so DiffUtil re-binds when any
+ * changes — including [match] (it carries the query, so a new search re-binds).
+ */
+data class HomeRow(val doc: ScanDocument, val info: HomeDocInfo, val match: RowMatch? = null) {
     val id: String get() = doc.id
 }
 

@@ -53,6 +53,9 @@ import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.tools.VaultFlow
 import com.scanwhirl.app.store.OcrTextCache
+import com.scanwhirl.app.ui.home.HomePageMatches
+import com.scanwhirl.app.ui.home.PageLink
+import com.scanwhirl.app.ui.home.RowMatch
 import com.scanwhirl.app.ui.home.HomeDocInfo
 import com.scanwhirl.app.ui.home.HomeDocInfoReader
 import com.scanwhirl.app.ui.home.HomeRow
@@ -86,7 +89,7 @@ class MainActivity : BaseActivity(), HomeHost {
 
     private lateinit var binding: ActivityMainBinding
     private val adapter by lazy {
-        ScanListAdapter(::onDocClick, ::onDocMore, ::onDocLongClick, ::onCategory)
+        ScanListAdapter(::onDocClick, ::onDocMore, ::onDocLongClick, ::onCategory, ::onPageLink)
     }
     private val repo by lazy { (application as ScanWhirlApp).repository }
     private val ocrTextCache by lazy { OcrTextCache(repo) }
@@ -591,15 +594,21 @@ class MainActivity : BaseActivity(), HomeHost {
                 sort = Prefs.sortMode(context),
                 includeVaulted = vaultMode
             )
-            val result = withContext(searchDispatcher) {
-                HomeFilter.applyDetailed(
-                    allDocs,
+            val docs = allDocs
+            val (result, matches) = withContext(searchDispatcher) {
+                val result = HomeFilter.applyDetailed(
+                    docs,
                     state,
                     normalizedText = { ocrTextCache.normalized(it) },
                     originalText = { ocrTextCache.original(it) }
                 )
+                // Retrieval slice 5: which pages hold every term (text hits only; the
+                // document list and its order above are unchanged).
+                result to HomePageMatches.build(
+                    state.query, result.docs, result.snippets.keys, ocrTextCache::pages
+                )
             }
-            showResult(result)
+            showResult(result, matches)
         }
     }
 
@@ -623,10 +632,16 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     /** One render path for both the sync and the debounced search result. */
-    private fun showResult(result: com.scanwhirl.app.util.HomeResult) {
+    private fun showResult(
+        result: com.scanwhirl.app.util.HomeResult,
+        matches: Map<String, RowMatch> = emptyMap()
+    ) {
         adapter.selectedIds = selectedIds
         adapter.snippets = result.snippets
-        adapter.submitList(result.docs.map { HomeRow(it, rowInfo[it.id] ?: HomeDocInfo.UNKNOWN) })
+        adapter.externalViewer = Prefs.defaultViewer(this) == Prefs.VIEWER_SYSTEM
+        adapter.submitList(result.docs.map {
+            HomeRow(it, rowInfo[it.id] ?: HomeDocInfo.UNKNOWN, matches[it.id])
+        })
         binding.emptyState.isVisible = result.docs.isEmpty()
         if (result.docs.isEmpty()) updateEmptyState()
         binding.scanList.isVisible = true
@@ -1478,6 +1493,31 @@ class MainActivity : BaseActivity(), HomeHost {
             return
         }
         launchViewerUnchecked(doc)
+    }
+
+    /**
+     * Retrieval slice 5: a "Page N" link. Always the ScanWhirl reader (an external
+     * viewer cannot be sent to a page), never a preference change; a locked document
+     * asks for its password first, exactly like an ordinary open. The reader re-checks
+     * the page against the document's current order before it jumps.
+     */
+    private fun onPageLink(doc: ScanDocument, link: PageLink) {
+        if (selectionMode) {
+            toggleSelection(doc.id)
+            return
+        }
+        // The row's document must still be the one in the library (not deleted or
+        // moved into/out of the vault since the search ran).
+        val current = allDocs.firstOrNull { it.id == link.docId } ?: return
+        if (current.isVaulted && !vaultMode) return
+        val open = {
+            startActivity(
+                PdfViewerActivity.pageIntent(
+                    this, current.id, current.name, link.pageIndex, link.pageKey, link.query
+                )
+            )
+        }
+        if (current.isLocked) promptUnlockBeforeOpen(current, open) else open()
     }
 
     private fun launchViewerUnchecked(doc: ScanDocument) {

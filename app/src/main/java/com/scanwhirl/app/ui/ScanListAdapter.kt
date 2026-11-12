@@ -15,6 +15,8 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.OcrIndexer
 import com.scanwhirl.app.ui.home.DocThumbBinder
 import com.scanwhirl.app.ui.home.HomeRow
+import com.scanwhirl.app.ui.home.PageHitViews
+import com.scanwhirl.app.ui.home.PageLink
 import com.scanwhirl.app.ui.home.TextState
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
@@ -32,13 +34,17 @@ class ScanListAdapter(
     private val onClick: (ScanDocument) -> Unit,
     private val onMore: (ScanDocument) -> Unit,
     private val onLongClick: (ScanDocument) -> Unit,
-    private val onCategory: (ScanDocument) -> Unit
+    private val onCategory: (ScanDocument) -> Unit,
+    /** Retrieval slice 5: a "Page N" link in a search row (always the ScanWhirl reader). */
+    private val onPageLink: (ScanDocument, PageLink) -> Unit = { _, _ -> }
 ) : ListAdapter<HomeRow, ScanListAdapter.VH>(DIFF) {
 
     var selectionMode: Boolean = false
     var selectedIds: Set<String> = emptySet()
     /** Document-level search snippets (why a document matched; not a page jump). */
     var snippets: Map<String, CharSequence> = emptyMap()
+    /** True when ordinary opens go to an external viewer: page links then say they open here. */
+    var externalViewer: Boolean = false
 
     /**
      * The indexer's live state. Changing it re-binds only the status line of the
@@ -111,8 +117,17 @@ class ScanListAdapter(
             binding.catChip.contentDescription =
                 context.getString(R.string.doc_category_action, catLabel)
 
-            // Search snippet: shown only when a text hit explains the match.
-            val snippet = snippets[doc.id]
+            // Retrieval slice 5: page links, only for a match computed for THIS document at
+            // its current revision (a recycled or edited row never inherits another's pages).
+            val match = row.match?.takeIf { it.docId == doc.id && it.revision == doc.revision }
+            val pagesShown = PageHitViews.bind(
+                binding.pageHits, binding.matchScope, binding.pageHitNote, doc, match,
+                enabled = !selectionMode, externalViewer = externalViewer, onOpen = onPageLink
+            )
+
+            // Search snippet: shown only when a text hit explains the match (page
+            // links carry their own per-page excerpts instead).
+            val snippet = snippets[doc.id]?.takeIf { !pagesShown }
             binding.scanSnippet.isVisible = snippet != null
             binding.scanSnippet.text = snippet
 

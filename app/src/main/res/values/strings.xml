@@ -530,4 +530,38 @@
     <string name="text_status_reading">Reading text %1$d/%2$d</string>
     <string name="doc_category_action">Category %1$s. Change category</string>
     <string name="home_pro_tag_desc">%1$s. Open ScanWhirl Pro details</string>
+    <!-- Retrieval slice 5: page-level evidence from stored per-page OCR text only.
+         A "Page N" link needs every search word on that same page; links open the
+         ScanWhirl reader because external viewers cannot be sent to a page. -->
+    <plurals name="page_hit_label">
+        <item quantity="one">Page %1$d · %2$d match</item>
+        <item quantity="other">Page %1$d · %2$d matches</item>
+    </plurals>
+    <string name="page_hit_open_desc">Open %1$s, page %2$d</string>
+    <plurals name="page_hit_see_all">
+        <item quantity="one">See %1$d matching page in Find</item>
+        <item quantity="other">See all %1$d matching pages in Find</item>
+    </plurals>
+    <string name="page_hit_see_all_desc">Open %1$s and find all %2$d matching pages</string>
+    <string name="page_hit_across">Matches across this document, not on one page</string>
+    <string name="page_hit_reader_note">Page links open in the ScanWhirl reader</string>
+    <string name="reader_find">Find in text</string>
+    <string name="reader_find_hint">Find in recognised text</string>
+    <string name="reader_find_prev">Previous</string>
+    <string name="reader_find_next">Next</string>
+    <string name="reader_find_prev_desc">Previous match</string>
+    <string name="reader_find_next_desc">Next match</string>
+    <string name="reader_find_close">Close Find</string>
+    <string name="reader_find_position">Match %1$d of %2$d · Page %3$d</string>
+    <string name="reader_find_type">Type a word to find it in this scan\'s recognised text.</string>
+    <string name="reader_find_none">No match for “%1$s” in the recognised text.</string>
+    <string name="reader_find_partial">Text is recognised on %1$d of %2$d pages; other pages can\'t be found yet.</string>
+    <string name="reader_find_pending">ScanWhirl is still reading this scan\'s text, so results may grow.</string>
+    <string name="reader_find_no_text">This scan has no recognised text yet, so Find has nothing to search.</string>
+    <string name="reader_find_external">Find works on ScanWhirl scans with recognised text. This PDF was opened from your device, so its text isn\'t indexed here.</string>
+    <string name="reader_find_out_of_step">This document\'s pages and its PDF don\'t line up right now, so Find can\'t point to pages.</string>
+    <string name="reader_find_note">Matches come from the recognised text. The page image isn\'t marked.</string>
+    <string name="reader_find_excerpt_page">Page %1$d</string>
+    <string name="reader_find_excerpt_desc">Page %1$d: %2$s. Go to page</string>
+    <string name="reader_start_changed">This document changed since your search, so it opened at page 1.</string>
 </resources>

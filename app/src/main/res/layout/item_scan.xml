@@ -152,6 +152,18 @@
             android:textSize="13sp"
             tools:text="5 pages · 1.4 MB · 11 Nov" />
 
+        <!-- Retrieval slice 5: said when the document matches but no single page
+             holds every term (terms spread over pages, or over name and text). -->
+        <TextView
+            android:id="@+id/matchScope"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/page_hit_across"
+            android:textColor="@color/rv_ink_3"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
         <!-- Search hit: why this document matched (document-level, not a page jump). -->
         <TextView
             android:id="@+id/scanSnippet"
@@ -162,6 +174,27 @@
             android:maxLines="2"
             android:textColor="@color/rv_ink_2"
             android:textSize="13sp"
+            android:visibility="gone" />
+
+        <!-- Retrieval slice 5: matching pages (every term on that page), filled by
+             PageHitViews from the row's RowMatch. Search only; never on blank Home. -->
+        <LinearLayout
+            android:id="@+id/pageHits"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
+        <!-- Shown only when the user prefers an external viewer: page links still open here. -->
+        <TextView
+            android:id="@+id/pageHitNote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/page_hit_reader_note"
+            android:textColor="@color/rv_ink_3"
+            android:textSize="12sp"
             android:visibility="gone" />
 
         <!-- Line 3: category (tap = move) + honest text status. A flow row: the

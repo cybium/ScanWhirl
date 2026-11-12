@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Retrieval slice 5: the reader's one action. Labelled (title shown to TalkBack and
+     on long-press); the panel explains when Find cannot work for this PDF. -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_find"
+        android:icon="@drawable/ic_sw_search_pages"
+        android:title="@string/reader_find"
+        app:showAsAction="always" />
+</menu>
