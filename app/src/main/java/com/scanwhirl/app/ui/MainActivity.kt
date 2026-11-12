@@ -343,6 +343,10 @@ class MainActivity : BaseActivity(), HomeHost {
             binding.searchInput.setText("")
             selectCategory(null)
         }
+        // M07 P3: keep the empty state's actions reachable while the header scrolls.
+        binding.homeAppBar.addOnOffsetChangedListener { _, _ -> updateEmptyInset() }
+        // Scrolling the empty state may collapse the header too (like the list does).
+        binding.emptyState.isNestedScrollingEnabled = true
 
         binding.btnVaultLock.setOnClickListener { setVaultMode(false) }
         binding.btnVaultChangePin.setOnClickListener { vaultFlow.promptSetVaultPin(onSuccess = {}) }
@@ -750,6 +754,30 @@ class MainActivity : BaseActivity(), HomeHost {
         }
         if (!collapsible) bar.setExpanded(true, false)
         bar.requestLayout()
+        bar.post { updateEmptyInset() }
+        updateEmptyState()
+    }
+
+    /**
+     * M07 P3: while the header can scroll away, the list area is laid out as tall as
+     * the whole content area and its bottom (the header's not-yet-scrolled height)
+     * sits below the visible region, behind the dock. A short "no match" message
+     * could not scroll its Show all into view. Padding the empty content by exactly
+     * that hidden height makes everything reachable, keyboard open or not.
+     */
+    private fun updateEmptyInset() {
+        val bar = binding.homeAppBar
+        val hidden = if (headerCollapsible) {
+            // bar.top is the AppBar's scroll offset (0 expanded, -range collapsed).
+            (bar.totalScrollRange + bar.top).coerceAtLeast(0)
+        } else {
+            0
+        }
+        val base = (16 * resources.displayMetrics.density).toInt()
+        val content = binding.emptyContent
+        if (content.paddingBottom != base + hidden) {
+            content.setPadding(content.paddingLeft, content.paddingTop, content.paddingRight, base + hidden)
+        }
     }
 
     /**
@@ -799,6 +827,25 @@ class MainActivity : BaseActivity(), HomeHost {
         // M06: a filter/search that hides everything shows its message right under the
         // header, not centred where the keyboard covers it; first-run stays centred.
         val filterEmpty = allDocs.isNotEmpty()
+        // M07 P3: at large text the decorative glyph gives way, so the message and
+        // Show all sit directly under the header (above the keyboard and the dock).
+        val compact = filterEmpty && headerCollapsible
+        if (compact) binding.emptyFrame.isVisible = false
+        // Device-verified at 200% + keyboard: ~370 px of list remain, so the action
+        // comes first, the explanation second; elsewhere it follows the message.
+        val content = binding.emptyContent
+        val chip = binding.btnShowAll
+        val wanted = if (compact) 0 else content.childCount - 1
+        if (content.indexOfChild(chip) != wanted) {
+            content.removeView(chip)
+            content.addView(chip, if (compact) 0 else content.childCount)
+        }
+        (chip.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let { lp ->
+            val d = resources.displayMetrics.density
+            lp.topMargin = ((if (compact) 4 else 16) * d).toInt()
+            lp.bottomMargin = ((if (compact) 8 else 0) * d).toInt()
+            chip.layoutParams = lp
+        }
         binding.emptyContent.gravity = if (filterEmpty) {
             Gravity.TOP or Gravity.CENTER_HORIZONTAL
         } else {

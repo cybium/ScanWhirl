@@ -90,6 +90,19 @@ android {
         buildConfig = true
         viewBinding = true
     }
+
+    // M07: device-acceptance fixtures (a test-only file-picker provider) exist only
+    // in -PtestBuild APKs. Production builds never compile or declare them.
+    if (project.hasProperty("testBuild")) {
+        sourceSets {
+            listOf("debug", "release").forEach { type ->
+                getByName(type) {
+                    java.srcDir("src/testHarness/java")
+                    manifest.srcFile("src/testHarness/AndroidManifest.xml")
+                }
+            }
+        }
+    }
 }
 
 dependencies {
