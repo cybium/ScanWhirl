@@ -72,7 +72,6 @@
     <color name="pdf_toolbar">#D6050A14</color>
     <color name="sf_toolbar">#050A14</color>
     <color name="sf_ic_camera">#FFFFFF</color>
-    <color name="sf_launcher_bg">#050A14</color>
     <!-- Review slice 1 (Index + Focus, dark set). The app theme is fixed dark
          ("no DayNight drift"), so these have no values-night twin by design.
          Ink = commit (Save); cyan stays reserved for capture. -->
@@ -101,4 +100,8 @@
     <color name="sw_paper_fold">#C3C7C4</color>
     <color name="sw_page_dim">#FFEDEDED</color>
     <color name="sw_ok">#5ED39A</color>
+    <!-- Brand slice 3: launcher/store ground behind the whirl mark (the owner's Canva
+         navy, deepened toward the app ink). The mark itself reuses sw_scan (rings) and
+         sw_paper (page): one accent, one paper, no second neon. -->
+    <color name="sw_brand_ground">#16213A</color>
 </resources>

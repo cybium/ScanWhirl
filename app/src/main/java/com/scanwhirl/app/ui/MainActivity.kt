@@ -3,6 +3,7 @@ package com.scanwhirl.app.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.drawable.AnimatedVectorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
@@ -56,6 +57,7 @@ import com.scanwhirl.app.ui.home.HomeDocInfo
 import com.scanwhirl.app.ui.home.HomeDocInfoReader
 import com.scanwhirl.app.ui.home.HomeRow
 import com.scanwhirl.app.ui.home.HomeRowDivider
+import com.scanwhirl.app.util.BrandWhirl
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.HomeFilter
@@ -196,6 +198,9 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** All documents on disk; refreshed off the main thread, queried in memory. */
     private var allDocs: List<ScanDocument> = emptyList()
+
+    /** Brand slice 3: one header-mark half-turn when the library gains a document. */
+    private val brandWhirl = BrandWhirl()
 
     /** Home slice 2: per-document disk facts (size, text status), read with [allDocs]. */
     private var rowInfo: Map<String, HomeDocInfo> = emptyMap()
@@ -383,6 +388,11 @@ class MainActivity : BaseActivity(), HomeHost {
         refreshList()
     }
 
+    override fun onPause() {
+        stopBrandWhirl()
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
         refreshList()
@@ -491,7 +501,25 @@ class MainActivity : BaseActivity(), HomeHost {
             rowInfo = info
             buildChipRail()
             renderHome()
+            if (brandWhirl.onLibraryLoaded(docs.mapTo(HashSet()) { it.id }, vault)) playBrandWhirl()
         }
+    }
+
+    /**
+     * Brand slice 3: the header mark's rings turn 180 deg once (220 ms). Finite,
+     * non-blocking, skipped when motion is off (animator scale 0, screen off, tests)
+     * or the header is hidden; the resting frame is identical, so skipping or
+     * cancelling never leaves a half-drawn mark.
+     */
+    private fun playBrandWhirl() {
+        val whirl = binding.brandMark.drawable as? AnimatedVectorDrawable ?: return
+        if (!binding.toolbar.isVisible || !SwMotion.ambientAllowed(this)) return
+        whirl.reset()
+        whirl.start()
+    }
+
+    private fun stopBrandWhirl() {
+        (binding.brandMark.drawable as? AnimatedVectorDrawable)?.let { it.stop(); it.reset() }
     }
 
     private fun isPowerSaveMode(): Boolean =

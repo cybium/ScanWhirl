@@ -59,7 +59,7 @@
                             android:layout_height="30dp"
                             android:contentDescription="@null"
                             android:importantForAccessibility="no"
-                            android:src="@drawable/ic_sw_brand_mark" />
+                            android:src="@drawable/avd_sw_brand_whirl" />
 
                         <TextView
                             android:id="@+id/appNameText"

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Brand slice 3: one half-turn of the mark's rings (220 ms, standard curve).
+     The rings are point-symmetric, so 180 deg lands on the resting frame. -->
+<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="220"
+    android:interpolator="@interpolator/sw_standard"
+    android:propertyName="rotation"
+    android:valueFrom="0"
+    android:valueTo="180"
+    android:valueType="floatType" />

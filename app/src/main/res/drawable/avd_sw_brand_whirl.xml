@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Brand slice 3: the Home header mark. Static frame = ic_sw_brand_mark; started once by
+     MainActivity when a new document lands in the library (see BrandWhirl). -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_sw_brand_mark">
+    <target
+        android:name="whirl"
+        android:animation="@animator/sw_whirl_turn" />
+</animated-vector>
