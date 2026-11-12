@@ -204,7 +204,7 @@ class HomeCategoryActionsTest {
                     sheet.findViewById<android.widget.TextView>(R.id.qaShare)!!.text.toString()
                 )
                 assertEquals(
-                    app.getString(R.string.delete),
+                    app.getString(R.string.trash_move),
                     sheet.findViewById<android.widget.TextView>(R.id.qaDelete)!!.text.toString()
                 )
 
@@ -245,7 +245,7 @@ class HomeCategoryActionsTest {
     }
 
     @Test
-    fun `quick action delete removes the document after confirm`() {
+    fun `quick action Move to Trash removes the document from Home and Undo restores it`() {
         val id = seed("Lecture notes", CategoryRules.STUDY)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -256,15 +256,29 @@ class HomeCategoryActionsTest {
 
                 ShadowDialog.getLatestDialog()!!
                     .findViewById<View>(R.id.qaDelete).performClick()
-
-                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
-                dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).performClick()
             }
 
             assertTrue(
-                "Delete must remove the document",
+                "M07: Move to Trash takes the document out of the library at once",
                 pollUntil { repo.getDocument(id) == null }
             )
+            assertTrue("it is in Trash, whole", repo.listTrash().any { it.originalId == id })
+
+            var undone = false
+            assertTrue("the Undo snackbar appears", pollUntil {
+                scenario.onActivity { a ->
+                    val action = a.findViewById<android.widget.Button>(
+                        com.google.android.material.R.id.snackbar_action
+                    )
+                    if (action != null && action.text.toString() == app.getString(R.string.undo)) {
+                        action.performClick()
+                        undone = true
+                    }
+                }
+                undone
+            })
+            assertTrue("Undo restores it under the same id", pollUntil { repo.getDocument(id) != null })
+            assertTrue("and Trash is empty again", repo.listTrash().isEmpty())
         }
     }
 

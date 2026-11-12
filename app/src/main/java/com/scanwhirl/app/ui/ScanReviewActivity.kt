@@ -1219,7 +1219,7 @@ class ScanReviewActivity : BaseActivity() {
                                 // T4.8: remember the copy so delete can remove it. A failure to
                                 // record it must not turn a finished export into a failed one.
                                 try {
-                                    repo.addExport(doc.id, copy.uri, copy.fingerprint)
+                                    repo.addExport(doc.id, copy)
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (_: Exception) {

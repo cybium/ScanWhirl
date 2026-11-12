@@ -10,6 +10,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivitySettingsBinding
 import com.scanwhirl.app.util.Prefs
@@ -86,8 +89,20 @@ class SettingsActivity : BaseActivity() {
         binding.rowLanguage.setOnClickListener { chooseLanguage() }
         binding.rowViewer.setOnClickListener { chooseViewer() }
         binding.rowAbout.setOnClickListener { showAbout() }
+        binding.rowTrash.setOnClickListener { startActivity(TrashActivity.intent(this)) }
 
         updateSummaries()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // M07: Trash count, read off the main thread.
+        val repo = com.scanwhirl.app.store.ScanRepository(this)
+        lifecycleScope.launch {
+            val n = withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { repo.trashCount() }.getOrDefault(0) }
+            binding.subTrash.text = if (n == 0) getString(R.string.trash_settings_empty)
+            else resources.getQuantityString(R.plurals.trash_count, n, n)
+        }
     }
 
     private fun updateSummaries() {

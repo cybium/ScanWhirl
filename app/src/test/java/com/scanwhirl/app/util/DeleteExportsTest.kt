@@ -1,19 +1,21 @@
 package com.scanwhirl.app.util
 
 import android.app.Application
-import android.content.ContentUris
 import android.content.pm.ProviderInfo
-import android.provider.MediaStore
 import androidx.appcompat.app.AlertDialog
+import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.DeleteExports
 import com.scanwhirl.app.ui.DocumentViewerActivity
+import com.scanwhirl.app.ui.TrashActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -27,13 +29,14 @@ import org.robolectric.shadows.ShadowDialog
 import java.io.File
 
 /**
- * T4.8 delete removes exported copies (complaint #18, N11, Q8): deleting a
- * document also removes the PDF copies it saved into Documents/ScanWhirl —
- * recorded in `meta.txt` (`exports=` line) or matched by exact legacy name,
- * never anything the app cannot prove it wrote.
+ * T4.8 / M06 / M07: exported copies and deletion, through the real screens.
  *
- * Shares [FakeMediaStore] with [ExportHygieneTest]; foreign-owned rows refuse
- * deletion with a SecurityException, like the real MediaStore.
+ *  - Moving a document to Trash (document screen → More → Move to Trash) never
+ *    touches its exports.
+ *  - Permanent deletion from Trash offers to remove only copies the document
+ *    provably created (signed provenance), default checked (Q8), and says that
+ *    unproven copies stay.
+ *  - Foreign-owned rows are skipped without a prompt; unchecked keeps everything.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -49,10 +52,7 @@ class DeleteExportsTest {
         app = ApplicationProvider.getApplicationContext()
         repo = ScanRepository(app)
         media = FakeMediaStore().also { provider ->
-            provider.attachInfo(
-                app,
-                ProviderInfo().apply { authority = "media"; exported = true }
-            )
+            provider.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
             ShadowContentResolver.registerProviderInternal("media", provider)
         }
     }
@@ -62,169 +62,105 @@ class DeleteExportsTest {
         media.close()
     }
 
-    // ------------------------------------------------------------------
-    // T4.8 tests
-    // ------------------------------------------------------------------
+    @Test
+    fun `move to Trash from the document screen keeps the exported copy`() {
+        val id = seedDoc("DelEx")
+        exportSigned(id, "DelEx")
+
+        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+            ensureLoaded(scenario)
+            scenario.onActivity { activity -> tapMoreDelete(activity) }
+            assertTrue("document leaves the library", poll { repo.getDocument(id) == null })
+        }
+        assertEquals("it is in Trash, whole", listOf(id), repo.listTrash().map { it.originalId })
+        assertEquals("Trash never touches exports", 1, media.scanwhirlPdfs().size)
+    }
 
     @Test
-    fun `delete document removes the recorded exported copy`() {
+    fun `permanent delete from Trash removes the proven copy`() {
         val id = seedDoc("DelEx")
-        // A copy in Documents/ScanWhirl, exactly like the download button makes.
-        DownloadSaver.savePdf(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor("DelEx"))
-        recordExport(id)
+        exportSigned(id, "DelEx")
+        repo.moveToTrash(id)
 
-        ActivityScenario.launch<DocumentViewerActivity>(
-            DocumentViewerActivity.intent(app, id)
-        ).use { scenario ->
-            ensureLoaded(scenario)
-            scenario.onActivity { activity ->
-                openDeleteDialog(activity)
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-            }
-            val text = awaitSnackbarText(scenario)
-            assertTrue(
-                "result message must report the removal — got $text",
-                text != null && text.contains("1 copy removed")
-            )
-        }
-
-        assertTrue("document must be deleted", repo.getDocument(id) == null)
-        assertTrue(
-            "T4.8: deleting the document must also remove its recorded export — " +
-                "got ${media.scanwhirlPdfs().names()}",
-            media.scanwhirlPdfs().isEmpty()
-        )
+        val text = deleteForeverFromTrash(uncheck = false)
+        assertTrue("result must report the removal — got $text", text != null && text.contains("1 copy removed"))
+        assertTrue("Trash entry gone", repo.listTrash().isEmpty())
+        assertTrue("proven copy removed: ${media.scanwhirlPdfs().map { it.name }}", media.scanwhirlPdfs().isEmpty())
     }
 
     @Test
     fun `leaving the box unchecked keeps the exported copy`() {
         val id = seedDoc("Unchecked")
-        DownloadSaver.savePdf(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor("Unchecked"))
-        recordExport(id)
+        exportSigned(id, "Unchecked")
+        repo.moveToTrash(id)
 
-        ActivityScenario.launch<DocumentViewerActivity>(
-            DocumentViewerActivity.intent(app, id)
-        ).use { scenario ->
-            ensureLoaded(scenario)
-            scenario.onActivity { activity ->
-                openDeleteDialog(activity)
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                val box = dialog.window!!.decorView
-                    .findViewById<android.widget.CheckBox>(R.id.deleteCopiesBox)
-                assertNotNull(
-                    "the checkbox row must appear when copies exist (Q8)", box
-                )
-                box!!.isChecked = false
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-            }
-        }
-
-        assertTrue("document must be deleted either way", repo.getDocument(id) == null)
-        assertEquals(
-            "unchecked box → the exported copy stays (T4.8 rule 4)",
-            1,
-            media.scanwhirlPdfs().size
-        )
+        deleteForeverFromTrash(uncheck = true)
+        assertTrue("document deleted either way", repo.listTrash().isEmpty())
+        assertEquals("unchecked box → the copy stays", 1, media.scanwhirlPdfs().size)
     }
 
     @Test
     fun `a foreign-owned copy is skipped but the document is still deleted`() {
         val id = seedDoc("Foreign")
-        DownloadSaver.savePdf(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor("Foreign"))
-        // e.g. the same file written by the Play build / an older install.
+        exportSigned(id, "Foreign")
         media.scanwhirlPdfs().single().owner = "com.some.other.app"
-        recordExport(id)
+        repo.moveToTrash(id)
 
-        ActivityScenario.launch<DocumentViewerActivity>(
-            DocumentViewerActivity.intent(app, id)
-        ).use { scenario ->
-            ensureLoaded(scenario)
-            scenario.onActivity { activity ->
-                openDeleteDialog(activity)
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-            }
-            val text = awaitSnackbarText(scenario)
-            assertTrue(
-                "message must report the skipped copy — got $text",
-                text != null && text.contains("could not be removed")
-            )
-        }
-
-        assertTrue(
-            "a refused copy must never block the document delete",
-            repo.getDocument(id) == null
-        )
-        assertEquals(
-            "foreign-owned row must be skipped, no permission prompt",
-            1,
-            media.scanwhirlPdfs().size
-        )
+        val text = deleteForeverFromTrash(uncheck = false)
+        assertTrue("message must report the kept copy — got $text", text != null && text.contains("kept"))
+        assertTrue("a refused copy never blocks the delete", repo.listTrash().isEmpty())
+        assertEquals("foreign-owned row kept, no prompt", 1, media.scanwhirlPdfs().size)
     }
 
-    /**
-     * M06 replaces the old "same URI rewritten in place" expectation: that
-     * truncated the only good copy before the new write could fail. Unchanged
-     * bytes are recognised (one row, one record); changed bytes become a new copy.
-     * The earlier file is kept, both are recorded, and both go with the document.
-     */
+    @Test
+    fun `an unsigned older record is not offered and the dialog says older copies stay`() {
+        val id = seedDoc("Older")
+        val saved = DownloadSaver.savePdfFile(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor("Older"))
+        repo.addExport(id, saved.uri, saved.fingerprint) // pre-M07 shape: recorded, not signed
+        repo.moveToTrash(id)
+
+        ActivityScenario.launch(TrashActivity::class.java).use { scenario ->
+            awaitRows(scenario, 1)
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnTrashDelete).performClick()
+            }
+            val dialog = awaitDialog()
+            assertNull("no copy count for unproven copies", dialog.findViewById<android.view.View>(R.id.deleteCopiesBox))
+            val note = dialog.findViewById<android.widget.TextView>(R.id.deleteCopiesNote)
+            assertNotNull("the dialog says unproven copies stay", note)
+            assertEquals(app.getString(R.string.delete_copies_unproven_note), note!!.text.toString())
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            assertTrue(poll { repo.listTrash().isEmpty() })
+        }
+        assertEquals("the older copy is kept", 1, media.scanwhirlPdfs().size)
+    }
+
     @Test
     fun `export twice records identical once and a changed copy separately`() {
         val id = seedDoc("Twice")
-        val first = DownloadSaver.savePdfFile(
-            app, "v1".toByteArray(), DownloadSaver.pdfNameFor("Twice")
-        )
-        repo.addExport(id, first.uri, first.fingerprint)
-        val same = DownloadSaver.savePdfFile(
-            app, "v1".toByteArray(), DownloadSaver.pdfNameFor("Twice")
-        )
-        repo.addExport(id, same.uri, same.fingerprint)
+        val first = DownloadSaver.savePdfFile(app, "v1".toByteArray(), DownloadSaver.pdfNameFor("Twice"))
+        repo.addExport(id, first)
+        val same = DownloadSaver.savePdfFile(app, "v1".toByteArray(), DownloadSaver.pdfNameFor("Twice"))
+        repo.addExport(id, same)
         assertEquals("identical: same uri", first.uri, same.uri)
         assertEquals("exportsOf lists it exactly once", listOf(first.uri), repo.exportsOf(id))
 
-        val second = DownloadSaver.savePdfFile(
-            app, "v2".toByteArray(), DownloadSaver.pdfNameFor("Twice")
-        )
-        repo.addExport(id, second.uri, second.fingerprint)
+        val second = DownloadSaver.savePdfFile(app, "v2".toByteArray(), DownloadSaver.pdfNameFor("Twice"))
+        repo.addExport(id, second)
         assertEquals(2, media.scanwhirlPdfs().size)
         assertEquals("v1", String(media.rowNamed("Twice.pdf").file.readBytes()))
         assertEquals("v2", String(media.rowNamed("Twice (2).pdf").file.readBytes()))
         assertEquals(listOf(first.uri, second.uri), repo.exportsOf(id))
         assertEquals(
+            "the re-save keeps the first copy's proof",
             listOf(first.uri, second.uri),
-            com.scanwhirl.app.ui.DeleteExports.copiesFor(app, repo, id, "Twice").map { it.uri }
-        )
-    }
-
-    @Test
-    fun `legacy match only hits exact names owned by this package`() {
-        DownloadSaver.savePdf(app, "1".toByteArray(), "Doc.pdf")
-        DownloadSaver.savePdf(app, "2".toByteArray(), "Doc (2).pdf")
-        DownloadSaver.savePdf(app, "3".toByteArray(), "Doc (3).pdf")
-        DownloadSaver.savePdf(app, "4".toByteArray(), "Doc extra.pdf")
-        DownloadSaver.savePdf(app, "5".toByteArray(), "Other.pdf")
-        // "Doc (3).pdf" was written by someone else (e.g. the Play build).
-        media.rows.values.first {
-            it.values.getAsString("_display_name") == "Doc (3).pdf"
-        }.owner = "com.some.other.app"
-
-        val found = DownloadSaver.findCopies(app, "Doc")
-        val names = found.map { uri ->
-            media.rows[ContentUris.parseId(uri)]!!
-                .values.getAsString("_display_name")
-        }.sorted()
-        assertEquals(
-            "only <name>.pdf / <name> (n).pdf owned by this package — got $names",
-            listOf("Doc (2).pdf", "Doc.pdf"),
-            names
+            DeleteExports.copiesFor(repo, id).map { it.uri }
         )
     }
 
     @Test
     fun `old two-line meta reads and survives setCategory`() {
         val id = seedDoc("Legacy")
-        // Pre-test23 scans: exactly two lines, no trailing newline (§8).
         val meta = File(app.filesDir, "documents/$id/meta.txt")
         meta.writeText("Legacy\n1700000000000")
 
@@ -244,74 +180,99 @@ class DeleteExportsTest {
     // Helpers
     // ------------------------------------------------------------------
 
-    /**
-     * T5.2 (§4.5): Delete moved off the dock into the document's More sheet —
-     * the test walks the same two taps a person makes.
-     */
-    private fun openDeleteDialog(activity: android.app.Activity) {
-        activity.findViewById<android.view.View>(R.id.btnMore).performClick()
-        val sheet = ShadowDialog.getLatestDialog()
-        assertNotNull("the More sheet must open", sheet)
-        val row = sheet!!.findViewById<android.view.View>(R.id.rowMoreDelete)
-        assertNotNull("the Danger row must exist", row)
-        row!!.performClick()
+    private fun exportSigned(id: String, name: String) {
+        val saved = DownloadSaver.savePdfFile(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor(name))
+        repo.addExport(id, saved)
     }
 
-    /** Waits for reloadDocument() to fill the header (the sheet needs a doc). */
-    private fun ensureLoaded(scenario: ActivityScenario<DocumentViewerActivity>) {
-        val deadline = System.currentTimeMillis() + 8000
-        while (System.currentTimeMillis() < deadline) {
-            shadowOf(android.os.Looper.getMainLooper()).idle()
-            var ready = false
-            scenario.onActivity { a ->
-                ready = a.findViewById<android.widget.TextView>(R.id.pageCount)
-                    ?.text?.isNotEmpty() == true
+    /** Trash → Delete permanently → (optionally untick) → confirm; returns the snackbar text. */
+    private fun deleteForeverFromTrash(uncheck: Boolean): String? {
+        ActivityScenario.launch(TrashActivity::class.java).use { scenario ->
+            awaitRows(scenario, 1)
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnTrashDelete).performClick()
             }
-            if (ready) return
-            Thread.sleep(50)
+            val dialog = awaitDialog()
+            val box = dialog.findViewById<android.widget.CheckBox>(R.id.deleteCopiesBox)
+            assertNotNull("the checkbox row appears for a proven copy (Q8)", box)
+            assertTrue("default checked (Q8)", box!!.isChecked)
+            if (uncheck) box.isChecked = false
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            return awaitSnackbarText(scenario)
         }
     }
 
-    private fun List<FakeMediaStore.Row>.names(): String =
-        joinToString { it.values.getAsString("_display_name") }
-
-    /** Copy removal runs off the main thread (M06); wait for its result message. */
-    private fun awaitSnackbarText(scenario: ActivityScenario<DocumentViewerActivity>): String? {
+    private fun awaitDialog(): AlertDialog {
         val deadline = System.currentTimeMillis() + 8000
-        var text: String? = null
         while (System.currentTimeMillis() < deadline) {
             shadowOf(android.os.Looper.getMainLooper()).idle()
+            val d = ShadowDialog.getLatestDialog()
+            if (d is AlertDialog && d.isShowing) return d
+            Thread.sleep(30)
+        }
+        throw AssertionError("dialog never appeared")
+    }
+
+    private fun awaitRows(scenario: ActivityScenario<TrashActivity>, n: Int) {
+        assertTrue("Trash shows $n row(s)", poll {
+            var count = -1
+            scenario.onActivity { a ->
+                val list = a.findViewById<RecyclerView>(R.id.trashList)
+                list.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(2000, android.view.View.MeasureSpec.EXACTLY)
+                )
+                list.layout(0, 0, 1080, 2000)
+                count = if (list.findViewHolderForAdapterPosition(n - 1) != null) list.adapter!!.itemCount else -1
+            }
+            count == n
+        })
+    }
+
+    private fun tapMoreDelete(activity: android.app.Activity) {
+        activity.findViewById<android.view.View>(R.id.btnMore).performClick()
+        val sheet = ShadowDialog.getLatestDialog()
+        assertNotNull("the More sheet must open", sheet)
+        val label = sheet!!.findViewById<android.widget.TextView>(R.id.labelMoreDelete)
+        assertEquals(app.getString(R.string.trash_move), label.text.toString())
+        sheet.findViewById<android.view.View>(R.id.rowMoreDelete)!!.performClick()
+    }
+
+    private fun ensureLoaded(scenario: ActivityScenario<DocumentViewerActivity>) {
+        poll {
+            var ready = false
+            scenario.onActivity { a ->
+                ready = a.findViewById<android.widget.TextView>(R.id.pageCount)?.text?.isNotEmpty() == true
+            }
+            ready
+        }
+    }
+
+    private fun poll(check: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + 8000
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            if (check()) return true
+            Thread.sleep(30)
+        }
+        return false
+    }
+
+    private fun awaitSnackbarText(scenario: ActivityScenario<TrashActivity>): String? {
+        var text: String? = null
+        poll {
             scenario.onActivity { activity ->
                 text = activity.findViewById<android.widget.TextView>(
                     com.google.android.material.R.id.snackbar_text
                 )?.text?.toString()?.takeIf { it.isNotEmpty() }
             }
-            if (text != null) return text
-            Thread.sleep(50)
+            text != null
         }
         return text
     }
 
-    /** Appends the T4.8 `exports=` line for the single exported row. */
-    private fun recordExport(id: String) {
-        val row = media.scanwhirlPdfs().single()
-        val uri = ContentUris.withAppendedId(
-            MediaStore.Files.getContentUri("external"), row.id
-        )
-        val meta = File(app.filesDir, "documents/$id/meta.txt")
-        meta.writeText(meta.readText().trimEnd('\n') + "\nexports=$uri")
-    }
-
-    private fun contentUri(bytes: ByteArray): android.net.Uri {
-        val uri = android.net.Uri.parse("content://test/del_${System.nanoTime()}.jpg")
-        shadowOf(app.contentResolver).registerInputStream(uri, bytes.inputStream())
-        return uri
-    }
-
     private fun jpegBytes(): ByteArray {
-        val bmp = android.graphics.Bitmap.createBitmap(
-            310, 444, android.graphics.Bitmap.Config.ARGB_8888
-        )
+        val bmp = android.graphics.Bitmap.createBitmap(310, 444, android.graphics.Bitmap.Config.ARGB_8888)
         android.graphics.Canvas(bmp).drawColor(android.graphics.Color.WHITE)
         val out = java.io.ByteArrayOutputStream()
         bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
@@ -319,8 +280,9 @@ class DeleteExportsTest {
         return out.toByteArray()
     }
 
-    private fun seedDoc(name: String, pages: Int = 1): String = runBlocking {
-        val uris = (0 until pages).map { contentUri(jpegBytes()) }
-        repo.saveScan(uris, null, name).id
+    private fun seedDoc(name: String): String = runBlocking {
+        val uri = android.net.Uri.parse("content://test/del_${System.nanoTime()}.jpg")
+        shadowOf(app.contentResolver).registerInputStream(uri, jpegBytes().inputStream())
+        repo.saveScan(listOf(uri), null, name).id
     }
 }

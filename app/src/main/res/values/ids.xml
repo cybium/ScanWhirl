@@ -14,4 +14,8 @@
     <!-- test26 T4.8: the delete dialog's "also delete exported copies" row
          (built in code, so the id is declared here). -->
     <item name="deleteCopiesBox" type="id" />
+    <item name="deleteCopiesNote" type="id" />
+    <!-- M07: TalkBack custom actions on a Trash row. -->
+    <item name="a11y_trash_restore" type="id" />
+    <item name="a11y_trash_delete" type="id" />
 </resources>

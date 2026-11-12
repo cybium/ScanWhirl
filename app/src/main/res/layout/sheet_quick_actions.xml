@@ -91,7 +91,7 @@
         android:minHeight="56dp"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
-        android:text="@string/delete"
+        android:text="@string/trash_move"
         android:textColor="@color/rv_danger"
         android:textSize="15sp" />
 </LinearLayout>

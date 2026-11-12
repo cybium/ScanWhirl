@@ -716,7 +716,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/delete"
+                android:text="@string/trash_move_short"
+                android:contentDescription="@string/trash_move"
                 android:textColor="@color/home_dock_danger"
                 app:icon="@drawable/ic_sw_delete"
                 app:iconTint="@color/home_dock_danger" />

@@ -50,10 +50,6 @@
     <string name="delete">Delete</string>
     <string name="delete_title">Delete scan?</string>
     <string name="delete_selected_title">Delete selected scans?</string>
-    <plurals name="delete_selected_message">
-        <item quantity="one">%1$d scan and all its pages will be permanently deleted.</item>
-        <item quantity="other">%1$d scans and all their pages will be permanently deleted.</item>
-    </plurals>
     <!-- test26 T4.8: deleting a document can remove its exported copies too. -->
     <plurals name="delete_copies">
         <item quantity="one">Also delete %1$d saved PDF copy in Documents/ScanWhirl</item>
@@ -71,7 +67,6 @@
         <item quantity="one">%1$d page</item>
         <item quantity="other">%1$d pages</item>
     </plurals>
-    <string name="delete_message">\"%1$s\" and all its pages will be permanently deleted.</string>
     <string name="doc_not_found">Document not found</string>
     <string name="nothing_to_share">Nothing to share</string>
     <plurals name="page_count_and_date">
@@ -184,7 +179,6 @@
     <string name="merge_needs_two_pdfs">Pick at least 2 PDFs to merge</string>
     <string name="merge_pdf_failed">Merge failed: %1$s</string>
     <string name="merge_done">PDFs merged</string>
-    <string name="edit_pdf_failed">Could not open this PDF: %1$s</string>
     <string name="remove">Remove</string>
     <string name="preview">Preview</string>
 
@@ -594,4 +588,84 @@
     <!-- M06: newly saved document on Home. -->
     <string name="home_new_doc_shown">Saved: %1$s</string>
     <string name="home_new_doc_hidden">Saved %1$s, but your search or filter hides it.</string>
+    <!-- M07 P1: Trash (reversible delete) -->
+    <string name="trash_title">Trash</string>
+    <string name="trash_navigate_up">Back</string>
+    <string name="trash_move">Move to Trash</string>
+    <string name="trash_move_short">Trash</string>
+    <string name="trash_moved_one">Moved “%1$s” to Trash</string>
+    <plurals name="trash_moved_many">
+        <item quantity="one">Moved %1$d scan to Trash</item>
+        <item quantity="other">Moved %1$d scans to Trash</item>
+    </plurals>
+    <plurals name="trash_moved_partial">
+        <item quantity="one">Moved %1$d scan to Trash. %2$d could not be moved and was not changed.</item>
+        <item quantity="other">Moved %1$d scans to Trash. %2$d could not be moved and were not changed.</item>
+    </plurals>
+    <string name="trash_move_failed">Couldn’t move to Trash. Nothing was deleted.</string>
+    <plurals name="trash_restored">
+        <item quantity="one">Restored %1$d scan</item>
+        <item quantity="other">Restored %1$d scans</item>
+    </plurals>
+    <string name="trash_restored_one">Restored “%1$s” to your library</string>
+    <string name="trash_restore_failed">Couldn’t restore. The item is still in Trash, unchanged.</string>
+    <string name="trash_restore">Restore</string>
+    <string name="trash_restore_named">Restore %1$s</string>
+    <string name="trash_delete_forever">Delete permanently</string>
+    <string name="trash_delete_forever_named">Delete %1$s permanently</string>
+    <string name="trash_delete_forever_title">Delete permanently?</string>
+    <string name="trash_delete_forever_message">“%1$s” and all its pages, text and edits will be removed from this phone. This can’t be undone.</string>
+    <string name="trash_empty_action">Empty Trash</string>
+    <string name="trash_empty_confirm_title">Empty Trash?</string>
+    <plurals name="trash_empty_confirm_message">
+        <item quantity="one">%1$d document will be removed from this phone permanently. This can’t be undone.</item>
+        <item quantity="other">%1$d documents will be removed from this phone permanently. This can’t be undone.</item>
+    </plurals>
+    <plurals name="trash_deleted">
+        <item quantity="one">Deleted %1$d document permanently</item>
+        <item quantity="other">Deleted %1$d documents permanently</item>
+    </plurals>
+    <string name="trash_delete_failed">Some items couldn’t be deleted. They are still in Trash.</string>
+    <string name="trash_empty_title">Trash is empty</string>
+    <string name="trash_empty_body">Scans you move to Trash stay here, complete, until you restore them or delete them permanently. Nothing is deleted automatically.</string>
+    <string name="trash_header_note">Restore puts a document back with all its pages and text. PDFs you saved to Documents/ScanWhirl are not affected by Trash.</string>
+    <string name="trash_error_title">Couldn’t open Trash</string>
+    <string name="trash_error_body">Your documents weren’t changed. Try again.</string>
+    <string name="trash_retry">Try again</string>
+    <plurals name="trash_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="trash_pages">
+        <item quantity="one">%1$d page</item>
+        <item quantity="other">%1$d pages</item>
+    </plurals>
+    <string name="trash_row_meta">%1$s · Moved to Trash %2$s</string>
+    <string name="trash_row_description">%1$s, %2$s</string>
+    <string name="trash_settings_empty">Empty</string>
+    <string name="settings_library">Library</string>
+    <string name="delete_copies_unproven_note">Copies ScanWhirl can’t prove this document saved stay in Documents/ScanWhirl. You can manage them in the Files app.</string>
+    <string name="delete_vault_message">Vault items don’t go to Trash. “%1$s” and all its pages will be permanently deleted.</string>
+    <plurals name="delete_vault_selected_message">
+        <item quantity="one">Vault items don’t go to Trash. %1$d scan and all its pages will be permanently deleted.</item>
+        <item quantity="other">Vault items don’t go to Trash. %1$d scans and all their pages will be permanently deleted.</item>
+    </plurals>
+    <!-- M07 P2: PDF import -->
+    <string name="import_pdf_progress">Importing PDF…</string>
+    <plurals name="import_pdf_done">
+        <item quantity="one">Imported %1$d page</item>
+        <item quantity="other">Imported %1$d pages</item>
+    </plurals>
+    <string name="import_pdf_cancelled">Import cancelled. Nothing was added.</string>
+    <string name="import_failed_title">Couldn’t import this PDF</string>
+    <string name="import_failed_password">This PDF is protected with a password. ScanWhirl can’t open protected PDFs, so nothing was imported. Remove the password in the app that made it, or save an unprotected copy, then import that.</string>
+    <string name="import_failed_damaged">This file is damaged or isn’t a PDF, so nothing was imported.</string>
+    <string name="import_failed_page">Couldn’t read page %1$d (of %2$d), so nothing was imported. The PDF may be damaged.</string>
+    <string name="import_failed_empty">This PDF has no pages, so nothing was imported.</string>
+    <string name="import_failed_too_large">This PDF is larger than %1$d MB. Split it into smaller PDFs and import those.</string>
+    <string name="import_failed_too_many">Pages in this PDF: %1$d. The most ScanWhirl imports at once is %2$d. Split it into smaller PDFs first.</string>
+    <string name="import_failed_no_space">There isn’t enough free storage to import this PDF. Nothing was added. Free up some space and try again.</string>
+    <string name="import_failed_no_access">ScanWhirl can no longer read this file. It may have been moved or deleted, or its permission was removed. Choose it again from the file picker.</string>
+    <string name="import_failed_read">The file stopped loading before it was complete, so nothing was imported. If it is in a cloud app, download it or make it available offline, then try again.</string>
+    <string name="import_failed_save">ScanWhirl couldn’t save the imported pages, so nothing was added. Try again.</string>
 </resources>

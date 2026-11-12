@@ -34,7 +34,8 @@ object SwDialog {
     fun progress(
         context: Context,
         titleRes: Int? = null,
-        messageRes: Int? = null
+        messageRes: Int? = null,
+        onCancel: (() -> Unit)? = null
     ): AlertDialog {
         val density = context.resources.displayMetrics.density
         val root = LinearLayout(context).apply {
@@ -71,6 +72,8 @@ object SwDialog {
         val builder = card(context)
             .setView(root)
             .setCancelable(false)
+        // M07: long work (a PDF import) can offer a real Cancel.
+        if (onCancel != null) builder.setNegativeButton(android.R.string.cancel) { _, _ -> onCancel() }
 
         return builder.showSw(isSheet = false)
     }

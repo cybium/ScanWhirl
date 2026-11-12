@@ -179,12 +179,12 @@ class ExportTransactionLegacyTest {
             repo.saveScan(listOf(uri), null, "Doc").id
         }
         val ours = DownloadSaver.savePdfFile(app, oldBytes, "Doc.pdf")
-        repo.addExport(id, ours.uri, ours.fingerprint)
+        repo.addExport(id, ours)
         // A record from an older build: a bare public path is no proof of ownership.
         val unproven = File(dir, "Doc (9).pdf").apply { writeBytes(newBytes) }
         repo.addExport(id, Uri.fromFile(unproven))
 
-        val copies = DeleteExports.copiesFor(app, repo, id, "Doc")
+        val copies = DeleteExports.copiesFor(repo, id)
         assertEquals(listOf(ours.uri), copies.map { it.uri })
         assertEquals(1 to 0, DeleteExports.removeCopies(app, copies))
         assertFalse(File(dir, "Doc.pdf").exists())

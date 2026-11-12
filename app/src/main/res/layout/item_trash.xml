@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- M07: one document in Trash. Same paper thumbnail rules as Home (DocThumbBinder:
+     no picture for locked documents), the name, "N pages · Moved to Trash <date>",
+     and two labelled actions. At large text the actions stack (TrashActivity). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/trashRow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="6dp"
+    android:background="@drawable/bg_home_row"
+    android:focusable="true"
+    android:orientation="vertical"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:layout_width="48dp"
+            android:layout_height="64dp"
+            android:importantForAccessibility="noHideDescendants">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/trashThumb"
+                android:layout_width="48dp"
+                android:layout_height="64dp"
+                android:alpha="0.72"
+                android:contentDescription="@null"
+                android:scaleType="centerCrop"
+                android:src="@drawable/bg_thumb_paper"
+                app:shapeAppearance="@style/ShapeAppearance.ScanWhirl.Paper" />
+
+            <ImageView
+                android:id="@+id/trashGlyph"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:visibility="gone"
+                app:tint="@color/rv_ink_2" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/trashName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="4"
+                android:textColor="@color/rv_ink"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/trashMeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/rv_ink_2"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/trashActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="end|center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTrashDelete"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="@string/trash_delete_forever"
+            android:textColor="@color/rv_danger" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTrashRestore"
+            style="@style/Widget.ScanWhirl.Button.Secondary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minHeight="48dp"
+            android:text="@string/trash_restore"
+            app:icon="@drawable/ic_undo" />
+    </LinearLayout>
+</LinearLayout>

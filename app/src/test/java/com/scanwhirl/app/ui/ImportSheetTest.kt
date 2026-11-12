@@ -297,7 +297,7 @@ abstract class ImportSheetBase {
     }
 
     @Test
-    fun `quick actions sheet keeps its five rows and delete still confirms`() {
+    fun `quick actions sheet keeps its five rows and Move to Trash is reversible`() {
         seed("Lecture notes", CategoryRules.STUDY)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -316,9 +316,10 @@ abstract class ImportSheetBase {
                 assertTrue("rows scroll at large font", scrolls)
                 sheet.findViewById<View>(R.id.qaDelete)!!.performClick()
                 assertFalse(sheet.isShowing)
-                assertNotNull("delete still asks first", ShadowDialog.getLatestDialog())
-                assertEquals("nothing deleted yet", 1, docCount())
             }
+            // M07: no confirm (the move is reversible); the document waits in Trash.
+            assertTrue(pollUntil { docCount() == 0 })
+            assertEquals("kept whole in Trash, not deleted", 1, ScanRepository(app).listTrash().size)
         }
     }
 

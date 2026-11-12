@@ -24,8 +24,19 @@ import kotlin.math.roundToInt
  */
 object PdfPageRenderer {
 
+    /**
+     * M07: `PdfRenderer` takes ownership of the descriptor it is given and closes it
+     * when the renderer closes. Callers here open one renderer per call on a shared
+     * descriptor ([pageCount], then [renderPageJpeg] for each page), so every
+     * renderer gets its own duplicate. Before this, the first `pageCount` closed the
+     * caller's descriptor and every later page failed with "file descriptor not
+     * seekable" (seen on an Android 14 phone: no PDF could be imported, merged,
+     * compressed or OCR'd from a device file).
+     */
+    private fun open(fd: ParcelFileDescriptor): PdfRenderer = PdfRenderer(fd.dup())
+
     /** Number of pages in the PDF (opens the renderer briefly). */
-    fun pageCount(fd: ParcelFileDescriptor): Int = PdfRenderer(fd).use { it.pageCount }
+    fun pageCount(fd: ParcelFileDescriptor): Int = open(fd).use { it.pageCount }
 
     /**
      * Copies [uri] into a cache file, opens it seekably, and runs [block].
@@ -59,7 +70,7 @@ object PdfPageRenderer {
         dpi: Float,
         maxDim: Int,
         quality: Int
-    ): ByteArray = PdfRenderer(fd).use { renderer ->
+    ): ByteArray = open(fd).use { renderer ->
         require(index in 0 until renderer.pageCount) { "No such page" }
         renderer.openPage(index).use { page ->
             var scale = dpi / 72f
@@ -89,7 +100,7 @@ object PdfPageRenderer {
         dpi: Float,
         maxDim: Int,
         quality: Int
-    ): List<ByteArray> = PdfRenderer(fd).use { renderer ->
+    ): List<ByteArray> = open(fd).use { renderer ->
         require(renderer.pageCount > 0) { "PDF has no pages" }
         (0 until renderer.pageCount).map { index ->
             renderer.openPage(index).use { page ->

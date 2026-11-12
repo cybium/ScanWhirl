@@ -38,6 +38,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.snackbar.Snackbar
+import com.scanwhirl.app.util.PdfImport.Reason as ImportReason
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -398,6 +399,12 @@ class MainActivity : BaseActivity(), HomeHost {
         // Abandoned, never-published save directories (hidden by their .incomplete marker and
         // older than a day) are reclaimed; published, legacy and unknown directories never are.
         lifecycleScope.launch { runCatching { repo.reapAbandonedSaves() } }
+        // M07: finish interrupted permanent deletes and drop dead import staging. Neither
+        // touches a visible document or a Trash entry.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { repo.recoverTrash() }
+            runCatching { repo.recoverImports() }
+        }
 
         updateSelectionHeader()
         refreshList()
@@ -411,6 +418,7 @@ class MainActivity : BaseActivity(), HomeHost {
     override fun onResume() {
         super.onResume()
         refreshList()
+        showPendingTrashNotice()
         // AppCompat re-syncs the toolbar title from the manifest label during resume.
         updateSelectionHeader()
         updateStatusLine()
@@ -475,6 +483,10 @@ class MainActivity : BaseActivity(), HomeHost {
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.action_settings -> {
             startActivity(SettingsActivity.intent(this))
+            true
+        }
+        R.id.action_trash -> {
+            startActivity(TrashActivity.intent(this))
             true
         }
         else -> super.onOptionsItemSelected(item)
@@ -1418,31 +1430,63 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** Edit tool: import a device PDF as editable pages and open the editor. */
     private fun startEditPdf(uri: Uri) {
-        val progress = showProgress()
-        lifecycleScope.launch {
+        var job: kotlinx.coroutines.Job? = null
+        val progress = SwDialog.progress(this, titleRes = R.string.import_pdf_progress) { job?.cancel() }
+        job = lifecycleScope.launch {
             try {
-                val name = repo.displayNameOf(uri)
-                    ?.removeSuffix(".pdf")?.removeSuffix(".PDF")
+                val name = withContext(Dispatchers.IO) {
+                    runCatching { repo.displayNameOf(uri) }.getOrNull()
+                }?.removeSuffix(".pdf")?.removeSuffix(".PDF")
                     ?.takeIf { it.isNotBlank() } ?: "Imported PDF"
-                val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
-                // Index imported PDF pages into free text search.
-                lifecycleScope.launch(Dispatchers.IO) {
-                    try { repo.buildOcr(doc.id) } catch (_: Exception) { }
-                }
-                progress.dismiss()
-                startActivity(DocumentViewerActivity.intent(this@MainActivity, doc.id))
-            } catch (e: SecurityException) {
-                progress.dismiss()
-                Toast.makeText(this@MainActivity, R.string.pdf_protected, Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
+                val doc = repo.importPdfAsScan(uri, name)
+                // M07: imported pages join the same background recognition queue as
+                // scans (honest "not read" states, survives this screen), then search.
+                ScanWhirlApp.from(this@MainActivity).indexer.enqueue(doc.id)
+                com.scanwhirl.app.ui.home.HomeReveal.request(doc.id)
                 progress.dismiss()
                 Toast.makeText(
                     this@MainActivity,
-                    getString(R.string.edit_pdf_failed, e.message),
-                    Toast.LENGTH_LONG
+                    resources.getQuantityString(R.plurals.import_pdf_done, doc.pageCount, doc.pageCount),
+                    Toast.LENGTH_SHORT
                 ).show()
+                startActivity(DocumentViewerActivity.intent(this@MainActivity, doc.id))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                progress.dismiss()
+                if (!isFinishing && !isDestroyed) {
+                    Toast.makeText(this@MainActivity, R.string.import_pdf_cancelled, Toast.LENGTH_LONG).show()
+                }
+                throw e
+            } catch (e: Exception) {
+                progress.dismiss()
+                showImportFailure(e)
             }
         }
+    }
+
+    /** M07 WP-06: a readable, specific reason instead of a fleeting toast. */
+    private fun showImportFailure(e: Exception) {
+        val failure = e as? com.scanwhirl.app.util.PdfImport.ImportException
+
+        val message = when (failure?.reason) {
+            ImportReason.PASSWORD -> getString(R.string.import_failed_password)
+            ImportReason.DAMAGED -> if (failure.page > 0) {
+                getString(R.string.import_failed_page, failure.page, failure.pages)
+            } else {
+                getString(R.string.import_failed_damaged)
+            }
+            ImportReason.EMPTY -> getString(R.string.import_failed_empty)
+            ImportReason.TOO_LARGE -> getString(R.string.import_failed_too_large, (com.scanwhirl.app.util.PdfImport.MAX_BYTES / (1024 * 1024)).toInt())
+            ImportReason.TOO_MANY_PAGES -> getString(R.string.import_failed_too_many, failure.pages, com.scanwhirl.app.util.PdfImport.MAX_PAGES)
+            ImportReason.NO_SPACE -> getString(R.string.import_failed_no_space)
+            ImportReason.NO_ACCESS -> getString(R.string.import_failed_no_access)
+            ImportReason.READ_FAILED -> getString(R.string.import_failed_read)
+            ImportReason.SAVE_FAILED, null -> getString(R.string.import_failed_save)
+        }
+        SwDialog.card(this)
+            .setTitle(R.string.import_failed_title)
+            .setMessage(message)
+            .setPositiveButton(android.R.string.ok, null)
+            .showSw(isSheet = false)
     }
 
     // ------------------------------------------------------------------
@@ -1514,29 +1558,48 @@ class MainActivity : BaseActivity(), HomeHost {
 
     private fun confirmDeleteSelected() = confirmDelete(selectedIds.toList())
 
-    /** T4.3: the single-card quick action shares the bulk confirm (T4.8 box). */
+    /**
+     * M07 P1: ordinary documents move to Trash at once, with Undo (no confirm: the
+     * action is reversible). Legacy Vault items never enter Trash, so inside the
+     * authenticated Vault the old permanent delete stays, and says so.
+     */
     private fun confirmDelete(ids: List<String>) {
         if (ids.isEmpty()) return
-        // T4.8: find the Documents/ScanWhirl copies these documents own while
-        // their meta.txt still exists (recorded exports + exact-name rows).
+        if (vaultMode) {
+            confirmVaultDelete(ids)
+            return
+        }
+        lifecycleScope.launch {
+            val moved = withContext(Dispatchers.IO) { TrashActions.moveAll(repo, ids) }
+            if (selectionMode) setSelectionMode(false)
+            refreshList()
+            TrashActions.showMoved(this@MainActivity, binding.root, binding.dockRoot, moved) { refreshList() }
+        }
+    }
+
+    /** Shows Undo for a move made on the document screen before it closed. */
+    private fun showPendingTrashNotice() {
+        val moved = TrashActions.takePending() ?: return
+        TrashActions.showMoved(this, binding.root, binding.dockRoot, moved) { refreshList() }
+    }
+
+    /** Legacy Vault: permanent delete inside the authenticated Vault (T4.8 box, M07 proof rules). */
+    private fun confirmVaultDelete(ids: List<String>) {
         val plan = ids.mapNotNull { repo.getDocument(it) }
-            .map { it to DeleteExports.copiesFor(this, repo, it.id, it.name) }
+            .map { it to DeleteExports.copiesFor(repo, it.id) }
         val total = plan.sumOf { it.second.size }
+        val body = DeleteExports.dialogBody(this, total)
+        val box: android.widget.CheckBox? = body.findViewById(R.id.deleteCopiesBox)
         val builder = SwDialog.danger(this)
             .setTitle(if (ids.size == 1) R.string.delete_title else R.string.delete_selected_title)
             .setMessage(
                 if (ids.size == 1) {
-                    val name = repo.getDocument(ids[0])?.name ?: ""
-                    getString(R.string.delete_message, name)
+                    getString(R.string.delete_vault_message, plan.firstOrNull()?.first?.name.orEmpty())
                 } else {
-                    resources.getQuantityString(R.plurals.delete_selected_message, ids.size, ids.size)
+                    resources.getQuantityString(R.plurals.delete_vault_selected_message, ids.size, ids.size)
                 }
             )
-        var box: android.widget.CheckBox? = null
-        if (total > 0) {
-            box = DeleteExports.checkboxRow(this, total)
-            builder.setView(box)
-        }
+            .setView(body)
         builder
             .setPositiveButton(R.string.delete) { _, _ ->
                 ids.forEach { repo.deleteDocument(it) } // never blocked by copy removal

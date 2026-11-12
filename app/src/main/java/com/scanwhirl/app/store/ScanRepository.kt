@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import androidx.core.net.toUri
 import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.OcrStore
@@ -13,7 +14,7 @@ import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
-import com.scanwhirl.app.util.OcrEngine
+import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
@@ -77,7 +78,36 @@ class ScanRepository(private val context: Context) {
 
         internal fun resetTestSeams() {
             usableSpace = ::probeUsableSpace
+            trashFault = {}
+            importFault = {}
         }
+
+        /** An import staging folder untouched this long belongs to an import that died. */
+        const val STALE_IMPORT_MS = 60L * 60 * 1000
+
+        /** M07: serialises Trash moves, restores and purges across repository instances. */
+        private val TRASH_LOCK = Any()
+
+        /** Written into a Trash entry after its move: `v1 / original id / trashedAt`. */
+        internal const val TRASH_MARKER = "trashed.txt"
+
+        /** Hidden entries being permanently deleted; finished by [recoverTrash]. */
+        internal const val PURGE_PREFIX = ".purge-"
+
+        /** Separates an id from its counter when two Trash entries share an id. */
+        private const val TRASH_KEY_SEP = "~"
+
+        /** Points in a Trash operation where a test can simulate process death. */
+        enum class TrashStage { BEFORE_MOVE, MOVED, BEFORE_RESTORE, RESTORED, PURGE_HIDDEN }
+
+        /** Fault-injection seam (tests only). May throw. */
+        @Volatile internal var trashFault: (TrashStage) -> Unit = {}
+
+        /** Points in a PDF import where a test can inject a failure. */
+        enum class ImportStage { COPIED, PAGE_RENDERED, BEFORE_PUBLISH }
+
+        /** Fault-injection seam (tests only). May throw. */
+        @Volatile internal var importFault: (ImportStage) -> Unit = {}
     }
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
@@ -197,33 +227,60 @@ class ScanRepository(private val context: Context) {
      * the whole file line-by-line, so it survives those.
      */
     fun addExport(id: String, uri: Uri, fingerprint: DownloadSaver.Fingerprint? = null) {
+        updateMeta(File(docsDir, id)) { lines -> recordSeen(lines, uri, fingerprint) }
+    }
+
+    /**
+     * M07 P0: records the outcome of a save of document [id].
+     *
+     * Every copy is listed in `exports=` so no *other* document's delete can ever
+     * remove it. Only a copy this save actually **created** also gets a signed
+     * provenance entry (`exportmade=`), the one proof [provenExportsOf] accepts.
+     * An "already saved" result adopted a file that existed before (perhaps a
+     * deleted document's retained copy), so it is recorded but never proven.
+     * Re-saving unchanged bytes keeps an existing proof for that same URI.
+     */
+    fun addExport(id: String, saved: DownloadSaver.SavedFile) {
+        val fp = saved.fingerprint
+        val signature = if (saved.created && fp != null) {
+            ExportProvenance.sign(context, id, saved.uri, fp)
+        } else {
+            null
+        }
         updateMeta(File(docsDir, id)) { lines ->
-            padMeta(lines)
-            val recorded = listLine(lines, EXPORTS_KEY)
-            setListLine(lines, EXPORTS_KEY, (recorded + uri.toString()).distinct())
-            // M06: what the copy held when this document saved it, so a later
-            // delete can prove the file is still that copy (`exportsigs=` is a
-            // separate line; older builds ignore it and keep reading `exports=`).
-            if (fingerprint != null) {
-                val sigs = listLine(lines, EXPORT_SIGS_KEY)
-                    .filterNot { it.substringBefore(' ') == uri.toString() }
-                setListLine(lines, EXPORT_SIGS_KEY, sigs + "$uri ${fingerprint.encode()}")
+            recordSeen(lines, saved.uri, fp)
+            if (signature != null && fp != null) {
+                val made = listLine(lines, EXPORT_MADE_KEY)
+                    .filterNot { it.substringBefore(' ') == saved.uri.toString() }
+                setListLine(lines, EXPORT_MADE_KEY, made + "${saved.uri} ${fp.encode()} $signature")
             }
         }
     }
 
-    /** M06: forgets a recorded copy (e.g. after Undo removed it). */
+    private fun recordSeen(lines: MutableList<String>, uri: Uri, fingerprint: DownloadSaver.Fingerprint?) {
+        padMeta(lines)
+        val recorded = listLine(lines, EXPORTS_KEY)
+        setListLine(lines, EXPORTS_KEY, (recorded + uri.toString()).distinct())
+        // M06: what the copy held when this document saved it (`exportsigs=` is a
+        // separate line; older builds ignore it and keep reading `exports=`).
+        if (fingerprint != null) {
+            val sigs = listLine(lines, EXPORT_SIGS_KEY)
+                .filterNot { it.substringBefore(' ') == uri.toString() }
+            setListLine(lines, EXPORT_SIGS_KEY, sigs + "$uri ${fingerprint.encode()}")
+        }
+    }
+
+    /** M06: forgets a recorded copy (e.g. after Undo removed it), including its proof. */
     fun removeExport(id: String, uri: Uri) {
         updateMeta(File(docsDir, id)) { lines ->
             val key = uri.toString()
             if (lines.any { it.startsWith(EXPORTS_KEY) }) {
                 setListLine(lines, EXPORTS_KEY, listLine(lines, EXPORTS_KEY).filterNot { it == key })
             }
-            if (lines.any { it.startsWith(EXPORT_SIGS_KEY) }) {
-                setListLine(
-                    lines, EXPORT_SIGS_KEY,
-                    listLine(lines, EXPORT_SIGS_KEY).filterNot { it.substringBefore(' ') == key }
-                )
+            for (k in listOf(EXPORT_SIGS_KEY, EXPORT_MADE_KEY)) {
+                if (lines.any { it.startsWith(k) }) {
+                    setListLine(lines, k, listLine(lines, k).filterNot { it.substringBefore(' ') == key })
+                }
             }
         }
     }
@@ -234,10 +291,16 @@ class ScanRepository(private val context: Context) {
     /** A recorded copy plus, when known, the fingerprint it had when this document saved it. */
     data class ExportRecord(val uri: Uri, val fingerprint: DownloadSaver.Fingerprint?)
 
-    fun exportRecordsOf(id: String): List<ExportRecord> {
-        val meta = File(File(docsDir, id), "meta.txt")
-        if (!meta.exists()) return emptyList()
-        val lines = try { meta.readLines() } catch (_: IOException) { return emptyList() }
+    fun exportRecordsOf(id: String): List<ExportRecord> = exportRecordsIn(File(docsDir, id))
+
+    private fun metaLines(dir: File): List<String>? {
+        val meta = File(dir, "meta.txt")
+        if (!meta.exists()) return null
+        return try { meta.readLines() } catch (_: IOException) { null }
+    }
+
+    private fun exportRecordsIn(dir: File): List<ExportRecord> {
+        val lines = metaLines(dir) ?: return emptyList()
         val sigs = listLine(lines, EXPORT_SIGS_KEY).mapNotNull { entry ->
             val space = entry.indexOf(' ')
             if (space <= 0) null
@@ -248,15 +311,40 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /** M07: a copy this document provably created, with the fingerprint it had then. */
+    data class ProvenExport(val uri: Uri, val fingerprint: DownloadSaver.Fingerprint)
+
     /**
-     * M06: every copy recorded by a document other than [id], including locked
-     * and vaulted ones. Deleting [id] must never remove a file another
-     * document also points at (identical saves, or a same-name copy an older
-     * build rewrote in place).
+     * M07 P0: the only copies a delete of [id] may offer to remove: those whose
+     * signed `exportmade=` entry verifies for this exact document id. Unsigned
+     * (pre-M07) records, adopted "already saved" files and title matches are never
+     * included. The caller still re-checks each file's current bytes.
      */
-    fun exportsRecordedByOthers(id: String): Set<Uri> {
-        val dirs = docsDir.listFiles { f -> f.isDirectory && f.name != id } ?: return emptySet()
-        return dirs.flatMapTo(HashSet()) { exportsOf(it.name) }
+    fun provenExportsOf(id: String): List<ProvenExport> = provenExportsIn(File(docsDir, id), id)
+
+    internal fun provenExportsIn(dir: File, docId: String): List<ProvenExport> {
+        val lines = metaLines(dir) ?: return emptyList()
+        return listLine(lines, EXPORT_MADE_KEY).mapNotNull { entry ->
+            val parts = entry.split(' ')
+            if (parts.size != 3) return@mapNotNull null
+            val uri = runCatching { parts[0].toUri() }.getOrNull() ?: return@mapNotNull null
+            val fp = DownloadSaver.Fingerprint.decode(parts[1]) ?: return@mapNotNull null
+            if (ExportProvenance.verify(context, docId, uri, fp, parts[2])) ProvenExport(uri, fp) else null
+        }.distinctBy { it.uri }
+    }
+
+    /**
+     * M06/M07: every copy recorded by any document other than the one in
+     * [exclude], including locked, vaulted and trashed ones. Deleting a document
+     * must never remove a file another document also points at.
+     */
+    fun exportsRecordedByOthers(id: String): Set<Uri> = exportsRecordedOutside(File(docsDir, id))
+
+    internal fun exportsRecordedOutside(exclude: File): Set<Uri> {
+        val dirs = (docsDir.listFiles { f -> f.isDirectory }.orEmpty().asList() +
+            trashDir.listFiles { f -> f.isDirectory }.orEmpty().asList())
+            .filter { it.absoluteFile != exclude.absoluteFile }
+        return dirs.flatMapTo(HashSet()) { dir -> exportRecordsIn(dir).map { it.uri } }
     }
 
     private fun listLine(lines: List<String>, key: String): List<String> =
@@ -695,9 +783,211 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Permanently deletes a live document (used for legacy Vault items, which never
+     * enter Trash). The directory is first renamed into a hidden purge entry, so a
+     * crash mid-delete can never leave a half-deleted document visible in Home;
+     * [recoverTrash] finishes the removal on the next start.
+     */
     fun deleteDocument(id: String) {
         val dir = File(docsDir, id)
-        OcrStore.locked { dir.deleteRecursively() }
+        synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                synchronized(TRASH_LOCK) {
+                    if (!dir.exists()) return@synchronized
+                    val hidden = File(trashDir, "$PURGE_PREFIX$id-${UUID.randomUUID().toString().take(8)}")
+                    if (dir.renameTo(hidden)) {
+                        trashFault(TrashStage.PURGE_HIDDEN)
+                        hidden.deleteRecursively()
+                    } else {
+                        dir.deleteRecursively()
+                    }
+                }
+            }
+        }
+        dropDerivedCaches(id)
+    }
+
+    // ------------------------------------------------------------------
+    // M07 P1: Trash (reversible delete)
+    // ------------------------------------------------------------------
+
+    /**
+     * `filesDir/trash`: trashed documents, each a complete document directory
+     * (pages, `.orig` originals, scan.pdf, meta, OCR text/geometry, flags) moved here
+     * whole. It is on the same filesystem as `documents/`, so every move is one
+     * atomic `rename(2)`: a document is either fully in the library or fully in
+     * Trash, never split. Nothing in Home, search, Quick Sort or the OCR indexer
+     * scans this directory.
+     */
+    internal val trashDir: File
+        get() = File(context.filesDir, "trash").apply { mkdirs() }
+
+    /** A document in Trash. [key] is its Trash entry; [originalId] the library id it had. */
+    data class TrashedDocument(
+        val key: String,
+        val originalId: String,
+        val trashedAt: Long,
+        val document: ScanDocument
+    )
+
+    /** Thrown when a legacy Vault item is asked to go to Trash; it never does. */
+    class VaultItemNotTrashable : IllegalStateException("Vault items are not moved to Trash")
+
+    /**
+     * Moves a live document into Trash and returns its Trash key, or null when the
+     * document no longer exists. Exported copies in Documents/ScanWhirl are never
+     * touched. Legacy Vault documents are refused ([VaultItemNotTrashable]) so they
+     * can never surface in the ordinary Trash list.
+     *
+     * Order: PDF lock, then the OCR store lock, so neither a PDF regeneration nor an
+     * OCR write can be half-way through the directory while it moves.
+     */
+    fun moveToTrash(id: String): String? {
+        val key = synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                synchronized(TRASH_LOCK) {
+                    val src = File(docsDir, id)
+                    val doc = loadDocument(src) ?: return@synchronized null
+                    if (doc.isVaulted) throw VaultItemNotTrashable()
+                    trashFault(TrashStage.BEFORE_MOVE)
+                    val key = freeTrashKey(id)
+                    val dest = File(trashDir, key)
+                    if (!src.renameTo(dest)) throw IOException("Could not move \"${doc.name}\" to Trash")
+                    trashFault(TrashStage.MOVED)
+                    // Written after the move, best effort: an entry without it is still a
+                    // complete trashed document (id from its name, time from the folder).
+                    try {
+                        Durable.atomicWriteText(
+                            File(dest, TRASH_MARKER),
+                            "v1\n$id\n${System.currentTimeMillis()}\n"
+                        )
+                    } catch (_: Exception) {
+                    }
+                    Durable.syncDir(docsDir)
+                    Durable.syncDir(trashDir)
+                    key
+                }
+            }
+        }
+        if (key != null) dropDerivedCaches(id)
+        return key
+    }
+
+    /** Trashed documents, most recently trashed first. Vault items never appear. */
+    fun listTrash(): List<TrashedDocument> {
+        val dirs = trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") } ?: return emptyList()
+        return dirs.mapNotNull { dir -> trashedIn(dir) }
+            .filterNot { it.document.isVaulted }
+            .sortedByDescending { it.trashedAt }
+    }
+
+    fun trashCount(): Int = listTrash().size
+
+    private fun trashedIn(dir: File): TrashedDocument? {
+        val doc = loadDocument(dir) ?: return null
+        val marker = try {
+            File(dir, TRASH_MARKER).takeIf { it.isFile }?.readLines()
+        } catch (_: IOException) {
+            null
+        }
+        val originalId = marker?.getOrNull(1)?.takeIf { isSafeId(it) } ?: dir.name.substringBefore(TRASH_KEY_SEP)
+        val trashedAt = marker?.getOrNull(2)?.toLongOrNull() ?: dir.lastModified()
+        return TrashedDocument(dir.name, originalId, trashedAt, doc)
+    }
+
+    /**
+     * Restores a trashed document whole and returns it. It goes back under its
+     * original id when that id is free. If a library document now uses that id, the
+     * existing document is left untouched and the restored one gets a new id, so no
+     * item is ever overwritten and no two documents share an id.
+     */
+    fun restoreFromTrash(key: String): ScanDocument {
+        val restored = synchronized(TRASH_LOCK) {
+            val src = File(trashDir, key)
+            val trashed = trashedIn(src) ?: throw IOException("This item is no longer in Trash")
+            var id = trashed.originalId
+            if (!isSafeId(id) || File(docsDir, id).exists()) id = freeLibraryId()
+            trashFault(TrashStage.BEFORE_RESTORE)
+            val dest = File(docsDir, id)
+            if (!src.renameTo(dest)) throw IOException("Could not restore \"${trashed.document.name}\"")
+            trashFault(TrashStage.RESTORED)
+            File(dest, TRASH_MARKER).delete()
+            Durable.syncDir(trashDir)
+            Durable.syncDir(docsDir)
+            loadDocument(dest) ?: throw IOException("Restored document could not be opened")
+        }
+        // A restored locked document is recognised again from its saved copies.
+        if (restored.isLocked) recordLockIndex(restored.pdfFile, restored.id)
+        return restored
+    }
+
+    /**
+     * Permanently deletes one Trash entry. It is renamed into a hidden purge entry
+     * first (atomic), so a crash part-way never leaves a half-deleted document in
+     * the Trash list; [recoverTrash] finishes it.
+     */
+    fun deleteFromTrash(key: String) {
+        synchronized(TRASH_LOCK) {
+            val src = File(trashDir, key)
+            if (!src.exists() || key.startsWith(".")) return
+            val originalId = trashedIn(src)?.originalId
+            val hidden = File(trashDir, "$PURGE_PREFIX$key-${UUID.randomUUID().toString().take(8)}")
+            if (!src.renameTo(hidden)) throw IOException("Could not delete this item")
+            trashFault(TrashStage.PURGE_HIDDEN)
+            hidden.deleteRecursively()
+            originalId?.let { dropDerivedCaches(it) }
+        }
+    }
+
+    /** Proven exported copies of a trashed document (see [provenExportsOf]). */
+    fun provenExportsOfTrashed(item: TrashedDocument): List<ProvenExport> =
+        provenExportsIn(File(trashDir, item.key), item.originalId)
+
+    /** Copies recorded by any document other than this Trash entry. */
+    fun exportsRecordedByOthersThan(item: TrashedDocument): Set<Uri> =
+        exportsRecordedOutside(File(trashDir, item.key))
+
+    /**
+     * Startup recovery: finishes interrupted permanent deletes (hidden purge
+     * entries) and drops a Trash marker left in a restored document by a crash
+     * between the move and the marker cleanup. Never touches a visible entry.
+     */
+    fun recoverTrash(): Int {
+        var finished = 0
+        synchronized(TRASH_LOCK) {
+            trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }?.forEach { f ->
+                if (f.deleteRecursively()) finished++
+            }
+            docsDir.listFiles { f -> f.isDirectory }?.forEach { dir -> File(dir, TRASH_MARKER).delete() }
+        }
+        return finished
+    }
+
+    private fun freeTrashKey(id: String): String {
+        if (!File(trashDir, id).exists()) return id
+        var n = 2
+        while (File(trashDir, "$id$TRASH_KEY_SEP$n").exists()) n++
+        return "$id$TRASH_KEY_SEP$n"
+    }
+
+    private fun freeLibraryId(): String {
+        while (true) {
+            val id = UUID.randomUUID().toString().take(8)
+            if (!File(docsDir, id).exists() && !File(trashDir, id).exists()) return id
+        }
+    }
+
+    private fun isSafeId(id: String): Boolean =
+        id.isNotEmpty() && id.length <= 64 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+
+    /** Unlocked previews built for a document must not outlive it in the library. */
+    private fun dropDerivedCaches(id: String) {
+        try {
+            File(context.cacheDir, "preview_$id.pdf").delete()
+            File(File(context.cacheDir, "documents"), "preview_$id.pdf").delete()
+        } catch (_: Exception) {
+        }
     }
 
     fun renameDocument(id: String, newName: String) {
@@ -729,7 +1019,10 @@ class ScanRepository(private val context: Context) {
             if (destMeta.exists()) {
                 destMeta.writeText(
                     destMeta.readLines()
-                        .filterNot { it.startsWith(EXPORTS_KEY) || it.startsWith(EXPORT_SIGS_KEY) }
+                        .filterNot {
+                            it.startsWith(EXPORTS_KEY) || it.startsWith(EXPORT_SIGS_KEY) ||
+                                it.startsWith(EXPORT_MADE_KEY)
+                        }
                         .joinToString("\n")
                 )
             }
@@ -1054,32 +1347,106 @@ class ScanRepository(private val context: Context) {
         dpi: Float = 150f,
         maxDim: Int = 2048,
         quality: Int = 85
+    ): ScanDocument = importPdf(uri, name, dpi, maxDim, quality, vaulted = false)
+
+    /**
+     * M07 WP-06: the one PDF import path.
+     *
+     *  - The source is only ever opened for reading, copied once (bounded by
+     *    [PdfImport.MAX_BYTES]) so pipe-backed providers work, and the copy is removed.
+     *  - Every page is rendered into a private staging folder outside `documents/`,
+     *    with one renderer for the whole file. Any page that fails fails the import:
+     *    no document with silently missing pages is ever published.
+     *  - The finished folder (pages, PDF, metadata, and the Vault flag when asked)
+     *    is published with one atomic rename. Until then nothing is visible, so a
+     *    failure, cancellation or crash leaves no phantom document; leftovers are
+     *    removed by [recoverImports].
+     *  - Failures are [PdfImport.ImportException]s with a [PdfImport.Reason] the UI
+     *    can explain (password, damaged, too large, no space, no access…).
+     *  - The new document is marked for text recognition; the caller queues it.
+     */
+    private suspend fun importPdf(
+        uri: Uri,
+        name: String?,
+        dpi: Float,
+        maxDim: Int,
+        quality: Int,
+        vaulted: Boolean
     ): ScanDocument = withContext(Dispatchers.IO) {
-        val (id, dir) = newDocDir()
+        val staging = File(importStagingDir, UUID.randomUUID().toString().take(12))
+        if (!staging.mkdirs()) throw PdfImport.ImportException(PdfImport.Reason.SAVE_FAILED, "Could not prepare the import")
         try {
-            // Copying once makes every provider (Downloads, Drive, chat apps)
-            // readable by PdfRenderer instead of failing "not seekable".
-            PdfPageRenderer.withSeekablePdf(context, uri) { fd ->
-                appendPdfPages(fd, dir, 0, dpi = dpi, maxDim = maxDim, quality = quality)
+            PdfImport.withSeekableCopy(context, uri) { fd, sourceBytes ->
+                importFault(ImportStage.COPIED)
+                PdfImport.renderAll(fd, sourceBytes, staging, usableSpace(docsDir), dpi, maxDim, quality) {
+                    importFault(ImportStage.PAGE_RENDERED)
+                }
             }
-            finalizeDoc(id, dir, name)
-        } catch (e: Exception) {
-            dir.deleteRecursively()
-            throw e
+            currentCoroutineContext().ensureActive()
+            val pdfFile = File(staging, "scan.pdf")
+            try {
+                writePdf(staging, pdfFile)
+            } catch (e: Exception) {
+                throw PdfImport.classifyWrite(e)
+            }
+            if (!pdfFile.isFile || pdfFile.length() == 0L) {
+                throw PdfImport.ImportException(PdfImport.Reason.NO_SPACE, "Could not write the document")
+            }
+            val title = name?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() } ?: nextDocumentName()
+            try {
+                writeMeta(staging, title)
+                if (vaulted) Durable.atomicWriteText(File(staging, VAULT_FILE), "1")
+                File(staging, "ocr_pending").writeText("")
+            } catch (e: Exception) {
+                throw PdfImport.classifyWrite(e)
+            }
+            importFault(ImportStage.BEFORE_PUBLISH)
+            currentCoroutineContext().ensureActive()
+            val id = synchronized(TRASH_LOCK) {
+                val id = freeLibraryId()
+                if (!staging.renameTo(File(docsDir, id))) {
+                    throw PdfImport.ImportException(PdfImport.Reason.SAVE_FAILED, "Could not add the document")
+                }
+                id
+            }
+            Durable.syncDir(docsDir)
+            loadDocument(File(docsDir, id))
+                ?: throw PdfImport.ImportException(PdfImport.Reason.DAMAGED, "The imported document could not be opened")
+        } finally {
+            if (staging.exists()) staging.deleteRecursively()
         }
     }
 
-    /** Imports a device PDF straight into the Hidden Vault (Pro). */
+    /** Private staging for imports in progress (same filesystem as `documents/`). */
+    private val importStagingDir: File
+        get() = File(context.filesDir, "import_staging").apply { mkdirs() }
+
+    /**
+     * Startup cleanup: an import staging folder only exists while an import runs, so
+     * one untouched for [STALE_IMPORT_MS] belongs to an import that died (crash,
+     * power loss). It was never visible. Same for leftover seekable PDF copies.
+     */
+    fun recoverImports(now: Long = System.currentTimeMillis()): Int {
+        var removed = 0
+        val cutoff = now - STALE_IMPORT_MS
+        File(context.filesDir, "import_staging").listFiles()?.forEach {
+            if (it.lastModified() < cutoff && it.deleteRecursively()) removed++
+        }
+        File(context.cacheDir, "pdf_fd").listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
+        return removed
+    }
+
+    /**
+     * Imports a device PDF straight into the Hidden Vault (Pro). The Vault flag is
+     * written before the document is published, so it is never visible in Home.
+     */
     suspend fun importPdfIntoVault(
         uri: Uri,
         name: String?,
         dpi: Float = 150f,
         maxDim: Int = 2048,
         quality: Int = 85
-    ): ScanDocument {
-        val doc = importPdfAsScan(uri, name, dpi, maxDim, quality)
-        return setVaulted(doc.id, true) ?: doc
-    }
+    ): ScanDocument = importPdf(uri, name, dpi, maxDim, quality, vaulted = true)
 
     private val LOCK_FILE = "locked.meta"
     private val VAULT_FILE = "vault.flag"
@@ -1089,6 +1456,9 @@ class ScanRepository(private val context: Context) {
 
     /** M06: `exportsigs=<uri> <size>:<sha256>|…` fingerprints of recorded copies. */
     private val EXPORT_SIGS_KEY = "exportsigs="
+
+    /** M07: `exportmade=<uri> <size>:<sha256> <hmac>|…` signed proof this document created a copy. */
+    private val EXPORT_MADE_KEY = "exportmade="
     private val LOCK_INDEX_FILE = "locked_pdfs.txt"
 
     /**
@@ -1241,28 +1611,6 @@ class ScanRepository(private val context: Context) {
         return ocrStore.updateTexts(id, pages)
     }
 
-    /**
-     * Runs OCR over every page (background) and stores text + geometry through
-     * [OcrStore]. Returns the number of pages processed. A page the recognizer
-     * rejects is stored with empty text and no geometry.
-     */
-    suspend fun buildOcr(id: String): Int = withContext(Dispatchers.IO) {
-        val dir = File(docsDir, id)
-        val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-        var count = 0
-        for (page in doc.pageFiles) {
-            try {
-                val result = OcrEngine.recognizeFile(page)
-                ocrStore.putPage(id, page.name, result.text, result.page)
-                count++
-            } catch (_: Exception) {
-                // Page unreadable: store empty text, no geometry, honest.
-                ocrStore.putPage(id, page.name, "", null)
-            }
-        }
-        count
-    }
-
     private fun renumberPages(dir: File) {
         pageFilesIn(dir).forEachIndexed { i, f ->
             val target = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i))
@@ -1334,7 +1682,9 @@ class ScanRepository(private val context: Context) {
      *  if that name is already taken by a document that was explicitly
      *  renamed to "Document N", making it collision-proof in all cases. */
     fun nextDocumentName(): String {
-        val docDirs = docsDir.listFiles { f -> f.isDirectory && !SaveFormat.isIncomplete(f) } ?: emptyArray()
+        // M07: Trash counts too, so restoring an item never duplicates a fresh default name.
+        val docDirs = (docsDir.listFiles { f -> f.isDirectory && !SaveFormat.isIncomplete(f) }.orEmpty().asList() +
+            trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty().asList())
         val existingNames = docDirs.mapNotNull { dir ->
             val meta = File(dir, "meta.txt")
             if (meta.exists()) meta.readLines().firstOrNull() else null

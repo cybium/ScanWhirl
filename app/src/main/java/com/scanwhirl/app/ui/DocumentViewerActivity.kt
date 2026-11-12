@@ -518,7 +518,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                             // T4.8: remember the copy so delete can remove it. A failure to
                             // record it must not turn a finished export into a failed one.
                             try {
-                                repo.addExport(doc.id, it.uri, it.fingerprint)
+                                repo.addExport(doc.id, it)
                             } catch (_: Exception) {
                             }
                         }
@@ -620,7 +620,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             sheet.dismiss()
             toggleVaultDoc()
         }
-        // Danger
+        // Danger: ordinary documents go to Trash; legacy Vault items are deleted permanently.
+        view.findViewById<android.widget.TextView>(R.id.labelMoreDelete).setText(
+            if (doc.isVaulted) R.string.delete_document else R.string.trash_move
+        )
         view.findViewById<View>(R.id.rowMoreDelete).setOnClickListener {
             sheet.dismiss()
             confirmDelete(doc)
@@ -893,18 +896,38 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         Toast.makeText(this, message, duration).show()
     }
 
+    /**
+     * M07 P1: an ordinary document moves to Trash at once; Home shows the Undo
+     * snackbar as this screen closes. A legacy Vault item never enters Trash, so it
+     * keeps the explicit permanent delete below.
+     */
     private fun confirmDelete(doc: ScanDocument) {
-        // T4.8: locate this document's Documents/ScanWhirl copies while its
-        // meta.txt still exists (recorded exports + exact-name legacy rows).
-        val copies = DeleteExports.copiesFor(this, repo, doc.id, doc.name)
+        if (doc.isVaulted) {
+            confirmVaultDelete(doc)
+            return
+        }
+        lifecycleScope.launch {
+            val moved = withContext(NonCancellable + Dispatchers.IO) {
+                TrashActions.moveAll(repo, listOf(doc.id))
+            }
+            if (moved.keys.isEmpty()) {
+                Snackbar.make(binding.root, R.string.trash_move_failed, Snackbar.LENGTH_LONG).show()
+                return@launch
+            }
+            TrashActions.post(moved)
+            finish()
+        }
+    }
+
+    private fun confirmVaultDelete(doc: ScanDocument) {
+        // M07: only copies this document provably made (signed records) are offered.
+        val copies = DeleteExports.copiesFor(repo, doc.id)
+        val body = DeleteExports.dialogBody(this, copies.size)
+        val box: android.widget.CheckBox? = body.findViewById(R.id.deleteCopiesBox)
         val builder = SwDialog.danger(this)
             .setTitle(R.string.delete_title)
-            .setMessage(getString(R.string.delete_message, doc.name))
-        var box: android.widget.CheckBox? = null
-        if (copies.isNotEmpty()) {
-            box = DeleteExports.checkboxRow(this, copies.size)
-            builder.setView(box)
-        }
+            .setMessage(getString(R.string.delete_vault_message, doc.name))
+            .setView(body)
         builder
             .setPositiveButton(R.string.delete) { _, _ ->
                 repo.deleteDocument(doc.id) // never blocked by copy removal

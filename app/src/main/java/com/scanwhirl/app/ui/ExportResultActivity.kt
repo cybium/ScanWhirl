@@ -132,7 +132,7 @@ class ExportResultActivity : BaseActivity() {
                                 docId?.let { id ->
                                     try {
                                         ScanRepository(this@ExportResultActivity)
-                                            .addExport(id, it.uri, it.fingerprint)
+                                            .addExport(id, it)
                                     } catch (_: Exception) {
                                     }
                                 }

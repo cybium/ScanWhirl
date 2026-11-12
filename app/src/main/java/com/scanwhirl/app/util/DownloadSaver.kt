@@ -311,34 +311,10 @@ object DownloadSaver {
         false
     }
 
-    // ------------------------------------------------------------------
-    // Ownership lookup (delete-with-document, T4.8)
-    // ------------------------------------------------------------------
-
-    /**
-     * T4.8: best-effort lookup of copies of [docName] this package owns in
-     * Documents/ScanWhirl: only `<name>.pdf` / `<name> (n).pdf`, never
-     * anything looser, and only rows `owner_package_name` proves we wrote
-     * (Android 10+; older installs return nothing rather than guessing).
-     */
-    fun findCopies(context: Context, docName: String): List<Uri> {
-        if (Build.VERSION.SDK_INT >= 29) return findCopiesQ(context, docName)
-        return emptyList()
-    }
-
-    @androidx.annotation.RequiresApi(29)
-    private fun findCopiesQ(context: Context, docName: String): List<Uri> {
-        val collection = MediaStore.Files.getContentUri("external")
-        val relPath = Environment.DIRECTORY_DOCUMENTS + "/" + SUBDIR
-        val exact = familyRegex(pdfNameFor(docName))
-        return try {
-            listRows(context.contentResolver, collection, relPath)
-                .filter { it.owner == context.packageName && exact.matches(it.name) }
-                .map { it.uri }
-        } catch (_: Exception) {
-            emptyList() // no MediaStore here / no permission → no legacy matches
-        }
-    }
+    // M07 P0: the T4.8 title-family lookup (`findCopies`) is gone on purpose. A name
+    // plus owner package cannot tell a deleted document's retained copy from a later
+    // namesake's, so delete-with-document trusts only signed provenance records
+    // (store/ExportProvenance, ui/DeleteExports).
 
     // ------------------------------------------------------------------
     // The transaction

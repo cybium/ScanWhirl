@@ -193,7 +193,6 @@
     <string name="crop_size_id"><!-- review -->ID card</string>
     <string name="crop_size_passport"><!-- review -->Passport 35×45</string>
     <string name="crop_size_visa"><!-- review -->Visa 5:7</string>
-    <string name="delete_message"><!-- review -->\"%1$s\" and all its पृष्ठ will be permanently हटाएंd.</string>
     <string name="delete_selected_title"><!-- review -->Delete चयनित स्कैन?</string>
     <string name="delete_title"><!-- review -->Delete स्कैन?</string>
     <string name="discard"><!-- review -->Discard</string>
@@ -204,7 +203,6 @@
     <string name="dlg_eyebrow_tool"><!-- review -->TOOL</string>
     <string name="dlg_eyebrow_warning"><!-- review -->WARNING</string>
     <string name="doc_not_found"><!-- review -->Document नहीं मिल गया</string>
-    <string name="edit_pdf_failed"><!-- review -->Could नहीं खोलें this PDF: %1$s</string>
     <string name="edit_pdf_note_title"><!-- review -->Import PDF</string>
     <string name="export_zip"><!-- review -->Export ZIP</string>
     <string name="filter_action"><!-- review -->Filter</string>
@@ -422,10 +420,6 @@
     <string name="wallpaper_on"><!-- review -->On, tap को बदलें the phoको</string>
     <string name="zoom_page"><!-- review -->Page pसमीक्षा, पिनch को ज़ूम</string>
     <!-- review: the 5 plurals below were machine-translated at WP-02 — native review pending -->
-    <plurals name="delete_selected_message">
-        <item quantity="one">%1$d स्कैन और उसके सभी पेज स्थायी रूप से हटा दिए जाएंगे।</item>
-        <item quantity="other">%1$d स्कैन और उनके सभी पेज स्थायी रूप से हटा दिए जाएंगे।</item>
-    </plurals>
     <plurals name="pages">
         <item quantity="one">%1$d पेज</item>
         <item quantity="other">%1$d पेज</item>
@@ -545,4 +539,84 @@
     <!-- M06: newly saved document on Home. -->
     <string name="home_new_doc_shown">सहेजा गया: %1$s</string>
     <string name="home_new_doc_hidden">%1$s सहेजा गया, लेकिन आपकी खोज या फ़िल्टर इसे छिपा रहा है।</string>
+    <!-- M07 P1: Trash (reversible delete) -->
+    <string name="trash_title">ट्रैश</string>
+    <string name="trash_navigate_up">वापस</string>
+    <string name="trash_move">ट्रैश में डालें</string>
+    <string name="trash_move_short">ट्रैश</string>
+    <string name="trash_moved_one">“%1$s” को ट्रैश में डाला गया</string>
+    <plurals name="trash_moved_many">
+        <item quantity="one">%1$d स्कैन ट्रैश में डाला गया</item>
+        <item quantity="other">%1$d स्कैन ट्रैश में डाले गए</item>
+    </plurals>
+    <plurals name="trash_moved_partial">
+        <item quantity="one">%1$d स्कैन ट्रैश में डाला गया। %2$d को नहीं हटाया जा सका और वह बदला नहीं गया।</item>
+        <item quantity="other">%1$d स्कैन ट्रैश में डाले गए। %2$d को नहीं हटाया जा सका और वे बदले नहीं गए।</item>
+    </plurals>
+    <string name="trash_move_failed">ट्रैश में नहीं डाला जा सका। कुछ भी डिलीट नहीं हुआ।</string>
+    <plurals name="trash_restored">
+        <item quantity="one">%1$d स्कैन वापस लाया गया</item>
+        <item quantity="other">%1$d स्कैन वापस लाए गए</item>
+    </plurals>
+    <string name="trash_restored_one">“%1$s” आपकी लाइब्रेरी में वापस आ गया</string>
+    <string name="trash_restore_failed">वापस नहीं लाया जा सका। आइटम ट्रैश में ही है, बिना बदले।</string>
+    <string name="trash_restore">वापस लाएँ</string>
+    <string name="trash_restore_named">%1$s वापस लाएँ</string>
+    <string name="trash_delete_forever">हमेशा के लिए डिलीट करें</string>
+    <string name="trash_delete_forever_named">%1$s हमेशा के लिए डिलीट करें</string>
+    <string name="trash_delete_forever_title">हमेशा के लिए डिलीट करें?</string>
+    <string name="trash_delete_forever_message">“%1$s” और इसके सभी पेज, टेक्स्ट और बदलाव इस फ़ोन से हटा दिए जाएँगे। इसे पहले जैसा नहीं किया जा सकता।</string>
+    <string name="trash_empty_action">ट्रैश खाली करें</string>
+    <string name="trash_empty_confirm_title">ट्रैश खाली करें?</string>
+    <plurals name="trash_empty_confirm_message">
+        <item quantity="one">%1$d दस्तावेज़ इस फ़ोन से हमेशा के लिए हटा दिया जाएगा। इसे पहले जैसा नहीं किया जा सकता।</item>
+        <item quantity="other">%1$d दस्तावेज़ इस फ़ोन से हमेशा के लिए हटा दिए जाएँगे। इसे पहले जैसा नहीं किया जा सकता।</item>
+    </plurals>
+    <plurals name="trash_deleted">
+        <item quantity="one">%1$d दस्तावेज़ हमेशा के लिए डिलीट किया गया</item>
+        <item quantity="other">%1$d दस्तावेज़ हमेशा के लिए डिलीट किए गए</item>
+    </plurals>
+    <string name="trash_delete_failed">कुछ आइटम डिलीट नहीं हो सके। वे अभी भी ट्रैश में हैं।</string>
+    <string name="trash_empty_title">ट्रैश खाली है</string>
+    <string name="trash_empty_body">ट्रैश में डाले गए स्कैन यहाँ पूरे के पूरे रहते हैं, जब तक आप उन्हें वापस नहीं लाते या हमेशा के लिए डिलीट नहीं करते। कुछ भी अपने आप डिलीट नहीं होता।</string>
+    <string name="trash_header_note">वापस लाने पर दस्तावेज़ अपने सभी पेज और टेक्स्ट के साथ लौटता है। Documents/ScanWhirl में सेव की गई PDF पर ट्रैश का कोई असर नहीं होता।</string>
+    <string name="trash_error_title">ट्रैश नहीं खुल सका</string>
+    <string name="trash_error_body">आपके दस्तावेज़ नहीं बदले। फिर से कोशिश करें।</string>
+    <string name="trash_retry">फिर से कोशिश करें</string>
+    <plurals name="trash_count">
+        <item quantity="one">%1$d आइटम</item>
+        <item quantity="other">%1$d आइटम</item>
+    </plurals>
+    <plurals name="trash_pages">
+        <item quantity="one">%1$d पेज</item>
+        <item quantity="other">%1$d पेज</item>
+    </plurals>
+    <string name="trash_row_meta">%1$s · %2$s को ट्रैश में डाला</string>
+    <string name="trash_row_description">%1$s, %2$s</string>
+    <string name="trash_settings_empty">खाली</string>
+    <string name="settings_library">लाइब्रेरी</string>
+    <string name="delete_copies_unproven_note">जिन कॉपी को ScanWhirl इस दस्तावेज़ की सेव की हुई साबित नहीं कर सकता, वे Documents/ScanWhirl में रहती हैं। आप उन्हें Files ऐप में संभाल सकते हैं।</string>
+    <string name="delete_vault_message">वॉल्ट के आइटम ट्रैश में नहीं जाते। “%1$s” और इसके सभी पेज हमेशा के लिए डिलीट हो जाएँगे।</string>
+    <plurals name="delete_vault_selected_message">
+        <item quantity="one">वॉल्ट के आइटम ट्रैश में नहीं जाते। %1$d स्कैन और इसके सभी पेज हमेशा के लिए डिलीट हो जाएँगे।</item>
+        <item quantity="other">वॉल्ट के आइटम ट्रैश में नहीं जाते। %1$d स्कैन और उनके सभी पेज हमेशा के लिए डिलीट हो जाएँगे।</item>
+    </plurals>
+    <!-- M07 P2: PDF import -->
+    <string name="import_pdf_progress">PDF इम्पोर्ट हो रही है…</string>
+    <plurals name="import_pdf_done">
+        <item quantity="one">%1$d पेज इम्पोर्ट हुआ</item>
+        <item quantity="other">%1$d पेज इम्पोर्ट हुए</item>
+    </plurals>
+    <string name="import_pdf_cancelled">इम्पोर्ट रद्द किया गया। कुछ भी नहीं जोड़ा गया।</string>
+    <string name="import_failed_title">यह PDF इम्पोर्ट नहीं हो सकी</string>
+    <string name="import_failed_password">यह PDF पासवर्ड से सुरक्षित है। ScanWhirl सुरक्षित PDF नहीं खोल सकता, इसलिए कुछ भी इम्पोर्ट नहीं हुआ। जिस ऐप ने इसे बनाया उसमें पासवर्ड हटाएँ या बिना पासवर्ड की कॉपी सेव करें, फिर उसे इम्पोर्ट करें।</string>
+    <string name="import_failed_damaged">यह फ़ाइल खराब है या PDF नहीं है, इसलिए कुछ भी इम्पोर्ट नहीं हुआ।</string>
+    <string name="import_failed_page">%2$d में से पेज %1$d पढ़ा नहीं जा सका, इसलिए कुछ भी इम्पोर्ट नहीं हुआ। PDF शायद खराब है।</string>
+    <string name="import_failed_empty">इस PDF में कोई पेज नहीं है, इसलिए कुछ भी इम्पोर्ट नहीं हुआ।</string>
+    <string name="import_failed_too_large">यह PDF %1$d MB से बड़ी है। इसे छोटी PDF में बाँटकर इम्पोर्ट करें।</string>
+    <string name="import_failed_too_many">इस PDF में %1$d पेज हैं। ScanWhirl एक बार में %2$d पेज तक इम्पोर्ट करता है, इसलिए पहले इसे छोटी PDF में बाँटें।</string>
+    <string name="import_failed_no_space">इस PDF को इम्पोर्ट करने के लिए फ़ोन में पर्याप्त जगह नहीं है। कुछ भी नहीं जोड़ा गया। कुछ जगह खाली करके फिर से कोशिश करें।</string>
+    <string name="import_failed_no_access">ScanWhirl अब यह फ़ाइल नहीं पढ़ सकता। शायद इसे हटाया या डिलीट किया गया, या इसकी अनुमति हटा दी गई। फ़ाइल पिकर से इसे फिर से चुनें।</string>
+    <string name="import_failed_read">फ़ाइल पूरी लोड होने से पहले रुक गई, इसलिए कुछ भी इम्पोर्ट नहीं हुआ। अगर यह किसी क्लाउड ऐप में है, तो इसे डाउनलोड करें या ऑफ़लाइन उपलब्ध करें, फिर कोशिश करें।</string>
+    <string name="import_failed_save">ScanWhirl इम्पोर्ट किए गए पेज सेव नहीं कर सका, इसलिए कुछ भी नहीं जोड़ा गया। फिर से कोशिश करें।</string>
 </resources>

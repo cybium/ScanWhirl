@@ -350,12 +350,12 @@ class ExportTransactionTest {
         val a = seedDoc("Invoice")
         val b = seedDoc("Invoice")
         val savedA = DownloadSaver.savePdfFile(app, oldBytes, DownloadSaver.pdfNameFor("Invoice"))
-        repo.addExport(a, savedA.uri, savedA.fingerprint)
+        repo.addExport(a, savedA)
         val savedB = DownloadSaver.savePdfFile(app, newBytes, DownloadSaver.pdfNameFor("Invoice"))
-        repo.addExport(b, savedB.uri, savedB.fingerprint)
+        repo.addExport(b, savedB)
         assertNotEquals("distinct documents get distinct files", savedA.uri, savedB.uri)
 
-        val copiesA = DeleteExports.copiesFor(app, repo, a, "Invoice")
+        val copiesA = DeleteExports.copiesFor(repo, a)
         assertEquals(listOf(savedA.uri), copiesA.map { it.uri })
         repo.deleteDocument(a)
         assertEquals(1 to 0, DeleteExports.removeCopies(app, copiesA))
@@ -367,21 +367,21 @@ class ExportTransactionTest {
         val a = seedDoc("Receipt")
         val b = seedDoc("Receipt copy")
         val saved = DownloadSaver.savePdfFile(app, oldBytes, "Receipt.pdf")
-        repo.addExport(a, saved.uri, saved.fingerprint)
+        repo.addExport(a, saved)
         repo.addExport(b, saved.uri, saved.fingerprint) // e.g. an older build rewrote it in place
-        assertTrue(DeleteExports.copiesFor(app, repo, a, "Receipt").isEmpty())
+        assertTrue(DeleteExports.copiesFor(repo, a).isEmpty())
         assertEquals(1, media.scanwhirlPdfs().size)
     }
 
     @Test
-    fun `legacy name matching is skipped when another document shares the family`() {
+    fun `unrecorded same-name copies are never offered (M07 no title matching)`() {
         val a = seedDoc("Tax")
         seedDoc("Tax (2)")
         DownloadSaver.savePdf(app, oldBytes, "Tax.pdf")
         DownloadSaver.savePdf(app, newBytes, "Tax (2).pdf")
         assertTrue(
-            "unrecorded copies of an ambiguous name are not provably A's",
-            DeleteExports.copiesFor(app, repo, a, "Tax").isEmpty()
+            "unrecorded copies are not provably A's, ambiguous family or not",
+            DeleteExports.copiesFor(repo, a).isEmpty()
         )
     }
 
@@ -389,9 +389,10 @@ class ExportTransactionTest {
     fun `a recorded copy edited after saving is kept on delete`() {
         val a = seedDoc("Lease")
         val saved = DownloadSaver.savePdfFile(app, oldBytes, "Lease.pdf")
-        repo.addExport(a, saved.uri, saved.fingerprint)
+        repo.addExport(a, saved)
         media.rowNamed("Lease.pdf").file.appendBytes(byteArrayOf(1))
-        val copies = DeleteExports.copiesFor(app, repo, a, "Lease")
+        val copies = DeleteExports.copiesFor(repo, a)
+        assertEquals("the signed record still names it", 1, copies.size)
         assertEquals(0 to 1, DeleteExports.removeCopies(app, copies))
         assertEquals(1, media.scanwhirlPdfs().size)
     }
