@@ -1,9 +1,12 @@
 package com.scanwhirl.app.ui
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -14,6 +17,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
@@ -436,25 +441,75 @@ class OcrEditorActivity : BaseActivity() {
                 }
             } else if (finishAfterSave) finish()
         } else {
-            // Temp mode: save as .txt via DownloadSaver.
+            // Temp mode: save as .txt via DownloadSaver (M06 transaction).
             val title = docTitle ?: "Document"
-            val fileName = "${sanitizeTitle(title)}.txt"
+            exportText(text, "${sanitizeTitle(title)}.txt") {
+                originalTexts = pageTexts.toMap()
+                isDirty = false
+                updateWordCount()
+                if (finishAfterSave) finish()
+            }
+        }
+    }
+
+    /**
+     * M06: writes [text] to Documents/ScanWhirl/[fileName] with the export
+     * transaction. An earlier .txt is never overwritten, and an identical one
+     * is reported as already saved. A failure is shown and never crashes the
+     * editor; edits stay in place. [onSaved] runs only after a verified save.
+     */
+    private fun exportText(text: String, fileName: String, onSaved: () -> Unit = {}) {
+        if (saving) return
+        withStoragePermission {
+            saving = true
+            binding.btnSave.isEnabled = false
             lifecycleScope.launch {
-                withContext(NonCancellable + Dispatchers.IO) {
-                    DownloadSaver.saveText(
+                try {
+                    val saved = withContext(NonCancellable + Dispatchers.IO) {
+                        DownloadSaver.saveText(this@OcrEditorActivity, text, fileName)
+                    }
+                    val message = when {
+                        !saved.created -> getString(R.string.export_already_saved, saved.name)
+                        saved.keptEarlier -> getString(R.string.export_saved_new_copy, saved.name)
+                        else -> getString(R.string.text_saved_docs, saved.name)
+                    }
+                    Toast.makeText(this@OcrEditorActivity, message, Toast.LENGTH_LONG).show()
+                    saving = false
+                    binding.btnSave.isEnabled = true
+                    onSaved()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    saving = false
+                    binding.btnSave.isEnabled = true
+                    Toast.makeText(
                         this@OcrEditorActivity,
-                        text,
-                        fileName
-                    )
-                }
-                withContext(Dispatchers.Main.immediate) {
-                    originalTexts = pageTexts.toMap()
-                    isDirty = false
-                    updateWordCount()
-                    Toast.makeText(this@OcrEditorActivity, R.string.ocr_saved, Toast.LENGTH_SHORT).show()
-                    if (finishAfterSave) finish()
+                        getString(R.string.text_save_failed, e.message ?: e.javaClass.simpleName),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
+        }
+    }
+
+    private var pendingExport: (() -> Unit)? = null
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) pendingExport?.invoke()
+            else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
+            pendingExport = null
+        }
+
+    /** Before Android 10 the public Documents folder needs the storage permission. */
+    private fun withStoragePermission(action: () -> Unit) {
+        val granted = Build.VERSION.SDK_INT >= 29 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            action()
+        } else {
+            pendingExport = action
+            permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
 
@@ -487,15 +542,7 @@ class OcrEditorActivity : BaseActivity() {
     private fun saveAllAsTxt() {
         val title = docTitle ?: "Document"
         val fileName = "${sanitizeTitle(title)}.txt"
-        val all = renderAllPages()
-        lifecycleScope.launch {
-            withContext(NonCancellable + Dispatchers.IO) {
-                DownloadSaver.saveText(this@OcrEditorActivity, all, fileName)
-            }
-            withContext(Dispatchers.Main.immediate) {
-                Toast.makeText(this@OcrEditorActivity, R.string.ocr_saved, Toast.LENGTH_SHORT).show()
-            }
-        }
+        exportText(renderAllPages(), fileName)
     }
 
     /** Renders all pages with localized "Page N" headings. Omits headings for a single page. */

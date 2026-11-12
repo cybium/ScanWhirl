@@ -10,6 +10,7 @@ import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.OcrStore
 import com.scanwhirl.app.util.CategoryRules
+import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OcrEngine
@@ -195,31 +196,80 @@ class ScanRepository(private val context: Context) {
      * builds ignore unknown lines, and setCategory/renameDocument rewrite
      * the whole file line-by-line, so it survives those.
      */
-    fun addExport(id: String, uri: Uri) {
+    fun addExport(id: String, uri: Uri, fingerprint: DownloadSaver.Fingerprint? = null) {
         updateMeta(File(docsDir, id)) { lines ->
             padMeta(lines)
-            val entry = lines.indexOfFirst { it.startsWith(EXPORTS_KEY) }
-            val recorded = if (entry >= 0) {
-                lines[entry].removePrefix(EXPORTS_KEY).split("|").filter { it.isNotBlank() }
-            } else {
-                emptyList()
+            val recorded = listLine(lines, EXPORTS_KEY)
+            setListLine(lines, EXPORTS_KEY, (recorded + uri.toString()).distinct())
+            // M06: what the copy held when this document saved it, so a later
+            // delete can prove the file is still that copy (`exportsigs=` is a
+            // separate line; older builds ignore it and keep reading `exports=`).
+            if (fingerprint != null) {
+                val sigs = listLine(lines, EXPORT_SIGS_KEY)
+                    .filterNot { it.substringBefore(' ') == uri.toString() }
+                setListLine(lines, EXPORT_SIGS_KEY, sigs + "$uri ${fingerprint.encode()}")
             }
-            val merged = (recorded + uri.toString()).distinct().joinToString("|")
-            if (entry >= 0) lines[entry] = EXPORTS_KEY + merged else lines.add(EXPORTS_KEY + merged)
+        }
+    }
+
+    /** M06: forgets a recorded copy (e.g. after Undo removed it). */
+    fun removeExport(id: String, uri: Uri) {
+        updateMeta(File(docsDir, id)) { lines ->
+            val key = uri.toString()
+            if (lines.any { it.startsWith(EXPORTS_KEY) }) {
+                setListLine(lines, EXPORTS_KEY, listLine(lines, EXPORTS_KEY).filterNot { it == key })
+            }
+            if (lines.any { it.startsWith(EXPORT_SIGS_KEY) }) {
+                setListLine(
+                    lines, EXPORT_SIGS_KEY,
+                    listLine(lines, EXPORT_SIGS_KEY).filterNot { it.substringBefore(' ') == key }
+                )
+            }
         }
     }
 
     /** T4.8: PDF copies of this document recorded in Documents/ScanWhirl. */
-    fun exportsOf(id: String): List<Uri> {
+    fun exportsOf(id: String): List<Uri> = exportRecordsOf(id).map { it.uri }
+
+    /** A recorded copy plus, when known, the fingerprint it had when this document saved it. */
+    data class ExportRecord(val uri: Uri, val fingerprint: DownloadSaver.Fingerprint?)
+
+    fun exportRecordsOf(id: String): List<ExportRecord> {
         val meta = File(File(docsDir, id), "meta.txt")
         if (!meta.exists()) return emptyList()
-        return meta.readLines()
-            .firstOrNull { it.startsWith(EXPORTS_KEY) }
-            ?.removePrefix(EXPORTS_KEY)
+        val lines = try { meta.readLines() } catch (_: IOException) { return emptyList() }
+        val sigs = listLine(lines, EXPORT_SIGS_KEY).mapNotNull { entry ->
+            val space = entry.indexOf(' ')
+            if (space <= 0) null
+            else entry.substring(0, space) to DownloadSaver.Fingerprint.decode(entry.substring(space + 1))
+        }.toMap()
+        return listLine(lines, EXPORTS_KEY).mapNotNull { raw ->
+            runCatching { Uri.parse(raw) }.getOrNull()?.let { ExportRecord(it, sigs[raw]) }
+        }
+    }
+
+    /**
+     * M06: every copy recorded by a document other than [id], including locked
+     * and vaulted ones. Deleting [id] must never remove a file another
+     * document also points at (identical saves, or a same-name copy an older
+     * build rewrote in place).
+     */
+    fun exportsRecordedByOthers(id: String): Set<Uri> {
+        val dirs = docsDir.listFiles { f -> f.isDirectory && f.name != id } ?: return emptySet()
+        return dirs.flatMapTo(HashSet()) { exportsOf(it.name) }
+    }
+
+    private fun listLine(lines: List<String>, key: String): List<String> =
+        lines.firstOrNull { it.startsWith(key) }
+            ?.removePrefix(key)
             ?.split("|")
             ?.filter { it.isNotBlank() }
-            ?.mapNotNull { raw -> runCatching { Uri.parse(raw) }.getOrNull() }
             ?: emptyList()
+
+    private fun setListLine(lines: MutableList<String>, key: String, values: List<String>) {
+        val entry = lines.indexOfFirst { it.startsWith(key) }
+        val line = key + values.joinToString("|")
+        if (entry >= 0) lines[entry] = line else lines.add(line)
     }
 
     /** User-chosen category override (editor → "Categorize"). */
@@ -679,7 +729,7 @@ class ScanRepository(private val context: Context) {
             if (destMeta.exists()) {
                 destMeta.writeText(
                     destMeta.readLines()
-                        .filterNot { it.startsWith(EXPORTS_KEY) }
+                        .filterNot { it.startsWith(EXPORTS_KEY) || it.startsWith(EXPORT_SIGS_KEY) }
                         .joinToString("\n")
                 )
             }
@@ -1036,6 +1086,9 @@ class ScanRepository(private val context: Context) {
 
     /** T4.8: prefix of the optional meta.txt line listing exported copies. */
     private val EXPORTS_KEY = "exports="
+
+    /** M06: `exportsigs=<uri> <size>:<sha256>|…` fingerprints of recorded copies. */
+    private val EXPORT_SIGS_KEY = "exportsigs="
     private val LOCK_INDEX_FILE = "locked_pdfs.txt"
 
     /**

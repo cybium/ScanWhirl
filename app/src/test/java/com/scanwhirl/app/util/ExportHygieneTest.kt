@@ -125,22 +125,79 @@ class ExportHygieneTest {
             scenario.onActivity { activity ->
                 shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
             }
-            // After the fix the second save rewrites the same row (writes >= 2);
-            // today it creates a second row "Hygiene (2).pdf" (rows >= 2).
+            // M06: an unchanged document is recognised as already saved: no
+            // second write, no duplicate, and no Undo (nothing was created).
+            var again: android.view.View? = null
             val settled = pollUntil {
-                media.scanwhirlPdfs().size >= 2 || media.totalWrites() >= 2
+                scenario.onActivity { activity -> again = findSnack(activity, "Already saved") }
+                again != null
             }
-            assertTrue("second download should complete", settled)
+            assertTrue("second download should report 'Already saved'", settled)
+            assertEquals(
+                "Undo must not be offered when nothing was created",
+                android.view.View.GONE,
+                again!!.findViewById<android.view.View>(R.id.snackUndo).visibility
+            )
         }
 
         val rows = media.scanwhirlPdfs()
         assertEquals(
-            "T4.7: downloading again must replace the file, not duplicate it " +
+            "T4.7: downloading an unchanged document again must not duplicate it " +
                 "— got ${rows.names()}",
             1,
             rows.size
         )
         assertEquals("Hygiene.pdf", rows[0].values.getAsString("_display_name"))
+        assertEquals("the existing copy is never rewritten", 1, media.totalWrites())
+    }
+
+    /**
+     * M06 regression for the dangerous combination: re-saving a *changed*
+     * document used to rewrite the existing row in place ("wt"), and Undo then
+     * deleted that row, which destroyed the earlier export. Now the second save is a
+     * new copy, the earlier file stays byte-identical, and Undo removes only the
+     * new copy.
+     */
+    @Test
+    fun `undo after a changed re-save keeps the earlier export`() {
+        val id = seedDoc("Changed")
+        val intent = DocumentViewerActivity.intent(app, id)
+        ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+            }
+            assertTrue(pollUntil { media.scanwhirlPdfs().size == 1 })
+            val original = media.scanwhirlPdfs().single().file.readBytes()
+
+            // The document changes (e.g. a page edit regenerated its PDF).
+            repo.getDocument(id)!!.pdfFile.appendBytes("\n% edited\n".toByteArray())
+
+            scenario.onActivity { activity ->
+                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+            }
+            var snack: android.view.View? = null
+            assertTrue(
+                "second save must say it made a new copy and kept the earlier file",
+                pollUntil {
+                    scenario.onActivity { activity -> snack = findSnack(activity, "earlier file was kept") }
+                    snack != null
+                }
+            )
+            assertEquals(2, media.scanwhirlPdfs().size)
+            scenario.onActivity {
+                snack!!.findViewById<android.view.View>(R.id.snackUndo).performClick()
+            }
+            assertTrue(
+                "Undo removes only the new copy",
+                pollUntil { media.scanwhirlPdfs().size == 1 }
+            )
+            val kept = media.scanwhirlPdfs().single()
+            assertEquals("Changed.pdf", kept.values.getAsString("_display_name"))
+            assertTrue("earlier export bytes unchanged", original.contentEquals(kept.file.readBytes()))
+            assertEquals("its record survives", listOf(kept.id), repo.exportsOf(id).map {
+                android.content.ContentUris.parseId(it)
+            })
+        }
     }
 
     @Test
@@ -208,14 +265,16 @@ class ExportHygieneTest {
     }
 
     @Test
-    fun `an unwritable existing row falls back to a unique name`() {
+    fun `a changed save never writes the existing row`() {
         val first = DownloadSaver.savePdf(app, "original".toByteArray(), "Doc.pdf")
         assertEquals("Doc.pdf", first)
-        // Simulate a copy written by an older install that cannot be rewritten.
+        // Even a copy written by an older install that cannot be rewritten is fine:
+        // M06 never opens an existing export for writing at all.
         media.rows.values.first().writable = false
 
         val saved = DownloadSaver.savePdfFile(app, "replacement".toByteArray(), "Doc.pdf")
-        assertEquals("T4.7: fallback must create a unique name", "Doc (2).pdf", saved.name)
+        assertEquals("M06: changed content becomes a new copy", "Doc (2).pdf", saved.name)
+        assertTrue(saved.keptEarlier)
 
         val rows = media.scanwhirlPdfs()
         assertEquals("old row stays, new row is added — got ${rows.names()}", 2, rows.size)
@@ -239,6 +298,22 @@ class ExportHygieneTest {
 
     private fun List<FakeMediaStore.Row>.names(): String =
         joinToString { it.values.getAsString("_display_name") }
+
+    /** The saved-snackbar content view whose message contains [text], if shown. */
+    private fun findSnack(activity: android.app.Activity, text: String): android.view.View? {
+        fun walk(v: android.view.View): android.view.View? {
+            if (v.id == R.id.snackMessage && v is android.widget.TextView &&
+                v.text.toString().contains(text)
+            ) {
+                return v.parent as android.view.View
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i))?.let { return it }
+            }
+            return null
+        }
+        return walk(activity.window.decorView)
+    }
 
     private fun contentUri(bytes: ByteArray): Uri {
         val uri = Uri.parse("content://test/hygiene_${System.nanoTime()}.jpg")

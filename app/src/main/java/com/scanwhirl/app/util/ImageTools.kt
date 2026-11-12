@@ -79,6 +79,31 @@ object ImageTools {
             ?: throw IllegalStateException("Could not decode image")
     }
 
+    /**
+     * [decodeSampled] straight from a file. Bounds are read from the header, then
+     * only the downsampled bitmap is decoded, so the encoded bytes are never
+     * held in memory.
+     */
+    fun decodeSampledFile(file: java.io.File, maxDim: Int): Bitmap {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Not a decodable image" }
+        var sample = 1
+        var w = bounds.outWidth
+        var h = bounds.outHeight
+        while (w / 2 >= maxDim || h / 2 >= maxDim) {
+            sample *= 2
+            w /= 2
+            h /= 2
+        }
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        return BitmapFactory.decodeFile(file.path, opts)
+            ?: throw IllegalStateException("Could not decode image")
+    }
+
     fun encodeJpeg(bitmap: Bitmap, quality: Int): ByteArray {
         val out = ByteArrayOutputStream()
         check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), out)) {

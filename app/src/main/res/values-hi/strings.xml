@@ -66,9 +66,17 @@
         <item quantity="other">हटाया गया। %1$d प्रतियाँ हटाई गईं।</item>
     </plurals>
     <plurals name="deleted_copies_partial">
-        <item quantity="one">हटाया गया। %1$d प्रति हटाई गई, %2$d हटाई नहीं जा सकी (Files में हटाएँ)।</item>
-        <item quantity="other">हटाया गया। %1$d प्रतियाँ हटाई गईं, %2$d हटाई नहीं जा सकीं (Files में हटाएँ)।</item>
+        <item quantity="one">हटाया गया। %1$d प्रति हटाई गई, %2$d रखी गई क्योंकि सहेजने के बाद बदली गई या हटाई नहीं जा सकी (Files देखें)।</item>
+        <item quantity="other">हटाया गया। %1$d प्रतियाँ हटाई गईं, %2$d रखी गईं क्योंकि सहेजने के बाद बदली गईं या हटाई नहीं जा सकीं (Files देखें)।</item>
     </plurals>
+    <!-- M06 export transaction: truthful save / Undo outcomes. -->
+    <string name="export_already_saved">पहले से सहेजा गया, कोई बदलाव नहीं: %1$s</string>
+    <string name="export_saved_new_copy">नई प्रति के रूप में सहेजा गया: %1$s। आपकी पिछली फ़ाइल सुरक्षित रखी गई।</string>
+    <string name="export_undo_removed">%1$s हटाई गई</string>
+    <string name="export_undo_kept_changed">%1$s रखी गई: सहेजने के बाद यह बदल गई</string>
+    <string name="export_undo_failed">%1$s हटाई नहीं जा सकी। ज़रूरत न हो तो Files में हटाएँ।</string>
+    <string name="text_saved_docs">टेक्स्ट Documents/ScanWhirl में सहेजा गया: %1$s</string>
+    <string name="text_save_failed">टेक्स्ट सहेजा नहीं जा सका: %1$s</string>
     <!-- review: the entry below was machine-translated at T4.1 — native review pending -->
     <string name="category_unsorted_hint">अभी तक छाँटा नहीं गया — कोई चुनें या छोड़ दें</string>
     <!-- review: the entry below was machine-translated at T4.2 — native review pending -->

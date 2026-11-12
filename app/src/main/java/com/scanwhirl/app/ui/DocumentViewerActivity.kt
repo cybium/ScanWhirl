@@ -27,14 +27,15 @@ import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.util.DownloadSaver
-import com.scanwhirl.app.util.PdfOpener
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -493,7 +494,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     // Document-level actions
     // ------------------------------------------------------------------
 
-    /** Saves a copy of the document PDF into Documents/ScanWhirl (T4.7) with an Open/Undo Snackbar. */
+    /**
+     * Saves a copy of the document PDF into Documents/ScanWhirl (T4.7) with the
+     * M06 export transaction. The PDF is streamed, never loaded whole, and an
+     * earlier copy is never overwritten. Undo only ever removes a copy this save
+     * created.
+     */
     private fun savePdfToDocuments() {
         val doc = document ?: return
         if (!doc.pdfFile.exists() || doc.pdfFile.length() == 0L) {
@@ -506,27 +512,26 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                     val saved = withContext(Dispatchers.IO) {
                         DownloadSaver.savePdfFile(
                             this@DocumentViewerActivity,
-                            doc.pdfFile.readBytes(),
+                            doc.pdfFile,
                             DownloadSaver.pdfNameFor(doc.name)
                         ).also {
-                            // T4.8: remember the copy so delete can remove it.
-                            repo.addExport(doc.id, it.uri)
-                        }
-                    }
-                    SavedSnackbar.show(
-                        binding.root,
-                        getString(R.string.pdf_saved_docs, saved.name),
-                        onOpen = { PdfOpener.open(this@DocumentViewerActivity, saved.uri) },
-                        onUndo = {
-                            lifecycleScope.launch {
-                                withContext(Dispatchers.IO) {
-                                    DownloadSaver.deleteSaved(
-                                        this@DocumentViewerActivity, saved.uri
-                                    )
-                                }
+                            // T4.8: remember the copy so delete can remove it. A failure to
+                            // record it must not turn a finished export into a failed one.
+                            try {
+                                repo.addExport(doc.id, it.uri, it.fingerprint)
+                            } catch (_: Exception) {
                             }
                         }
+                    }
+                    SavedSnackbar.showExport(
+                        this@DocumentViewerActivity,
+                        binding.root,
+                        saved,
+                        R.string.pdf_saved_docs,
+                        doc.id
                     )
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Toast.makeText(
                         this@DocumentViewerActivity,
@@ -904,20 +909,25 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .setPositiveButton(R.string.delete) { _, _ ->
                 repo.deleteDocument(doc.id) // never blocked by copy removal
                 if (box?.isChecked == true && copies.isNotEmpty()) {
-                    val (removed, failed) = DeleteExports.removeCopies(this, copies)
-                    // The viewer is closing, so hold the close until the
-                    // result message has actually been seen.
-                    val snackbar = Snackbar.make(
-                        binding.root,
-                        DeleteExports.message(this, removed, failed),
-                        Snackbar.LENGTH_LONG
-                    )
-                    snackbar.addCallback(object : Snackbar.Callback() {
-                        override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                            if (!isFinishing) finish()
+                    lifecycleScope.launch {
+                        // M06: removal re-reads each copy to prove it is still ours.
+                        val (removed, failed) = withContext(NonCancellable + Dispatchers.IO) {
+                            DeleteExports.removeCopies(applicationContext, copies)
                         }
-                    })
-                    snackbar.show()
+                        // The viewer is closing, so hold the close until the
+                        // result message has actually been seen.
+                        val snackbar = Snackbar.make(
+                            binding.root,
+                            DeleteExports.message(this@DocumentViewerActivity, removed, failed),
+                            Snackbar.LENGTH_LONG
+                        )
+                        snackbar.addCallback(object : Snackbar.Callback() {
+                            override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                                if (!isFinishing) finish()
+                            }
+                        })
+                        snackbar.show()
+                    }
                 } else {
                     finish()
                 }

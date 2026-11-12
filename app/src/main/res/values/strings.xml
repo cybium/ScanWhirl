@@ -22,6 +22,14 @@
     <string name="storage_perm_needed">Allow storage access so files can be saved to your device</string>
     <string name="pdf_saved_docs">Saved to Documents/ScanWhirl: %1$s</string>
     <string name="pdf_save_failed">Could not save PDF: %1$s</string>
+    <!-- M06 export transaction: truthful save / Undo outcomes. -->
+    <string name="export_already_saved">Already saved, unchanged: %1$s</string>
+    <string name="export_saved_new_copy">Saved as a new copy: %1$s. Your earlier file was kept.</string>
+    <string name="export_undo_removed">Removed %1$s</string>
+    <string name="export_undo_kept_changed">Kept %1$s: it changed after saving</string>
+    <string name="export_undo_failed">Could not remove %1$s. Delete it in Files if you no longer need it.</string>
+    <string name="text_saved_docs">Text saved to Documents/ScanWhirl: %1$s</string>
+    <string name="text_save_failed">Could not save text: %1$s</string>
     <string name="save_pdf_device">Save PDF to Documents</string>
     <string name="pdf_missing">This scan has no PDF file yet</string>
     <string name="scan_saved">Scan saved</string>
@@ -56,8 +64,8 @@
         <item quantity="other">Deleted. %1$d copies removed.</item>
     </plurals>
     <plurals name="deleted_copies_partial">
-        <item quantity="one">Deleted. %1$d copy removed, %2$d could not be removed (delete it in Files).</item>
-        <item quantity="other">Deleted. %1$d copies removed, %2$d could not be removed (delete it in Files).</item>
+        <item quantity="one">Deleted. %1$d copy removed, %2$d kept because it changed after saving or could not be removed (check Files).</item>
+        <item quantity="other">Deleted. %1$d copies removed, %2$d kept because they changed after saving or could not be removed (check Files).</item>
     </plurals>
     <plurals name="pages">
         <item quantity="one">%1$d page</item>

@@ -82,16 +82,11 @@ class DeleteExportsTest {
                 val dialog = ShadowDialog.getLatestDialog() as AlertDialog
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             }
-            shadowOf(android.os.Looper.getMainLooper()).idle()
-            scenario.onActivity { activity ->
-                val text = activity.findViewById<android.widget.TextView>(
-                    com.google.android.material.R.id.snackbar_text
-                )?.text?.toString()
-                assertTrue(
-                    "result message must report the removal — got $text",
-                    text != null && text.contains("1 copy removed")
-                )
-            }
+            val text = awaitSnackbarText(scenario)
+            assertTrue(
+                "result message must report the removal — got $text",
+                text != null && text.contains("1 copy removed")
+            )
         }
 
         assertTrue("document must be deleted", repo.getDocument(id) == null)
@@ -150,16 +145,11 @@ class DeleteExportsTest {
                 val dialog = ShadowDialog.getLatestDialog() as AlertDialog
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             }
-            shadowOf(android.os.Looper.getMainLooper()).idle()
-            scenario.onActivity { activity ->
-                val text = activity.findViewById<android.widget.TextView>(
-                    com.google.android.material.R.id.snackbar_text
-                )?.text?.toString()
-                assertTrue(
-                    "message must report the skipped copy — got $text",
-                    text != null && text.contains("could not be removed")
-                )
-            }
+            val text = awaitSnackbarText(scenario)
+            assertTrue(
+                "message must report the skipped copy — got $text",
+                text != null && text.contains("could not be removed")
+            )
         }
 
         assertTrue(
@@ -173,29 +163,37 @@ class DeleteExportsTest {
         )
     }
 
+    /**
+     * M06 replaces the old "same URI rewritten in place" expectation: that
+     * truncated the only good copy before the new write could fail. Unchanged
+     * bytes are recognised (one row, one record); changed bytes become a new copy.
+     * The earlier file is kept, both are recorded, and both go with the document.
+     */
     @Test
-    fun `export twice records a single replace-not-duplicate uri`() {
+    fun `export twice records identical once and a changed copy separately`() {
         val id = seedDoc("Twice")
         val first = DownloadSaver.savePdfFile(
             app, "v1".toByteArray(), DownloadSaver.pdfNameFor("Twice")
         )
-        repo.addExport(id, first.uri)
+        repo.addExport(id, first.uri, first.fingerprint)
+        val same = DownloadSaver.savePdfFile(
+            app, "v1".toByteArray(), DownloadSaver.pdfNameFor("Twice")
+        )
+        repo.addExport(id, same.uri, same.fingerprint)
+        assertEquals("identical: same uri", first.uri, same.uri)
+        assertEquals("exportsOf lists it exactly once", listOf(first.uri), repo.exportsOf(id))
+
         val second = DownloadSaver.savePdfFile(
             app, "v2".toByteArray(), DownloadSaver.pdfNameFor("Twice")
         )
-        repo.addExport(id, second.uri)
-
-        assertEquals("replace-not-duplicate: one row", 1, media.scanwhirlPdfs().size)
-        assertEquals("the replacement rewrites the same uri", first.uri, second.uri)
+        repo.addExport(id, second.uri, second.fingerprint)
+        assertEquals(2, media.scanwhirlPdfs().size)
+        assertEquals("v1", String(media.rowNamed("Twice.pdf").file.readBytes()))
+        assertEquals("v2", String(media.rowNamed("Twice (2).pdf").file.readBytes()))
+        assertEquals(listOf(first.uri, second.uri), repo.exportsOf(id))
         assertEquals(
-            "exportsOf lists the uri exactly once",
-            listOf(first.uri),
-            repo.exportsOf(id)
-        )
-        assertEquals(
-            "the row now holds the second write",
-            "v2",
-            String(media.scanwhirlPdfs().single().file.readBytes())
+            listOf(first.uri, second.uri),
+            com.scanwhirl.app.ui.DeleteExports.copiesFor(app, repo, id, "Twice").map { it.uri }
         )
     }
 
@@ -276,6 +274,23 @@ class DeleteExportsTest {
 
     private fun List<FakeMediaStore.Row>.names(): String =
         joinToString { it.values.getAsString("_display_name") }
+
+    /** Copy removal runs off the main thread (M06); wait for its result message. */
+    private fun awaitSnackbarText(scenario: ActivityScenario<DocumentViewerActivity>): String? {
+        val deadline = System.currentTimeMillis() + 8000
+        var text: String? = null
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            scenario.onActivity { activity ->
+                text = activity.findViewById<android.widget.TextView>(
+                    com.google.android.material.R.id.snackbar_text
+                )?.text?.toString()?.takeIf { it.isNotEmpty() }
+            }
+            if (text != null) return text
+            Thread.sleep(50)
+        }
+        return text
+    }
 
     /** Appends the T4.8 `exports=` line for the single exported row. */
     private fun recordExport(id: String) {

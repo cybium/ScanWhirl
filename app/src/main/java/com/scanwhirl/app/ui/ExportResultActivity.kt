@@ -16,7 +16,6 @@ import com.scanwhirl.app.databinding.ActivityExportResultBinding
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
-import com.scanwhirl.app.util.PdfOpener
 import com.scanwhirl.app.util.SavedSnackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -90,7 +89,7 @@ class ExportResultActivity : BaseActivity() {
             return
         }
         try {
-            val bitmap = ImageTools.decodeSampled(File(path).readBytes(), 1600)
+            val bitmap = ImageTools.decodeSampledFile(File(path), 1600)
             binding.resultPreview.setImageBitmap(bitmap)
         } catch (_: Exception) {
             binding.resultPreview.visibility = android.view.View.GONE
@@ -121,36 +120,36 @@ class ExportResultActivity : BaseActivity() {
             lifecycleScope.launch {
                 try {
                     if (isPdf) {
-                        // T4.7: replace-not-duplicate + Open/Undo (covers the
-                        // Compress / Lock / Unlock flows that land here).
+                        // M06 export transaction (covers the Compress / Lock / Unlock
+                        // flows that land here): streamed from the result file, never
+                        // overwrites an earlier copy; identical re-save → "Already saved".
                         val saved = withContext(Dispatchers.IO) {
                             DownloadSaver.savePdfFile(
-                                this@ExportResultActivity, file.readBytes(), displayName
+                                this@ExportResultActivity, file, displayName
                             ).also {
-                                // T4.8: remember the copy so delete can remove it.
-                                docId?.let { id -> ScanRepository(this@ExportResultActivity)
-                                    .addExport(id, it.uri) }
-                            }
-                        }
-                        SavedSnackbar.show(
-                            binding.root,
-                            getString(R.string.result_saved_documents, saved.name),
-                            onOpen = { PdfOpener.open(this@ExportResultActivity, saved.uri) },
-                            onUndo = {
-                                lifecycleScope.launch {
-                                    withContext(Dispatchers.IO) {
-                                        DownloadSaver.deleteSaved(
-                                            this@ExportResultActivity, saved.uri
-                                        )
+                                // T4.8: remember the copy so delete can remove it. A failure
+                                // to record it must not turn a finished export into a failure.
+                                docId?.let { id ->
+                                    try {
+                                        ScanRepository(this@ExportResultActivity)
+                                            .addExport(id, it.uri, it.fingerprint)
+                                    } catch (_: Exception) {
                                     }
                                 }
                             }
+                        }
+                        SavedSnackbar.showExport(
+                            this@ExportResultActivity,
+                            binding.root,
+                            saved,
+                            R.string.result_saved_documents,
+                            docId
                         )
                     } else {
-                        // Resized images get their own folder in Downloads.
+                        // Resized images get their own folder in Downloads (streamed, always a new file).
                         val finalName = withContext(Dispatchers.IO) {
                             DownloadSaver.saveJpeg(
-                                this@ExportResultActivity, file.readBytes(), displayName,
+                                this@ExportResultActivity, file, displayName,
                                 subdir = "Resize"
                             )
                         }

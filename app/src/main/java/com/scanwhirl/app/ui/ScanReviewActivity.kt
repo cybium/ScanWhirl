@@ -1219,12 +1219,19 @@ class ScanReviewActivity : BaseActivity() {
                                 // T4.8: remember the copy so delete can remove it. A failure to
                                 // record it must not turn a finished export into a failed one.
                                 try {
-                                    repo.addExport(doc.id, copy.uri)
+                                    repo.addExport(doc.id, copy.uri, copy.fingerprint)
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (_: Exception) {
                                 }
-                                copy.name
+                                // M06: a taken name means a new copy; the earlier file is kept.
+                                if (!copy.created) {
+                                    getString(R.string.export_already_saved, copy.name)
+                                } else if (copy.keptEarlier) {
+                                    getString(R.string.export_saved_new_copy, copy.name)
+                                } else {
+                                    getString(R.string.pdf_saved_docs, copy.name)
+                                }
                             }
                         } catch (e: CancellationException) {
                             throw e
@@ -1237,7 +1244,7 @@ class ScanReviewActivity : BaseActivity() {
                     stagingDir.deleteRecursively()
                     progress.dismiss()
                     val message = if (exported != null) {
-                        getString(R.string.pdf_saved_docs, exported)
+                        exported
                     } else {
                         getString(R.string.scan_saved)
                     }

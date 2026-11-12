@@ -1449,13 +1449,18 @@ class MainActivity : BaseActivity(), HomeHost {
                 if (selectionMode) setSelectionMode(false)
                 refreshList()
                 if (box?.isChecked == true && total > 0) {
-                    val (removed, failed) =
-                        DeleteExports.removeCopies(this, plan.flatMap { it.second })
-                    Snackbar.make(
-                        binding.root,
-                        DeleteExports.message(this, removed, failed),
-                        Snackbar.LENGTH_LONG
-                    ).show()
+                    val copies = plan.flatMap { it.second }.distinctBy { it.uri }
+                    lifecycleScope.launch {
+                        // M06: removal re-reads each copy to prove it is still ours.
+                        val (removed, failed) = withContext(Dispatchers.IO) {
+                            DeleteExports.removeCopies(applicationContext, copies)
+                        }
+                        Snackbar.make(
+                            binding.root,
+                            DeleteExports.message(this@MainActivity, removed, failed),
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                    }
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
