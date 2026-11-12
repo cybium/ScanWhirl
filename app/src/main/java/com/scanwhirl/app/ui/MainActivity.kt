@@ -1143,25 +1143,16 @@ class MainActivity : BaseActivity(), HomeHost {
     // ------------------------------------------------------------------
 
     /**
-     * Import sheet: Photos from gallery / PDF as pages. Replaces the old
-     * camera/gallery chooser.
+     * Import sheet (slice 4): Photos → the gallery picker and Review; PDF → the
+     * device-PDF picker, the rasterize confirmation and a new saved copy. The
+     * launchers are the existing contracts; [ImportSheet] only chooses.
      */
     private fun showImportSheet() {
-        SwDialog.sheet(this)
-            .setTitle(R.string.import_title)
-            .setItems(
-                arrayOf(
-                    getString(R.string.import_photos),
-                    getString(R.string.import_pdf)
-                )
-            ) { _, which ->
-                when (which) {
-                    0 -> pickGalleryImages.launch("image/*")
-                    1 -> pickEditPdf.launch(arrayOf("application/pdf"))
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+        ImportSheet.show(
+            this,
+            onPhotos = { pickGalleryImages.launch("image/*") },
+            onPdf = { pickEditPdf.launch(arrayOf("application/pdf")) }
+        )
     }
 
     /**
@@ -1266,6 +1257,8 @@ class MainActivity : BaseActivity(), HomeHost {
             confirmDelete(listOf(doc.id))
         }
         sheet.show()
+        // Expanded + scrolling: at large font scales the rows outgrow the peek.
+        sheet.behavior.state = BottomSheetBehavior.STATE_EXPANDED
     }
 
     /** T4.3: rename dialog (same shape as the Document screen's prompt). */

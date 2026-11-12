@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Import/sheets slice 4: the Home-accessible sheets share the Index's ink surface
+     (rv_surface, hairline edge, grab handle) instead of the older navy glass.
+     Scoped: only Import, Quick sort, quick actions and Tools use it; the shared
+     bg_sheet_glass (AlertDialog sheets, category picker, viewer More) is untouched. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners
+                android:topLeftRadius="24dp"
+                android:topRightRadius="24dp" />
+            <solid android:color="@color/rv_surface" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/rv_hairline" />
+        </shape>
+    </item>
+    <item
+        android:gravity="top|center_horizontal"
+        android:top="10dp">
+        <shape android:shape="rectangle">
+            <size
+                android:width="36dp"
+                android:height="4dp" />
+            <corners android:radius="2dp" />
+            <solid android:color="@color/rv_ink_3" />
+        </shape>
+    </item>
+</layer-list>

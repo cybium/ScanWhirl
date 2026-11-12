@@ -550,12 +550,9 @@ class UiSmokeTest {
                 val dialog = ShadowDialog.getLatestDialog()
                 assertNotNull("Import sheet should open", dialog)
                 assertTrue((dialog as android.app.Dialog).isShowing)
-                val chooser = dialog as? androidx.appcompat.app.AlertDialog
-                assertEquals(
-                    "photos + PDF paths",
-                    2,
-                    chooser?.listView?.adapter?.count ?: -1
-                )
+                // Slice 4: the chooser is a custom sheet with exactly two options.
+                assertNotNull("photos path", dialog.findViewById<android.view.View>(R.id.importPhotos))
+                assertNotNull("PDF path", dialog.findViewById<android.view.View>(R.id.importPdf))
                 dialog.dismiss()
             }
         }

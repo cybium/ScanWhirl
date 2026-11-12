@@ -69,8 +69,8 @@ class QuickSortTest {
                 assertTrue("the nudge must carry its label", nudge.childCount > 0)
                 val text = (nudge.getChildAt(0) as TextView).text.toString()
                 assertTrue(
-                    "the nudge counts the unsorted docs (got '$text')",
-                    text.contains("1 unsorted")
+                    "the nudge counts the docs to organize (got '$text')",
+                    text.contains("1 to organize")
                 )
                 assertTrue(
                     "the nudge offers Quick sort (got '$text')",
@@ -208,12 +208,12 @@ class QuickSortTest {
                 )
 
                 assertTrue(
-                    "the nudge keeps the remaining count (1 unsorted)",
+                    "the nudge keeps the remaining count (1 to organize)",
                     pollUntil {
                         val nudge = activity.findViewById<android.view.ViewGroup>(R.id.nudge)
                         nudge.visibility == View.VISIBLE && nudge.childCount > 0 &&
                             (nudge.getChildAt(0) as TextView).text.toString()
-                                .contains("1 unsorted")
+                                .contains("1 to organize")
                     }
                 )
 

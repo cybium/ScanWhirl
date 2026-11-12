@@ -83,7 +83,7 @@
     <string name="share_pdf">साझा करें</string>
     <!-- review: the 5 entries below were machine-translated at T4.4 — native review pending -->
     <string name="quick_sort">क्विक सॉर्ट</string>
-    <string name="quick_sort_nudge">%1$d अनसॉर्टेड · क्विक सॉर्ट ›</string>
+    <string name="quick_sort_nudge"><!-- review -->%1$d व्यवस्थित करने हैं · क्विक सॉर्ट ›</string>
     <string name="qs_progress">%1$d / %2$d</string>
     <string name="all_sorted">सभी क्रमबद्ध</string>
     <string name="skip">छोड़ें</string>
@@ -106,6 +106,10 @@
     <string name="import_title"><!-- review -->आयात करें</string>
     <string name="import_photos"><!-- review -->गैलरी से फ़ोटो</string>
     <string name="import_pdf"><!-- review -->PDF पन्नों के रूप में</string>
+    <string name="import_subtitle"><!-- review -->चुनें कि पन्ने कहाँ से आ रहे हैं।</string>
+    <string name="import_photos_desc"><!-- review -->गैलरी से तस्वीरें चुनें। सेव करने से पहले आप उन्हें रिव्यू में व्यवस्थित और संपादित करते हैं।</string>
+    <string name="import_pdf_desc"><!-- review -->PDF से एक नया संपादन-योग्य स्कैन बनता है। पन्ने तस्वीरों में बदल जाते हैं, इसलिए टेक्स्ट और वेक्टर विवरण समतल हो जाते हैं। मूल फ़ाइल नहीं बदलती।</string>
+    <string name="import_order_note"><!-- review -->Android का फ़ोटो पिकर तस्वीरें अलग क्रम में दे सकता है, इसलिए सेव करने से पहले रिव्यू में पन्नों का क्रम जाँच लें।</string>
     <string name="empty_scan_button"><!-- review -->एक दस्तावेज़ स्कैन करें</string>
     <string name="empty_import_button"><!-- review -->फोटो या एक PDF आयात करें</string>
     <string name="empty_no_match_hint"><!-- review -->आपके स्कैन में नाम और पाठ खोजे गए।</string>

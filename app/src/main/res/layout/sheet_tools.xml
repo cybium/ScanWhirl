@@ -8,10 +8,10 @@
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_sheet_glass"
+    android:background="@drawable/bg_sheet_ink"
     android:fillViewport="true"
     android:paddingStart="12dp"
-    android:paddingTop="20dp"
+    android:paddingTop="26dp"
     android:paddingEnd="12dp"
     android:paddingBottom="24dp">
 
@@ -26,7 +26,7 @@
             android:layout_marginBottom="14dp"
             android:letterSpacing="0.04"
             android:text="@string/bar_tools"
-            android:textColor="@color/text_hologram_hi"
+            android:textColor="@color/rv_ink"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -48,7 +48,7 @@
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1"
-                android:background="@color/cyan_border_hair" />
+                android:background="@color/rv_hairline" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -64,7 +64,7 @@
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1"
-                android:background="@color/cyan_border_hair" />
+                android:background="@color/rv_hairline" />
         </LinearLayout>
 
         <LinearLayout

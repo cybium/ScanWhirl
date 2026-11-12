@@ -3,17 +3,22 @@
      "Quick sort  N of M" header with the X close button top-right
      (Rev 4 §3D: closing mid-queue just closes, no confirmation), a big
      thumbnail + document line, then the five category chips and Skip.
-     Chips are added in code (Widget.ScanWhirl.Chip, tag = stored value;
+     Slice 4: ink surface, scrolls at large font scales. Chips are added in code (Widget.ScanWhirl.Chip, tag = stored value;
      the Skip chip is tagged "skip"). The All-sorted banner replaces the
      queue UI when the queue empties. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_sheet_glass"
+    android:background="@drawable/bg_sheet_ink"
+    android:fillViewport="true">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
     android:paddingStart="16dp"
-    android:paddingTop="16dp"
+    android:paddingTop="22dp"
     android:paddingEnd="16dp"
     android:paddingBottom="24dp">
 
@@ -32,7 +37,7 @@
             android:letterSpacing="0.04"
             android:maxLines="1"
             android:text="@string/quick_sort"
-            android:textColor="@color/text_hologram_hi"
+            android:textColor="@color/rv_ink"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -42,7 +47,7 @@
             android:layout_height="wrap_content"
             android:layout_marginEnd="4dp"
             android:maxLines="1"
-            android:textColor="@color/cyan_dim"
+            android:textColor="@color/rv_ink_3"
             android:textSize="12sp" />
 
         <!-- Rev 4 §3D: the visible button equivalent for swipe-down dismiss
@@ -55,7 +60,8 @@
             android:contentDescription="@string/close"
             android:padding="12dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_close" />
+            android:src="@drawable/ic_sw_close"
+            app:tint="@color/rv_ink_2" />
     </LinearLayout>
 
     <ImageView
@@ -74,7 +80,7 @@
         android:layout_marginTop="8dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:textColor="@color/text_hologram_hi"
+        android:textColor="@color/rv_ink"
         android:textSize="14sp" />
 
     <com.google.android.material.chip.ChipGroup
@@ -94,8 +100,9 @@
         android:paddingTop="24dp"
         android:paddingBottom="24dp"
         android:text="@string/all_sorted"
-        android:textColor="@color/cyan_primary"
+        android:textColor="@color/sw_ok"
         android:textSize="16sp"
         android:textStyle="bold"
         android:visibility="gone" />
 </LinearLayout>
+</androidx.core.widget.NestedScrollView>

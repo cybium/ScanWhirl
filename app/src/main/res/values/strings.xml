@@ -202,6 +202,10 @@
     <string name="import_title">Import</string>
     <string name="import_photos">Photos from gallery</string>
     <string name="import_pdf">PDF as pages</string>
+    <string name="import_subtitle">Choose where the pages are coming from.</string>
+    <string name="import_photos_desc">Pick images from your gallery. You arrange and edit them in Review before saving.</string>
+    <string name="import_pdf_desc">Makes a new editable scan from a PDF. Pages become images, so text and vector detail are flattened. The original file is not changed.</string>
+    <string name="import_order_note">Android\'s photo picker may hand photos over in a different order, so check the page order in Review before you save.</string>
     <string name="empty_scan_button">Scan a document</string>
     <string name="empty_import_button">Import photos or a PDF</string>
     <string name="empty_no_match_hint">Names and text inside your scans were searched.</string>
@@ -446,7 +450,7 @@
     <string name="moved_n_to_cat">Moved %1$d to %2$s</string>
     <!-- test26 T4.4: Quick Sort — nudge, sheet header, Tools tile, end state -->
     <string name="quick_sort">Quick sort</string>
-    <string name="quick_sort_nudge">%1$d unsorted · Quick sort ›</string>
+    <string name="quick_sort_nudge">%1$d to organize · Quick sort ›</string>
     <string name="qs_progress">%1$d of %2$d</string>
     <string name="all_sorted">All sorted</string>
     <string name="skip">Skip</string>
