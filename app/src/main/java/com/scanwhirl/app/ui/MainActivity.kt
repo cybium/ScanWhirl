@@ -1136,6 +1136,9 @@ class MainActivity : BaseActivity(), HomeHost {
 
     internal fun setVaultMode(enabled: Boolean) {
         vaultMode = enabled
+        // Privacy: a query typed inside Private is never written to saved instance state, so a
+        // rotation/recreation (which leaves Private) cannot carry it into ordinary Home.
+        binding.searchInput.isSaveEnabled = !enabled
         backCallback.isEnabled = selectionMode || vaultMode
         binding.vaultBanner.isVisible = enabled
         // In the vault SCAN becomes "Add": gold disc, ic_add, "Add" label.

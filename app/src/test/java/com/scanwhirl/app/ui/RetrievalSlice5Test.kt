@@ -383,6 +383,59 @@ class RetrievalSlice5Test {
     }
 
     @Test
+    fun `changing the viewer preference while Home shows page links updates the note without a new search`() {
+        // Device-found (API 37): after Settings → System PDF app → Back, the same rows were
+        // kept by DiffUtil and the "opens in the ScanWhirl reader" note never appeared.
+        fixture("Bill", 3, text(3, mapOf(2 to "kilowatt")))
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue(pollUntil { list(activity).adapter!!.itemCount == 1 })
+                search(activity, "kilowatt")
+                assertTrue(pollUntil { strips(row(activity, 0)).isNotEmpty() })
+                assertFalse(row(activity, 0).findViewById<View>(R.id.pageHitNote).isVisible)
+            }
+            Prefs.setDefaultViewer(app, Prefs.VIEWER_SYSTEM)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity { activity ->
+                assertTrue(pollUntil { row(activity, 0).findViewById<View>(R.id.pageHitNote).isVisible })
+                assertEquals("kilowatt", activity.findViewById<EditText>(R.id.searchInput).text.toString())
+            }
+            Prefs.setDefaultViewer(app, Prefs.VIEWER_IN_APP)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity { activity ->
+                assertTrue(pollUntil { !row(activity, 0).findViewById<View>(R.id.pageHitNote).isVisible })
+                assertTrue(strips(row(activity, 0)).isNotEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun `a query typed inside Private is not restored after recreation, an ordinary one is`() {
+        fixture("Visible", 2, text(2, mapOf(0 to "orchid")))
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue(pollUntil { list(activity).adapter!!.itemCount == 1 })
+                search(activity, "orchid")
+            }
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                assertEquals("ordinary query survives rotation", "orchid",
+                    activity.findViewById<EditText>(R.id.searchInput).text.toString())
+                activity.findViewById<EditText>(R.id.searchInput).setText("")
+                activity.setVaultMode(true)
+                search(activity, "secretterm")
+            }
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                assertEquals("private query is not carried into a recreated Home", "",
+                    activity.findViewById<EditText>(R.id.searchInput).text.toString())
+            }
+        }
+    }
+
+    @Test
     fun `vaulted documents leak no row, count or page outside Private`() {
         fixture("Visible", 2, text(2, mapOf(0 to "orchid")))
         fixture("Hidden", 2, text(2, mapOf(1 to "orchid zephyrquill")), vaulted = true)

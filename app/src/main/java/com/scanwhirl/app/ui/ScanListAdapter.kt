@@ -43,8 +43,17 @@ class ScanListAdapter(
     var selectedIds: Set<String> = emptySet()
     /** Document-level search snippets (why a document matched; not a page jump). */
     var snippets: Map<String, CharSequence> = emptyMap()
-    /** True when ordinary opens go to an external viewer: page links then say they open here. */
+    /**
+     * True when ordinary opens go to an external viewer: page links then say they open here.
+     * Changing it re-binds the shown rows: the rows themselves are unchanged, so DiffUtil alone
+     * would leave the old note (found on device after switching the viewer in Settings).
+     */
     var externalViewer: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (itemCount > 0) notifyItemRangeChanged(0, itemCount)
+        }
 
     /**
      * The indexer's live state. Changing it re-binds only the status line of the
