@@ -2,7 +2,9 @@ package com.scanwhirl.app.ui
 
 import android.app.Application
 import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -24,15 +26,15 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 
 /**
- * T4.4 — Quick Sort (plan §4.8): the Home nudge counts the Unsorted/Other
+ * T4.4 â€” Quick Sort (plan Â§4.8): the Home nudge counts the Unsorted/Other
  * docs and opens the sheet, the Tools sheet carries the extra Quick sort
  * tile, picking saves instantly and advances, and the X close button (Rev 4
- * §3D) just closes — the nudge keeps the remaining count.
+ * Â§3D) just closes â€” the nudge keeps the remaining count.
  *
  * The first three cases were written **before** the fix against existing
  * symbols only (R.id.nudge, R.id.btnTools, the wireframe's literal labels),
- * so they run red first. The sheet's own ids (qsProgress, qsChips, qsClose …)
- * arrive with the fix — those guards are in the section below it.
+ * so they run red first. The sheet's own ids (qsProgress, qsChips, qsClose â€¦)
+ * arrive with the fix â€” those guards are in the section below it.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -55,35 +57,27 @@ class QuickSortTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `nudge shows the unsorted count and opens quick sort`() {
+    fun `tools sheet opens quick sort and the nudge stays retired`() {
         seed("Lecture notes", CategoryRules.STUDY)
         seed("Electricity bill", CategoryRules.UNSORTED)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
+                // M08: the Home nudge is retired; Quick sort lives in Tools.
                 val nudge = activity.findViewById<android.view.ViewGroup>(R.id.nudge)
-                assertTrue(
-                    "T4.4: the nudge must be visible while an unsorted doc exists",
-                    pollUntil { nudge.visibility == View.VISIBLE }
-                )
-                assertTrue("the nudge must carry its label", nudge.childCount > 0)
-                val text = (nudge.getChildAt(0) as TextView).text.toString()
-                assertTrue(
-                    "the nudge counts the docs to organize (got '$text')",
-                    text.contains("1 to organize")
-                )
-                assertTrue(
-                    "the nudge offers Quick sort (got '$text')",
-                    text.contains("Quick sort")
+                assertFalse(
+                    "the nudge stays hidden even with an unsorted doc",
+                    nudge.visibility == View.VISIBLE
                 )
 
-                nudge.performClick()
+                openSheetFromTools(activity)
                 val sheet = ShadowDialog.getLatestDialog()
-                assertNotNull(
-                    "T4.4: the nudge must open the Quick Sort sheet",
-                    sheet
-                )
+                assertNotNull("the Tools tile must open the Quick Sort sheet", sheet)
                 assertTrue("the sheet must be showing", sheet!!.isShowing)
+                assertNotNull(
+                    "the sheet must be the queue, not the Tools sheet",
+                    sheet.findViewById<View>(R.id.qsProgress)
+                )
             }
         }
     }
@@ -129,7 +123,7 @@ class QuickSortTest {
     // ------------------------------------------------------------------
     // Guards added with the fix (they reference the new sheet ids
     // qsProgress/qsDone/qsChips/qsClose and the qs_progress/all_sorted
-    // strings, so they could not compile before it — appended after the
+    // strings, so they could not compile before it â€” appended after the
     // implementation, same approach as T4.1/T4.3).
     // ------------------------------------------------------------------
 
@@ -140,7 +134,7 @@ class QuickSortTest {
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                openSheetFromNudge(activity)
+                openSheetFromTools(activity)
 
                 val sheet = ShadowDialog.getLatestDialog()!!
                 assertEquals(
@@ -189,17 +183,17 @@ class QuickSortTest {
     }
 
     @Test
-    fun `closing mid queue leaves the rest unsorted and the nudge keeps counting`() {
+    fun `closing mid queue leaves the rest unsorted`() {
         seed("Lecture notes", CategoryRules.UNSORTED)
         seed("Electricity bill", CategoryRules.UNSORTED)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                openSheetFromNudge(activity)
+                openSheetFromTools(activity)
                 val sheet = ShadowDialog.getLatestDialog()!!
                 tapChip(sheet, CategoryRules.RECEIPTS)
 
-                // Rev 4 §3D: the X button just closes — no confirmation, the
+                // Rev 4 Â§3D: the X button just closes â€” no confirmation, the
                 // remaining docs stay unsorted.
                 sheet.findViewById<View>(R.id.qsClose).performClick()
                 assertFalse(
@@ -207,14 +201,17 @@ class QuickSortTest {
                     sheet.isShowing
                 )
 
-                assertTrue(
-                    "the nudge keeps the remaining count (1 to organize)",
-                    pollUntil {
-                        val nudge = activity.findViewById<android.view.ViewGroup>(R.id.nudge)
-                        nudge.visibility == View.VISIBLE && nudge.childCount > 0 &&
-                            (nudge.getChildAt(0) as TextView).text.toString()
-                                .contains("1 to organize")
-                    }
+                // M08: the nudge is retired; the remaining count is still visible
+                // on the Unsorted chip, and the doc stays unsorted.
+                assertFalse(
+                    "the retired nudge stays hidden",
+                    activity.findViewById<android.view.ViewGroup>(R.id.nudge).isVisible
+                )
+                // M08: the nudge is retired. The remaining count is carried by the
+                // library itself — one doc is still unsorted (asserted below).
+                assertFalse(
+                    "the retired nudge stays hidden",
+                    activity.findViewById<android.view.ViewGroup>(R.id.nudge).isVisible
                 )
 
                 val stillUnsorted = listOf("Lecture notes", "Electricity bill")
@@ -237,15 +234,14 @@ class QuickSortTest {
     // Helpers
     // ------------------------------------------------------------------
 
-    private fun openSheetFromNudge(activity: MainActivity) {
-        val nudge = activity.findViewById<android.view.ViewGroup>(R.id.nudge)
-        assertTrue(
-            "the nudge must be visible to open the sheet",
-            pollUntil { nudge.visibility == View.VISIBLE }
-        )
-        nudge.performClick()
+    private fun openSheetFromTools(activity: MainActivity) {
+        // M08: the nudge is retired; Quick sort is opened from the Tools sheet.
+        activity.findViewById<android.view.View>(R.id.btnTools).performClick()
+        val tools = ShadowDialog.getLatestDialog()
+        assertNotNull("Tools sheet opens", tools)
+        tools!!.findViewById<android.view.View>(R.id.tile_quick_sort)!!.performClick()
         assertNotNull(
-            "T4.4: the nudge must open the Quick Sort sheet",
+            "the Tools tile must open the Quick Sort sheet",
             ShadowDialog.getLatestDialog()
         )
     }

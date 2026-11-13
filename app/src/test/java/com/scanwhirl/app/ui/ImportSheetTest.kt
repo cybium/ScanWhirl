@@ -14,6 +14,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.view.isVisible
 import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
@@ -78,20 +79,21 @@ abstract class ImportSheetBase {
 
             val photosDesc = sheet.findViewById<TextView>(R.id.importPhotosDesc)!!.text.toString()
             val pdfDesc = sheet.findViewById<TextView>(R.id.importPdfDesc)!!.text.toString()
-            assertTrue("Photos copy says Review", photosDesc.contains("Review"))
-            // The PDF is rasterized and the original is untouched; never "lossless"/"coming soon".
-            assertTrue("PDF copy admits rasterizing", pdfDesc.contains("flattened"))
-            assertTrue("PDF copy keeps the original", pdfDesc.contains("original"))
-            val all = listOf(photosTitle, photosDesc, pdfTitle, pdfDesc,
-                sheet.findViewById<TextView>(R.id.importOrderNote)!!.text.toString())
+            // M08 copy: one plain line per row, no "Review" promise in the chooser.
+            assertEquals(app.getString(R.string.import_photos_desc), photosDesc)
+            assertEquals(app.getString(R.string.import_pdf_desc), pdfDesc)
+            assertTrue("PDF copy says the pages become editable", pdfDesc.contains("editable"))
+            val all = listOf(photosTitle, photosDesc, pdfTitle, pdfDesc)
                 .joinToString(" ").lowercase()
             for (banned in listOf("coming", "wp-06", "lossless", "tap order", "order you tapped")) {
                 assertFalse("no '$banned' claim", all.contains(banned))
             }
 
-            // Order note is a calm caption, not a modal, and promises no tap order.
-            assertTrue(sheet.findViewById<TextView>(R.id.importOrderNote)!!.text
-                .contains("different order"))
+            // M08: the order note is kept in the layout but hidden — the picker
+            // order is still explained in Review, not in the chooser.
+            val orderNote = sheet.findViewById<TextView>(R.id.importOrderNote)!!
+            assertFalse("the order note is not shown in the chooser", orderNote.isVisible)
+            assertTrue(orderNote.text.contains("different order"))
 
             val photosIcon = firstImage(sheet.findViewById(R.id.importPhotos))
             val pdfIcon = firstImage(sheet.findViewById(R.id.importPdf))
@@ -241,23 +243,23 @@ abstract class ImportSheetBase {
     // -------------------------------------------------- Quick sort count truth
 
     @Test
-    fun `nudge counts Unsorted plus Other as to organize and never calls Other unsorted`() {
+    fun `quick sort counts Unsorted plus Other as to organize and never calls Other unsorted`() {
         seed("Notes", CategoryRules.STUDY)
         seed("Bill", CategoryRules.UNSORTED)
         seed("Misc", CategoryRules.OTHER)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val nudge = activity.findViewById<ViewGroup>(R.id.nudge)
-                assertTrue(pollUntil { nudge.visibility == View.VISIBLE && nudge.childCount > 0 })
-                val text = (nudge.getChildAt(0) as TextView).text.toString()
-                assertEquals(app.getString(R.string.quick_sort_nudge, 2), text)
-                assertTrue(text.startsWith("2 to organize"))
-                assertFalse("Other is not Unsorted", text.contains("unsorted"))
-                // The queue itself still holds both (selection rule unchanged).
-                nudge.performClick()
+                // M08: the Home nudge is retired; the queue is reached through
+                // the Tools sheet's Quick sort tile.
+                assertFalse("the retired nudge stays hidden",
+                    activity.findViewById<View>(R.id.nudge).isVisible)
+                openQuickSort(activity)
                 val sheet = ShadowDialog.getLatestDialog()!!
-                assertEquals(app.getString(R.string.qs_progress, 1, 2),
-                    sheet.findViewById<TextView>(R.id.qsProgress)!!.text.toString())
+                val progress = sheet.findViewById<TextView>(R.id.qsProgress)!!
+                assertEquals(app.getString(R.string.qs_progress, 1, 2), progress.text.toString())
+                // "Other" is part of the queue but is never called Unsorted.
+                assertFalse("Other is not Unsorted",
+                    progress.text.toString().lowercase().contains("unsorted"))
                 // Chip rail's Unsorted chip counts only the one Unsorted doc.
                 val unsortedChip = activity.findViewById<View>(R.id.chipRail).allChips()
                     .first { it.text.startsWith("Unsorted") }
@@ -274,9 +276,7 @@ abstract class ImportSheetBase {
         seed("Bill", CategoryRules.UNSORTED)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val nudge = activity.findViewById<ViewGroup>(R.id.nudge)
-                assertTrue(pollUntil { nudge.visibility == View.VISIBLE })
-                nudge.performClick()
+                openQuickSort(activity)
                 val sheet = ShadowDialog.getLatestDialog()!!
                 val close = sheet.findViewById<View>(R.id.qsClose)!!
                 assertEquals(app.getString(R.string.close), close.contentDescription)
@@ -331,10 +331,15 @@ abstract class ImportSheetBase {
             scenario.onActivity { activity ->
                 activity.findViewById<View>(R.id.btnTools).performClick()
                 val tools = ShadowDialog.getLatestDialog()!!
+                // M08: six live tiles in one grid; no PRO band, and no Vault tile
+                // without a legacy PIN (new Vault setup is disabled).
                 for (id in intArrayOf(R.id.tile_ocr, R.id.tile_merge, R.id.tile_compress,
-                    R.id.tile_resize, R.id.tile_quick_sort, R.id.tile_lock, R.id.tile_vault)) {
+                    R.id.tile_resize, R.id.tile_quick_sort, R.id.tile_lock)) {
                     assertNotNull("tile $id", tools.findViewById<View>(id))
                 }
+                assertNull("no Vault tile without a legacy PIN", tools.findViewById<View>(R.id.tile_vault))
+                assertFalse("no PRO section while Pro is not sold",
+                    tools.findViewById<View>(R.id.sheetPro).isVisible)
                 // Free user tapping a Pro tile gets the Pro panel, not the flow.
                 tools.findViewById<View>(R.id.tile_lock)!!.performClick()
                 assertNotNull(ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.proDossierStatus))
@@ -343,6 +348,12 @@ abstract class ImportSheetBase {
     }
 
     // ------------------------------------------------------------- helpers
+
+    /** M08: Quick sort is opened from the Tools sheet, not from the retired nudge. */
+    private fun openQuickSort(activity: Activity) {
+        activity.findViewById<View>(R.id.btnTools).performClick()
+        ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.tile_quick_sort)!!.performClick()
+    }
 
     private fun withImportSheet(block: (MainActivity, Dialog) -> Unit) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->

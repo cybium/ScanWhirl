@@ -3,6 +3,7 @@ package com.scanwhirl.app.ui
 import android.app.Activity
 import android.app.Application
 import android.net.Uri
+import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -11,6 +12,8 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -97,57 +100,64 @@ class StatusLineScreenTest {
     // ---- T3.10: the screen, not just the formatter -----------------------
 
     @Test
-    fun `status line reads one doc with the card's size after first load`() {
+    fun `status line is hidden on first load even when the old setting is on`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 assertTrue("list lands", pollUntil { rowCount(activity) == 1 })
-                val status = statusOf(activity)
-                assertTrue("says 1 DOC, was: $status", status.contains("1 DOC"))
-                val want = StatusLine.formatBytes(totalBytes())
-                assertTrue("says the card's size ($want), was: $status", status.contains(want))
+                // M08: the Status line is retired. A stored "on" must not revive it
+                // (Prefs.showGreeting is hard-false so nobody is stuck with it).
+                assertFalse(
+                    "the retired status line stays hidden",
+                    activity.findViewById<android.view.View>(R.id.statusLine).isVisible
+                )
+                assertEquals("no readout is written", "", statusOf(activity))
             }
         }
     }
 
     @Test
-    fun `status line counts the second doc after it is added`() {
+    fun `status line stays hidden after a second doc is added`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 assertTrue("first doc lands", pollUntil { rowCount(activity) == 1 })
-                assertTrue("says 1 DOC first", pollUntil { statusOf(activity).contains("1 DOC") })
+                assertFalse(
+                    "hidden before the add",
+                    activity.findViewById<android.view.View>(R.id.statusLine).isVisible
+                )
 
                 seed("Electricity bill", CategoryRules.RECEIPTS)
                 reenter(scenario) // onResume -> refreshList (the real trigger)
 
-                assertTrue(
-                    "says 2 DOCS after add, was: ${statusOf(activity)}",
-                    pollUntil { statusOf(activity).contains("2 DOCS") }
+                assertTrue("second doc lands", pollUntil { rowCount(activity) == 2 })
+                assertFalse(
+                    "still hidden after the add",
+                    activity.findViewById<android.view.View>(R.id.statusLine).isVisible
                 )
             }
         }
     }
 
     @Test
-    fun `deleting every doc shows 0 DOCS and the empty state`() {
+    fun `deleting every doc keeps the status line hidden and shows the empty state`() {
         val a = seed("Lecture notes", CategoryRules.STUDY)
         val b = seed("Electricity bill", CategoryRules.RECEIPTS)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 assertTrue("2 docs land", pollUntil { rowCount(activity) == 2 })
-                assertTrue("says 2 DOCS first", pollUntil { statusOf(activity).contains("2 DOCS") })
 
                 repo.deleteDocument(a)
                 repo.deleteDocument(b)
                 reenter(scenario)
 
-                assertTrue(
-                    "says 0 DOCS after delete, was: ${statusOf(activity)}",
-                    pollUntil { statusOf(activity).contains("0 DOCS") }
+                assertTrue("list empties", pollUntil { rowCount(activity) == 0 })
+                assertFalse(
+                    "no 0 DOCS readout any more",
+                    activity.findViewById<android.view.View>(R.id.statusLine).isVisible
                 )
                 assertTrue(
                     "empty state shows with it",
@@ -161,13 +171,12 @@ class StatusLineScreenTest {
     }
 
     @Test
-    fun `category filter never changes the status line`() {
+    fun `category filter never reveals the status line`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 assertTrue("doc lands", pollUntil { rowCount(activity) == 1 })
-                assertTrue("says 1 DOC", pollUntil { statusOf(activity).contains("1 DOC") })
 
                 // Receipts is empty -> filtered list 0, unfiltered library still 1.
                 val receipts = activity.findViewById<com.google.android.material.chip.ChipGroup>(
@@ -179,8 +188,10 @@ class StatusLineScreenTest {
                 chip.performClick()
                 assertTrue("filter lands", pollUntil { rowCount(activity) == 0 })
 
-                val status = statusOf(activity)
-                assertTrue("status stays at 1 DOC while filtered, was: $status", status.contains("1 DOC"))
+                assertFalse(
+                    "the filter does not reveal it either",
+                    activity.findViewById<android.view.View>(R.id.statusLine).isVisible
+                )
             }
         }
     }

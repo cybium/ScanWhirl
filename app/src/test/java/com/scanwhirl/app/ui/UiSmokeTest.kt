@@ -297,14 +297,16 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `home shows a status line and settings can turn it off`() {
+    fun `home keeps the status line retired whatever the stored setting says`() {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val line = activity.findViewById<android.widget.TextView>(R.id.statusLine)
-                assertTrue(
-                    "status line should be shown under the name",
-                    line.text.isNotEmpty() && line.isVisible
+                // M08: Settings no longer offers the toggle; an old "on" must not
+                // leave anyone stuck with a feature they cannot switch off.
+                assertFalse(
+                    "status line stays hidden under the name",
+                    line.isVisible
                 )
             }
         }
@@ -1343,26 +1345,15 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `status line renders under the app name, and the badge is clickable`() {
+    fun `status line stays retired, and the badge is clickable`() {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val line = activity.findViewById<android.widget.TextView>(R.id.statusLine)
-                // T1.5/T3.2: the emoji greeting is now the HUD status line — it must
-                // lead with the phase for the current hour and carry count+size.
-                val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-                val period = activity
-                    .getString(com.scanwhirl.app.util.StatusLine.phase(hour))
-                    .uppercase(java.util.Locale.ROOT)
-                val text = line.text.toString()
-                assertTrue("status line leads with the phase: \"$text\"", text.startsWith("$period · "))
-                assertTrue(
-                    "status line carries count and size: \"$text\"",
-                    Regex("""· \d+ DOCS? · .+""").containsMatchIn(text)
-                )
-                // T3.2 styling: 11sp caps micro-label with wide tracking.
-                assertEquals(11f, line.textSize / line.resources.displayMetrics.scaledDensity, 0.01f)
-                assertEquals(0.12f, line.letterSpacing, 0.001f)
+                // M08: the HUD status line is retired, and a stored "on" cannot
+                // bring it back (Prefs.showGreeting is hard-false).
+                assertFalse("the retired status line stays hidden", line.isShown)
+                assertTrue("no readout is written: \"${line.text}\"", line.text.isEmpty())
                 // Crown badge opens the Pro panel.
                 activity.findViewById<android.view.View>(R.id.proBadge).performClick()
             }
@@ -1655,7 +1646,8 @@ class UiSmokeTest {
                 assertNotNull("tools sheet should open", sheet)
                 assertNotNull(sheet!!.findViewById<android.view.View>(R.id.tile_ocr))
                 assertNotNull(sheet.findViewById<android.view.View>(R.id.tile_lock))
-                assertNotNull(sheet.findViewById<android.view.View>(R.id.tile_vault))
+                // M08: no Vault tile without a legacy PIN; new Vault setup is off.
+                assertNull(sheet.findViewById<android.view.View>(R.id.tile_vault))
                 renderActivityPng(activity, "/tmp/opencode/ui_home.png")
                 sheet.dismiss()
             }

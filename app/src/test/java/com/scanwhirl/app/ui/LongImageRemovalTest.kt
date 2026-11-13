@@ -142,7 +142,9 @@ class LongImageRemovalTest {
                         .mapNotNull { runCatching { app.resources.getResourceEntryName(it.id) }.getOrNull() }
                         .filter { it.startsWith("tile_") }
                     assertEquals(
-                        "exactly the 7 remaining tiles: $tiles", 7, tiles.toSet().size
+                        // M08: six live tiles; the Vault tile only exists for a
+                        // legacy Vault owner, and the PRO band is gone.
+                        "exactly the 6 remaining tiles: $tiles", 6, tiles.toSet().size
                     )
                     assertFalse("no Long Image label (forcedFree=$forcedFree)",
                         texts(sheet.window!!.decorView).any { longImageText.containsMatchIn(it) })

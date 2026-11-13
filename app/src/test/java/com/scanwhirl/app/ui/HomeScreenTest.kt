@@ -635,7 +635,7 @@ class HomeScreenTest {
     }
 
     @Test
-    fun `tools sheet opens and holds seven tiles in two sections`() {
+    fun `tools sheet opens and holds six tiles in one Free section`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val bar = activity.findViewById<android.view.View>(R.id.dockRoot)
@@ -645,28 +645,31 @@ class HomeScreenTest {
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("Tools sheet opens", sheet)
 
-                // T6: OCR tile is Free, Edit tile is gone.
-                val freeIds = setOf(
+                // M08: one even grid. Lock keeps its Pro gate inside the same
+                // Free section; the PRO band is gone while Pro is not sold, and
+                // the Vault tile only appears for a legacy Vault owner.
+                val ids = setOf(
                     R.id.tile_ocr, R.id.tile_merge, R.id.tile_compress, R.id.tile_resize,
-                    R.id.tile_quick_sort
+                    R.id.tile_lock, R.id.tile_quick_sort
                 )
-                val proIds = setOf(
-                    R.id.tile_lock, R.id.tile_vault
-                )
-                for (id in freeIds + proIds) {
+                for (id in ids) {
                     assertNotNull(
                         "tile ${activity.resources.getResourceEntryName(id)} present",
                         sheet!!.findViewById<android.view.View>(id)
                     )
                 }
+                assertNull(
+                    "no Vault tile without a legacy PIN",
+                    sheet!!.findViewById<android.view.View>(R.id.tile_vault)
+                )
 
-                // T3.11: rows are chunked per section (4 columns, or 3 when the
-                // longest word would not fit) — assert the section holds its
-                // tiles, whatever the column count.
+                // T3.11: rows are chunked (4 columns, or 3 when the longest word
+                // would not fit) — count the section, not one row.
                 val free = sheet.findViewById<android.view.ViewGroup>(R.id.sheetFree)
+                assertEquals("Free section holds all six tiles", ids, tilesIn(free, ids))
                 val pro = sheet.findViewById<android.view.ViewGroup>(R.id.sheetPro)
-                assertEquals("Free section holds 5 tiles", freeIds, tilesIn(free, freeIds))
-                assertEquals("Pro section holds 2 tiles", proIds, tilesIn(pro, proIds))
+                assertFalse("no PRO section while Pro is not sold", pro.isVisible)
+                assertEquals("PRO section holds nothing", emptySet<Int>(), tilesIn(pro, ids))
 
                 sheet.dismiss()
                 assertFalse("sheet dismissed", sheet.isShowing)

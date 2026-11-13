@@ -18,6 +18,7 @@ import com.scanwhirl.app.util.Prefs
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -146,14 +147,10 @@ abstract class HomeFontScaleBase {
                     layoutAs(root, activity)
                     val density = activity.resources.displayMetrics.density
 
-                    // 1. HUD status line shows the whole readout (period · count · size).
+                    // 1. M08: the HUD status line is retired. At every scale it must
+                    // stay out of the way — nothing to clip because nothing shows.
                     val status = activity.findViewById<TextView>(R.id.statusLine)
-                    assertTrue(status.isShown)
-                    assertFullyShown(status, "statusLine", scale, problems)
-                    assertTrue(
-                        "status shows the size segment",
-                        status.text.toString().contains("MB") || status.text.toString().contains(" KB")
-                    )
+                    assertFalse("the retired status line stays hidden @ $scale", status.isShown)
 
                     // 2. List header: count + sort + Select — all visible, never ellipsized.
                     val header = activity.findViewById<View>(R.id.listHeader)

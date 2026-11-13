@@ -102,6 +102,12 @@ class FreeLegacyVaultEntryPointTest {
     private fun proPanelShown(): Boolean =
         ShadowDialog.getLatestDialog()?.findViewById<View>(R.id.proDossierStatus) != null
 
+    /** Opens Tools and returns the Vault tile, or null when it is not offered. */
+    private fun vaultTile(activity: MainActivity): View? {
+        activity.findViewById<View>(R.id.btnTools).performClick()
+        return ShadowDialog.getLatestDialog()?.findViewById<View>(R.id.tile_vault)
+    }
+
     private fun openToolsAndTap(activity: MainActivity, tileId: Int) {
         activity.findViewById<View>(R.id.btnTools).performClick()
         val sheet = ShadowDialog.getLatestDialog()
@@ -195,16 +201,16 @@ class FreeLegacyVaultEntryPointTest {
     }
 
     @Test
-    fun `free vault tile without a PIN is blocked with truthful copy and creates nothing`() {
+    fun `free vault tile without a PIN is not offered and creates nothing`() {
         seedDoc("Public doc")
         assertFalse(Prefs.hasVaultPin(app))
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { activity ->
-                openToolsAndTap(activity, R.id.tile_vault)
-                assertEquals(app.getString(R.string.vault_new_unavailable), latestToast())
+                // M08: with no legacy Vault there is no tile to explain — setup is
+                // disabled for everyone, so the door is simply absent.
+                assertNull("no Vault tile without a legacy PIN", vaultTile(activity))
                 assertFalse("no Pro-panel redirect", proPanelShown())
-                assertNull("no PIN-setup / entry dialog", pinDialog())
                 assertFalse(vaultBannerShown(activity))
             }
         }
@@ -212,16 +218,14 @@ class FreeLegacyVaultEntryPointTest {
     }
 
     @Test
-    fun `pro vault tile without a PIN is also blocked - setup disabled for everyone`() {
+    fun `pro vault tile without a PIN is also absent - setup disabled for everyone`() {
         ProGate.setTestOverride(app, true)
         seedDoc("Public doc")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { activity ->
                 assertTrue("really Pro", ProGate.isPro(activity))
-                openToolsAndTap(activity, R.id.tile_vault)
-                assertEquals(app.getString(R.string.vault_new_unavailable), latestToast())
-                assertNull(pinDialog())
+                assertNull("Pro does not get a Vault tile either", vaultTile(activity))
                 assertFalse(vaultBannerShown(activity))
             }
         }

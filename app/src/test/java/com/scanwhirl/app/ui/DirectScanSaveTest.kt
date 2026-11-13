@@ -15,6 +15,7 @@ import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.Prefs
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -59,7 +60,7 @@ class DirectScanSaveTest {
     }
 
     @Test
-    fun `Done saves straight to Home in scan order with nothing left staged`() {
+    fun `Done saves the scan, leaves nothing staged and opens the saved document`() {
         Prefs.setAutoCopyToDocuments(app, false)
         val scanned = pages(3)
         var started: Intent? = null
@@ -68,7 +69,13 @@ class DirectScanSaveTest {
             await("the saved document") { repo.listDocuments().isNotEmpty() && PendingScans.all(app).isEmpty() }
             scenario.onActivity { a -> started = shadowOf(a).nextStartedActivity }
         }
-        assertNull("no second edit screen after the scanner", started)
+        // M08 lands on the saved document's page overview. OQ-12 says the eventual
+        // landing is the Reader; PM-2.2 changes both the app and this assertion.
+        assertNotNull("the scanner opens the saved document", started)
+        assertEquals(
+            "the landing is the document screen today",
+            DocumentViewerActivity::class.java.name, started!!.component?.className
+        )
         val doc = repo.listDocuments().single()
         assertEquals(3, doc.pageCount)
         // Same order and the same picture as the scanner returned (normalised once, by the save).

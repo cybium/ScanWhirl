@@ -393,7 +393,9 @@ class HomeSlice2Test {
                 fun status(name: String): String? = byName.getValue(name)
                     .findViewById<TextView>(R.id.scanTextStatus).takeIf { it.isVisible }?.text?.toString()
                 assertEquals("Waiting to read text", status("Waiting"))
-                assertEquals("Search ready", status("Ready"))
+                // M08: "Search ready" is the normal state, so it is spoken, not
+                // printed on the card (ScanListAdapter.bindStatus).
+                assertNull("ready rows print no chip", status("Ready"))
                 assertEquals("Text on 1 of 2 pages", status("Partial"))
                 assertNull(status("Flag only"))
                 assertNull(status("Malformed"))
@@ -455,7 +457,9 @@ class HomeSlice2Test {
                 // Tools → still holds Quick sort and the Private (vault) path.
                 activity.findViewById<View>(R.id.btnTools).performClick()
                 val tools = ShadowDialog.getLatestDialog()!!
-                assertNotNull(tools.findViewById<View>(R.id.tile_vault))
+                // M08: the Vault tile only exists for a legacy Vault owner; this
+                // device has no PIN, so Quick sort is the private-path-free tile.
+                assertNull("no Vault tile without a legacy PIN", tools.findViewById<View>(R.id.tile_vault))
                 assertNotNull(tools.findViewById<View>(R.id.tile_quick_sort))
                 tools.dismiss()
 
@@ -468,10 +472,9 @@ class HomeSlice2Test {
                 assertNotNull(panel.findViewById<View>(R.id.proDossierStatus))
                 panel.dismiss()
 
-                // Quick sort is a calm row; tapping it opens the sheet.
+                // M08: the nudge row is retired; Quick sort stays reachable in Tools.
                 val nudge = activity.findViewById<android.view.ViewGroup>(R.id.nudge)
-                assertTrue(nudge.isVisible)
-                assertTrue((nudge.getChildAt(0) as TextView).text.contains("Quick sort"))
+                assertFalse("the retired nudge stays hidden", nudge.isVisible)
 
                 // More and long-press both open quick actions.
                 val row = rowView(activity, 0)
@@ -624,7 +627,11 @@ class HomeSlice2LargeTextTest {
                         }
                     }
                     check(row.findViewById(R.id.scanMeta), "scanMeta")
-                    check(row.findViewById(R.id.catChip), "catChip")
+                    // M08: an Unsorted document prints no category chip, so there
+                    // is nothing to lay out; a categorised row still gets checked.
+                    val cat = row.findViewById<TextView>(R.id.catChip)
+                    assertFalse("Unsorted rows show no category chip", cat.isVisible)
+                    if (cat.isVisible) check(cat, "catChip")
                     check(row.findViewById(R.id.scanTextStatus), "scanTextStatus")
                     check(row.findViewById(R.id.scanName), "scanName")
                     check(activity.findViewById(R.id.scanLabel), "scanLabel")

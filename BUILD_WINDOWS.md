@@ -11,13 +11,19 @@ Installed toolchain detected:
 - Git for Windows
 - Gradle wrapper in the repository
 
+## Unit tests are gated on Linux
+
+This host compiles and lints fine, but **do not use it to judge the unit suite**. 142 of 807 tests fail only
+because `File.renameTo` cannot replace an existing file on Windows. The canonical runner is WSL — see
+`BUILD_LINUX.md` for the exact command and the list of expected host-only failures.
+
 ## Commands
 
 Run from this directory:
 
 - Compile main sources: `.\gradlew.bat :app:compileDebugKotlin -PtestBuild --no-daemon`
 - Compile tests: `.\gradlew.bat :app:compileDebugUnitTestKotlin -PtestBuild --no-daemon`
-- Full unit suite: `.\gradlew.bat test -PtestBuild --no-daemon`
+- Full unit suite: `.\gradlew.bat test -PtestBuild --no-daemon` (Windows-only failures expected — use `BUILD_LINUX.md` for the real gate)
 - Lint: `.\gradlew.bat lintDebug -PtestBuild --no-daemon`
 - Test APK: `.\gradlew.bat assembleRelease -PtestBuild --no-daemon`
 
