@@ -33,7 +33,7 @@ Some of these directly overlap the audit. Check the current tree first.
 ## Last recorded test state
 
 - Last full-suite claim: **797 tests, 0 failures** at `d69a304`, recorded in the owner’s handoff.
-- Current tree: not compiled or fully tested.
+- Current tree: **compiled successfully on Windows on 2026-11-13** (`:app:compileDebugKotlin`, 1m27s); not fully tested.
 - Last targeted subset on disk: **101 tests, 3 failures**:
   - `SearchMatcherTest` — two-term query requires both terms
   - `SearchMatcherTest` — name hit ranks above text-only hit

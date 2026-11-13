@@ -14,7 +14,7 @@ A local-first Android document scanner in Kotlin. Google ML Kit supplies scannin
 - Version: `versionCode 27`, `versionName 1.1.1-test27`.
 - This clean copy is frozen on branch `clean-workspace-2026-11-13`. The WSL repository remains untouched as a backup.
 - The uncommitted UX pass includes direct save after Google’s scanner, auto-export, whole-word search, hiding dead Vault entry points, one ink palette, tighter Home cards, and shorter Import/Trash copy.
-- The UX pass was **not compiled or fully tested** before this snapshot. The latest recorded targeted subset was 101 tests with 3 failures in `SearchMatcherTest` and `LockedDocumentSearchPrivacyTest`.
+- The UX pass **compiled successfully in this Windows snapshot** on 2026-11-13 (`:app:compileDebugKotlin`, 1m27s). It has not been fully tested. The latest recorded targeted subset was 101 tests with 3 failures in `SearchMatcherTest` and `LockedDocumentSearchPrivacyTest`.
 - The full suite was last reported green at `d69a304`: 797 tests, 0 failures. Treat that as historical until rerun.
 - The recording `Screen_Recording_20261113_121627.mp4` is test27. It predates the latest UX pass. Do not assume current code matches every frame.
 

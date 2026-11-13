@@ -23,7 +23,7 @@ Run from this directory:
 
 ## Important
 
-- The current tree is a snapshot of an uncompiled UX pass. A successful compile is not evidence that tests or device behaviour are green.
+- The current tree compiled successfully in this Windows workspace on 2026-11-13. A successful compile is not evidence that tests or device behaviour are green.
 - Release test builds use `keystore/scanwhirl.keystore` and `keystore.properties`. Do not print or share their contents.
 - Never run `assembleRelease` without `-PtestBuild` unless the owner explicitly asks for a production build.
 - Run gates one at a time; the machine has limited memory.

@@ -16,7 +16,7 @@ This is the clean ScanWhirl workspace created on 2026-11-13.
 - Source baseline: `d69a304` plus the uncommitted UX pass.
 - Latest APK in this workspace: `builds/2026-11-13/ScanWhirl-M08-candidate-D.apk`.
 - Candidate D does **not** include the latest uncommitted UX pass.
-- The current tree has not been fully tested. The last recorded targeted run was 101 tests with 3 search-related failures.
+- The current tree compiles successfully in this Windows workspace. It has not been fully tested. The last recorded targeted run was 101 tests with 3 search-related failures.
 - The full suite was last reported green at `d69a304` with 797 tests.
 
 ## Read order
