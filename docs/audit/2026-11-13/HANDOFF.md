@@ -6,6 +6,8 @@ The codebase is modular and test-heavy. The handoff was the problem. This folder
 
 Do not treat the test27 recording, the current working tree, and the historical docs as the same state.
 
+**A device walk on candidate D was completed on 2026-11-13.** Read `DEVICE_FINDINGS.md` immediately after this file. It supersedes two video findings and adds new current failures.
+
 ## Four states that must not be conflated
 
 | State | Evidence | What it means |
@@ -16,6 +18,16 @@ Do not treat the test27 recording, the current working tree, and the historical 
 | Current working tree | 20 modified files + 3 untracked files frozen in this snapshot | Post-M08 UX pass. Not fully compiled or tested. Latest targeted subset: 101 tests, 3 failures. |
 
 The recording is therefore older than part of the current tree. Re-test findings on a device rather than assuming every frame is still exact.
+
+**Two video findings did not survive device testing:**
+
+- The stale page grid (F02) did not reproduce: deleting page 2 produced a 1-page grid.
+- The universal B/W failure (F01) did not reproduce on the DocX contents page: B/W was legible. Treat it as image-dependent.
+
+**Two worse current failures emerged:**
+
+- Page deletion persisted through a force-stop, while the Save dialog offered no discard.
+- PRO/Vault is a “Not available yet” dead end with no purchase or benefit list.
 
 ## What is already changed in the current tree
 
@@ -41,17 +53,21 @@ Some of these directly overlap the audit. Check the current tree first.
 
 The three tests were rewritten for the new search rule. Determine whether the failures are stale expectations, red-first tests, or regressions before changing behaviour.
 
-## First session scope
+**Device test-document note:** the candidate-D walk changed the fixture `DocX` from 2 pages / 1.5 MB to 1 page / 1009 KB. Page 2 (contents) was deleted and did not return after force-stop. This is recorded as D1; do not run further destructive edits on that fixture without a backup.
+
+## First session scope — device-verified
 
 Do not start with the full 30-finding critique. Use these five:
 
-1. **F02 — page grid after deletion.** Editor says 1/1, grid says 2 pages. Make the grid, page count, save summary, and reopened document agree. Likely files: `PageGridView.kt`, `ScanRepository.kt`, `SaveTransaction.kt`, `DocumentViewerActivity.kt`.
-2. **F01 — B/W legibility.** Existing-page B/W makes a readable page nearly disappear. Add full-page review, Original/Result comparison, explicit revert, and verify the exported page. Likely: `PageViewerActivity.kt`, `PageGridView.kt`, `ImageTools.kt`, `PageReplace.kt`.
-3. **F03 — overwrite emphasis.** “Overwrite saved PDF” is visually primary. Make save-as-new primary, name the affected file, and make overwrite a confirmed destructive secondary action. Likely: `SaveTransaction.kt`, `DocumentViewerActivity.kt`, `ScanReviewActivity.kt`, `DownloadSaver.kt`.
-4. **F05/F06 — Resize.** Keyboard hides Cancel/Resize; custom field loses its unit; preset and custom precedence is unexplained. Likely: `ResizeFlow.kt`, `CompressFlow.kt`, resize layout.
-5. **F04 — Vault.** The audit saw “unavailable” after tapping a PRO tile. The current tree hides the tile when no legacy PIN exists. First verify that on device; do not rewrite the Vault unless the dead end remains.
+1. **D1/D2 — page-edit transaction and Save changes.** Page deletion survived force-stop; the Save dialog offers Overwrite / Cancel / Save as new, with no Discard and no filename. Prove whether the page set and PDF can diverge. Make the transaction explicit, name the file, and add a real Discard/Keep-editing path. Likely: `SaveTransaction.kt`, `ScanRepository.kt`, `DocumentViewerActivity.kt`, `SaveReviewIdentityTest.kt`.
+2. **D3/D4 — PRO and Vault.** PRO says “Not available yet” with no price, benefits or purchase; Vault dies in a toast. The current WIP hides Vault and removes the PRO band; first verify those changes, then decide the honest production surface. Do not ship “Not available yet” behind a PRO badge.
+3. **D5/D6 — document actions and lock state.** The saved reader offers only Find; Share/Edit/Text/More are reachable only via Home row overflow → Edit pages. Lock is in the page-grid More sheet, with no row badge. Restore a visible document action dock and a lock state.
+4. **D7 — Resize.** Keyboard hides Cancel/Resize; 500 KB is orphaned on its own row; the hint looks like a value; the field uses a text keyboard. Likely: `ResizeFlow.kt`, resize layout.
+5. **D11 — privacy wording.** Auto enhance is ON and says “Google processing”, while About says “no servers.” State exactly what runs on-device and what leaves it.
 
-Second session, only after those are green: OCR proofreading, password target/search consequence, privacy wording, naming at save, and file-source choosers.
+Second session, only after those are green: B/W comparison/revert (not a universal failure), OCR proofreading, password target/search consequence, naming at save, and source choosers.
+
+Do not implement F02 (stale grid) or claim universal F01 (B/W failure) without reproducing them on the current build.
 
 ## Out of scope for the first session
 
