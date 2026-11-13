@@ -52,7 +52,7 @@ Screenshots are in `screenshots/` and are ignored by Git so the repository stays
 
 - `RANKING.md` — top 10 and where ScanWhirl sits.
 - `CAMSCANNER_DEEP_DIVE.md` — CamScanner feature/APK analysis.
-- `apk-analysis/camscanner/` — pulled base APK, manifest, dex package list, tool JSON; ignored by Git.
+- `C:\Users\Cybium\Desktop\ScanWhirl_Research_2026-11-13\apk-analysis\camscanner\` — pulled base APK, manifest, compressed dex package list, tool JSON. Kept outside the code workspace so it stays portable.
 - `PRICING.md` — observed prices and benefits.
 - `FEATURE_MATRIX.md` — what each app visibly offers.
 - `UI_PATTERNS.md` — UI and navigation patterns with evidence.

@@ -25,14 +25,17 @@ This is the clean ScanWhirl workspace created on 2026-11-13.
 
 1. `docs/audit/2026-11-13/HANDOFF.md`
 2. `docs/audit/2026-11-13/DEVICE_FINDINGS.md` — current installed build
-3. `docs/competitive/2026-11-13/OPUS_BRIEF.md` — competitor synthesis
-4. `docs/competitive/2026-11-13/RANKING.md`
-5. `docs/competitive/2026-11-13/PRICING.md`
-6. `docs/competitive/2026-11-13/UI_PATTERNS.md`
-7. `docs/audit/2026-11-13/M08_HANDOFF.md`
-8. `docs/audit/2026-11-13/UX_AUDIT.md`
-9. `SCANWHIRL_CRITIQUE.md` — only the assigned findings
-10. The smallest set of source files that owns those findings
+3. `docs/product/pdf-manager-2026-11-13/SPEC.md` — new PDF Manager product spec
+4. `docs/product/pdf-manager-2026-11-13/TOOL_MATRIX.md` — Free/PRO and feasibility
+5. `docs/product/pdf-manager-2026-11-13/OPUS_BRIEF.md` — design brief
+6. `docs/competitive/2026-11-13/OPUS_BRIEF.md` — competitor synthesis
+7. `docs/competitive/2026-11-13/RANKING.md`
+8. `docs/competitive/2026-11-13/PRICING.md`
+9. `docs/competitive/2026-11-13/UI_PATTERNS.md`
+10. `docs/audit/2026-11-13/M08_HANDOFF.md`
+11. `docs/audit/2026-11-13/UX_AUDIT.md`
+12. `SCANWHIRL_CRITIQUE.md` — only the assigned findings
+13. The smallest set of source files that owns those findings
 
 Do not read `docs/history/`; it is deliberately historical. Do not read signing material.
 

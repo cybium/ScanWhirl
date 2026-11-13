@@ -144,6 +144,10 @@ Why: no server cost, strong privacy positioning, and a lifetime anchor already e
 6. Add optional local backup/export through Android’s picker; leave cloud/account out of scope.
 7. Revisit AI only if it can run fully on-device and is clearly optional. Do not add server AI.
 
+## PDF Manager follow-up
+
+The detailed PDF Manager product spec is in `../../product/pdf-manager-2026-11-13/`. It turns the PDF-tool gap above into a concrete hub, page organizer, tool matrix, Free/PRO split and one-time pricing proposal.
+
 ## The one-sentence strategy
 
 **Be the offline, no-ads, no-account scanner with the best document retrieval and the most useful local finishing tools — not a weaker clone of Adobe’s cloud or SwiftScan’s ad-supported tool chest.**

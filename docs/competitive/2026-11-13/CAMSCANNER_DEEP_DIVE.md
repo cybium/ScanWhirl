@@ -4,7 +4,7 @@
 **Version:** 7.28.5.2611020000 (versionCode 72852)  
 **Installed:** 2026-11-13 18:39  
 **Status:** Pro unlocked by the owner. Pricing is deliberately ignored.  
-**APK:** 194.47 MB, SHA-256 captured in `apk-analysis/camscanner/`  
+**APK:** 194.47 MB, SHA-256 captured in `C:\Users\Cybium\Desktop\ScanWhirl_Research_2026-11-13\apk-analysis\camscanner\`  
 **Method:** ADB screenshots, UIAutomator, actual gallery import, APK manifest/dex/resource inspection. No camera due the phone facing down.
 
 ## The core answer: why it feels so feature-packed

@@ -24,13 +24,16 @@ A local-first Android document scanner in Kotlin. Google ML Kit supplies scannin
 1. `START_HERE.md`
 2. `docs/audit/2026-11-13/HANDOFF.md`
 3. `docs/audit/2026-11-13/DEVICE_FINDINGS.md` — current installed build
-4. `docs/competitive/2026-11-13/OPUS_BRIEF.md` — competitor synthesis
-5. `docs/competitive/2026-11-13/RANKING.md`, `PRICING.md`, `UI_PATTERNS.md`
-6. `docs/audit/2026-11-13/M08_HANDOFF.md`
-7. `docs/audit/2026-11-13/UX_AUDIT.md`
-8. `SCANWHIRL_CRITIQUE.md` — full video audit; use only the assigned findings
-9. `README.md` — build and product rules
-10. Relevant source files only
+4. `docs/product/pdf-manager-2026-11-13/SPEC.md` — PDF Manager product spec
+5. `docs/product/pdf-manager-2026-11-13/TOOL_MATRIX.md` — Free/PRO and offline feasibility
+6. `docs/product/pdf-manager-2026-11-13/APK_ARCHITECTURE.md` — competitor stack/code footprint
+7. `docs/competitive/2026-11-13/OPUS_BRIEF.md` — competitor synthesis
+8. `docs/competitive/2026-11-13/RANKING.md`, `PRICING.md`, `UI_PATTERNS.md`
+9. `docs/audit/2026-11-13/M08_HANDOFF.md`
+10. `docs/audit/2026-11-13/UX_AUDIT.md`
+11. `SCANWHIRL_CRITIQUE.md` — full video audit; use only the assigned findings
+12. `README.md` — build and product rules
+13. Relevant source files only
 
 Do **not** load `docs/history/`, old plan/log files, or the entire research archive into context. Do not read `keystore/` or `keystore.properties`.
 
