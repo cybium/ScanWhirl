@@ -8,6 +8,8 @@ Do not treat the test27 recording, the current working tree, and the historical 
 
 **A device walk on candidate D was completed on 2026-11-13.** Read `DEVICE_FINDINGS.md` immediately after this file. It supersedes two video findings and adds new current failures.
 
+**A ten-app competitor teardown is in `../../competitive/2026-11-13/`.** Read `OPUS_BRIEF.md` before proposing a new Home, document action model or Pro offer. It is based on actual Play Store installs, in-app paywalls and device screenshots, not launch-page marketing.
+
 ## Four states that must not be conflated
 
 | State | Evidence | What it means |

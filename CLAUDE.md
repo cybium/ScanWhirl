@@ -24,11 +24,13 @@ A local-first Android document scanner in Kotlin. Google ML Kit supplies scannin
 1. `START_HERE.md`
 2. `docs/audit/2026-11-13/HANDOFF.md`
 3. `docs/audit/2026-11-13/DEVICE_FINDINGS.md` — current installed build
-4. `docs/audit/2026-11-13/M08_HANDOFF.md`
-5. `docs/audit/2026-11-13/UX_AUDIT.md`
-6. `SCANWHIRL_CRITIQUE.md` — full video audit; use only the assigned findings
-7. `README.md` — build and product rules
-8. Relevant source files only
+4. `docs/competitive/2026-11-13/OPUS_BRIEF.md` — competitor synthesis
+5. `docs/competitive/2026-11-13/RANKING.md`, `PRICING.md`, `UI_PATTERNS.md`
+6. `docs/audit/2026-11-13/M08_HANDOFF.md`
+7. `docs/audit/2026-11-13/UX_AUDIT.md`
+8. `SCANWHIRL_CRITIQUE.md` — full video audit; use only the assigned findings
+9. `README.md` — build and product rules
+10. Relevant source files only
 
 Do **not** load `docs/history/`, old plan/log files, or the entire research archive into context. Do not read `keystore/` or `keystore.properties`.
 
