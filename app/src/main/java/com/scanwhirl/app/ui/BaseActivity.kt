@@ -7,9 +7,9 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.util.Prefs
 
 /**
- * Base activity for the Orbital design system.
- * Sets the window background to [SpaceBackgroundDrawable] so all screens
- * share a continuous cosmic backdrop, and applies font overlays before inflation.
+ * Base activity: applies font overlays before inflation and gives every screen the same
+ * plain ink background as Home (M08 — the star-field backdrop made Settings, the
+ * document screen and the editors look like a different app).
  */
 abstract class BaseActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,6 +21,6 @@ abstract class BaseActivity : AppCompatActivity() {
         // Edge-to-edge on every Android version; screens then pad themselves via
         // View.applySystemBarsPadding() so the result is identical everywhere.
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.setBackgroundDrawable(SpaceBackgroundDrawable())
+        window.setBackgroundDrawableResource(R.color.rv_bg)
     }
 }

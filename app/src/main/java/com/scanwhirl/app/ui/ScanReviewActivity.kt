@@ -1086,10 +1086,8 @@ class ScanReviewActivity : BaseActivity() {
                     GmsDocumentScannerOptions.SCANNER_MODE_BASE
                 }
             )
-            .setResultFormats(
-                GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
-                GmsDocumentScannerOptions.RESULT_FORMAT_PDF
-            )
+            // M08: JPEG only — the PDF Google could also encode was never read.
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
             .setPageLimit(30)
             .build()
         try {
@@ -1117,9 +1115,8 @@ class ScanReviewActivity : BaseActivity() {
             var appended = false
             try {
                 withContext(Dispatchers.IO) {
-                    var next = (stagingDir.listFiles { f -> f.extension.equals("jpg", true) }
-                        ?.mapNotNull { it.nameWithoutExtension.removePrefix("page_").toIntOrNull() }
-                        ?.maxOrNull() ?: 0)
+                    // M08: count pages hidden for Undo (.del) too, so an Undo can never land on an added page.
+                    var next = PendingScans.lastPageNumber(stagingDir)
                     uris.forEach { uri ->
                         val bytes = contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
                             ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
@@ -1205,39 +1202,9 @@ class ScanReviewActivity : BaseActivity() {
                     // T4.7 (N10): only place a copy in Documents/ScanWhirl when the
                     // owner opted in — no more silent copies on every save. Streamed from
                     // the saved PDF (never loaded whole); the original is only read.
-                    var exported: String? = null
-                    if (Prefs.autoCopyToDocuments(this@ScanReviewActivity) &&
-                        doc.pdfFile.exists() && doc.pdfFile.length() > 0
-                    ) {
-                        try {
-                            exported = withContext(Dispatchers.IO) {
-                                val copy = DownloadSaver.savePdfFile(
-                                    this@ScanReviewActivity,
-                                    doc.pdfFile,
-                                    DownloadSaver.pdfNameFor(doc.name)
-                                )
-                                // T4.8: remember the copy so delete can remove it. A failure to
-                                // record it must not turn a finished export into a failed one.
-                                try {
-                                    repo.addExport(doc.id, copy)
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (_: Exception) {
-                                }
-                                // M06: a taken name means a new copy; the earlier file is kept.
-                                if (!copy.created) {
-                                    getString(R.string.export_already_saved, copy.name)
-                                } else if (copy.keptEarlier) {
-                                    getString(R.string.export_saved_new_copy, copy.name)
-                                } else {
-                                    getString(R.string.pdf_saved_docs, copy.name)
-                                }
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            exported = null
-                        }
+                    // M08: shared with the direct save after Google's scanner.
+                    val exported: String? = withContext(Dispatchers.IO) {
+                        com.scanwhirl.app.store.AutoExport.afterSave(this@ScanReviewActivity, repo, doc)
                     }
 
                     // Verified committed document in hand: only now is the staging source released.

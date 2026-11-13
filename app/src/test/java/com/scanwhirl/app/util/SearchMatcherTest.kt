@@ -115,10 +115,11 @@ class SearchMatcherTest {
 
     @Test
     fun `two-term query requires both terms`() {
-        // "notes" is in name of "a" and "e", "quantum" is in text of "a" only
-        val hits = SearchMatcher.search("notes quantum", docs, includeVaulted = false, normalizedText, originalText)
-        assertEquals(1, hits.size)
-        assertEquals("a", hits.first().doc.id)
+        // M08: both words in the name, or both in the text. "notes" is only in a's name and
+        // "quantum" only in its text, so nothing matches; both text words do match.
+        assertEquals(0, SearchMatcher.search("notes quantum", docs, includeVaulted = false, normalizedText, originalText).size)
+        val hits = SearchMatcher.search("quantum lecture", docs, includeVaulted = false, normalizedText, originalText)
+        assertEquals(listOf("a"), hits.map { it.doc.id })
     }
 
     @Test
@@ -133,15 +134,13 @@ class SearchMatcherTest {
 
     @Test
     fun `name hit ranks above text-only hit`() {
-        // "notes" matches name of "a" and "e" (both NAME, score 1000 each).
-        // "lecture" is TEXT-only for "a" (score 1).
-        // Search "notes lecture" → both terms must match:
-        //   "a": name has "notes", text has "lecture" → BOTH, score 1001
-        // Only "a" matches both terms.
-        val hits = SearchMatcher.search("notes lecture", docs, includeVaulted = false, normalizedText, originalText)
-        assertEquals(1, hits.size)
-        assertEquals("a", hits[0].doc.id)
-        assertEquals(SearchMatcher.Hit.Kind.BOTH, hits[0].kind)
+        val local = listOf(doc("t", "Notes", createdAt = 9), doc("n", "Budget plan", createdAt = 1))
+        val text = mapOf("t" to "monthly budget", "n" to "")
+        val hits = SearchMatcher.search("budget", local, includeVaulted = false,
+            { SearchMatcher.normalize(text[it].orEmpty()) }, { text[it].orEmpty() })
+        assertEquals(listOf("n", "t"), hits.map { it.doc.id })
+        assertEquals(SearchMatcher.Hit.Kind.NAME, hits[0].kind)
+        assertEquals(SearchMatcher.Hit.Kind.TEXT, hits[1].kind)
     }
 
     @Test

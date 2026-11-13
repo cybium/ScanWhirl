@@ -59,7 +59,10 @@ object Prefs {
     fun setLocaleTag(c: Context, v: String) = sp(c).edit().putString(KEY_LOCALE, v).apply()
 
     /** Home status line (count · size). Opt-in since Home slice 2: no greeting noise by default. */
-    fun showGreeting(c: Context): Boolean = sp(c).getBoolean(KEY_GREETING, false)
+    // M08: Status line and Wallpaper are retired (Settings no longer offers them), so an
+    // earlier "on" can't leave someone stuck with a feature they can no longer switch off.
+    @Suppress("UNUSED_PARAMETER")
+    fun showGreeting(c: Context): Boolean = false
     fun setShowGreeting(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_GREETING, v).apply()
 
     fun showWallpaper(c: Context): Boolean = sp(c).getBoolean(KEY_WALLPAPER_ON, false)
@@ -70,7 +73,9 @@ object Prefs {
     /** Auto-enhance on scan: ON uses Google's SCANNER_MODE_FULL, OFF uses BASE. */
     private const val KEY_AUTO_ENHANCE = "auto_enhance_scan"
 
-    fun autoEnhanceScan(c: Context): Boolean = sp(c).getBoolean(KEY_AUTO_ENHANCE, false)
+    // M08: default ON (Google FULL) — chosen by the owner after a same-page device comparison.
+    // An explicit earlier choice of OFF is kept.
+    fun autoEnhanceScan(c: Context): Boolean = sp(c).getBoolean(KEY_AUTO_ENHANCE, true)
     fun setAutoEnhanceScan(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_AUTO_ENHANCE, v).apply()
 
     fun pickedPdfs(c: Context): Set<String> =

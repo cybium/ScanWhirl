@@ -80,11 +80,11 @@ class LockedDocumentSearchPrivacyTest {
         // "pay" is in the name; "salary" only in the locked OCR. Must NOT match.
         val hits = SearchMatcher.search("pay salary", docs, true, normalized, original)
         assertTrue(hits.none { it.doc.isLocked })
-        // The same two-term query against an unlocked doc with name+text still works.
+        // M08: a name word plus a text word matches no document at all, locked or not,
+        // so the rule itself can never reveal anything about locked text.
         val mixed = listOf(doc("open", "Pay record"))
-        val ok = SearchMatcher.search("pay zephyrquill", mixed, true, normalized, original)
-        assertEquals(listOf("open"), ok.map { it.doc.id })
-        assertEquals(SearchMatcher.Hit.Kind.BOTH, ok.single().kind)
+        assertTrue(SearchMatcher.search("pay zephyrquill", mixed, true, normalized, original).isEmpty())
+        assertEquals(listOf("open"), SearchMatcher.search("pay record", mixed, true, normalized, original).map { it.doc.id })
     }
 
     @Test

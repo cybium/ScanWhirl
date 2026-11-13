@@ -18,6 +18,14 @@ import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.Prefs
+import android.os.SystemClock
+import android.util.Log
+import com.scanwhirl.app.ScanWhirlApp
+import com.scanwhirl.app.store.AutoExport
+import com.scanwhirl.app.ui.home.HomeReveal
+import com.scanwhirl.app.util.Durable
+import kotlinx.coroutines.CancellationException
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,6 +46,10 @@ class ScanLauncher(
     private val host: HomeHost,
     private val startScanning: (IntentSender) -> Unit
 ) {
+
+    companion object {
+        const val PERF_TAG = "ScanPerf"
+    }
 
     /** An unfinished review session and, when its save already committed, that document. */
     internal class Unfinished(val dir: File, val pageCount: Int, val committed: ScanDocument?)
@@ -108,10 +120,9 @@ class ScanLauncher(
                     GmsDocumentScannerOptions.SCANNER_MODE_BASE
                 }
             )
-            .setResultFormats(
-                GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
-                GmsDocumentScannerOptions.RESULT_FORMAT_PDF
-            )
+            // M08: JPEG pages only. ScanWhirl builds its own verified, searchable PDF from them;
+            // asking Google for a PDF too made it encode one at Done that nothing read.
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
             .setPageLimit(30)
             .build()
         try {
@@ -132,6 +143,81 @@ class ScanLauncher(
             Toast.makeText(activity, activity.getString(R.string.scanner_failed, e.message), Toast.LENGTH_LONG).show()
         }
     }
+
+    /**
+     * M08: Google's scanner already offered crop, rotate, filters, retake and add page, so
+     * its Done saves straight away — no second edit screen. The pages go through the same
+     * durable staging folder and the same verified save transaction as Review's Save, and
+     * Home then shows the new document at the top with Undo.
+     *
+     * Pages are copied byte for byte (no decode here): the save transaction validates and
+     * normalises each one anyway, so doing it twice only cost time. If the save fails, the
+     * staged pages are kept and Review opens on them, so nothing scanned is lost.
+     */
+    fun saveScanned(uris: List<Uri>) {
+        val progress = host.showProgress(R.string.review_saving)
+        activity.lifecycleScope.launch {
+            val t0 = SystemClock.elapsedRealtime()
+            var staging: File? = null
+            try {
+                val dir = withContext(Dispatchers.IO) { copyScannedPages(uris) }
+                staging = dir
+                val tCopied = SystemClock.elapsedRealtime()
+                val name = withContext(Dispatchers.IO) { repo.nextDocumentName() }
+                val doc = repo.saveScan(PendingScans.pages(dir).map { Uri.fromFile(it) }, null, name, reviewDir = dir)
+                val tSaved = SystemClock.elapsedRealtime()
+                val note = withContext(Dispatchers.IO) {
+                    AutoExport.afterSave(activity, repo, doc).also { dir.deleteRecursively() }
+                }
+                Log.i(PERF_TAG, "perf direct_save pages=${uris.size} copy_ms=${tCopied - t0} " +
+                    "save_ms=${tSaved - tCopied} total_ms=${SystemClock.elapsedRealtime() - t0}")
+                // Free text recognition in the background; it never invalidates the saved PDF.
+                ScanWhirlApp.from(activity).indexer.enqueue(doc.id)
+                HomeReveal.request(doc.id)
+                host.scanSaved(doc, note)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(PERF_TAG, "direct save failed", e)
+                val kept = ((e as? PartialStaging)?.dir ?: staging)?.takeIf { PendingScans.pageCount(it) > 0 }
+                if (kept != null) {
+                    host.toast(activity.getString(R.string.scan_save_failed_review, e.message), Toast.LENGTH_LONG)
+                    activity.startActivity(ScanReviewActivity.intent(activity, kept.path, null, repo.nextDocumentName()))
+                } else {
+                    host.toast(activity.getString(R.string.stage_failed, e.message), Toast.LENGTH_LONG)
+                }
+            } finally {
+                progress.dismiss()
+            }
+        }
+    }
+
+    /** Bounded byte copy of each scanned page into a new durable staging folder, in order. */
+    internal fun copyScannedPages(uris: List<Uri>): File {
+        val staging = PendingScans.create(activity)
+        try {
+            uris.forEachIndexed { index, uri ->
+                val bytes = activity.contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
+                    ?: throw IllegalArgumentException("Page ${index + 1} could not be read. Scan it again.")
+                val target = File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
+                // Written aside and renamed, so a half-written page is never listed.
+                val part = File(staging, target.name + ".part")
+                Durable.writeFile(part, bytes)
+                if (!part.renameTo(target)) throw IOException("Could not stage page ${index + 1}.")
+            }
+            return staging
+        } catch (t: Throwable) {
+            // Keep any page already copied (the scanner's own copy may be gone); an empty folder goes.
+            if (PendingScans.pageCount(staging) == 0) {
+                staging.deleteRecursively()
+                throw t
+            }
+            throw PartialStaging(staging, t)
+        }
+    }
+
+    /** Copying stopped part-way; [dir] holds the pages that did arrive. */
+    internal class PartialStaging(val dir: File, cause: Throwable) : IOException(cause.message, cause)
 
     /** Copies the scanned page URIs into a staging folder, then opens the review screen. */
     fun stageAndReview(uris: List<Uri>) {

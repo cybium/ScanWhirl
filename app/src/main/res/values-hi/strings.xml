@@ -112,11 +112,11 @@
     <string name="bar_import"><!-- review -->आयात करें</string>
     <string name="bar_vault">वॉल्ट</string>
     <string name="import_title"><!-- review -->आयात करें</string>
-    <string name="import_photos"><!-- review -->गैलरी से फ़ोटो</string>
-    <string name="import_pdf"><!-- review -->PDF पन्नों के रूप में</string>
+    <string name="import_photos">फ़ोटो</string>
+    <string name="import_pdf">PDF फ़ाइल</string>
     <string name="import_subtitle"><!-- review -->चुनें कि पन्ने कहाँ से आ रहे हैं।</string>
-    <string name="import_photos_desc"><!-- review -->गैलरी से तस्वीरें चुनें। सेव करने से पहले आप उन्हें रिव्यू में व्यवस्थित और संपादित करते हैं।</string>
-    <string name="import_pdf_desc"><!-- review -->PDF से एक नया संपादन-योग्य स्कैन बनता है। पन्ने तस्वीरों में बदल जाते हैं, इसलिए टेक्स्ट और वेक्टर विवरण समतल हो जाते हैं। मूल फ़ाइल नहीं बदलती।</string>
+    <string name="import_photos_desc">आपकी गैलरी से</string>
+    <string name="import_pdf_desc">हर पेज एक संपादन-योग्य पेज बनता है</string>
     <string name="import_order_note"><!-- review -->Android का फ़ोटो पिकर तस्वीरें अलग क्रम में दे सकता है, इसलिए सेव करने से पहले रिव्यू में पन्नों का क्रम जाँच लें।</string>
     <string name="empty_scan_button"><!-- review -->एक दस्तावेज़ स्कैन करें</string>
     <string name="empty_import_button"><!-- review -->फोटो या एक PDF आयात करें</string>
@@ -578,8 +578,8 @@
     </plurals>
     <string name="trash_delete_failed">कुछ आइटम डिलीट नहीं हो सके। वे अभी भी ट्रैश में हैं।</string>
     <string name="trash_empty_title">ट्रैश खाली है</string>
-    <string name="trash_empty_body">ट्रैश में डाले गए स्कैन यहाँ पूरे के पूरे रहते हैं, जब तक आप उन्हें वापस नहीं लाते या हमेशा के लिए डिलीट नहीं करते। कुछ भी अपने आप डिलीट नहीं होता।</string>
-    <string name="trash_header_note">वापस लाने पर दस्तावेज़ अपने सभी पेज और टेक्स्ट के साथ लौटता है। Documents/ScanWhirl में सेव की गई PDF पर ट्रैश का कोई असर नहीं होता।</string>
+    <string name="trash_empty_body">यहाँ से कुछ भी अपने आप डिलीट नहीं होता।</string>
+    <string name="trash_header_note">वापस लाए गए दस्तावेज़ पूरे लौटते हैं।</string>
     <string name="trash_error_title">ट्रैश नहीं खुल सका</string>
     <string name="trash_error_body">आपके दस्तावेज़ नहीं बदले। फिर से कोशिश करें।</string>
     <string name="trash_retry">फिर से कोशिश करें</string>
@@ -619,4 +619,8 @@
     <string name="import_failed_no_access">ScanWhirl अब यह फ़ाइल नहीं पढ़ सकता। शायद इसे हटाया या डिलीट किया गया, या इसकी अनुमति हटा दी गई। फ़ाइल पिकर से इसे फिर से चुनें।</string>
     <string name="import_failed_read">फ़ाइल पूरी लोड होने से पहले रुक गई, इसलिए कुछ भी इम्पोर्ट नहीं हुआ। अगर यह किसी क्लाउड ऐप में है, तो इसे डाउनलोड करें या ऑफ़लाइन उपलब्ध करें, फिर कोशिश करें।</string>
     <string name="import_failed_save">ScanWhirl इम्पोर्ट किए गए पेज सेव नहीं कर सका, इसलिए कुछ भी नहीं जोड़ा गया। फिर से कोशिश करें।</string>
+    <!-- M08 -->
+    <string name="scan_saved_named">“%1$s” सेव हो गया</string>
+    <string name="scan_saved_named_export">“%1$s” सेव हो गया। %2$s</string>
+    <string name="scan_save_failed_review">स्कैन सेव नहीं हो सका (%1$s)। आपके पेज यहाँ सुरक्षित हैं — जाँचकर फिर से सेव करें।</string>
 </resources>

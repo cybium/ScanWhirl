@@ -38,6 +38,29 @@ object SearchMatcher {
         }
     }
 
+    /**
+     * M08: where [term] (already normalised) occurs in [norm] as a WORD match, from [from]:
+     * it must start a word (no letter or digit just before it), so "art" finds "Art" and
+     * "artery" but never "start"; a term made only of digits must also end the number, so
+     * "2" finds "2" and "(2)" but never "21" or "2026". Returns -1 when there is none.
+     */
+    fun findWord(norm: String, term: String, from: Int = 0): Int {
+        if (term.isEmpty()) return -1
+        val numeric = term.all { it.isDigit() }
+        var i = norm.indexOf(term, from.coerceAtLeast(0))
+        while (i >= 0) {
+            val startsWord = i == 0 || !norm[i - 1].isLetterOrDigit()
+            val end = i + term.length
+            val endsNumber = !numeric || end >= norm.length || !norm[end].isDigit()
+            if (startsWord && endsNumber) return i
+            i = norm.indexOf(term, i + 1)
+        }
+        return -1
+    }
+
+    /** True when [term] occurs in [norm] as a word match ([findWord]). */
+    fun containsWord(norm: String, term: String): Boolean = findWord(norm, term) >= 0
+
     /** A single search hit. */
     data class Hit(
         val doc: ScanDocument,
@@ -83,22 +106,27 @@ object SearchMatcher {
             // not even a term that also appears in the name — and no snippet can exist.
             val normText = if (doc.isLocked) "" else normalizedText(doc.id)
 
-            val nameTerms = terms.count { normName.contains(it) }
-            val textTerms = terms.count { normText.contains(it) }
+            val nameTerms = terms.count { containsWord(normName, it) }
+            val textTerms = terms.count { containsWord(normText, it) }
 
-            // Every term must occur in name or text.
-            if (!terms.all { normName.contains(it) || normText.contains(it) }) return@mapNotNull null
+            // M08: every term in the name, or every term in the text — never one word from
+            // the name and another from the text ("Document 2" must not find "Document 1"
+            // just because its text has a "(2)" somewhere).
+            if (nameTerms < terms.size && textTerms < terms.size) return@mapNotNull null
 
+            val inName = nameTerms == terms.size
+            val inText = textTerms == terms.size
             val kind = when {
-                nameTerms == terms.size && textTerms == 0 -> Hit.Kind.NAME
-                nameTerms == 0 -> Hit.Kind.TEXT
-                else -> Hit.Kind.BOTH
+                inName && inText -> Hit.Kind.BOTH
+                inName -> Hit.Kind.NAME
+                else -> Hit.Kind.TEXT
             }
 
-            val textOccurrences = countOccurrences(normText, terms)
+            val textOccurrences = if (textTerms == terms.size) countOccurrences(normText, terms) else 0
             val score = 1000 * nameTerms + minOf(textOccurrences, 999)
 
-            val snippet = if (!doc.isLocked && textTerms > 0) buildSnippet(originalText(doc.id), terms) else null
+            // A snippet only when the text itself matches the whole query.
+            val snippet = if (!doc.isLocked && textTerms == terms.size) buildSnippet(originalText(doc.id), terms) else null
 
             Hit(doc, kind, snippet, score)
         }
@@ -115,7 +143,7 @@ object SearchMatcher {
         for (term in terms) {
             var start = 0
             while (true) {
-                val idx = text.indexOf(term, start)
+                val idx = findWord(text, term, start)
                 if (idx < 0) break
                 count++
                 start = idx + 1
@@ -136,7 +164,7 @@ object SearchMatcher {
         // Find the first occurrence of any term.
         var firstHit = -1
         for (term in terms) {
-            val idx = norm.indexOf(term)
+            val idx = findWord(norm, term)
             if (idx >= 0 && (firstHit < 0 || idx < firstHit)) firstHit = idx
         }
         if (firstHit < 0) return flat
@@ -159,7 +187,7 @@ object SearchMatcher {
             for (term in terms) {
                 var searchFrom = 0
                 while (true) {
-                    val idx = normSlice.indexOf(term, searchFrom)
+                    val idx = findWord(normSlice, term, searchFrom)
                     if (idx < 0) break
                     val absIdx = ellipsisLen + idx
                     // setSpan is not mocked under Robolectric; on real devices

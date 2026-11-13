@@ -471,12 +471,12 @@ class MainActivity : BaseActivity(), HomeHost {
      * therefore never needs a manual refresh here: the next render shows
      * whatever is still unsorted.
      */
+    /**
+     * M08: the "N to organize · Quick sort" row is retired — it repeated the Unsorted chip
+     * on every Home visit. Quick sort stays one tap away in Tools.
+     */
     private fun updateNudge() {
-        val n = allDocs.count {
-            it.category == CategoryRules.UNSORTED || it.category == CategoryRules.OTHER
-        }
-        binding.nudge.isVisible = n > 0
-        if (n > 0) nudgeLabel.text = getString(R.string.quick_sort_nudge, n)
+        binding.nudge.isVisible = false
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -1191,22 +1191,22 @@ class MainActivity : BaseActivity(), HomeHost {
             Tile(R.id.tile_resize, R.string.tool_resize, R.drawable.ic_resize, false) {
                 pickResizeImage.launch("image/*")
             },
-            // T4.4: the 9th tile (§4.3) — same sheet entry as the nudge.
-            Tile(R.id.tile_quick_sort, R.string.quick_sort, R.drawable.ic_sort, false) {
-                showQuickSort()
-            }
-        )
-        val proTiles = listOf(
             Tile(R.id.tile_lock, R.string.tool_lock, R.drawable.ic_lock, true) {
                 lockFlow.chooseLockSource()
             },
-            // WP-22 repair: opening an EXISTING PIN vault is Free, so this tile
-            // must not pass the generic Pro guard. VaultFlow itself refuses new
-            // vault setup (no PIN) in Free and Pro alike.
+            // T4.4: same sheet entry as Home's Quick sort; an ordinary tile (M08).
+            Tile(R.id.tile_quick_sort, R.string.quick_sort, R.drawable.ic_sort, false) {
+                showQuickSort()
+            }
+        ) + listOfNotNull(
+            // M08: new Vault setup is unavailable (O-02), so the tile is offered only to
+            // someone who already has a legacy Vault — opening it stays free (WP-22).
             Tile(R.id.tile_vault, R.string.bar_vault, R.drawable.ic_vault, false) {
                 vaultFlow.openVaultWithPin()
-            }
+            }.takeIf { Prefs.hasVaultPin(this) }
         )
+        // M08: one even grid; no PRO band while Pro is not sold (the Lock tile keeps its gate).
+        val proTiles = emptyList<Tile>()
 
         // §4.3 column rule: probe one label (12sp, already font-scaled at
         // inflation) and compare the longest word with the tile's inner width
@@ -1248,12 +1248,18 @@ class MainActivity : BaseActivity(), HomeHost {
                     }
                     row.addView(tile)
                 }
+                // M08: pad a short last row with empty slots so every tile keeps one
+                // grid cell (a lone tile used to stretch across the whole sheet).
+                repeat(columns - rowTiles.size) {
+                    row.addView(View(this@MainActivity), LinearLayout.LayoutParams(0, 1, 1f))
+                }
                 section.addView(row)
             }
         }
 
         addSection(view.findViewById(R.id.sheetFree), free)
         addSection(view.findViewById(R.id.sheetPro), proTiles)
+        view.findViewById<View>(R.id.sheetPro).isVisible = proTiles.isNotEmpty()
         sheet.show()
         // T3.11: open expanded, not at Material's default rest state
         // (STATE_COLLAPSED). Collapsed equals "fully visible" only while the
@@ -1692,12 +1698,27 @@ class MainActivity : BaseActivity(), HomeHost {
             if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
             val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
             val uris = scanResult?.pages.orEmpty().mapNotNull { it.imageUri }
+            android.util.Log.i(ScanLauncher.PERF_TAG, "perf scanner_result pages=${uris.size}")
             if (uris.isEmpty()) {
                 Toast.makeText(this, R.string.scan_no_pages, Toast.LENGTH_SHORT).show()
             } else {
-                scanLauncher.stageAndReview(uris)
+                // M08: Google's preview already did crop/rotate/filter: save directly, no second editor.
+                scanLauncher.saveScanned(uris)
             }
         }
+
+    /**
+     * M08: the scan is saved; open its document screen — the page overview where pages
+     * can be checked, reordered, renamed and shared (Google's preview can't reorder).
+     * Back from there lands on Home with the new document revealed at the top.
+     */
+    override fun scanSaved(doc: ScanDocument, exportNote: String?) {
+        refreshList()
+        val text = exportNote?.let { getString(R.string.scan_saved_named_export, doc.name, it) }
+            ?: getString(R.string.scan_saved_named, doc.name)
+        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+        startActivity(DocumentViewerActivity.intent(this, doc.id))
+    }
 
     private fun openViewer(doc: ScanDocument) {
         if (doc.isLocked) {

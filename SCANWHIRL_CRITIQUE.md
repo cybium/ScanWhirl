@@ -1,0 +1,469 @@
+# ScanWhirl Android PRO — Product and UX Critique
+
+**Recording:** Screen_Recording_20261113_121627.mp4  
+**Build shown:** ScanWhirl 1.1.1-test27 (About, 03:38), Android 14  
+**Native duration:** 05:18.27, 720 × 1640 portrait  
+**Audit date:** 2026-11-13
+
+**Coverage caveat, read before the verdict.** The full five minutes were sampled, not played continuously. I extracted and reviewed 406 native-resolution frames: one frame every two seconds across 00:00–05:18, an intervening frame every second, and dense quarter- or half-second bursts at 01:00–01:02, 02:59–03:07, 04:09–04:16, 04:50–04:56 and 05:02–05:04. This is enough to establish sequences, persistent states and visible contradictions, but not enough to judge animation smoothness, brief intermediate frames, audio, touch-target dimensions, screen-reader output or actual colour contrast. The recording itself averages 12.89 fps and is variable-frame-rate, so apparent jank must not be inferred from it. No screen was reviewed out of order before the inventory was written.
+
+## 1. Verdict
+
+This is a capable test build with a real document workflow, not a polished PRO scanner. Capture, OCR, merge, compression, page editing, sorting and password protection all appear, but the interface repeatedly asks the user to trust states it does not keep consistent.
+
+The three worst problems are: (1) the B/W page filter can render a readable page almost illegible, without an export-safe comparison flow (02:56); (2) after deleting a page, the grid still says “2 pages” and shows both thumbnails while the editor and saved document say one page (03:02–03:09); and (3) saves and security are under-explained — automatic “Document N” names (04:27), an emphasised destructive “Overwrite saved PDF” action (03:06), an unnamed password target (05:03) and a Vault tile that ends in “unavailable” (05:15).
+
+The three things worth protecting are the library’s page-plus-snippet search bridge, the concrete before/after feedback in Compress and Resize, and Quick sort’s fast category-by-category organisation.
+
+The core issue is confidence, not feature count. A scanner’s promise is “what you see is what will be saved, and you can find it later.” This build does not yet make that promise consistently legible.
+
+**Scope warning:** this is an explicitly marked test build. The FREE/PRO screens are previews; no purchase, price, entitlement check or paywall transaction is shown. Vault’s failure and the filter degradation must be re-tested in a production build before being called shipped defects.
+
+## 2. Who this app seems to be for
+
+The evidence points to an individual student or everyday document handler who scans textbook pages and paperwork, needs to find a term later, and occasionally has to compress, resize, merge or protect a file before sending it. The textbook OCR searches at 00:04–00:23, the Study/Receipts/IDs/Forms categories at 04:42, the KB/MB target controls at 01:40 and 02:09, and the “offline only · no accounts” promise at 00:34 all support that inference.
+
+The UI partly serves them. Search is the strongest match: a query returns document names, page numbers and snippets, then opens the relevant page (00:04–00:08). Quick sort serves the “pile of unsorted scans” problem directly (04:42–04:57). Compress and Resize speak the language of upload limits (01:40, 02:09). But the app does not yet serve the same user at the moment of saving: every capture becomes “Document 5” at 04:27, the document they just created is hidden by the still-active search at 04:28, and the save dialog at 03:05 makes overwriting the original the most visually prominent choice. A student who scans once a week will not build a reliable mental model of which file is which.
+
+The UI is less convincing for a professional or small-business user. There are no visible folders or tags (library 00:01, Tools 00:49), no signature or annotation flow (Tools 00:49, page editor 02:33), no visible export-format choice (Compress 01:49, Resize 02:16), and no visible cloud-backup path (Settings 03:13–03:36). Those are not necessarily absent from the product, but they are not discoverable in the recorded surfaces. The “no servers” positioning is attractive, but the “Google processing is on” setting at 03:34 needs much clearer language before a privacy-sensitive user can act on it.
+
+## 3. Screen inventory with timestamps
+
+Method: frames were viewed chronologically first; opinions were formed only after this log. “Observed” means visible in a sampled frame. A control being absent from a visible menu is not proof that the capability does not exist elsewhere; those cases are listed as unobserved or hidden.
+
+| Time | Screen / surface | What was observed |
+|---|---|---|
+| 00:00 | Android launcher | ScanWhirl app icon; launch into library. |
+| 00:01–00:04 | Library / home | “ScanWhirl”, “PRO”, trash and settings icons, “Search names and text”, chips All 8 / Unsorted 7 / Study 1 with Receipts partially offscreen, “7 to organize · Quick sort ›”, “8 documents”, “Date created”, “Select”, document rows, bottom dock Tools / Scan / Import. Search “teratoma” typed; result header becomes “5 documents” while chips remain library totals. |
+| 00:04–00:07 | Search results | Five matching documents; result cards show page number, match count, snippet with highlighted “teratoma” and a chevron. M08 Book2 Landscape, M08 Book1 and M08 Google1 become visible while scrolling. |
+| 00:08–00:11 | Reader — search panel | M08 Book2 Landscape, page 2 / 2, “Match 1 of 1 · Page 2”, snippet, Previous/Next subdued, and the disclosure “Matches come from the recognised text. The page image isn't marked.” Panel closed and reopened to empty state. |
+| 00:12–00:23 | Reader — in-document search | Query progresses “gener”→“general”; match counters change from 3 to 2; snippets and page references alternate. Image itself shows no word highlight. |
+| 00:24–00:26 | Library return | Search panel dismissed, then library; the “teratoma” query still persists. |
+| 00:27–00:31 | Trash | Explanation of restore and saved PDFs; empty state “Trash is empty”; overflow menu offers “Empty Trash” even at zero items. No non-empty Trash, restore or permanent-delete flow. |
+| 00:32 | Library | Returns to still-filtered results. |
+| 00:33–00:46 | PRO information dialog / FREE preview | “SCANWHIRL PRO”, “Unlocked in this test build”, free-feature promise, “Offline only · No accounts”, actions Preview Free UI / OK. Header switches to FREE with a toast; then “Not available yet”, Preview Pro UI. An actual purchase, price, billing or restore purchase is NOT OBSERVED IN RECORDING. Search/count state persists; a transient “Scan. Search. Keep control.” illustration appears at 00:45. |
+| 00:49–00:50 | Tools bottom sheet | Read text, Merge, Compress, Resize, Quick sort; gold PRO divider; Lock, Vault. All seven entries visible. |
+| 00:51–00:53 | Extracted text source chooser | Saved scan / Device PDF / Gallery image / Cancel; saved-scan list of eight named documents. |
+| 00:54–01:02 | Extracted text (OCR) | “Extracted text”, 821 words, faulty text examples, Join lines / Fix spaces / Remove gaps, Copy / Share / Save, overflow and two small unlabeled icons. One icon interaction produces “0 words · edited” at 01:01; the other restores 821 words. |
+| 01:03–01:09 | Tools → OCR → Device PDF | Android Recent picker shows four fixture PDFs; progress “Extracting text from pages…”. |
+| 01:10–01:18 | Device-PDF extracted text | 559 words, then 558 words · edited after Remove gaps; unsaved-changes dialog Cancel / Discard / Save. No OCR save result observed. |
+| 01:19–01:20 | Library | Filtered library remains. |
+| 01:21–01:34 | Merge PDFs | Source chooser Merge scans / Device PDFs; multi-select list of eight; no visible thumbnails, page counts or reorder handles; naming dialog “Merged document name”; user types DocX; reader shows two pages. “DocX” is the chosen document name, not evidence of Word export. |
+| 01:35–01:39 | Library / Compress source | Totals become All 9 / Unsorted 8, result list remains “5 documents”; Compress PDF chooser Saved scan / PDF file; scan selector. |
+| 01:40–01:48 | Compression level | Low 1.3 MB, Medium 630 KB selected, High 413 KB, Ultra 206 KB; optional target-size field placeholder “Up to 500 KB, 3 MB”; user enters 600; progress “Working…”. Background remains visible through dialog. |
+| 01:49–01:54 | Compress result | DocX (compressed), Before 1.5 MB → After 567 KB, Share / Save to Documents; toast with truncated path and Open / Undo. |
+| 01:55–01:57 | Library / Tools | All 10 / Unsorted 9; five search results. |
+| 01:58–02:06 | Photo picker / reader | Android photo picker empty first; later one screenshot available. Document 2 opened at 1 / 1 and returned. |
+| 02:07–02:15 | Resize image | 1000000431.jpg, 872 KB, 1080 × 2460 px; Limit file size presets 50 / 100 / 200 / 500 KB, custom placeholder, Advanced (pixels & DPI), Reset all, Cancel / Resize; user enters 510; keyboard obscures the action row until dismissal. Advanced not expanded. |
+| 02:16–02:23 | Resize result / save | Before 872 KB → After 382 KB, 1080 × 2460 px, Share / Save to Downloads; toast “Saved to Downloads/ScanWhirl: 1000000431_1080x2460.jpg”. |
+| 02:24–02:32 | Import sheet / PDF confirmation / page grid | Photos from gallery and PDF as pages; warning that imported pages become images and text is flattened; “Imported 2 pages”; M08 Book1 grid with 2 pages, UNSORTED, Select, download icon, numbered thumbnails and handle-like controls; dock Share / Edit / Text / More. |
+| 02:33–02:47 | Page editor / Crop | Full-screen page 1 / 2; X; Rotate / Crop / Filter / Delete; rotations demonstrated; crop screen with Free / Passport 35×45 / ID card / Visa 5:7 and Cancel / Apply crop. |
+| 02:48–02:59 | Page filter dialog | Original / Enhance / Clean / B/W radio dialog, Cancel. Enhance and Clean preview; after the next selection the page is nearly white with much text lost. |
+| 02:59–03:04 | Page deletion / page grid | Page deleted, remaining page 1 / 1, snackbar “Page deleted” with Undo; back to grid which still says “2 pages” and shows two thumbnails. |
+| 03:05–03:09 | Save changes? dialog / library | “Your edits are not in the original PDF yet”; actions Overwrite saved PDF (bright cyan), Cancel, Save as new document (muted); new top library item M08 Book1, 1 page, All 11 / Unsorted 10; reopening shows 1 / 1. |
+| 03:10–03:12 | Library | Filtered results remain; returned. |
+| 03:13–03:53 | Settings | Appearance: Text & font style, Status line, Wallpaper. Library: Trash. Language: App language. Viewing: Default PDF viewer, Auto enhance scans (Google processing copy), Also save a copy to Documents, Make PDFs searchable. About / Privacy policy. Font chooser Default / Serif / Monospace; status line “GOOD AFTERNOON 11 DOCS 9.1 MB” tested and off; app language list System default, English, हिन्दी, اردو, Español, Français, Deutsch, Português, العربية, বাংলা, Русский, 中文, More languages…; About dialog claims everything happens on the phone, no servers. No non-English UI applied, no RTL test. |
+| 03:54–04:04 | Camera / auto capture | Live camera, X and flash-off, “Position document in frame”, shutter, Manual / Auto capture with Auto selected, permission footer. Blue quadrilateral, “Scanning… hold steady”, processing spinner, transition to review. |
+| 04:03–04:25 | Scan review | One-page thumbnail, add-page control, overlay controls, Enhance / Filters / Crop and rotate, later Clean; bottom Discard scan / Next; previews with processing spinners. Filters: Original / Auto / Colour / Greyscale / B&W / Shadows; partial labels while horizontally scrolling. Clean: “Draw to erase marks or stains”, five brush sizes, undo/redo-style controls, Reset / Apply, X. |
+| 04:26–04:32 | Save / library / snackbar | “Saving…” then All 12 / Unsorted 11, still six search matches; snackbar “Saved Document 5, but your search or filter hides it.” with Show all. Snackbar overlaps bottom dock. |
+| 04:33–04:39 | Filtered library | User scrolls matches; Document 5 remains hidden by query. |
+| 04:40–04:57 | Quick sort | “1 of 11”, Document 5 preview, Study / Receipts / IDs / Forms / Other / Skip, X; advances through all 11 with updates to Study 2, Unsorted 10 and Receipts 1; completion “All sorted”; totals All 12 / Study 9 / Receipts 1 / IDs 1, with more categories possibly offscreen. No visible previous or undo during sorting. |
+| 04:58–05:02 | Lock / Unlock chooser | Saved scan / Lock a device PDF / Unlock a locked PDF file / Cancel; saved-scan list with scrollbar. |
+| 05:03–05:10 | Password-protect / result | Exact disclosure RC4-128 “stops casual readers, not strong cryptography”; one masked password field; Cancel / Apply password; toast “PDF is password-protected”; result count falls from 6 to 5, All remains 12. Selected document name not visible inside dialog. |
+| 05:13–05:18 | Vault | Tools reopened; Vault under PRO; activation returns to library with toast “Adding to Hidden Vault is unavailable. Existing vault items stay accessible.” No Vault contents screen. |
+
+### NOT OBSERVED IN RECORDING
+
+The following are gaps in evidence, not automatic defects: first-run onboarding; camera permission request or denial recovery; flash activation; a completed manual-shutter multi-page capture; multi-select gallery import and page-order review; merge from device PDFs; user-controlled merge ordering; compression from an external PDF; target-size validation or failure; Resize Advanced (pixels & DPI); OCR from a gallery image; OCR copy/share/save success; OCR overflow contents; Android share-sheet completion; bulk library selection; library row overflow menus; page-grid More menu; actual category-chip filtering; sort-order menu; non-empty Trash and permanent deletion; successful Empty Trash; opening an existing Vault; successful Vault add; opening the password-protected output; incorrect-password handling; privacy-policy contents; network traffic; non-English UI; RTL; TalkBack; large font scaling; light mode; measured contrast; measured touch-target bounds; crash handling; long-library scale; repeatable latency; actual purchase, pricing, entitlement or paywall.
+
+Some items are conclusively not present in a particular surface: the Tools sheet at 00:49 visibly lists all seven entries and therefore exposes no signature, annotation, redaction, translation, ID-mode or export-format tool. They may live inside editor overflow, but no such route is shown.
+
+## 4. Competitor teardown and findings
+
+### Benchmark map
+
+All competitor statements below are **VERIFIED** against official documentation retrieved on 2026-11-13 unless marked otherwise. “Verified” means documented, not tested hands-on. Adobe evidence is mostly iOS; CamScanner tiers and platform parity are often unspecified; features may sit behind paid tiers.
+
+| Competitor | Strongest relevant interaction | Why it is a useful benchmark | Confidence |
+|---|---|---|---|
+| Adobe Scan | Capture feedback names the state (“Looking for document”, “Capturing… hold steady”, “No document found. Capture manually”), with Retake and Keep scanning. Book mode shows the binding and can split a spread; ID mode guides front → Next page → Review and save. Filters and brightness/contrast can apply to all pages. | Makes automation legible and recoverable, and changes the output structure for book and ID tasks rather than only renaming the camera. | VERIFIED — Adobe iOS capture and modify docs, 2026 pages. |
+| Adobe Scan (output) | Premium compression explains high/low trade-offs and creates a separate “compressed” copy; password protection adds a lock badge; exports to Word/Excel/PowerPoint/RTF require internet. | Gives the user a visible before/after consequence and distinguishes an output copy from the original. | VERIFIED — Adobe iOS subscription/export docs. |
+| CamScanner | Scan to Excel asks the user to capture/import a table, confirm the recognition area, then export; help warns that full table borders and visible table lines are required. OCR → To Word explicitly does not preserve formatting in that path. Recognised text offers Translate. | Sets expectations before conversion and exposes task-specific constraints instead of implying universal layout fidelity. | VERIFIED — official CamScanner FAQ search excerpts; exact tier/platform often unknown. |
+| CamScanner (organisation/security) | Folders via folder icon and overflow Move; document encryption under All Documents → More → Encrypt Document; separate folder-access password. | Shows that “lock this file”, “hide this file” and “lock the app” can be different promises and need different language. | VERIFIED — official FAQ search excerpts; encryption scope not proven. |
+| Genius Scan | Folder search offers “Search all documents” versus “Search only in Folder Name”. Folders, nested folders and multiple tags coexist. Device-local storage by default; optional Genius Cloud requires an account and Ultra. | The explicit search-scope control is directly relevant to ScanWhirl’s persistent query and global chip counts. Local-first is also the clearest privacy benchmark. | VERIFIED — official Genius help and 2025 organisation guide. |
+| Genius Scan (naming/automation) | Title tap → edit → Save; name templates; Ultra contextual suggestions from dates/words; export shortcuts and auto-export rules by tag/filename to a fixed destination. | Makes naming and filing a repeatable setup decision rather than repeated manual work. | VERIFIED — official Genius organisation/export help. |
+| Google Drive scanner | Camera shows a blue outline; Manual/Auto capture; Crop & Rotate, Filter, Clean (“stains, fingers, and more”), Add, Retake, Delete; Done leads to name or suggested title, PDF/JPG, destination folder, Save. Android widget can be pre-bound to a destination folder. | Strong end-to-end model: recover from a bad page, then choose name, format and destination explicitly. The widget removes repeated filing decisions. | VERIFIED — Google Drive Android scanning help, fetched 2026-11-13. |
+| Microsoft (current) | Microsoft Lens is retired: new scans ended 2026-03-09. Microsoft directs users to OneDrive → + → Scan photo → destination, with modes for Whiteboard/Document/Business Card/Photo and Document/PDF output. OneDrive Android supports up to 10 pages; iOS up to 30. OneDrive explicitly does **not** save scans locally. | The current benchmark is OneDrive, not Lens inside Office. It shows explicit capture modes but also the cost of cloud-only storage. | VERIFIED — Microsoft Lens retirement and OneDrive help, retrieved 2026-11-13. The assertion that Lens utilities previously lived in the Office app is **FROM MEMORY** and is not current evidence. |
+| Apple Notes / Files | Attachment → Scan Documents; auto capture or shutter/volume key; drag corners → Keep Scan → add pages or Done. Markup → Add → Signature. Files scan lets the user choose a location before Save. Notes search finds text inside scanned documents; folders, tags and Smart Folders exist. | Best benchmark for low-ceremony capture, signing and “put it where it belongs” without a separate scanner account. | VERIFIED — Apple support pages published 2026. Privacy depends on iCloud/ADP settings; “built-in” does not mean local-only or E2EE by default. |
+| SwiftScan | Name Template combines custom placeholders with date/time/location; default folder applies to future scans; automatic upload is off by default and can be Wi-Fi-only. OCR Text tab shows progress, share/search and Re-Run OCR. iOS saved-document Edit exposes Draw/Redaction/Text/Note/Signature. Scan Quality & File Size slider is a future-scan setting. | Strongest benchmark for repeat-workflow setup, OCR recovery and document finishing. Vendor claims local OCR; that is not an independent security audit. | VERIFIED — SwiftScan official help, 2026 pages; iOS/Android and tier differences remain. |
+
+### What ScanWhirl does genuinely well
+
+These should be protected, but they are not all unique.
+
+**Search that bridges name, page, snippet and reader.** At 00:04–00:08, a term returns five named documents with page references and highlighted snippets, and the reader jumps to the page. Genius and Adobe document content search and in-document next/previous (VERIFIED, official docs); Apple Notes finds scanned-document text (VERIFIED). The exact snippet treatment may be distinctive, but it is not proven unique. Its real advantage is that it is visible and low-friction in this app.
+
+**Concrete before/after output feedback.** Compress shows “Before 1.5 MB → After 567 KB” at 01:49; Resize shows “Before 872 KB → After 382 KB” at 02:16. CamScanner explicitly says it cannot compress to a specific size (VERIFIED); Adobe offers high/low compression but not verified target-bytes (VERIFIED). ScanWhirl’s target-size ambition is potentially differentiated, provided units and precedence are made unambiguous.
+
+**Recovery messages at the point of failure.** “Page deleted” with Undo at 03:00, Open/Undo after save at 01:53, and “Saved Document 5, but your search or filter hides it” with Show all at 04:28 are specific, honest feedback. The last one is good copy attached to a poor landing state.
+
+**Quick sort.** Eleven documents can be assigned to Study, Receipts, IDs, Forms or Other in one focused sequence at 04:42–04:57. This is materially faster than opening each document and editing metadata. No verified competitor documentation shows an identical one-item-at-a-time category sorter, so treat this as a plausible differentiator, not a proven unique feature.
+
+### Findings
+
+Severity: **P0** blocks an essential flow; **P1** major trust/usability failure; **P2** meaningful friction; **P3** polish. No P0 is established because every observed failure had a visible route back or occurred in an explicitly marked test build.
+
+| ID | Severity (P0 blocker, P1 major, P2 minor, P3 polish) | Screen and timestamp | What is wrong (evidence) | Why it hurts the user | Competitor comparison (who, how, confidence) | Recommended direction (in words, NOT code) | Effort (S/M/L) |
+|---|---|---|---|---|---|---|---|
+| F01 | P1 | Page filter — existing page editor, 02:56–02:59 | Selecting B/W produces a nearly white contents page; most text is faint or missing while bullets and some page numbers remain. The damaged preview is still visible in the grid at 03:02. That page was subsequently deleted, so export of the B/W result is NOT OBSERVED IN RECORDING. | A scanner that makes a readable page unreadable in preview destroys confidence in the core task. Users may either save an unusable page or abandon an edit that might have been salvageable. | Adobe Scan (VERIFIED, iOS docs) offers filters plus separate brightness/contrast and an apply-to-all scope; Apple and Drive (VERIFIED) expose multiple filters but do not provide a published B/W quality guarantee. No verified competitor promises that every preset is safe. | Treat the filtered result as a reviewable proposal: full-page fit-to-width preview, immediate Original/Result comparison, explicit Revert, and a legibility warning before accepting an extreme threshold. Make the default result readable rather than dramatic. | S/M |
+| F02 | P1 | Page grid after deletion, 03:02–03:09 | Editor shows remaining page “1 / 1” and snackbar “Page deleted” at 03:00. Back on the grid, “2 pages” and both thumbnails are still shown at 03:02–03:04. Library then lists the new document as 1 page at 03:07; reopening shows 1 / 1 at 03:09. | The grid is the user’s last check before saving and exporting. If it disagrees with the editor and the saved result, the user cannot know what will be exported. This is a trust failure, not a cosmetic inconsistency. | Adobe Scan (VERIFIED, iOS docs) supports page-level rotate/delete and page selection before save; Apple keeps scanning until Done and then presents the document (VERIFIED). Their documented flows keep page management in one place. No direct stale-grid test is documented. | Make the grid update from committed state before the screen is shown, keep page count, thumbnail order and save summary in lockstep, and require the save review to summarise the pages actually present. | M |
+| F03 | P1 | Save changes? dialog, 03:05–03:06 | “Overwrite saved PDF” carries the bright cyan emphasis; Cancel and “Save as new document” are muted. The preceding copy says “Your edits are not in the original PDF yet.” The user has just imported a PDF whose original was promised unchanged at 02:25. | The visually promoted action is the destructive one. A hurried user can replace the imported file without understanding that “saved PDF” and “original file” are different objects. The recording does not show an overwrite completing, so actual data loss is NOT OBSERVED IN RECORDING. | Adobe Scan (VERIFIED, iOS docs) creates a separate “compressed” copy and an “edited” copy for text edits; Drive (VERIFIED) names a new file and chooses a destination before save. Both make the new artifact the default mental model. | Make “Save as new document” the primary, name the affected file in the dialog, and make Overwrite a clearly destructive secondary action with a consequence sentence and confirmation. | S |
+| F04 | P1 | Tools → Vault, 05:14–05:18 | Vault is presented as an ordinary PRO tool at 00:50 and 05:14. Tapping it returns to the library with “Adding to Hidden Vault is unavailable. Existing vault items stay accessible.” No Vault surface, contents view or disabled state is shown. The app already identifies itself as a test build at 00:33 and shows “Not available yet” in the PRO dialog. | A flagship-looking privacy feature appears ready and then fails after the user commits the tap. That is worse than not offering it: it teaches the user that security features are unreliable. | Adobe Scan (VERIFIED, iOS docs) gives protected files a visible lock badge; Genius (VERIFIED) separates local-by-default storage from optional Cloud. No official “Hidden Vault” equivalent was verified across the reviewed competitors. | Mark the tool as unavailable before entry, explain what is unavailable and what remains accessible, or remove it from the PRO group until the flow is complete. Never let a primary security tile terminate in a toast. | S/M |
+| F05 | P1 | Resize image, 02:11–02:14 | With the custom-size field focused, the keyboard covers or clips Cancel / Resize. The labels are not visible until the keyboard is dismissed at 02:15. | The user completes the required input and loses the action needed to continue. Recovery depends on knowing a platform gesture, which is unnecessary friction in a modal task. | No verified competitor keyboard-obstruction test was found. Apple’s scan flow keeps an explicit Done/Keep Scan endpoint (VERIFIED); Drive keeps Save after naming and destination (VERIFIED). The pattern is to keep the terminal action present. | Keep the action row visible above the keyboard, or make the keyboard dismissible without hiding the primary action. Show the computed target size beside the field. | S |
+| F06 | P1 | Resize image / Compression level, 02:09–02:15 and 01:40–01:47 | The presets (50/100/200/500 KB) and a free-text field coexist with “Advanced (pixels & DPI)”. After “510” is typed, no persistent unit is visible; at 01:46 “600” is entered while Medium remains selected. Which control wins is not explained. A text keyboard appears first for a numeric target. | The user cannot predict whether they are setting an exact ceiling, a preset, or a quality preference. A wrong interpretation produces a file that is rejected by an upload portal or unnecessarily degraded. | Adobe Scan (VERIFIED, iOS docs) distinguishes high/low compression and original size; CamScanner (VERIFIED) explicitly says it does not compress to a specific size; SwiftScan (VERIFIED) uses a future-scan quality/size slider. ScanWhirl’s exact-target idea is useful but less self-explanatory than any of these. | Separate “preset quality” from “exact target size” into named modes, keep the unit attached to the value, disable or clear a preset when a custom value is entered, and state the expected result before applying. | M |
+| F07 | P1 | Extracted text (OCR), 00:54–01:02 | The visible 821-word extraction contains “wth”, “betuen t and L5” and “As soo child grows older…”. Two small unlabeled icons sit by the word count; one interaction produces an empty editor and “0 words · edited” at 01:00, the other restores 821 words at 01:01. No source comparison or confidence signal is visible. | Users cannot tell whether the text is faithful, what the small controls do, or whether an edit is recoverable until they experiment. On a study document, a plausible-looking OCR error is more dangerous than an obvious failure. | Adobe Scan (VERIFIED, iOS docs) provides a preparation/progress state, in-app formatting controls and a separate edited copy; SwiftScan (VERIFIED) has a Text tab with progress, share/search and Re-Run OCR; CamScanner offers translation after recognition (VERIFIED). None establishes perfect accuracy. | Give the text editor a clear proofreading model: source-image toggle or side-by-side view, uncertain-text treatment, labelled cleanup actions, undo history, and a visible save copy. Never let an unlabeled icon silently replace the entire text. | M/L |
+| F08 | P1 | Password-protect and result, 05:03–05:13 | The dialog states RC4-128 honestly but does not show the selected document’s name. Only one password field is visible, with no repeat or reveal. The result toast does not name the file. Immediately after protection, the result count falls from 6 to 5 while All stays 12. The cause is NOT OBSERVED IN RECORDING. | The user cannot confirm what was protected, may mistype an unrecoverable password, and then sees a searchable result disappear without explanation. That looks like data loss even if it is a search-indexing consequence. | Adobe Scan (VERIFIED, iOS docs) shows a lock badge on protected documents; CamScanner (VERIFIED) separates document encryption from folder access. Neither establishes ScanWhirl’s search behaviour. | Name the target file inside the dialog, require confirmation or a reveal control, show a lock badge afterwards, and explicitly state whether locking removes the document from text search. Explain the count change in the same surface. | M |
+| F09 | P1 | Settings → Viewing / About, 03:33–03:40 | “Auto enhance scans” explains “Google processing is on when this is on. Off gives a fast, original-looking scan.” The About dialog says “Everything happens on your phone: no accounts, no ads, no servers. Your scans stay on your device only.” No network audit or privacy-policy content was observed. | A privacy-sensitive user cannot reconcile “Google processing” with “no servers”. The app may be entirely on-device, but the words do not prove it. This ambiguity attacks the strongest brand promise. | Genius (VERIFIED) documents device-local storage by default and optional Genius Cloud; SwiftScan (VERIFIED) documents local OCR while cloud destinations are intentional and opt-in. Neither relies on an ambiguous vendor-processing sentence. | Name the processing boundary precisely: what runs on-device, what leaves the device, when, and what the user loses by turning it off. Link the explanation to the privacy policy at the point of the claim. | S/M |
+| F10 | P1 | Camera save → Library, 04:24–04:32; initial library 00:01 | The capture flow offers no visible rename step before saving: “Next” leads to “Saving…” and “Saved Document 5”. Existing documents are Document 1–4 and fixture-like names. No smart suggestion is shown. | Generic names force the user to remember content or search for it. As the library grows, “Document 5” is indistinguishable from “Document 6”, undermining the otherwise strong search and sort tools. | Genius Scan (VERIFIED) offers title editing, name templates and Ultra contextual suggestions; SwiftScan (VERIFIED) offers name templates and date/time/location naming; Adobe (VERIFIED) offers review-stage OCR suggestions and a custom default. | Add a naming moment at save with a useful suggestion and a clear skip; allow immediate rename from the success state. Do not force naming when the user is capturing quickly. | M |
+| F11 | P1 | Library after capture, 04:27–04:32 | The just-created Document 5 is hidden by the still-active “teratoma” query. The app says so and offers Show all, but the user remains in a result list that excludes the object they just made. The snackbar also overlaps the bottom dock. | The success state does not let the user verify, rename, share or open the new document. The explanation is good; the landing state is not. | Genius Scan (VERIFIED) makes search scope explicit (“Search all documents” versus folder); Drive (VERIFIED) ends with a named file and chosen destination. | Preserve the search, but make the saved object directly actionable: open it, show it temporarily, or offer a clear “Show all” that preserves the query as a removable filter. Pair the result count with an explicit scope label. | S/M |
+| F12 | P2 | Compression, Resize, Save changes, Language, Password dialogs, 01:40 / 02:14 / 03:06 / 03:30 / 05:03 | Background document rows, thumbnails and text remain visible through the modal surface. In the Compression dialog, library content is legible through the body. | The foreground is not a clean reading plane. Muted labels, field values and destructive choices compete with unrelated thumbnails and snippets. This is especially harmful on a dark theme. | No verified competitor documentation establishes modal opacity. This is an internal visual finding, not a comparative failure. | Use a more opaque dialog surface and a stronger scrim; reserve translucency for decorative layers, not forms and confirmations. | S |
+| F13 | P2 | Page filter vs capture-review filter, 02:48 and 04:09–04:20 | Existing-page editing uses Original / Enhance / Clean / B/W in a radio dialog. Capture review uses Original / Auto / Colour / Greyscale / B&W / Shadows in a visual strip. “Clean” means a filter in one place and a brush-eraser tool (“Draw to erase marks or stains”) in the other. | The same vocabulary points to different controls, and the same job has two interaction models. Users must relearn filtering depending on when they arrived. | Adobe Scan (VERIFIED, iOS docs) uses a consistent filter set and apply-to-all scope; Drive (VERIFIED) exposes Filter and Clean as distinct named review actions. The labels are at least stable in those docs. | Use one filter taxonomy and one interaction pattern; reserve “Clean” for the eraser or rename one of them. If the two contexts genuinely differ, say so in the label. | M |
+| F14 | P2 | OCR, Merge, Compress and Lock source choosers, 00:51 / 01:24 / 01:38 / 05:02 | Pickers are primarily lists of names. Several are Document 1–4; both one-page and two-page M08 Book1 variants exist (03:07 and 04:53). Merge exposes no thumbnails, page counts or order handles. | The user cannot confidently pick the right source, especially for merge order or password protection. A wrong merge forces a restart; a wrong lock can protect the wrong file. | Adobe (VERIFIED) supports multi-select combine and page-level management; CamScanner (VERIFIED) documents a merge choice about deleting originals. No verified source-chooser thumbnail pattern was found, so this is a gap in every reviewed benchmark. | Add a thumbnail, page count, date and category to each row, and expose merge order before confirmation. Make duplicate names distinguishable. | M |
+| F15 | P2 | Merge scans, 01:24–01:34 | Two documents are checked; the list offers no visible reorder. The next screen asks only for a name, then opens DocX with two pages. Merge order is not established as controllable. | In a two-page merge, order is part of the output. If the order is wrong, the user must redo the merge or edit afterwards. | Adobe (VERIFIED) documents drag/drop reorder and page selection; CamScanner (VERIFIED) documents reorder. | Show the selected documents as an ordered list with clear position, and let the user inspect the final page order before creating the file. | M |
+| F16 | P2 | Reader search, 00:08–00:23 | The app explicitly says “The page image isn't marked.” Previous/Next changes the snippet and match counter, but the scanned page itself has no word highlight. | On dense textbook pages, finding the fifth occurrence still requires manual scanning. The search has done the hard retrieval work but stops before the last step. | Adobe Scan (VERIFIED, iOS docs) documents in-document next/previous match navigation; the docs do not establish image highlighting. Apple Notes (VERIFIED) finds text inside scanned documents. No verified competitor promise of coordinate-level highlighting was found. | If image highlighting is unavailable, make the text-first reading route stronger: larger context, jump-to-snippet, and a clear “match x of y” view that does not imply the page is marked. | M |
+| F17 | P2 | Library search, 00:04 and 04:27 | Chips show All 8 / Unsorted 7 / Study 1 while the header shows “5 documents”. After capture, All 12 / Unsorted 11 versus six matches. The counts describe different scopes but the screen does not say so. | Users reasonably read the chips as result facets. The mismatch looks like a data bug even when it is arithmetic correctness. That weakens trust in search. | Genius Scan (VERIFIED) explicitly offers “Search all documents” versus folder-only search. Adobe Scan (VERIFIED) exposes type/date filters and sort state. Both make scope a user-facing concept. | Label the scope once, e.g. “6 matches in 12 documents”, and distinguish a filter chip from a global library total. Keep the search term visible and removable. | S |
+| F18 | P2 | Library, 00:01 | Before the first document row, the screen presents brand, PRO, trash, settings, a search field, a scrollable chip row, a 7-to-organize banner, “8 documents”, sort, Select and then rows. The primary Scan action is in the bottom dock. | Browsing starts below a dense band of controls. The eye is drawn to the organising prompt and the search field rather than the documents. With snippets visible at 04:28, the compression is worse. | No verified competitor establishes a universal density target. Apple Notes and Drive (VERIFIED) use simpler capture-first surfaces, but this is a design judgment rather than a documented rule. | Collapse secondary library chrome into a compact header or overflow; keep search, document count and the primary capture action visually dominant. Let the organise prompt become a dismissible single line. | M |
+| F19 | P2 | Extracted text, 00:54 | Copy / Share / Save sit beside two small unlabeled icons and a top-right overflow, while the word count competes for attention. The action row is visually dense. Muted contrast is visible but NOT MEASURED. | Users may miss the primary export actions or mistake an icon for formatting. The word count is more prominent than what the user can do with the text. | Adobe Scan (VERIFIED, iOS docs) exposes formatting controls in a dedicated text-editing context; SwiftScan (VERIFIED) has a Text tab with share/search and OCR rerun. Both name the recovery action. | Give Copy / Share / Save a clear primary/secondary hierarchy, label or remove the two mystery icons, and move word count to supporting metadata. | S |
+| F20 | P2 | Lock / Unlock and password protection, 04:58–05:10 | The chooser mixes “Lock a device PDF”, “Unlock a locked PDF file” and a saved-scan flow. The password dialog describes PDF RC4-128, while the separate Vault promises a hidden area. “Lock”, “password-protect”, “Vault” and “hidden” are not clearly differentiated. | Users cannot tell whether they are protecting a file, hiding it from the library, locking the app, or encrypting an export. That ambiguity is dangerous because the remedies differ. | Adobe Scan (VERIFIED) uses a lock badge for a password-protected document; CamScanner (VERIFIED) separates document encryption from folder-access passwords. Neither proves a hidden Vault equivalent. | Define three separate concepts in the UI: PDF open-password, library visibility, and app access. Use distinct labels and icons, and never call all three “lock”. | M |
+| F21 | P2 | Compress / Resize / Import / Save changes, 01:49 / 02:16 / 02:25 / 03:06 | “Save to Documents”, “Save to Downloads”, “Overwrite saved PDF” and “Save as new document” coexist. The import warning says the original is not changed, while the save dialog refers to edits not being in “the original PDF”. | The user must infer whether an action creates a library item, exports a copy or replaces a file. Wrong inference is costly and hard to undo. | Drive (VERIFIED) names file, format and destination before Save; Adobe (VERIFIED) appends “compressed” or “edited” to distinguish copies; SwiftScan (VERIFIED) has a configurable default folder. | Use one save model: state the object, the destination and whether a copy is created. Name the source file in every overwrite confirmation. | M |
+| F22 | P2 | Quick sort, 04:42–04:57 | The sequence advances immediately after each category tap; no Previous or Undo is visible. The completion screen says “All sorted” but offers no review of assignments. The queue includes documents outside the active search results, and the sheet does not state that it is sorting the whole library. | A mistaken tap requires reopening the document later; the user cannot audit what they just did. The speed is good, but it comes at the cost of correction. | Genius Scan (VERIFIED) supports tags/folders that can be corrected later; no verified one-at-a-time sorter equivalent was found. | Keep the one-tap speed, add a visible previous/undo for the last assignment, and show a completion summary grouped by category with a way back. Label the scope (“Sorting all 11 documents”). | S |
+| F23 | P2 | Capture review — Filters, 04:09–04:19 | Six filter choices sit in a horizontal strip; some labels are clipped during scrolling. No stable overflow indicator or “more” affordance is visible. A permanently inaccessible option is NOT OBSERVED IN RECORDING. | Users may never discover Shadows or the later options, and partial labels make the strip feel broken even when it is merely scrollable. | Adobe Scan (VERIFIED, iOS docs) documents a filter set; Drive (VERIFIED) documents Filter and Clean. Neither establishes a specific strip layout, so this is a local execution issue. | Show a partial next item or a count/edge fade to signal horizontal content, keep the selected label fully visible, and consider a wrapped two-row selector for six options. | S |
+| F24 | P2 | Library snackbar, 04:27–04:32 | The “Saved Document 5…” snackbar overlaps the upper portion of the bottom dock (Tools / Scan / Import). | The confirmation for a successful action covers the controls for the next action. On a small screen it makes the app feel layered incorrectly. | No verified competitor comparison. | Anchor snackbars above the dock with reserved space, or use an inline success row in the document list. | S |
+| F25 | P2 | Trash, 00:27–00:31 | The overflow offers “Empty Trash” while the screen says “Trash is empty”. | An enabled destructive command with nothing to destroy creates doubt: is the state wrong, or is the command a no-op? | No verified competitor equivalent was checked at this level. | Disable the command at zero items or remove it from the overflow; keep the empty-state explanation. | S |
+| F26 | P2 | Library chip row, 00:01 and 04:55 | Receipts is partly offscreen at launch; after sorting, additional categories are offscreen. There is no visible scroll cue or “more” control. | Users may not realise more categories exist. The clipped chip reads as a layout defect even if horizontal scrolling is intentional. | Genius (VERIFIED) uses folders/tags; Adobe (VERIFIED) exposes type/date filters. No exact chip benchmark was verified. | Add a clear overflow affordance and make the active chip fully visible; consider a compact category menu once the row exceeds the width. | S |
+| F27 | P3 | Compress save toast, 01:53 | “Saved to Documents/Scan…” is truncated. | The user cannot verify the exact destination from the confirmation. | Drive (VERIFIED) chooses a visible destination before save; SwiftScan (VERIFIED) has default folders. | Use a shorter, complete destination sentence and keep the path in a details surface. | S |
+| F28 | P3 | Settings → Status line, 03:20–03:26 | Enabling the status line adds an all-caps “GOOD AFTERNOON 11 DOCS 9.1 MB” above the library. It is visually loud relative to the document names and repeats information already present. | It consumes scarce vertical space and competes with search and the first result without adding a task. | No verified competitor comparison; this is a local hierarchy judgment. | Treat it as optional secondary metadata, not a headline; use sentence case and a quieter weight. | S |
+| F29 | P3 | Library / Extracted text / Settings / Password-protect, 00:01 / 00:54 / 03:14 / 05:03 | Bold serif document titles, sans-serif controls, cyan accents, gold PRO markers, starfield decoration and translucent navy dialogs coexist. The starfield appears behind OCR and Settings surfaces. | The brand reads as several themes stacked rather than one system. Decoration behind text tools makes a utility feel less precise. | No verified competitor visual-system comparison; this is a brand judgment. | Choose one signature (serif titles or starfield, not both as competing motifs), reserve cyan for primary actions, and use neutral surfaces for document work. | M |
+| F30 | P3 | Quick sort completion, 04:55–04:57 | “All sorted” removes the Unsorted chip and the organise banner, and shows category totals. There is no visible audit of which document went where, nor a way to return to the last assignment. | A fast flow with an irreversible-looking completion state gives the user no confidence that all assignments were correct. | Genius tags (VERIFIED) remain editable after assignment. No exact sorter benchmark verified. | Add a “Review assignments” link and a one-step undo on completion; keep the completion state celebratory but auditable. | S |
+
+## 5. Missing features and tools, in priority order
+
+This is a roadmap filter, not a claim that every item is absent from the codebase. Each row names the inspected surface and says exactly what was not observed. ScanWhirl should not build a feature merely to match a competitor; the value case is tied to the inferred student/everyday user.
+
+| Priority | Missing or hidden capability | Evidence gap and user value | Competitor pattern and confidence | Recommendation |
+|---|---|---|---|---|
+| P1 | **Naming at save, with templates and suggestions** | Capture at 04:24–04:32 saves “Document 5” with no naming step; library at 00:01 shows Document 1–4. Smart naming is NOT OBSERVED IN RECORDING. Value: retrieval, sharing and version confidence. | Genius (VERIFIED) title editing/templates/Ultra suggestions; SwiftScan (VERIFIED) templates with date/time/location; Adobe (VERIFIED) review-stage OCR suggestions. | Add a pre-save name field with a suggestion the user can accept, edit or skip. Support a simple default template. Do not block rapid capture. |
+| P1 | **Clear save provenance and output format** | Compress and Resize offer destination buttons but no format picker; capture save shows no format choice. PDF/JPG choice is NOT OBSERVED IN RECORDING. Value: upload compatibility and knowing whether the original was replaced. | Drive (VERIFIED) explicitly offers PDF or JPG, name and folder; Adobe (VERIFIED) creates named copies; SwiftScan (VERIFIED) offers PDF/JPEG and a default folder. | Make format, name, destination and “new copy vs replace” one coherent save step. |
+| P1 | **Library organisation beyond six categories: folders and tags** | Library 00:01 exposes only All / Unsorted / Study / Receipts / IDs / Forms / Other. Folders, tags and nested organisation are NOT OBSERVED IN RECORDING. Value: a student’s term, course and receipt piles need overlap and hierarchy that one category cannot provide. | Genius (VERIFIED) has nested folders and multiple tags; CamScanner (VERIFIED) supports folders; SwiftScan (VERIFIED) has default folders. | Add folders for hierarchy and tags for cross-cutting labels; keep Quick sort as the fast way to populate them. |
+| P1 | **Accessibility and i18n validation as a release gate** | The language list at 03:30 exposes 12+ languages and multiple scripts, but no non-English UI, RTL, TalkBack, large text or measured contrast is shown. All are NOT OBSERVED IN RECORDING. Value: the app claims broad language support but its usability is unproven. | Apple and Android platform guidance require accessible roles and 48 × 48 dp targets (VERIFIED); competitors publish language support but no verified screen-reader parity. | Test English, Arabic/Urdu RTL, Hindi, large font and TalkBack with the core capture → OCR → save flow. Do not ship a language list as a promise without a layout test. |
+| P2 | **Signature and annotation** | Tools at 00:49 has no signature/annotation entry; page editor at 02:33 has Rotate/Crop/Filter/Delete only; page grid More is not opened. Signature and annotation are NOT OBSERVED IN RECORDING. Value: forms, permission slips, contracts, study annotations. | Apple Notes (VERIFIED) has Markup → Signature; SwiftScan iOS Plus (VERIFIED) has Draw/Text/Note/Signature. Adobe documents drawing markup (VERIFIED). | Add a saved-signature flow and a simple pen/text annotation layer on the page, with flatten-on-export and a clear original/copy distinction. |
+| P2 | **True ID-card mode** | Crop presets include ID card and Passport 35×45 at 02:44, but no guided front/back capture, pairing or one-page ID layout is shown. ID mode is NOT OBSERVED IN RECORDING; a crop ratio is not a mode. | Adobe (VERIFIED) guides front → Next page → Review and save, producing one page with both sides; CamScanner (VERIFIED) documents a Premium Collage for front/back on mobile. | Add a guided two-side flow with edge guidance, one composite output and a choice of separate pages. Reuse the crop preset for the geometry. |
+| P2 | **Secure redaction** | No redaction tool appears in Tools 00:49 or the page editor 02:33; Clean at 04:20 is described as erasing marks/stains, not secure removal. Redaction is NOT OBSERVED IN RECORDING. Value: receipts, IDs and study material frequently contain sensitive data. | SwiftScan iOS Plus (VERIFIED) exposes a named Redaction tool, but destructive removal of underlying pixels/OCR is not independently proven; Adobe cleanup (VERIFIED) is explicitly described as hiding an area, not secure redaction. | If offered, call it redaction only when the output is flattened and verified; otherwise call it “cover” and explain the difference. Do not conflate with the Clean brush. |
+| P2 | **OCR language selection, proofreading and format-aware export** | OCR at 00:54 exposes Join lines / Fix spaces / Remove gaps, Copy / Share / Save, but no language selector or source comparison. Word/Excel/TXT export, table preservation and handwriting handling are NOT OBSERVED IN RECORDING; the Save button’s format is unknown. | CamScanner (VERIFIED) has OCR → Word with an explicit formatting warning, Scan to Excel with table-border requirements, and Translate; Adobe (VERIFIED) exports Word/Excel/PowerPoint/RTF with language and formatting controls; SwiftScan (VERIFIED) supports >60 languages and Re-Run OCR (vendor claim). | Add OCR language choice, a proofreading source view, and explicit fidelity labels for text/Word/Excel. Treat tables and handwriting as separate quality tiers rather than silent promises. |
+| P2 | **OCR failure, zero-text and retry states** | The OCR flows at 00:54–01:18 show successful extraction and editing, but a failed recognition, zero-text result, wrong-language result or retry state is NOT OBSERVED IN RECORDING. Value: a blank or corrupted result is indistinguishable from an empty page, so the user needs a recoverable explanation. | SwiftScan (VERIFIED) exposes Re-Run OCR and progress; Adobe (VERIFIED) shows preparation/progress for text actions. Neither documents an accuracy guarantee. | Provide a distinct “no text found / recognition failed” state with the source page, likely causes, a language check and a retry path. Keep the original untouched. |
+| P2 | **Searchable-PDF controls and PDF/A** | Settings at 03:36 already exposes “Make PDFs searchable” with a clear explanation; per-export control and PDF/A are NOT OBSERVED IN RECORDING. Value: recipients can search the file, and archives need a stable profile. | Genius (VERIFIED) adds an OCR text layer and lists PDF/A on its pricing page, with exact tier/variant unverified. Drive promises searchable PDFs (VERIFIED). | Keep the global setting, add a per-save override and an output summary that says whether this file contains searchable text. Add PDF/A only with a clear compatibility reason. |
+| P2 | **Opt-in cloud backup and sync, clearly separate from local scanning** | Settings 03:33–03:36 shows Documents/ScanWhirl copies but no cloud account or backup. Cloud sync is NOT OBSERVED IN RECORDING. Value: device loss is the obvious failure mode for a local-only library. | Genius (VERIFIED) is local by default with optional Genius Cloud; SwiftScan (VERIFIED) has automatic upload off by default with Wi-Fi-only and delete-after-upload; Drive/OneDrive are cloud-first. | Preserve local-first as the identity, then offer an explicit, off-by-default encrypted backup with destination, schedule and deletion semantics. Do not turn “no accounts” into “no recovery”. |
+| P2 | **Widgets, shortcuts and inbound share** | The launcher at 00:00 and library 00:01 show no widget configuration; incoming share to ScanWhirl is NOT OBSERVED IN RECORDING (only outgoing Copy/Share is visible). Value: receipt capture and “open PDF in scanner” are repeat tasks. | Google Drive (VERIFIED) has an Android widget pre-bound to a destination folder; SwiftScan’s iOS Plus benefits list a shortcut widget (VERIFIED). Apple Notes supports adding material through another app’s Share menu (VERIFIED). | Add a capture widget with a chosen default category and an inbound “Open with ScanWhirl” path. Test share-sheet behaviour before claiming it. |
+| P2 | **Page management: reorder, insert, extract, batch edit** | The grid at 02:30 shows numbered thumbnails and handle-like controls, but reorder is NOT OBSERVED IN RECORDING; insert/extract is not shown. Merge exists, but page-level order is not visible. Value: fixing one page should not require rebuilding the document. | Adobe (VERIFIED) documents drag/drop page reorder and multi-page rotate/delete; CamScanner (VERIFIED) documents Reorder Pages and apply-to-selected-pages filters. | Expose page order as a first-class grid action, allow insert/extract, and make apply-to-all/selected scope explicit. |
+| P2 | **Batch capture and book mode** | Live capture shows one page saved; the review has an add-page control at 04:04 but the recording does not complete a multi-page session. Batch capture and book-spread splitting are NOT OBSERVED IN RECORDING. Value: a textbook chapter is not one page. | Adobe (VERIFIED) auto/manual capture plus Book mode split; Drive/Apple (VERIFIED) support Add Scan; OneDrive Android documents a 10-page limit. | Make continuous capture and book-spread splitting explicit modes, with a visible page counter and an easy “finish now” exit. |
+| P2 | **Deskew, shadow removal and finger cleanup** | The capture review exposes Shadows and a Clean brush at 04:09–04:20; auto-straightening and finger-removal quality are NOT OBSERVED IN RECORDING. Do not call them absent; call their effectiveness unproven. | Google Drive Clean (VERIFIED) explicitly targets “stains, fingers, and more”; SwiftScan advertises perspective correction (VERIFIED vendor claim); Adobe exposes individual Straighten (VERIFIED). | Benchmark the existing Shadows/Clean results against those patterns before building new tools. Make before/after and undo visible. |
+| P2 | **Annotation is not the same as editing the scan** | The page editor is image-only at 02:33; no text note, highlight or stamp is shown. Annotation is NOT OBSERVED IN RECORDING. Value: study notes and review comments. | Apple Markup (VERIFIED) and SwiftScan iOS (VERIFIED) provide annotation layers separate from destructive image edits. | Add an overlay layer that can be hidden, edited and flattened only on export. |
+| P3 | **Translation** | No translation control appears in OCR at 00:54 or in tools at 00:49. Translation is NOT OBSERVED IN RECORDING. Value: foreign-language study material and receipts. | CamScanner (VERIFIED) offers Translate after recognition; SwiftScan iOS Plus (VERIFIED) lists Translate with nine languages and device/OS requirements. | Add translation only after OCR language and confidence are trustworthy; label it as a network or on-device operation. |
+| P3 | **AI summary and study aids** | No AI action is visible in OCR, reader or tools; AI summary and flashcards are NOT OBSERVED IN RECORDING. Value: the textbook corpus suggests summarisation/flashcards, but this is speculative for the current audience. | SwiftScan iOS (VERIFIED) offers Brief/Detailed/In-Depth summaries and Translate, with Apple Intelligence/Plus requirements; Apple Writing Tools (VERIFIED) summarises selected text, not a whole scanned PDF automatically. | Defer. If added, keep it opt-in, show the source pages, and never make an AI summary look like the authoritative document. |
+| P3 | **Custom categories, saved searches and smart filters** | The chip taxonomy appears fixed at Study / Receipts / IDs / Forms / Other at 04:42; no custom category or saved search is shown. NOT OBSERVED IN RECORDING. Value: repeat retrieval for a term or course. | Genius tags (VERIFIED), Apple Smart Folders (VERIFIED). | Allow user-defined categories and a saved “search + filter” view after folder/tag basics exist. |
+
+**Feature-matrix warning.** The absence of a feature in this recording is not proof of absence in the app. The Tools sheet is a complete visible menu at 00:49, so signature, annotation, redaction, ID mode and export format are not exposed there; editor overflow and page-grid More were not opened. Those routes must be checked in the build before implementation planning.
+
+## 6. Cross-cutting design-system issues and principles
+
+### Colour, contrast and legibility
+
+The app uses a dark navy ground, cyan primary actions, gold PRO markers, muted grey supporting text and occasional starfield decoration (00:01, 00:50, 00:54, 03:14). The starfield behind Settings and OCR competes with text rather than supporting it. Cyan is used for primary actions, selected filters and progress accents, so it no longer reliably means “the next action”.
+
+No contrast ratio is measured. A dark-theme review should not declare WCAG failure from video alone. The visible grey-on-navy supporting copy at 00:54, 03:14 and 05:03 is a risk, not a verdict. The correct next step is to sample the original colours and measure 4.5:1 for ordinary text and 3:1 for non-text control boundaries; Android’s 48 × 48 dp target is also a design criterion, not something this recording can prove.
+
+### Typography and density
+
+Document titles use a bold serif at 00:01 while controls use sans serif, and the Settings font chooser can switch labels to Serif or Monospace at 03:15–03:18. The result reads as a document-brand motif plus a debug preference, not a coherent type system. The library is dense before the first row: brand, PRO, two icon actions, search, chips, a “7 to organize” banner, count, sort, select and then content. The all-caps status line at 03:22 adds another loud layer.
+
+Impose a type ladder: one display/title treatment, one body treatment, one metadata treatment, and one numeric style. Do not let a user-selectable font change the information hierarchy. Truncation should be intentional: the OCR action row and the compressed-save toast at 01:53 both clip content that the user needs to verify.
+
+### Spacing, touch targets and reach
+
+The bottom dock is the right place for Scan, but the snackbar at 04:28 overlaps it. The small unlabeled OCR icons at 00:54, the header icons at 00:01 and the thumbnail controls at 02:30 visually crowd their neighbours. Their actual hit areas are unknown. Build to 48 × 48 dp minimum, keep destructive actions away from the primary thumb path, and reserve a snackbar band above the dock.
+
+### Components and consistency
+
+Dialogs vary in opacity and emphasis. The Compression, Resize, Save changes, Language and Password surfaces all allow background content to bleed through at 01:40, 02:14, 03:06, 03:30 and 05:03. The destructive “Overwrite saved PDF” is the brightest action at 03:06. The same word “Clean” describes a page filter at 02:55 and a brush at 04:20. Filter vocabularies differ between existing-page editing and capture review.
+
+One component contract should govern all forms: opaque reading surface, one primary action, destructive action visually distinct and confirmed, cancel always available, keyboard never covers the terminal action, and the affected object named in the title or body.
+
+### Navigation and information architecture
+
+The library is the hub. Tools contains creation and transformation utilities; the reader contains search; the page grid contains editing; settings contains privacy and language. That is a reasonable map. The problem is that tools are split between a bottom sheet, a bottom dock, page-grid More and reader overflow, with no visible rule for what lives where. “Read text” is a Tools entry, but the page grid also has a Text action at 02:30; “Lock” is a Tools entry; Vault is a separate PRO tile. A user cannot predict whether a job is document-level or page-level.
+
+Establish two levels explicitly: document actions (merge, compress, resize, lock, export) and page actions (rotate, crop, filter, clean, annotate). Use the same labels in every surface. Put “Text” in both places only if it has the same scope, and say whether it is the whole document or the current page.
+
+### State clarity
+
+This is the largest systemic weakness. The query persists across library, reader and settings returns (00:24–00:26, 03:45–03:53), but the chip totals remain global while the header counts matches. The page grid can show two pages after a deletion that leaves one. The just-saved document is hidden by the active query. Locking changes the result count from six to five without explanation. The FREE/PRO preview changes the header and dialogs but is explicitly a test mode. Each state is individually explainable except the grid contradiction; together they teach the user that the screen is not authoritative.
+
+Impose a state contract: every count has a named scope; every filter has a visible chip and a clear reset; every destructive change updates all summaries before the next screen; every save lands on an object the user can see or explicitly chooses to hide.
+
+### Feedback and recovery
+
+The app is strongest here. Before/after sizes, Undo after page deletion, Open/Undo after save, progress dialogs, and the hidden-by-filter explanation are all specific. Keep them. Improve the weak complements: no visible correction in Quick sort, no named password target, no OCR proofreading state, no export-format confirmation, and no confirmation that a B/W filter is safe. Feedback should identify the object and the next action, not only report that something happened.
+
+### Capture-quality UX
+
+Capture is observed, so it should not be listed as missing. At 03:54–04:04 the camera shows X, flash-off, “Position document in frame”, a shutter, Manual/Auto capture with Auto selected, a permission footer, a blue page quadrilateral, “Scanning… hold steady”, and a processing spinner before review. This is a competent minimum: the mode is visible, the page outline is visible, and the state changes are named.
+
+The gaps are recoverability and multi-page confidence. There is no visible “no document found”, low-light failure, retake, or manual-fallback guidance in the recorded capture path; flash is off and never tested; the processing state has no cancel; and the session ends with a single saved page at 04:26 even though Review exposes an add-page control at 04:04. A page counter and a visible “finish / keep scanning” choice would make the difference between a one-off scan and a chapter capture. Adobe (VERIFIED, iOS docs) explicitly names capture failure and offers manual fallback; Drive (VERIFIED) exposes Retake and Add. Those are the right recovery benchmarks. The edge-detection, perspective-correction and clipping quality itself cannot be judged from one successful burst.
+
+### Export and sharing
+
+The app gives good local output feedback: before/after size, dimensions, Save to Documents/Downloads, and a path toast at 01:49, 02:16 and 02:21. What is missing is the decision layer. No PDF/JPG format choice is visible before save; no share target or share-sheet result is shown; no export to Word, Excel, plain text or PDF/A is visible; and there is no per-export searchable-text confirmation. Outgoing Share buttons are visible in Compress and Resize, but a completed share is NOT OBSERVED IN RECORDING. Drive (VERIFIED) shows name, PDF/JPG and destination before Save; Adobe (VERIFIED) names the export format and requires internet for Office formats. ScanWhirl should expose the output contract before the user commits, not only after compression succeeds.
+
+### PRO monetisation UX
+
+The PRO dialog at 00:33–00:46 is clear about one thing: “Scanning, text recognition, search, export, merge and compress are free and stay free.” It also shows “Unlocked in this test build”, and Preview Free UI / Preview Pro UI toggles. No price, billing period, trial, purchase, restore-purchase, or entitlement check is visible. That means gating fairness, paywall timing and value communication cannot be judged from this recording. It would be wrong to call the app’s monetisation annoying or fair based on a developer preview.
+
+What can be judged is the promise hierarchy. Vault sits under a gold PRO divider at 00:50 and 05:14 but ends in “unavailable” at 05:15. A PRO feature that looks available and fails is a monetisation UX problem even in a test build, because it is exactly the surface a buyer would evaluate. Keep the free-core promise, but make every PRO tile honest about availability before the tap, and show the actual value boundary rather than a header toggle.
+
+### Accessibility and internationalisation
+
+The language list at 03:30 includes English, Hindi, Urdu, Spanish, French, German, Portuguese, Arabic, Bengali, Russian, Chinese and “More languages…”. That is a promise of broad reach, but no non-English layout, RTL mirroring, font scaling, TalkBack label or large-text state is shown. The Arabic and Urdu entries are the critical RTL test cases. The interface’s icon-only actions and terse labels make semantic labelling especially important.
+
+Set release gates: every control has a meaningful accessibility name; 48 × 48 dp targets; text survives 200% font scale without clipping; RTL mirrors navigation but not document imagery; OCR language selection is separate from UI language; and all visible strings are localised, including error and empty states. None of these can be certified from this recording.
+
+### Motion and perceived performance
+
+Progress is visible at 01:09 (OCR), 01:48 (compression), 04:01–04:04 (capture processing), 04:10–04:14 (filter processing) and 04:25–04:26 (save). That is good feedback. The recording’s variable 12.89 fps average cannot establish jank, lag or dropped frames. Do not optimise from this evidence; measure on a device. Do reserve a stable layout during processing so buttons do not jump or disappear, as the Resize action row does.
+
+### Brand feel
+
+The app wants to feel private, calm and slightly magical: navy, cyan, starfield, serif document titles, “Scan. Search. Keep control.” (00:01, 00:45, 00:54, 03:14). At its best, the starfield and serif give it a notebook-in-space identity. At its worst, the decoration sits behind utility text while the real differentiator — local ownership and searchable documents — is buried in Settings. The brand should be expressed through calm document surfaces and precise privacy language, not another texture. One signature motif is enough.
+
+### Principles I would impose
+
+1. **The document is the primary surface.** Chrome, badges and decoration must earn their space above or beside it.
+2. **One state, one source of truth.** A page count, thumbnail set and save summary cannot disagree at the moment of commitment.
+3. **One concept, one name.** Password protection, library visibility and app access are different promises; do not call all three “lock”. Filters should not share a name with an eraser.
+4. **Destructive actions are never the visual default.** The safe copy is primary; replacement names its target and asks again.
+5. **Every count names its scope.** “All 12” and “6 matches” may both be right, but the screen must say what each is counting.
+6. **No silent work.** Processing, filtering, OCR, locking and export must say what changed, what is preserved and how to reverse it.
+7. **Local-first must be proved by language.** “No servers” is a strong promise; every processing setting must be specific enough to honour it.
+8. **Accessibility and localisation are release gates, not later polish.** RTL, large text, TalkBack and measured contrast belong in the definition of done.
+9. **Decoration never sits behind reading text.** Starfields belong to empty, celebratory or branded surfaces, not forms and document tools.
+10. **Speed without correction is not efficiency.** Quick sort is good because it is fast; it becomes trustworthy only when a wrong tap is cheap to fix.
+
+### Seed hypotheses: my verdict
+
+| Seed | Verdict | Evidence |
+|---|---|---|
+| Search query persists while chip totals and list count disagree, and a toast says the saved doc is hidden. | **Partly confirmed, but not proven to be a data bug.** Query persistence is real at 00:24–00:26 and 03:45–03:53. Global chip totals versus result counts at 00:04 and 04:27 are a scope-labeling failure; the numbers can be internally correct. The toast and Show all are real at 04:28; the landed state is the problem. | Library 00:01–00:04; capture save 04:27–04:32; return from reader 00:24–00:26. |
+| The category chip row is clipped on the right. | **Visually confirmed at 00:01**, where Receipts is partly offscreen. Whether this is a permanent cut-off or intentional horizontal overflow is not established. There is no visible scroll cue. Treat as P2 discoverability, not a layout break. | Library 00:01; post-sort categories 04:55. |
+| Many documents are called “Document 2” or “M08 Book1” with no smart naming. | **Confirmed for the visible library and capture save.** Document 1–4 at 00:01, fixture-like M08 names, and “Saved Document 5” at 04:27. No smart-name suggestion is observed. | Library 00:01; capture save 04:24–04:32; Quick sort list 04:40–04:55. |
+| The Resize dialog is confusing: presets, free field and Advanced. | **Confirmed on three counts:** keyboard obscures the action row at 02:11–02:14, the free value loses its unit, and preset/custom precedence is unexplained at 02:09–02:15. The Advanced section is not expanded; its contents are NOT OBSERVED IN RECORDING. | Resize image 02:09–02:15. |
+| The filter strip in the page editor is cut off. | **Partly confirmed, with a correction.** Existing-page filtering is a radio dialog at 02:48, not a strip. The capture-review filter strip at 04:09–04:19 is horizontally scrollable and shows clipped labels during movement; a permanently inaccessible option is not proven. The real issue is discoverability and two filter systems. | Page filter 02:48; capture Filters 04:09–04:19. |
+| The extracted-text screen has crowded, low-contrast actions. | **Crowding confirmed; contrast not measured.** Copy / Share / Save, two unlabeled icons, overflow and a large word count compete at 00:54. One unlabeled icon empties the text at 01:00. No WCAG claim is justified without sampling colours. | Extracted text 00:54–01:02. |
+
+## 7. Redesign directions for the three worst screens
+
+### A. Existing-page filter / B/W result — F01, 02:56
+
+**Problem to solve:** the user must be able to see what the filter did to the whole page, compare it with the source, and reverse it before it becomes the saved state.
+
+    PAGE 01 / 02                                   [X]
+    ┌──────────────────────────────────────────────┐
+    │                                              │
+    │        FULL-PAGE PREVIEW, FIT TO WIDTH       │
+    │        (no surrounding chrome)               │
+    │                                              │
+    │   [ Original ] [ Result ]   <= segmented     │
+    │                                              │
+    │   "Text may be hard to read in B/W."         │
+    │   [ Keep B/W ]   [ Revert to Clean ]         │
+    └──────────────────────────────────────────────┘
+     Filter:  Original   Enhance   Clean   B/W
+              (selected state fully visible)
+     [ Cancel ]                         [ Apply ]
+
+Reasoning: put the document first and the controls second. A segmented Original/Result comparison is faster than reopening the dialog, and it directly addresses the observed “nearly white page” failure. The warning is attached to the result, not buried in help. “Revert to Clean” gives a safe fallback without forcing the user to remember the previous choice. Apply remains the only commitment. If the filter has already been applied, the same surface must show an explicit undo and must not silently persist an illegible result. The full-page fit-to-width view prevents judging legibility from a cropped thumbnail.
+
+### B. Page grid and save checkpoint — F02/F03, 03:02–03:09
+
+**Problem to solve:** the grid must be the truth about what will be saved, and the save dialog must not promote overwriting.
+
+    M08 Book1                               [Done]
+    1 page · edited                          [Save]
+    ┌────────────┐
+    │  1         │   Page 1 of 1
+    │  thumbnail │   [Reorder] [Insert] [Extract]
+    └────────────┘
+    [ + Add page ]
+
+    ──────────────────────────────────────────────
+    Save changes
+    You edited a copy of M08 Book1.pdf.
+
+    ( ) Save as new document        <= primary
+        Name: [ M08 Book1 - edited      ]
+        Save to: [ ScanWhirl library  v ]
+
+    ( ) Overwrite M08 Book1.pdf      <= secondary,
+        This replaces the imported file.   confirm
+    ( ) Discard changes
+
+    [ Cancel ]                         [ Continue ]
+
+Reasoning: the page count and thumbnail are committed state, so the grid cannot say “2 pages” after a one-page edit. The save checkpoint names the object, distinguishes a new copy from replacement, and makes the safe choice primary. “Overwrite” is visible but carries a consequence sentence and a confirmation. This is the pattern Adobe and Drive approximate with “edited” copy names and explicit destinations (VERIFIED). The user should never have to infer which file the cyan button will destroy.
+
+### C. Resize input — F05/F06, 02:09–02:15
+
+**Problem to solve:** the user must understand whether they are choosing quality, a preset ceiling or an exact byte target, and must always see the action that commits it.
+
+    Resize image
+    1000000431.jpg · 872 KB · 1080 × 2460 px
+
+    How should the size be limited?
+    (•) Preset ceiling        ( ) Exact target
+        [50 KB] [100 KB] [200 KB] [500 KB]
+        Selected: 500 KB
+
+        Custom: [ 510 ] KB
+        (Preset and custom are alternatives)
+
+    [ ] Advanced: pixels & DPI
+        (not expanded)
+    ──────────────────────────────────────────────
+    Estimated result: about 510 KB
+    [ Cancel ]                       [ Resize ]
+
+Reasoning: radio modes make the precedence explicit. The unit stays attached to the number. The estimated result is visible before commitment. The action row is part of the sheet, above the keyboard, and never scrolls away. Advanced stays collapsed and clearly optional. The current screen’s strength — showing before and after plus dimensions — is preserved; this redesign only removes ambiguity around the input and the keyboard.
+
+## 8. Opus handoff
+
+### Top 15 backlog
+
+Each item is written so a reviewer can verify it by looking at the running app. These are outcomes, not implementation instructions.
+
+| ID | Finding | One-line goal | Acceptance criteria |
+|---|---|---|---|
+| SW-01 | F02 | Make the page grid authoritative after every page edit. | With a two-page imported PDF, delete page 1, return to the grid: the header says “1 page”, exactly one thumbnail is visible, and the save summary lists one page. Reopen the saved item and confirm 1 / 1. Repeat with rotate and crop. |
+| SW-02 | F01 | Prevent an unreadable B/W result from being accepted blindly. | On a text-heavy contents page, choose B/W: the whole page is visible at fit-to-width; Original/Result comparison is available; a legibility warning appears when text is lost; Revert restores the prior readable state. Verify the exported page, not only the preview. |
+| SW-03 | F10 | Give every new scan a useful, editable identity at save. | Capture a page and reach the save step. A suggested name is present, editable and skippable. Saving without editing uses the suggestion; saving with a new name shows that name in the library and reader. Repeat from the camera five times; no automatic “Document N” appears without a name opportunity. |
+| SW-04 | F03 | Make copy-on-save the safe default and overwrite an explicit destructive choice. | Open an imported PDF, edit a page, press back. “Save as new document” is the primary action; “Overwrite” is visually secondary, names the source file, and requires confirmation. Cancel returns to the grid with edits intact. |
+| SW-05 | F04 | Stop presenting Vault as ready when its add flow is unavailable. | Open Tools: Vault either opens a working Vault surface or is visibly marked unavailable with an explanation before tapping. No tap leads only to a failure toast. If unavailable, existing-vault access is still explained and reachable. |
+| SW-06 | F05/F06 | Keep Resize’s action row visible and make its input model unambiguous. | Focus the custom-size field: Cancel/Resize remain visible above the keyboard. The field shows its unit. Choosing a preset clears or disables the custom value, and vice versa. The estimated output size is shown before applying. Test with a 510 KB entry and a 3 MB entry. |
+| SW-07 | F07 | Make OCR results verifiable and recoverable. | Open Extracted text with a known-error page. Copy/Share/Save have readable labels or accessible names. Every icon action is labelled or removed. Triggering a destructive edit shows an undo route. The source page can be compared with the text, and the word count updates without wiping the editor. |
+| SW-08 | F08 | Make password protection target-specific and explain its search consequence. | Open Password-protect: the selected file name is shown. The password can be revealed and confirmed. After applying, the document shows a visible protected state. If it disappears from search results, an explicit message says so; the All count remains stable and the search count is explained. |
+| SW-09 | F09 | Make the on-device versus network processing claim precise and consistent. | Settings explains exactly what Auto enhance processes and where; About does not contradict it. A reviewer can point to one sentence that answers “does my scan leave the phone?” for each setting. The privacy-policy link opens from that explanation. |
+| SW-10 | F11/F17 | Make search scope and the saved-document landing state legible. | With an active query, save a new scan. The result screen names the scope (“6 matches in 12 documents”), the new document is directly openable or temporarily visible, and Show all preserves the query as a removable filter. No snackbar covers the bottom dock. |
+| SW-11 | F13/F23 | Use one filter vocabulary and one discoverable filter surface. | Existing-page editing and capture review expose the same filter names and selection model, or explicitly explain why they differ. Six options are all reachable without a hidden gesture, and the selected label is never clipped. “Clean” has one meaning. |
+| SW-12 | F22 | Preserve Quick sort speed while making mistakes correctable. | During Quick sort, the last assignment can be undone or revisited. The sheet states that it is sorting all 11 documents. Completion shows assignments by category with a review route and a one-step undo. |
+| SW-13 | F14/F15 | Make document source selection and merge order trustworthy. | OCR, Merge, Compress and Lock pickers show a thumbnail, page count, date and category for each item. Duplicate names are distinguishable. Merge shows the selected order before creation, and the resulting reader order matches it. |
+| SW-14 | F12/F18/F21/F27 | Establish a calm, predictable dialog and save system. | Compression, Resize, Save changes, Language and Password dialogs have an opaque reading surface. The affected object, destination and copy/replace semantics are stated. The save toast shows a complete destination. Library chrome does not bury the first document. |
+| SW-15 | F29 + accessibility validation | Turn the brand and accessibility claims into testable qualities. | Run the core flow in English, Arabic (RTL), Urdu (RTL) and Hindi at 200% font scale with TalkBack. All controls have meaningful names; no text clips; navigation mirrors correctly; document imagery does not. Measure all body and control colours against 4.5:1 / 3:1. Record the results. |
+
+### Suggested order of work
+
+1. **Stop state contradictions first:** SW-01, SW-02, SW-04, SW-05. A scanner that lies about its page count or promotes overwrite is not ready for more features.
+2. **Make the next action safe and visible:** SW-06, SW-08, SW-09. These are small surfaces with large trust consequences.
+3. **Fix the creation-to-retrieval loop:** SW-03, SW-10, SW-13, SW-12. Naming, search scope and source identity determine whether the library scales.
+4. **Unify the editing language:** SW-11, SW-14. Reduce the number of mental models before adding tools.
+5. **Validate the promise:** SW-15. Run this in parallel with the above, not at the end; RTL and font scaling can force layout changes.
+6. **Only then consider new tools:** signature, redaction, ID mode, folders/tags, export formats, cloud backup. First confirm what is already hidden in editor overflow, page-grid More and the share sheet.
+
+### Open questions that require the codebase or a device
+
+- Does the B/W filter produce the same near-white pixels in the exported PDF, or only in the preview? Is the operation reversible after save?
+- Why does the page grid retain two thumbnails and “2 pages” after deletion? Is the editor state cached separately from the committed document state?
+- Does password protection remove the document from OCR/library search, causing the 6 → 5 result change, or is the count measured against a different scope?
+- Is Vault intentionally disabled only in this test build? Is there an existing-vault route, and what does “Existing vault items stay accessible” mean in practice?
+- Is “Google processing” in Auto enhance an on-device library call or a network request? Does any scan data leave the device when the setting is on?
+- In Resize, does a custom value override the selected preset, add to it, or behave differently when both are present? Is the unit always KB?
+- What is the default output format for a normal capture? Is JPEG/PDF selection available anywhere outside the recorded surfaces?
+- Does “Save to Documents” mean the app library or the system Documents folder? Does “Overwrite saved PDF” replace a library item, the imported file, or both?
+- Are chip totals intentionally whole-library counts? Is there a scope label in the code or only in the design intent?
+- Can merge order be changed? Are the numbered thumbnail handles at 02:30 reorder controls or decorative?
+- Does the OCR output preserve tables, columns, headings or reading order? Is there an OCR language selector independent of app language?
+- What happens when OCR fails, returns zero text, or the image is rotated? Is there a retry path?
+- Do locked PDFs remain searchable in the library? Is RC4-128 the only protection offered, and is that acceptable for the promised use cases?
+- Are the small OCR icons and header icons labelled for TalkBack? What are their actual hit areas?
+- What does the library “Select” control at 00:01 support: multi-delete, move, merge, share, tag? Bulk selection is NOT OBSERVED IN RECORDING.
+- Is there a paywall, price, trial, restore-purchase or entitlement check outside the recorded test preview?
+- Is there cloud backup, share-sheet receive, a widget, or a shortcut intent that the recording simply did not reach?
+- Do the “567 KB” app result and “581 kB” picker size reflect different units or different files? Do not log this as a bug until checked.
+- Does the starfield/translucent theme meet contrast requirements in its real colour values? Measure, do not eyeball.
+
+## 9. Confidence and limits
+
+**What is strong evidence.** The page-count contradiction (02:59–03:09), the Resize keyboard obstruction (02:11–02:15), the automatic generic name (04:24–04:32), the OCR empty/restore behaviour (01:00–01:01), the save-dialog emphasis (03:05–03:06), the hidden-by-filter toast (04:27–04:32), the Vault failure (05:15–05:18) and the privacy wording (03:33–03:40) are directly visible in multiple frames. They should drive the next session.
+
+**What is not established.** No continuous playback was performed; brief frames and animations could be missed. The recording is compressed 720 × 1640 video, so fine text, contrast and touch bounds are unreliable. No audio was assessed. No code, logs, accessibility tree, network capture, storage inspection, purchase flow or long-library stress test was available. No actual PDF export, wrong-password attempt, OCR copy/share completion, cloud upload or share-sheet receipt was observed.
+
+**What must not be claimed.** Do not say the B/W result was saved to the exported PDF; the page was deleted before the save. Do not say the page grid contradiction caused data loss; the reopened and saved document showed one page. Do not say Vault is broken in production; the build is explicitly a test build. Do not say locking deleted a document; it remains in All 12 and the result count changed. Do not claim a WCAG failure, a 48 dp violation or an accessibility-label failure from pixels. Do not claim OCR accuracy percentages. Do not claim that a missing visible tool is absent from the codebase.
+
+**Competitor confidence.** All competitor descriptions are based on official documentation retrieved on 2026-11-13, not hands-on use. Platform and tier caveats matter: Adobe evidence is predominantly iOS; CamScanner tier and platform details are often unspecified; Genius’s PDF/A listing does not establish the exact variant or control path; SwiftScan’s OCR language count and local-processing statement are vendor claims. Microsoft Lens is retired as of 2026; the current Microsoft benchmark is OneDrive, which does not save scans locally. The only **FROM MEMORY** assertion in this document is the historical claim that Microsoft’s combined Office app once hosted Lens-derived scanning utilities; it is not used to describe current behaviour.
+
+**What would change the verdict.** A production build that exports the B/W page legibly, updates the grid correctly, makes Vault functional, provides naming at save and clarifies processing boundaries would move this from “promising but untrustworthy” to “credible local-first scanner”. Conversely, if the password count drop reflects a permanent search-index loss, or if “Google processing” sends scans off-device while About says no servers, the trust problem is more serious than the visual issues suggest.
+
+### Source index
+
+All pages were retrieved for this audit on 2026-11-13. “Verified” below means official documentation, not hands-on testing.
+
+**Adobe Scan**
+- Capture, book mode, ID mode: https://www.adobe.com/devnet-docs/adobescan/ios/en/scan.html
+- Modify, crop, filters, cleanup, resume: https://www.adobe.com/devnet-docs/adobescan/ios/en/modify.html
+- Find/rename/bulk actions: https://www.adobe.com/devnet-docs/adobescan/ios/en/findingfiles.html
+- Premium compress/export/password/text editing: https://www.adobe.com/devnet-docs/adobescan/ios/en/managingsubscriptions.html
+
+**CamScanner**
+- FAQ, OCR, table conversion, compression, translation, encryption: https://www.camscanner.com/faq
+- Create/save FAQ, folders, collage, rename, sync: https://www.camscanner.com/faq?category=create-save
+- Capabilities, capture modes: https://www.camscanner.com/capabilities
+
+**Genius Scan**
+- Organisation, folders, tags, naming: https://blog.thegrizzlylabs.com/2025/03/organizing-documents.html
+- Search scope: https://help.thegrizzlylabs.com/article/241-how-to-search-my-documents
+- Content search and OCR processing: https://help.thegrizzlylabs.com/article/240-how-to-search-my-scans-with-their-content
+- OCR enablement: https://help.thegrizzlylabs.com/article/235-how-to-enable-text-recognition
+- OCR capabilities: https://help.thegrizzlylabs.com/article/227-can-genius-scan-recognize-the-text-in-my-scans
+- Storage/privacy: https://help.thegrizzlylabs.com/article/36-where-are-my-documents-stored
+- Privacy overview: https://help.thegrizzlylabs.com/article/170-privacy-security-and-compliance
+- Export shortcuts: https://help.thegrizzlylabs.com/article/358-how-to-configure-an-export-shortcut-or-destination
+- Tags: https://help.thegrizzlylabs.com/article/51-how-to-organize-documents-with-tags
+- Pricing/PDF-A listing: https://thegrizzlylabs.com/genius-scan/pricing
+
+**Google Drive**
+- Android scanning, capture, Clean, PDF/JPG, destination, widget: https://support.google.com/drive/answer/3145835?hl=en&co=GENIE.Platform%3DAndroid
+
+**Microsoft**
+- Lens retirement and OneDrive recommendation: https://support.microsoft.com/en-us/office/microsoft-lens-for-android-ec124207-0049-4201-afaf-b5874a8e6f2b
+- OneDrive Android scanning: https://support.microsoft.com/en-us/onedrive/scan-a-whiteboard-document-business-card-or-photo-in-onedrive-for-android
+- OneDrive OCR: https://support.microsoft.com/en-us/onedrive/how-to-use-optical-character-recognition-to-read-pdfs-in-onedrive
+- Microsoft mobile app lifecycle: https://support.microsoft.com/en-us/microsoft-365-copilot/understand-changes-to-microsoft-365-copilot-mobile-app
+
+**Apple**
+- Notes/Files scanning and signatures: https://support.apple.com/en-us/108963
+- Notes search, attachments, folders, tags: https://support.apple.com/en-us/118442
+- iCloud encryption and ADP: https://support.apple.com/en-us/102651
+
+**SwiftScan**
+- Features: https://swiftscanapp.com/en/features.html
+- Smart naming iOS: https://swiftscanapp.zendesk.com/hc/en-us/articles/7602877609627-SwiftScan-Smart-File-Naming-iOS
+- Default folders Android: https://swiftscanapp.zendesk.com/hc/en-us/articles/54285988489755-SwiftScan-Android-Default-Folders
+- Automatic upload: https://swiftscanapp.zendesk.com/hc/en-us/articles/7487295135387-SwiftScan-Setting-up-Automatic-Upload
+- Local OCR: https://swiftscanapp.zendesk.com/hc/en-us/articles/7604024721051-SwiftScan-Plus-OCR
+- Advanced editing, redaction, signature: https://swiftscanapp.zendesk.com/hc/en-us/articles/55520163683995-SwiftScan-Advanced-Editing-Tools-iOS
+- Scan quality/file size: https://swiftscanapp.zendesk.com/hc/en-us/articles/18764468965147-SwiftScan-Scan-Quality-and-File-Size
+- AI tools: https://swiftscanapp.zendesk.com/hc/en-us/articles/27344098492955-SwiftScan-New-AI-Tools
+- Android listing and tier/privacy data: https://play.google.com/store/apps/details?id=net.doo.snap&hl=en_US
+
+**Accessibility**
+- Android accessibility and 48 × 48 dp: https://developer.android.com/guide/topics/ui/accessibility/apps
+- WCAG text contrast: https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+- WCAG non-text contrast: https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html
+
+**Recording evidence:** Screen_Recording_20261113_121627.mp4; frames extracted for this audit. No project source files were read or modified; no code changes were made.

@@ -125,6 +125,10 @@ class ScanListAdapter(
             binding.catChip.compoundDrawablesRelative[0]?.mutate()?.setTint(catColor)
             binding.catChip.contentDescription =
                 context.getString(R.string.doc_category_action, catLabel)
+            // M08: a category shows once one is chosen; "Unsorted" on every card was noise
+            // (the chip rail and the card menu still sort it).
+            binding.catChip.isVisible = doc.category.orEmpty() != CategoryRules.UNSORTED &&
+                doc.category.orEmpty().isNotEmpty()
 
             // Retrieval slice 5: page links, only for a match computed for THIS document at
             // its current revision (a recycled or edited row never inherits another's pages).
@@ -189,8 +193,12 @@ class ScanListAdapter(
                 )
                 else -> Triple(null, 0, 0)
             }
-            binding.scanTextStatus.isVisible = text != null
-            if (text != null) {
+            // M08: "Search ready" is the normal state, so it is spoken, not printed on every
+            // card; waiting / reading / partial states stay visible because they need attention.
+            val shown = text?.takeIf { row.info.text != TextState.READY || live != null }
+            binding.scanTextStatus.isVisible = shown != null
+            binding.statusRow.isVisible = shown != null || binding.catChip.isVisible
+            if (shown != null) {
                 val tint = ContextCompat.getColor(context, color)
                 binding.scanTextStatus.text = text
                 binding.scanTextStatus.setTextColor(tint)

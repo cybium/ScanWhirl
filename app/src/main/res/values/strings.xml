@@ -202,11 +202,11 @@
     <string name="bar_import">Import</string>
     <string name="bar_vault">Vault</string>
     <string name="import_title">Import</string>
-    <string name="import_photos">Photos from gallery</string>
-    <string name="import_pdf">PDF as pages</string>
+    <string name="import_photos">Photos</string>
+    <string name="import_pdf">PDF file</string>
     <string name="import_subtitle">Choose where the pages are coming from.</string>
-    <string name="import_photos_desc">Pick images from your gallery. You arrange and edit them in Review before saving.</string>
-    <string name="import_pdf_desc">Makes a new editable scan from a PDF. Pages become images, so text and vector detail are flattened. The original file is not changed.</string>
+    <string name="import_photos_desc">From your gallery</string>
+    <string name="import_pdf_desc">Each page becomes an editable page</string>
     <string name="import_order_note">Android\'s photo picker may hand photos over in a different order, so check the page order in Review before you save.</string>
     <string name="empty_scan_button">Scan a document</string>
     <string name="empty_import_button">Import photos or a PDF</string>
@@ -627,8 +627,8 @@
     </plurals>
     <string name="trash_delete_failed">Some items couldn’t be deleted. They are still in Trash.</string>
     <string name="trash_empty_title">Trash is empty</string>
-    <string name="trash_empty_body">Scans you move to Trash stay here, complete, until you restore them or delete them permanently. Nothing is deleted automatically.</string>
-    <string name="trash_header_note">Restore puts a document back with all its pages and text. PDFs you saved to Documents/ScanWhirl are not affected by Trash.</string>
+    <string name="trash_empty_body">Nothing here is deleted automatically.</string>
+    <string name="trash_header_note">Restored documents come back complete.</string>
     <string name="trash_error_title">Couldn’t open Trash</string>
     <string name="trash_error_body">Your documents weren’t changed. Try again.</string>
     <string name="trash_retry">Try again</string>
@@ -668,4 +668,8 @@
     <string name="import_failed_no_access">ScanWhirl can no longer read this file. It may have been moved or deleted, or its permission was removed. Choose it again from the file picker.</string>
     <string name="import_failed_read">The file stopped loading before it was complete, so nothing was imported. If it is in a cloud app, download it or make it available offline, then try again.</string>
     <string name="import_failed_save">ScanWhirl couldn’t save the imported pages, so nothing was added. Try again.</string>
+    <!-- M08: Google scanner Done saves directly to Home. -->
+    <string name="scan_saved_named">Saved “%1$s”</string>
+    <string name="scan_saved_named_export">Saved “%1$s”. %2$s</string>
+    <string name="scan_save_failed_review">Couldn’t save the scan (%1$s). Your pages are kept here — check them and save again.</string>
 </resources>

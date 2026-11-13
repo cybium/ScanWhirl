@@ -157,4 +157,14 @@ internal object PendingScans {
     private const val FILTERS_FILE = "filters.txt"
 
     fun pageCount(dir: File): Int = dir.listFiles { p -> p.extension.equals("jpg", true) }?.size ?: 0
+
+    private val PAGE_NAME = Regex("^page_(\\d+)\\.jpg(\\.del)?$", RegexOption.IGNORE_CASE)
+
+    /**
+     * Highest page number in [dir] (0 when none), counting pages a review has hidden for
+     * Undo (`page_NNN.jpg.del`): a page appended after it can never be overwritten when
+     * that Undo renames the hidden page back.
+     */
+    fun lastPageNumber(dir: File): Int =
+        dir.list()?.mapNotNull { PAGE_NAME.find(it)?.groupValues?.get(1)?.toIntOrNull() }?.maxOrNull() ?: 0
 }

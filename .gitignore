@@ -27,3 +27,9 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local build artifacts kept out of Git
+builds/
+
+docs/audit/*/evidence/
+

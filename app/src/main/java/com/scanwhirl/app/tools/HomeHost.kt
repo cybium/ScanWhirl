@@ -26,4 +26,7 @@ interface HomeHost {
 
     /** Background work ended — host may dim the signal dot. */
     fun workEnded() = Unit
+
+    /** M08: a scan was saved straight from Google's scanner; [exportNote] is the opt-in copy result. */
+    fun scanSaved(doc: com.scanwhirl.app.model.ScanDocument, exportNote: String?) = refreshList()
 }

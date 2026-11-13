@@ -616,9 +616,14 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
         // Vault row is NOT Pro-guarded (WP-22): removing an existing vaulted
         // doc is Free; adding is unavailable and says so (no Pro redirect).
-        view.findViewById<View>(R.id.rowMoreVault).setOnClickListener {
-            sheet.dismiss()
-            toggleVaultDoc()
+        // M08: adding to the legacy Vault is unavailable (O-02), so the row exists only to
+        // take an existing Vault item back out — never as a dead end that just shows a toast.
+        view.findViewById<View>(R.id.rowMoreVault).apply {
+            isVisible = doc.isVaulted
+            setOnClickListener {
+                sheet.dismiss()
+                toggleVaultDoc()
+            }
         }
         // Danger: ordinary documents go to Trash; legacy Vault items are deleted permanently.
         view.findViewById<android.widget.TextView>(R.id.labelMoreDelete).setText(

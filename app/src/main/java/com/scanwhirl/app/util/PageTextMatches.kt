@@ -112,13 +112,14 @@ object PageTextMatches {
         // The normaliser is one char in, one char out; if that ever failed,
         // ranges would point at the wrong text, so report no page hit at all.
         if (norm.length != text.length) return null
-        if (!terms.all { norm.contains(it) }) return null
+        // M08: word matches only (see SearchMatcher.findWord), the same rule as Home search.
+        if (!terms.all { SearchMatcher.containsWord(norm, it) }) return null
 
         val raw = ArrayList<IntRange>()
         for (term in terms) {
             var from = 0
             while (true) {
-                val idx = norm.indexOf(term, from)
+                val idx = SearchMatcher.findWord(norm, term, from)
                 if (idx < 0) break
                 raw += idx until idx + term.length
                 from = idx + term.length
@@ -179,7 +180,8 @@ object PageTextMatches {
             append(body)
             if (end < pageText.length) append('…')
         }
-        val highlights = matchPage(text, terms.filter { SearchMatcher.normalize(text).contains(it) })
+        val normText = SearchMatcher.normalize(text)
+        val highlights = matchPage(text, terms.filter { SearchMatcher.containsWord(normText, it) })
             ?.first.orEmpty()
         return Excerpt(text, highlights)
     }

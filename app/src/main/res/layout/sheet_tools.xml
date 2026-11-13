@@ -36,8 +36,10 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
-        <!-- PRO divider (§4.3): hairlines either side of the micro-caps label. -->
+        <!-- PRO divider (§4.3). M08: hidden while Pro is not sold; tools form one grid. -->
         <LinearLayout
+            android:id="@+id/proDivider"
+            android:visibility="gone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginVertical="12dp"
