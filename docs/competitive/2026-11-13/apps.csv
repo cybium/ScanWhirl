@@ -1,12 +1,13 @@
 rank,app,package,version,paid_offer,price_inr,ads,login,offline_fit,best_pattern,price_captured
 1,Genius Scan,com.thegrizzlylabs.geniusscan.free,7.44.1,"OCR, PDF/A, password, tags/search, cloud",4250/year,no,no,high,"free core + compare plans",yes
 2,Adobe Scan,com.adobe.scan.android,26.10.29,"Magic eraser, edit text, high-speed, Office export, combine, compress, password, 100-page OCR, 20GB",not captured,yes,google (already signed in),low,"scan options sheet + document quick actions + dock",no
-3,SwiftScan,net.doo.snap,11.0.1(721),"OCR, signature, cloud, AI, editing, unlimited scans",2350/year or 470/month,yes,no,medium,"VIP benefit sheet + post-save export row",yes
-4,vFlat Scan,com.voyagerx.scanner,1.16.10,"finger removal, flatten, OCR, Word/images",2999/year or 299/month,referral promo,no,medium-high,"permission explainer + camera feedback",yes
-5,TapScanner,pdf.tap.scanner,3.1.24,"premium tools; exact benefits not captured",not captured,not assessed,optional,medium,"scan/gallery/import + popular tools",no
-6,ACE Scanner,pdfscanner.scan.pdf.scanner.free,1.5.2,"tool grid, ID, conversions, sign; exact benefits not captured",not captured,yes,no,medium,"choose Home tools + tool grid",no
-7,Notebloc,com.notebloc.app,6.0.4,"remove ads only",100/mo; 750/year; 1350 lifetime,yes,no,high,"three price cards + lifetime",yes
-8,Lufick Doc Scanner,com.cv.docscanner,6.9.9,"remove ads, themes, VIP support",399/3mo or 799/year,yes,no,high,"Home/PDF Tools/ID tabs + folders",yes
-9,Tiny Scanner,com.appxy.tinyscanner,8.16.7,"subscription; exact benefits not captured",not captured,yes (Play listing),no,medium,"Recents/Library/Actions/Me nav",no
-10,iScanner,com.bpmobile.iscanner.free,6.11.3,"WebView trial/weekly/annual; cloud/AI",not captured,webview upsell,webview,low,"negative: funnel-first onboarding",no
--,"ScanWhirl current",com.scanwhirl.app.test,1.1.1-test27,"none; PRO not available yet",none,no,no,high,"search snippets + page grid + before/after + Quick sort",n/a
+3,CamScanner,com.intsig.camscanner,7.28.5.2611020000,"Pro sideloaded; pricing excluded by owner; 20+ privileges",excluded,yes,optional/cloud,low,"custom camera modes + Home tool grid + PDF suite + editor tabs",n/a
+4,SwiftScan,net.doo.snap,11.0.1(721),"OCR, signature, cloud, AI, editing, unlimited scans",2350/year or 470/month,yes,no,medium,"VIP benefit sheet + post-save export row",yes
+5,vFlat Scan,com.voyagerx.scanner,1.16.10,"finger removal, flatten, OCR, Word/images",2999/year or 299/month,referral promo,no,medium-high,"permission explainer + camera feedback",yes
+6,TapScanner,pdf.tap.scanner,3.1.24,"premium tools; exact benefits not captured",not captured,not assessed,optional,medium,"scan/gallery/import + popular tools",no
+7,ACE Scanner,pdfscanner.scan.pdf.scanner.free,1.5.2,"tool grid, ID, conversions, sign; exact benefits not captured",not captured,yes,no,medium,"choose Home tools + tool grid",no
+8,Notebloc,com.notebloc.app,6.0.4,"remove ads only",100/mo; 750/year; 1350 lifetime,yes,no,high,"three price cards + lifetime",yes
+9,Lufick Doc Scanner,com.cv.docscanner,6.9.9,"remove ads, themes, VIP support",399/3mo or 799/year,yes,no,high,"Home/PDF Tools/ID tabs + folders",yes
+10,Tiny Scanner,com.appxy.tinyscanner,8.16.7,"subscription; exact benefits not captured",not captured,yes (Play listing),no,medium,"Recents/Library/Actions/Me nav",no
+W,iScanner,com.bpmobile.iscanner.free,6.11.3,"WebView trial/weekly/annual; cloud/AI",not captured,webview upsell,webview,low,"negative: funnel-first onboarding",no
+ours,ScanWhirl current,com.scanwhirl.app.test,1.1.1-test27,"none; PRO not available yet",none,no,no,high,"search snippets + page grid + before/after + Quick sort",n/a

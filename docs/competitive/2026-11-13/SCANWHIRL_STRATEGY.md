@@ -13,6 +13,7 @@
 The competitors with strong tool models do not rely on their scanner for everything:
 
 - **Adobe** puts modes and actions in a Home scan sheet, then a document dock.
+- **CamScanner** uses 8 Home shortcuts, 19 All-Tools entries, 11 PDF Tools and a tabbed editor; its 194 MB/46-permission APK shows the cost of that breadth.
 - **ACE** asks users which tools to put on Home.
 - **TapScanner** puts Scan Doc / Gallery / Import File and Popular Tools on Home.
 - **Lufick** separates Home, PDF Tools and Import ID Photo.
@@ -111,6 +112,7 @@ Do not put “remove ads,” “premium themes,” or “VIP support” in a no-
 - **No opaque weekly trial.** iScanner’s funnel is the anti-pattern.
 - **No vague Pro features.** Lufick’s “Premium Features” and “VIP Support” say nothing.
 - **No cloud dependency.** Adobe’s “processed in and saved to Adobe cloud” is the exact thing ScanWhirl promises not to do.
+- **No feature-suite bloat.** CamScanner’s 41-tool catalogue, 340 activities, 46 permissions and 194 MB APK are evidence of what not to ship. Build the 10 offline tools that matter.
 
 ## Pricing recommendation
 

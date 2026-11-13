@@ -1,5 +1,9 @@
 # Per-app notes — deep walk
 
+## CamScanner — `com.intsig.camscanner` 7.28.5.2611020000
+
+A full deep dive lives in `CAMSCANNER_DEEP_DIVE.md`, including the APK analysis. In short: Home has 8 shortcuts and Recents; Files has import/create folder/multi-select; All has 19 visible tools; PDF Tools has 11; the editor has Images/Markup/Page tabs; ID Cards has General/ID card/Passport and an A4 composite preview; ID Photo Maker and To Word are separate camera modes; Me has premium/cloud/tasks/points/widgets/settings. The APK is 194.47 MB, 12,695 files, 14 dex, 84,681 classes, 522,684 methods, 340 activities and 46 permissions. This is why it is feature-packed, and why it is not a model for an offline app.
+
 ## Adobe Scan — `com.adobe.scan.android` 26.10.29
 
 **First run:** Adobe data-usage notice, then “Your scans will be processed in and saved to Adobe cloud storage.” Google sign-in was already done by the owner. Camera and notification permissions accepted. A Google Pay ad appeared on Home; a “Go ad-free and unlock premium tools — Free trial” strip sits above it.

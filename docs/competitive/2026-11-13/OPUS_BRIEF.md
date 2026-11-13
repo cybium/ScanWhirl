@@ -5,14 +5,15 @@ Read this after `docs/audit/2026-11-13/HANDOFF.md` and `DEVICE_FINDINGS.md`.
 ## What the benchmark says
 
 1. **Genius Scan** is the closest strategic peer: free core, no ads, no forced account, clean document flow; Ultra at ₹4,250/year sells OCR, PDF/A, password, tags and cloud.
-2. **Adobe Scan** is the feature ceiling and the best Home/tool architecture: Home/Files, a scan-options sheet, document quick actions, a real reader dock, naming templates, preferences and Office export. It is cloud-first and has ads in free.
-3. **SwiftScan** proves the value of a visible post-save export row and full-page review, but its watermark/ads/filter gates are hostile.
-4. **vFlat** has the best capture feedback and permission explainer.
-5. **ACE Scanner** has the strongest “choose which tools go on Home” onboarding—the right answer to an uncustomisable ML Kit scanner.
-6. **TapScanner** shows scan/gallery/import plus a tool shelf and optional account, but feature sprawl.
-7. **Notebloc** proves the lifetime price anchor and ad-removal-only model.
-8. **Lufick** shows folders/tabs but a thin Pro offer.
-9. **Tiny Scanner** and **iScanner** are the marketing/paywall-first anti-patterns.
+2. **Adobe Scan** is the clean feature ceiling and the best Home/tool architecture: Home/Files, a scan-options sheet, document quick actions, a real reader dock, naming templates, preferences and Office export. It is cloud-first and has ads in free.
+3. **CamScanner** is the feature-breadth ceiling: 8 Home shortcuts, 19 visible All-Tools entries, 11 PDF Tools, tabbed editor, ID Cards A4 mode, ID Photo, Word/Excel/PPT, sign, watermark, lock, tags, widgets and cloud. Read `CAMSCANNER_DEEP_DIVE.md` for the inventory and APK cost. Do not copy its 194 MB/46-permission/ads/cloud model.
+4. **SwiftScan** proves the value of a visible post-save export row and full-page review, but its watermark/ads/filter gates are hostile.
+5. **vFlat** has the best capture feedback and permission explainer.
+6. **ACE Scanner** has the strongest “choose which tools go on Home” onboarding—the right answer to an uncustomisable ML Kit scanner.
+7. **TapScanner** shows scan/gallery/import plus a tool shelf and optional account, but feature sprawl.
+8. **Notebloc** proves the lifetime price anchor and ad-removal-only model.
+9. **Lufick** shows folders/tabs but a thin Pro offer.
+10. **Tiny Scanner** is the marketing/paywall-first anti-pattern; **iScanner** is the same pattern taken further and is not a top-10 model.
 
 ## Non-negotiable ScanWhirl constraints
 

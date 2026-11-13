@@ -2,7 +2,27 @@
 
 This is a product ranking, not a feature checklist. It weighs capture quality, document workflow, clarity, trust, monetisation decency and fit with an offline-first scanner.
 
-## Top 10
+## Revised top 10 after the CamScanner sideload
+
+The official CamScanner APK was not available on this Play Store region; the owner sideloaded a Pro-unlocked build and asked for a feature audit without pricing. It is the most feature-packed app observed, but it is also 194 MB, has 46 permissions, 340 activities and ads/cloud/account surfaces.
+
+**Overall revised order:** 1 Genius, 2 Adobe, 3 CamScanner, 4 SwiftScan, 5 vFlat, 6 TapScanner, 7 ACE, 8 Notebloc, 9 Lufick, 10 Tiny Scanner. iScanner drops to a warning, not a top-10 model.
+
+**Fit with ScanWhirl’s offline promise:** Genius (#1), Adobe/ACE for patterns, CamScanner for feature inventory only. CamScanner’s 194 MB ad/cloud suite is not a template.
+
+The detailed entries below retain their earlier numbering as benchmark notes; the revised order above is the ranking to use.
+
+## CamScanner at #3 — the feature ceiling
+
+**Why it is high:** the most complete scanner utility surface observed. Eight Home shortcuts (Smart Scan, PDF Tools, Import Images, Import Files, ID Cards, ID Photo Maker, To Word, All), 19 visible All-Tools entries across Convert/Import/Edit/AI, 11 PDF Tools, a three-tab editor (Images/Markup/Page), a dedicated ID Cards A4 mode, an ID Photo studio, Word/Excel/PPT conversion, signature, watermark, lock, smart erase, tags, folders, widgets and a Me/cloud/account hub.
+
+**Weak spot:** it wins by becoming a 194 MB document suite: 14 dex files, 84,681 classes, 522,684 methods, 340 activities, 46 permissions, ad/cloud/account surfaces, remote-configurable 41-tool catalogue, and adjacent products such as ID photo, calorie/plant/solver AI. Pricing was excluded by the owner because the Pro build is sideloaded.
+
+**Best pattern to steal:** the Home tool grid, three editor tabs, ID Cards A4 composition and PDF Tools grouping. Do not copy the size, permissions, ads or cloud.
+
+**Offline fit:** very low.
+
+See `CAMSCANNER_DEEP_DIVE.md` for the full UI/APK evidence.
 
 ### 1. Genius Scan — the best model for ScanWhirl
 
@@ -94,7 +114,7 @@ This is a product ranking, not a feature checklist. It weighs capture quality, d
 
 **Offline fit:** medium; ads and account prompts are likely.
 
-### 10. iScanner — the paywall-first benchmark to avoid
+### 10. iScanner — the paywall-first benchmark to avoid (warning, not revised top 10)
 
 **Why it is included:** it is a major install base and shows where aggressive subscription funnels go: a WebView onboarding with “Loved by 120M users,” rotating testimonials, legal terms woven into the funnel, and a 3-day trial/weekly plan. It advertises cloud storage, OpenAI, Mathpix OCR and other server services.
 
@@ -106,7 +126,7 @@ This is a product ranking, not a feature checklist. It weighs capture quality, d
 
 ## Where ScanWhirl sits today
 
-**Current position: about 8th on UX, with the potential to reach 3rd–4th for the offline segment.**
+**Current position: about 8th–9th on UX after inserting CamScanner, with the potential to reach 3rd–4th for the offline segment.**
 
 **Real advantages to protect:**
 

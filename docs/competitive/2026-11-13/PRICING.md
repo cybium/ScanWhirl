@@ -2,6 +2,8 @@
 
 All prices below were shown on the Indian Play Store or in the app on 2026-11-13. They are localized, may A/B test, and may exclude tax. “Not captured” means the app did not show a readable price in this walk; it does not mean free.
 
+**CamScanner pricing is excluded by owner instruction.** The installed build is a sideloaded Pro-unlocked APK. Its feature surface is analysed in `CAMSCANNER_DEEP_DIVE.md`; do not infer a price or plan from it.
+
 | App | Free tier | Paid tier and price | Paid benefits actually shown | Ads | Confidence |
 |---|---|---|---|---|---|
 | Genius Scan | High-res scanning, unlimited scans, perspective correction, multipage PDF | **₹4,250/year**, 1 week free | OCR, PDF/A-1b, password encryption, tags/search, cloud backup/sync, auto-export, advanced security | No ads observed | High — paywall and Compare plans screen |

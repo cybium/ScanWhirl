@@ -11,7 +11,7 @@ This is a device-based teardown of the scanner apps installed from Google Play o
 - ADB screenshots and UIAutomator hierarchy.
 - Permissions accepted on the reset test phone.
 - Camera used where possible, with the phone held over a real page. Hardware flicker lines are ignored.
-- Account gates skipped where a skip existed. Adobe was already signed in with Google. TapScanner was continued without an account. CamScanner’s official listing was not available; only a sponsored “OKEN — CamScanner” clone appeared and was not installed. OneDrive was skipped because it requires a Microsoft account. Google Drive’s package had no launchable activity on this device.
+- Account gates skipped where a skip existed. Adobe was already signed in with Google. TapScanner was continued without an account. Official CamScanner was absent from this Play Store region and only a sponsored “OKEN — CamScanner” clone appeared; the owner sideloaded the official Pro-unlocked build for the deep dive. OneDrive was skipped because it requires a Microsoft account. Google Drive’s package had no launchable activity on this device.
 - Each app was opened, its onboarding skipped where possible, and its Home/library, main actions, Pro/paywall and at least one document flow inspected. Depth varies by app and is recorded in `APP_NOTES.md`.
 
 ## Apps observed
@@ -19,23 +19,25 @@ This is a device-based teardown of the scanner apps installed from Google Play o
 | App | Package | Version | Rank | Deep walk |
 |---|---|---|---|---|
 | Adobe Scan | `com.adobe.scan.android` | 26.10.29 | 2 | Home, Files, scan sheet, import from photos, crop/edit review, saved card, viewer, Preferences, plan screen |
+| CamScanner | `com.intsig.camscanner` | 7.28.5.2611020000 | 3 | Sideloaded Pro; Home, All Tools, Files, Me, More Settings, PDF Tools, import flow, editor tabs, ID Cards, ID Photo, To Word, Smart Scan; APK extracted |
 | Genius Scan | `com.thegrizzlylabs.geniusscan.free` | 7.44.1 | 1 | Onboarding, paywall, plan comparison, import, document detail, OCR gate |
-| SwiftScan | `net.doo.snap` | 11.0.1(721) | 3 | Terms, onboarding, VIP paywall, Home, camera, review, save, ad, library, export |
-| vFlat Scan | `com.voyagerx.scanner` | 1.16.10 | 4 | Permission explainer, terms, Premium, camera, library |
-| TapScanner | `pdf.tap.scanner` | 3.1.24 | 5 | Onboarding, optional account, Home tools, premium entry |
-| ACE Scanner | `pdfscanner.scan.pdf.scanner.free` | 1.5.2 | 6 | Launch ad, language, onboarding, tool picker, Home tools |
-| Notebloc | `com.notebloc.app` | 6.0.4 | 7 | Home, drawer, ad-removal Pro paywall |
-| Lufick Doc Scanner | `com.cv.docscanner` | 6.9.9 | 8 | Tour, Home folders/tools, Premium |
-| Tiny Scanner | `com.appxy.tinyscanner` | 8.16.7 | 9 | Marketing onboarding, Home |
-| iScanner | `com.bpmobile.iscanner.free` | 6.11.3 | 10 | WebView onboarding, account/terms, subscription/legal funnel |
+| SwiftScan | `net.doo.snap` | 11.0.1(721) | 4 | Terms, onboarding, VIP paywall, Home, camera, review, save, ad, library, export |
+| vFlat Scan | `com.voyagerx.scanner` | 1.16.10 | 5 | Permission explainer, terms, Premium, camera, library |
+| TapScanner | `pdf.tap.scanner` | 3.1.24 | 6 | Onboarding, optional account, Home tools, premium entry |
+| ACE Scanner | `pdfscanner.scan.pdf.scanner.free` | 1.5.2 | 7 | Launch ad, language, onboarding, tool picker, Home tools |
+| Notebloc | `com.notebloc.app` | 6.0.4 | 8 | Home, drawer, ad-removal Pro paywall |
+| Lufick Doc Scanner | `com.cv.docscanner` | 6.9.9 | 9 | Tour, Home folders/tools, Premium |
+| Tiny Scanner | `com.appxy.tinyscanner` | 8.16.7 | 10 | Marketing onboarding, Home |
+| iScanner | `com.bpmobile.iscanner.free` | 6.11.3 | warning | WebView onboarding, account/terms, subscription/legal funnel; not a top-10 model |
 
-**Excluded:** Microsoft Lens (retired), Microsoft OneDrive (login wall), Google Drive scanner (no launchable activity on this test device), Apple Notes/Files (iOS), official CamScanner (not available; clone not installed).
+**Excluded:** Microsoft Lens (retired), Microsoft OneDrive (login wall), Google Drive scanner (no launchable activity on this test device), Apple Notes/Files (iOS). Official CamScanner was absent from Play Store in this region; the owner sideloaded a Pro build for the deep dive. The sponsored “OKEN — CamScanner” clone was not installed.
 
 ## Evidence map
 
 Screenshots are in `screenshots/` and are ignored by Git so the repository stays small. The key ones are named by app and surface:
 
 - Adobe: `01_adobe_filebrowser.png`, `01_adobe_camera4.png`, `01_adobe_import_review.png`, `01_adobe_home_saved.png`, `01_adobe_document.png`, `01_adobe_modify.png`, `01_adobe_preferences.png`, `01_adobe_filename.png`, `01_adobe_premium.png`
+- CamScanner: `cam_home.png`, `cam_tools_all.png`, `cam_import_review2.png`, `cam_document2.png`, `cam_editor.png`, `cam_editor_markup.png`, `cam_pdf_tools.png`, `cam_idcards.png`, `cam_idphoto.png`, `cam_toword.png`, `cam_files3.png`, `cam_me2.png`, `cam_settings_security.png`
 - Genius: `02_genius_welcome.png`, `02_genius_editor.png`, `02_genius_ultra_paywall.png`, `02_genius_compare_plans.png`, `02_genius_ocr_gate.png`
 - SwiftScan: `03_swiftscan_home.png`, `03_swiftscan_camera.png`, `03_swiftscan_review.png`, `03_swiftscan_paywall.png`, `03_swiftscan_library4.png`, `03_swiftscan_library.png`
 - vFlat: `04_vflat_onboarding2.png`, `04_vflat_camera.png`, `04_vflat_home4.png`, `04_vflat_library.png`
@@ -49,6 +51,8 @@ Screenshots are in `screenshots/` and are ignored by Git so the repository stays
 ## Files
 
 - `RANKING.md` — top 10 and where ScanWhirl sits.
+- `CAMSCANNER_DEEP_DIVE.md` — CamScanner feature/APK analysis.
+- `apk-analysis/camscanner/` — pulled base APK, manifest, dex package list, tool JSON; ignored by Git.
 - `PRICING.md` — observed prices and benefits.
 - `FEATURE_MATRIX.md` — what each app visibly offers.
 - `UI_PATTERNS.md` — UI and navigation patterns with evidence.
