@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v2 UI: 04_vault (mockup 04_vault) — lane L2. -->
+    <string name="vault_screen_title">Vault</string>
+    <plurals name="vault_files_protected">
+        <item quantity="one">%d file protected</item>
+        <item quantity="other">%d files protected</item>
+    </plurals>
+    <string name="vault_stats_body">AES-256 · key sealed in this phone’s secure chip\nLocks itself when you leave the app</string>
+    <string name="vault_locked_title">Vault locked</string>
+    <string name="vault_locked_body">Unlock with your fingerprint or passcode to see your private files.</string>
+    <string name="vault_not_setup_title">Your private space</string>
+    <string name="vault_not_setup_body">Set up the Vault to keep files encrypted on this phone. Only you can open them.</string>
+    <string name="vault_banner_phone_lock">Unlocked with phone lock · relocks in 2 min</string>
+    <string name="vault_banner_passcode">Unlocked with passcode · relocks in 2 min</string>
+    <string name="vault_banner_recovery">Unlocked with recovery code · relocks in 2 min</string>
+    <string name="vault_banner_locked">Locked · fingerprint or passcode</string>
+    <string name="vault_private_files">Private files</string>
+    <string name="vault_add_files">+ Add files</string>
+    <string name="vault_recovery_button">Recovery code</string>
+    <string name="vault_backup_button">Backup file</string>
+    <string name="vault_setup_button">Set up Vault</string>
+    <string name="vault_unlock_button">Unlock Vault</string>
+    <string name="vault_no_files_title">No private files yet</string>
+    <string name="vault_empty_body">Add a document from your library. Its files are encrypted before the plain copy is removed.</string>
+    <string name="vault_locked_desc">Lock Vault</string>
+    <string name="vault_more_desc">Vault options</string>
+    <string name="vault_entry_meta">%1$d pages · %2$s · %3$s</string>
+    <string name="vault_entry_meta_files">%1$d pages · %2$d files · %3$s</string>
+
+    <string name="vault_setup_sheet_title">Set up your Vault</string>
+    <string name="vault_setup_note">Choose a 6+ digit passcode. It unlocks the Vault on this phone.</string>
+    <string name="vault_passcode_hint">Passcode (6+ digits)</string>
+    <string name="vault_passcode_confirm_hint">Repeat passcode</string>
+    <string name="vault_passcode_short">Use at least 6 digits</string>
+    <string name="vault_passcode_mismatch">The passcodes do not match</string>
+    <string name="vault_setup_primary">Create Vault</string>
+    <string name="vault_cancel">Cancel</string>
+
+    <string name="vault_recovery_sheet_title">Save this recovery code</string>
+    <string name="vault_recovery_note">This is the only way back if you forget your passcode and this phone is lost. Write it down now — it is shown once.</string>
+    <string name="vault_recovery_once">Encrypted on this phone. If you lose the recovery code and this phone, nobody can open these files — not even us.</string>
+    <string name="vault_recovery_copy">Copy code</string>
+    <string name="vault_recovery_copy_warning">Anyone with this code can open your backup. Keep it offline.</string>
+    <string name="vault_copy_done">Recovery code copied</string>
+    <string name="vault_recovery_saved">I saved it</string>
+    <string name="vault_confirm_title">Type 4 characters</string>
+    <string name="vault_confirm_note">Type the first 4 characters of your recovery code to finish.</string>
+    <string name="vault_confirm_hint">First 4 characters</string>
+    <string name="vault_confirm_wrong">That does not match the code</string>
+    <string name="vault_finish">Finish setup</string>
+
+    <string name="vault_unlock_sheet_title">Unlock Vault</string>
+    <string name="vault_unlock_note">Enter your passcode, or confirm your phone\'s lock (fingerprint, face or PIN).</string>
+    <string name="vault_passcode_hint_generic">Passcode</string>
+    <string name="vault_unlock_primary">Unlock</string>
+    <string name="vault_unlock_wrong">Wrong passcode</string>
+    <string name="vault_unlock_pause">Too many tries. Try again in %1$d s.</string>
+    <string name="vault_use_phone_lock">Use fingerprint or phone lock</string>
+    <string name="vault_phone_lock_prompt_title">Unlock ScanWhirl Vault</string>
+    <string name="vault_phone_lock_prompt_note">Confirm your phone lock to open the Vault</string>
+    <string name="vault_phone_lock_failed">Your phone lock did not open the Vault. Use the passcode.</string>
+    <string name="vault_phone_lock_unavailable">Add a fingerprint or a screen lock on this phone, or use the passcode.</string>
+    <string name="vault_use_recovery">Use recovery code</string>
+    <string name="vault_recovery_unlock_title">Use recovery code</string>
+    <string name="vault_recovery_unlock_note">Enter the 24-character recovery code.</string>
+    <string name="vault_recovery_hint">XXXX XXXX XXXX XXXX XXXX XXXX</string>
+    <string name="vault_recovery_wrong">That code did not work</string>
+    <string name="vault_unlock_first">Unlock the Vault first</string>
+
+    <string name="vault_more_title">Vault options</string>
+    <string name="vault_lock_now">Lock now</string>
+    <string name="vault_change_passcode">Change passcode</string>
+    <string name="vault_new_passcode_title">New passcode</string>
+    <string name="vault_new_passcode_note">Choose a new 6+ digit passcode.</string>
+    <string name="vault_save">Save</string>
+    <string name="vault_passcode_changed">Passcode changed</string>
+    <string name="vault_new_recovery_title">New recovery code</string>
+    <string name="vault_new_recovery_note">The old code stops working. Write the new one down now.</string>
+    <string name="vault_recovery_make_new">Make a new code</string>
+    <string name="vault_recovery_explain">The recovery code was shown once when you set up the Vault. It is the only way back if you forget the passcode.</string>
+
+    <string name="vault_add_sheet_title">Add to Vault</string>
+    <string name="vault_add_sheet_note">Choose a document from your library.</string>
+    <string name="vault_add_empty">There are no library documents. Scan or import one first.</string>
+    <string name="vault_added">Added to the Vault</string>
+    <string name="vault_add_failed">Could not add this document: %1$s</string>
+
+    <string name="vault_open">Open</string>
+    <string name="vault_remove">Remove from Vault</string>
+    <string name="vault_remove_note">This deletes the encrypted copy permanently. The library copy was already removed.</string>
+    <string name="vault_removed">Removed from the Vault</string>
+    <string name="vault_open_failed">Could not open this document: %1$s</string>
+
+    <string name="vault_backup_name">ScanWhirl-vault-%1$s.swvault</string>
+    <string name="vault_backup_done">Backup saved</string>
+    <string name="vault_backup_failed">Could not save the backup: %1$s</string>
+    <string name="vault_backup_note">The backup is encrypted. Without the recovery code it cannot be opened.</string>
+    <string name="vault_backup_requires_setup">Set up the Vault first</string>
+    <string name="vault_restore_title">Restore backup</string>
+    <string name="vault_restore_note">Enter the recovery code that belongs to this backup.</string>
+    <string name="vault_restore_primary">Restore</string>
+    <string name="vault_restore_done">Backup restored. Set a new passcode on this phone.</string>
+    <string name="vault_restore_failed">Could not restore the backup: %1$s</string>
+    <string name="vault_restore_busy">Restoring…</string>
+
+    <string name="vault_legacy_title">Old PIN Vault</string>
+    <string name="vault_legacy_note">Enter the old 4-digit PIN once to move those files into the encrypted Vault.</string>
+    <string name="vault_legacy_pin_hint">4-digit PIN</string>
+    <string name="vault_legacy_wrong">Wrong PIN</string>
+    <string name="vault_legacy_continue">Continue</string>
+    <string name="vault_legacy_skip">Set up without old files</string>
+    <string name="vault_legacy_migrated">%1$d old files moved into the Vault</string>
+    <string name="vault_legacy_later">Your old PIN Vault can be migrated from Vault options.</string>
+    <string name="vault_migrate_legacy">Move old PIN files</string>
+</resources>

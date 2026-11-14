@@ -12,6 +12,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.TrustPill
 
 /**
@@ -83,12 +84,13 @@ class ProScreen(
         title.addView(
             SwStyle.text(context, 28f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(R.string.pro_title_prefix)
+                typeface = SwType.extraBold(context)
             }
         )
         title.addView(
             SwStyle.text(context, 28f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
                 text = context.getString(R.string.pro_title_pro)
-                typeface = Typeface.create("sans-serif", Typeface.BOLD)
+                typeface = SwType.extraBold(context)
             }
         )
         addView(title, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))

@@ -49,12 +49,13 @@ internal object FlowUtil {
             Toast.makeText(activity, R.string.empty_title, Toast.LENGTH_SHORT).show()
             return
         }
-        SwDialog.sheet(activity)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(titleRes)
-            .setItems(docs.map { it.name }.toTypedArray()) { _, which ->
+            .setOptions(docs.map { it.name }) { which, _ ->
                 onPicked(docs[which])
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 }

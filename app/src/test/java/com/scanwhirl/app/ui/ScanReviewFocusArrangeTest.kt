@@ -7,7 +7,6 @@ import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.lifecycle.Lifecycle
@@ -145,8 +144,13 @@ class ScanReviewFocusArrangeTest {
                 assertFalse(a.findViewById<View>(R.id.btnArrLater).isEnabled)
                 assertTrue(a.findViewById<View>(R.id.btnArrEarlier).isEnabled)
                 a.findViewById<View>(R.id.btnArrMove).performClick()
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                assertEquals("Move to… lists every position", 30, dialog.listView.adapter.count)
+                val dialog = ShadowDialog.getLatestDialog()
+                // v2 UI: 08_text_ocr — Move to… is a SwSheet list (rows in swSheetItems).
+                assertEquals(
+                    "Move to… lists every position",
+                    30,
+                    dialog.findViewById<ViewGroup>(R.id.swSheetItems).childCount
+                )
                 dialog.dismiss()
             }
         }
@@ -221,8 +225,9 @@ class ScanReviewFocusArrangeTest {
             scenario.onActivity { a ->
                 assertEquals(1, a.currentIndex)
                 a.findViewById<View>(R.id.btnArrMove).performClick()
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                dialog.listView.performItemClick(null, 4, 4)
+                // v2 UI: 08_text_ocr — pick position 5 from the sheet list.
+                ShadowDialog.getLatestDialog()
+                    .findViewById<ViewGroup>(R.id.swSheetItems).getChildAt(4).performClick()
             }
             await { widths(dir) == listOf(120, 122, 123, 124, 121) && !scenario.get { it.pageOpBusy } }
             scenario.onActivity { a -> assertEquals(4, a.currentIndex) }
@@ -327,8 +332,10 @@ class ScanReviewFocusArrangeTest {
             scenario.onActivity { a ->
                 a.showPage(1)
                 a.findViewById<View>(R.id.btnToolFilter).performClick()
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                dialog.listView.performItemClick(null, ScanFilter.BLACKWHITE.ordinal, 0)
+                // v2 UI: 08_text_ocr — the filter list is a SwSheet list.
+                ShadowDialog.getLatestDialog()
+                    .findViewById<ViewGroup>(R.id.swSheetItems)
+                    .getChildAt(ScanFilter.BLACKWHITE.ordinal).performClick()
                 assertTrue(File(dir, "filters.txt").readText().contains("page_001.jpg=${ScanFilter.BLACKWHITE.id}"))
                 assertTrue(a.text(R.id.reviewStatus).endsWith("Edited · not saved"))
             }

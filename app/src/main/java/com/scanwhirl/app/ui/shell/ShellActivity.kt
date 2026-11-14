@@ -409,7 +409,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             )
         }
         override fun onCreateIdCard() {
-            ToolRegistry.byId("id_card")?.let { comingSoon(it) }
+            ToolRegistry.byId("id_card")?.let { it.launch(this@ShellActivity, it) }
         }
         override fun onAllTools() = showTab(Tab.TOOLS)
         override fun onOpenDoc(doc: ScanDocument) = openDocument(doc.id)

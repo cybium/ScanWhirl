@@ -58,7 +58,8 @@ class StampToolWiringTest {
     )
 
     private fun clickItem(index: Int) {
-        (ShadowDialog.getLatestDialog() as AlertDialog).listView.performItemClick(null, index, 0)
+        // v2 UI: 03_tools_hub — the shared chooser is now a kit SwSheet (rows in swSheetItems).
+        ShadowDialog.getLatestDialog().findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
         shadowOf(Looper.getMainLooper()).idle()
     }
 
@@ -76,7 +77,7 @@ class StampToolWiringTest {
             val chooser = requireNotNull(ShadowDialog.getLatestDialog()) {
                 "$toolId must ask for a document first"
             }
-            assertEquals("$toolId lists the library", 1, (chooser as AlertDialog).listView.adapter.count)
+            assertEquals("$toolId lists the library", 1, chooser.findViewById<android.view.ViewGroup>(R.id.swSheetItems).childCount)
             clickItem(0)
 
             val started = requireNotNull(shadowOf(host).nextStartedActivity) {

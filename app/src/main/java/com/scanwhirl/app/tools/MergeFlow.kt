@@ -29,19 +29,20 @@ class MergeFlow(
 
     /** Merge tool: choose saved scans or device PDFs. */
     fun showMergeChooser() {
-        SwDialog.sheet(activity)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.merge_chooser_title)
-            .setItems(
-                arrayOf(
+            .setOptions(
+                listOf(
                     activity.getString(R.string.merge_source_scans),
                     activity.getString(R.string.merge_source_device)
                 )
-            ) { _, which ->
+            ) { which, _ ->
                 if (which == 0) showMergePicker()
                 else activity.startActivity(MergePdfActivity.intent(activity))
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     /** Merge tool: tick 2+ scans, then name the merged document. */
@@ -52,13 +53,12 @@ class MergeFlow(
             return
         }
         val checked = BooleanArray(all.size)
-        val labels = all.map { it.name }.toTypedArray()
-        SwDialog.sheet(activity)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.merge_title)
-            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+            .setOptions(all.map { it.name }, multiChecked = checked) { which, isChecked ->
                 checked[which] = isChecked
             }
-            .setPositiveButton(R.string.merge) { _, _ ->
+            .setPrimary(R.string.merge) {
                 val ids = all.filterIndexed { i, _ -> checked[i] }.map { it.id }
                 if (ids.size < 2) {
                     host.toast(R.string.merge_needs_two)
@@ -66,20 +66,12 @@ class MergeFlow(
                     promptMergeName(ids)
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
-    private fun promptMergeName(ids: List<String>) {
-        val (builder, input) = SwDialog.input(activity, hint = activity.getString(R.string.merge_name_hint))
-        builder
-            .setTitle(R.string.merge_title)
-            .setPositiveButton(R.string.save) { _, _ ->
-                doMerge(ids, input.text?.toString())
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
-    }
+    private fun promptMergeName(ids: List<String>) = promptMerge(ids)
 
     /** Selection-mode merge: name the merged document. */
     fun promptMerge(ids: List<String>) {
@@ -87,14 +79,15 @@ class MergeFlow(
             host.toast(R.string.merge_needs_two)
             return
         }
-        val (builder, input) = SwDialog.input(activity, hint = activity.getString(R.string.merge_name_hint))
-        builder
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.merge_title)
-            .setPositiveButton(R.string.save) { _, _ ->
-                doMerge(ids, input.text?.toString())
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .setInput(hint = activity.getString(R.string.merge_name_hint))
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.setPrimary(R.string.save) {
+            doMerge(ids, sheet.inputView?.text?.toString())
+        }
+        sheet.show()
     }
 
     private fun doMerge(ids: List<String>, name: String?) {

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- L5 wave 2: ids for the Organize draft UI built in code. -->
-<resources>
-    <item name="draftNameInput" type="id" />
-</resources>

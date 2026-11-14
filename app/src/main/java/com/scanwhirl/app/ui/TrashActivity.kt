@@ -138,17 +138,18 @@ class TrashActivity : BaseActivity() {
         lifecycleScope.launch {
             val copies = withContext(Dispatchers.IO) { DeleteExports.copiesFor(repo, item) }
             val body = DeleteExports.dialogBody(this@TrashActivity, copies.size)
-            SwDialog.danger(this@TrashActivity)
+            com.scanwhirl.app.ui.kit.SwSheet.builder(this@TrashActivity)
                 .setTitle(R.string.trash_delete_forever_title)
                 .setMessage(getString(R.string.trash_delete_forever_message, item.document.name))
-                .setView(body)
-                .setPositiveButton(R.string.trash_delete_forever) { _, _ ->
+                .setContent(body)
+                .setPrimary(R.string.trash_delete_forever) {
                     val removeCopies = body.findViewById<android.widget.CheckBox>(R.id.deleteCopiesBox)
                         ?.isChecked == true
                     deleteForever(listOf(item), if (removeCopies) copies else emptyList())
                 }
-                .setNegativeButton(android.R.string.cancel, null)
-                .showSw(isSheet = false)
+                .setSecondary(android.R.string.cancel)
+                .build()
+                .show()
         }
     }
 
@@ -160,17 +161,18 @@ class TrashActivity : BaseActivity() {
                 all.flatMap { DeleteExports.copiesFor(repo, it) }.distinctBy { it.uri }
             }
             val body = DeleteExports.dialogBody(this@TrashActivity, copies.size)
-            SwDialog.danger(this@TrashActivity)
+            com.scanwhirl.app.ui.kit.SwSheet.builder(this@TrashActivity)
                 .setTitle(R.string.trash_empty_confirm_title)
                 .setMessage(resources.getQuantityString(R.plurals.trash_empty_confirm_message, all.size, all.size))
-                .setView(body)
-                .setPositiveButton(R.string.trash_empty_action) { _, _ ->
+                .setContent(body)
+                .setPrimary(R.string.trash_empty_action) {
                     val removeCopies = body.findViewById<android.widget.CheckBox>(R.id.deleteCopiesBox)
                         ?.isChecked == true
                     deleteForever(all, if (removeCopies) copies else emptyList())
                 }
-                .setNegativeButton(android.R.string.cancel, null)
-                .showSw(isSheet = false)
+                .setSecondary(android.R.string.cancel)
+                .build()
+                .show()
         }
     }
 

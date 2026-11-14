@@ -179,22 +179,21 @@ class ShellScreenTest {
         }
     }
 
+    // v2 UI: 04_vault — the tab now opens L2's encrypted Vault instead of a "coming soon" sheet.
     @Test
-    fun `vault tab is honest about the new encrypted vault`() {
+    fun `vault tab opens the encrypted vault`() {
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavVault).performClick()
             idle()
-            val note = activity.findViewById<TextView>(R.id.swVaultNote)
-            assertEquals(activity.getString(R.string.vault_tab_coming), note.text.toString())
-            activity.findViewById<View>(R.id.swVaultAction).performClick()
+            assertNotNull(activity.findViewById<View>(R.id.swVaultNote))
+            activity.findViewById<View>(R.id.swVaultAction)!!.performClick()
             idle()
-            val dialog = ShadowDialog.getLatestDialog()
-            assertNotNull(dialog)
+            val started = shadowOf(activity).nextStartedActivity
+            assertNotNull("the Vault opens", started)
             assertEquals(
-                activity.getString(R.string.vault_tab_coming),
-                dialog.findViewById<TextView>(R.id.swSheetMessage).text.toString()
+                com.scanwhirl.app.ui.vault.VaultActivity::class.java.name,
+                started.component?.className
             )
-            dialog.dismiss()
         }
     }
 

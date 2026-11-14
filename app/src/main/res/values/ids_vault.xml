@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v2 UI: 04_vault — ids owned by lane L2. -->
+    <item name="vaultStatsTitle" type="id" />
+    <item name="vaultStatsBody" type="id" />
+    <item name="vaultBanner" type="id" />
+    <item name="vaultLock" type="id" />
+    <item name="vaultMore" type="id" />
+    <item name="vaultRecoveryButton" type="id" />
+    <item name="vaultBackupButton" type="id" />
+    <item name="vaultSetupButton" type="id" />
+    <item name="vaultUnlockButton" type="id" />
+    <item name="vaultAddFiles" type="id" />
+    <item name="vaultFilesHeader" type="id" />
+    <item name="vaultList" type="id" />
+    <item name="vaultEmpty" type="id" />
+    <item name="vaultEntryName" type="id" />
+    <item name="vaultEntryMeta" type="id" />
+    <item name="vaultEntryMore" type="id" />
+    <item name="vaultAddRow" type="id" />
+    <item name="vaultUseRecovery" type="id" />
+
+    <item name="vaultPasscodeInput" type="id" />
+    <item name="vaultPasscodeConfirm" type="id" />
+    <item name="vaultRecoveryCode" type="id" />
+    <item name="vaultRecoveryInput" type="id" />
+    <item name="vaultRecoveryCopy" type="id" />
+    <item name="vaultUnlockPasscode" type="id" />
+    <item name="vaultUnlockError" type="id" />
+    <item name="vaultRestoreCode" type="id" />
+    <item name="vaultNewPasscode" type="id" />
+    <item name="vaultNewPasscodeConfirm" type="id" />
+    <item name="vaultLegacyPin" type="id" />
+    <item name="vaultSheetError" type="id" />
+</resources>

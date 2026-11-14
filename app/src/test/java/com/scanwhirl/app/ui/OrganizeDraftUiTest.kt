@@ -169,8 +169,8 @@ class OrganizeDraftUiTest {
             assertTrue(pollUntil { draftChanges(id) == 1 })
 
             scenario.onActivity { it.findViewById<android.view.View>(R.id.btnDraftSave)!!.performClick() }
-            assertTrue(pollUntil { runCatching { sheet()?.findViewById<EditText>(R.id.draftNameInput) != null }.getOrDefault(false) })
-            val input = sheet()!!.findViewById<EditText>(R.id.draftNameInput)!!
+            assertTrue(pollUntil { runCatching { sheet()?.findViewById<EditText>(R.id.swSheetInput) != null }.getOrDefault(false) })
+            val input = sheet()!!.findViewById<EditText>(R.id.swSheetInput)!!
             assertEquals(app.getString(R.string.draft_edited_name, doc.name), input.text.toString())
             primary()
 

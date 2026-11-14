@@ -57,12 +57,14 @@ class CompressFlow(
             pickPdf()
             return
         }
-        SwDialog.sheet(activity)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.compress_title)
-            .setItems(arrayOf(
-                activity.getString(R.string.compress_source_scan),
-                activity.getString(R.string.compress_source_file)
-            )) { _, which ->
+            .setOptions(
+                listOf(
+                    activity.getString(R.string.compress_source_scan),
+                    activity.getString(R.string.compress_source_file)
+                )
+            ) { which, _ ->
                 when (which) {
                     0 -> FlowUtil.pickScan(
                         activity, R.string.compress_pick_scan, docs()
@@ -70,8 +72,9 @@ class CompressFlow(
                     1 -> pickPdf()
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     /**
@@ -158,26 +161,29 @@ class CompressFlow(
         }
         (dialogBinding.levelGroup.getChildAt(1) as? RadioButton)?.isChecked = true
 
-        SwDialog.card(activity)
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.compress_level_title)
-            .setView(dialogBinding.root)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val targetText = dialogBinding.editCompressTarget.text?.toString()
-                if (!targetText.isNullOrBlank()) {
-                    val target = ImageTools.parseSizeInput(targetText)
-                    if (target == null) {
-                        Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
-                        return@setPositiveButton
-                    }
-                    onTarget(target)
-                    return@setPositiveButton
+            .setContent(dialogBinding.root)
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.setPrimaryStayOpen(android.R.string.ok) {
+            val targetText = dialogBinding.editCompressTarget.text?.toString()
+            if (!targetText.isNullOrBlank()) {
+                val target = ImageTools.parseSizeInput(targetText)
+                if (target == null) {
+                    Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
+                    return@setPrimaryStayOpen
                 }
-                val checked = dialogBinding.levelGroup.checkedRadioButtonId
-                val index = dialogBinding.levelGroup.indexOfChild(dialogBinding.levelGroup.findViewById(checked))
-                onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
+                sheet.dismiss()
+                onTarget(target)
+                return@setPrimaryStayOpen
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            val checked = dialogBinding.levelGroup.checkedRadioButtonId
+            val index = dialogBinding.levelGroup.indexOfChild(dialogBinding.levelGroup.findViewById(checked))
+            sheet.dismiss()
+            onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
+        }
+        sheet.show()
     }
 
     private fun runCompressScan(doc: ScanDocument, level: Level) {
@@ -320,8 +326,25 @@ class CompressFlow(
     // Exact-target compression helpers (PDF ≈ Σ page JPEGs + ~600 B/page)
     // ------------------------------------------------------------------
 
-    private fun fitFilesToTotal(files: List<File>, target: Long): List<ByteArray> {
-        if (files.isEmpty()) throw IllegalStateException("No pages to compress")
+    private fun fitFilesToTotal(files: List<File>, target: Long): List<ByteArray> =
+        SizeFit.compressPages(files, target)
+
+    private fun fitJpegsToTotal(pages: List<ByteArray>, target: Long): List<ByteArray> =
+        SizeFit.compressBytes(pages, target)
+
+    /** Never grows a page: keeps the original bytes when they already fit the share. */
+    private fun fitToShare(orig: ByteArray, share: Long): ByteArray = SizeFit.fitToShare(orig, share)
+}
+
+/**
+ * v2 UI: 03_tools_hub — exact target-size compression shared by the legacy Compress flow and
+ * the v2 Compress setup screen. A generated PDF is about the sum of its page JPEGs plus
+ * ~600 bytes per page, and a page never grows: bytes that already fit are kept unchanged.
+ */
+object SizeFit {
+
+    fun compressPages(files: List<File>, target: Long): List<ByteArray> {
+        require(files.isNotEmpty()) { "No pages to compress" }
         val budget = (target - (files.size * 600L + 1000L)).coerceAtLeast(2048L)
         val sizes = files.map { it.length().coerceAtLeast(1L) }
         val sum = sizes.sum().coerceAtLeast(1L)
@@ -330,8 +353,8 @@ class CompressFlow(
         }
     }
 
-    private fun fitJpegsToTotal(pages: List<ByteArray>, target: Long): List<ByteArray> {
-        if (pages.isEmpty()) throw IllegalStateException("No pages to compress")
+    fun compressBytes(pages: List<ByteArray>, target: Long): List<ByteArray> {
+        require(pages.isNotEmpty()) { "No pages to compress" }
         val budget = (target - (pages.size * 600L + 1000L)).coerceAtLeast(2048L)
         val sum = pages.sumOf { it.size.toLong() }.coerceAtLeast(1L)
         return pages.map { orig ->
@@ -339,8 +362,7 @@ class CompressFlow(
         }
     }
 
-    /** Never grows a page: keeps the original bytes when they already fit the share. */
-    private fun fitToShare(orig: ByteArray, share: Long): ByteArray {
+    fun fitToShare(orig: ByteArray, share: Long): ByteArray {
         if (orig.size.toLong() <= share) return orig
         val bmp = try {
             ImageTools.decodeSampled(orig, 3000)

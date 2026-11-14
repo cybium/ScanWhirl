@@ -160,8 +160,12 @@ class ProtectionStateTest {
     }
 
     private fun latestTitle(): String? =
-        ShadowDialog.getLatestDialog()
-            ?.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.text?.toString()
+        // v2 UI: 09_unlock_sheet — the repair prompt is a SwSheet (swSheetTitle);
+        // L3's password prompt is still an AlertDialog.
+        ShadowDialog.getLatestDialog()?.let { dialog ->
+            (dialog.findViewById<TextView>(com.scanwhirl.app.R.id.swSheetTitle)
+                ?: dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle))?.text?.toString()
+        }
 
     private fun pollUntil(timeoutMs: Long = 8000, condition: () -> Boolean): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs

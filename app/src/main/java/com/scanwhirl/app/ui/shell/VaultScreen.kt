@@ -32,7 +32,7 @@ class VaultScreen(
         bar.addView(
             SwStyle.text(context, 24f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(R.string.vault_tab_title)
-                typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+                typeface = com.scanwhirl.app.ui.kit.SwType.extraBold(context)
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
@@ -87,7 +87,7 @@ class VaultScreen(
                 context, SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f
             )
             isClickable = true
-            setOnClickListener { onComingSoon() }
+            setOnClickListener { context.startActivity(com.scanwhirl.app.ui.vault.VaultActivity.intent(context)) }
         }
         addView(
             action,

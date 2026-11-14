@@ -230,11 +230,12 @@ class HomeCategoryActionsTest {
                 ShadowDialog.getLatestDialog()!!
                     .findViewById<View>(R.id.qaRename).performClick()
 
-                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
-                val editText = firstEditText(dialog.window!!.decorView)
+                // v2 UI: 09_unlock_sheet — the rename input is the sheet's field.
+                val dialog = ShadowDialog.getLatestDialog()
+                val editText = dialog.findViewById<android.widget.EditText>(R.id.swSheetInput)
                 assertNotNull("the rename prompt must carry an input", editText)
                 editText!!.setText("Physics notes")
-                dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).performClick()
+                dialog.findViewById<View>(R.id.swSheetPrimary).performClick()
             }
 
             assertTrue(
