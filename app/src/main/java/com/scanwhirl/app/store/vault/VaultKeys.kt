@@ -1,38 +1,83 @@
 package com.scanwhirl.app.store.vault
 
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import java.security.KeyStore
 import java.security.UnrecoverableKeyException
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+
+/** The fingerprint key was reset (new biometrics enrolled): the wrap must be rebuilt. */
+class VaultKeyInvalidatedException(message: String, cause: Throwable? = null) :
+    VaultAuthException(message, cause)
+
+/**
+ * One biometric unlock waiting for the user: [cipher] is the Keystore decrypt operation the
+ * `BiometricPrompt` authorizes (as its CryptoObject), and [complete] runs it afterwards.
+ *
+ * The cipher stays unusable until the prompt's hardware-backed authentication succeeds, so the
+ * vault key cannot be unwrapped without the fingerprint/face.
+ */
+class VaultKeyChallenge internal constructor(
+    val cipher: Cipher?,
+    private val finish: () -> ByteArray
+) {
+    /** Decrypts the vault key once the prompt has authorized [cipher]. */
+    fun complete(): ByteArray = try {
+        finish()
+    } catch (e: AEADBadTagException) {
+        throw VaultAuthException("The fingerprint key no longer matches this Vault", e)
+    }
+}
 
 /**
  * Seam around the Android Keystore. Robolectric has no hardware Keystore, so tests inject an
  * in-memory implementation. The real path is **DEVICE-UNPROVEN** until a phone run is recorded.
  */
 interface VaultKeys {
+    /** The Keystore itself can be opened on this phone. */
     fun isAvailable(): Boolean
+
+    /** An auth-bound key for [ALIAS] exists (so the fingerprint prompt can be offered). */
+    fun hasKey(): Boolean
+
+    /** Wraps the vault key with the auth-bound Keystore key (setup, or after a reset). */
     fun wrap(vaultKey: ByteArray): ByteArray
-    fun unwrap(blob: ByteArray): ByteArray
+
+    /**
+     * Prepares the CryptoObject decrypt of [blob]. Throws [VaultKeyInvalidatedException] when the
+     * key was invalidated (new biometrics enrolled) and [VaultAuthException] for a damaged wrap.
+     */
+    fun challenge(blob: ByteArray): VaultKeyChallenge
+
     fun delete()
 }
 
 /**
- * AES-256 key in the Android Keystore. [wrap] of the random Vault key happens once at setup;
- * [unwrap] is the fingerprint/face path and may require user authentication.
+ * AES-256-GCM key in the Android Keystore, **auth-bound**: `setUserAuthenticationRequired(true)`
+ * without a validity duration means every use needs a fresh user authentication, provided by
+ * `androidx.biometric.BiometricPrompt` as a CryptoObject. `setInvalidatedByBiometricEnrollment`
+ * makes a new fingerprint/face invalidate the key instead of silently trusting it.
  *
- * DEVICE-UNPROVEN: `setUserAuthenticationRequired(true)` means unwrap needs a
- * `BiometricPrompt` CryptoObject on a real phone. Not exercised by Robolectric.
+ * The alias changed with the CryptoObject design (`_v2`); a wrap made with the old time-based
+ * alias fails its GCM tag, the UI falls back to the passcode and the Vault re-wraps the key.
+ *
+ * DEVICE-UNPROVEN: Robolectric has no hardware Keystore; tests use [VaultKeys] fakes.
  */
 class AndroidVaultKeys(
     private val alias: String = DEFAULT_ALIAS
 ) : VaultKeys {
 
     companion object {
-        const val DEFAULT_ALIAS = "scanwhirl_vault_key"
+        const val DEFAULT_ALIAS = "scanwhirl_vault_key_v2"
+
+        /** The alias used before the CryptoObject design; deleted alongside the new one. */
+        const val LEGACY_ALIAS = "scanwhirl_vault_key"
         private const val PROVIDER = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val IV_BYTES = 12
@@ -49,6 +94,12 @@ class AndroidVaultKeys(
         false
     }
 
+    override fun hasKey(): Boolean = try {
+        keyStore().containsAlias(alias)
+    } catch (_: Exception) {
+        false
+    }
+
     override fun wrap(vaultKey: ByteArray): ByteArray {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, key())
@@ -56,18 +107,28 @@ class AndroidVaultKeys(
         return cipher.iv + encrypted
     }
 
-    override fun unwrap(blob: ByteArray): ByteArray {
+    override fun challenge(blob: ByteArray): VaultKeyChallenge {
         if (blob.size <= IV_BYTES) throw VaultAuthException("Damaged Keystore wrap")
         val iv = blob.copyOfRange(0, IV_BYTES)
         val encrypted = blob.copyOfRange(IV_BYTES, blob.size)
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BITS, iv))
-        return cipher.doFinal(encrypted)
+        try {
+            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BITS, iv))
+        } catch (e: KeyPermanentlyInvalidatedException) {
+            delete()
+            throw VaultKeyInvalidatedException("The fingerprint key was reset on this phone", e)
+        } catch (e: UnrecoverableKeyException) {
+            delete()
+            throw VaultKeyInvalidatedException("The fingerprint key is no longer usable", e)
+        }
+        return VaultKeyChallenge(cipher) { cipher.doFinal(encrypted) }
     }
 
     override fun delete() {
         try {
-            keyStore().deleteEntry(alias)
+            val store = keyStore()
+            store.deleteEntry(alias)
+            if (alias != LEGACY_ALIAS) store.deleteEntry(LEGACY_ALIAS)
         } catch (_: Exception) {
         }
     }
@@ -82,7 +143,7 @@ class AndroidVaultKeys(
         if (existing != null) return existing
 
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, PROVIDER)
-        val spec = KeyGenParameterSpec.Builder(
+        val builder = KeyGenParameterSpec.Builder(
             alias,
             KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
         )
@@ -90,10 +151,14 @@ class AndroidVaultKeys(
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setKeySize(256)
             .setUserAuthenticationRequired(true)
-            .setUserAuthenticationValidityDurationSeconds(30)
             .setInvalidatedByBiometricEnrollment(true)
-            .build()
-        generator.init(spec)
+        if (Build.VERSION.SDK_INT >= 30) {
+            // Per-use authentication (timeout 0) satisfied by a strong biometric only, which is
+            // exactly what the BIOMETRIC_STRONG prompt offers. A device credential cannot unwrap.
+            builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
+        }
+        // Below API 30 the default for setUserAuthenticationRequired(true) is already per-use.
+        generator.init(builder.build())
         return generator.generateKey()
     }
 }

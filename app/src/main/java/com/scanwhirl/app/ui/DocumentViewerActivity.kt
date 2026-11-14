@@ -767,7 +767,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         view.findViewById<View>(R.id.rowMoreLock).setOnClickListener {
             sheet.dismiss()
             if (doc.isLocked) unlockCurrentPdf()
-            else if (pro) promptProtectPdf() else showProPanel()
+            else if (pro) {
+                // v2 UI: 05_protect_pdf — the same Protect sheet as Tools → Protect PDF.
+                LockFlow(this, repo, this, { listOf(doc) }, { _ -> }).protectDocument(doc)
+            } else showProPanel()
         }
         // Vault row is NOT Pro-guarded (WP-22): removing an existing vaulted
         // doc is Free; adding is unavailable and says so (no Pro redirect).
@@ -857,52 +860,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         } else {
             // New vault additions disabled until WP-14 encrypted Private ships.
             Toast.makeText(this, R.string.vault_new_unavailable, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /** Password-protect the document's PDF (Pro; honest RC4-128 note included). */
-    private fun promptProtectPdf() {
-        if (!ProGate.isPro(this)) return
-        val doc = document ?: return
-        withStoragePermission {
-            val (builder, input) = SwDialog.input(
-                this@DocumentViewerActivity,
-                hint = getString(R.string.protect_hint),
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            )
-            builder
-                .setTitle(R.string.protect_title)
-                .setMessage(R.string.protect_note)
-                .setPositiveButton(R.string.protect_apply) { _, _ ->
-                    val password = input.text?.toString().orEmpty()
-                    if (password.isBlank()) {
-                        Toast.makeText(this@DocumentViewerActivity, R.string.protect_hint, Toast.LENGTH_SHORT).show()
-                    } else {
-                        lifecycleScope.launch {
-                            val progress = showProgress()
-                            try {
-                                withContext(Dispatchers.IO) { repo.protectPdf(doc.id, password) }
-                                progress.dismiss()
-                                Toast.makeText(
-                                    this@DocumentViewerActivity,
-                                    R.string.protect_done,
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                reloadDocument()
-                            } catch (e: Exception) {
-                                progress.dismiss()
-                                Toast.makeText(
-                                    this@DocumentViewerActivity,
-                                    getString(R.string.page_op_failed, e.message),
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    }
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .showSw(isSheet = false)
         }
     }
 

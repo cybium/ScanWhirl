@@ -71,7 +71,7 @@ class ProScreen(
             )
         }
         hero.addView(
-            ImageView(context).apply { setImageResource(R.drawable.ic_whirl_gold) },
+            ImageView(context).apply { setImageResource(R.drawable.ic_brand_mark_gold) },
             FrameLayout.LayoutParams(SwStyle.dp(context, 72f), SwStyle.dp(context, 72f))
                 .apply { gravity = Gravity.CENTER }
         )

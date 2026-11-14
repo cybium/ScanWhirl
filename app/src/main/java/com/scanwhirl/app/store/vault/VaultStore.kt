@@ -18,7 +18,8 @@ import java.util.UUID
  *   - `recovery.bin`: the vault key wrapped by the recovery code (PBKDF2). Its presence is
  *     "the Vault is set up"; it is portable, so a `.swvault` backup restores from the code alone.
  *   - `passcode.bin`: the same key wrapped by the 6+ digit passcode.
- *   - `keystore.bin`: the same key wrapped by the Android Keystore key (fingerprint/face path).
+ *   - `keystore.bin`: the same key wrapped by the auth-bound Android Keystore key; unwrapping it
+ *     needs a `BiometricPrompt` CryptoObject (fingerprint/face), see [VaultKeys].
  *   - `<documentId>/`: `manifest.enc` plus one `fNNNN.enc` per source file. Manifests and
  *     every file are AES-256-GCM; nothing under this directory is readable plaintext.
  *   - `passwords.bin`: PDF passwords remembered for documents ([VaultPasswords]), the same
@@ -119,9 +120,13 @@ class VaultStore(
 
     fun isUnlocked(): Boolean = VaultSession.isUnlocked()
 
-    /** True when a Keystore wrap exists on this phone and the Keystore is reachable. */
-    fun hasBiometricKey(): Boolean =
-        File(vaultDir, KEYSTORE_FILE).isFile && keys.isAvailable()
+    /**
+     * True when the fingerprint path can be attempted: a Keystore wrap exists on this phone,
+     * the Keystore opens, and its auth-bound key has not been invalidated. The screen still
+     * asks `BiometricManager.canAuthenticate(BIOMETRIC_STRONG)` before offering it.
+     */
+    fun canUseBiometric(): Boolean =
+        File(vaultDir, KEYSTORE_FILE).isFile && keys.isAvailable() && keys.hasKey()
 
     fun hasLegacyPin(): Boolean = Prefs.hasVaultPin(context)
 
@@ -165,6 +170,7 @@ class VaultStore(
         }
         gate.onSuccess()
         VaultSession.open(key)
+        repairKeystoreWrap(key)
         UnlockResult(true)
     }
 
@@ -181,18 +187,35 @@ class VaultStore(
         } ?: return false
         gate.onSuccess()
         VaultSession.open(key)
+        repairKeystoreWrap(key)
         true
     }
 
-    /** Fingerprint/face path through the Keystore seam (DEVICE-UNPROVEN on hardware). */
-    fun unlockWithBiometric(): Boolean = synchronized(LOCK) {
+    /**
+     * Prepares the fingerprint unlock: the Keystore decrypt that `BiometricPrompt` must
+     * authorize. The wrap file is dropped when the key was invalidated, so the screen falls
+     * back to the passcode and the next passcode unlock re-wraps with a fresh key.
+     */
+    fun beginBiometricUnlock(): VaultKeyChallenge = synchronized(LOCK) {
         val blob = File(vaultDir, KEYSTORE_FILE)
-        if (!blob.isFile) return false
+        if (!blob.isFile) throw VaultAuthException("No fingerprint key on this phone")
+        try {
+            keys.challenge(blob.readBytes())
+        } catch (e: VaultKeyInvalidatedException) {
+            blob.delete()
+            throw e
+        }
+    }
+
+    /** Completes the fingerprint unlock after the prompt authorized the challenge's cipher. */
+    fun completeBiometricUnlock(challenge: VaultKeyChallenge): Boolean = synchronized(LOCK) {
         val key = try {
-            keys.unwrap(blob.readBytes())
-        } catch (e: Exception) {
-            null
-        } ?: return false
+            challenge.complete()
+        } catch (e: VaultAuthException) {
+            // The wrap belongs to another key (old alias, reinstall): rebuild it next unlock.
+            File(vaultDir, KEYSTORE_FILE).delete()
+            return false
+        }
         if (key.size != VaultCrypto.KEY_BYTES) return false
         gate.onSuccess()
         VaultSession.open(key)
@@ -405,7 +428,9 @@ class VaultStore(
     fun exportBackup(dest: File): File = synchronized(LOCK) {
         if (!isSetUp()) throw IllegalStateException("Set up the Vault first")
         val recovery = File(vaultDir, RECOVERY_FILE).readBytes()
-        VaultBackup.write(dest, recovery, entryDirs())
+        // Remembered PDF passwords travel with the backup (still encrypted under the vault key).
+        val extras = listOf(File(vaultDir, VaultPasswords.FILE_NAME)).filter { it.isFile }
+        VaultBackup.write(dest, recovery, entryDirs(), extras)
         dest
     }
 
@@ -429,6 +454,11 @@ class VaultStore(
                 verifyEntry(dir, manifest, key)
                 manifest
             }
+            // The remembered passwords are encrypted with the same key: prove they open before
+            // publishing them, so a damaged blob fails the restore instead of the first unlock.
+            contents.extras.forEach { extra ->
+                if (extra.name == VaultPasswords.FILE_NAME) VaultPasswords.verifyFile(extra, key)
+            }
 
             val moved = ArrayList<File>()
             try {
@@ -438,6 +468,11 @@ class VaultStore(
                     if (to.exists()) throw IOException("This document is already in the Vault")
                     if (!from.renameTo(to)) throw IOException("Could not restore this document")
                     moved += to
+                }
+                contents.extras.forEach { extra ->
+                    val to = File(vaultDir, extra.name)
+                    if (extra.name == VaultPasswords.FILE_NAME && to.exists()) to.delete()
+                    if (!extra.renameTo(to)) throw IOException("Could not restore the Vault settings")
                 }
                 // Portable state: the key wrapped by the code, then a new Keystore wrap.
                 Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), contents.recoveryBlob)
@@ -525,6 +560,16 @@ class VaultStore(
         } catch (_: Exception) {
             // The passcode and recovery code still open the Vault.
         }
+    }
+
+    /**
+     * After a passcode/recovery unlock, rebuild the fingerprint wrap when it is missing or its
+     * Keystore key was invalidated (a new fingerprint/face was enrolled). The user just proved
+     * who they are, so this is the right moment to create the fresh auth-bound key.
+     */
+    private fun repairKeystoreWrap(key: ByteArray) {
+        if (File(vaultDir, KEYSTORE_FILE).isFile && keys.hasKey()) return
+        writeKeystoreWrap(key)
     }
 
     private fun entryDirs(): List<File> =

@@ -41,6 +41,7 @@ import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.launchTool
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -154,13 +155,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         library = LibraryScreen(this, this, repo, libraryCallbacks)
         toolsHub = ToolsHubScreen(this, this)
-        vaultScreen = VaultScreen(this) {
-            SwSheet.note(
-                this,
-                getString(R.string.vault_tab_title),
-                getString(R.string.vault_tab_coming)
-            ).show()
-        }
+        vaultScreen = VaultScreen(this)
         meScreen = MeScreen(this, object : MeScreen.Callbacks {
             override fun onPro() = showPro()
             override fun onSettings() = startActivity(SettingsActivity.intent(this@ShellActivity))
@@ -324,6 +319,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private fun scroll(child: View): ScrollView = scrolls.getOrPut(child) {
         ScrollView(this).apply {
             isFillViewport = true
+            // D: the nav bar + the scan disc's overhang are not part of the page,
+            // but the last row must clear the disc when scrolled to the end.
+            clipToPadding = false
+            setPadding(0, 0, 0, SwStyle.dp(this@ShellActivity, 112f))
             addView(
                 child,
                 ViewGroup.LayoutParams(
@@ -350,10 +349,27 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         val idle = SwStyle.color(this, R.color.text_hologram_dim)
         for ((key, cell) in navItems) {
             val on = key == tab && !proOpen
-            (cell.getChildAt(0) as ImageView).imageTintList = ColorStateList.valueOf(if (on) active else idle)
+            val icon = if (on) navIconOn[key] else navIconOff[key]
+            val glyph = cell.getChildAt(0) as ImageView
+            icon?.let { glyph.setImageResource(it) }
+            glyph.imageTintList = ColorStateList.valueOf(if (on) active else idle)
             (cell.findViewWithTag<TextView>("label"))?.setTextColor(if (on) active else idle)
         }
     }
+
+    /** The nav's selected (filled) and idle (outlined) glyphs. */
+    private val navIconOn = mapOf(
+        Tab.LIBRARY to R.drawable.ic_sym_folder_filled,
+        Tab.TOOLS to R.drawable.ic_sym_apps_filled,
+        Tab.VAULT to R.drawable.ic_sym_shield_lock_filled,
+        Tab.ME to R.drawable.ic_sym_person_filled
+    )
+    private val navIconOff = mapOf(
+        Tab.LIBRARY to R.drawable.ic_sym_folder_open,
+        Tab.TOOLS to R.drawable.ic_sym_apps,
+        Tab.VAULT to R.drawable.ic_sym_shield_lock,
+        Tab.ME to R.drawable.ic_sym_person
+    )
 
     // ---- Pro --------------------------------------------------------------
 
@@ -409,7 +425,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             )
         }
         override fun onCreateIdCard() {
-            ToolRegistry.byId("id_card")?.let { it.launch(this@ShellActivity, it) }
+            ToolRegistry.byId("id_card")?.let { this@ShellActivity.launchTool(it) }
         }
         override fun onAllTools() = showTab(Tab.TOOLS)
         override fun onOpenDoc(doc: ScanDocument) = openDocument(doc.id)
@@ -517,6 +533,13 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     override fun comingSoon(tool: SwTool) {
         SwSheet.comingSoon(this, tool).show()
+    }
+
+    /** v2 UI: 06_pro — a Pro tool in a Free build opens the Pro screen. */
+    override fun proGate(tool: SwTool): Boolean {
+        if (com.scanwhirl.app.util.ProGate.isPro(this)) return false
+        showPro()
+        return true
     }
 
     private fun openText(doc: ScanDocument) {

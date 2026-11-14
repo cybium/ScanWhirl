@@ -130,9 +130,9 @@
     <string name="result_saved_documents">Saved to Documents/ScanWhirl: %1$s</string>
     <string name="result_save_failed">Could not save: %1$s</string>
     <string name="compress_grew_warning">This PDF is text/vector, so the result is larger than the original.</string>
-    <string name="compress_target_missed">Couldn\'t reach %1$s — this is the smallest honest result.</string>
+    <string name="compress_target_missed">Couldn\'t reach %1$s. This is the smallest honest result.</string>
 
-    <string name="pdf_rasterize_note">The pages become images, so text won\'t be selectable afterwards. Reordering, rotating, cropping and deleting work the same.</string>
+    <string name="pdf_rasterize_note">Pages become images, so text is no longer selectable. Editing works the same.</string>
     <string name="edit_pdf_note_title">Import PDF</string>
     <string name="continue_label">Continue</string>
     <string name="badge_free">FREE</string>
@@ -143,12 +143,12 @@
     <string name="resume_scan_msg">You have %1$d unsaved page(s) from last time. Resume, or delete them?</string>
     <string name="resume_scan_resume">Resume</string>
     <string name="resume_saved_title">Scan already saved</string>
-    <string name="resume_saved_msg">This scan was already saved as \"%1$s\", but the screen closed before it finished. Open the saved document, or remove the leftover pages.</string>
+    <string name="resume_saved_msg">This scan was saved as \"%1$s\". Open it, or remove the leftover pages.</string>
     <string name="resume_saved_open">Open saved document</string>
     <string name="resume_saved_remove">Remove leftover pages</string>
     <string name="review_conflict_title">Saved earlier</string>
-    <string name="review_conflict_changed">An earlier save of this scan finished, but you have changed its pages, order or filters since. Your changes are not in that document. Save the current version as a new document, or open the earlier one. Nothing has been replaced or deleted.</string>
-    <string name="review_conflict_modified">An earlier save of this scan exists, but that document was edited afterwards or can no longer be verified. Save the current version as a new document, or open the earlier one. Nothing has been replaced or deleted.</string>
+    <string name="review_conflict_changed">Saved earlier, but you changed this scan since. Save as new, or open the earlier copy.</string>
+    <string name="review_conflict_modified">An earlier save exists but cannot be verified. Save as new, or open the earlier copy.</string>
     <string name="review_conflict_save_new">Save as new document</string>
     <string name="review_conflict_open">Open earlier document</string>
 
@@ -207,7 +207,7 @@
     <string name="import_subtitle">Choose where the pages are coming from.</string>
     <string name="import_photos_desc">From your gallery</string>
     <string name="import_pdf_desc">Each page becomes an editable page</string>
-    <string name="import_order_note">Android\'s photo picker may hand photos over in a different order, so check the page order in Review before you save.</string>
+    <string name="import_order_note">The photo picker may change page order. Check it in Review before saving.</string>
     <string name="empty_scan_button">Scan a document</string>
     <string name="empty_import_button">Import photos or a PDF</string>
     <string name="empty_no_match_hint">Names and text inside your scans were searched.</string>
@@ -263,7 +263,6 @@
     <string name="protect_title">Password-protect</string>
     <string name="protect_hint">Password</string>
     <string name="protect_apply">Apply password</string>
-    <string name="protect_note">Uses the widely-compatible PDF standard password (RC4-128). It stops casual readers, not strong cryptography.</string>
     <string name="protect_done">PDF is password-protected</string>
     <string name="menu_protect_pdf">Lock PDF</string>
     <string name="btn_lock_pdf">Lock PDF</string>
@@ -304,13 +303,13 @@
     <string name="unlock_pdf_msg">Enter password for \"%1$s\":</string>
     <string name="unlock_pdf_remove">Unlock permanently</string>
     <string name="unlock_pdf_open">Open</string>
-    <string name="unlock_pdf_done">Password removed — PDF is unlocked</string>
+    <string name="unlock_pdf_done">Password removed. PDF is unlocked</string>
     <string name="unlock_pdf_wrong">Incorrect password</string>
     <string name="locked_edit_refused">Unlock this document to edit its pages.</string>
     <string name="locked_source_refused">Unlock “%1$s” first. Tools can’t use a password-protected document yet.</string>
     <string name="locked_no_pages">This document has no page images, so its password can’t be changed or removed.</string>
     <string name="unlock_current_pw_title">Current password</string>
-    <string name="password_charset">Use letters, numbers and common symbols. Emoji and non-Latin letters can’t be used in a PDF password.</string>
+    <string name="password_charset">Use letters, numbers and common symbols. Emoji and non-Latin letters cannot be used.</string>
     <string name="protection_repair_title">Protection needs repair</string>
     <string name="protection_repair_msg">“%1$s” is marked as locked, but its PDF is not password-protected. Copies you already shared or saved are not changed by this. Enter your password to protect it again.</string>
     <string name="btn_protect_again">Protect again</string>
@@ -332,7 +331,7 @@
     <string name="ocr_saved">Saved</string>
     <string name="ocr_unsaved_title">Unsaved changes</string>
     <string name="ocr_unsaved_msg">You have unsaved edits. Save before closing?</string>
-    <string name="ocr_save_btn">Save</string>
+    <string name="ocr_save_btn">Save .txt</string>
     <string name="ocr_discard_btn">Discard</string>
     <string name="ocr_join_lines">Join lines</string>
     <string name="ocr_fix_spaces">Fix spaces</string>
@@ -341,8 +340,8 @@
     <string name="ocr_undo_desc">Undo</string>
     <string name="ocr_redo_desc">Redo</string>
     <string name="ocr_remove_gaps">Remove gaps</string>
-    <string name="ocr_copy_btn">Copy</string>
-    <string name="ocr_share_btn">Share</string>
+    <string name="ocr_copy_btn">Copy all</string>
+    <string name="ocr_share_btn">Share text</string>
     <string name="ocr_copy_all">Copy all pages</string>
     <string name="ocr_share_all">Share all pages</string>
     <string name="ocr_save_txt">Save as .txt</string>
@@ -423,7 +422,7 @@
     <string name="lock_device_msg">ScanWhirl imports this PDF\'s pages as images first (the text stops being selectable), then protects the new PDF with your password. Save or share the locked file from the next screen.</string>
     <string name="lock_device_note">Pages were imported as images, so this PDF is picture-based. The copy you save is password-protected.</string>
     <string name="unlock_pdf_not_ours_title">Not a ScanWhirl-locked PDF</string>
-    <string name="unlock_pdf_not_ours_msg">ScanWhirl only removes passwords it set itself — it can\'t break a lock made by another app. This file was left untouched. Remove its password in the app that locked it, or ask the sender for an unlocked copy.</string>
+    <string name="unlock_pdf_not_ours_msg">ScanWhirl only removes its own passwords. This file was not changed.</string>
     <string name="unlock_device_note">Your scan in ScanWhirl keeps its password; this exported copy is open. Use Lock / Unlock → Saved scan to remove the password from the scan itself.</string>
 
     <!-- Hidden Vault: add via the FAB. -->
@@ -457,7 +456,7 @@
     <string name="cat_label_forms">Forms</string>
     <string name="cat_label_other">Other</string>
     <!-- test26 T4.1: scan-review category rail hint while nothing is selected -->
-    <string name="category_unsorted_hint">Not sorted yet — pick one or skip</string>
+    <string name="category_unsorted_hint">Not sorted yet. Pick one or skip</string>
     <!-- test26 T4.2: category picker sheet title (T4.3/T4.4/T4.6) -->
     <string name="category_picker_title">Choose a category</string>
     <!-- test26 T4.3: Home quick-actions sheet + bulk Move toast -->
@@ -537,7 +536,7 @@
     <!-- Home slice 2: the Index. Status copy is evidence-based (ocr_pending marker,
          stored page text, live indexer state); search is document-level, never a page jump. -->
     <string name="empty_home_title">Scan. Search. Keep control.</string>
-    <string name="empty_home_body">Scan paper or import photos. Text is recognised on this phone, so you can find a document by any word in it.</string>
+    <string name="empty_home_body">Scan paper or import photos. Text is recognised on this phone, so search any word.</string>
     <string name="empty_home_note">No account. Files leave ScanWhirl only when you share or export them.</string>
     <string name="text_status_ready">Search ready</string>
     <string name="text_status_partial">Text on %1$d of %2$d pages</string>
@@ -573,15 +572,15 @@
     <string name="reader_find_partial">Text is recognised on %1$d of %2$d pages; other pages can\'t be found yet.</string>
     <string name="reader_find_pending">ScanWhirl is still reading this scan\'s text, so results may grow.</string>
     <string name="reader_find_no_text">This scan has no recognised text yet, so Find has nothing to search.</string>
-    <string name="reader_find_external">Find works on ScanWhirl scans with recognised text. This PDF was opened from your device, so its text isn\'t indexed here.</string>
-    <string name="reader_find_out_of_step">This document\'s pages and its PDF don\'t line up right now, so Find can\'t point to pages.</string>
+    <string name="reader_find_external">Find works on ScanWhirl scans with text. This PDF was opened from your device.</string>
+    <string name="reader_find_out_of_step">This document\'s pages and its PDF do not line up, so Find cannot point to pages.</string>
     <string name="reader_find_note">Matches come from the recognised text. The page image isn\'t marked.</string>
     <string name="reader_find_excerpt_page">Page %1$d</string>
     <string name="reader_find_excerpt_desc">Page %1$d: %2$s. Go to page</string>
     <string name="reader_start_changed">This document changed since your search, so it opened at page 1.</string>
     <!-- M06: honest recognition status in the Text editor. -->
-    <string name="ocr_unavailable_toast">Text recognition is not available on this device yet. Google Play services must download its text model (needs internet). Try again later.</string>
-    <string name="ocr_status_unavailable">Text recognition is not available on this device yet: Google Play services has not downloaded its text model (it needs an internet connection). Try again later, or type the text yourself.</string>
+    <string name="ocr_unavailable_toast">Text recognition is not ready: its model still has to download. Try again later.</string>
+    <string name="ocr_status_unavailable">Text recognition is not ready. Its model has to download first. Type the text instead.</string>
     <string name="ocr_status_not_read">Text could not be read from these pages. Try again, or type the text yourself.</string>
     <plurals name="ocr_status_partial">
         <item quantity="one">Text read on %1$d of %2$d page. Not read: page %3$s.</item>
@@ -627,7 +626,7 @@
     <string name="trash_delete_forever">Delete permanently</string>
     <string name="trash_delete_forever_named">Delete %1$s permanently</string>
     <string name="trash_delete_forever_title">Delete permanently?</string>
-    <string name="trash_delete_forever_message">“%1$s” and all its pages, text and edits will be removed from this phone. This can’t be undone.</string>
+    <string name="trash_delete_forever_message">\"%1$s\" and all its pages leave this phone for good. This cannot be undone.</string>
     <string name="trash_empty_action">Empty Trash</string>
     <string name="trash_empty_confirm_title">Empty Trash?</string>
     <plurals name="trash_empty_confirm_message">
@@ -657,7 +656,7 @@
     <string name="trash_row_description">%1$s, %2$s</string>
     <string name="trash_settings_empty">Empty</string>
     <string name="settings_library">Library</string>
-    <string name="delete_copies_unproven_note">Copies ScanWhirl can’t prove this document saved stay in Documents/ScanWhirl. You can manage them in the Files app.</string>
+    <string name="delete_copies_unproven_note">Copies ScanWhirl cannot prove came from this document stay in Documents/ScanWhirl.</string>
     <string name="delete_vault_message">Vault items don’t go to Trash. “%1$s” and all its pages will be permanently deleted.</string>
     <plurals name="delete_vault_selected_message">
         <item quantity="one">Vault items don’t go to Trash. %1$d scan and all its pages will be permanently deleted.</item>
@@ -676,13 +675,13 @@
     <string name="import_failed_page">Couldn’t read page %1$d (of %2$d), so nothing was imported. The PDF may be damaged.</string>
     <string name="import_failed_empty">This PDF has no pages, so nothing was imported.</string>
     <string name="import_failed_too_large">This PDF is larger than %1$d MB. Split it into smaller PDFs and import those.</string>
-    <string name="import_failed_too_many">Pages in this PDF: %1$d. The most ScanWhirl imports at once is %2$d. Split it into smaller PDFs first.</string>
-    <string name="import_failed_no_space">There isn’t enough free storage to import this PDF. Nothing was added. Free up some space and try again.</string>
-    <string name="import_failed_no_access">ScanWhirl can no longer read this file. It may have been moved or deleted, or its permission was removed. Choose it again from the file picker.</string>
-    <string name="import_failed_read">The file stopped loading before it was complete, so nothing was imported. If it is in a cloud app, download it or make it available offline, then try again.</string>
+    <string name="import_failed_too_many">This PDF has %1$d pages; the most ScanWhirl imports at once is %2$d. Split it first.</string>
+    <string name="import_failed_no_space">Not enough free storage, so nothing was added. Free some space and try again.</string>
+    <string name="import_failed_no_access">ScanWhirl cannot read this file any more. It may have moved or lost its permission.</string>
+    <string name="import_failed_read">The file stopped loading, so nothing was imported. Download it if it lives in the cloud.</string>
     <string name="import_failed_save">ScanWhirl couldn’t save the imported pages, so nothing was added. Try again.</string>
     <!-- M08: Google scanner Done saves directly to Home. -->
     <string name="scan_saved_named">Saved “%1$s”</string>
     <string name="scan_saved_named_export">Saved “%1$s”. %2$s</string>
-    <string name="scan_save_failed_review">Couldn’t save the scan (%1$s). Your pages are kept here — check them and save again.</string>
+    <string name="scan_save_failed_review">Couldn’t save the scan (%1$s). Your pages are kept here. Check them and save again.</string>
 </resources>

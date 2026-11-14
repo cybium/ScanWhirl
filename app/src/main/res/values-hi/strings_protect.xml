@@ -4,7 +4,7 @@
     <string name="protect_sheet_title"><!-- review -->PDF सुरक्षित करें</string>
     <string name="protect_change_title"><!-- review -->पासवर्ड बदलें</string>
     <string name="protect_close"><!-- review -->बंद करें</string>
-    <string name="protect_sheet_note"><!-- review -->इस PDF को खोलने वाले को पासवर्ड डालना होगा — किसी भी PDF ऐप में, किसी भी डिवाइस पर।</string>
+    <string name="protect_sheet_note"><!-- review -->इस PDF को खोलने वाले को पासवर्ड डालना होगा, किसी भी PDF ऐप में, किसी भी डिवाइस पर।</string>
     <string name="protect_doc_meta"><!-- review -->%1$d पेज · %2$s</string>
     <string name="protect_label_password"><!-- review -->पासवर्ड</string>
     <string name="protect_label_confirm"><!-- review -->फिर से लिखें</string>
@@ -18,7 +18,7 @@
     <string name="protect_meter_strong"><!-- review -->बहुत मज़बूत · %1$d अक्षर</string>
     <string name="protect_confirm_ok"><!-- review -->पासवर्ड मिलते हैं</string>
     <string name="protect_aes_title"><!-- review -->AES-256 एन्क्रिप्शन</string>
-    <string name="protect_aes_note"><!-- review -->आधुनिक मानक। मज़बूती आपके पासवर्ड पर निर्भर है — 10+ अक्षर रखें।</string>
+    <string name="protect_aes_note"><!-- review -->आधुनिक मानक। मज़बूती आपके पासवर्ड पर निर्भर है। 10+ अक्षर रखें।</string>
     <string name="protect_remember_title"><!-- review -->Vault में याद रखें</string>
     <string name="protect_remember_note"><!-- review -->ताकि यह कभी न खोए। फिंगरप्रिंट से खुलेगा।</string>
     <string name="protect_action_share"><!-- review -->सुरक्षित करें और शेयर करें</string>
@@ -37,5 +37,11 @@
     <string name="unlock_remove_title"><!-- review -->सुरक्षा हटाएँ?</string>
     <string name="unlock_remove_msg"><!-- review -->यह PDF अब बिना पासवर्ड खुलेगा। इसके पेज जैसे हैं वैसे ही रहेंगे।</string>
     <string name="unlock_remove_confirm"><!-- review -->सुरक्षा हटाएँ</string>
-    <string name="unlock_removed"><!-- review -->पासवर्ड हट गया — PDF खुल गया</string>
+    <string name="unlock_removed"><!-- review -->पासवर्ड हट गया। PDF खुल गया।</string>
+
+    <!-- L3 + L2: remembered PDF passwords in the Vault. -->
+    <string name="vault_password_not_saved"><!-- review -->पासवर्ड Vault में सहेजा नहीं गया।</string>
+    <string name="vault_password_missing"><!-- review -->कोई सहेजा पासवर्ड नहीं। उसे टाइप करें।</string>
+    <string name="vault_password_stale"><!-- review -->सहेजा पासवर्ड काम नहीं आया। उसे टाइप करें।</string>
+    <string name="vault_unlock_to_save"><!-- review -->यह पासवर्ड सहेजने के लिए Vault खोलें।</string>
 </resources>

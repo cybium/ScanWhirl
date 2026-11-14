@@ -75,6 +75,7 @@ class ToolSetupActivity : BaseActivity() {
     private var rangesText = ""
     private var nameText = ""
     private var targetText = ""
+    private var wordPictures = false
 
     private lateinit var column: LinearLayout
     private lateinit var optionsHost: LinearLayout
@@ -396,6 +397,7 @@ class ToolSetupActivity : BaseActivity() {
             "zip" -> buildZipOptions()
             "long_image" -> buildLongImageOption()
             "to_word" -> buildWordOption()
+            "to_powerpoint" -> buildPptxOption()
             "remove_metadata" -> buildCleanOption()
             "id_card" -> buildIdCardOption()
             else -> optionsHost.addView(note(getString(R.string.tools_setup_nothing)))
@@ -571,6 +573,53 @@ class ToolSetupActivity : BaseActivity() {
             if (hasText) getString(R.string.tools_setup_word_note)
             else getString(R.string.tools_setup_no_text)
         ))
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            id = R.id.toolSetupWordPictures
+            isClickable = true
+            isFocusable = true
+            val pad = SwStyle.dp(this@ToolSetupActivity, 12f)
+            setPadding(pad, pad, pad, pad)
+            background = SwStyle.rounded(
+                this@ToolSetupActivity,
+                if (wordPictures) SwStyle.color(this@ToolSetupActivity, R.color.glass_surface_raised)
+                else SwStyle.color(this@ToolSetupActivity, R.color.glass_surface),
+                radiusDp = 12f,
+                stroke = if (wordPictures) SwStyle.color(this@ToolSetupActivity, R.color.cyan_primary)
+                else SwStyle.color(this@ToolSetupActivity, R.color.sw_field_border)
+            )
+            setOnClickListener {
+                wordPictures = !wordPictures
+                render()
+            }
+            addView(
+                ImageView(this@ToolSetupActivity).apply {
+                    setImageResource(R.drawable.ic_sym_check)
+                    imageTintList = android.content.res.ColorStateList.valueOf(
+                        SwStyle.color(this@ToolSetupActivity, R.color.cyan_primary)
+                    )
+                    visibility = if (wordPictures) View.VISIBLE else View.INVISIBLE
+                },
+                LinearLayout.LayoutParams(
+                    SwStyle.dp(this@ToolSetupActivity, 20f), SwStyle.dp(this@ToolSetupActivity, 20f)
+                ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 10f) }
+            )
+            addView(
+                SwStyle.text(this@ToolSetupActivity, 14f, SwStyle.color(this@ToolSetupActivity, R.color.text_hologram_hi)).apply {
+                    text = getString(R.string.tools_setup_word_pictures)
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            )
+        }
+        optionsHost.addView(row, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 48f)
+        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) })
+        if (wordPictures) optionsHost.addView(note(getString(R.string.tools_setup_word_pictures_note)))
+    }
+
+    private fun buildPptxOption() {
+        optionsHost.addView(note(getString(R.string.tools_setup_pptx_note)))
     }
 
     private fun buildCleanOption() {
@@ -765,8 +814,17 @@ class ToolSetupActivity : BaseActivity() {
                     ?: return fail(getString(R.string.tools_setup_pick_one))
                 execute({
                     val out = File(outputDir(), "${baseName(doc)}.docx")
-                    repo.exportWord(doc.id, out)
+                    repo.exportWord(doc.id, out, includePictures = wordPictures)
                     ResultFiles(listOf(out), DOCX_MIME)
+                }) { openFiles(it.files, it.mime) }
+            }
+            "to_powerpoint" -> {
+                val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
+                    ?: return fail(getString(R.string.tools_setup_pick_one))
+                execute({
+                    val out = File(outputDir(), "${baseName(doc)}.pptx")
+                    repo.exportPowerPoint(doc.id, out)
+                    ResultFiles(listOf(out), PPTX_MIME)
                 }) { openFiles(it.files, it.mime) }
             }
             "zip" -> {
@@ -866,6 +924,8 @@ class ToolSetupActivity : BaseActivity() {
         private const val EXTRA_TOOL_ID = "tool_id"
         private const val DOCX_MIME =
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        private const val PPTX_MIME =
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
         fun intent(context: Context, toolId: String): Intent =
             Intent(context, ToolSetupActivity::class.java).putExtra(EXTRA_TOOL_ID, toolId)

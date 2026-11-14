@@ -77,7 +77,7 @@ class OcrEditorTest {
                 val edit = activity.findViewById<android.widget.EditText>(R.id.editText)
                 edit.setText("TOTAL 450.00 GST Receipt No 12")
                 edit.setSelection(edit.text.length)
-                activity.findViewById<android.widget.Button>(R.id.btnSave).performClick()
+                activity.findViewById<android.view.View>(R.id.btnSave).performClick()
             }
         }
 

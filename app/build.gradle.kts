@@ -121,6 +121,8 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     // Vault unlock (70_APP_DESIGN §4.1): in-app fingerprint/face sheet with device-credential fallback. Offline, no permission beyond USE_BIOMETRIC.
     implementation("androidx.biometric:biometric:1.1.0")
+    // QR code reader tool (lead-approved): Google code scanner UI, same delivery model as the document scanner; no camera permission.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

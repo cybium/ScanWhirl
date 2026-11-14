@@ -19,6 +19,12 @@
     <string name="home_create_photos"><!-- review -->फ़ोटो</string>
     <string name="home_create_import"><!-- review -->PDF लाएँ</string>
     <string name="home_quick_tools"><!-- review -->त्वरित टूल्स</string>
+    <string name="quick_merge"><!-- review -->मर्ज</string>
+    <string name="quick_compress"><!-- review -->कंप्रेस</string>
+    <string name="quick_sign"><!-- review -->हस्ताक्षर</string>
+    <string name="quick_protect"><!-- review -->सुरक्षित</string>
+    <string name="quick_to_word"><!-- review -->Word में</string>
+    <string name="quick_read_text"><!-- review -->टेक्स्ट पढ़ें</string>
     <string name="home_all_tools"><!-- review -->सभी टूल्स ›</string>
     <string name="home_recent"><!-- review -->हाल के</string>
     <string name="home_newest"><!-- review -->नवीनतम ▾</string>
@@ -31,7 +37,7 @@
     <string name="home_protected"><!-- review -->सुरक्षित</string>
 
     <string name="tools_title"><!-- review -->टूल्स</string>
-    <string name="tools_search_hint"><!-- review -->टूल खोजें — जैसे “sign”, “smaller”</string>
+    <string name="tools_search_hint"><!-- review -->टूल खोजें, जैसे “sign”, “smaller”</string>
     <string name="tools_no_match"><!-- review -->“%1$s” से कोई टूल नहीं मिला।</string>
     <string name="tools_group_create"><!-- review -->बनाएँ</string>
     <string name="tools_group_organize"><!-- review -->व्यवस्थित करें</string>
@@ -126,9 +132,8 @@
     <string name="me_about_summary"><!-- review -->संस्करण, गोपनीयता, लाइसेंस</string>
 
     <string name="vault_tab_title"><!-- review -->वॉल्ट</string>
-    <string name="vault_tab_note"><!-- review -->इस फ़ोन पर एन्क्रिप्टेड। अगर रिकवरी कोड और यह फ़ोन दोनों खो जाएँ, तो ये फ़ाइलें कोई नहीं खोल सकता — हम भी नहीं।</string>
-    <string name="vault_tab_coming"><!-- review -->नया एन्क्रिप्टेड वॉल्ट बन रहा है। इस बिल्ड में आपका पुराना PIN वॉल्ट अभी भी काम करता है।</string>
-    <string name="vault_tab_open"><!-- review -->जल्द आ रहा है</string>
+    <string name="vault_tab_encrypted"><!-- review -->इस फ़ोन पर एन्क्रिप्टेड</string>
+    <string name="vault_tab_open"><!-- review -->वॉल्ट खोलें</string>
 
     <string name="sheet_cancel"><!-- review -->रद्द करें</string>
     <string name="sheet_got_it"><!-- review -->समझ गया</string>
@@ -158,14 +163,19 @@
     <string name="reader_dock_text"><!-- review -->टेक्स्ट</string>
     <string name="reader_dock_sign"><!-- review -->हस्ताक्षर</string>
     <string name="reader_dock_more"><!-- review -->और</string>
-    <string name="reader_text_unavailable"><!-- review -->टेक्स्ट उन ScanWhirl दस्तावेज़ों के लिए उपलब्ध है जिन्हें पढ़ा गया है। यह PDF फ़ाइल से खोली गई है, इसलिए इसमें संपादन योग्य टेक्स्ट नहीं है।</string>
+    <string name="reader_text_unavailable"><!-- review -->टेक्स्ट के लिए ScanWhirl दस्तावेज़ चाहिए। यह PDF फ़ाइल से खुली है, इसलिए इसमें संपादन योग्य टेक्स्ट नहीं है।</string>
     <string name="reader_more_note"><!-- review -->%1$d पेज। सब कुछ इसी फ़ोन पर होता है।</string>
     <string name="ocr_mode_page"><!-- review -->पेज</string>
     <string name="ocr_mode_text"><!-- review -->टेक्स्ट</string>
     <string name="ocr_page_pane_note"><!-- review -->इस टेक्स्ट फ़ाइल के लिए पेज की छवि उपलब्ध नहीं है।</string>
     <string name="ocr_to_word_pro"><!-- review -->Word में · PRO</string>
-    <string name="ocr_foot_note"><!-- review -->इसी फ़ोन पर पढ़ा गया · ScanWhirl और PDF में खोजें</string>
+    <string name="ocr_foot_note"><!-- review -->इसी फ़ोन पर पढ़ा गया। खोजने योग्य।</string>
     <string name="ocr_to_word_soon"><!-- review -->Word निर्यात बन रहा है। यह इसी फ़ोन पर इस टेक्स्ट से .docx बनाएगा।</string>
     <string name="ocr_screen_title"><!-- review -->टेक्स्ट</string>
+    <string name="ocr_tidy_text"><!-- review -->टेक्स्ट सुधारें</string>
+    <string name="ocr_join_lines_desc"><!-- review -->टूटी पंक्तियों को जोड़कर पैराग्राफ बनाएँ।</string>
+    <string name="ocr_fix_spaces_desc"><!-- review -->गायब और दोहरे स्पेस ठीक करें।</string>
+    <string name="ocr_remove_gaps_desc"><!-- review -->खाली पंक्तियाँ हटाएँ।</string>
+    <string name="ocr_lang_english"><!-- review -->अंग्रेज़ी</string>
     <string name="ocr_page_sub"><!-- review -->%1$s · पेज %2$d / %3$d</string>
 </resources>

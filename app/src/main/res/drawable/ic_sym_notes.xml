@@ -1,5 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded 'notes', Apache License 2.0, Google. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M5,3h14v18H5zM7,5v14h10V5zM9,8h6v2H9zM9,12h6v2H9zM9,16h4v2H9z" />
+    android:viewportWidth="960" android:viewportHeight="960">
+    <group android:translateY="960">
+        <path android:fillColor="@android:color/white" android:pathData="M160-240q-17 0-28.5-11.5T120-280q0-17 11.5-28.5T160-320h400q17 0 28.5 11.5T600-280q0 17-11.5 28.5T560-240H160Zm0-200q-17 0-28.5-11.5T120-480q0-17 11.5-28.5T160-520h640q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H160Zm0-200q-17 0-28.5-11.5T120-680q0-17 11.5-28.5T160-720h640q17 0 28.5 11.5T840-680q0 17-11.5 28.5T800-640H160Z" />
+    </group>
 </vector>

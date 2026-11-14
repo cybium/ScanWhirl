@@ -113,6 +113,44 @@ class VaultStoreTest {
     }
 
     @Test
+    fun `the biometric challenge opens the vault only when the cipher completes`() {
+        val store = store()
+        store.setup("246810")
+        store.lock()
+        assertTrue("a valid Keystore key exists", store.canUseBiometric())
+
+        val challenge = store.beginBiometricUnlock()
+        assertNotNull("the prompt gets a CryptoObject cipher", challenge.cipher)
+        assertFalse("nothing is unlocked before the prompt", store.isUnlocked())
+
+        assertTrue(store.completeBiometricUnlock(challenge))
+        assertTrue(store.isUnlocked())
+    }
+
+    @Test
+    fun `an invalidated keystore key falls back to the passcode and is re-wrapped`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Passport")
+        val store = store()
+        store.setup("246810")
+        store.addDocument(id)
+        store.lock()
+
+        keys.invalidate() // a new fingerprint/face was enrolled on the phone
+        assertFalse("the dead key is not offered", store.canUseBiometric())
+        assertThrows(VaultKeyInvalidatedException::class.java) { store.beginBiometricUnlock() }
+
+        // The user unlocks with the passcode and the store rebuilds the fingerprint wrap.
+        assertTrue(store.unlockWithPasscode("246810").ok)
+        assertTrue(store.canUseBiometric())
+        assertEquals(listOf(id), store.listEntries().map { it.id })
+
+        // The fresh key can unwrap the same vault key again.
+        store.lock()
+        assertTrue(store.completeBiometricUnlock(store.beginBiometricUnlock()))
+        assertEquals(listOf(id), store.listEntries().map { it.id })
+    }
+
+    @Test
     fun `a tampered encrypted byte fails the GCM tag and leaves no decrypted copy`() {
         val id = DocFixtures.saved(repo, app, pages = 2)
         val store = store()

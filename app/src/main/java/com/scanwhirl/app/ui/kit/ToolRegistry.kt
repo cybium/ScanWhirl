@@ -15,6 +15,22 @@ interface ToolHost {
 
     /** The honest non-dead-end: a "Coming soon" sheet with one line. */
     fun comingSoon(tool: SwTool)
+
+    /**
+     * v2 UI: 06_pro — a Pro tool tapped in a Free build. Return true when the
+     * host handled it (the shell shows the Pro screen); false lets it run.
+     */
+    fun proGate(tool: SwTool): Boolean = false
+}
+
+/**
+ * The one place a tool tap is dispatched: Free + Pro tool goes to the Pro
+ * screen, everything else runs its launch. Tools hub, Home quick row and the
+ * Library create row all funnel here.
+ */
+fun ToolHost.launchTool(tool: SwTool) {
+    if (tool.pro && proGate(tool)) return
+    tool.launch(this, tool)
 }
 
 /**
@@ -80,7 +96,24 @@ object ToolRegistry {
         // Create (8)
         ready("scan", ToolGroup.CREATE, R.string.tool_scan, R.drawable.ic_sym_document_scanner, "scan camera capture photo"),
         ready("id_card", ToolGroup.CREATE, R.string.tool_id_card, R.drawable.ic_sym_badge, "id card front back aadhaar licence", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        soon("book_pages", ToolGroup.CREATE, R.string.tool_book_pages, R.drawable.ic_sym_menu_book, "book spread split two page", pro = true, note = R.string.soon_book_pages),
+        // L3: built tool — the launch starts the Book pages screen (status + launch only).
+        SwTool(
+            id = "book_pages",
+            group = ToolGroup.CREATE,
+            title = R.string.tool_book_pages,
+            icon = R.drawable.ic_sym_menu_book,
+            pro = true,
+            status = ToolStatus.READY,
+            keywords = "book spread split two page",
+            launch = { host, tool ->
+                val context = host as? android.content.Context
+                if (context != null) {
+                    context.startActivity(com.scanwhirl.app.ui.book.BookPagesActivity.intent(context))
+                } else {
+                    host.open(tool)
+                }
+            }
+        ),
         ready("photos_pdf", ToolGroup.CREATE, R.string.tool_photos_pdf, R.drawable.ic_sym_photo_library, "photos gallery images jpg png"),
         ready("import_pdf", ToolGroup.CREATE, R.string.tool_import_pdf, R.drawable.ic_sym_upload_file, "import pdf file open"),
         ready("passport", ToolGroup.CREATE, R.string.tool_passport, R.drawable.ic_sym_travel_explore, "passport crop preset size", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
@@ -92,9 +125,9 @@ object ToolRegistry {
         ready("split", ToolGroup.ORGANIZE, R.string.tool_split, R.drawable.ic_sym_call_split, "split range separate", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("extract", ToolGroup.ORGANIZE, R.string.tool_extract, R.drawable.ic_sym_content_cut, "extract pages pick remove", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         build("organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages, R.drawable.ic_sym_view_module, "organize reorder pages move"),
-        soon("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_add_photo_alternate, "insert add pages into pdf"),
+        soon("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_note_add, "insert add pages into pdf"),
         ready("duplicate", ToolGroup.ORGANIZE, R.string.tool_duplicate, R.drawable.ic_sym_content_copy, "duplicate copy clone", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        soon("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_create_new_folder, "folder tag group", pro = true, note = R.string.soon_folders),
+        soon("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = true, note = R.string.soon_folders),
         soon("batch_rename", ToolGroup.ORGANIZE, R.string.tool_batch_rename, R.drawable.ic_sym_drive_file_rename, "batch rename many files", pro = true, note = R.string.soon_batch_rename),
 
         // Optimize (4)
@@ -107,6 +140,7 @@ object ToolRegistry {
         ready("pdf_to_images", ToolGroup.CONVERT, R.string.tool_pdf_to_images, R.drawable.ic_sym_image, "pdf to jpg png images zip", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("long_image", ToolGroup.CONVERT, R.string.tool_long_image, R.drawable.ic_sym_view_day, "long image stitch pages", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("to_word", ToolGroup.CONVERT, R.string.tool_to_word, R.drawable.ic_sym_description, "word docx document text", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        ready("to_powerpoint", ToolGroup.CONVERT, R.string.tools_tool_to_powerpoint, R.drawable.ic_sym_slideshow, "powerpoint pptx slides presentation deck", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         soon("to_excel", ToolGroup.CONVERT, R.string.tool_to_excel, R.drawable.ic_sym_table_chart, "excel xlsx table sheet", pro = true, note = R.string.soon_to_excel),
         ready("to_text", ToolGroup.CONVERT, R.string.tool_to_text, R.drawable.ic_sym_notes, "text txt export ocr"),
         ready("zip", ToolGroup.CONVERT, R.string.tool_zip, R.drawable.ic_sym_archive, "zip archive export batch", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
@@ -120,16 +154,16 @@ object ToolRegistry {
         ready("add_text", ToolGroup.EDIT, R.string.tool_add_text, R.drawable.ic_sym_text_fields, "add text type write", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "add_text") } ?: host.comingSoon(tool) }
         ),
-        ready("draw", ToolGroup.EDIT, R.string.tool_draw, R.drawable.ic_sym_highlight, "draw freehand pen", pro = true).copy(
+        ready("draw", ToolGroup.EDIT, R.string.tool_draw, R.drawable.ic_sym_draw, "draw freehand pen", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "draw") } ?: host.comingSoon(tool) }
         ),
-        ready("highlight", ToolGroup.EDIT, R.string.tool_highlight, R.drawable.ic_sym_format_list_numbered, "highlight marker yellow", pro = true).copy(
+        ready("highlight", ToolGroup.EDIT, R.string.tool_highlight, R.drawable.ic_sym_ink_highlighter, "highlight marker yellow", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "highlight") } ?: host.comingSoon(tool) }
         ),
         ready("watermark", ToolGroup.EDIT, R.string.tool_watermark, R.drawable.ic_sym_watermark, "watermark diagonal draft", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "watermark") } ?: host.comingSoon(tool) }
         ),
-        ready("page_numbers", ToolGroup.EDIT, R.string.tool_page_numbers, R.drawable.ic_sym_notes_lines, "page numbers footer header", pro = true).copy(
+        ready("page_numbers", ToolGroup.EDIT, R.string.tool_page_numbers, R.drawable.ic_sym_format_list_numbered, "page numbers footer header", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "page_numbers") } ?: host.comingSoon(tool) }
         ),
         ready("stamp", ToolGroup.EDIT, R.string.tool_stamp, R.drawable.ic_sym_approval, "stamp paid approved date badge", pro = true).copy(
@@ -156,11 +190,11 @@ object ToolRegistry {
                 }
             }
         ),
-        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_shield_lock, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Text (3)
-        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_text_fields, "read text ocr recognise copy"),
-        soon("hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_translate, "hindi devanagari text", note = R.string.soon_hindi_text),
+        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy"),
+        soon("hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language, "hindi devanagari text", note = R.string.soon_hindi_text),
         soon("translate", ToolGroup.TEXT, R.string.tool_translate, R.drawable.ic_sym_translate, "translate language", pro = true, note = R.string.soon_translate)
     )
 

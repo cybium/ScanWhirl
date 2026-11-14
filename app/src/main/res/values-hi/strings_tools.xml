@@ -36,6 +36,9 @@
     <string name="tools_setup_long_note"><!-- review -->%1$d छवि(याँ) बनेंगी, 1080 px चौड़ी, हर एक अधिकतम 16,000 px ऊँची। कुछ भी दबाया नहीं जाएगा।</string>
     <string name="tools_setup_long_failed"><!-- review -->एक पृष्ठ एक छवि के लिए बहुत ऊँचा है। पहले उसे छोटा करें।</string>
     <string name="tools_setup_word_note"><!-- review -->पहचाने गए पाठ का उपयोग होता है: हर पंक्ति एक अनुच्छेद और पृष्ठों के बीच पृष्ठ विराम।</string>
+    <string name="tools_setup_word_pictures"><!-- review -->पृष्ठ की तस्वीरें भी जोड़ें</string>
+    <string name="tools_setup_word_pictures_note"><!-- review -->हर पृष्ठ की तस्वीर उस पृष्ठ के पाठ के ऊपर रखी जाती है।</string>
+    <string name="tools_setup_pptx_note"><!-- review -->हर पृष्ठ पर एक स्लाइड, पृष्ठ स्लाइड में फिट किया जाता है। पहचाना गया पाठ वक्ता नोट्स में जाता है।</string>
     <string name="tools_setup_no_text"><!-- review -->इस दस्तावेज़ में अभी कोई पहचाना गया पाठ नहीं है। पहले इसे खोलकर पाठ पढ़ें।</string>
     <string name="tools_setup_metadata_note"><!-- review -->EXIF, कैमरा विवरण और अंदर की थंबनेल के बिना साफ़ प्रति बनाता है। मूल जैसा है वैसा रहता है।</string>
     <string name="tools_setup_id_note"><!-- review -->दोनों तरफ़ एक A4 पृष्ठ पर: आगे का भाग ऊपर, पीछे का भाग नीचे।</string>
@@ -49,6 +52,22 @@
     <string name="tools_setup_failed"><!-- review -->पूरा नहीं हो सका: %1$s</string>
     <string name="tools_setup_nothing"><!-- review -->इस टूल में कोई विकल्प नहीं है।</string>
     <string name="tools_id_card_name"><!-- review -->ID कार्ड</string>
+    <string name="tools_tool_to_powerpoint"><!-- review -->PowerPoint में</string>
+    <string name="tools_id_hint"><!-- review -->पहले आगे का भाग स्कैन करें, फिर पीछे का जोड़ें। दोनों भाग असली ID-1 अनुपात में एक A4 पृष्ठ पर, या हर भाग अपने पृष्ठ पर।</string>
+    <string name="tools_id_front_title"><!-- review -->आगे का भाग</string>
+    <string name="tools_id_front_msg"><!-- review -->कार्ड का आगे का भाग स्कैन करें, या गैलरी से फ़ोटो चुनें।</string>
+    <string name="tools_id_scan_front"><!-- review -->आगे का भाग स्कैन करें</string>
+    <string name="tools_id_pick_gallery"><!-- review -->गैलरी से चुनें</string>
+    <string name="tools_id_back_title"><!-- review -->पीछे का भाग जोड़ें?</string>
+    <string name="tools_id_back_msg"><!-- review -->अधिकतर कार्ड का पीछे का भाग होता है। यह उसी पृष्ठ पर आगे के भाग के नीचे जा सकता है।</string>
+    <string name="tools_id_scan_back"><!-- review -->पीछे का भाग स्कैन करें</string>
+    <string name="tools_id_front_only"><!-- review -->सिर्फ़ आगे का भाग</string>
+    <string name="tools_id_pick_back_gallery"><!-- review -->पीछे का भाग गैलरी से चुनें</string>
+    <string name="tools_id_layout_title"><!-- review -->लेआउट</string>
+    <string name="tools_id_layout_msg"><!-- review -->कार्ड कैसे सहेजें? पिछली बार: %1$s।</string>
+    <string name="tools_id_layout_one"><!-- review -->दोनों भाग एक पृष्ठ पर</string>
+    <string name="tools_id_layout_own"><!-- review -->हर भाग अपने पृष्ठ पर</string>
+    <string name="tools_id_failed"><!-- review -->कार्ड नहीं बन सका: %1$s</string>
 
     <string name="tools_result_done"><!-- review -->तैयार</string>
     <string name="tools_result_summary_docs"><!-- review -->%1$d दस्तावेज़ · %2$d पृष्ठ · %3$s</string>

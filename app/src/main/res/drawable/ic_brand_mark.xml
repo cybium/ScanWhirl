@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ScanWhirl brand mark (two rings + page) cropped from ic_launcher_foreground for in-app headers. Same geometry as the launcher icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp" android:height="32dp"
+    android:viewportWidth="58" android:viewportHeight="58">
+    <group android:translateX="-25" android:translateY="-25">
+    <group android:name="lift">
+            <clip-path android:pathData="M0,0H108V108H0ZM38.21,39.92V68.08A4.22,4.22 0 0,0 42.44,72.3H65.56A4.22,4.22 0 0,0 69.79,68.08V39.92A4.22,4.22 0 0,0 65.56,35.7H42.44A4.22,4.22 0 0,0 38.21,39.92Z" />
+            <group>
+                <path
+                    android:fillColor="@color/sw_scan"
+                    android:fillType="evenOdd"
+                    android:pathData="M27.65,40.12A14.08,14.08 0 1,1 55.81,40.12A14.08,14.08 0 1,1 27.65,40.12ZM33.35,40.88A9.05,9.05 0 1,0 51.45,40.88A9.05,9.05 0 1,0 33.35,40.88ZM52.19,67.88A14.08,14.08 0 1,1 80.35,67.88A14.08,14.08 0 1,1 52.19,67.88ZM56.55,67.12A9.05,9.05 0 1,0 74.65,67.12A9.05,9.05 0 1,0 56.55,67.12Z" />
+            </group>
+        </group>
+        <path
+            android:fillColor="@color/sw_paper"
+            android:fillType="evenOdd"
+            android:pathData="M42.44,37.91H65.56A2.01,2.01 0 0,1 67.58,39.92V68.08A2.01,2.01 0 0,1 65.56,70.09H42.44A2.01,2.01 0 0,1 40.42,68.08V39.92A2.01,2.01 0 0,1 42.44,37.91ZM45.65,46.76V46.76A1.81,1.81 0 0,0 47.46,48.57H53.19A1.81,1.81 0 0,0 55,46.76V46.76A1.81,1.81 0 0,0 53.19,44.95H47.46A1.81,1.81 0 0,0 45.65,46.76ZM45.65,53.8V53.8A1.81,1.81 0 0,0 47.46,55.61H60.54A1.81,1.81 0 0,0 62.35,53.8V53.8A1.81,1.81 0 0,0 60.54,51.99H47.46A1.81,1.81 0 0,0 45.65,53.8ZM45.65,60.84V60.84A1.81,1.81 0 0,0 47.46,62.65H60.54A1.81,1.81 0 0,0 62.35,60.84V60.84A1.81,1.81 0 0,0 60.54,59.03H47.46A1.81,1.81 0 0,0 45.65,60.84Z" />
+        </group>
+</vector>

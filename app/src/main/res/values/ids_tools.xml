@@ -13,6 +13,7 @@
     <item name="toolSetupQualityValue" type="id" />
     <item name="toolSetupTarget" type="id" />
     <item name="toolSetupName" type="id" />
+    <item name="toolSetupWordPictures" type="id" />
     <item name="toolSetupFront" type="id" />
     <item name="toolSetupBack" type="id" />
     <item name="toolSetupRun" type="id" />
@@ -30,4 +31,7 @@
     <item name="toolResultError" type="id" />
     <item name="toolCropView" type="id" />
     <item name="toolCropApply" type="id" />
+    <item name="toolIdCardFront" type="id" />
+    <item name="toolIdCardBack" type="id" />
+    <item name="toolIdCardError" type="id" />
 </resources>

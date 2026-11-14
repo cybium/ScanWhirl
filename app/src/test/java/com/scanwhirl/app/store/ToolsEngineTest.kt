@@ -15,6 +15,7 @@ import com.scanwhirl.app.util.PageRanges
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -340,6 +341,101 @@ class ToolsEngineTest {
         assertTrue("writing over a directory must fail", r.isFailure)
         assertTrue("the directory must be untouched", directory.isDirectory)
         assertTrue("no .part file may be left behind", !File(directory.path + ".part").exists())
+    }
+
+    @Test
+    fun `exportWord with pictures embeds every page image and keeps the text`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        DocFixtures.withOcr(repo, id)
+        val out = work("pictures.docx")
+        runBlocking { repo.exportWord(id, out, includePictures = true) }
+
+        ZipFile(out).use { zip ->
+            val names = zip.entries().toList().map { it.name }
+            assertEquals(
+                "one picture per page",
+                2,
+                names.count { it.startsWith("word/media/") && it.endsWith(".jpg") }
+            )
+            val document = zip.getInputStream(zip.getEntry("word/document.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertTrue("page 1 text missing", document.contains("text page_000.jpg"))
+            assertTrue("page 2 text missing", document.contains("text page_001.jpg"))
+            assertTrue("no inline drawing", document.contains("<w:drawing>"))
+            assertTrue("picture does not embed its relationship", document.contains("r:embed=\"rId1\""))
+            val rels = zip.getInputStream(zip.getEntry("word/_rels/document.xml.rels")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertTrue("rels must point at the page picture: $rels", rels.contains("media/page_000.jpg"))
+            val image = zip.getInputStream(zip.getEntry("word/media/page_000.jpg")).use { it.readBytes() }
+            assertEquals("embedded picture is not a JPEG", 0xFF, image[0].toInt() and 255)
+            assertEquals(0xD8, image[1].toInt() and 255)
+        }
+
+        val plain = work("textonly.docx")
+        runBlocking { repo.exportWord(id, plain) }
+        ZipFile(plain).use { zip ->
+            assertTrue(
+                "a text-only export must not carry media",
+                zip.entries().toList().none { it.name.startsWith("word/media/") }
+            )
+        }
+    }
+
+    @Test
+    fun `exportWord picture failure leaves no half written docx`() {
+        val id = DocFixtures.saved(repo, app, pages = 1)
+        DocFixtures.withOcr(repo, id)
+        repo.getDocument(id)!!.pageFiles.first().writeBytes("not an image".toByteArray())
+        val out = work("broken_pictures.docx")
+        val r = runCatching { runBlocking { repo.exportWord(id, out, includePictures = true) } }
+        assertTrue("an unreadable page must fail the picture export", r.isFailure)
+        assertTrue("no output may exist after a failed export", !out.exists())
+        assertTrue("no .part file may be left", !File(out.path + ".part").exists())
+    }
+
+    @Test
+    fun `exportPowerPoint writes one slide per page with the OCR text in notes`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        DocFixtures.withOcr(repo, id)
+        val out = work("deck.pptx")
+
+        runBlocking { repo.exportPowerPoint(id, out) }
+
+        ZipFile(out).use { zip ->
+            val names = zip.entries().toList().map { it.name }
+            assertEquals(
+                "one slide per page",
+                2,
+                names.count { it.startsWith("ppt/slides/slide") && it.endsWith(".xml") }
+            )
+            assertEquals(2, names.count { it.startsWith("ppt/media/") })
+            assertTrue(names.contains("ppt/slideMasters/slideMaster1.xml"))
+            assertTrue(names.contains("ppt/slideLayouts/slideLayout1.xml"))
+            assertTrue(names.contains("ppt/theme/theme1.xml"))
+            val notes = zip.getInputStream(zip.getEntry("ppt/notesSlides/notesSlide1.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertTrue("page 1 OCR text missing from notes: $notes", notes.contains("text page_000.jpg"))
+            val presentation = zip.getInputStream(zip.getEntry("ppt/presentation.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertEquals(
+                "two slide ids",
+                2,
+                Regex("<p:sldId ").findAll(presentation).count()
+            )
+        }
+    }
+
+    @Test
+    fun `exportPowerPoint refuses a locked source and writes nothing`() {
+        val id = DocFixtures.locked(repo, app, pages = 1)
+        val out = work("locked.pptx")
+        val r = runCatching { runBlocking { repo.exportPowerPoint(id, out) } }
+        assertTrue("a locked source must not be exported", r.isFailure)
+        assertTrue("nothing may be written", !out.exists())
     }
 
     // ---------------------------------------------------------------- Remove metadata

@@ -13,8 +13,8 @@ import java.io.File
  * every Vault file), keyed by the document id. It can only be read while the Vault is
  * unlocked: with the key gone from [VaultSession], [save], [get] and [remove] throw
  * [VaultLockedException]. The file lives beside the Vault entries
- * (`filesDir/vault2/passwords.bin`), holds no plaintext, and is deleted by
- * [VaultStore.wipeAll].
+ * (`filesDir/vault2/passwords.bin`), holds no plaintext, travels inside a `.swvault` backup
+ * (where only the recovery code can open it), and is deleted by [VaultStore.wipeAll].
  *
  * Contract for callers (documented for lane L3):
  *  - `VaultPasswords.of(context).save(docId, password)` after protecting a PDF;
@@ -37,6 +37,30 @@ class VaultPasswords private constructor(context: Context) {
 
         /** The only way in: the store needs nothing but the application context. */
         fun of(context: Context): VaultPasswords = VaultPasswords(context.applicationContext)
+
+        /**
+         * Restore check: proves [file] opens with [key] (a `.swvault` backup carries it).
+         * Throws [VaultAuthException] when the blob was changed or belongs to another key.
+         */
+        internal fun verifyFile(file: File, key: ByteArray) {
+            if (!file.isFile || file.length() == 0L) return
+            parse(VaultCrypto.decryptBytes(file.readBytes(), key))
+        }
+
+        private fun parse(plain: ByteArray): MutableMap<String, String> {
+            val lines = String(plain, Charsets.UTF_8).lines().filter { it.isNotEmpty() }
+            if (lines.firstOrNull() != HEADER) throw VaultAuthException("Unsupported Vault password list")
+            val entries = LinkedHashMap<String, String>(lines.size)
+            lines.drop(1).forEach { line ->
+                val parts = line.split('\t')
+                if (parts.size != 2) throw VaultAuthException("Damaged Vault password list")
+                entries[decode(parts[0])] = decode(parts[1])
+            }
+            return entries
+        }
+
+        private fun decode(value: String): String =
+            String(Base64.decode(value, Base64.NO_WRAP), Charsets.UTF_8)
     }
 
     private val context: Context = context.applicationContext
@@ -83,16 +107,7 @@ class VaultPasswords private constructor(context: Context) {
     private fun read(key: ByteArray): MutableMap<String, String> {
         val file = file
         if (!file.isFile || file.length() == 0L) return LinkedHashMap()
-        val plain = VaultCrypto.decryptBytes(file.readBytes(), key)
-        val lines = String(plain, Charsets.UTF_8).lines().filter { it.isNotEmpty() }
-        if (lines.firstOrNull() != HEADER) throw VaultAuthException("Unsupported Vault password list")
-        val entries = LinkedHashMap<String, String>(lines.size)
-        lines.drop(1).forEach { line ->
-            val parts = line.split('\t')
-            if (parts.size != 2) throw VaultAuthException("Damaged Vault password list")
-            entries[decode(parts[0])] = decode(parts[1])
-        }
-        return entries
+        return parse(VaultCrypto.decryptBytes(file.readBytes(), key))
     }
 
     private fun write(entries: Map<String, String>, key: ByteArray) {
@@ -114,7 +129,4 @@ class VaultPasswords private constructor(context: Context) {
 
     private fun encode(value: String): String =
         Base64.encodeToString(value.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-
-    private fun decode(value: String): String =
-        String(Base64.decode(value, Base64.NO_WRAP), Charsets.UTF_8)
 }
