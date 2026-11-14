@@ -51,3 +51,5 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 - Next lead step: APK of integration -> phone -> QA continues coverage on the new build -> lead reviews every screenshot (SCREEN_MAP verdicts).
 
 - 23:05 L5 wave 2 MERGED (draft engine, grid, crop): integration 1c13819, 1118 tests, lint 0 errors. L5 now: Insert pages + carried items + copy.
+
+- 11-15 00:03 L2 MERGED (vault QA fixes + QR). L2 now: OCR quality (U+FFFD, reading order) + Hindi OCR (lead adds com.google.mlkit:text-recognition-devanagari:16.0.1 bundled after current gate). OCR quality moved from L3's queue to L2.
