@@ -56,7 +56,7 @@ class MeScreen(
 
         list.addView(
             row(
-                R.drawable.ic_sym_workspace_premium,
+                R.drawable.ic_sym_star_filled,
                 context.getString(R.string.me_pro),
                 context.getString(R.string.me_pro_summary),
                 R.id.swMePro,
@@ -65,7 +65,7 @@ class MeScreen(
         )
         list.addView(
             row(
-                R.drawable.ic_sym_apps,
+                R.drawable.ic_sym_settings,
                 context.getString(R.string.me_settings),
                 context.getString(R.string.me_settings_summary),
                 R.id.swMeSettings
@@ -73,7 +73,7 @@ class MeScreen(
         )
         list.addView(
             row(
-                R.drawable.ic_sym_ink_eraser,
+                R.drawable.ic_sym_delete,
                 context.getString(R.string.me_trash),
                 context.getString(R.string.me_trash_summary),
                 R.id.swMeTrash
@@ -81,7 +81,7 @@ class MeScreen(
         )
         list.addView(
             row(
-                R.drawable.ic_sym_verified_user,
+                R.drawable.ic_sym_info,
                 context.getString(R.string.me_about),
                 context.getString(R.string.me_about_summary),
                 R.id.swMeAbout

@@ -95,16 +95,30 @@ class ToolTile(context: Context) : FrameLayout(context) {
         this.tool = tool
         setImageResourceInternal(tool.icon)
         labelView.text = context.getString(tool.title)
-        proTag.isVisible = tool.pro
-        soonTag.isVisible = tool.status == ToolStatus.SOON
-        alpha = if (tool.status == ToolStatus.SOON) 0.55f else 1f
+        // One tag at most: Soon wins over PRO, and the tag is never dimmed.
+        val soon = tool.status == ToolStatus.SOON
+        proTag.isVisible = tool.pro && !soon
+        soonTag.isVisible = soon
+        // Only the icon + label fade on a Soon tile; the tag stays readable.
+        inner.alpha = if (soon) 0.55f else 1f
+        alpha = 1f
         contentDescription = buildString {
             append(labelView.text)
             if (tool.pro) append(", ").append(context.getString(R.string.badge_pro))
-            if (tool.status == ToolStatus.SOON) append(", ").append(context.getString(R.string.tool_soon_tag))
+            if (soon) append(", ").append(context.getString(R.string.tool_soon_tag))
         }
-        // A Sooon/Build tile still has a real action: the sheet is set by the host.
-        setOnClickListener { tool.launch(host ?: return@setOnClickListener, tool) }
+        // A Soon/Build tile still has a real action: the sheet is set by the host.
+        // Pro gating lives in launchTool, the one dispatch point.
+        setOnClickListener { host?.launchTool(tool) }
+    }
+
+    /** A short label for the Home quick row (the tile keeps its full title elsewhere). */
+    fun setLabel(text: CharSequence) {
+        labelView.text = text
+        contentDescription = buildString {
+            append(text)
+            if (tool?.pro == true) append(", ").append(context.getString(R.string.badge_pro))
+        }
     }
 
     /** The host that runs this tile's launch lambda (set by the screen that owns it). */
@@ -113,6 +127,8 @@ class ToolTile(context: Context) : FrameLayout(context) {
     /** Home quick row variant: a 52dp circle behind the glyph, label underneath. */
     fun asQuick() {
         background = SwStyle.rounded(context, Color.TRANSPARENT, radiusDp = 14f)
+        // No side padding: six equal columns must fit a 360dp phone exactly.
+        inner.setPadding(0, SwStyle.dp(context, 4f), 0, 0)
         iconView.background = SwStyle.rounded(
             context,
             SwStyle.color(context, R.color.glass_surface_raised),
@@ -121,13 +137,23 @@ class ToolTile(context: Context) : FrameLayout(context) {
         )
         val pad = SwStyle.dp(context, 14f)
         iconView.setPadding(pad, pad, pad, pad)
-        iconView.layoutParams = iconView.layoutParams.apply {
+        iconView.layoutParams = (iconView.layoutParams as LinearLayout.LayoutParams).apply {
             width = SwStyle.dp(context, 52f)
             height = SwStyle.dp(context, 52f)
+            topMargin = 0
+            bottomMargin = 0
         }
+        labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        labelView.maxLines = 1
+        labelView.setLineSpacing(0f, 1f)
         soonTag.visibility = View.GONE
-        proTag.translationY = SwStyle.dp(context, 6f).toFloat()
-        proTag.translationX = SwStyle.dp(context, 6f).toFloat()
+        // PRO sits on the circle's top-right edge, inside the column.
+        proTag.translationX = 0f
+        proTag.translationY = 0f
+        proTag.layoutParams = (proTag.layoutParams as? LayoutParams)?.apply {
+            topMargin = 0
+            marginEnd = 0
+        } ?: proTag.layoutParams
     }
 
     private fun setImageResourceInternal(res: Int) {

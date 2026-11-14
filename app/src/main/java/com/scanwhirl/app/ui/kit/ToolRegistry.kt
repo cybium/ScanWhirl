@@ -15,6 +15,22 @@ interface ToolHost {
 
     /** The honest non-dead-end: a "Coming soon" sheet with one line. */
     fun comingSoon(tool: SwTool)
+
+    /**
+     * v2 UI: 06_pro — a Pro tool tapped in a Free build. Return true when the
+     * host handled it (the shell shows the Pro screen); false lets it run.
+     */
+    fun proGate(tool: SwTool): Boolean = false
+}
+
+/**
+ * The one place a tool tap is dispatched: Free + Pro tool goes to the Pro
+ * screen, everything else runs its launch. Tools hub, Home quick row and the
+ * Library create row all funnel here.
+ */
+fun ToolHost.launchTool(tool: SwTool) {
+    if (tool.pro && proGate(tool)) return
+    tool.launch(this, tool)
 }
 
 /**
@@ -109,9 +125,9 @@ object ToolRegistry {
         ready("split", ToolGroup.ORGANIZE, R.string.tool_split, R.drawable.ic_sym_call_split, "split range separate", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("extract", ToolGroup.ORGANIZE, R.string.tool_extract, R.drawable.ic_sym_content_cut, "extract pages pick remove", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         build("organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages, R.drawable.ic_sym_view_module, "organize reorder pages move"),
-        soon("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_add_photo_alternate, "insert add pages into pdf"),
+        soon("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_note_add, "insert add pages into pdf"),
         ready("duplicate", ToolGroup.ORGANIZE, R.string.tool_duplicate, R.drawable.ic_sym_content_copy, "duplicate copy clone", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        soon("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_create_new_folder, "folder tag group", pro = true, note = R.string.soon_folders),
+        soon("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = true, note = R.string.soon_folders),
         soon("batch_rename", ToolGroup.ORGANIZE, R.string.tool_batch_rename, R.drawable.ic_sym_drive_file_rename, "batch rename many files", pro = true, note = R.string.soon_batch_rename),
 
         // Optimize (4)
@@ -138,16 +154,16 @@ object ToolRegistry {
         ready("add_text", ToolGroup.EDIT, R.string.tool_add_text, R.drawable.ic_sym_text_fields, "add text type write", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "add_text") } ?: host.comingSoon(tool) }
         ),
-        ready("draw", ToolGroup.EDIT, R.string.tool_draw, R.drawable.ic_sym_highlight, "draw freehand pen", pro = true).copy(
+        ready("draw", ToolGroup.EDIT, R.string.tool_draw, R.drawable.ic_sym_draw, "draw freehand pen", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "draw") } ?: host.comingSoon(tool) }
         ),
-        ready("highlight", ToolGroup.EDIT, R.string.tool_highlight, R.drawable.ic_sym_format_list_numbered, "highlight marker yellow", pro = true).copy(
+        ready("highlight", ToolGroup.EDIT, R.string.tool_highlight, R.drawable.ic_sym_ink_highlighter, "highlight marker yellow", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "highlight") } ?: host.comingSoon(tool) }
         ),
         ready("watermark", ToolGroup.EDIT, R.string.tool_watermark, R.drawable.ic_sym_watermark, "watermark diagonal draft", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "watermark") } ?: host.comingSoon(tool) }
         ),
-        ready("page_numbers", ToolGroup.EDIT, R.string.tool_page_numbers, R.drawable.ic_sym_notes_lines, "page numbers footer header", pro = true).copy(
+        ready("page_numbers", ToolGroup.EDIT, R.string.tool_page_numbers, R.drawable.ic_sym_format_list_numbered, "page numbers footer header", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "page_numbers") } ?: host.comingSoon(tool) }
         ),
         ready("stamp", ToolGroup.EDIT, R.string.tool_stamp, R.drawable.ic_sym_approval, "stamp paid approved date badge", pro = true).copy(
@@ -174,11 +190,11 @@ object ToolRegistry {
                 }
             }
         ),
-        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_shield_lock, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Text (3)
-        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_text_fields, "read text ocr recognise copy"),
-        soon("hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_translate, "hindi devanagari text", note = R.string.soon_hindi_text),
+        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy"),
+        soon("hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language, "hindi devanagari text", note = R.string.soon_hindi_text),
         soon("translate", ToolGroup.TEXT, R.string.tool_translate, R.drawable.ic_sym_translate, "translate language", pro = true, note = R.string.soon_translate)
     )
 

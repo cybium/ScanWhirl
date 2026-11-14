@@ -162,12 +162,12 @@ class ToolsHubScreen(
             tile.id = R.id.swToolsGrid
             tile.host = host
             tile.bind(tool)
-            tile.layoutParams = LayoutParams(0, SwStyle.dp(context, 72f), 1f)
+            tile.layoutParams = LayoutParams(0, SwStyle.dp(context, 84f), 1f)
             row!!.addView(tile)
         }
         // Fill the last row so four columns stay aligned.
         while (row != null && row.childCount % 4 != 0) {
-            row.addView(View(context), LayoutParams(0, SwStyle.dp(context, 72f), 1f))
+            row.addView(View(context), LayoutParams(0, SwStyle.dp(context, 84f), 1f))
         }
         return card
     }

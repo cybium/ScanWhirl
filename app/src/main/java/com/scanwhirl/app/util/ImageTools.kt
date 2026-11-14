@@ -793,4 +793,38 @@ object ImageTools {
 
     private fun derive(from: Int, fromOrig: Int, toOrig: Int): Int =
         if (fromOrig > 0) (from.toDouble() * toOrig / fromOrig).roundToInt() else from
+
+    /**
+     * v2 UI: 08_text_ocr — a page bitmap with its EXIF orientation already
+     * applied, so a landscape photo shows upright in the editor's Page tab.
+     * Pages we rotated ourselves are re-encoded and carry no EXIF, so this is
+     * identity for them.
+     */
+    fun decodeOriented(file: java.io.File, maxDim: Int): Bitmap? = try {
+        if (!file.exists() || file.length() == 0L) {
+            null
+        } else {
+            val bytes = file.readBytes()
+            val bitmap = decodeSampled(bytes, maxDim)
+            val orientation = try {
+                ExifInterface(bytes.inputStream()).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+                )
+            } catch (e: Exception) {
+                ExifInterface.ORIENTATION_NORMAL
+            }
+            if (orientation in 2..8) {
+                val matrix = orientationMatrix(orientation)
+                val turned = Bitmap.createBitmap(
+                    bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+                )
+                if (turned !== bitmap) bitmap.recycle()
+                turned
+            } else {
+                bitmap
+            }
+        }
+    } catch (e: Exception) {
+        null
+    }
 }
