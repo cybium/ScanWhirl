@@ -119,9 +119,11 @@ backups. L3 wiring: `rememberAvailable = true`; hide "Use password saved in Vaul
 ## Gate
 
 ```
-tests: total=1038 failures=0 skipped=0
-GATE PASS L2 tests=1038 lint=[lint skipped (lead runs it at merge)]
+tests: total=1048 failures=0 skipped=0
+GATE PASS L2 tests=1048 lint=[lint skipped (lead runs it at merge)]
 ```
+
+(Also green at `1038` before the last `integration` merge.)
 
 ## Commits
 
@@ -129,5 +131,7 @@ GATE PASS L2 tests=1038 lint=[lint skipped (lead runs it at merge)]
 - `a162028` L2: v2 Vault UI (04_vault) — setup, unlock, library add, backup/restore, migration
 - `96e0714` L2: process-wide VaultSession + VaultPasswords API for L3
 - `bcd3ec8`/`ac87cba` merges of `integration`
-- (this pass) L2: biometric unlock with CryptoObject + Keystore repair + passwords in the backup
+- `56fb445` L2: fingerprint unlock via androidx BiometricPrompt (BIOMETRIC_STRONG CryptoObject,
+  Keystore invalidation repair) + remembered PDF passwords in the `.swvault` backup (v2, v1 readable)
+- `24da48f` merge `integration` (`3882fc3`)
 - (this report) L2: report
