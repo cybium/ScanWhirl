@@ -19,8 +19,8 @@ import org.robolectric.annotation.GraphicsMode
 class ToolRegistryTest {
 
     @Test
-    fun `catalogue holds all 44 tools, each id once`() {
-        assertEquals(44, ToolRegistry.all.size)
+    fun `catalogue holds all 45 tools, each id once`() {
+        assertEquals(45, ToolRegistry.all.size)
         assertEquals(
             "duplicate tool ids",
             ToolRegistry.all.size,

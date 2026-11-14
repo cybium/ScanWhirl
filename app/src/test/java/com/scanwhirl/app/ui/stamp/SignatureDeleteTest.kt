@@ -37,7 +37,7 @@ class SignatureDeleteTest {
         )
         val host = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
 
-        StampPrompts.signature(host, store) { }
+        StampPrompts.signature(host, store, onPick = { })
 
         val rows = requireNotNull(ShadowDialog.getLatestDialog())
             .findViewById<LinearLayout>(R.id.stampSignatureRows)!!

@@ -190,6 +190,14 @@ object ToolRegistry {
         ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "redact") } ?: host.comingSoon(tool) }
         ),
+        ready("mask_aadhaar", ToolGroup.EDIT, R.string.tool_mask_aadhaar, R.drawable.ic_sym_visibility_off, "aadhaar mask uidai hide aadhar vid", launch = { host, tool ->
+            val activity = host as? android.app.Activity
+            if (activity == null) {
+                host.comingSoon(tool)
+            } else {
+                com.scanwhirl.app.ui.stamp.StampToolLauncher.openMaskAadhaar(activity)
+            }
+        }),
 
         // Secure (4)
         build("protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted, "protect password encrypt aes"),

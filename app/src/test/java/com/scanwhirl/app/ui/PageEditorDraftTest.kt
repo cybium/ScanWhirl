@@ -9,6 +9,7 @@ import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.PdfInvariants
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.PageReplace
+import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
 import kotlinx.coroutines.runBlocking
@@ -24,6 +25,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.util.UUID
 
 /**
  * PM-2.3b: the full-page editor writes crop/filter/rotate/delete to the draft, never to the
@@ -161,6 +163,53 @@ class PageEditorDraftTest {
         assertTrue("saved page width was ${newSize.first}", kotlin.math.abs(newSize.first - 100) <= 1)
         assertTrue("saved original width was ${origSize.first}", kotlin.math.abs(origSize.first - 100) <= 1)
         assertEquals("the base page keeps its own size", baseSize, PageReplace.bounds(basePage))
+    }
+
+    @Test
+    fun `back from the page viewer keeps the draft edit and the bar shows it`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        val d0 = digest(id)
+        ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+            scenario.onActivity { activity ->
+                forceLayout(activity.findViewById(R.id.pager))
+                activity.findViewById<android.view.View>(R.id.btnRotateRight)!!.performClick()
+            }
+            assertTrue("the rotate lands in the draft", pollUntil { runBlocking { repo.draftOf(id) }?.changes == 1 })
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        }
+        assertEquals("Back must not drop the saved document's edit", 1, runBlocking { repo.draftOf(id) }!!.changes)
+        assertEquals(d0, digest(id))
+
+        // Returning to Organize shows the change count.
+        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+            var shown = false
+            assertTrue("the draft bar must show the change", pollUntil {
+                scenario.onActivity { shown = it.findViewById<android.view.View>(R.id.draftBar)?.visibility == android.view.View.VISIBLE }
+                shown
+            })
+            scenario.onActivity {
+                assertEquals(
+                    app.getString(R.string.draft_header, 2, 1),
+                    it.findViewById<android.widget.TextView>(R.id.draftHeader).text.toString()
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `staging back keeps the staged rotate for the review`() {
+        val dir = File(app.cacheDir, "stage_${UUID.randomUUID()}").apply { mkdirs() }
+        val page = File(dir, "page_001.jpg")
+        page.writeBytes(ImportFixtures.image(width = 200, height = 300))
+        ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.stagingIntent(app, dir.path, 0)).use { scenario ->
+            scenario.onActivity { activity ->
+                forceLayout(activity.findViewById(R.id.pager))
+                activity.findViewById<android.view.View>(R.id.btnRotateRight)!!.performClick()
+            }
+            assertTrue("the staged page rotates", pollUntil { PageReplace.bounds(page) == 300 to 200 })
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        }
+        assertEquals("staging Back keeps the edit for Review", 300 to 200, PageReplace.bounds(page))
     }
 
     /** The UiSmokeTest crop gesture: drag the top-left corner in, then Apply. */

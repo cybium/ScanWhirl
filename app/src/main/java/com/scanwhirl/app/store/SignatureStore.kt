@@ -34,15 +34,21 @@ class SignatureStore(context: Context) {
         val id: String,
         val name: String,
         val strokes: List<PageStamp.Stroke>,
-        val createdAt: Long
-    )
+        val createdAt: Long,
+        /** Set for an imported bitmap signature (transparent PNG); null for drawn ink. */
+        val pngFile: File? = null
+    ) {
+        val isBitmap: Boolean get() = pngFile != null
+    }
 
     private val dir: File = File(context.filesDir, "signatures")
 
     companion object {
         const val MAX_SIGNATURES = 5
         private const val HEADER = "#scanwhirl-signature-v1"
+        private const val HEADER_V2 = "#scanwhirl-signature-v2"
         private const val EXT = ".sig"
+        private const val PNG = ".png"
         private val SAFE_ID = Regex("^[A-Za-z0-9_-]{1,64}$")
     }
 
@@ -92,10 +98,53 @@ class SignatureStore(context: Context) {
         return saved
     }
 
-    /** Deletes one signature; unknown or unsafe ids are ignored. */
+    /** Manifest first is not the commit point here: the PNG is fsynced before this is called. */
+    private fun writeManifest(saved: SavedSignature) {
+        Durable.atomicWriteText(File(dir, saved.id + EXT), encode(saved))
+    }
+
+    /** Deletes one signature (and its PNG when it is a bitmap signature). */
     fun delete(id: String) {
         if (!SAFE_ID.matches(id)) return
         File(dir, id + EXT).delete()
+        File(dir, id + PNG).delete()
+    }
+
+    /**
+     * Saves an imported signature (transparent PNG) beside the drawn ones. The 5-signature limit
+     * counts both kinds. The bitmap is stored as PNG, never as a raw bitmap.
+     */
+    fun saveBitmap(name: String, bitmap: android.graphics.Bitmap): SavedSignature {
+        require(!bitmap.isRecycled) { "The signature image is no longer in memory." }
+        require(bitmap.width >= 8 && bitmap.height >= 8) { "No ink was found in this photo." }
+        if (list().size >= MAX_SIGNATURES) {
+            throw IllegalStateException(
+                "You can keep up to $MAX_SIGNATURES signatures. Delete one to save another."
+            )
+        }
+        val id = newId()
+        val png = File(dir, id + PNG)
+        val out = java.io.ByteArrayOutputStream()
+        if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)) {
+            throw IllegalStateException("The signature image could not be encoded.")
+        }
+        val saved = SavedSignature(
+            id = id,
+            name = name.trim().ifBlank { "Signature" },
+            strokes = emptyList(),
+            createdAt = System.currentTimeMillis(),
+            pngFile = png
+        )
+        dir.mkdirs()
+        try {
+            com.scanwhirl.app.util.Durable.writeFile(png, out.toByteArray())
+            writeManifest(saved)
+        } catch (t: Throwable) {
+            png.delete()
+            File(dir, id + EXT).delete()
+            throw t
+        }
+        return saved
     }
 
     private fun newId(): String {
@@ -105,22 +154,48 @@ class SignatureStore(context: Context) {
         }
     }
 
-    private fun encode(saved: SavedSignature): String = buildString {
-        append(HEADER).append('\n')
-        append(saved.id).append('\n')
-        append(saved.createdAt).append('\n')
-        append(
-            Base64.encodeToString(saved.name.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        ).append('\n')
-        append(saved.strokes.size).append('\n')
-        saved.strokes.forEach { stroke ->
-            append(stroke.points.joinToString(" ") { "${it.x},${it.y}" }).append('\n')
+    private fun encode(saved: SavedSignature): String {
+        if (saved.pngFile != null) {
+            return buildString {
+                append(HEADER_V2).append('\n')
+                append(saved.id).append('\n')
+                append(saved.createdAt).append('\n')
+                append(
+                    Base64.encodeToString(saved.name.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+                ).append('\n')
+                append("kind=bitmap\n")
+            }
+        }
+        return buildString {
+            append(HEADER).append('\n')
+            append(saved.id).append('\n')
+            append(saved.createdAt).append('\n')
+            append(
+                Base64.encodeToString(saved.name.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            ).append('\n')
+            append(saved.strokes.size).append('\n')
+            saved.strokes.forEach { stroke ->
+                append(stroke.points.joinToString(" ") { "${it.x},${it.y}" }).append('\n')
+            }
         }
     }
 
     private fun parse(id: String, text: String): SavedSignature? {
         val lines = text.lines()
-        if (lines.firstOrNull() != HEADER) return null
+        val header = lines.firstOrNull()
+        if (header == HEADER_V2) {
+            if (lines.size < 5 || lines[4] != "kind=bitmap") return null
+            val createdAt = lines[2].toLongOrNull() ?: return null
+            val name = try {
+                String(Base64.decode(lines[3], Base64.NO_WRAP), Charsets.UTF_8)
+            } catch (_: IllegalArgumentException) {
+                return null
+            }
+            val png = File(dir, id + PNG)
+            if (!png.isFile || png.length() == 0L) return null
+            return SavedSignature(id, name, emptyList(), createdAt, png)
+        }
+        if (header != HEADER) return null
         if (lines.size < 5) return null
         val createdAt = lines[2].toLongOrNull() ?: return null
         val name = try {
