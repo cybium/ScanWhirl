@@ -9,7 +9,7 @@ merges your work, and reads your final reply. There is no human to answer questi
   and give every shell command `workdir` = your lane folder. Never edit files in `C:\Users\Cybium\Desktop\ScanWhirl`
   (the lead's checkout) or another lane's folder; you only RUN `C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1` from there.
 - A previous session of your lane may have left uncommitted work. Start with `git status` and `git log --oneline -5`,
-  read `LANE_REPORT.md`, and continue that work (review it, finish it) rather than starting over.
+  read `LANE_REPORT_<LANE>.md` (or an old `LANE_REPORT.md`), and continue that work (review it, finish it) rather than starting over.
 
 ## Read first
 1. `docs\plans\lanes\71_LANES.md` — your lane section, rules §1-§2, file ownership.
@@ -43,6 +43,6 @@ merges your work, and reads your final reply. There is no human to answer questi
 - If one error blocks you for more than 30 minutes: write `LANE_BLOCKED.md` (exact error, what you tried), commit, stop.
 
 ## When you stop
-Overwrite `LANE_REPORT.md` (done / not done / tests added / last gate line / commit hashes) and commit it.
+Write your report to `LANE_REPORT_<LANE>.md` (e.g. `LANE_REPORT_L2.md`; NOT `LANE_REPORT.md`, which the lead removed from integration because every lane's copy clashed on merge; if `git merge integration` gives a modify/delete conflict on `LANE_REPORT.md`, resolve it with `git rm LANE_REPORT.md`) (done / not done / tests added / last gate line / commit hashes) and commit it.
 Your FINAL REPLY goes to the lead: first line `<LANE> DONE: <summary>` or `<LANE> BLOCKED: <reason>`, then up to 15
 lines: commits, last gate line, anything the lead must decide or check on the device.

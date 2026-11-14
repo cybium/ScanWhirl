@@ -25,7 +25,7 @@ import java.io.File
  * v2 UI: 03_tools_hub — Long image is back (E20, the owner reversed O-01).
  *
  * This replaces `LongImageRemovalTest`, which encoded the old "Long image is removed" UI.
- * The stitcher must stay bounded: 1080 px wide, at most 20,000 px tall per part, split instead
+ * The stitcher must stay bounded: 1080 px wide, at most 16,000 px tall per part, split instead
  * of squashed, aspect ratio kept, and the document's page files untouched (I5). The old
  * data-safety promise also stays: an image exported by an earlier version is still an ordinary
  * shareable JPEG and the app never deletes or edits it.

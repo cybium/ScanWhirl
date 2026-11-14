@@ -22,7 +22,7 @@ import kotlin.math.roundToInt
 object LongImage {
 
     const val WIDTH = 1080
-    const val MAX_PART_HEIGHT = 20_000
+    const val MAX_PART_HEIGHT = 16_000
     const val GAP = 12
     const val QUALITY = 88
 

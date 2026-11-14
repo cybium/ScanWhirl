@@ -1,6 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- L4 tools lane strings (Hindi). Every value carries a review marker for a native speaker. -->
 <resources>
-    <string name="op_no_space"><!-- review -->पर्याप्त जगह नहीं है। कुछ जगह खाली करके फिर कोशिश करें।</string>
+    <string name="op_no_space"><!-- review -->पर्याप्त संग्रहण जगह नहीं है। थोड़ी जगह खाली करके फिर कोशिश करें।</string>
     <string name="op_publish_failed"><!-- review -->नया दस्तावेज़ नहीं जोड़ा जा सका। फिर कोशिश करें।</string>
+
+    <string name="tools_setup_back"><!-- review -->वापस</string>
+    <string name="tools_setup_source"><!-- review -->स्रोत</string>
+    <string name="tools_setup_options"><!-- review -->विकल्प</string>
+    <string name="tools_setup_doc_meta"><!-- review -->%1$d पृष्ठ · %2$s</string>
+    <string name="tools_setup_no_docs"><!-- review -->अभी कोई दस्तावेज़ नहीं है। पहले कुछ स्कैन करें।</string>
+    <string name="tools_setup_pick_one"><!-- review -->पहले एक दस्तावेज़ चुनें।</string>
+    <string name="tools_setup_need_two"><!-- review -->कम से कम दो दस्तावेज़ चुनें।</string>
+    <string name="tools_setup_merge_device"><!-- review -->इस फ़ोन की PDF जोड़ें</string>
+    <string name="tools_setup_merge_note"><!-- review -->दो या अधिक दस्तावेज़ चुनें। जिन क्रम में आप उन्हें दबाएँगे, उसी क्रम में वे जुड़ेंगे।</string>
+    <string name="tools_setup_zip_note"><!-- review -->एक ZIP फ़ाइल में रखने के लिए दस्तावेज़ चुनें।</string>
+    <string name="tools_setup_zip_name"><!-- review -->ScanWhirl निर्यात</string>
+    <string name="tools_setup_ranges_hint"><!-- review -->1-3, 5, 8-</string>
+    <string name="tools_setup_ranges_example"><!-- review -->पृष्ठ लिखें, जैसे 1-3, 5, 8-</string>
+    <string name="tools_setup_split_preview"><!-- review -->%1$d नए दस्तावेज़: %2$s</string>
+    <string name="tools_setup_extract_preview"><!-- review -->%1$d पृष्ठ रखे गए: %2$s</string>
+    <string name="tools_setup_bad_ranges"><!-- review -->पृष्ठ संख्या ऐसे लिखें: 1-3, 5, 8-</string>
+    <string name="tools_setup_jpg"><!-- review -->JPG</string>
+    <string name="tools_setup_png"><!-- review -->PNG</string>
+    <string name="tools_setup_quality"><!-- review -->गुणवत्ता</string>
+    <string name="tools_setup_quality_value"><!-- review -->%1$d%%</string>
+    <string name="tools_setup_images_note"><!-- review -->एक बार में एक पृष्ठ। एक से अधिक पृष्ठ ZIP में रखे जाते हैं।</string>
+    <string name="tools_setup_target_hint"><!-- review -->लक्ष्य आकार, जैसे 500 KB या 2 MB (वैकल्पिक)</string>
+    <string name="tools_setup_bad_target"><!-- review -->आकार ऐसे लिखें: 500 KB या 2 MB।</string>
+    <string name="tools_setup_level_light"><!-- review -->हल्का</string>
+    <string name="tools_setup_level_medium"><!-- review -->मध्यम</string>
+    <string name="tools_setup_level_strong"><!-- review -->ज़्यादा</string>
+    <string name="tools_setup_compress_note"><!-- review -->लक्ष्य आकार हर पृष्ठ को उसमें फिट करता है; बिना लक्ष्य के चुनी गई गुणवत्ता लगती है।</string>
+    <string name="tools_setup_name_hint"><!-- review -->नाम (वैकल्पिक)</string>
+    <string name="tools_setup_long_calculating"><!-- review -->पृष्ठों को मापा जा रहा है…</string>
+    <string name="tools_setup_long_note"><!-- review -->%1$d छवि(याँ) बनेंगी, 1080 px चौड़ी, हर एक अधिकतम 16,000 px ऊँची। कुछ भी दबाया नहीं जाएगा।</string>
+    <string name="tools_setup_long_failed"><!-- review -->एक पृष्ठ एक छवि के लिए बहुत ऊँचा है। पहले उसे छोटा करें।</string>
+    <string name="tools_setup_word_note"><!-- review -->पहचाने गए पाठ का उपयोग होता है: हर पंक्ति एक अनुच्छेद और पृष्ठों के बीच पृष्ठ विराम।</string>
+    <string name="tools_setup_no_text"><!-- review -->इस दस्तावेज़ में अभी कोई पहचाना गया पाठ नहीं है। पहले इसे खोलकर पाठ पढ़ें।</string>
+    <string name="tools_setup_metadata_note"><!-- review -->EXIF, कैमरा विवरण और अंदर की थंबनेल के बिना साफ़ प्रति बनाता है। मूल जैसा है वैसा रहता है।</string>
+    <string name="tools_setup_id_note"><!-- review -->दोनों तरफ़ एक A4 पृष्ठ पर: आगे का भाग ऊपर, पीछे का भाग नीचे।</string>
+    <string name="tools_setup_id_front"><!-- review -->कार्ड का आगे का भाग</string>
+    <string name="tools_setup_id_back"><!-- review -->कार्ड का पीछे का भाग</string>
+    <string name="tools_setup_need_front"><!-- review -->कार्ड का आगे का भाग चुनें।</string>
+    <string name="tools_setup_need_back"><!-- review -->कार्ड का पीछे का भाग चुनें।</string>
+    <string name="tools_setup_image_failed"><!-- review -->यह छवि पढ़ी नहीं जा सकती।</string>
+    <string name="tools_setup_run"><!-- review -->आगे बढ़ें</string>
+    <string name="tools_setup_working"><!-- review -->काम चल रहा है…</string>
+    <string name="tools_setup_failed"><!-- review -->पूरा नहीं हो सका: %1$s</string>
+    <string name="tools_setup_nothing"><!-- review -->इस टूल में कोई विकल्प नहीं है।</string>
+    <string name="tools_id_card_name"><!-- review -->ID कार्ड</string>
+
+    <string name="tools_result_done"><!-- review -->तैयार</string>
+    <string name="tools_result_summary_docs"><!-- review -->%1$d दस्तावेज़ · %2$d पृष्ठ · %3$s</string>
+    <string name="tools_result_summary_one_doc"><!-- review -->%1$d पृष्ठ · %2$s</string>
+    <string name="tools_result_summary_files"><!-- review -->%1$d फ़ाइलें · %2$s</string>
+    <string name="tools_result_summary_one_file"><!-- review -->1 फ़ाइल · %1$s</string>
+    <string name="tools_result_open"><!-- review -->खोलें</string>
+    <string name="tools_result_share"><!-- review -->साझा करें</string>
+    <string name="tools_result_save"><!-- review -->सहेजें</string>
+    <string name="tools_result_library"><!-- review -->लाइब्रेरी में दिखाएँ</string>
+    <string name="tools_result_undo"><!-- review -->पूर्ववत करें</string>
+    <string name="tools_result_nothing"><!-- review -->कुछ नहीं बनाया गया।</string>
+    <string name="tools_result_open_failed"><!-- review -->इस फ़ोन पर कोई ऐप यह फ़ाइल नहीं खोल सकता।</string>
+    <string name="tools_result_saved"><!-- review -->सहेजा गया %1$s</string>
+    <string name="tools_result_save_failed"><!-- review -->सहेजा नहीं जा सका: %1$s</string>
+    <string name="tools_result_undone"><!-- review -->नई प्रति हटा दी गई।</string>
+
+    <string name="tools_passport_hint"><!-- review -->चारों कोनों को पासपोर्ट फ़ोटो के किनारों तक खींचें।</string>
+    <string name="tools_passport_apply"><!-- review -->काटें और सहेजें</string>
+    <string name="tools_passport_name"><!-- review -->पासपोर्ट फ़ोटो</string>
+    <string name="tools_passport_failed"><!-- review -->फ़ोटो नहीं काटी जा सकी।</string>
+    <string name="tools_passport_failed_with"><!-- review -->फ़ोटो नहीं काटी जा सकी: %1$s</string>
 </resources>
