@@ -1,23 +1,25 @@
 package com.scanwhirl.app.ui.stamp
 
 import android.app.Activity
-import android.content.Context
+import android.graphics.Color
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.ContextCompat
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.SignatureStore
+import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.PageStamp
 
 /**
- * L5 Phase B — the editor's three sheets (text entry, saved signatures, preset badges) and the
- * signature pad. They are [BottomSheetDialog]s, not `AlertDialog`s, so they already use the v2
- * sheet language; L1's `SwSheet` can restyle them later without changing behaviour.
+ * L5 Phase B — the editor's sheets, all built with the design kit's [SwSheet]: text entry,
+ * saved signatures, preset badges and the signature pad. No `AlertDialog` and no bespoke
+ * sheet shell remains in this lane.
  */
 object StampPrompts {
 
@@ -28,34 +30,52 @@ object StampPrompts {
         initial: String,
         onAdd: (String) -> Unit
     ) {
-        val sheet = BottomSheetDialog(activity)
-        val view = activity.layoutInflater.inflate(R.layout.sheet_stamp_text, null)
-        sheet.setContentView(view)
-        val title = view.findViewById<TextView>(R.id.sheetTitle)
-        val input = view.findViewById<android.widget.EditText>(R.id.sheetInput)
-        title.setText(titleRes)
-        input.hint = activity.getString(hintRes)
-        input.setText(initial)
-        input.setSelection(input.text.length)
-        view.findViewById<View>(R.id.sheetCancel).setOnClickListener { sheet.dismiss() }
-        view.findViewById<View>(R.id.sheetAdd).setOnClickListener {
+        val input = EditText(activity).apply {
+            id = R.id.stampTextInput
+            hint = activity.getString(hintRes)
+            setText(initial)
+            setSelection(text.length)
+            setTextColor(SwStyle.color(activity, R.color.text_hologram_hi))
+            setHintTextColor(SwStyle.color(activity, R.color.text_hologram_dim))
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            maxLines = 3
+            minHeight = SwStyle.dp(activity, 52f)
+            setPadding(
+                SwStyle.dp(activity, 14f), SwStyle.dp(activity, 12f),
+                SwStyle.dp(activity, 14f), SwStyle.dp(activity, 12f)
+            )
+            background = SwStyle.rounded(
+                activity,
+                SwStyle.color(activity, R.color.glass_surface_raised),
+                radiusDp = 14f,
+                stroke = SwStyle.color(activity, R.color.sw_field_border)
+            )
+        }
+        val sheet = SwSheet.builder(activity)
+            .setTitle(titleRes)
+            .setContent(input)
+            .setPrimary(R.string.stamp_add)
+            .build()
+        sheet.keepOpenOnPrimary()
+        sheet.primaryButton.setOnClickListener {
             val value = input.text.toString().trim()
-            if (value.isNotEmpty()) {
+            if (value.isEmpty()) {
+                input.error = activity.getString(R.string.stamp_text_required)
+            } else {
                 sheet.dismiss()
                 onAdd(value)
             }
         }
-        sheet.setOnShowListener {
-            input.requestFocus()
-            val ime = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            ime.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
-        }
         sheet.show()
+        input.requestFocus()
+        val ime = activity.getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
+        ime.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
     }
 
     /**
-     * Shows the saved signatures, or goes straight to the pad when there is none. A signature
-     * that could not be saved (a sixth, empty ink) says why and keeps the pad open.
+     * Saved signatures (vector paths), or the pad when none exist. A signature that cannot be
+     * saved — a sixth, or empty ink — says why and keeps the pad open.
      */
     fun signature(
         activity: Activity,
@@ -67,22 +87,24 @@ object StampPrompts {
             pad(activity, store, onPick)
             return
         }
-        val sheet = BottomSheetDialog(activity)
-        val view = activity.layoutInflater.inflate(R.layout.sheet_stamp_signatures, null)
-        sheet.setContentView(view)
-        val rows = view.findViewById<LinearLayout>(R.id.signatureRows)
+        val list = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            id = R.id.stampSignatureRows
+        }
+        lateinit var sheet: SwSheet
         saved.forEach { signature ->
-            rows.addView(
-                sheetRow(activity, signature.name) {
+            list.addView(
+                row(activity, signature.name) {
                     sheet.dismiss()
                     onPick(signature)
                 }
             )
         }
-        view.findViewById<View>(R.id.drawNewSignature).setOnClickListener {
-            sheet.dismiss()
-            pad(activity, store, onPick)
-        }
+        sheet = SwSheet.builder(activity)
+            .setTitle(R.string.stamp_signature_title)
+            .setContent(list)
+            .setSecondary(R.string.stamp_signature_new) { pad(activity, store, onPick) }
+            .build()
         sheet.show()
     }
 
@@ -91,12 +113,21 @@ object StampPrompts {
         store: SignatureStore,
         onSaved: (SignatureStore.SavedSignature) -> Unit
     ) {
-        val sheet = BottomSheetDialog(activity)
-        val view = activity.layoutInflater.inflate(R.layout.sheet_stamp_signature_pad, null)
-        sheet.setContentView(view)
-        val pad = view.findViewById<SignaturePadView>(R.id.signaturePad)
-        view.findViewById<View>(R.id.signatureCancel).setOnClickListener { sheet.dismiss() }
-        view.findViewById<View>(R.id.signatureSave).setOnClickListener {
+        val pad = SignaturePadView(activity).apply {
+            id = R.id.stampSignaturePad
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                SwStyle.dp(activity, 240f)
+            )
+            background = SwStyle.rounded(activity, Color.WHITE, radiusDp = 14f)
+        }
+        val sheet = SwSheet.builder(activity)
+            .setTitle(R.string.stamp_signature_sheet_title)
+            .setContent(pad)
+            .setPrimary(R.string.stamp_signature_save)
+            .build()
+        sheet.keepOpenOnPrimary()
+        sheet.primaryButton.setOnClickListener {
             if (pad.isEmpty()) {
                 Toast.makeText(activity, R.string.stamp_signature_empty, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -118,10 +149,11 @@ object StampPrompts {
     }
 
     fun badges(activity: Activity, onPick: (PageStamp.BadgeKind) -> Unit) {
-        val sheet = BottomSheetDialog(activity)
-        val view = activity.layoutInflater.inflate(R.layout.sheet_stamp_badges, null)
-        sheet.setContentView(view)
-        val rows = view.findViewById<LinearLayout>(R.id.badgeRows)
+        val list = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            id = R.id.stampBadgeRows
+        }
+        lateinit var sheet: SwSheet
         val labels = listOf(
             PageStamp.BadgeKind.PAID to R.string.stamp_badge_paid,
             PageStamp.BadgeKind.APPROVED to R.string.stamp_badge_approved,
@@ -130,34 +162,93 @@ object StampPrompts {
             PageStamp.BadgeKind.SELF_ATTESTED to R.string.stamp_badge_self_attested
         )
         labels.forEach { (kind, label) ->
-            rows.addView(
-                sheetRow(activity, activity.getString(label)) {
+            list.addView(
+                row(activity, activity.getString(label)) {
                     sheet.dismiss()
                     onPick(kind)
                 }
             )
         }
+        sheet = SwSheet.builder(activity)
+            .setTitle(R.string.stamp_badge_title)
+            .setContent(list)
+            .build()
         sheet.show()
     }
 
-    private fun sheetRow(activity: Activity, text: String, onClick: () -> Unit): TextView {
-        val density = activity.resources.displayMetrics.density
-        fun dp(value: Int) = (value * density).toInt()
-        return TextView(activity).apply {
+    private fun row(activity: Activity, text: String, onClick: () -> Unit): TextView =
+        SwStyle.text(
+            activity, 16f, SwStyle.color(activity, R.color.text_hologram_hi)
+        ).apply {
             this.text = text
-            setTextColor(ContextCompat.getColor(activity, R.color.text_hologram_hi))
-            textSize = 16f
             gravity = Gravity.CENTER_VERTICAL
-            minHeight = dp(52)
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = ContextCompat.getDrawable(activity, R.drawable.bg_sw_sheet_row)
+            minHeight = SwStyle.dp(activity, 52f)
+            setPadding(
+                SwStyle.dp(activity, 14f), SwStyle.dp(activity, 10f),
+                SwStyle.dp(activity, 14f), SwStyle.dp(activity, 10f)
+            )
+            background = SwStyle.rounded(
+                activity,
+                SwStyle.color(activity, R.color.glass_surface_raised),
+                radiusDp = 14f,
+                stroke = SwStyle.color(activity, R.color.sw_cyan_hair)
+            )
             isClickable = true
             isFocusable = true
             setOnClickListener { onClick() }
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(6) }
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = SwStyle.dp(activity, 6f) }
         }
+
+    /** Shared row builder for the document picker (name + page count). */
+    fun documentRow(
+        activity: Activity,
+        name: String,
+        pageCount: Int,
+        onClick: () -> Unit
+    ): View {
+        val container = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(
+                SwStyle.dp(activity, 14f), SwStyle.dp(activity, 10f),
+                SwStyle.dp(activity, 14f), SwStyle.dp(activity, 10f)
+            )
+            background = SwStyle.rounded(
+                activity,
+                SwStyle.color(activity, R.color.glass_surface_raised),
+                radiusDp = 14f,
+                stroke = SwStyle.color(activity, R.color.sw_cyan_hair)
+            )
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = SwStyle.dp(activity, 6f) }
+        }
+        container.addView(
+            SwStyle.text(
+                activity, 16f, SwStyle.color(activity, R.color.text_hologram_hi)
+            ).apply {
+                text = name
+                maxLines = 2
+            }
+        )
+        container.addView(
+            SwStyle.text(
+                activity, 12f, SwStyle.color(activity, R.color.text_hologram_dim)
+            ).apply {
+                text = if (pageCount == 1) {
+                    activity.getString(R.string.stamp_document_page)
+                } else {
+                    activity.getString(R.string.stamp_document_pages, pageCount)
+                }
+            }
+        )
+        return container
     }
 }

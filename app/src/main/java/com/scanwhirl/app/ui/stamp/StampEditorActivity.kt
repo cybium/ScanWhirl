@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.lifecycle.lifecycleScope
@@ -14,8 +15,13 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.SignatureStore
 import com.scanwhirl.app.ui.BaseActivity
-import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.applySystemBarsPadding
+import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwTool
+import com.scanwhirl.app.ui.kit.ToolGroup
+import com.scanwhirl.app.ui.kit.ToolStatus
+import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.util.PageStamp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +57,12 @@ class StampEditorActivity : BaseActivity() {
         const val TOOL_PAGE_NUMBERS = "page_numbers"
         const val TOOL_STAMP = "stamp"
         const val TOOL_REDACT = "redact"
+
+        /** Intent for a screen or the Tools hub: open [docId] with [tool] already armed. */
+        fun intent(context: android.content.Context, docId: String, tool: String? = null): Intent =
+            Intent(context, StampEditorActivity::class.java)
+                .putExtra(EXTRA_DOC_ID, docId)
+                .putExtra(EXTRA_TOOL, tool)
     }
 
     private lateinit var binding: ActivityStampEditorBinding
@@ -134,37 +146,7 @@ class StampEditorActivity : BaseActivity() {
             }
         }
 
-        binding.toolSignature.setOnClickListener { pickSignature() }
-        binding.toolText.setOnClickListener {
-            StampPrompts.text(
-                this, R.string.stamp_text_title, R.string.stamp_text_hint, ""
-            ) { text -> addMark(PageStamp.Mark.Text(text, textBox(), size = 0.05f)) }
-        }
-        binding.toolDraw.setOnClickListener {
-            arm(StampCanvasView.Tool.DRAW, R.string.stamp_hint_draw)
-        }
-        binding.toolHighlight.setOnClickListener {
-            arm(StampCanvasView.Tool.HIGHLIGHT, R.string.stamp_hint_highlight)
-        }
-        binding.toolWatermark.setOnClickListener {
-            StampPrompts.text(
-                this, R.string.stamp_watermark_title, R.string.stamp_watermark_hint,
-                getString(R.string.stamp_watermark_default)
-            ) { text -> addMarkToAll(PageStamp.Mark.Watermark(text)) }
-        }
-        binding.toolPageNumbers.setOnClickListener {
-            addMarkToAll(PageStamp.Mark.PageNumber())
-        }
-        binding.toolStamp.setOnClickListener {
-            StampPrompts.badges(this) { kind ->
-                addMark(PageStamp.Mark.Badge(kind, badgeBox()))
-            }
-        }
-        binding.toolRedact.setOnClickListener {
-            arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
-        }
-        binding.toolSuggest.setOnClickListener { suggestRedactions() }
-
+        buildToolRow()
         binding.deleteMark.setOnClickListener {
             if (editor.removeSelected()) refresh()
         }
@@ -188,15 +170,92 @@ class StampEditorActivity : BaseActivity() {
 
     // ------------------------------------------------------------------ tools
 
+    /**
+     * The bottom tool row, made of kit [ToolTile]s so it matches the Tools hub and Home quick
+     * row. Ids stay `toolSignature`…`toolSuggest` for the screen tests.
+     */
+    private fun buildToolRow() {
+        val row = binding.stampToolRow
+        fun add(id: Int, title: Int, icon: Int, action: () -> Unit) {
+            row.addView(tile(id, title, icon, action))
+        }
+        add(R.id.toolSignature, R.string.stamp_tool_signature, R.drawable.ic_sym_signature) {
+            pickSignature()
+        }
+        add(R.id.toolText, R.string.stamp_tool_text, R.drawable.ic_sym_text_fields) {
+            promptText()
+        }
+        add(R.id.toolDraw, R.string.stamp_tool_draw, R.drawable.ic_sym_edit) {
+            arm(StampCanvasView.Tool.DRAW, R.string.stamp_hint_draw)
+        }
+        add(R.id.toolHighlight, R.string.stamp_tool_highlight, R.drawable.ic_sym_format_list_numbered) {
+            arm(StampCanvasView.Tool.HIGHLIGHT, R.string.stamp_hint_highlight)
+        }
+        add(R.id.toolWatermark, R.string.stamp_tool_watermark, R.drawable.ic_sym_watermark) {
+            promptWatermark()
+        }
+        add(R.id.toolPageNumbers, R.string.stamp_tool_page_numbers, R.drawable.ic_sym_notes_lines) {
+            addMarkToAll(PageStamp.Mark.PageNumber())
+        }
+        add(R.id.toolStamp, R.string.stamp_tool_stamp, R.drawable.ic_sym_approval) {
+            promptBadges()
+        }
+        add(R.id.toolRedact, R.string.stamp_tool_redact, R.drawable.ic_sym_ink_eraser) {
+            arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
+        }
+        add(R.id.toolSuggest, R.string.stamp_suggest, R.drawable.ic_sym_auto_fix_high) {
+            suggestRedactions()
+        }
+    }
+
+    private fun tile(id: Int, title: Int, icon: Int, action: () -> Unit): ToolTile {
+        val tool = SwTool(
+            id = "stamp_edit_$id",
+            group = ToolGroup.EDIT,
+            title = title,
+            icon = icon,
+            pro = false,
+            status = ToolStatus.READY,
+            keywords = "edit stamp"
+        )
+        return ToolTile(this).apply {
+            this.id = id
+            bind(tool)
+            setOnClickListener { action() }
+            layoutParams = LinearLayout.LayoutParams(dp(82f), dp(68f)).apply {
+                marginEnd = dp(2f)
+            }
+        }
+    }
+
+    private fun promptText() {
+        StampPrompts.text(
+            this, R.string.stamp_text_title, R.string.stamp_text_hint, ""
+        ) { text -> addMark(PageStamp.Mark.Text(text, textBox(), size = 0.05f)) }
+    }
+
+    private fun promptWatermark() {
+        StampPrompts.text(
+            this, R.string.stamp_watermark_title, R.string.stamp_watermark_hint,
+            getString(R.string.stamp_watermark_default)
+        ) { text -> addMarkToAll(PageStamp.Mark.Watermark(text)) }
+    }
+
+    private fun promptBadges() {
+        StampPrompts.badges(this) { kind ->
+            addMark(PageStamp.Mark.Badge(kind, badgeBox()))
+        }
+    }
+
     private fun applyRequestedTool(tool: String?) {
         when (tool) {
             TOOL_SIGN -> pickSignature()
-            TOOL_TEXT -> binding.toolText.performClick()
+            TOOL_TEXT -> promptText()
             TOOL_DRAW -> arm(StampCanvasView.Tool.DRAW, R.string.stamp_hint_draw)
             TOOL_HIGHLIGHT -> arm(StampCanvasView.Tool.HIGHLIGHT, R.string.stamp_hint_highlight)
-            TOOL_WATERMARK -> binding.toolWatermark.performClick()
+            TOOL_WATERMARK -> promptWatermark()
             TOOL_PAGE_NUMBERS -> addMarkToAll(PageStamp.Mark.PageNumber())
-            TOOL_STAMP -> binding.toolStamp.performClick()
+            TOOL_STAMP -> promptBadges()
             TOOL_REDACT -> arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
             else -> Unit
         }
@@ -335,13 +394,16 @@ class StampEditorActivity : BaseActivity() {
             finish()
             return
         }
-        SwDialog.card(this)
+        SwSheet.builder(this)
             .setTitle(R.string.stamp_discard_title)
             .setMessage(R.string.stamp_discard_message)
-            .setPositiveButton(R.string.stamp_discard) { _, _ -> finish() }
-            .setNegativeButton(R.string.stamp_keep_editing, null)
+            .setPrimary(R.string.stamp_discard) { finish() }
+            .setSecondary(R.string.stamp_keep_editing)
+            .build()
             .show()
     }
+
+    private fun dp(value: Float): Int = SwStyle.dp(this, value)
 
     private fun note(message: String) {
         Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()

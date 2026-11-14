@@ -131,9 +131,9 @@ class StampEditorActivityTest {
         screen.findViewById<android.view.View>(R.id.toolText).performClick()
 
         val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "a text sheet opens" }
-        val input = sheet.findViewById<EditText>(R.id.sheetInput)!!
+        val input = sheet.findViewById<EditText>(R.id.stampTextInput)!!
         input.setText("SELF-ATTESTED")
-        sheet.findViewById<android.view.View>(R.id.sheetAdd)!!.performClick()
+        sheet.findViewById<android.view.View>(R.id.swSheetPrimary)!!.performClick()
 
         val mark = screen.editor.marks().single() as PageStamp.Mark.Text
         assertEquals("SELF-ATTESTED", mark.text)

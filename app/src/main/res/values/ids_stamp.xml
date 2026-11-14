@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L5: ids for views the stamp editor builds in code (the kit owns its own sheet ids). -->
+<resources>
+    <item name="stampTextInput" type="id" />
+    <item name="stampSignaturePad" type="id" />
+    <item name="stampSignatureRows" type="id" />
+    <item name="stampBadgeRows" type="id" />
+    <item name="stampDocumentRows" type="id" />
+    <item name="stampToolRow" type="id" />
+    <item name="toolSignature" type="id" />
+    <item name="toolText" type="id" />
+    <item name="toolDraw" type="id" />
+    <item name="toolHighlight" type="id" />
+    <item name="toolWatermark" type="id" />
+    <item name="toolPageNumbers" type="id" />
+    <item name="toolStamp" type="id" />
+    <item name="toolRedact" type="id" />
+    <item name="toolSuggest" type="id" />
+</resources>

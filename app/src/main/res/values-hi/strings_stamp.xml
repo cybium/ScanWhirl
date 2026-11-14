@@ -119,4 +119,14 @@
     <string name="stamp_discard"><!-- review -->छोड़ें</string>
     <!-- review -->
     <string name="stamp_keep_editing"><!-- review -->संपादन जारी रखें</string>
+    <!-- review -->
+    <string name="stamp_choose_document"><!-- review -->दस्तावेज़ चुनें</string>
+    <!-- review -->
+    <string name="stamp_no_documents"><!-- review -->संपादित करने के लिए कोई अनलॉक दस्तावेज़ नहीं है। पहले स्कैन या आयात करें।</string>
+    <!-- review -->
+    <string name="stamp_document_pages"><!-- review -->%1$d पृष्ठ</string>
+    <!-- review -->
+    <string name="stamp_document_page"><!-- review -->1 पृष्ठ</string>
+    <!-- review -->
+    <string name="stamp_text_required"><!-- review -->पहले पाठ लिखें।</string>
 </resources>

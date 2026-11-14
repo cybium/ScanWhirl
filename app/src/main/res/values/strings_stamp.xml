@@ -63,4 +63,9 @@
     <string name="stamp_discard_message">No copy has been saved yet.</string>
     <string name="stamp_discard">Discard</string>
     <string name="stamp_keep_editing">Keep editing</string>
+    <string name="stamp_choose_document">Choose a document</string>
+    <string name="stamp_no_documents">No unlocked documents to edit. Scan or import one first.</string>
+    <string name="stamp_document_pages">%1$d pages</string>
+    <string name="stamp_document_page">1 page</string>
+    <string name="stamp_text_required">Type the text first.</string>
 </resources>
