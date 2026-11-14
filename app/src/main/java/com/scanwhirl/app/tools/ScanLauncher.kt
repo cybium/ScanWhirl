@@ -80,28 +80,30 @@ class ScanLauncher(
         val pending = found.dir
         val committed = found.committed
         if (committed != null) {
-            SwDialog.card(activity)
+            com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
                 .setTitle(R.string.resume_saved_title)
                 .setMessage(activity.getString(R.string.resume_saved_msg, committed.name))
-                .setPositiveButton(R.string.resume_saved_open) { _, _ ->
+                .setPrimary(R.string.resume_saved_open) {
                     activity.startActivity(DocumentViewerActivity.intent(activity, committed.id))
                     // The committed document was verified above; only now do the leftovers go.
                     pending.deleteRecursively()
                 }
-                .setNegativeButton(R.string.resume_saved_remove) { _, _ -> pending.deleteRecursively() }
-                .showSw(isSheet = false)
+                .setSecondary(R.string.resume_saved_remove) { pending.deleteRecursively() }
+                .build()
+                .show()
             return
         }
-        SwDialog.card(activity)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.resume_scan_title)
             .setMessage(activity.getString(R.string.resume_scan_msg, found.pageCount))
-            .setPositiveButton(R.string.resume_scan_resume) { _, _ ->
+            .setPrimary(R.string.resume_scan_resume) {
                 activity.startActivity(
                     ScanReviewActivity.intent(activity, pending.path, null, repo.nextDocumentName())
                 )
             }
-            .setNegativeButton(R.string.discard) { _, _ -> pending.deleteRecursively() }
-            .showSw(isSheet = false)
+            .setSecondary(R.string.discard) { pending.deleteRecursively() }
+            .build()
+            .show()
     }
 
     /**

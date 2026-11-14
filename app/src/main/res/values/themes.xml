@@ -156,6 +156,7 @@
          bar uses it now; T5.1 reuses it for the document screen dock. Width,
          weight and height stay on the item in XML (repo convention). -->
     <style name="Widget.ScanWhirl.Button.DockItem" parent="Widget.Material3.Button.TextButton">
+        <item name="android:fontFamily">@font/manrope</item>
         <item name="android:minHeight">56dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
@@ -169,6 +170,16 @@
         <item name="iconPadding">4dp</item>
         <item name="iconSize">24dp</item>
         <item name="android:stateListAnimator">@animator/sw_press</item>
+    </style>
+
+    <!-- v2 UI: 08_text_ocr — Manrope title and subtitle on the v2 top bar. -->
+    <style name="TextAppearance.ScanWhirl.ToolbarTitle" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.ScanWhirl.ToolbarSubtitle" parent="TextAppearance.Material3.TitleSmall">
+        <item name="android:fontFamily">@font/manrope</item>
     </style>
 
     <!-- FAB Styles -->

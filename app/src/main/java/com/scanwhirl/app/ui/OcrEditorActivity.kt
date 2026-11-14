@@ -51,7 +51,7 @@ import java.io.File
  * - `EXTRA_TITLE` — temp mode: document title used for the exported `.txt` name.
  *
  * Dirty-state: any edit to the current page's text marks the activity dirty.
- * Back while dirty shows a Save/Discard/Cancel confirm (SwDialog.card).
+ * Back while dirty shows a Save/Discard/Cancel SwSheet.
  *
  * Rotation safety: `currentPageKey` and the dirty pages (text differing from
  * `originalTexts`) are saved in `onSaveInstanceState` and restored on top of
@@ -85,6 +85,8 @@ class OcrEditorActivity : BaseActivity() {
     /** Suppresses recording while the activity sets text programmatically. */
     private var applyingHistory = false
     private var saving = false
+    /** v2 UI: 08_text_ocr — Text is the default pane; Page shows the scan. */
+    private var pageMode = false
 
     private lateinit var editText: EditText
     private lateinit var wordCount: TextView
@@ -219,7 +221,8 @@ class OcrEditorActivity : BaseActivity() {
         val toolbar: Toolbar = binding.toolbar
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = getString(R.string.ocr_editor_title)
+        supportActionBar?.title = getString(R.string.ocr_screen_title)
+        updateSubtitle()
         toolbar.setNavigationOnClickListener {
             if (isDirty) showUnsavedConfirm() else finish()
         }
@@ -297,8 +300,71 @@ class OcrEditorActivity : BaseActivity() {
         binding.btnCopy.setOnClickListener { copyCurrent() }
         binding.btnShare.setOnClickListener { shareCurrent() }
         binding.btnSave.setOnClickListener { saveCurrent() }
+        binding.btnToWord.setOnClickListener {
+            com.scanwhirl.app.ui.kit.SwSheet.note(
+                this,
+                getString(R.string.ocr_to_word_pro),
+                getString(R.string.ocr_to_word_soon)
+            ).show()
+        }
+        setupModeSwitch()
         updateWordCount()
         updateUndoRedoState()
+    }
+
+    private fun setupModeSwitch() {
+        binding.ocrModePage.setOnClickListener { setPageMode(true) }
+        binding.ocrModeText.setOnClickListener { setPageMode(false) }
+        setPageMode(false)
+    }
+
+    /** v2 UI: 08_text_ocr — Page and Text share the pane; Text stays editable. */
+    private fun setPageMode(page: Boolean) {
+        pageMode = page
+        binding.ocrPagePane.isVisible = page
+        binding.editText.isVisible = !page
+        val d = resources.displayMetrics.density
+        val active = com.scanwhirl.app.ui.kit.SwStyle.rounded(
+            this, getColor(com.scanwhirl.app.R.color.sw_cyan_soft), 10f
+        )
+        for ((view, on) in listOf(
+            binding.ocrModePage to page,
+            binding.ocrModeText to !page
+        )) {
+            view.background = if (on) active else null
+            view.setTextColor(
+                getColor(
+                    if (on) com.scanwhirl.app.R.color.cyan_primary
+                    else com.scanwhirl.app.R.color.text_hologram_dim
+                )
+            )
+            view.setPadding(0, 0, 0, 0)
+            view.minimumHeight = (34 * d).toInt()
+        }
+        if (page) loadPageImage(currentPageKey)
+    }
+
+    /** The scan behind this page; null when the text came from a plain file. */
+    private fun loadPageImage(key: String) {
+        val doc = docId?.let { repo.getDocument(it) }
+        val file = doc?.pageFiles?.firstOrNull { it.name == key }
+        val note = binding.ocrPagePaneNote
+        if (file == null || !file.exists()) {
+            binding.ocrPageImage.setImageDrawable(null)
+            note.isVisible = true
+            return
+        }
+        note.isVisible = false
+        com.scanwhirl.app.ui.pagegrid.PageThumbLoader.load(
+            file, 1400, com.scanwhirl.app.util.ScanFilter.ORIGINAL, binding.ocrPageImage
+        )
+    }
+
+    private fun updateSubtitle() {
+        val name = docTitle ?: getString(R.string.ocr_screen_title)
+        val total = maxOf(1, pageTexts.size)
+        val current = pageNumberOf(currentPageKey).coerceIn(1, total)
+        supportActionBar?.subtitle = getString(R.string.ocr_page_sub, name, current, total)
     }
 
     // ------------------------------------------------------------------
@@ -314,6 +380,8 @@ class OcrEditorActivity : BaseActivity() {
         updateWordCount()
         updateUndoRedoState()
         updateStatus()
+        updateSubtitle()
+        if (pageMode) loadPageImage(key)
     }
 
     // ------------------------------------------------------------------
@@ -673,20 +741,20 @@ class OcrEditorActivity : BaseActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Unsaved-changes confirm (SwDialog.card)
+    // Unsaved-changes confirm (SwSheet)
     // ------------------------------------------------------------------
 
     private fun showUnsavedConfirm() {
-        SwDialog.card(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ocr_unsaved_title)
             .setMessage(R.string.ocr_unsaved_msg)
-            .setPositiveButton(R.string.ocr_save_btn) { _, _ ->
+            .setPrimaryStayOpen(R.string.ocr_save_btn) {
                 saveCurrent(finishAfterSave = true)
             }
-            .setNegativeButton(R.string.ocr_discard_btn) { _, _ ->
+            .setSecondary(R.string.ocr_discard_btn) {
                 finish()
             }
-            .setNeutralButton(android.R.string.cancel, null)
+            .build()
             .show()
     }
 

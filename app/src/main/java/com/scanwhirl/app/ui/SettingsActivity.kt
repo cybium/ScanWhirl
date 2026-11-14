@@ -153,16 +153,16 @@ class SettingsActivity : BaseActivity() {
             getString(R.string.theme_system)
         )
         val checked = values.indexOf(Prefs.themeMode(this)).coerceAtLeast(0)
-        SwDialog.sheet(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.settings_theme)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
+            .setOptions(labels.toList(), checked) { which, _ ->
                 Prefs.setThemeMode(this, values[which])
                 AppCompatDelegate.setDefaultNightMode(Prefs.nightMode(values[which]))
-                dialog.dismiss()
                 updateSummaries()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun chooseFont() {
@@ -173,15 +173,15 @@ class SettingsActivity : BaseActivity() {
             getString(R.string.font_mono)
         )
         val checked = values.indexOf(Prefs.fontStyle(this)).coerceAtLeast(0)
-        SwDialog.sheet(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.settings_font)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
+            .setOptions(labels.toList(), checked) { which, _ ->
                 Prefs.setFontStyle(this, values[which])
-                dialog.dismiss()
                 recreate()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun chooseLanguage() {
@@ -192,18 +192,18 @@ class SettingsActivity : BaseActivity() {
             .toMutableList()
         labels.add(getString(R.string.language_more))
         val checked = tags.indexOf(Prefs.localeTag(this)).coerceAtLeast(0)
-        SwDialog.sheet(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.settings_language)
-            .setSingleChoiceItems(labels.toTypedArray(), checked) { dialog, which ->
-                dialog.dismiss()
+            .setOptions(labels.toList(), checked) { which, _ ->
                 if (which >= tags.size) {
                     openSystemLanguageSettings()
                 } else {
                     applyLanguage(tags[which])
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun applyLanguage(tag: String) {
@@ -232,15 +232,15 @@ class SettingsActivity : BaseActivity() {
         val values = arrayOf(Prefs.VIEWER_IN_APP, Prefs.VIEWER_SYSTEM)
         val labels = arrayOf(getString(R.string.viewer_in_app), getString(R.string.viewer_system))
         val checked = values.indexOf(Prefs.defaultViewer(this)).coerceAtLeast(0)
-        SwDialog.sheet(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.settings_default_viewer)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
+            .setOptions(labels.toList(), checked) { which, _ ->
                 Prefs.setDefaultViewer(this, values[which])
-                dialog.dismiss()
                 updateSummaries()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun showAbout() {
@@ -252,11 +252,12 @@ class SettingsActivity : BaseActivity() {
         val view = com.scanwhirl.app.databinding.DialogAboutBinding
             .inflate(layoutInflater)
         view.aboutText.text = getString(R.string.about_message, version)
-        SwDialog.card(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.about_title)
-            .setView(view.root)
-            .setPositiveButton(android.R.string.ok, null)
-            .showSw(isSheet = false)
+            .setContent(view.root)
+            .setPrimary(android.R.string.ok)
+            .build()
+            .show()
     }
 
     private fun languageLabel(tag: String): String = when (tag) {

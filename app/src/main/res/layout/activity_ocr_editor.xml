@@ -11,8 +11,11 @@
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        app:subtitleTextAppearance="@style/TextAppearance.ScanWhirl.ToolbarSubtitle"
         app:title="@string/ocr_editor_title"
+        app:titleTextAppearance="@style/TextAppearance.ScanWhirl.ToolbarTitle"
         app:titleTextColor="@color/text_hologram_hi" />
 
     <!-- Page tabs: ChipGroup, only visible when there is more than one page. -->
@@ -67,21 +70,100 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- v2 UI: 08_text_ocr — Page / Text switch. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="38dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_sw_segment"
+        android:orientation="horizontal"
+        android:padding="4dp">
+
+        <TextView
+            android:id="@+id/ocrModePage"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/manrope"
+            android:gravity="center"
+            android:text="@string/ocr_mode_page"
+            android:textColor="@color/text_hologram_dim"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/ocrModeText"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/bg_sw_segment_on"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/manrope"
+            android:gravity="center"
+            android:text="@string/ocr_mode_text"
+            android:textColor="@color/cyan_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Page view: the scan itself while the text pane is hidden. -->
+    <FrameLayout
+        android:id="@+id/ocrPagePane"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="12dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_glass_card"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/ocrPageImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:adjustViewBounds="true"
+            android:contentDescription="@string/ocr_mode_page"
+            android:padding="6dp"
+            android:scaleType="fitCenter" />
+
+        <TextView
+            android:id="@+id/ocrPagePaneNote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="18dp"
+            android:text="@string/ocr_page_pane_note"
+            android:textColor="@color/text_hologram_dim"
+            android:textSize="13sp"
+            android:visibility="gone" />
+    </FrameLayout>
+
     <EditText
         android:id="@+id/editText"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="12dp"
         android:layout_weight="1"
-        android:inputType="textMultiLine|textNoSuggestions"
-        android:minLines="10"
+        android:background="@drawable/bg_glass_card"
+        android:fontFamily="@font/manrope"
         android:gravity="top|start"
-        android:textSize="14sp"
-        android:fontFamily="sans-serif"
+        android:inputType="textMultiLine|textNoSuggestions"
+        android:minLines="3"
+        android:overScrollMode="always"
+        android:padding="12dp"
+        android:scrollbarStyle="outsideInset"
         android:textColor="@color/text_hologram_hi"
         android:textColorHint="@color/text_hologram_dim"
-        android:overScrollMode="always"
-        android:scrollbarStyle="outsideInset"
-        android:padding="16dp" />
+        android:textSize="14sp" />
 
     <!-- Word count + Undo/Redo row. -->
     <LinearLayout
@@ -89,8 +171,8 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="8dp">
+        android:paddingTop="2dp"
+        android:paddingBottom="4dp">
 
         <TextView
             android:id="@+id/wordCount"
@@ -127,8 +209,8 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="8dp">
+        android:paddingTop="2dp"
+        android:paddingBottom="4dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnJoinLines"
@@ -167,38 +249,82 @@
             android:text="@string/ocr_remove_gaps" />
     </LinearLayout>
 
-    <!-- Action bar: Copy · Share · Save. -->
-    <LinearLayout
+    <!-- v2 UI: 08_text_ocr — Copy · Share · Save · To Word. Horizontal scroll so
+         a 320dp phone at 200% text never squeezes a label (the mockup wraps). -->
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp">
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:scrollbars="none">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCopy"
-            style="@style/Widget.ScanWhirl.Button.DockItem"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/ocr_copy_btn" />
+            android:orientation="horizontal">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnShare"
-            style="@style/Widget.ScanWhirl.Button.DockItem"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/ocr_share_btn" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCopy"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="64dp"
+                android:minHeight="48dp"
+                android:paddingHorizontal="12dp"
+                android:text="@string/ocr_copy_btn" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSave"
-            style="@style/Widget.ScanWhirl.Button.DockItem"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/ocr_save_btn" />
-    </LinearLayout>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnShare"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:minWidth="64dp"
+                android:minHeight="48dp"
+                android:paddingHorizontal="12dp"
+                android:text="@string/ocr_share_btn" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSave"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:minWidth="64dp"
+                android:minHeight="48dp"
+                android:paddingHorizontal="12dp"
+                android:text="@string/ocr_save_btn" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnToWord"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:minWidth="64dp"
+                android:minHeight="48dp"
+                android:paddingHorizontal="12dp"
+                android:text="@string/ocr_to_word_pro"
+                android:textColor="@color/gold_pro_primary" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- v2 UI: 08_text_ocr — the honest footer. -->
+    <TextView
+        android:id="@+id/ocrFootNote"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="6dp"
+        android:drawableStart="@drawable/ic_sym_check_circle"
+        android:drawablePadding="6dp"
+        android:drawableTint="@color/ok_green"
+        android:fontFamily="@font/manrope"
+        android:text="@string/ocr_foot_note"
+        android:textColor="@color/text_hologram_dim"
+        android:textSize="11.5sp"
+        android:textStyle="bold" />
 
 </LinearLayout>

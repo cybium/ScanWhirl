@@ -9,6 +9,8 @@
     <item name="swSheetContent" type="id" />
     <item name="swSheetPrimary" type="id" />
     <item name="swSheetSecondary" type="id" />
+    <item name="swSheetItems" type="id" />
+    <item name="swSheetInput" type="id" />
 
     <item name="swPasswordField" type="id" />
     <item name="swPasswordToggle" type="id" />
@@ -67,4 +69,12 @@
     <item name="swMeAbout" type="id" />
     <item name="swVaultNote" type="id" />
     <item name="swVaultAction" type="id" />
+    <item name="readerDockRoot" type="id" />
+    <item name="readerDockShare" type="id" />
+    <item name="readerDockPages" type="id" />
+    <item name="readerDockText" type="id" />
+    <item name="readerDockSign" type="id" />
+    <item name="readerDockMore" type="id" />
+    <item name="readerStrip" type="id" />
+    <item name="readerStripPages" type="id" />
 </resources>

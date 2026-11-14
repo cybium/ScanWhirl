@@ -82,7 +82,7 @@ object SwStyle {
     ): TextView = TextView(context).apply {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
         setTextColor(textColor)
-        typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
+        typeface = SwType.of(context, if (bold) SwType.BOLD else SwType.REGULAR)
         this.letterSpacing = letterSpacing
         includeFontPadding = false
     }

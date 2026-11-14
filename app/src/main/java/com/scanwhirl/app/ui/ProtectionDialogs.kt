@@ -57,25 +57,25 @@ object ProtectionDialogs {
         doc: ScanDocument,
         onResolved: () -> Unit
     ) {
-        SwDialog.card(activity)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.protection_repair_title)
             .setMessage(activity.getString(R.string.protection_repair_msg, doc.name))
-            .setPositiveButton(R.string.btn_protect_again) { _, _ ->
+            .setPrimary(R.string.btn_protect_again) {
                 LockFlow.promptCurrentPassword(activity, doc.name) { pw ->
                     launchRepair(activity, onResolved, toast = R.string.protection_repaired) {
                         repo.repairProtection(doc.id, pw)
                     }
                 }
             }
-            .setNeutralButton(R.string.btn_remove_lock) { _, _ ->
+            .setSecondary(R.string.btn_remove_lock) {
                 LockFlow.promptCurrentPassword(activity, doc.name) { pw ->
                     launchRepair(activity, onResolved, toast = null) {
                         repo.removeProtectionLabel(doc.id, pw)
                     }
                 }
             }
-            .setNegativeButton(R.string.protection_not_now, null)
-            .showSw(isSheet = false)
+            .build()
+            .show()
     }
 
     private fun showUnknownPassword(
@@ -84,14 +84,15 @@ object ProtectionDialogs {
         doc: ScanDocument,
         onResolved: () -> Unit
     ) {
-        SwDialog.card(activity)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.protection_repair_title)
             .setMessage(R.string.protection_unknown_msg)
-            .setPositiveButton(R.string.btn_rebuild_pdf) { _, _ ->
+            .setPrimary(R.string.btn_rebuild_pdf) {
                 launchRepair(activity, onResolved, toast = null) { repo.rebuildPlainPdf(doc.id) }
             }
-            .setNegativeButton(R.string.protection_not_now, null)
-            .showSw(isSheet = false)
+            .setSecondary(R.string.protection_not_now)
+            .build()
+            .show()
     }
 
     private fun launchRepair(

@@ -129,24 +129,26 @@ class MergePdfActivity : BaseActivity() {
             Toast.makeText(this, R.string.merge_needs_two_pdfs, Toast.LENGTH_SHORT).show()
             return
         }
-        val (builder, input) = SwDialog.input(this, hint = getString(R.string.merge_name_hint))
-        builder
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.merge_builder_title)
-            .setPositiveButton(R.string.merge_action) { _, _ ->
-                confirmMerge(input.text?.toString())
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .setInput(hint = getString(R.string.merge_name_hint))
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.setPrimary(R.string.merge_action) {
+            confirmMerge(sheet.inputView?.text?.toString())
+        }
+        sheet.show()
     }
 
     /** Device-PDF merge rasterizes each page; the user confirms that once. */
     private fun confirmMerge(name: String?) {
-        SwDialog.card(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.merge_builder_title)
             .setMessage(R.string.pdf_rasterize_note)
-            .setPositiveButton(R.string.continue_label) { _, _ -> doMerge(name) }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .setPrimary(R.string.continue_label) { doMerge(name) }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun doMerge(name: String?) {

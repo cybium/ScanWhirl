@@ -265,13 +265,9 @@ class PageViewerActivity : BaseActivity() {
         if (dir != null) {
             // Staging: the choice is virtual, persisted for the review screen.
             val checked = filters.indexOf(stagingFilters[file.path] ?: ScanFilter.ORIGINAL)
-            SwDialog.sheet(this)
+            com.scanwhirl.app.ui.kit.SwSheet.builder(this)
                 .setTitle(R.string.filter_title)
-                .setSingleChoiceItems(
-                    filters.map { getString(it.labelRes) }.toTypedArray(),
-                    checked
-                ) { dialog, which ->
-                    dialog.dismiss()
+                .setOptions(filters.map { getString(it.labelRes) }, checked) { which, _ ->
                     stagingFilters[file.path] = filters[which]
                     writeStagingFilters(dir)
                     reload()
@@ -279,8 +275,9 @@ class PageViewerActivity : BaseActivity() {
                     binding.pager.scrollToPosition(currentPos)
                     updateIndicator()
                 }
-                .setNegativeButton(android.R.string.cancel, null)
-                .showSw(isSheet = true)
+                .setSecondary(android.R.string.cancel)
+                .build()
+                .show()
             return
         }
         val id = docId ?: return
@@ -291,17 +288,14 @@ class PageViewerActivity : BaseActivity() {
                 val checked = filters.indexOf(
                     filterChoice[file.path] ?: ScanFilter.ORIGINAL
                 )
-                SwDialog.sheet(this@PageViewerActivity)
+                com.scanwhirl.app.ui.kit.SwSheet.builder(this@PageViewerActivity)
                     .setTitle(R.string.filter_title)
-                    .setSingleChoiceItems(
-                        filters.map { getString(it.labelRes) }.toTypedArray(),
-                        checked
-                    ) { dialog, which ->
-                        dialog.dismiss()
+                    .setOptions(filters.map { getString(it.labelRes) }, checked) { which, _ ->
                         applyFilter(id, pos, file, filters[which])
                     }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .showSw(isSheet = true)
+                    .setSecondary(android.R.string.cancel)
+                    .build()
+                    .show()
             } catch (e: Exception) {
                 Toast.makeText(
                     this@PageViewerActivity,
@@ -377,15 +371,16 @@ class PageViewerActivity : BaseActivity() {
 
     /** Last page of an unsaved scan: deleting it means discarding the scan. */
     private fun confirmStagingDiscard() {
-        SwDialog.danger(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.review_discard_title)
             .setMessage(R.string.review_discard_msg)
-            .setPositiveButton(R.string.discard) { _, _ ->
+            .setPrimary(R.string.discard) {
                 stagingDir?.deleteRecursively()
                 finish()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     // ------------------------------------------------------------------

@@ -21,6 +21,7 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.DocCard
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
@@ -197,7 +198,7 @@ class LibraryScreen(
         row.addView(
             SwStyle.text(context, 22f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(R.string.app_name)
-                typeface = Typeface.create("sans-serif", Typeface.BOLD)
+                typeface = SwType.extraBold(context)
                 letterSpacing = -0.01f
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)

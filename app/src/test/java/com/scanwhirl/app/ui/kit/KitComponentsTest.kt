@@ -58,6 +58,85 @@ class KitComponentsTest {
     }
 
     @Test
+    fun `option sheet lists rows in order, checks the choice and closes on pick`() {
+        var picked = -1
+        val sheet = SwSheet.builder(app)
+            .setTitle("Appearance")
+            .setOptions(listOf("Light", "Dark", "System"), checked = 1) { which, _ -> picked = which }
+            .build()
+        sheet.show()
+
+        val list = sheet.view.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+        assertEquals("one row per option", 3, list.childCount)
+        assertEquals(
+            "Light",
+            ((list.getChildAt(0) as android.view.ViewGroup).getChildAt(0) as TextView).text.toString()
+        )
+        // The checked row carries the 20dp check mark.
+        assertEquals(2, (list.getChildAt(1) as android.view.ViewGroup).childCount)
+
+        (list.getChildAt(2) as View).performClick()
+        assertEquals("the tapped index reaches the caller", 2, picked)
+        assertFalse("a single choice closes the sheet", sheet.isShowing)
+    }
+
+    @Test
+    fun `multi-choice sheet toggles and stays open for the primary`() {
+        val checked = booleanArrayOf(false, false, false)
+        val sheet = SwSheet.builder(app)
+            .setTitle("Merge")
+            .setOptions(listOf("One", "Two", "Three"), multiChecked = checked) { which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setPrimary("Merge")
+            .build()
+        sheet.show()
+
+        val list = sheet.view.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+        (list.getChildAt(1) as View).performClick()
+        assertTrue("row 1 toggled on", checked[1])
+        assertTrue("multi-choice keeps the sheet open", sheet.isShowing)
+        sheet.view.findViewById<View>(R.id.swSheetPrimary).performClick()
+        assertFalse("the primary closes it", sheet.isShowing)
+    }
+
+    @Test
+    fun `input sheet fills its field and the primary reads it`() {
+        var typed: String? = null
+        val sheet = SwSheet.builder(app)
+            .setTitle("Rename")
+            .setInput(initial = "Rent agreement", hint = "Name")
+            .build()
+        sheet.setPrimary("Save") { typed = sheet.inputView?.text?.toString() }
+        sheet.show()
+
+        val input = sheet.view.findViewById<android.widget.EditText>(R.id.swSheetInput)
+        assertNotNull("the sheet carries swSheetInput", input)
+        assertEquals("Rent agreement", input.text.toString())
+        input.setText("Rent agreement 2026")
+        sheet.view.findViewById<View>(R.id.swSheetPrimary).performClick()
+        assertEquals("Rent agreement 2026", typed)
+    }
+
+    @Test
+    fun `a stay-open primary keeps the sheet up until the work succeeds`() {
+        var attempts = 0
+        val sheet = SwSheet.builder(app).setTitle("Unsaved").setMessage("Save first?").build()
+        sheet.setPrimaryStayOpen("Save") {
+            attempts++
+            if (attempts == 2) sheet.dismiss()
+        }
+        sheet.show()
+
+        val primary = sheet.view.findViewById<View>(R.id.swSheetPrimary)
+        primary.performClick()
+        assertTrue("a failed attempt leaves the sheet open", sheet.isShowing)
+        primary.performClick()
+        assertEquals(2, attempts)
+        assertFalse("a successful attempt closes it", sheet.isShowing)
+    }
+
+    @Test
     fun `coming soon sheet names the tool and explains it in one line`() {
         val tool = ToolRegistry.byId("qr_code")!!
         val sheet = SwSheet.comingSoon(app, tool)

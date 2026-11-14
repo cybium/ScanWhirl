@@ -117,18 +117,21 @@ class FreeLegacyVaultEntryPointTest {
         tile.performClick()
     }
 
-    private fun pinDialog(): AlertDialog? {
-        val d = ShadowDialog.getLatestDialog() as? AlertDialog ?: return null
+    private fun pinDialog(): android.app.Dialog? {
+        val d = ShadowDialog.getLatestDialog() ?: return null
         return d.takeIf { dlg ->
             allViews(dlg.window!!.decorView).any { it is EditText }
         }
     }
 
-    private fun submitPin(dialog: AlertDialog, pin: String) {
+    private fun submitPin(dialog: android.app.Dialog, pin: String) {
         val input = allViews(dialog.window!!.decorView).filterIsInstance<EditText>().first()
         input.setText(pin)
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        // AlertDialog dispatches button clicks through a Handler message.
+        // v2 UI: 09_unlock_sheet — the legacy PIN gate is a SwSheet now; the
+        // L3 password prompt is still an AlertDialog until that lane merges.
+        val primary = dialog.findViewById<View>(R.id.swSheetPrimary)
+        if (primary != null) primary.performClick()
+        else (dialog as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         shadowOf(android.os.Looper.getMainLooper()).idle()
     }
 
