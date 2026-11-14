@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- L2: fingerprint/face unlock for the Vault (API 28+); the passcode works everywhere. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -33,6 +35,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- L2 v2 Vault (04_vault): setup, unlock, private files, backup/restore. -->
+        <activity
+            android:name=".ui.vault.VaultActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- The legacy home is kept until every flow has moved to the shell. -->
         <activity

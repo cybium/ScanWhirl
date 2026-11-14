@@ -90,6 +90,7 @@ class AndroidVaultKeys(
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setKeySize(256)
             .setUserAuthenticationRequired(true)
+            .setUserAuthenticationValidityDurationSeconds(30)
             .setInvalidatedByBiometricEnrollment(true)
             .build()
         generator.init(spec)

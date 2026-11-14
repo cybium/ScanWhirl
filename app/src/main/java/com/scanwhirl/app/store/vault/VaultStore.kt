@@ -115,6 +115,10 @@ class VaultStore(
 
     fun isUnlocked(): Boolean = vaultKey != null
 
+    /** True when a Keystore wrap exists on this phone and the Keystore is reachable. */
+    fun hasBiometricKey(): Boolean =
+        File(vaultDir, KEYSTORE_FILE).isFile && keys.isAvailable()
+
     fun hasLegacyPin(): Boolean = Prefs.hasVaultPin(context)
 
     fun verifyLegacyPin(pin: String): Boolean = Prefs.verifyVaultPin(context, pin)
