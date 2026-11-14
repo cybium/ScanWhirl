@@ -9,19 +9,23 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.vault.VaultStore
+import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.ExportResultActivity
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.ui.protect.ImportUnlockSheet
 import com.scanwhirl.app.ui.protect.ProtectSheet
 import com.scanwhirl.app.ui.protect.TryCooldown
 import com.scanwhirl.app.ui.protect.UnlockSheet
 import com.scanwhirl.app.ui.protect.VaultPasswordsFlow
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.PdfDecryptor
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
@@ -46,7 +50,9 @@ class LockFlow(
     private val repo: ScanRepository,
     private val host: HomeHost,
     private val docs: () -> List<ScanDocument>,
-    private val pickPdf: ((Uri) -> Unit) -> Unit
+    private val pickPdf: ((Uri) -> Unit) -> Unit,
+    /** Test seam: the real path decrypts and imports; Robolectric cannot run PdfRenderer. */
+    private val importProtected: (suspend (Uri, String?, String) -> ScanDocument)? = null
 ) {
 
     /** Wrong-password pacing survives closing and reopening a sheet, per document, this process. */
@@ -127,6 +133,59 @@ class LockFlow(
     fun protectDocument(doc: ScanDocument) = promptNewPasswordForScan(doc)
 
     /**
+     * The import dead-end fix: a password-protected PDF opens the Unlock sheet, then its
+     * decrypted pages become a new document. The source file is only read.
+     */
+    fun importProtectedPdf(uri: Uri, suggestedName: String?) {
+        activity.lifecycleScope.launch {
+            // If this is a ScanWhirl export of a library document, its remembered password can
+            // fill the sheet (same hash index the device unlock uses).
+            val match = withContext(Dispatchers.IO) {
+                runCatching {
+                    val hash = activity.contentResolver.openInputStream(uri)?.use { Sha256.of(it) }
+                    if (hash == null) null else repo.findLockedDocumentByHash(hash)
+                }.getOrNull()
+            }
+            val vaultAvailable = match != null && VaultPasswordsFlow.has(activity, match.id)
+            val useVault: (((String?) -> Unit) -> Unit)? = if (vaultAvailable && match != null) {
+                { done -> VaultPasswordsFlow.readForUnlock(activity, match.id) { pw -> done(pw) } }
+            } else {
+                null
+            }
+            ImportUnlockSheet.show(
+                activity = activity,
+                documentName = suggestedName?.takeIf { it.isNotBlank() } ?: "PDF",
+                vaultAvailable = vaultAvailable,
+                onUseVault = useVault
+            ) { password, done ->
+                activity.lifecycleScope.launch {
+                    val progress = host.showProgress()
+                    try {
+                        val doc = withContext(Dispatchers.IO) {
+                            importProtected?.invoke(uri, suggestedName, password)
+                                ?: repo.importProtectedPdfAsScan(uri, suggestedName, password)
+                        }
+                        progress.dismiss()
+                        ScanWhirlApp.from(activity).indexer.enqueue(doc.id)
+                        host.refreshList()
+                        activity.startActivity(DocumentViewerActivity.intent(activity, doc.id))
+                        done(ImportUnlockSheet.Result.OK)
+                    } catch (e: PdfDecryptor.WrongPassword) {
+                        progress.dismiss()
+                        done(ImportUnlockSheet.Result.WRONG)
+                    } catch (e: PdfDecryptor.Unsupported) {
+                        progress.dismiss()
+                        done(ImportUnlockSheet.Result.UNSUPPORTED)
+                    } catch (e: Exception) {
+                        progress.dismiss()
+                        done(ImportUnlockSheet.Result.FAILED)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Mockup 05. [current] is the verified current password when changing it; null when protecting
      * for the first time. The sheet only calls back with a password that is long enough and typed
      * twice the same, so no validation happens here.
@@ -156,17 +215,21 @@ class LockFlow(
                     progress.dismiss()
                     Toast.makeText(activity, R.string.protect_done, Toast.LENGTH_LONG).show()
                     host.refreshList()
-                    if (remember) {
-                        VaultPasswordsFlow.remember(activity, doc.id, password) { saved ->
-                            if (!saved) {
-                                Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
-                            }
-                            if (!changing) offerProtectedCopy(updated, shareNow)
+                    // The protection (and the save/share the owner picked) completes first. The
+                    // Vault step is silent and only affects remembering: a locked Vault never
+                    // replaces this screen or loses the save action.
+                    val remembered = withContext(Dispatchers.IO) {
+                        if (remember) {
+                            VaultPasswordsFlow.saveIfUnlocked(activity, doc.id, password)
+                        } else {
+                            VaultPasswordsFlow.forget(activity, doc.id)
+                            true
                         }
-                    } else {
-                        withContext(Dispatchers.IO) { VaultPasswordsFlow.forget(activity, doc.id) }
-                        if (!changing) offerProtectedCopy(updated, shareNow)
                     }
+                    if (!remembered) {
+                        Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
+                    }
+                    if (!changing) offerProtectedCopy(updated, shareNow)
                 } catch (e: PdfProtection.WrongPassword) {
                     progress.dismiss()
                     Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
@@ -317,15 +380,14 @@ class LockFlow(
                     }
                 }
                 if (remember) {
-                    VaultPasswordsFlow.remember(activity, locked.id, password) { saved ->
-                        if (!saved) {
-                            Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
-                        }
-                        present()
+                    val saved = withContext(Dispatchers.IO) {
+                        VaultPasswordsFlow.saveIfUnlocked(activity, locked.id, password)
                     }
-                } else {
-                    present()
+                    if (!saved) {
+                        Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
+                    }
                 }
+                present()
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(

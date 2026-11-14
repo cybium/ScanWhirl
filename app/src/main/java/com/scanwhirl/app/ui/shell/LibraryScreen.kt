@@ -92,6 +92,7 @@ class LibraryScreen(
     private var docs: List<ScanDocument> = emptyList()
     private var query = ""
     private var category: String? = null
+    private var revealId: String? = null
 
     private val quickIds = listOf("merge", "compress", "sign", "protect", "to_word", "read_text")
 
@@ -194,20 +195,6 @@ class LibraryScreen(
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                     .apply { topMargin = SwStyle.dp(context, 6f) }
             )
-            val scan = SwStyle.text(context, 15f, SwStyle.color(context, R.color.sw_disc_ink), bold = true).apply {
-                text = context.getString(R.string.shell_nav_scan)
-                gravity = Gravity.CENTER
-                background = SwStyle.rounded(
-                    context, SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f
-                )
-                isClickable = true
-                setOnClickListener { callbacks.onScan() }
-            }
-            addView(
-                scan,
-                LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f))
-                    .apply { topMargin = SwStyle.dp(context, 16f) }
-            )
         }
         addView(emptyView)
 
@@ -221,6 +208,15 @@ class LibraryScreen(
         renderFolders()
         renderChips()
         renderDocs()
+    }
+
+    /**
+     * v2 UI: 01_home_A — highlight and scroll to a document after a tool's "Show in library".
+     * The target is kept so the post-onResume reload shows it highlighted too.
+     */
+    fun revealDocument(id: String) {
+        revealId = id
+        reload()
     }
 
     /** v2 UI: 03_tools_hub — the Folders tool lands here with the folder row in view. */
@@ -992,6 +988,22 @@ class LibraryScreen(
                     setMargins(m, 0, m, SwStyle.dp(context, 10f))
                 }
             )
+            if (doc.id == revealId) {
+                card.isSelected = true
+                card.background = SwStyle.gradient(
+                    context,
+                    SwStyle.color(context, R.color.glass_surface_raised),
+                    SwStyle.color(context, R.color.glass_surface),
+                    18f,
+                    SwStyle.color(context, R.color.cyan_primary)
+                )
+                card.requestFocus()
+                card.post {
+                    card.requestRectangleOnScreen(
+                        android.graphics.Rect(0, 0, card.width, card.height), true
+                    )
+                }
+            }
         }
         emptyView.isVisible = docs.isEmpty()
         if (docs.isEmpty()) {

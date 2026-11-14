@@ -36,6 +36,7 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.protect.UnlockSheet
 import com.scanwhirl.app.util.IdCard
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
@@ -288,7 +289,6 @@ class ToolSetupActivity : BaseActivity() {
                 }
                 val pad = SwStyle.dp(this@ToolSetupActivity, 14f)
                 setPadding(pad, pad, pad, pad)
-                setOnClickListener { choose(doc.id) }
             }
             row.addView(mark)
             row.addView(
@@ -300,9 +300,29 @@ class ToolSetupActivity : BaseActivity() {
             )
             row.addView(
                 SwStyle.text(this, 12f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
-                    text = getString(R.string.tools_setup_doc_meta, doc.pageCount, StatusLine.formatBytes(doc.pdfFile.length()))
+                    text = resources.getQuantityString(
+                        R.plurals.tools_setup_doc_meta, doc.pageCount, doc.pageCount,
+                        StatusLine.formatBytes(doc.pdfFile.length())
+                    )
                 }
             )
+            if (doc.isLocked) {
+                row.addView(
+                    ImageView(this).apply {
+                        setImageResource(R.drawable.ic_sym_lock)
+                        imageTintList = android.content.res.ColorStateList.valueOf(
+                            SwStyle.color(this@ToolSetupActivity, R.color.gold_pro_primary)
+                        )
+                        contentDescription = getString(R.string.tools_setup_locked)
+                    },
+                    LinearLayout.LayoutParams(
+                        SwStyle.dp(this@ToolSetupActivity, 18f), SwStyle.dp(this@ToolSetupActivity, 18f)
+                    ).apply { marginStart = SwStyle.dp(this@ToolSetupActivity, 8f) }
+                )
+            }
+            row.setOnClickListener {
+                if (doc.isLocked) promptUnlock(doc) else choose(doc.id)
+            }
             list.addView(row, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
@@ -429,9 +449,14 @@ class ToolSetupActivity : BaseActivity() {
             val spans = PageRanges.parse(rangesText, doc.pageCount)
             val labels = spans.joinToString(", ") { PageRanges.label(it) }
             preview.text = if (tool.id == "split") {
-                getString(R.string.tools_setup_split_preview, spans.size, labels)
+                resources.getQuantityString(
+                    R.plurals.tools_setup_split_preview, spans.size, spans.size, labels
+                )
             } else {
-                getString(R.string.tools_setup_extract_preview, spans.sumOf { it.size }, labels)
+                val pages = spans.sumOf { it.size }
+                resources.getQuantityString(
+                    R.plurals.tools_setup_extract_preview, pages, pages, labels
+                )
             }
             preview.setTextColor(SwStyle.color(this, R.color.ok_green))
         } catch (e: IllegalArgumentException) {
@@ -559,7 +584,7 @@ class ToolSetupActivity : BaseActivity() {
                 }.getOrNull()
             }
             if (plan != null && !isFinishing) {
-                info.text = getString(R.string.tools_setup_long_note, plan)
+                info.text = resources.getQuantityString(R.plurals.tools_setup_long_note, plan, plan)
             } else if (!isFinishing) {
                 info.text = getString(R.string.tools_setup_long_failed)
             }
@@ -733,6 +758,43 @@ class ToolSetupActivity : BaseActivity() {
         render()
     }
 
+    /**
+     * A locked source is not a dead end: L3's Unlock sheet takes the password, the document is
+     * unlocked in place, and the same row becomes the selection so the tool can continue.
+     */
+    private fun promptUnlock(doc: ScanDocument) {
+        UnlockSheet.show(
+            activity = this,
+            documentName = doc.name,
+            verify = { candidate -> repo.verifyPdfPassword(doc.id, candidate) },
+            onUnlocked = { password -> unlockAndSelect(doc, password) }
+        )
+    }
+
+    private fun unlockAndSelect(doc: ScanDocument, password: String) {
+        progressOverlay.isVisible = true
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, password) }
+                docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+                if (tool.id == "merge" || tool.id == "zip") {
+                    selected += doc.id
+                } else {
+                    selected.clear()
+                    selected += doc.id
+                }
+                progressOverlay.isVisible = false
+                render()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                progressOverlay.isVisible = false
+                render()
+                fail(getString(R.string.tools_setup_failed, e.message ?: ""))
+            }
+        }
+    }
+
     // ---- run --------------------------------------------------------------
 
     private fun run() {
@@ -780,7 +842,7 @@ class ToolSetupActivity : BaseActivity() {
                 execute({
                     val out = if (targetBytes != null) {
                         val pages = SizeFit.compressPages(doc.pageFiles, targetBytes)
-                        repo.createDocument("${doc.name} (compressed)", pages).id
+                        repo.createDocument(repo.outputName(doc.name, "Compressed"), pages).id
                     } else {
                         val (quality, maxDim) = compressLevel()
                         repo.compressScan(doc.id, quality, maxDim).id

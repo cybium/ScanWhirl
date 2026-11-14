@@ -48,14 +48,12 @@ class IdCardFlowTest {
 
     @Before
     fun setUp() {
-        IdCardActivity.suppressScannerForTest = true
         app.getSharedPreferences("scanwhirl_id_card", android.content.Context.MODE_PRIVATE)
             .edit().clear().commit()
     }
 
     @After
     fun tearDown() {
-        IdCardActivity.suppressScannerForTest = false
         Faults.resetAll()
     }
 
@@ -90,6 +88,23 @@ class IdCardFlowTest {
         idle()
     }
 
+    /** Clicks a quiet action inside the sheet body (for example "Front only"). */
+    private fun clickSheetText(textRes: Int) {
+        idle()
+        val dialog = requireNotNull(ShadowDialog.getLatestDialog()) { "no sheet is open" }
+        val wanted = app.getString(textRes)
+        val found = mutableListOf<TextView>()
+        fun walk(view: View) {
+            if (view is TextView && view.text.toString() == wanted) found += view
+            if (view is android.view.ViewGroup) {
+                for (i in 0 until view.childCount) walk(view.getChildAt(i))
+            }
+        }
+        walk(dialog.window!!.decorView)
+        requireNotNull(found.firstOrNull()) { "sheet has no action \"$wanted\"" }.performClick()
+        idle()
+    }
+
     private fun newestDoc() = repo.listDocuments().first()
 
     private fun pageColor(docId: String, pageIndex: Int, x: Int, y: Int): Int {
@@ -118,8 +133,8 @@ class IdCardFlowTest {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.acceptCapture(IdCardActivity.Side.FRONT, jpeg(Color.RED))
-                // "Add the back side?" → Front only (secondary).
-                clickSheet(R.id.swSheetSecondary)
+                // "Add the back side?" → Front only (a quiet action in the sheet body).
+                clickSheetText(R.string.tools_id_front_only)
                 // Layout → remembered default: both sides on one page (primary).
                 clickSheet(R.id.swSheetPrimary)
             }
@@ -190,7 +205,7 @@ class IdCardFlowTest {
     }
 
     @Test
-    fun `front sheet offers the scanner and the gallery`() {
+    fun `front sheet offers the camera and the gallery`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity {
                 idle()
@@ -199,15 +214,21 @@ class IdCardFlowTest {
                     it.getString(R.string.tools_id_front_title),
                     (dialog.findViewById<TextView>(R.id.swSheetTitle)).text.toString()
                 )
-                assertNotNull(dialog.findViewById<View>(R.id.swSheetPrimary))
-                assertNotNull(dialog.findViewById<View>(R.id.swSheetSecondary))
+                assertEquals(
+                    it.getString(R.string.tools_id_scan_camera),
+                    dialog.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
+                )
+                assertEquals(
+                    it.getString(R.string.tools_id_pick_gallery),
+                    dialog.findViewById<TextView>(R.id.swSheetSecondary).text.toString()
+                )
             }
         }
         assertTrue(repo.listDocuments().isEmpty())
     }
 
     @Test
-    fun `back sheet asks for the back and offers front only`() {
+    fun `back sheet asks for the back and still offers front only`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.acceptCapture(IdCardActivity.Side.FRONT, jpeg(Color.RED))
@@ -218,12 +239,24 @@ class IdCardFlowTest {
                     (dialog.findViewById<TextView>(R.id.swSheetTitle)).text.toString()
                 )
                 assertEquals(
-                    activity.getString(R.string.tools_id_scan_back),
+                    activity.getString(R.string.tools_id_scan_camera),
                     dialog.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
                 )
                 assertEquals(
-                    activity.getString(R.string.tools_id_front_only),
+                    activity.getString(R.string.tools_id_pick_gallery),
                     dialog.findViewById<TextView>(R.id.swSheetSecondary).text.toString()
+                )
+                val texts = mutableListOf<String>()
+                fun walk(view: View) {
+                    if (view is TextView) texts += view.text.toString()
+                    if (view is android.view.ViewGroup) {
+                        for (i in 0 until view.childCount) walk(view.getChildAt(i))
+                    }
+                }
+                walk(dialog.window!!.decorView)
+                assertTrue(
+                    "Front only must stay reachable: $texts",
+                    texts.contains(activity.getString(R.string.tools_id_front_only))
                 )
             }
         }

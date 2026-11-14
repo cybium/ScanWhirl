@@ -19,8 +19,8 @@ import org.robolectric.annotation.GraphicsMode
 class ToolRegistryTest {
 
     @Test
-    fun `catalogue holds all 45 tools, each id once`() {
-        assertEquals(45, ToolRegistry.all.size)
+    fun `catalogue holds all 44 tools, each id once`() {
+        assertEquals(44, ToolRegistry.all.size)
         assertEquals(
             "duplicate tool ids",
             ToolRegistry.all.size,
@@ -29,8 +29,8 @@ class ToolRegistryTest {
     }
 
     @Test
-    fun `nineteen tools are Pro`() {
-        assertEquals(19, ToolRegistry.all.count { it.pro })
+    fun `eighteen tools are Pro`() {
+        assertEquals(18, ToolRegistry.all.count { it.pro })
     }
 
     @Test
@@ -89,6 +89,19 @@ class ToolRegistryTest {
         for (group in ToolGroup.entries) {
             assertTrue("$group is empty", ToolRegistry.byGroup(group).isNotEmpty())
         }
+    }
+
+    @Test
+    fun `search ranks title matches before keyword matches`() {
+        val app = androidx.test.core.app.ApplicationProvider
+            .getApplicationContext<android.app.Application>()
+        fun ids(q: String) = ToolRegistry.search(app, q).map { it.id }
+
+        assertEquals("a title starts-with wins", "read_text", ids("read").first())
+        assertEquals("Sign is the Sign tool", "sign", ids("sign").first())
+        assertEquals("a PDF title starts-with wins", "pdf_to_images", ids("pdf").first())
+        assertEquals("keyword 'smaller' finds Compress", "compress", ids("small").first())
+        assertTrue("a keyword substring still matches", ids("scan").contains("scan"))
     }
 
     private class RecordingHost : ToolHost {

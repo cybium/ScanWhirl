@@ -48,7 +48,9 @@ separate Home vs Library tab.
 - `DocCard`: thumbnail, name, meta, category dot, Share, ⋯.
 - `TrustPill`: a green pill ("Offline · No ads").
 
-## 3. Tool catalogue (43 tools; 18 Pro)
+## 3. Tool catalogue (44 tools; 19 Pro)
+
+Updated 2026-11-15: To PowerPoint added, Translate removed (see §6). Live status is in `ui/kit/ToolRegistry.kt`.
 
 **Status meanings:**
 - **Ready**: the code exists today; restyle and wire it.
@@ -80,7 +82,8 @@ separate Home vs Library tab.
 | Convert | PDF to images (JPG/PNG, ZIP) | Free | Build | L4 |
 | | Long image | Free | Build (E20 rules, bounded) | L4 |
 | | To Word (.docx, text) | Pro | Build | L4 |
-| | To Excel | Pro | Soon | — |
+| | To Excel | Pro | Build (wave 2) | L4 |
+| | To PowerPoint (pages as slides) | Pro | Ready | L4 |
 | | To text (.txt) | Free | Ready (OCR export) | L1 |
 | | ZIP export | Free | Ready (archive) | L4 |
 | | Searchable PDF | Free | Ready (setting) | L1 |
@@ -99,7 +102,6 @@ separate Home vs Library tab.
 | | Remove metadata | Free | Build | L4 |
 | Text | Read text (OCR) | Free | Ready → Text screen | L1 |
 | | Hindi text | Free | Soon (PM-6.3 spike) | — |
-| | Translate (on-device) | Pro | Soon | — |
 
 **Pro price:** ₹100, one time (owner, OQ-2). **Pro switch:** test builds unlock Pro (`BuildConfig.TEST_BUILD`).
 Until billing (PM-5.5) exists, production shows the Pro screen with "Coming soon" on the buy button. It never shows a dead end.
@@ -152,3 +154,11 @@ The old lock mixed two jobs. They are now two features.
 3. Every user-visible string lives in that lane's own file, `values/strings_<lane>.xml`, **and** `values-hi/strings_<lane>.xml`. Hindi values start with `<!-- review -->`.
 4. No network permission, no ads, no analytics, no account. New libraries are allowed only from the approved list in `71_LANES.md` §4.
 5. Data safety: outputs publish through `buildAndPublish` (PM-2.1b) once L4 lands it. Nothing overwrites a user's file in place.
+6. Copy: no long dash in user-visible text; one short plain line where possible (`tools/copy_audit.ps1`).
+
+## 6. Decisions log
+
+- 2026-11-15: **Translate removed.** On-device translation needs language models downloaded with the app's own network access; ScanWhirl has no INTERNET permission. Not offered, not shown as Soon.
+- 2026-11-15: Approved libraries: `androidx.biometric:biometric:1.1.0` (Vault unlock), `play-services-code-scanner:16.1.0` (QR), `com.google.mlkit:text-recognition-devanagari:16.0.1` (bundled Hindi OCR).
+- 2026-11-14: Header logo = the launcher brand mark (two rings + page), not the three-arc whirl. Icons = official Material Symbols Rounded (Apache 2.0).
+- 2026-11-14: Long image part limit 16,000 px (E20).

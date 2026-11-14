@@ -25,6 +25,7 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.HomeHost
+import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
@@ -42,6 +43,7 @@ import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.launchTool
+import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -191,6 +193,24 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         })
 
         showTab(Tab.LIBRARY)
+        revealFromIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        revealFromIntent(intent)
+    }
+
+    /**
+     * v2 UI: 01_home_A — "Show in library" from a tool result opens the Library tab with that
+     * document's card highlighted and scrolled into view.
+     */
+    private fun revealFromIntent(source: Intent?) {
+        val docId = source?.getStringExtra(EXTRA_SHOW_DOC_ID) ?: return
+        source.removeExtra(EXTRA_SHOW_DOC_ID)
+        showTab(Tab.LIBRARY)
+        library.revealDocument(docId)
     }
 
     override fun onResume() {
@@ -322,7 +342,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 library.reload()
                 scroll(library)
             }
-            Tab.TOOLS -> scroll(toolsHub)
+            Tab.TOOLS -> scroll(toolsHub).also { toolsHub.clearSearch() }
             Tab.VAULT -> {
                 vaultScreen.refreshStatus()
                 scroll(vaultScreen)
@@ -552,10 +572,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private fun importPdf(uri: android.net.Uri) {
         var job: kotlinx.coroutines.Job? = null
+        var name: String? = null
         val progress = SwDialog.progress(this, titleRes = R.string.import_pdf_progress) { job?.cancel() }
         job = lifecycleScope.launch {
             try {
-                val name = withContext(Dispatchers.IO) {
+                name = withContext(Dispatchers.IO) {
                     runCatching { repo.displayNameOf(uri) }.getOrNull()
                 }?.removeSuffix(".pdf")?.removeSuffix(".PDF")
                     ?.takeIf { it.isNotBlank() } ?: "Imported PDF"
@@ -574,12 +595,18 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 throw e
             } catch (e: Exception) {
                 progress.dismiss()
-                SwSheet.builder(this@ShellActivity)
-                    .setTitle(getString(R.string.import_title))
-                    .setMessage(e.message ?: getString(R.string.import_failed_save))
-                    .setPrimary(R.string.sheet_got_it)
-                    .build()
-                    .show()
+                if (e is PdfImport.ImportException && e.reason == PdfImport.Reason.PASSWORD) {
+                    // Not a dead end: ask for the password, then import the decrypted pages.
+                    LockFlow(this@ShellActivity, repo, this@ShellActivity, { emptyList() }, { _ -> })
+                        .importProtectedPdf(uri, name)
+                } else {
+                    SwSheet.builder(this@ShellActivity)
+                        .setTitle(getString(R.string.import_title))
+                        .setMessage(e.message ?: getString(R.string.import_failed_save))
+                        .setPrimary(R.string.sheet_got_it)
+                        .build()
+                        .show()
+                }
             }
         }
     }
@@ -758,5 +785,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     override fun toast(message: CharSequence, duration: Int) {
         Toast.makeText(this, message, duration).show()
+    }
+
+    companion object {
+        /** A tool result asks the Library tab to highlight this document. */
+        const val EXTRA_SHOW_DOC_ID = "show_doc_id"
+
+        fun intent(context: android.content.Context, docId: String? = null): Intent =
+            Intent(context, ShellActivity::class.java).apply {
+                if (!docId.isNullOrBlank()) putExtra(EXTRA_SHOW_DOC_ID, docId)
+            }
     }
 }

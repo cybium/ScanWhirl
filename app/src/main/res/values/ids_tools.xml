@@ -34,4 +34,17 @@
     <item name="toolIdCardFront" type="id" />
     <item name="toolIdCardBack" type="id" />
     <item name="toolIdCardError" type="id" />
+    <item name="bcPreview" type="id" />
+    <item name="bcForm" type="id" />
+    <item name="bcError" type="id" />
+    <item name="bcName" type="id" />
+    <item name="bcCompany" type="id" />
+    <item name="bcJob" type="id" />
+    <item name="bcPhone" type="id" />
+    <item name="bcEmail" type="id" />
+    <item name="bcWebsite" type="id" />
+    <item name="bcAddress" type="id" />
+    <item name="bcSaveContact" type="id" />
+    <item name="bcShareVCard" type="id" />
+    <item name="bcSaveImage" type="id" />
 </resources>

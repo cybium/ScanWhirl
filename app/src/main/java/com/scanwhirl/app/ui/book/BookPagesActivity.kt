@@ -13,6 +13,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.widget.SwitchCompat
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -59,6 +60,12 @@ class BookPagesActivity : BaseActivity() {
 
     internal fun createButton(): View = primaryButton
     internal fun addButton(): View = addButton
+
+    /** The "Keep as one page" switch for a card, or null when it is a spread. */
+    internal fun onePageSwitch(index: Int): SwitchCompat? = items.getOrNull(index)?.onePageSwitch
+
+    /** True when card [index] will contribute one page instead of two. */
+    internal fun keepsAsOnePage(index: Int): Boolean = items.getOrNull(index)?.keepAsOnePage == true
 
     private val pickImages = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
@@ -244,7 +251,11 @@ class BookPagesActivity : BaseActivity() {
         }
         val note = SwStyle.text(this, 11.5f, SwStyle.color(this, R.color.cyan_dim)).apply {
             text = getString(
-                if (gutter.found) R.string.book_gutter_found else R.string.book_gutter_middle
+                when {
+                    gutter.singlePage -> R.string.book_one_page_note
+                    gutter.found -> R.string.book_gutter_found
+                    else -> R.string.book_gutter_middle
+                }
             )
         }
         val heading = LinearLayout(this).apply {
@@ -270,12 +281,29 @@ class BookPagesActivity : BaseActivity() {
             }
         )
 
+        val item = Item(uri, spread, gutter.singlePage)
+        if (gutter.singlePage) {
+            val onePage = SwitchCompat(this).apply {
+                text = getString(R.string.book_keep_one_page)
+                isChecked = true
+                setTextColor(SwStyle.color(this@BookPagesActivity, R.color.text_hologram_hi))
+                minHeight = SwStyle.dp(this@BookPagesActivity, 44f)
+                setOnCheckedChangeListener { _, checked ->
+                    item.keepAsOnePage = checked
+                    spread.lineVisible = !checked
+                }
+            }
+            item.onePageSwitch = onePage
+            spread.lineVisible = false
+            card.addView(onePage)
+        }
+
         container.addView(
             card,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { bottomMargin = SwStyle.dp(this@BookPagesActivity, 10f) }
         )
-        items += Item(uri, spread)
+        items += item
     }
 
     private fun renderEmpty() {
@@ -305,27 +333,30 @@ class BookPagesActivity : BaseActivity() {
         busy = true
         statusView.text = getString(R.string.book_splitting)
         updateControls()
-        val sources = items.map { it.view.gutter() to it.uri }
+        val sources = items.map { Triple(it.view.gutter(), it.uri, it.keepAsOnePage) }
         lifecycleScope.launch {
             try {
                 val pages = withContext(Dispatchers.IO) {
                     val out = ArrayList<ByteArray>(sources.size * 2)
-                    for ((gutter, uri) in sources) {
+                    for ((gutter, uri, keepAsOne) in sources) {
                         // Sampled to 3000 px inside BookSplit; the provider's image is only read.
-                        val (left, right) = BookSplit.splitToJpeg(readBytes(uri), gutter)
-                        out += left
-                        out += right
+                        val bytes = readBytes(uri)
+                        if (keepAsOne) {
+                            out += BookSplit.singlePageJpeg(bytes)
+                        } else {
+                            val (left, right) = BookSplit.splitToJpeg(bytes, gutter)
+                            out += left
+                            out += right
+                        }
                     }
                     out
                 }
-                val name = getString(
-                    R.string.book_doc_name,
-                    SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())
-                )
-                val doc = repo.createDocument(name, pages)
+                val doc = repo.createDocument(nextBookName(), pages)
                 Toast.makeText(
                     this@BookPagesActivity,
-                    getString(R.string.book_created, doc.pageCount),
+                    resources.getQuantityString(
+                        R.plurals.book_created, doc.pageCount, doc.pageCount
+                    ),
                     Toast.LENGTH_LONG
                 ).show()
                 startActivity(DocumentViewerActivity.intent(this@BookPagesActivity, doc.id))
@@ -344,6 +375,20 @@ class BookPagesActivity : BaseActivity() {
         }
     }
 
+    /** "Book 14 Nov", then "Book 14 Nov (2)" when the name already exists. */
+    internal fun nextBookName(today: Date = Date()): String {
+        val base = getString(
+            R.string.book_doc_name,
+            SimpleDateFormat("dd MMM", Locale.getDefault()).format(today)
+        )
+        val existing = runCatching { repo.listDocuments().map { it.name }.toSet() }
+            .getOrDefault(emptySet())
+        if (base !in existing) return base
+        var suffix = 2
+        while ("$base ($suffix)" in existing) suffix++
+        return "$base ($suffix)"
+    }
+
     private fun readBytes(uri: Uri): ByteArray =
         contentResolver.openInputStream(uri)?.use { ImageTools.readPageBytes(it) }
             ?: throw IllegalStateException(getString(R.string.book_read_failed))
@@ -354,7 +399,13 @@ class BookPagesActivity : BaseActivity() {
         super.onDestroy()
     }
 
-    private class Item(val uri: Uri, val view: BookSpreadView)
+    private class Item(
+        val uri: Uri,
+        val view: BookSpreadView,
+        var keepAsOnePage: Boolean
+    ) {
+        var onePageSwitch: SwitchCompat? = null
+    }
 
     companion object {
         /** Previews are decodes for the screen only; the create path decodes at 3000 px. */
