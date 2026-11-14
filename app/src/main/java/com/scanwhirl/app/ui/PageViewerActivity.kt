@@ -410,6 +410,11 @@ class PageViewerActivity : BaseActivity() {
     private fun showCropOverlay(pos: Int, file: File) {
         cropIndex = pos
         cropPath = file.path
+        // Owner QA: only Cancel / Apply belong on screen while cropping; the page toolbar
+        // underneath must not keep visible or clickable areas.
+        binding.pageDock.isVisible = false
+        binding.btnClose.isVisible = false
+        binding.pageIndicator.isVisible = false
         binding.cropView.clearImage()
         binding.cropOverlay.visibility = View.VISIBLE
         // WP-22-7: ID/passport crop presets are free.
@@ -456,6 +461,10 @@ class PageViewerActivity : BaseActivity() {
 
     private fun closeCrop() {
         binding.cropOverlay.visibility = android.view.View.GONE
+        // Restore the page toolbar the crop mode hid.
+        binding.pageDock.isVisible = true
+        binding.btnClose.isVisible = true
+        binding.pageIndicator.isVisible = true
         binding.cropView.tag = null // drop any in-flight decode result
         binding.cropView.clearImage() // drop the view's reference BEFORE recycling
         cropBitmap?.takeIf { !it.isRecycled }?.recycle()
