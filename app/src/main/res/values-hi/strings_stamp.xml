@@ -94,6 +94,46 @@
     <!-- review -->
     <string name="stamp_signature_full"><!-- review -->आप 5 हस्ताक्षर तक रख सकते हैं। नया सहेजने के लिए एक हटाएँ।</string>
     <!-- review -->
+    <string name="stamp_signature_delete_title"><!-- review -->यह हस्ताक्षर हटाएँ?</string>
+    <!-- review -->
+    <string name="stamp_signature_delete_msg"><!-- review -->%1$s इस फ़ोन से हट जाएगा।</string>
+    <!-- review -->
+    <string name="stamp_import_photo"><!-- review -->फ़ोटो से</string>
+    <!-- review -->
+    <string name="stamp_import_choose"><!-- review -->फ़ोटो चुनें</string>
+    <!-- review -->
+    <string name="stamp_import_camera"><!-- review -->फ़ोटो लें</string>
+    <!-- review -->
+    <string name="stamp_ink_title"><!-- review -->यह स्याही ठीक है?</string>
+    <!-- review -->
+    <string name="stamp_ink_original"><!-- review -->मूल</string>
+    <!-- review -->
+    <string name="stamp_ink_black"><!-- review -->काली</string>
+    <!-- review -->
+    <string name="stamp_ink_blue"><!-- review -->नीली</string>
+    <!-- review -->
+    <string name="stamp_ink_none"><!-- review -->कोई स्याही नहीं मिली। साफ़ फ़ोटो आज़माएँ।</string>
+    <!-- review -->
+    <string name="stamp_ink_save"><!-- review -->सहेजें और लगाएँ</string>
+    <!-- review -->
+    <string name="stamp_my_stamps"><!-- review -->मेरे स्टाम्प</string>
+    <!-- review -->
+    <string name="stamp_stamp_import"><!-- review -->फ़ोटो से स्टाम्प जोड़ें</string>
+    <!-- review -->
+    <string name="stamp_stamp_name"><!-- review -->मेरा स्टाम्प %1$d</string>
+    <!-- review -->
+    <string name="stamp_stamp_full"><!-- review -->आप 10 स्टाम्प तक रख सकते हैं। नया सहेजने के लिए एक हटाएँ।</string>
+    <!-- review -->
+    <string name="tool_mask_aadhaar"><!-- review -->आधार छिपाएँ</string>
+    <!-- review -->
+    <string name="mask_aadhaar_hint"><!-- review -->पहले 8 अंकों पर बने बॉक्स जाँचें, फिर सहेजें</string>
+    <!-- review -->
+    <string name="mask_aadhaar_name"><!-- review -->%1$s - छिपाया गया</string>
+    <!-- review -->
+    <string name="mask_aadhaar_none"><!-- review -->यहाँ कोई आधार संख्या नहीं मिली। ज़रूरत हो तो बॉक्स जोड़ें।</string>
+    <!-- review -->
+    <string name="mask_aadhaar_saved"><!-- review -->छिपी हुई प्रति सहेजी गई: %1$s</string>
+    <!-- review -->
     <string name="stamp_hint_draw"><!-- review -->एक उँगली से लिखें</string>
     <!-- review -->
     <string name="stamp_hint_highlight"><!-- review -->हाइलाइट करने के लिए पाठ पर खींचें</string>

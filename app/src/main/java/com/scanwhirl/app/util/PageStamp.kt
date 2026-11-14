@@ -82,6 +82,16 @@ object PageStamp {
             val rotation: Float = 0f
         ) : Mark()
 
+        /**
+         * An imported bitmap signature or company stamp (a transparent PNG owned by the app),
+         * placed and rotated like [Signature].
+         */
+        data class Picture(
+            val file: File,
+            val box: Box,
+            val rotation: Float = 0f
+        ) : Mark()
+
         /** One or more lines of text fitted inside [box]. */
         data class Text(
             val text: String,
@@ -211,6 +221,7 @@ object PageStamp {
             when (mark) {
                 is Mark.Redact -> redactions += mark
                 is Mark.Signature -> drawInk(canvas, mark.strokes, rectOf(mark.box, w, h), mark.color, mark.width, minDim, mark.rotation)
+                is Mark.Picture -> drawPicture(canvas, mark, w, h)
                 is Mark.Freehand -> drawInk(canvas, mark.strokes, RectF(0f, 0f, w, h), mark.color, mark.width, minDim, 0f)
                 is Mark.Text -> drawText(canvas, mark, w, h, minDim)
                 is Mark.Highlight -> drawHighlight(canvas, mark, w, h)
@@ -280,6 +291,20 @@ object PageStamp {
         rotate(canvas, rotation, rect)
         canvas.drawPath(path, paint)
         canvas.restore()
+    }
+
+    private fun drawPicture(canvas: Canvas, mark: Mark.Picture, w: Float, h: Float) {
+        val bmp = try {
+            BitmapFactory.decodeFile(mark.file.path)
+        } catch (_: Throwable) {
+            null
+        } ?: return
+        val rect = rectOf(mark.box, w, h)
+        canvas.save()
+        rotate(canvas, mark.rotation, rect)
+        canvas.drawBitmap(bmp, null, rect, Paint(Paint.FILTER_BITMAP_FLAG))
+        canvas.restore()
+        bmp.recycle()
     }
 
     private fun textPaint(color: Int, bold: Boolean): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -549,7 +574,7 @@ object PageStamp {
         val suffix = when {
             marks.any { it is Mark.Redact } -> "redacted"
             marks.any { it is Mark.Watermark } -> "watermarked"
-            marks.any { it is Mark.Signature } -> "signed"
+            marks.any { it is Mark.Signature || it is Mark.Picture } -> "signed"
             else -> "edited"
         }
         return "$sourceName ($suffix)"

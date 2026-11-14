@@ -34,11 +34,11 @@ object PdfImport {
     /** Largest source file accepted (bytes). */
     const val MAX_BYTES: Long = 256L * 1024 * 1024
 
-    /** Most pages one import may hold. */
-    const val MAX_PAGES = 500
+    /** Most pages one import may hold; range selection handles bigger books. */
+    const val MAX_PAGES = 10_000
 
     /** Rough upper estimate of one rendered page on disk (JPEG + its share of the PDF). */
-    internal const val EST_PAGE_BYTES: Long = 1_200_000L
+    internal const val EST_PAGE_BYTES: Long = PdfImportBudget.TYPICAL_PAGE_BYTES
 
     /** Headroom always left free on the device. */
     internal const val SPACE_MARGIN: Long = 16L * 1024 * 1024
@@ -176,10 +176,52 @@ object PdfImport {
         }
     }
 
+    /** A PDF page source: the real renderer, or a fake in tests (huge-import memory checks). */
+    interface PageSource {
+        fun pageCount(): Int
+        fun render(index: Int): ByteArray
+    }
+
+    /** Page count without rendering; the caller owns [fd]. */
+    fun pageCount(fd: ParcelFileDescriptor): Int = openRenderer(fd).use { renderer ->
+        val count = renderer.pageCount
+        if (count <= 0) throw ImportException(Reason.EMPTY, "This PDF has no pages")
+        if (count > MAX_PAGES) {
+            throw ImportException(Reason.TOO_MANY_PAGES, "This PDF has $count pages", pages = count)
+        }
+        count
+    }
+
+    /** The real renderer behind [PageSource]; keep it open for the whole render pass. */
+    class PdfRendererSource(
+        fd: ParcelFileDescriptor,
+        private val dpi: Float,
+        private val maxDim: Int,
+        private val quality: Int
+    ) : PageSource, java.io.Closeable {
+        private val renderer = openRenderer(fd)
+
+        override fun pageCount(): Int = renderer.pageCount
+
+        override fun render(index: Int): ByteArray = renderPage(renderer, index, dpi, maxDim, quality)
+
+        override fun close() = renderer.close()
+    }
+
+    private fun openRenderer(fd: ParcelFileDescriptor): PdfRenderer = try {
+        // The renderer owns (and closes) what it is given; the caller keeps fd.
+        PdfRenderer(fd.dup())
+    } catch (e: SecurityException) {
+        throw ImportException(Reason.PASSWORD, "This PDF is password-protected", e)
+    } catch (e: IOException) {
+        throw ImportException(Reason.DAMAGED, "This PDF is damaged or not a PDF", e)
+    } catch (e: RuntimeException) {
+        throw ImportException(Reason.DAMAGED, "This PDF is damaged or not a PDF", e)
+    }
+
     /**
-     * Renders every page of the open PDF into [dir] as `page_000.jpg`… with one
-     * renderer. Throws a classified [ImportException]; never returns with pages
-     * missing. [onPage] runs after each page (tests inject faults there).
+     * Renders every page of the open PDF into [dir] as `page_000.jpg`… with one renderer.
+     * Throws a classified [ImportException]; never returns with pages missing.
      */
     suspend fun renderAll(
         fd: ParcelFileDescriptor,
@@ -191,48 +233,64 @@ object PdfImport {
         quality: Int,
         onPage: () -> Unit = {}
     ): Int {
-        val renderer = try {
-            // The renderer owns (and closes) what it is given; the caller keeps fd.
-            PdfRenderer(fd.dup())
-        } catch (e: SecurityException) {
-            throw ImportException(Reason.PASSWORD, "This PDF is password-protected", e)
-        } catch (e: IOException) {
-            throw ImportException(Reason.DAMAGED, "This PDF is damaged or not a PDF", e)
-        } catch (e: RuntimeException) {
-            throw ImportException(Reason.DAMAGED, "This PDF is damaged or not a PDF", e)
-        }
-        return renderer.use { r ->
-            val count = r.pageCount
+        val source = PdfRendererSource(fd, dpi, maxDim, quality)
+        return source.use {
+            val count = source.pageCount()
             if (count <= 0) throw ImportException(Reason.EMPTY, "This PDF has no pages")
             if (count > MAX_PAGES) {
                 throw ImportException(Reason.TOO_MANY_PAGES, "This PDF has $count pages", pages = count)
             }
-            if (freeBytes < count * EST_PAGE_BYTES + SPACE_MARGIN) {
-                throw ImportException(Reason.NO_SPACE, "Not enough storage for $count pages")
-            }
-            for (i in 0 until count) {
-                currentCoroutineContext().ensureActive()
-                val jpeg = try {
-                    renderPage(r, i, dpi, maxDim, quality)
-                } catch (e: OutOfMemoryError) {
-                    throw ImportException(
-                        Reason.DAMAGED, "Page ${i + 1} is too large to render", IOException(e),
-                        pages = count, page = i + 1
-                    )
-                } catch (e: RuntimeException) {
-                    throw ImportException(
-                        Reason.DAMAGED, "Page ${i + 1} of $count could not be read", e,
-                        pages = count, page = i + 1
-                    )
-                }
-                try {
-                    Durable.writeFile(File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i)), jpeg)
-                } catch (e: IOException) {
-                    throw classifyWrite(e)
-                }
-                onPage()
-            }
+            renderPages(source, dir, (0 until count).toList(), freeBytes) { _, _ -> onPage() }
             count
+        }
+    }
+
+    /**
+     * Renders only [indices] (0-based, in the order given) into [dir] as `page_000.jpg`…, one page
+     * at a time, and reports progress. Memory holds one rendered page; cancellation is honoured
+     * before each page and the caller removes the staging folder.
+     */
+    suspend fun renderPages(
+        source: PageSource,
+        dir: File,
+        indices: List<Int>,
+        freeBytes: Long,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ) {
+        val count = source.pageCount()
+        if (count <= 0) throw ImportException(Reason.EMPTY, "This PDF has no pages")
+        if (indices.isEmpty()) throw ImportException(Reason.EMPTY, "No pages selected")
+        if (indices.any { it !in 0 until count }) {
+            throw ImportException(Reason.DAMAGED, "A chosen page is outside this PDF", pages = count)
+        }
+        if (freeBytes < indices.size * EST_PAGE_BYTES + SPACE_MARGIN) {
+            throw ImportException(
+                Reason.NO_SPACE, "Not enough storage for ${indices.size} pages", pages = count
+            )
+        }
+        indices.forEachIndexed { done, pageIndex ->
+            currentCoroutineContext().ensureActive()
+            val jpeg = try {
+                source.render(pageIndex)
+            } catch (e: OutOfMemoryError) {
+                throw ImportException(
+                    Reason.DAMAGED, "Page ${pageIndex + 1} is too large to render", IOException(e),
+                    pages = count, page = pageIndex + 1
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: RuntimeException) {
+                throw ImportException(
+                    Reason.DAMAGED, "Page ${pageIndex + 1} of $count could not be read", e,
+                    pages = count, page = pageIndex + 1
+                )
+            }
+            try {
+                Durable.writeFile(File(dir, String.format(Locale.ROOT, "page_%03d.jpg", done)), jpeg)
+            } catch (e: IOException) {
+                throw classifyWrite(e)
+            }
+            onPage(done + 1, indices.size)
         }
     }
 

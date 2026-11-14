@@ -23,10 +23,13 @@ internal class DraftStore(filesDir: File) {
     class DraftStale(message: String) : IOException(message)
     class DraftDamaged(message: String) : IOException(message)
 
-    /** One output page: a base page (name + SHA-256) and an optional draft-owned replacement. */
+    /**
+     * One output page: either a base page (name + SHA-256) or an inserted page (both null) that
+     * only exists as a draft replacement. [replacement] is required for an inserted page.
+     */
     data class Entry(
-        val source: String,
-        val sourceSha: String,
+        val source: String?,
+        val sourceSha: String?,
         val replacement: String? = null,
         val replacementOrig: String? = null
     )
@@ -82,16 +85,26 @@ internal class DraftStore(filesDir: File) {
             if (line.startsWith("p=")) {
                 val parts = line.removePrefix("p=").split('\t')
                 if (parts.size != 4) throw DraftDamaged("Draft entry")
-                val source = parts[0]
-                if (!SOURCE_NAME.matches(source)) throw DraftDamaged("Draft source name")
-                val sha = parts[1]
-                if (!SHA.matches(sha)) throw DraftDamaged("Draft source sha")
+                val inserted = parts[0] == "-"
+                val source: String?
+                val sha: String?
+                if (inserted) {
+                    source = null
+                    sha = null
+                    if (parts[1] != "-") throw DraftDamaged("Inserted page sha")
+                } else {
+                    source = parts[0]
+                    if (!SOURCE_NAME.matches(source)) throw DraftDamaged("Draft source name")
+                    sha = parts[1]
+                    if (!SHA.matches(sha)) throw DraftDamaged("Draft source sha")
+                }
                 val replacement = parts[2].takeIf { it != "-" }?.also {
                     if (!REPLICA_NAME.matches(it)) throw DraftDamaged("Draft replacement name")
                 }
                 val replacementOrig = parts[3].takeIf { it != "-" }?.also {
                     if (!REPLICA_ORIG_NAME.matches(it)) throw DraftDamaged("Draft original name")
                 }
+                if (inserted && replacement == null) throw DraftDamaged("Inserted page has no file")
                 entries += Entry(source, sha, replacement, replacementOrig)
                 continue
             }
@@ -136,8 +149,8 @@ internal class DraftStore(filesDir: File) {
             append("changes=").append(draft.changes).append('\n')
             append("next=").append(draft.next).append('\n')
             draft.entries.forEach { entry ->
-                append("p=").append(entry.source)
-                    .append('\t').append(entry.sourceSha)
+                append("p=").append(entry.source ?: "-")
+                    .append('\t').append(entry.sourceSha ?: "-")
                     .append('\t').append(entry.replacement ?: "-")
                     .append('\t').append(entry.replacementOrig ?: "-")
                     .append('\n')

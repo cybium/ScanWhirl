@@ -296,6 +296,83 @@ class DraftEngineTest {
         assertFalse(draftDir(id).exists())
     }
 
+    @Test
+    fun `insert pages at the start middle and end updates the draft order`() = runBlocking {
+        val target = DocFixtures.saved(repo, app, pages = 3) // widths 200, 220, 240
+        val source = repo.createDocument(
+            "Source",
+            listOf(
+                ImportFixtures.image(width = 300, height = 400),
+                ImportFixtures.image(width = 320, height = 400)
+            )
+        )
+        val src = repo.getDocument(source.id)!!.pageFiles
+
+        repo.draftInsertPages(target, listOf(src[0]), 0)
+        assertEquals(listOf(300, 200, 220, 240), widths(target))
+
+        repo.draftInsertPages(target, listOf(src[1]), 2)
+        assertEquals(listOf(300, 200, 320, 220, 240), widths(target))
+
+        repo.draftInsertPages(target, listOf(src[0]), 5)
+        assertEquals(listOf(300, 200, 320, 220, 240, 300), widths(target))
+        assertEquals(3, repo.draftOf(target)!!.changes)
+    }
+
+    @Test
+    fun `insert pages never change the base until save`() = runBlocking {
+        val target = DocFixtures.saved(repo, app, pages = 2)
+        val source = DocFixtures.saved(repo, app, pages = 1, name = "Source")
+        val d0 = digest(target)
+        val srcFiles = repo.getDocument(source)!!.pageFiles
+
+        repo.draftInsertPages(target, srcFiles, 2)
+
+        assertEquals("the saved document changed before Save", d0, digest(target))
+        val copy = repo.saveDraftAsNew(target, null)
+        assertEquals(3, copy.pageFiles.size)
+        PdfInvariants.assertI1(repo, copy.id)
+        assertEquals(d0, digest(target))
+    }
+
+    @Test
+    fun `discard drops inserted pages`() = runBlocking {
+        val target = DocFixtures.saved(repo, app, pages = 2)
+        val source = DocFixtures.saved(repo, app, pages = 1, name = "Source")
+        val d0 = digest(target)
+        repo.draftInsertPages(target, repo.getDocument(source)!!.pageFiles, 1)
+        assertEquals(3, repo.draftPages(target).size)
+
+        repo.discardDraft(target)
+
+        assertEquals(2, repo.draftPages(target).size)
+        assertEquals(d0, digest(target))
+        assertFalse(draftDir(target).exists())
+    }
+
+    @Test
+    fun `inserting from another document copies its pages`() = runBlocking {
+        val target = DocFixtures.saved(repo, app, pages = 2)
+        val source = DocFixtures.saved(repo, app, pages = 2, name = "Source")
+        val sourceDigest = digest(source)
+        val sourcePages = repo.getDocument(source)!!.pageFiles.map { it.path }
+
+        repo.draftInsertPages(target, repo.getDocument(source)!!.pageFiles, 0)
+
+        assertEquals("the source document must stay byte identical", sourceDigest, digest(source))
+        assertEquals(sourcePages, repo.getDocument(source)!!.pageFiles.map { it.path })
+        val inserted = repo.draftPages(target).take(2)
+        assertTrue(
+            "inserted pages must live in the target's draft, got $inserted",
+            inserted.all { it.path.contains("drafts${File.separator}$target") }
+        )
+    }
+
+    private suspend fun widths(id: String): List<Int> =
+        repo.draftPages(id).map {
+            requireNotNull(ImageTools.imageSize(it.readBytes())).first
+        }
+
     private fun assertArrayEquals(expected: ByteArray, actual: ByteArray) {
         org.junit.Assert.assertArrayEquals(expected, actual)
     }

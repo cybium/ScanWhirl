@@ -17,12 +17,14 @@ import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PageStamp
 import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.PdfDecryptor
+import com.scanwhirl.app.util.PdfImportBudget
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
@@ -33,6 +35,8 @@ import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
+import com.scanwhirl.app.util.TableDetect
+import com.scanwhirl.app.util.XlsxWriter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -1736,6 +1740,29 @@ class ScanRepository(private val context: Context) {
      *    can explain (password, damaged, too large, no space, no access…).
      *  - The new document is marked for text recognition; the caller queues it.
      */
+    /** How a planned PDF import continues after the pre-check sheet. */
+    sealed interface ImportDecision {
+        data object All : ImportDecision
+        data class Pages(val indices: List<Int>) : ImportDecision
+        data object Cancel : ImportDecision
+    }
+
+    /**
+     * Imports a device PDF after a pre-check. [onPlan] is called with the page count, the size
+     * estimate and free space when the PDF is big (>50 pages or >25% of free space); it runs
+     * while the seekable copy is open. Pages are rendered one at a time and the document is
+     * published only when every chosen page is written. A cancel returns null and leaves nothing.
+     */
+    suspend fun importPdfAsScanPlanned(
+        uri: Uri,
+        name: String?,
+        dpi: Float = 150f,
+        maxDim: Int = 2048,
+        quality: Int = 85,
+        onPlan: suspend (PdfImportBudget.Plan) -> ImportDecision,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): ScanDocument? = importPdfInternal(uri, name, dpi, maxDim, quality, vaulted = false, onPlan, onPage)
+
     private suspend fun importPdf(
         uri: Uri,
         name: String?,
@@ -1743,15 +1770,65 @@ class ScanRepository(private val context: Context) {
         maxDim: Int,
         quality: Int,
         vaulted: Boolean
-    ): ScanDocument = withContext(Dispatchers.IO) {
+    ): ScanDocument = importPdfInternal(uri, name, dpi, maxDim, quality, vaulted, null, null)
+        ?: throw IllegalStateException("Import cancelled")
+
+    private suspend fun importPdfInternal(
+        uri: Uri,
+        name: String?,
+        dpi: Float,
+        maxDim: Int,
+        quality: Int,
+        vaulted: Boolean,
+        onPlan: (suspend (PdfImportBudget.Plan) -> ImportDecision)?,
+        onPage: ((Int, Int) -> Unit)?
+    ): ScanDocument? = withContext(Dispatchers.IO) {
         val staging = File(importStagingDir, UUID.randomUUID().toString().take(12))
         if (!staging.mkdirs()) throw PdfImport.ImportException(PdfImport.Reason.SAVE_FAILED, "Could not prepare the import")
         try {
-            PdfImport.withSeekableCopy(context, uri) { fd, sourceBytes ->
+            val rendered = PdfImport.withSeekableCopy(context, uri) { fd, sourceBytes ->
                 importFault(ImportStage.COPIED)
-                PdfImport.renderAll(fd, sourceBytes, staging, usableSpace(docsDir), dpi, maxDim, quality) {
-                    importFault(ImportStage.PAGE_RENDERED)
+                val pageCount = PdfImport.pageCount(fd)
+                val plan = PdfImportBudget.plan(
+                    pageCount, usableSpace(docsDir), PdfImportBudget.pageBytes(maxDim)
+                )
+                if (plan.tooLittleSpace) {
+                    throw PdfImport.ImportException(
+                        PdfImport.Reason.NO_SPACE,
+                        context.getString(
+                            R.string.tools_import_no_space,
+                            plan.estimateBytes / (1024 * 1024),
+                            plan.freeBytes / (1024 * 1024)
+                        ),
+                        pages = pageCount
+                    )
                 }
+                val decision = if (plan.needsDecision && onPlan != null) {
+                    onPlan(plan)
+                } else {
+                    ImportDecision.All
+                }
+                val indices = when (decision) {
+                    ImportDecision.All -> (0 until pageCount).toList()
+                    is ImportDecision.Pages -> decision.indices.distinct().sorted()
+                    ImportDecision.Cancel -> emptyList()
+                }
+                if (indices.isEmpty()) {
+                    false
+                } else {
+                    val source = PdfImport.PdfRendererSource(fd, dpi, maxDim, quality)
+                    source.use {
+                        PdfImport.renderPages(it, staging, indices, usableSpace(docsDir)) { done, total ->
+                            importFault(ImportStage.PAGE_RENDERED)
+                            onPage?.invoke(done, total)
+                        }
+                    }
+                    true
+                }
+            }
+            if (!rendered) {
+                staging.deleteRecursively()
+                return@withContext null
             }
             currentCoroutineContext().ensureActive()
             val pdfFile = File(staging, "scan.pdf")
@@ -2556,6 +2633,45 @@ class ScanRepository(private val context: Context) {
         outFile
     }
 
+    /**
+     * Writes a `.xlsx` workbook: one sheet per page ("Page 1", ...). A page whose stored OCR
+     * geometry forms a table becomes a cell grid; other pages export one line per cell.
+     * [tablesOnly] drops the plain text (a page without a table gets one clear note line).
+     * Pages with no stored OCR are recognised now with the app's existing on-device engine.
+     */
+    suspend fun exportExcel(
+        id: String,
+        outFile: File,
+        tablesOnly: Boolean = false,
+        noTableNote: String = "No table found on this page."
+    ): File = withContext(Dispatchers.IO) {
+        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        refuseLockedSources(listOf(doc))
+        require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
+        val stored = ocrStore.readGeo(id)
+        val pages = ArrayList<OcrPage>(doc.pageFiles.size)
+        for (page in doc.pageFiles) {
+            currentCoroutineContext().ensureActive()
+            val ocr = stored[page.name] ?: runCatching { OcrEngine.recognizeFile(page).page }
+                .getOrElse { OcrPage(0, 0, emptyList()) }
+            pages += ocr
+        }
+        val sheets = pages.mapIndexed { index, ocr ->
+            val table = TableDetect.detect(ocr)
+            val rows: List<List<String>> = when {
+                table != null -> table.rows
+                tablesOnly -> listOf(listOf(noTableNote))
+                else -> ocr.lines.filter { it.text.isNotBlank() }.map { listOf(it.text) }
+            }
+            XlsxWriter.Sheet(
+                "Page ${index + 1}",
+                rows.ifEmpty { listOf(listOf(noTableNote)) }
+            )
+        }
+        XlsxWriter.write(outFile, sheets)
+        outFile
+    }
+
     /** A page for a slide: at most 2000 px on the long side, JPEG 90. */
     private fun slidePageJpeg(page: File): ByteArray {
         val bitmap = ImageTools.decodeSampledFile(page, PPTX_PICTURE_MAX_PX)
@@ -2637,6 +2753,8 @@ class ScanRepository(private val context: Context) {
         val copy = duplicateDocument(
             id,
             suggestedName?.trim()?.takeIf { it.isNotBlank() }
+                // TODO(OutputNames): switch to util/OutputNames.forTool(base, label, existing)
+                // once L4's helper is in integration (not present at this commit).
                 ?: PageStamp.outputName(source.name, effective.flatMap { it.marks })
         )
         val copyDir = File(docsDir, copy.id)
@@ -2692,7 +2810,7 @@ class ScanRepository(private val context: Context) {
                 ?: return@withContext getDocument(id)?.pageFiles.orEmpty()
             draft.entries.map { entry ->
                 entry.replacement?.let { drafts.fileOf(id, it) }
-                    ?: File(File(docsDir, id), entry.source)
+                    ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
             }
         }
     }
@@ -2771,6 +2889,51 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Inserts copies of [pages] at [position] (0 = start, entries.size = end). The files are
+     * copied into the draft folder and never moved, so the source document is untouched (I7).
+     * A `.orig` sibling is copied too, keeping filter-from-original behaviour.
+     */
+    internal suspend fun draftInsertPages(
+        id: String,
+        pages: List<File>,
+        position: Int
+    ): DraftStore.Draft = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) {
+            val doc = draftEditDoc(id)
+            val draft = draftFor(doc)
+            require(pages.isNotEmpty()) { "No pages to add" }
+            require(pages.all { it.isFile && it.length() > 0L }) { "A page could not be read" }
+            val dir = drafts.folderOf(id).apply { mkdirs() }
+            var n = draft.next
+            val inserted = ArrayList<DraftStore.Entry>(pages.size)
+            pages.forEach { page ->
+                val jpgName = "r_$n.jpg"
+                Durable.copyFile(page, File(dir, jpgName))
+                var origName: String? = null
+                val orig = File(page.parentFile, page.nameWithoutExtension + ".orig")
+                    .takeIf { it.isFile }
+                if (orig != null) {
+                    val oName = "r_$n.orig"
+                    Durable.copyFile(orig, File(dir, oName))
+                    origName = oName
+                }
+                inserted += DraftStore.Entry(null, null, jpgName, origName)
+                n++
+            }
+            OpFaults.at("draft:replacement_written")
+            val at = position.coerceIn(0, draft.entries.size)
+            storeDraft(
+                draft.copy(
+                    updated = System.currentTimeMillis(),
+                    changes = draft.changes + 1,
+                    next = n,
+                    entries = draft.entries.toMutableList().also { it.addAll(at, inserted) }
+                )
+            )
+        }
+    }
+
     /** Crops one draft page (and its kept original) into fresh `r_<n>` files. */
     internal suspend fun draftCrop(
         id: String,
@@ -2833,7 +2996,7 @@ class ScanRepository(private val context: Context) {
             if (filter == ScanFilter.ORIGINAL) {
                 if (unfiltered == null) return@withContext draft
                 val pureReference = entry.replacementOrig != null &&
-                    Sha256.of(unfiltered) == entry.sourceSha
+                    entry.sourceSha != null && Sha256.of(unfiltered) == entry.sourceSha
                 val newEntry: DraftStore.Entry
                 val newNext: Int
                 if (pureReference) {
@@ -2857,7 +3020,7 @@ class ScanRepository(private val context: Context) {
             } else {
                 val source = unfiltered
                     ?: entry.replacement?.let { drafts.fileOf(id, it) }
-                    ?: File(File(docsDir, id), entry.source)
+                    ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
                 val n = draft.next
                 val newOrig = entry.replacementOrig ?: run {
                     val outOrig = File(dir, "r_$n.orig")
@@ -3008,14 +3171,16 @@ class ScanRepository(private val context: Context) {
 
     private fun entryFile(id: String, entry: DraftStore.Entry): File =
         entry.replacement?.let { drafts.fileOf(id, it) }
-            ?: File(File(docsDir, id), entry.source)
+            ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
 
     private fun entryOrig(id: String, entry: DraftStore.Entry): File? =
         entry.replacementOrig?.let { drafts.fileOf(id, it) }
             ?: if (entry.replacement == null) baseOrig(id, entry) else null
 
-    private fun baseOrig(id: String, entry: DraftStore.Entry): File? =
-        origOf(File(File(docsDir, id), entry.source)).takeIf { it.exists() }
+    private fun baseOrig(id: String, entry: DraftStore.Entry): File? {
+        val source = entry.source ?: return null
+        return origOf(File(File(docsDir, id), source)).takeIf { it.exists() }
+    }
 
     /** Copies the chosen draft pages into [staging] and carries base OCR for untouched pages. */
     private suspend fun stageDraftPages(
@@ -3038,15 +3203,16 @@ class ScanRepository(private val context: Context) {
                     Durable.copyFile(drafts.fileOf(doc.id, it), origOf(out))
                 }
             } else {
-                val src = File(File(docsDir, doc.id), entry.source)
+                val source = requireNotNull(entry.source) { "Draft page has no source" }
+                val src = File(File(docsDir, doc.id), source)
                 if (!src.isFile) throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
                 Durable.copyFile(src, out)
                 if (Sha256.of(out) != entry.sourceSha) {
                     throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
                 }
                 origOf(src).takeIf { it.exists() }?.let { Durable.copyFile(it, origOf(out)) }
-                baseText[entry.source]?.let { texts[out.name] = it }
-                baseGeo[entry.source]?.let { geo[out.name] = it }
+                baseText[source]?.let { texts[out.name] = it }
+                baseGeo[source]?.let { geo[out.name] = it }
             }
             OpFaults.at("op:page:$i")
         }

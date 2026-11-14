@@ -134,6 +134,37 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <!-- Empty state: a document always has pages today, but the draft/grid must never be
+             a dead end (owner: Add pages also lives here). -->
+        <LinearLayout
+            android:id="@+id/gridEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/grid_empty"
+                android:textColor="@color/text_hologram_mid"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/btnEmptyAddPages"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginTop="@dimen/sw_space_2"
+                android:gravity="center"
+                android:paddingHorizontal="@dimen/sw_space_4"
+                android:text="@string/add_pages"
+                android:textColor="@color/cyan_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <com.scanwhirl.app.ui.pagegrid.PageGridView
             android:id="@+id/pageList"
             android:layout_width="match_parent"

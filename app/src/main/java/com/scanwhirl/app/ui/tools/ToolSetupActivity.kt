@@ -77,6 +77,9 @@ class ToolSetupActivity : BaseActivity() {
     private var nameText = ""
     private var targetText = ""
     private var wordPictures = false
+    private var excelTablesOnly = true
+    private var compressEstimates: List<Long>? = null
+    private var estimatesFor: String? = null
 
     private lateinit var column: LinearLayout
     private lateinit var optionsHost: LinearLayout
@@ -418,6 +421,7 @@ class ToolSetupActivity : BaseActivity() {
             "long_image" -> buildLongImageOption()
             "to_word" -> buildWordOption()
             "to_powerpoint" -> buildPptxOption()
+            "to_excel" -> buildExcelOptions()
             "remove_metadata" -> buildCleanOption()
             "id_card" -> buildIdCardOption()
             else -> optionsHost.addView(note(getString(R.string.tools_setup_nothing)))
@@ -473,12 +477,9 @@ class ToolSetupActivity : BaseActivity() {
         val jpg = chip(getString(R.string.tools_setup_jpg), R.id.toolSetupFormatJpg)
         val png = chip(getString(R.string.tools_setup_png), R.id.toolSetupFormatPng)
         fun paint() {
-            val on = SwStyle.color(this, R.color.cyan_primary)
-            val off = SwStyle.color(this, R.color.text_hologram_dim)
-            jpg.setTextColor(if (format == ScanRepository.ImageExportFormat.JPG) on else off)
-            png.setTextColor(if (format == ScanRepository.ImageExportFormat.PNG) on else off)
-            jpg.background = chipBackground(format == ScanRepository.ImageExportFormat.JPG)
-            png.background = chipBackground(format == ScanRepository.ImageExportFormat.PNG)
+            val jpgOn = format == ScanRepository.ImageExportFormat.JPG
+            paintChip(jpg, jpgOn)
+            paintChip(png, !jpgOn)
         }
         jpg.setOnClickListener { format = ScanRepository.ImageExportFormat.JPG; paint(); render() }
         png.setOnClickListener { format = ScanRepository.ImageExportFormat.PNG; paint(); render() }
@@ -535,27 +536,104 @@ class ToolSetupActivity : BaseActivity() {
             inputType = InputType.TYPE_CLASS_TEXT
         ) { targetText = it })
         val levels = listOf(
-            getString(R.string.tools_setup_level_light) to 0,
-            getString(R.string.tools_setup_level_medium) to 1,
-            getString(R.string.tools_setup_level_strong) to 2
+            Triple(getString(R.string.tools_setup_level_light), 0, R.id.toolSetupLevelLight),
+            Triple(getString(R.string.tools_setup_level_medium), 1, R.id.toolSetupLevelMedium),
+            Triple(getString(R.string.tools_setup_level_strong), 2, R.id.toolSetupLevelStrong)
         )
+        val chips = mutableListOf<TextView>()
+        fun paintChips() {
+            chips.forEachIndexed { index, chip -> paintChip(chip, index == level) }
+        }
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        for ((title, index) in levels) {
-            val view = chip(title, R.id.toolSetupLevel).apply {
+        for ((title, index, id) in levels) {
+            val view = chip(title, id).apply {
                 setOnClickListener {
                     level = index
                     target = null
                     targetText = ""
-                    render()
+                    optionsHost.findViewById<EditText>(R.id.toolSetupTarget)?.setText("")
+                    paintChips()
+                    updateEstimateLine()
                 }
             }
+            chips += view
             row.addView(view, LinearLayout.LayoutParams(
                 0, SwStyle.dp(this, 40f), 1f
             ).apply { marginEnd = if (index < 2) SwStyle.dp(this@ToolSetupActivity, 8f) else 0 })
         }
         optionsHost.addView(row)
+        paintChips()
+        val estimate = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+            id = R.id.toolSetupEstimate
+        }
+        optionsHost.addView(estimate)
+        startEstimate()
+        updateEstimateLine()
         optionsHost.addView(note(getString(R.string.tools_setup_compress_note)))
     }
+
+    /** The kit chip's selected look: cyan border, soft cyan fill and a check. */
+    private fun paintChip(chipView: TextView, selected: Boolean) {
+        chipView.isSelected = selected
+        chipView.setTextColor(
+            SwStyle.color(this, if (selected) R.color.cyan_primary else R.color.text_hologram_dim)
+        )
+        chipView.background = if (selected) {
+            SwStyle.rounded(
+                this,
+                SwStyle.color(this, R.color.sw_cyan_soft),
+                radiusDp = 12f,
+                stroke = SwStyle.color(this, R.color.cyan_primary)
+            )
+        } else {
+            chipBackground(false)
+        }
+        chipView.setCompoundDrawablesRelativeWithIntrinsicBounds(
+            if (selected) R.drawable.ic_sym_check else 0, 0, 0, 0
+        )
+        chipView.compoundDrawablePadding = SwStyle.dp(this, 6f)
+    }
+
+    /** Estimates each level on two sample pages (the same extrapolation as CompressFlow). */
+    private fun startEstimate() {
+        val doc = selected.firstOrNull()?.let { id -> docs.firstOrNull { it.id == id } } ?: return
+        if (estimatesFor == doc.id) return
+        estimatesFor = doc.id
+        compressEstimates = null
+        updateEstimateLine()
+        lifecycleScope.launch {
+            val estimates = withContext(Dispatchers.IO) {
+                runCatching {
+                    val samples = listOfNotNull(
+                        doc.pageFiles.firstOrNull(),
+                        doc.pageFiles.getOrNull(doc.pageFiles.size / 2)
+                    ).distinct().map { it.readBytes() }
+                    compressLevels().map { (quality, maxDim) ->
+                        val average = samples.map {
+                            ImageTools.recompressJpeg(it, quality, maxDim).size.toLong()
+                        }.average()
+                        (average * doc.pageCount * 1.02 + 1024).toLong()
+                    }
+                }.getOrNull()
+            }
+            if (estimates != null && selected.firstOrNull() == doc.id) {
+                compressEstimates = estimates
+                updateEstimateLine()
+            }
+        }
+    }
+
+    private fun updateEstimateLine() {
+        val line = optionsHost.findViewById<TextView>(R.id.toolSetupEstimate) ?: return
+        val estimate = compressEstimates?.getOrNull(level)
+        line.text = if (estimate != null) {
+            getString(R.string.tools_setup_estimate, StatusLine.formatBytes(estimate))
+        } else {
+            ""
+        }
+    }
+
+    private fun compressLevels(): List<Pair<Int, Int?>> = listOf(80 to null, 65 to 2000, 50 to 1600)
 
     private fun buildNameOption() {
         optionsHost.addView(field(
@@ -645,6 +723,31 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun buildPptxOption() {
         optionsHost.addView(note(getString(R.string.tools_setup_pptx_note)))
+    }
+
+    private fun buildExcelOptions() {
+        val tables = chip(getString(R.string.tools_setup_excel_tables_only), R.id.toolSetupExcelTables)
+        val all = chip(getString(R.string.tools_setup_excel_all_text), R.id.toolSetupExcelAll)
+        fun paint() {
+            paintChip(tables, excelTablesOnly)
+            paintChip(all, !excelTablesOnly)
+        }
+        tables.setOnClickListener {
+            excelTablesOnly = true
+            paint()
+        }
+        all.setOnClickListener {
+            excelTablesOnly = false
+            paint()
+        }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(tables, LinearLayout.LayoutParams(0, SwStyle.dp(this, 40f), 1f).apply {
+            marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
+        })
+        row.addView(all, LinearLayout.LayoutParams(0, SwStyle.dp(this, 40f), 1f))
+        optionsHost.addView(row)
+        paint()
+        optionsHost.addView(note(getString(R.string.tools_setup_excel_note)))
     }
 
     private fun buildCleanOption() {
@@ -889,6 +992,19 @@ class ToolSetupActivity : BaseActivity() {
                     ResultFiles(listOf(out), PPTX_MIME)
                 }) { openFiles(it.files, it.mime) }
             }
+            "to_excel" -> {
+                val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
+                    ?: return fail(getString(R.string.tools_setup_pick_one))
+                execute({
+                    val out = File(outputDir(), "${baseName(doc)}.xlsx")
+                    repo.exportExcel(
+                        doc.id, out,
+                        tablesOnly = excelTablesOnly,
+                        noTableNote = getString(R.string.tools_excel_no_table)
+                    )
+                    ResultFiles(listOf(out), XLSX_MIME)
+                }) { openFiles(it.files, it.mime) }
+            }
             "zip" -> {
                 val ids = selected.toList()
                 if (ids.isEmpty()) return fail(getString(R.string.tools_setup_pick_one))
@@ -988,6 +1104,8 @@ class ToolSetupActivity : BaseActivity() {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         private const val PPTX_MIME =
             "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        private const val XLSX_MIME =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
         fun intent(context: Context, toolId: String): Intent =
             Intent(context, ToolSetupActivity::class.java).putExtra(EXTRA_TOOL_ID, toolId)

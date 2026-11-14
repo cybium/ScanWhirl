@@ -372,8 +372,21 @@ class PdfViewerActivity : BaseActivity() {
         findViewById<View>(R.id.readerDockPages).setOnClickListener { toggleStrip() }
         findViewById<View>(R.id.readerDockText).setOnClickListener { openTextScreen() }
         findViewById<View>(R.id.readerDockSign).setOnClickListener {
-            com.scanwhirl.app.ui.kit.ToolRegistry.byId("sign")?.let {
-                com.scanwhirl.app.ui.kit.SwSheet.comingSoon(this, it).show()
+            val doc = dockDoc
+            if (doc != null) {
+                // L5: a saved scan opens the stamp editor armed with Sign.
+                startActivity(
+                    com.scanwhirl.app.ui.stamp.StampEditorActivity.intent(
+                        this,
+                        doc.id,
+                        com.scanwhirl.app.ui.stamp.StampEditorActivity.TOOL_SIGN
+                    )
+                )
+            } else {
+                // An external PDF is not a library document: save/import it first.
+                com.scanwhirl.app.ui.kit.ToolRegistry.byId("sign")?.let {
+                    com.scanwhirl.app.ui.kit.SwSheet.comingSoon(this, it).show()
+                }
             }
         }
         findViewById<View>(R.id.readerDockMore).setOnClickListener { showReaderMore() }

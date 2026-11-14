@@ -316,6 +316,11 @@ class SwSheet private constructor(
         primaryButton.setOnClickListener(null)
     }
 
+    /** Runs when the sheet closes for any reason (button, close icon, back, outside tap). */
+    fun setOnDismissListener(action: () -> Unit) = apply {
+        dialog.setOnDismissListener { action() }
+    }
+
     /**
      * A primary whose work decides when to close: the sheet stays open (a
      * failed save keeps the retry in place) and the caller dismisses it.

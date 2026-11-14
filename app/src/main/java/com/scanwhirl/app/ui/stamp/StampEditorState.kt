@@ -119,6 +119,7 @@ class StampEditorState(val pageCount: Int) {
         val moved = when (mark) {
             is PageStamp.Mark.Text -> mark.copy(box = shifted(mark.box, dx, dy))
             is PageStamp.Mark.Signature -> mark.copy(box = shifted(mark.box, dx, dy))
+            is PageStamp.Mark.Picture -> mark.copy(box = shifted(mark.box, dx, dy))
             is PageStamp.Mark.Highlight -> mark.copy(box = shifted(mark.box, dx, dy))
             is PageStamp.Mark.Badge -> mark.copy(box = shifted(mark.box, dx, dy))
             is PageStamp.Mark.Redact -> mark.copy(box = shifted(mark.box, dx, dy))
@@ -138,6 +139,7 @@ class StampEditorState(val pageCount: Int) {
         val resized = when (mark) {
             is PageStamp.Mark.Text -> mark.copy(box = fitted)
             is PageStamp.Mark.Signature -> mark.copy(box = fitted)
+            is PageStamp.Mark.Picture -> mark.copy(box = fitted)
             is PageStamp.Mark.Highlight -> mark.copy(box = fitted)
             is PageStamp.Mark.Badge -> mark.copy(box = fitted)
             is PageStamp.Mark.Redact -> mark.copy(box = fitted)
@@ -155,6 +157,7 @@ class StampEditorState(val pageCount: Int) {
         val rotated = when (mark) {
             is PageStamp.Mark.Text -> mark.copy(rotation = normaliseAngle(mark.rotation + degrees))
             is PageStamp.Mark.Signature -> mark.copy(rotation = normaliseAngle(mark.rotation + degrees))
+            is PageStamp.Mark.Picture -> mark.copy(rotation = normaliseAngle(mark.rotation + degrees))
             else -> return false
         }
         if (rotated == mark) return false

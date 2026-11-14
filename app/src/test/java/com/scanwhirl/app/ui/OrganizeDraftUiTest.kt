@@ -286,6 +286,41 @@ class OrganizeDraftUiTest {
     }
 
     @Test
+    fun `insert pages writes the draft and discard drops them`() {
+        val target = DocFixtures.saved(repo, app, pages = 2)
+        val source = DocFixtures.saved(repo, app, pages = 1, name = "Source")
+        val d0 = digest(target)
+        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
+            var cells = 0
+            assertTrue("the grid loads", pollUntil {
+                scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
+                cells == 2
+            })
+            scenario.onActivity { activity ->
+                activity.insertFiles(repo.getDocument(source)!!.pageFiles, 1)
+            }
+            assertTrue(
+                "the page lands in the draft",
+                pollUntil { runBlocking { repo.draftPages(target) }.size == 3 }
+            )
+            assertEquals("the base changed before Save", d0, digest(target))
+
+            var barShown = false
+            assertTrue(pollUntil {
+                scenario.onActivity { barShown = it.findViewById<android.view.View>(R.id.draftBar)?.visibility == android.view.View.VISIBLE }
+                barShown
+            })
+            scenario.onActivity { it.findViewById<android.view.View>(R.id.btnDraftDiscard)!!.performClick() }
+            idle()
+            assertNotNull("Discard asks first", sheet())
+            primary()
+            assertTrue(pollUntil { runBlocking { repo.draftOf(target) } == null })
+            assertEquals(2, runBlocking { repo.draftPages(target) }.size)
+            assertEquals(d0, digest(target))
+        }
+    }
+
+    @Test
     fun `reopening after process death shows the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->

@@ -13,6 +13,7 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.PageStamp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -191,6 +192,33 @@ class StampEditorActivityTest {
             StampCanvasView.Tool.HIGHLIGHT,
             screen.findViewById<StampCanvasView>(R.id.canvas).tool
         )
+    }
+
+    @Test
+    fun `the first back with unsaved marks asks to discard`() {
+        val id = DocFixtures.saved(repo, context, pages = 1)
+        val screen = activity(id)
+        screen.editor.add(PageStamp.Mark.Redact(PageStamp.Box(0.1f, 0.1f, 0.5f, 0.3f)))
+
+        screen.onBackPressedDispatcher.onBackPressed()
+
+        val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "the prompt must open on the first Back" }
+        assertEquals(
+            context.getString(R.string.stamp_discard_title),
+            sheet.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
+        )
+        assertFalse("the editor must stay open behind the prompt", screen.isFinishing)
+    }
+
+    @Test
+    fun `back with no marks closes at once`() {
+        val id = DocFixtures.saved(repo, context, pages = 1)
+        val screen = activity(id)
+
+        screen.onBackPressedDispatcher.onBackPressed()
+
+        assertTrue("no marks: Back closes the editor", screen.isFinishing)
+        assertNull("no prompt without edits", ShadowDialog.getLatestDialog())
     }
 
     @Test
