@@ -154,6 +154,7 @@ class ScanRepository(private val context: Context) {
         val createdAt = lines.getOrNull(1)?.toLongOrNull() ?: dir.lastModified()
         val category = lines.getOrNull(2)?.takeIf { CategoryRules.isValid(it) }
             ?: CategoryRules.OTHER
+        val organised = LibraryMeta.read(lines)
         val pdf = File(dir, "scan.pdf")
         val pages = dir.listFiles { f -> f.extension.equals("jpg", true) || f.extension.equals("jpeg", true) }
             ?.filter { it.length() > 0 }
@@ -183,6 +184,8 @@ class ScanRepository(private val context: Context) {
             isLocked = isLocked,
             isVaulted = isVaulted,
             category = category,
+            folder = organised.folder,
+            tags = organised.tags,
             revision = revision,
             isSearchable = isSearchable
         )
@@ -387,6 +390,130 @@ class ScanRepository(private val context: Context) {
      */
     fun setCategory(ids: List<String>, category: String) {
         ids.forEach { id -> setCategory(id, category) }
+    }
+
+    // ------------------------------------------------------------------
+    // Library organisation: folders and tags (v2 UI: 03_tools_hub)
+    // ------------------------------------------------------------------
+
+    private val foldersFile: File get() = File(context.filesDir, "library_folders.txt")
+
+    /** Folder names created explicitly (empty folders survive a restart), sorted. */
+    fun listFolders(): List<String> = synchronized(META_LOCK) {
+        if (!foldersFile.exists()) return emptyList()
+        runCatching { foldersFile.readLines() }.getOrDefault(emptyList())
+            .mapNotNull { LibraryMeta.normalizeFolder(it) }
+            .distinctBy { it.lowercase(Locale.getDefault()) }
+            .sortedBy { it.lowercase(Locale.getDefault()) }
+    }
+
+    private fun writeFolders(names: List<String>) {
+        Durable.atomicWriteText(
+            foldersFile,
+            names.joinToString("\n") + if (names.isEmpty()) "" else "\n"
+        )
+    }
+
+    /** Creates an explicit (possibly empty) folder. False when blank or already there. */
+    fun createFolder(name: String): Boolean {
+        val clean = LibraryMeta.normalizeFolder(name) ?: return false
+        synchronized(META_LOCK) {
+            val all = listFolders()
+            if (all.any { it.equals(clean, true) }) return false
+            writeFolders(all + clean)
+            return true
+        }
+    }
+
+    /** Renames a folder and every document in it. Documents are never lost. */
+    fun renameFolder(oldName: String, newName: String): Boolean {
+        val clean = LibraryMeta.normalizeFolder(newName) ?: return false
+        synchronized(META_LOCK) {
+            val all = listFolders()
+            val at = all.indexOfFirst { it.equals(oldName, true) }
+            if (at < 0) return false
+            if (all.any { it.equals(clean, true) && !it.equals(oldName, true) }) return false
+            writeFolders(all.toMutableList().also { it[at] = clean })
+            forEachDocumentDir { dir ->
+                updateMeta(dir) { lines ->
+                    val meta = LibraryMeta.read(lines)
+                    if (meta.folder != null && meta.folder.equals(oldName, true)) {
+                        LibraryMeta.write(lines, clean, meta.tags)
+                    }
+                }
+            }
+            return true
+        }
+    }
+
+    /** Deletes a folder; its documents move to "All" and stay in the library. */
+    fun deleteFolder(name: String) {
+        synchronized(META_LOCK) {
+            writeFolders(listFolders().filterNot { it.equals(name, true) })
+            forEachDocumentDir { dir ->
+                updateMeta(dir) { lines ->
+                    val meta = LibraryMeta.read(lines)
+                    if (meta.folder != null && meta.folder.equals(name, true)) {
+                        LibraryMeta.write(lines, null, meta.tags)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Moves documents to [folder] (null = "All"). A missing folder is created. */
+    fun setFolder(ids: List<String>, folder: String?) {
+        val clean = LibraryMeta.normalizeFolder(folder)
+        if (clean != null) createFolder(clean)
+        for (id in ids.distinct()) {
+            updateMeta(File(docsDir, id)) { lines ->
+                val meta = LibraryMeta.read(lines)
+                LibraryMeta.write(lines, clean, meta.tags)
+            }
+        }
+    }
+
+    fun setTags(id: String, tags: List<String>) {
+        updateMeta(File(docsDir, id)) { lines ->
+            val meta = LibraryMeta.read(lines)
+            LibraryMeta.write(lines, meta.folder, LibraryMeta.normalizeTags(tags))
+        }
+    }
+
+    fun addTag(ids: List<String>, tag: String) {
+        val clean = LibraryMeta.normalizeTags(listOf(tag)).firstOrNull() ?: return
+        for (id in ids.distinct()) {
+            updateMeta(File(docsDir, id)) { lines ->
+                val meta = LibraryMeta.read(lines)
+                LibraryMeta.write(lines, meta.folder, meta.tags + clean)
+            }
+        }
+    }
+
+    fun removeTag(id: String, tag: String) {
+        updateMeta(File(docsDir, id)) { lines ->
+            val meta = LibraryMeta.read(lines)
+            LibraryMeta.write(lines, meta.folder, meta.tags.filterNot { it.equals(tag, true) })
+        }
+    }
+
+    /** Every tag used in the library, for the tag sheet's quick picks. */
+    fun listTags(): List<String> = synchronized(META_LOCK) {
+        val seen = LinkedHashSet<String>()
+        forEachDocumentDir { dir ->
+            metaLines(dir)?.let { lines ->
+                LibraryMeta.read(lines).tags.forEach { tag ->
+                    if (seen.none { it.equals(tag, true) }) seen += tag
+                }
+            }
+        }
+        seen.sortedBy { it.lowercase(Locale.getDefault()) }
+    }
+
+    private inline fun forEachDocumentDir(action: (File) -> Unit) {
+        docsDir.listFiles { f -> f.isDirectory }?.forEach { dir ->
+            if (!SaveFormat.isIncomplete(dir)) action(dir)
+        }
     }
 
     /**
@@ -1876,12 +2003,30 @@ class ScanRepository(private val context: Context) {
     }
 
     /** Writes the document's PDF through [writePdf], then maintains `text_layer.flag`. */
-    private fun regeneratePdf(dir: File) = synchronized(PDF_LOCK) {
+    private fun regeneratePdf(dir: File, forceLayers: Boolean = false) = synchronized(PDF_LOCK) {
         requireUnlocked(dir) // A3 backstop: a locked document's PDF is never rebuilt in plaintext
         val pdfFile = File(dir, "scan.pdf")
         val pages = pageFilesIn(dir)
-        val layered = if (pages.isNotEmpty()) writePdf(dir, pdfFile) else false
+        val layered = if (pages.isNotEmpty()) {
+            if (forceLayers) writePdfInto(dir, pdfFile, ocrStore.readGeo(dir.name))
+            else writePdf(dir, pdfFile)
+        } else false
         updateTextLayerFlag(dir, layered)
+    }
+
+    /**
+     * v2 UI: 03_tools_hub — "Make searchable": rebuild this document's PDF with
+     * the invisible OCR text layer already stored for it. False when the PDF is
+     * locked, has no pages, or its text has not been recognised yet (the Tools
+     * sheet then says so instead of pretending).
+     */
+    fun makeSearchable(id: String): Boolean {
+        val dir = File(docsDir, id)
+        if (!dir.isDirectory || File(dir, LOCK_FILE).exists()) return false
+        if (pageFilesIn(dir).isEmpty()) return false
+        if (ocrStore.readGeo(id).isEmpty()) return false
+        regeneratePdf(dir, forceLayers = true)
+        return File(dir, "text_layer.flag").exists()
     }
 
     /** `text_layer.flag` exists exactly when every page of [dir] received an invisible text layer. */
