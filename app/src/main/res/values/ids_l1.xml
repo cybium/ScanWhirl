@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v2 component ids (L1 kit). Kept in their own file so lanes never edit ids.xml. -->
+    <item name="swSheetRoot" type="id" />
+    <item name="swSheetGrab" type="id" />
+    <item name="swSheetTitle" type="id" />
+    <item name="swSheetMessage" type="id" />
+    <item name="swSheetClose" type="id" />
+    <item name="swSheetContent" type="id" />
+    <item name="swSheetPrimary" type="id" />
+    <item name="swSheetSecondary" type="id" />
+
+    <item name="swPasswordField" type="id" />
+    <item name="swPasswordToggle" type="id" />
+    <item name="swPasswordError" type="id" />
+    <item name="swStrengthRow" type="id" />
+    <item name="swStrength1" type="id" />
+    <item name="swStrength2" type="id" />
+    <item name="swStrength3" type="id" />
+    <item name="swStrength4" type="id" />
+
+    <item name="swToolTile" type="id" />
+    <item name="swToolIcon" type="id" />
+    <item name="swToolLabel" type="id" />
+    <item name="swToolProTag" type="id" />
+    <item name="swToolSoonTag" type="id" />
+
+    <item name="swDocCard" type="id" />
+    <item name="swDocName" type="id" />
+    <item name="swDocMeta" type="id" />
+    <item name="swDocCategory" type="id" />
+    <item name="swDocLock" type="id" />
+    <item name="swDocLockBadge" type="id" />
+    <item name="swDocShare" type="id" />
+    <item name="swDocMore" type="id" />
+    <item name="swDocThumb" type="id" />
+
+    <item name="swShellNav" type="id" />
+    <item name="swNavLibrary" type="id" />
+    <item name="swNavTools" type="id" />
+    <item name="swNavScan" type="id" />
+    <item name="swNavVault" type="id" />
+    <item name="swNavMe" type="id" />
+    <item name="swShellTab" type="id" />
+    <item name="swHomeSearch" type="id" />
+    <item name="swHomeDocs" type="id" />
+    <item name="swToolsSearch" type="id" />
+    <item name="swToolsBody" type="id" />
+    <item name="swProBuy" type="id" />
+    <item name="swProClose" type="id" />
+    <item name="swTabContent" type="id" />
+    <item name="swCreateRow" type="id" />
+    <item name="swCreateIdCard" type="id" />
+    <item name="swCreatePhotos" type="id" />
+    <item name="swCreateImport" type="id" />
+    <item name="swQuickRow" type="id" />
+    <item name="swDocList" type="id" />
+    <item name="swHomeEmpty" type="id" />
+    <item name="swToolsGrid" type="id" />
+    <item name="swToolsEmpty" type="id" />
+    <item name="swProScreen" type="id" />
+    <item name="swProPrice" type="id" />
+    <item name="swMeList" type="id" />
+    <item name="swMeSettings" type="id" />
+    <item name="swMePro" type="id" />
+    <item name="swMeTrash" type="id" />
+    <item name="swMeAbout" type="id" />
+    <item name="swVaultNote" type="id" />
+    <item name="swVaultAction" type="id" />
+</resources>
