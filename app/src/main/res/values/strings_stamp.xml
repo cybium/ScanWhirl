@@ -65,7 +65,9 @@
     <string name="stamp_keep_editing">Keep editing</string>
     <string name="stamp_choose_document">Choose a document</string>
     <string name="stamp_no_documents">No unlocked documents to edit. Scan or import one first.</string>
-    <string name="stamp_document_pages">%1$d pages</string>
-    <string name="stamp_document_page">1 page</string>
     <string name="stamp_text_required">Type the text first.</string>
+    <string name="stamp_pro_message">Sign, Add text, Draw, Highlight, Watermark, Page numbers, Stamp and Redact are part of Pro (one-time purchase). Billing is not switched on yet, so Pro tools stay free in test builds.</string>
+    <string name="stamp_redact_warn_title">Redaction is permanent</string>
+    <string name="stamp_redact_warn_message">Hidden text and pixels are removed for good in the new copy. The original document is not changed.</string>
+    <string name="stamp_redact_warn_save">Save redacted copy</string>
 </resources>

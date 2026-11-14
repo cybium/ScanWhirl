@@ -45,6 +45,9 @@ class StampEditorState(val pageCount: Int) {
 
     fun isEmpty(): Boolean = pages.all { it.isEmpty() }
 
+    /** True when any page carries a redaction: the copy then destroys pixels and OCR text. */
+    fun hasRedaction(): Boolean = pages.any { page -> page.any { it is PageStamp.Mark.Redact } }
+
     /** The visible edit set, ready for `ScanRepository.stampDocument`. */
     fun edits(): List<PageStamp.PageEdits> =
         pages.mapIndexedNotNull { index, list ->

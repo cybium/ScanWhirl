@@ -12,6 +12,8 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import androidx.core.content.ContextCompat
+import com.scanwhirl.app.R
 import com.scanwhirl.app.util.PageStamp
 import kotlin.math.atan2
 import kotlin.math.max
@@ -83,24 +85,29 @@ class StampCanvasView @JvmOverloads constructor(
     private val density = resources.displayMetrics.density
     private fun dp(value: Float): Float = value * density
 
+    /** v2 kit: the selection chrome is cyan_primary on void_abyss, handles sized by dimens_v2. */
+    private val cyan = ContextCompat.getColor(context, R.color.cyan_primary)
+    private val voidInk = ContextCompat.getColor(context, R.color.void_abyss)
+    private val handleRadius = resources.getDimension(R.dimen.sw_space_2)
+
     private val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(1.5f)
-        color = Color.parseColor("#00F0FF")
+        color = cyan
     }
     private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#00F0FF")
+        color = cyan
     }
     private val handleRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(1f)
-        color = Color.parseColor("#0E1316")
+        color = voidInk
     }
     private val previewPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(2f)
-        color = Color.parseColor("#00F0FF")
+        color = cyan
         pathEffect = DashPathEffect(floatArrayOf(dp(7f), dp(5f)), 0f)
     }
     private val inkPreviewPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -108,9 +115,9 @@ class StampCanvasView @JvmOverloads constructor(
         strokeWidth = dp(2.5f)
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
-        color = Color.parseColor("#00F0FF")
+        color = cyan
     }
-    private val dimPaint = Paint().apply { color = Color.parseColor("#660E1316") }
+    private val dimPaint = Paint().apply { color = (voidInk and 0x00FFFFFF) or 0x66000000 }
 
     private var mode = Mode.NONE
     private var moveIndex = -1
@@ -166,14 +173,14 @@ class StampCanvasView @JvmOverloads constructor(
         // Corner handles: every boxed mark can be resized. A freehand mark only moves.
         if (mark is PageStamp.Mark.Freehand) return
         for (corner in corners(rect)) {
-            canvas.drawCircle(corner.x, corner.y, dp(7f), handlePaint)
-            canvas.drawCircle(corner.x, corner.y, dp(7f), handleRing)
+            canvas.drawCircle(corner.x, corner.y, handleRadius, handlePaint)
+            canvas.drawCircle(corner.x, corner.y, handleRadius, handleRing)
         }
         if (canRotate(mark)) {
             val knob = PointF(rect.centerX(), rect.top - dp(30f))
             canvas.drawLine(rect.centerX(), rect.top, knob.x, knob.y, selectionPaint)
-            canvas.drawCircle(knob.x, knob.y, dp(8f), handlePaint)
-            canvas.drawCircle(knob.x, knob.y, dp(8f), handleRing)
+            canvas.drawCircle(knob.x, knob.y, handleRadius, handlePaint)
+            canvas.drawCircle(knob.x, knob.y, handleRadius, handleRing)
         }
     }
 

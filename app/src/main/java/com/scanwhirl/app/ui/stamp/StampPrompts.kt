@@ -3,7 +3,6 @@ package com.scanwhirl.app.ui.stamp
 import android.app.Activity
 import android.graphics.Color
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -201,54 +200,4 @@ object StampPrompts {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = SwStyle.dp(activity, 6f) }
         }
-
-    /** Shared row builder for the document picker (name + page count). */
-    fun documentRow(
-        activity: Activity,
-        name: String,
-        pageCount: Int,
-        onClick: () -> Unit
-    ): View {
-        val container = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(
-                SwStyle.dp(activity, 14f), SwStyle.dp(activity, 10f),
-                SwStyle.dp(activity, 14f), SwStyle.dp(activity, 10f)
-            )
-            background = SwStyle.rounded(
-                activity,
-                SwStyle.color(activity, R.color.glass_surface_raised),
-                radiusDp = 14f,
-                stroke = SwStyle.color(activity, R.color.sw_cyan_hair)
-            )
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { onClick() }
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = SwStyle.dp(activity, 6f) }
-        }
-        container.addView(
-            SwStyle.text(
-                activity, 16f, SwStyle.color(activity, R.color.text_hologram_hi)
-            ).apply {
-                text = name
-                maxLines = 2
-            }
-        )
-        container.addView(
-            SwStyle.text(
-                activity, 12f, SwStyle.color(activity, R.color.text_hologram_dim)
-            ).apply {
-                text = if (pageCount == 1) {
-                    activity.getString(R.string.stamp_document_page)
-                } else {
-                    activity.getString(R.string.stamp_document_pages, pageCount)
-                }
-            }
-        )
-        return container
-    }
 }

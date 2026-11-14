@@ -1,13 +1,17 @@
 package com.scanwhirl.app.ui.stamp
 
 import android.app.Application
-import android.widget.LinearLayout
+import android.os.Looper
+import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.SettingsActivity
+import com.scanwhirl.app.util.ProGate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,8 +25,9 @@ import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
 
 /**
- * L5 Phase B: the Tools-hub bridge. After the lead merges L1, the eight Edit & sign entries
- * call [StampToolLauncher.open]; this test proves the mapping, the picker and the extras.
+ * L5 Phase B: the Tools-hub bridge. The eight Edit & sign entries call
+ * [StampToolLauncher.open], which uses the same document chooser as Merge/Compress
+ * (`FlowUtil.pickScan`) behind the Pro gate.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -33,6 +38,11 @@ class StampToolLauncherTest {
         get() = ApplicationProvider.getApplicationContext()
 
     private val repo get() = ScanRepository(context)
+
+    private fun clickItem(index: Int) {
+        (ShadowDialog.getLatestDialog() as AlertDialog).listView.performItemClick(null, index, 0)
+        shadowOf(Looper.getMainLooper()).idle()
+    }
 
     @Test
     fun `every catalogue id maps to an editor tool`() {
@@ -48,16 +58,17 @@ class StampToolLauncherTest {
     }
 
     @Test
-    fun `the picker opens the editor with the chosen document and tool`() {
+    fun `the shared document chooser opens the editor with the chosen document and tool`() {
         val id = DocFixtures.saved(repo, context, pages = 2, name = "Rent agreement")
         val host = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
 
         StampToolLauncher.open(host, "redact")
 
-        val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "a document picker opens" }
-        val rows = sheet.findViewById<LinearLayout>(R.id.stampDocumentRows)!!
-        assertEquals(1, rows.childCount)
-        rows.getChildAt(0).performClick()
+        val chooser = requireNotNull(ShadowDialog.getLatestDialog()) { "a document chooser opens" }
+        assertTrue("Merge/Compress' chooser is reused", chooser is AlertDialog)
+        val list = (chooser as AlertDialog).listView
+        assertEquals("the saved document is listed", 1, list.adapter.count)
+        clickItem(0)
 
         val started = requireNotNull(shadowOf(host).nextStartedActivity) { "the editor starts" }
         assertEquals(StampEditorActivity::class.java.name, started.component?.className)
@@ -83,5 +94,35 @@ class StampToolLauncherTest {
         StampToolLauncher.open(host, "sign")
         assertNull("a protected document cannot be stamped", ShadowDialog.getLatestDialog())
         assertTrue(ShadowToast.getTextOfLatestToast().isNotEmpty())
+    }
+
+    @Test
+    fun `a free build gets the Pro sheet instead of the chooser`() {
+        DocFixtures.saved(repo, context, pages = 1)
+        val host = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
+        ProGate.setTestOverride(host, false)
+        try {
+            StampToolLauncher.open(host, "watermark")
+
+            val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "the Pro sheet opens" }
+            val title = sheet.findViewById<TextView>(R.id.swSheetTitle)
+            assertEquals(context.getString(R.string.pro_suite_title), title?.text?.toString())
+            assertTrue(
+                "nothing in the library may be picked for a Pro tool on Free",
+                sheet.findViewById<android.view.View>(android.R.id.list) == null
+            )
+            assertNull("the editor does not start", shadowOf(host).nextStartedActivity)
+        } finally {
+            ProGate.setTestOverride(host, null)
+        }
+    }
+
+    @Test
+    fun `a Pro test build is not blocked`() {
+        DocFixtures.saved(repo, context, pages = 1)
+        val host = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
+        assertTrue("test builds unlock Pro", ProGate.isPro(host))
+        StampToolLauncher.open(host, "sign")
+        assertNotNull("the chooser opens", ShadowDialog.getLatestDialog())
     }
 }

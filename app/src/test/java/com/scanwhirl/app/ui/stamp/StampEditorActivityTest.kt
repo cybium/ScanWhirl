@@ -112,6 +112,30 @@ class StampEditorActivityTest {
     }
 
     @Test
+    fun `a redaction warns that it is permanent before saving`() {
+        val id = DocFixtures.saved(repo, context, pages = 1)
+        val screen = activity(id)
+        val canvas = screen.findViewById<StampCanvasView>(R.id.canvas)
+        screen.findViewById<android.view.View>(R.id.toolRedact).performClick()
+        canvas.listener?.onBox(
+            StampCanvasView.Tool.REDACT,
+            PageStamp.Box(0.1f, 0.1f, 0.6f, 0.3f)
+        )
+        val before = repo.listDocuments().size
+
+        screen.findViewById<android.view.View>(R.id.saveCopy).performClick()
+
+        val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "a warning sheet opens" }
+        val message = sheet.findViewById<TextView>(R.id.swSheetMessage)?.text?.toString().orEmpty()
+        assertTrue("the warning must be explicit, got: $message", message.contains("removed for good"))
+        assertEquals(
+            "nothing is written before the user confirms",
+            before,
+            repo.listDocuments().size
+        )
+    }
+
+    @Test
     fun `page numbers apply to every page as one undo step`() {
         val id = DocFixtures.saved(repo, context, pages = 3)
         val screen = activity(id)

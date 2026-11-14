@@ -1,6 +1,8 @@
 package com.scanwhirl.app.ui.stamp
 
 import android.app.Application
+import android.os.Looper
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -12,16 +14,21 @@ import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
 
-/** L5 Phase B: the 8 Edit & sign catalogue entries are READY and open the stamp editor. */
+/**
+ * L5 Phase B: the eight Edit & sign catalogue entries are READY, are Pro, and each opens the
+ * stamp editor with its own tool already armed after a library document is picked.
+ */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
@@ -38,24 +45,50 @@ class StampToolWiringTest {
 
     private val repo get() = ScanRepository(context)
 
-    private val editTools = listOf(
-        "sign", "add_text", "draw", "highlight",
-        "watermark", "page_numbers", "stamp", "redact"
+    /** catalogue id → the tool the editor must be armed with. */
+    private val editTools = linkedMapOf(
+        "sign" to StampEditorActivity.TOOL_SIGN,
+        "add_text" to StampEditorActivity.TOOL_TEXT,
+        "draw" to StampEditorActivity.TOOL_DRAW,
+        "highlight" to StampEditorActivity.TOOL_HIGHLIGHT,
+        "watermark" to StampEditorActivity.TOOL_WATERMARK,
+        "page_numbers" to StampEditorActivity.TOOL_PAGE_NUMBERS,
+        "stamp" to StampEditorActivity.TOOL_STAMP,
+        "redact" to StampEditorActivity.TOOL_REDACT
     )
 
+    private fun clickItem(index: Int) {
+        (ShadowDialog.getLatestDialog() as AlertDialog).listView.performItemClick(null, index, 0)
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
     @Test
-    fun `the eight edit tools are ready and open the document picker`() {
-        DocFixtures.saved(repo, context, pages = 1, name = "KYC")
+    fun `each of the eight entries opens the editor with its own tool preselected`() {
+        val docId = DocFixtures.saved(repo, context, pages = 1, name = "KYC")
         val host = Robolectric.buildActivity(Host::class.java).setup().get()
 
-        for (toolId in editTools) {
+        for ((toolId, editorTool) in editTools) {
             val tool = requireNotNull(ToolRegistry.byId(toolId)) { "$toolId is registered" }
             assertEquals("$toolId must be built now", ToolStatus.READY, tool.status)
+            assertTrue("$toolId is a Pro tool", tool.pro)
+
             tool.launch(host, tool)
-            val sheet = requireNotNull(ShadowDialog.getLatestDialog()) {
-                "$toolId must open a real screen"
+            val chooser = requireNotNull(ShadowDialog.getLatestDialog()) {
+                "$toolId must ask for a document first"
             }
-            sheet.dismiss()
+            assertEquals("$toolId lists the library", 1, (chooser as AlertDialog).listView.adapter.count)
+            clickItem(0)
+
+            val started = requireNotNull(shadowOf(host).nextStartedActivity) {
+                "$toolId must open the editor"
+            }
+            assertEquals(StampEditorActivity::class.java.name, started.component?.className)
+            assertEquals("$toolId document", docId, started.getStringExtra(StampEditorActivity.EXTRA_DOC_ID))
+            assertEquals(
+                "$toolId must arm its own editor tool",
+                editorTool,
+                started.getStringExtra(StampEditorActivity.EXTRA_TOOL)
+            )
         }
     }
 

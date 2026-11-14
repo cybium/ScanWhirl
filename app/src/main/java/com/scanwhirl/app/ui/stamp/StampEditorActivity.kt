@@ -3,8 +3,11 @@ package com.scanwhirl.app.ui.stamp
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Typeface
 import android.os.Bundle
+import android.view.Gravity
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.lifecycle.lifecycleScope
@@ -58,6 +61,8 @@ class StampEditorActivity : BaseActivity() {
         const val TOOL_STAMP = "stamp"
         const val TOOL_REDACT = "redact"
 
+        private const val DISABLED_ALPHA = 0.38f
+
         /** Intent for a screen or the Tools hub: open [docId] with [tool] already armed. */
         fun intent(context: android.content.Context, docId: String, tool: String? = null): Intent =
             Intent(context, StampEditorActivity::class.java)
@@ -80,6 +85,7 @@ class StampEditorActivity : BaseActivity() {
         binding = ActivityStampEditorBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.root.applySystemBarsPadding()
+        applyKitChrome()
 
         repo = ScanRepository(this)
         signatureStore = SignatureStore(this)
@@ -346,18 +352,43 @@ class StampEditorActivity : BaseActivity() {
             editor.currentPage + 1,
             editor.pageCount
         )
-        binding.prevPage.isEnabled = editor.currentPage > 0
-        binding.nextPage.isEnabled = editor.currentPage < editor.pageCount - 1
+        val hasPrev = editor.currentPage > 0
+        val hasNext = editor.currentPage < editor.pageCount - 1
+        binding.prevPage.isEnabled = hasPrev
+        binding.nextPage.isEnabled = hasNext
         binding.undo.isEnabled = editor.canUndo
         binding.redo.isEnabled = editor.canRedo
         binding.deleteMark.isEnabled = editor.selected != null
         binding.saveCopy.isEnabled = !editor.isEmpty() && !saving
+        // v2 kit: a flat TextView does not dim itself when disabled, so say so plainly.
+        binding.prevPage.alpha = if (hasPrev) 1f else DISABLED_ALPHA
+        binding.nextPage.alpha = if (hasNext) 1f else DISABLED_ALPHA
+        binding.undo.alpha = if (editor.canUndo) 1f else DISABLED_ALPHA
+        binding.redo.alpha = if (editor.canRedo) 1f else DISABLED_ALPHA
+        binding.deleteMark.alpha = if (editor.selected != null) 1f else DISABLED_ALPHA
+        binding.saveCopy.alpha = if (!editor.isEmpty() && !saving) 1f else DISABLED_ALPHA
         binding.selectionHint.setText(
             if (editor.selected != null) R.string.stamp_hint_select else R.string.stamp_no_selection
         )
     }
 
     private fun save() {
+        if (saving || editor.isEmpty()) return
+        // I9/E10: redaction destroys pixels and text in the copy — warn before anything is written.
+        if (editor.hasRedaction()) {
+            SwSheet.builder(this)
+                .setTitle(R.string.stamp_redact_warn_title)
+                .setMessage(R.string.stamp_redact_warn_message)
+                .setPrimary(R.string.stamp_redact_warn_save) { writeCopy() }
+                .setSecondary(R.string.stamp_keep_editing)
+                .build()
+                .show()
+            return
+        }
+        writeCopy()
+    }
+
+    private fun writeCopy() {
         if (saving || editor.isEmpty()) return
         saving = true
         binding.saveCopy.isEnabled = false
@@ -404,6 +435,84 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun dp(value: Float): Int = SwStyle.dp(this, value)
+
+    private fun dimenDp(res: Int): Float =
+        resources.getDimension(res) / resources.displayMetrics.density
+
+    // ------------------------------------------------------------------ kit chrome
+
+    /**
+     * v2 UI: 03_tools_hub — the screen's own buttons are painted by the kit: the 54dp cyan
+     * primary (the same as SwSheet's Save), glass secondary for Undo/Redo/Delete and the page
+     * navigator. Radii and the save height come from dimens_v2 so they follow the tokens.
+     */
+    private fun applyKitChrome() {
+        val radiusMedium = dimenDp(R.dimen.sw_radius_medium)
+        val radiusSmall = dimenDp(R.dimen.sw_radius_small)
+        val radiusLarge = dimenDp(R.dimen.sw_radius_large)
+
+        fun paint(view: TextView, fill: Int, ink: Int, stroke: Int?, radius: Float) {
+            view.background = SwStyle.rounded(this, fill, radiusDp = radius, stroke = stroke)
+            view.setTextColor(ink)
+            view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            view.gravity = Gravity.CENTER
+        }
+
+        paint(
+            binding.saveCopy,
+            SwStyle.color(this, R.color.cyan_primary),
+            SwStyle.color(this, R.color.sw_disc_ink),
+            null,
+            radiusMedium
+        )
+        paint(
+            binding.undo,
+            SwStyle.color(this, R.color.glass_surface_raised),
+            SwStyle.color(this, R.color.text_hologram_hi),
+            SwStyle.color(this, R.color.sw_cyan_hair),
+            radiusMedium
+        )
+        paint(
+            binding.redo,
+            SwStyle.color(this, R.color.glass_surface_raised),
+            SwStyle.color(this, R.color.text_hologram_hi),
+            SwStyle.color(this, R.color.sw_cyan_hair),
+            radiusMedium
+        )
+        paint(
+            binding.deleteMark,
+            SwStyle.color(this, R.color.laser_danger_surface),
+            SwStyle.color(this, R.color.laser_danger),
+            SwStyle.color(this, R.color.laser_danger_border),
+            radiusMedium
+        )
+        paint(
+            binding.prevPage,
+            SwStyle.color(this, R.color.glass_surface_high),
+            SwStyle.color(this, R.color.cyan_primary),
+            SwStyle.color(this, R.color.sw_cyan_hair),
+            999f
+        )
+        paint(
+            binding.nextPage,
+            SwStyle.color(this, R.color.glass_surface_high),
+            SwStyle.color(this, R.color.cyan_primary),
+            SwStyle.color(this, R.color.sw_cyan_hair),
+            999f
+        )
+        binding.pageNav.background = SwStyle.rounded(
+            this,
+            SwStyle.color(this, R.color.glass_surface_raised),
+            radiusDp = radiusLarge,
+            stroke = SwStyle.color(this, R.color.sw_cyan_hair_strong)
+        )
+        binding.hint.background = SwStyle.rounded(
+            this,
+            SwStyle.color(this, R.color.glass_surface),
+            radiusDp = radiusSmall,
+            stroke = SwStyle.color(this, R.color.sw_cyan_hair)
+        )
+    }
 
     private fun note(message: String) {
         Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()

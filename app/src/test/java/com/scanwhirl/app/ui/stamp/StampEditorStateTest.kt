@@ -127,6 +127,18 @@ class StampEditorStateTest {
     }
 
     @Test
+    fun `hasRedaction spots a redaction on any page`() {
+        val state = StampEditorState(pageCount = 2)
+        assertFalse(state.hasRedaction())
+        state.add(text())
+        assertFalse("ordinary marks are not redactions", state.hasRedaction())
+
+        state.currentPage = 1
+        state.add(PageStamp.Mark.Redact(PageStamp.Box(0.1f, 0.1f, 0.5f, 0.2f)))
+        assertTrue("a redaction on another page still counts", state.hasRedaction())
+    }
+
+    @Test
     fun `selection is cleared when the selected mark is undone`() {
         val state = StampEditorState(pageCount = 1)
         val index = state.add(text())

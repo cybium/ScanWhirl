@@ -1,17 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- L5 Stamp editor (70 §3 Edit & sign; product spec §3.7). Page view, a tool row along
-     the bottom, drag/resize/rotate handles, undo/redo and Save as a new copy. -->
+     the bottom, drag/resize/rotate handles, undo/redo and Save as a new copy.
+     v2 tokens: void_abyss, glass_surface*, cyan_primary and dimens_v2; the buttons are
+     painted from SwStyle in StampEditorActivity so they match the kit's sheets. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/rv_bg"
+    android:background="@color/void_abyss"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/rv_bg"
+        android:background="@color/void_abyss"
         android:foreground="@drawable/bg_appbar_hairline">
 
         <com.google.android.material.appbar.MaterialToolbar
@@ -19,16 +21,16 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:navigationIcon="?attr/homeAsUpIndicator"
-            app:navigationIconTint="@color/rv_ink"
+            app:navigationIconTint="@color/text_hologram_hi"
             app:title="@string/stamp_title"
-            app:titleTextColor="@color/rv_ink" />
+            app:titleTextColor="@color/text_hologram_hi" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:paddingHorizontal="8dp">
+        android:paddingHorizontal="@dimen/sw_space_2">
 
         <com.scanwhirl.app.ui.stamp.StampCanvasView
             android:id="@+id/canvas"
@@ -40,20 +42,19 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="10dp"
-            android:background="@drawable/bg_dock_glass"
+            android:layout_marginBottom="@dimen/sw_space_2"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="4dp">
+            android:paddingHorizontal="@dimen/sw_space_1">
 
-            <com.google.android.material.button.MaterialButton
+            <TextView
                 android:id="@+id/prevPage"
-                style="@style/Widget.ScanWhirl.Button.Dock"
-                android:layout_width="wrap_content"
+                android:layout_width="44dp"
                 android:layout_height="40dp"
                 android:contentDescription="@string/stamp_prev_page"
-                android:minWidth="44dp"
+                android:gravity="center"
                 android:text="@string/stamp_prev_symbol"
+                android:textColor="@color/cyan_primary"
                 android:textSize="22sp" />
 
             <TextView
@@ -62,17 +63,17 @@
                 android:layout_height="wrap_content"
                 android:minWidth="64dp"
                 android:gravity="center"
-                android:textColor="@color/rv_ink_2"
+                android:textColor="@color/text_hologram_mid"
                 android:textSize="14sp" />
 
-            <com.google.android.material.button.MaterialButton
+            <TextView
                 android:id="@+id/nextPage"
-                style="@style/Widget.ScanWhirl.Button.Dock"
-                android:layout_width="wrap_content"
+                android:layout_width="44dp"
                 android:layout_height="40dp"
                 android:contentDescription="@string/stamp_next_page"
-                android:minWidth="44dp"
+                android:gravity="center"
                 android:text="@string/stamp_next_symbol"
+                android:textColor="@color/cyan_primary"
                 android:textSize="22sp" />
         </LinearLayout>
 
@@ -81,22 +82,26 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="top"
-            android:layout_marginHorizontal="16dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_chip_void"
+            android:layout_marginHorizontal="@dimen/sw_space_4"
+            android:layout_marginTop="@dimen/sw_space_2"
             android:gravity="center"
-            android:paddingHorizontal="12dp"
+            android:paddingHorizontal="@dimen/sw_space_3"
             android:paddingVertical="6dp"
-            android:textColor="@color/rv_ink_2"
+            android:textColor="@color/text_hologram_mid"
             android:textSize="13sp"
             android:visibility="gone" />
     </FrameLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/sw_cyan_hair" />
 
     <HorizontalScrollView
         android:id="@+id/toolScroll"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/rv_bg"
+        android:background="@color/void_abyss"
         android:fillViewport="false"
         android:scrollbars="none">
 
@@ -105,8 +110,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp" />
+            android:paddingHorizontal="@dimen/sw_space_2"
+            android:paddingVertical="@dimen/sw_space_1" />
     </HorizontalScrollView>
 
     <LinearLayout
@@ -114,26 +119,28 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="12dp"
+        android:paddingHorizontal="@dimen/sw_space_3"
         android:paddingTop="2dp">
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/deleteMark"
-            style="@style/Widget.ScanWhirl.Button.Danger"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:enabled="false"
-            android:minHeight="40dp"
-            android:text="@string/stamp_delete" />
+            android:gravity="center"
+            android:minWidth="72dp"
+            android:paddingHorizontal="@dimen/sw_space_3"
+            android:text="@string/stamp_delete"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/selectionHint"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
+            android:layout_marginStart="@dimen/sw_space_3"
             android:layout_weight="1"
             android:text="@string/stamp_no_selection"
-            android:textColor="@color/rv_ink_3"
+            android:textColor="@color/text_hologram_dim"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -142,35 +149,40 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="12dp">
+        android:padding="@dimen/sw_space_3">
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/undo"
-            style="@style/Widget.ScanWhirl.Button.Secondary"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
+            android:layout_marginEnd="@dimen/sw_space_2"
             android:enabled="false"
+            android:gravity="center"
             android:minWidth="72dp"
-            android:text="@string/stamp_undo" />
+            android:paddingHorizontal="@dimen/sw_space_3"
+            android:text="@string/stamp_undo"
+            android:textSize="14sp" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/redo"
-            style="@style/Widget.ScanWhirl.Button.Secondary"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
             android:layout_marginEnd="10dp"
             android:enabled="false"
+            android:gravity="center"
             android:minWidth="72dp"
-            android:text="@string/stamp_redo" />
+            android:paddingHorizontal="@dimen/sw_space_3"
+            android:text="@string/stamp_redo"
+            android:textSize="14sp" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/saveCopy"
-            style="@style/Widget.ScanWhirl.Button.Primary"
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="@dimen/sw_btn_height"
             android:layout_weight="1"
             android:enabled="false"
-            android:text="@string/stamp_save_copy" />
+            android:gravity="center"
+            android:text="@string/stamp_save_copy"
+            android:textSize="16sp" />
     </LinearLayout>
 </LinearLayout>
