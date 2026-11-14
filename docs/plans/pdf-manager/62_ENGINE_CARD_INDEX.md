@@ -20,7 +20,7 @@ PM-2.2, PM-2.3, PM-3.1 (protect/unlock) and PM-3.2 in `40_SONNET_TASKS.md`. The 
 - Every `@After` calls `Faults.resetAll()` (test helper from PM-0.2b).
 - New user-visible strings go in `app/src/main/res/values/strings.xml` and `values-hi/strings.xml`. Each card gives
   the English and a Hindi draft. Prefix the Hindi value with `<!-- review -->`, as existing entries do (`values-hi/strings.xml:165`).
-- Do not touch `app/build.gradle.kts`, the manifest, versions, signing or `keystore/`. Do not commit; the owner commits.
+- Do not touch `app/build.gradle.kts`, the manifest, versions, signing or `keystore/`. Commit locally only after Gate G is fully green; never push.
 
 ## 2. Gate G (run in this order, one task at a time, foreground)
 
@@ -36,7 +36,10 @@ wsl -d Ubuntu bash -lc 'cd /mnt/c/Users/Cybium/Desktop/ScanWhirl && JAVA_HOME=/u
   `app/build/test-results/testDebugUnitTest/*.xml` (`tests`, `failures`, `errors`, `skipped` attributes).
 - A failure in only one of the two runs is a flake. Record it, rerun once more, and never "fix" it in this card unless it is in this card's tests.
 - To run one class on Linux, add `--tests 'com.scanwhirl.app.store.OpPublishTest'` to the same command.
-- Lint must report no new errors. Compare against the previous card's report count.
+- Lint must report **0 errors**. The baseline after PM-0.2b is 0 errors, 316 warnings, and new warnings must not come from the card's own files. Run lint with `--rerun-tasks`, because a cached lint result can be stale.
+- Run the second Linux suite with `--rerun-tasks -x lint`. An identical command is skipped as up-to-date.
+
+**Progress:** PM-0.2b done (`db454bb`, 814 tests). Next: PM-3.1b.
 
 ---
 
