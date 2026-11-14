@@ -62,13 +62,19 @@ object PdfGenerator {
      * There is no copy fallback: if the rename fails the call fails. On any failure
      * the `.tmp` is deleted and an existing `outFile` is left untouched.
      *
+     * When [encryption] is given (v2 Protect PDF, ISO 32000-2 V5/R6 AESV3), every stream body is
+     * replaced by `16-byte IV + AES-256-CBC/PKCS#7` and `/Length` is the real (larger) byte count,
+     * and the trailer gains the `/Encrypt` dictionary and `/ID`. The verifier gets the same key, so
+     * the page bytes are still compared before the file is published.
+     *
      * @throws java.io.IOException (incl. [Durable.SyncException], [PdfVerifier.InvalidPdfException])
      *   when the PDF cannot be written, synced or verified.
      */
     fun imagesToPdf(
         images: List<File>,
         outFile: File,
-        textLayers: Map<Int, OcrPage> = emptyMap()
+        textLayers: Map<Int, OcrPage> = emptyMap(),
+        encryption: PdfAes.Encryption? = null
     ): Set<Int> {
         require(images.isNotEmpty()) { "No images to convert" }
 
@@ -146,17 +152,19 @@ object PdfGenerator {
                             append(PdfTextLayer.contentFor(layer, pageW, pageH))
                         }
                     }.toByteArray(Charsets.ISO_8859_1)
+                    val contentBody = encryption?.encryptStream(content) ?: content
                     offsets[contentObj] = position
                     // /Length is the encoded byte count, never the character count.
-                    w("$contentObj 0 obj\n<< /Length ${content.size} >>\nstream\n")
-                    w(content)
+                    w("$contentObj 0 obj\n<< /Length ${contentBody.size} >>\nstream\n")
+                    w(contentBody)
                     w("endstream\nendobj\n")
 
                     val colorSpace = if (info.components == 1) "/DeviceGray" else "/DeviceRGB"
+                    val imageBody = encryption?.encryptStream(bytes) ?: bytes
                     offsets[imageObj] = position
                     w("$imageObj 0 obj\n<< /Type /XObject /Subtype /Image /Width ${info.width} /Height ${info.height} " +
-                        "/ColorSpace $colorSpace /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.size} >>\nstream\n")
-                    w(bytes)
+                        "/ColorSpace $colorSpace /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBody.size} >>\nstream\n")
+                    w(imageBody)
                     w("\nendstream\nendobj\n")
                 }
 
@@ -169,11 +177,17 @@ object PdfGenerator {
                     xref.append(String.format(Locale.ROOT, "%010d 00000 n \n", offsets[num]))
                 }
                 w(xref.toString())
-                w("trailer\n<< /Size ${total + 1} /Root 1 0 R >>\nstartxref\n$xrefOffset\n%%EOF\n")
+                val encryptPart = if (encryption == null) {
+                    ""
+                } else {
+                    " /Encrypt ${encryption.encryptDict()} " +
+                        "/ID [<${PdfAes.hex(encryption.fileId)}> <${PdfAes.hex(encryption.fileId)}>]"
+                }
+                w("trailer\n<< /Size ${total + 1} /Root 1 0 R$encryptPart >>\nstartxref\n$xrefOffset\n%%EOF\n")
                 Durable.syncStream(out, tmp)
             }
 
-            PdfVerifier.verify(tmp, expectedImages = images)
+            PdfVerifier.verify(tmp, expectedImages = images, decryption = encryption)
 
             // Atomic publish: file rename replaces outFile atomically. No fallback copy.
             if (!tmp.renameTo(outFile)) {

@@ -72,9 +72,24 @@ object PdfProtection {
     }
 
     /**
-     * True when the PDF password and its lock hash agree: non-empty printable Latin-1 only (F15).
-     * The ranges are U+0020..U+007E and U+00A0..U+00FF; the C1 controls U+007F..U+009F are excluded.
+     * True when the PDF password can be encoded: any non-empty Unicode text with well-formed
+     * surrogate pairs (v2, R6 UTF-8 passwords). The old lock was limited to printable Latin-1 (F15);
+     * AES-256 raises that limit, so emoji and Devanagari are now valid passwords.
      */
-    fun isEncodable(pw: String): Boolean =
-        pw.isNotEmpty() && pw.all { it in ' '..'~' || it in ' '..'ÿ' }
+    fun isEncodable(pw: String): Boolean {
+        if (pw.isEmpty()) return false
+        var i = 0
+        while (i < pw.length) {
+            val c = pw[i]
+            if (Character.isHighSurrogate(c)) {
+                if (i + 1 >= pw.length || !Character.isLowSurrogate(pw[i + 1])) return false
+                i += 2
+            } else if (Character.isLowSurrogate(c)) {
+                return false
+            } else {
+                i++
+            }
+        }
+        return true
+    }
 }
