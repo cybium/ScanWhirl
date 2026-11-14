@@ -51,7 +51,7 @@ import java.io.File
  * - `EXTRA_TITLE` — temp mode: document title used for the exported `.txt` name.
  *
  * Dirty-state: any edit to the current page's text marks the activity dirty.
- * Back while dirty shows a Save/Discard/Cancel confirm (SwDialog.card).
+ * Back while dirty shows a Save/Discard/Cancel SwSheet.
  *
  * Rotation safety: `currentPageKey` and the dirty pages (text differing from
  * `originalTexts`) are saved in `onSaveInstanceState` and restored on top of
@@ -741,7 +741,7 @@ class OcrEditorActivity : BaseActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Unsaved-changes confirm (SwDialog.card)
+    // Unsaved-changes confirm (SwSheet)
     // ------------------------------------------------------------------
 
     private fun showUnsavedConfirm() {
