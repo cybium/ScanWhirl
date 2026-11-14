@@ -57,12 +57,14 @@ class CompressFlow(
             pickPdf()
             return
         }
-        SwDialog.sheet(activity)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.compress_title)
-            .setItems(arrayOf(
-                activity.getString(R.string.compress_source_scan),
-                activity.getString(R.string.compress_source_file)
-            )) { _, which ->
+            .setOptions(
+                listOf(
+                    activity.getString(R.string.compress_source_scan),
+                    activity.getString(R.string.compress_source_file)
+                )
+            ) { which, _ ->
                 when (which) {
                     0 -> FlowUtil.pickScan(
                         activity, R.string.compress_pick_scan, docs()
@@ -70,8 +72,9 @@ class CompressFlow(
                     1 -> pickPdf()
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     /**
@@ -158,26 +161,29 @@ class CompressFlow(
         }
         (dialogBinding.levelGroup.getChildAt(1) as? RadioButton)?.isChecked = true
 
-        SwDialog.card(activity)
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.compress_level_title)
-            .setView(dialogBinding.root)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val targetText = dialogBinding.editCompressTarget.text?.toString()
-                if (!targetText.isNullOrBlank()) {
-                    val target = ImageTools.parseSizeInput(targetText)
-                    if (target == null) {
-                        Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
-                        return@setPositiveButton
-                    }
-                    onTarget(target)
-                    return@setPositiveButton
+            .setContent(dialogBinding.root)
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.setPrimaryStayOpen(android.R.string.ok) {
+            val targetText = dialogBinding.editCompressTarget.text?.toString()
+            if (!targetText.isNullOrBlank()) {
+                val target = ImageTools.parseSizeInput(targetText)
+                if (target == null) {
+                    Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
+                    return@setPrimaryStayOpen
                 }
-                val checked = dialogBinding.levelGroup.checkedRadioButtonId
-                val index = dialogBinding.levelGroup.indexOfChild(dialogBinding.levelGroup.findViewById(checked))
-                onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
+                sheet.dismiss()
+                onTarget(target)
+                return@setPrimaryStayOpen
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            val checked = dialogBinding.levelGroup.checkedRadioButtonId
+            val index = dialogBinding.levelGroup.indexOfChild(dialogBinding.levelGroup.findViewById(checked))
+            sheet.dismiss()
+            onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
+        }
+        sheet.show()
     }
 
     private fun runCompressScan(doc: ScanDocument, level: Level) {

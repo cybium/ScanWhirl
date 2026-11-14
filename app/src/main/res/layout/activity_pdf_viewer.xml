@@ -34,7 +34,8 @@
             android:layout_height="match_parent"
             android:background="@color/pdf_bg"
             android:clipToPadding="false"
-            android:paddingVertical="8dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="92dp"
             android:scrollbars="none" />
 
         <TextView
@@ -48,6 +49,17 @@
             android:paddingVertical="4dp"
             android:textColor="#FFFFFFFF"
             android:textSize="14sp" />
+
+        <!-- v2 UI: 07_reader_dock — the dock floats over the page, so it never
+             takes height from the PDF (the Find panel below keeps its room). -->
+        <include
+            layout="@layout/view_reader_dock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="12dp" />
     </FrameLayout>
 
     <!-- Retrieval slice 5: Find in the recognised text. Docked under the pages (never

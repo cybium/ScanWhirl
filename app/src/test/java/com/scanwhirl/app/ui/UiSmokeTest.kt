@@ -210,12 +210,16 @@ class UiSmokeTest {
                 activity.findViewById<android.view.View>(R.id.btnTools).performClick()
                 ShadowDialog.getLatestDialog()!!
                     .findViewById<android.view.View>(R.id.tile_merge).performClick()
-                val chooser = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+                val chooser = ShadowDialog.getLatestDialog()
                 assertTrue("merge chooser should be showing", chooser.isShowing)
-                // Item 0 = merge saved scans -> the scan picker dialog.
-                chooser.listView.performItemClick(null, 0, 0)
-                val picker = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
-                assertTrue("scan picker should be showing", picker.isShowing)
+                // v2 UI: 08_text_ocr — Item 0 = merge saved scans -> the scan picker.
+                chooser.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+                    .getChildAt(0).performClick()
+                val picker = ShadowDialog.getLatestDialog()
+                assertTrue(
+                    "scan picker should be showing",
+                    picker.isShowing && picker.findViewById<android.view.View>(R.id.swSheetItems) != null
+                )
                 picker.dismiss()
             }
         }
@@ -787,8 +791,10 @@ class UiSmokeTest {
         ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 activity.findViewById<android.view.View>(R.id.btnFilter).performClick()
-                val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
-                dialog.listView.performItemClick(null, 3, 3) // B/W
+                // v2 UI: 08_text_ocr — the filter list is a SwSheet list.
+                ShadowDialog.getLatestDialog()
+                    .findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+                    .getChildAt(3).performClick() // B/W
             }
             val persisted = pollUntil {
                 java.io.File(staging, "filters.txt")

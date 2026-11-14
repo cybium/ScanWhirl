@@ -58,17 +58,20 @@ class OcrEditorSaveFailureTest {
             assertTrue(activity.findViewById<TextView>(R.id.wordCount).text.contains("edited", ignoreCase = true))
 
             activity.onBackPressedDispatcher.onBackPressed()
-            val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+            // v2 UI: 08_text_ocr — the back confirm is a SwSheet; its primary stays
+            // open until the save really lands.
+            val dialog = ShadowDialog.getLatestDialog()
             ShadowToast.reset()
-            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick()
+            dialog.findViewById<android.view.View>(R.id.swSheetPrimary).performClick()
             awaitToast()
             assertFalse(activity.isFinishing)
 
+            dialog.dismiss()
             Durable.resetForTests()
             ShadowToast.reset()
             activity.onBackPressedDispatcher.onBackPressed()
-            (ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog)
-                .getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick()
+            ShadowDialog.getLatestDialog()
+                .findViewById<android.view.View>(R.id.swSheetPrimary).performClick()
             awaitToast()
             assertEquals("corrected", repo.ocrDoc(id)["page_000.jpg"])
             assertTrue(activity.isFinishing)

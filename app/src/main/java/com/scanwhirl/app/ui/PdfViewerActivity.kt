@@ -13,14 +13,19 @@ import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityPdfViewerBinding
 import com.scanwhirl.app.databinding.ItemPdfPageBinding
+import com.scanwhirl.app.util.ShareUtils
 import java.io.File
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -51,6 +56,11 @@ class PdfViewerActivity : BaseActivity() {
     private val renderLock = Any()
     private var pageCount = 0
     private var title = ""
+
+    /** v2 reader dock: the saved scan (when opened from the library) and its PDF. */
+    private var dockDoc: com.scanwhirl.app.model.ScanDocument? = null
+    private var dockFile: File? = null
+    private var stripBuilt = false
 
     private val renderExecutor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "pdf-render").apply { isDaemon = true }
@@ -112,6 +122,7 @@ class PdfViewerActivity : BaseActivity() {
         )
         find = reader
         reader.bind()
+        bindDock()
         binding.toolbar.inflateMenu(R.menu.menu_pdf_viewer)
         binding.toolbar.setOnMenuItemClickListener { item ->
             if (item.itemId == R.id.action_find) {
@@ -331,6 +342,125 @@ class PdfViewerActivity : BaseActivity() {
         val shown = visiblePage() ?: return
         binding.pdfPageIndicator.text =
             getString(R.string.page_indicator, shown + 1, pageCount)
+    }
+
+    /**
+     * v2 UI: 07_reader_dock — Share · Pages · Text · Sign · More, a page strip
+     * and the lock badge in the title. Every action is real or a Coming soon
+     * sheet; Sign waits for L5.
+     */
+    private fun bindDock() {
+        dockDoc = intent.getStringExtra(EXTRA_DOC_ID)
+            ?.let { (application as ScanWhirlApp).repository.getDocument(it) }
+        val path = intent.getStringExtra(EXTRA_PATH)
+        dockFile = dockDoc?.pdfFile ?: path?.let { File(it) } ?: tempPdf
+
+        val doc = dockDoc
+        if (doc != null && (doc.isLocked || doc.isVaulted)) {
+            binding.toolbar.setLogo(R.drawable.ic_sym_lock)
+            binding.toolbar.logo?.let {
+                DrawableCompat.setTint(
+                    it, ContextCompat.getColor(this, R.color.gold_pro_primary)
+                )
+            }
+            binding.toolbar.logoDescription = getString(R.string.home_protected)
+        }
+
+        // The dock lives in layout/view_reader_dock.xml (an <include>), so it has
+        // no ViewBinding fields: find it by id, which is also how tests reach it.
+        findViewById<View>(R.id.readerDockShare).setOnClickListener { shareCurrent() }
+        findViewById<View>(R.id.readerDockPages).setOnClickListener { toggleStrip() }
+        findViewById<View>(R.id.readerDockText).setOnClickListener { openTextScreen() }
+        findViewById<View>(R.id.readerDockSign).setOnClickListener {
+            com.scanwhirl.app.ui.kit.ToolRegistry.byId("sign")?.let {
+                com.scanwhirl.app.ui.kit.SwSheet.comingSoon(this, it).show()
+            }
+        }
+        findViewById<View>(R.id.readerDockMore).setOnClickListener { showReaderMore() }
+    }
+
+    private fun shareCurrent() {
+        val doc = dockDoc
+        if (doc != null) {
+            ShareUtils.share(this, doc)
+            return
+        }
+        val file = dockFile
+        if (file != null && file.exists()) {
+            ShareUtils.shareFile(this, file, "application/pdf")
+        } else {
+            Toast.makeText(this, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openTextScreen() {
+        val id = intent.getStringExtra(EXTRA_DOC_ID)
+        if (id == null) {
+            com.scanwhirl.app.ui.kit.SwSheet.note(
+                this,
+                getString(R.string.reader_dock_text),
+                getString(R.string.reader_text_unavailable)
+            ).show()
+            return
+        }
+        startActivity(
+            Intent(this, OcrEditorActivity::class.java)
+                .putExtra(OcrEditorActivity.EXTRA_DOC_ID, id)
+                .putExtra(OcrEditorActivity.EXTRA_TITLE, title)
+        )
+    }
+
+    private fun showReaderMore() {
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(title)
+            .setMessage(getString(R.string.reader_more_note, pageCount))
+            .setPrimary(R.string.reader_find) { find?.open(focus = true) }
+            .setSecondary(R.string.share_pdf) { shareCurrent() }
+            .build()
+            .show()
+    }
+
+    private fun toggleStrip() {
+        val strip = findViewById<View>(R.id.readerStrip)
+        if (strip.visibility == View.VISIBLE) {
+            strip.visibility = View.GONE
+            return
+        }
+        if (!stripBuilt) {
+            stripBuilt = true
+            val density = resources.displayMetrics.density
+            val thumbW = (38 * density).toInt()
+            val thumbH = (50 * density).toInt()
+            val margin = (5 * density).toInt()
+            val outline = com.scanwhirl.app.ui.kit.SwStyle.rounded(
+                this, ContextCompat.getColor(this, R.color.sw_paper_thumb), 5f
+            )
+            val shown = minOf(pageCount, 40)
+            for (index in 0 until shown) {
+                val thumb = ImageView(this).apply {
+                    tag = index
+                    contentDescription = getString(R.string.page_indicator, index + 1, pageCount)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    background = outline
+                    setPadding(0, 0, 0, 0)
+                }
+                findViewById<android.view.ViewGroup>(R.id.readerStripPages).addView(
+                    thumb,
+                    LinearLayout.LayoutParams(thumbW, thumbH).apply { marginEnd = margin }
+                )
+                renderExecutor.execute {
+                    val bmp = try {
+                        synchronized(renderLock) { renderer?.render(index, 120) }
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (bmp != null) runOnUiThread {
+                        if (thumb.tag == index) thumb.setImageBitmap(bmp)
+                    }
+                }
+            }
+        }
+        strip.visibility = View.VISIBLE
     }
 
     /** Height/width of the last rendered page; A4 portrait until one is known. */

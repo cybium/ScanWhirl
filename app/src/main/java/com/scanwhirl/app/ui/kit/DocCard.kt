@@ -101,7 +101,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         }
         nameView = SwStyle.text(context, 15.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.swDocName
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            typeface = SwType.bold(context)
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
         }

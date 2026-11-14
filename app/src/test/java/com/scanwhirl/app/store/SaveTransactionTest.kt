@@ -746,14 +746,20 @@ class SaveTransactionTest {
                 assertEquals(committed.id, ScanLauncher(activity, repo, activity) {}.findUnfinished()!!.committed?.id)
                 ScanLauncher(activity, repo, activity) {}.offerUnfinishedScan()
             }
-            var dialog: AlertDialog? = null
-            await { dialog = ShadowDialog.getLatestDialog() as? AlertDialog; dialog?.isShowing == true }
+            var dialog: android.app.Dialog? = null
+            await {
+                dialog = ShadowDialog.getLatestDialog()
+                dialog?.isShowing == true
+            }
             assertTrue("staging kept until the user acts", staged.dir.isDirectory)
+            // v2 UI: 09_unlock_sheet — the resume prompt is a SwSheet.
             assertEquals(
                 app.getString(com.scanwhirl.app.R.string.resume_saved_open),
-                dialog!!.getButton(AlertDialog.BUTTON_POSITIVE).text.toString()
+                dialog!!.findViewById<android.widget.TextView>(com.scanwhirl.app.R.id.swSheetPrimary)
+                    .text.toString()
             )
-            dialog!!.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            dialog!!.findViewById<android.view.View>(com.scanwhirl.app.R.id.swSheetPrimary)
+                .performClick()
             shadowOf(Looper.getMainLooper()).idle() // AlertController delivers clicks through its handler
             val opened = activityShadow!!.nextStartedActivity
             assertEquals(DocumentViewerActivity::class.java.name, opened.component?.className)

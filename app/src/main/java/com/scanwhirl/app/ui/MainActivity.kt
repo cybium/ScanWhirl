@@ -197,12 +197,13 @@ class MainActivity : BaseActivity(), HomeHost {
      * raster. The user confirms this once — honesty over surprise.
      */
     private fun confirmEditPdf(uri: Uri) {
-        SwDialog.card(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.edit_pdf_note_title)
             .setMessage(R.string.pdf_rasterize_note)
-            .setPositiveButton(R.string.continue_label) { _, _ -> startEditPdf(uri) }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .setPrimary(R.string.continue_label) { startEditPdf(uri) }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     /** All documents on disk; refreshed off the main thread, queried in memory. */
@@ -1043,13 +1044,13 @@ class MainActivity : BaseActivity(), HomeHost {
         val view = layoutInflater.inflate(R.layout.dialog_pro_panel, null)
         view.findViewById<TextView>(R.id.proDossierStatus)?.text =
             getString(if (pro) R.string.pro_status_test else R.string.pro_status_unavailable)
-        val builder = SwDialog.sheet(this)
-            .setView(view)
-            .setPositiveButton(android.R.string.ok, null)
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.pro_suite_title)
+            .setContent(view)
         if (com.scanwhirl.app.BuildConfig.TEST_BUILD) {
-            builder.setNeutralButton(
+            sheet.setSecondary(
                 if (pro) R.string.preview_free_ui else R.string.preview_pro_ui
-            ) { _, _ ->
+            ) {
                 ProGate.setTestOverride(this, !pro)
                 recreate()
                 Toast.makeText(
@@ -1062,7 +1063,8 @@ class MainActivity : BaseActivity(), HomeHost {
                 ).show()
             }
         }
-        builder.showSw(isSheet = true)
+        sheet.setPrimary(android.R.string.ok)
+        sheet.build().show()
     }
 
     /**
@@ -1350,9 +1352,9 @@ class MainActivity : BaseActivity(), HomeHost {
             getString(R.string.source_device_pdf)
         )
         if (onImage != null) items += getString(R.string.source_gallery_image)
-        SwDialog.sheet(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(titleRes)
-            .setItems(items.toTypedArray()) { _, which ->
+            .setOptions(items) { which, _ ->
                 when (which) {
                     0 -> FlowUtil.pickScan(this, titleRes, allDocs) { doc -> onScan(doc) }
                     1 -> {
@@ -1360,13 +1362,14 @@ class MainActivity : BaseActivity(), HomeHost {
                         pickProPdf.launch(arrayOf("application/pdf"))
                     }
                     else -> {
-                        pendingUriAction = onImage ?: return@setItems
+                        pendingUriAction = onImage ?: return@setOptions
                         pickProImage.launch("image/*")
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
 
@@ -1442,20 +1445,19 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** T4.3: rename dialog (same shape as the Document screen's prompt). */
     private fun promptRename(doc: ScanDocument) {
-        val (builder, input) = SwDialog.input(
-            this, hint = getString(R.string.rename_title), initial = doc.name
-        )
-        builder
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.rename_title)
-            .setPositiveButton(R.string.save) { _, _ ->
-                val newName = input.text?.toString()
-                if (!newName.isNullOrBlank()) {
-                    repo.renameDocument(doc.id, newName.trim())
-                    refreshList()
-                }
+            .setInput(initial = doc.name, hint = getString(R.string.rename_title))
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.setPrimary(R.string.save) {
+            val newName = sheet.inputView?.text?.toString()
+            if (!newName.isNullOrBlank()) {
+                repo.renameDocument(doc.id, newName.trim())
+                refreshList()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+        }
+        sheet.show()
     }
 
     /**
@@ -1537,11 +1539,12 @@ class MainActivity : BaseActivity(), HomeHost {
             ImportReason.READ_FAILED -> getString(R.string.import_failed_read)
             ImportReason.SAVE_FAILED, null -> getString(R.string.import_failed_save)
         }
-        SwDialog.card(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.import_failed_title)
             .setMessage(message)
-            .setPositiveButton(android.R.string.ok, null)
-            .showSw(isSheet = false)
+            .setPrimary(android.R.string.ok)
+            .build()
+            .show()
     }
 
     // ------------------------------------------------------------------
@@ -1645,7 +1648,7 @@ class MainActivity : BaseActivity(), HomeHost {
         val total = plan.sumOf { it.second.size }
         val body = DeleteExports.dialogBody(this, total)
         val box: android.widget.CheckBox? = body.findViewById(R.id.deleteCopiesBox)
-        val builder = SwDialog.danger(this)
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(if (ids.size == 1) R.string.delete_title else R.string.delete_selected_title)
             .setMessage(
                 if (ids.size == 1) {
@@ -1654,9 +1657,9 @@ class MainActivity : BaseActivity(), HomeHost {
                     resources.getQuantityString(R.plurals.delete_vault_selected_message, ids.size, ids.size)
                 }
             )
-            .setView(body)
-        builder
-            .setPositiveButton(R.string.delete) { _, _ ->
+            .setContent(body)
+            .setSecondary(android.R.string.cancel)
+            .setPrimary(R.string.delete) {
                 ids.forEach { repo.deleteDocument(it) } // never blocked by copy removal
                 if (selectionMode) setSelectionMode(false)
                 refreshList()
@@ -1675,8 +1678,8 @@ class MainActivity : BaseActivity(), HomeHost {
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .build()
+        sheet.show()
     }
 
     // ------------------------------------------------------------------
@@ -1764,25 +1767,17 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     private fun promptUnlockBeforeOpen(doc: ScanDocument, onUnlocked: () -> Unit) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.protect_hint)
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        SwDialog.card(this)
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.unlock_pdf_title)
             .setMessage(getString(R.string.unlock_pdf_msg, doc.name))
-            .setView(input)
-            .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
-                val pw = input.text?.toString().orEmpty()
-                if (repo.verifyPdfPassword(doc.id, pw)) {
-                    onUnlocked()
-                } else {
-                    Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
-                }
-            }
-            .setNeutralButton(R.string.unlock_pdf_remove) { _, _ ->
-                val pw = input.text?.toString().orEmpty()
+            .setInput(
+                hint = getString(R.string.protect_hint),
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            )
+            .build()
+        sheet.setSecondary(R.string.unlock_pdf_remove) {
+                val pw = sheet.inputView?.text?.toString().orEmpty()
                 if (repo.verifyPdfPassword(doc.id, pw)) {
                     lifecycleScope.launch {
                         // PM-3.1b review C2: unlockPdf can still throw (for example locked_no_pages).
@@ -1803,8 +1798,16 @@ class MainActivity : BaseActivity(), HomeHost {
                     Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+        sheet.setPrimaryStayOpen(R.string.unlock_pdf_open) {
+            val pw = sheet.inputView?.text?.toString().orEmpty()
+            if (repo.verifyPdfPassword(doc.id, pw)) {
+                sheet.dismiss()
+                onUnlocked()
+            } else {
+                Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
+            }
+        }
+        sheet.show()
     }
 
     /** Editing a locked scan asks for the password first (pages stay protected). */
