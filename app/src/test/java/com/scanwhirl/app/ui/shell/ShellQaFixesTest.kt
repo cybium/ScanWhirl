@@ -1,11 +1,13 @@
 package com.scanwhirl.app.ui.shell
 
 import android.app.Application
+import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -173,14 +175,9 @@ class ShellQaFixesTest {
             idle()
             val picker = ShadowDialog.getLatestDialog()
             assertNotNull("the document chooser opens", picker)
-            val rows = picker.findViewById<ViewGroup>(R.id.swSheetItems)
-            assertNotNull("a real chooser", rows)
-            (0 until rows.childCount).map { rows.getChildAt(it) }
-                .first {
-                    val label = (it as ViewGroup).getChildAt(0) as TextView
-                    label.text == "Search me"
-                }
-                .performClick()
+            val list = picker.findViewById<ViewGroup>(R.id.swDocPickerList)
+            assertNotNull("compact document rows", list)
+            (list.getChildAt(0) as View).performClick()
             idle()
             val sheet = ShadowDialog.getLatestDialog()
             assertNotNull("the make-searchable sheet opens", sheet)
@@ -203,5 +200,112 @@ class ShellQaFixesTest {
         val colour = (sheet.view.background as GradientDrawable).color?.defaultColor ?: 0
         assertEquals("no dock shows through a sheet", 255, (colour ushr 24) and 0xFF)
         sheet.dismiss()
+    }
+
+    @Test
+    fun `the document chooser uses compact rows and searches past eight documents`() {
+        for (i in 1..10) DocFixtures.saved(repo, app, pages = 1, name = "Chooser doc $i")
+        launch { activity ->
+            activity.findViewById<View>(R.id.swNavTools).performClick()
+            idle()
+            ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
+                .first { it.tool?.id == "enhance" }
+                .performClick()
+            idle()
+            val sheet = ShadowDialog.getLatestDialog()
+            assertNotNull(sheet)
+            val search = sheet.findViewById<EditText>(R.id.swDocPickerSearch)
+            assertNotNull("a search field appears above eight documents", search)
+            val list = sheet.findViewById<ViewGroup>(R.id.swDocPickerList)
+            assertEquals(10, list.childCount)
+            search.setText("Chooser doc 7")
+            idle()
+            assertEquals("filtered rows", 1, list.childCount)
+            assertEquals("Chooser doc 7", (list.getChildAt(0) as com.scanwhirl.app.ui.kit.DocCard).doc?.name)
+        }
+    }
+
+    @Test
+    fun `the vault tab shows the live state and the shared trust pill`() {
+        launch { activity ->
+            activity.findViewById<View>(R.id.swNavVault).performClick()
+            idle()
+            val status = activity.findViewById<TextView>(R.id.swVaultStatus)
+            assertNotNull("the vault status line exists", status)
+            assertEquals(activity.getString(R.string.vault_tab_not_setup), status.text.toString())
+
+            val vaultPill = (activity.findViewById<ViewGroup>(R.id.swTabContent)
+                .getChildAt(0) as ScrollView).getChildAt(0)
+                .let { vault -> findTrustPill(vault as ViewGroup) }
+            assertNotNull("the vault tab carries the trust pill", vaultPill)
+            assertEquals(
+                "same pill as the other tabs",
+                activity.getString(R.string.trust_offline_no_ads),
+                vaultPill!!.text.toString()
+            )
+        }
+    }
+
+    private fun findTrustPill(root: ViewGroup): TextView? {
+        for (i in 0 until root.childCount) {
+            val v = root.getChildAt(i)
+            if (v is com.scanwhirl.app.ui.kit.TrustPill) return v
+            if (v is ViewGroup) findTrustPill(v)?.let { return it }
+        }
+        return null
+    }
+
+    @Test
+    fun `no tool tag sits on its icon`() {
+        launch { activity ->
+            activity.findViewById<View>(R.id.swNavTools).performClick()
+            idle()
+            val body = activity.findViewById<View>(R.id.swToolsBody)
+            val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)
+            val dm = activity.resources.displayMetrics
+            val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+            val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+            repeat(2) { root.measure(w, h); root.layout(0, 0, dm.widthPixels, dm.heightPixels) }
+
+            var checked = 0
+            for (tile in ToolsHubScreen.tiles(body)) {
+                val tag = when {
+                    tile.soonTag.isVisible -> tile.soonTag
+                    tile.proTag.isVisible -> tile.proTag
+                    else -> null
+                } ?: continue
+                val inner = tile.iconView.parent as View
+                val iconRect = Rect(
+                    inner.left + tile.iconView.left,
+                    inner.top + tile.iconView.top,
+                    inner.left + tile.iconView.right,
+                    inner.top + tile.iconView.bottom
+                )
+                val tagRect = Rect(
+                    tag.left + tag.translationX.toInt(),
+                    tag.top + tag.translationY.toInt(),
+                    tag.right + tag.translationX.toInt(),
+                    tag.bottom + tag.translationY.toInt()
+                )
+                assertFalse(
+                    "${tile.tool?.id} tag overlaps its icon ($tagRect vs $iconRect)",
+                    Rect.intersects(iconRect, tagRect)
+                )
+                checked++
+            }
+            assertTrue("some tiles carry a tag ($checked)", checked > 0)
+        }
+    }
+    @Test
+    fun `the library list keeps room above the nav bar`() {
+        DocFixtures.saved(repo, app, pages = 1, name = "Bottom padding")
+        launch { activity ->
+            val list = activity.findViewById<ViewGroup>(R.id.swDocList)
+            val need = 90 * activity.resources.displayMetrics.density
+            assertTrue(
+                "the list's last card clears the nav/disc (${list.paddingBottom}px)",
+                list.paddingBottom >= need
+            )
+        }
     }
 }

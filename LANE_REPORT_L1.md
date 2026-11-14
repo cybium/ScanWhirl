@@ -1,7 +1,48 @@
 # L1 — Shell & look: lane report
 
 Branch `lane/L1-shell`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L1`.
-`integration` merged at the start of this session (L2/L3/L4/L5, Phone-QA build).
+`integration` merged at the start of both sessions (L2/L3/L4/L5, including L5's draft engine and Organize grid).
+
+## Done this session (after the folders/tags pass)
+
+### Merge
+- `git merge integration` clean; L5's `DraftStore`, Organize grid and page-grid draft code kept intact.
+
+### Items 11-15
+11. The kit document chooser now uses compact `DocCard` rows (`asCompact()`: 40×52 thumbnail, one-line name and
+    "N pages · size · date", lock badge, no category/buttons) inside a scrollable sheet, with a search field when
+    there are more than 8 documents. Every document tool uses it.
+12. Tools hub tags: the PRO/Soon tag sits in the tile's top-right corner; tiles reserve a 16dp top strip and grew to
+    96dp so the tag never intersects the icon and two-line labels stay fully visible. New test walks all 44 tiles and
+    asserts `Rect.intersects(tag, icon) == false`.
+13. Vault tab: the pill is the same "Offline · No ads" as every other tab; a live status line (`VaultSession` +
+    `VaultStore`: "Not set up yet" / "Locked" / "N documents · unlocked") sits under the emblem, plus an AES-256 /
+    locks-itself facts card, so the tab is no longer half empty. Refreshed on every open of the tab.
+14. Library list has its own 96dp bottom padding (`swDocList`) on top of the shell ScrollView's 112dp, so the last
+    card clears the nav bar and scan disc when scrolled to the end (test asserts the padding).
+15. Moving a document to Trash now confirms first, from the library (`confirmTrash`) and from the document screen:
+    "Move “name” to Trash?" / "You can restore it for 30 days. Nothing is uploaded." (test updated to confirm the
+    sheet). Trash's "Empty Trash" already requires the SwSheet confirm ("Delete N documents for good?") and is
+    enabled only when the Trash has items.
+
+## Earlier in this lane (still in place)
+- Folders & tags (Pro): folder/tag meta lines, folder chips with rename/delete, tag sheets, selection mode, tag
+  search, Free → Pro gating.
+- Batch rename (Pro): `{name} {n} {date}`, live preview, apply + Undo snackbar.
+- Phone QA 1-10: search (name/OCR/tag + empty text), persisted sort, IME hides nav, Searchable PDF tool, one kit
+  chooser, saved snackbar above the dock, opaque sheets, Text screen chips/Tidy/undo/To Word, category rail padding,
+  More-sheet icons + "Protect PDF".
+
+## Tests
+- `ShellQaFixesTest` now also covers: compact chooser + search past 8 docs, tag/icon bounds for every tile, Vault
+  live status + shared pill, list bottom padding. `DeleteExportsTest` confirms the new Trash sheet.
+- Full gate: `GATE PASS L1 tests=1135 failures=0 skipped=0 lint=[lint skipped (lead runs it at merge)]`.
+
+## Commits
+- `b475148` phone-review pass (icons, brand, quick/tools layout, Pro gating, Text chips)
+- `2fd4fbd` folders & tags, batch rename, phone-QA fixes 1-10
+- (this session) QA 11-15: compact chooser, tag bounds, Vault status, list padding, Trash confirms
+
 
 ## Done this session
 

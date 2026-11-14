@@ -154,6 +154,8 @@ class LibraryScreen(
         docList = LinearLayout(context).apply {
             id = R.id.swDocList
             orientation = VERTICAL
+            // The last card must clear the nav bar and the scan disc.
+            setPadding(0, 0, 0, SwStyle.dp(context, 96f))
         }
         addView(docList)
 

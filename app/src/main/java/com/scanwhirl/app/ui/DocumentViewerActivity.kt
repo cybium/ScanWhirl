@@ -1159,6 +1159,17 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             confirmVaultDelete(doc)
             return
         }
+        // v2 UI: 09_unlock_sheet — moving a document to Trash always asks first.
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(getString(R.string.shell_trash_title, doc.name))
+            .setMessage(R.string.shell_trash_note)
+            .setPrimary(R.string.shell_move_to_trash) { moveToTrash(doc) }
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+            .show()
+    }
+
+    private fun moveToTrash(doc: ScanDocument) {
         lifecycleScope.launch {
             val moved = withContext(NonCancellable + Dispatchers.IO) {
                 TrashActions.moveAll(repo, listOf(doc.id))

@@ -38,6 +38,10 @@ class DocCard(context: Context) : LinearLayout(context) {
     /** The selection check; visible only while the library is selecting this card. */
     val selectionBadge: ImageView
 
+    private val thumbFrame: FrameLayout
+    private val categoryRow: LinearLayout
+    private val actions: LinearLayout
+
     var doc: ScanDocument? = null
         private set
 
@@ -50,7 +54,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         isClickable = true
         isFocusable = true
 
-        val thumbFrame = FrameLayout(context).apply {
+        thumbFrame = FrameLayout(context).apply {
             background = SwStyle.rounded(context, SwStyle.color(context, R.color.sw_paper_thumb), radiusDp = 9f)
             clipToOutline = true
         }
@@ -149,7 +153,7 @@ class DocCard(context: Context) : LinearLayout(context) {
                 .apply { topMargin = (4 * d).toInt() }
         )
 
-        val categoryRow = LinearLayout(context).apply {
+        categoryRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -172,7 +176,7 @@ class DocCard(context: Context) : LinearLayout(context) {
 
         addView(info, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        val actions = LinearLayout(context).apply {
+        actions = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -233,6 +237,22 @@ class DocCard(context: Context) : LinearLayout(context) {
                 SwStyle.color(context, if (document.isLocked) R.color.sw_thumb_locked else R.color.sw_paper_thumb)
             )
         }
+    }
+
+    /**
+     * v2 UI: 03_tools_hub — compact row for the kit document chooser: 40×52
+     * thumbnail, one-line name and meta, lock badge, no category or buttons.
+     */
+    fun asCompact(): DocCard = apply {
+        val d = resources.displayMetrics.density
+        setPadding((8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt())
+        thumbFrame.layoutParams = LayoutParams((40 * d).toInt(), (52 * d).toInt())
+            .apply { marginEnd = (12 * d).toInt() }
+        categoryRow.visibility = View.GONE
+        actions.visibility = View.GONE
+        selectionBadge.visibility = View.GONE
+        nameView.maxLines = 1
+        metaView.maxLines = 1
     }
 
     /**

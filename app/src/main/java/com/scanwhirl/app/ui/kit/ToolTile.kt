@@ -81,8 +81,8 @@ class ToolTile(context: Context) : FrameLayout(context) {
         soonTag.id = R.id.swToolSoonTag
         addView(proTag, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.TOP or Gravity.END
-            topMargin = (6 * d).toInt()
-            marginEnd = (6 * d).toInt()
+            topMargin = 0
+            marginEnd = 0
         })
         addView(soonTag, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.TOP or Gravity.END
@@ -102,6 +102,14 @@ class ToolTile(context: Context) : FrameLayout(context) {
         // Only the icon + label fade on a Soon tile; the tag stays readable.
         inner.alpha = if (soon) 0.55f else 1f
         alpha = 1f
+        // Hub tiles: reserve the top corner for the tag so it never sits on the glyph.
+        if (!quick) {
+            val shown = proTag.isVisible || soonTag.isVisible
+            (iconView.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                lp.topMargin = if (shown) SwStyle.dp(context, 16f) else 0
+                iconView.layoutParams = lp
+            }
+        }
         contentDescription = buildString {
             append(labelView.text)
             if (tool.pro) append(", ").append(context.getString(R.string.badge_pro))
@@ -126,6 +134,7 @@ class ToolTile(context: Context) : FrameLayout(context) {
 
     /** Home quick row variant: a 52dp circle behind the glyph, label underneath. */
     fun asQuick() {
+        quick = true
         background = SwStyle.rounded(context, Color.TRANSPARENT, radiusDp = 14f)
         // No side padding: six equal columns must fit a 360dp phone exactly.
         inner.setPadding(0, SwStyle.dp(context, 4f), 0, 0)
@@ -162,6 +171,9 @@ class ToolTile(context: Context) : FrameLayout(context) {
             SwStyle.color(context, if (tool?.status == ToolStatus.SOON) R.color.text_hologram_dim else R.color.cyan_primary)
         )
     }
+
+    /** True once [asQuick] turned this into the Home circle tile. */
+    private var quick = false
 
     private fun tagView(context: Context, text: String, gold: Boolean): TextView =
         SwStyle.text(

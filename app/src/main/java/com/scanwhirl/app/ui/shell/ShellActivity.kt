@@ -323,7 +323,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 scroll(library)
             }
             Tab.TOOLS -> scroll(toolsHub)
-            Tab.VAULT -> scroll(vaultScreen)
+            Tab.VAULT -> {
+                vaultScreen.refreshStatus()
+                scroll(vaultScreen)
+            }
             Tab.ME -> scroll(meScreen)
         }
         setContent(view)
@@ -644,13 +647,101 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 .show()
             return
         }
-        SwSheet.builder(this)
+        val sheet = SwSheet.builder(this)
             .setTitle(getString(R.string.tool_pick_document))
-            .setOptions(docs.take(10).map { it.name }) { which, _ -> onPick(docs[which]) }
             .setSecondary(R.string.sheet_cancel)
             .build()
-            .show()
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val rows = LinearLayout(this).apply {
+            id = R.id.swDocPickerList
+            orientation = LinearLayout.VERTICAL
+        }
+        var filt = ""
+        fun render() {
+            rows.removeAllViews()
+            val q = filt.trim().lowercase()
+            for (doc in docs.filter { q.isEmpty() || it.name.lowercase().contains(q) }.take(50)) {
+                val pages = resources.getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
+                val meta = "$pages · ${sizeLabel(doc)} · ${dayLabel(doc)}"
+                val card = com.scanwhirl.app.ui.kit.DocCard(this).apply {
+                    asCompact()
+                    bind(doc, meta, onShare = {}, onMore = {})
+                    setOnClickListener {
+                        sheet.dismiss()
+                        onPick(doc)
+                    }
+                }
+                rows.addView(
+                    card,
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = SwStyle.dp(this@ShellActivity, 6f) }
+                )
+            }
+        }
+        if (docs.size > 8) {
+            val search = android.widget.EditText(this).apply {
+                id = R.id.swDocPickerSearch
+                hint = getString(R.string.home_search_hint)
+                setHintTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_dim))
+                setTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_hi))
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
+                background = SwStyle.rounded(
+                    this@ShellActivity,
+                    SwStyle.color(this@ShellActivity, R.color.glass_surface_raised),
+                    radiusDp = 14f,
+                    stroke = SwStyle.color(this@ShellActivity, R.color.sw_cyan_hair)
+                )
+                setPadding(
+                    SwStyle.dp(this@ShellActivity, 12f), SwStyle.dp(this@ShellActivity, 10f),
+                    SwStyle.dp(this@ShellActivity, 12f), SwStyle.dp(this@ShellActivity, 10f)
+                )
+                addTextChangedListener(object : android.text.TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                    override fun afterTextChanged(s: android.text.Editable?) {
+                        filt = s?.toString().orEmpty()
+                        render()
+                    }
+                })
+            }
+            body.addView(
+                search,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = SwStyle.dp(this@ShellActivity, 8f) }
+            )
+        }
+        val scroll = androidx.core.widget.NestedScrollView(this).apply {
+            isFillViewport = false
+            addView(rows)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ShellActivity, 360f)
+            )
+        }
+        body.addView(scroll)
+        render()
+        sheet.setContent(body)
+        sheet.show()
     }
+
+    private fun sizeLabel(doc: ScanDocument): String {
+        val bytes = runCatching {
+            if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
+        }.getOrDefault(0L)
+        return when {
+            bytes >= 1024 * 1024 -> String.format(java.util.Locale.getDefault(), "%.1f MB", bytes / 1048576f)
+            bytes >= 1024 -> "${bytes / 1024} KB"
+            bytes > 0 -> "$bytes B"
+            else -> "0 B"
+        }
+    }
+
+    private fun dayLabel(doc: ScanDocument): String =
+        java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault())
+            .format(java.util.Date(doc.createdAt))
 
     // ---- HomeHost ---------------------------------------------------------
 

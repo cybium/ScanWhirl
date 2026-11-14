@@ -157,7 +157,7 @@
     <string name="shell_open">Open</string>
     <string name="shell_move_to_trash">Move to Trash</string>
     <string name="shell_trash_title">Move “%1$s” to Trash?</string>
-    <string name="shell_trash_note">It stays in Trash for 30 days. Nothing is uploaded.</string>
+    <string name="shell_trash_note">You can restore it for 30 days. Nothing is uploaded.</string>
     <string name="shell_moved_to_trash">Moved to Trash</string>
     <string name="reader_dock_pages">Pages</string>
     <string name="reader_dock_text">Text</string>
@@ -228,6 +228,16 @@
     <string name="make_searchable_action">Make it</string>
     <string name="make_searchable_done">%1$s is searchable now</string>
     <string name="make_searchable_unavailable">%1$s has no recognised text yet. Open its Text screen first.</string>
+    <string name="vault_tab_status_loading">Checking…</string>
+    <string name="vault_tab_not_setup">Not set up yet</string>
+    <string name="vault_tab_locked">Locked</string>
+    <string name="vault_tab_aes">AES-256 on this phone</string>
+    <string name="vault_tab_relock">Locks itself when you leave</string>
+
+    <plurals name="vault_tab_unlocked">
+        <item quantity="one">%1$d document · unlocked</item>
+        <item quantity="other">%1$d documents · unlocked</item>
+    </plurals>
 
     <plurals name="sel_count">
         <item quantity="one">%1$d selected</item>

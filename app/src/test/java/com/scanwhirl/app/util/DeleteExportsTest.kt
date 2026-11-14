@@ -70,6 +70,13 @@ class DeleteExportsTest {
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             ensureLoaded(scenario)
             scenario.onActivity { activity -> tapMoreDelete(activity) }
+            // v2 UI: 09_unlock_sheet — moving to Trash now confirms in a sheet.
+            scenario.onActivity { activity ->
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("the trash confirm sheet opens", sheet)
+                sheet!!.findViewById<View>(R.id.swSheetPrimary).performClick()
+            }
             assertTrue("document leaves the library", poll { repo.getDocument(id) == null })
         }
         assertEquals("it is in Trash, whole", listOf(id), repo.listTrash().map { it.originalId })

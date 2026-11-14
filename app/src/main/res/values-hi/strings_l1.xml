@@ -227,6 +227,16 @@
     <string name="make_searchable_action"><!-- review -->बनाएँ</string>
     <string name="make_searchable_done"><!-- review -->%1$s अब खोजने योग्य है</string>
     <string name="make_searchable_unavailable"><!-- review -->%1$s का टेक्स्ट अभी पहचाना नहीं गया। पहले उसकी टेक्स्ट स्क्रीन खोलें।</string>
+    <string name="vault_tab_status_loading"><!-- review -->देख रहे हैं…</string>
+    <string name="vault_tab_not_setup"><!-- review -->अभी सेट नहीं है</string>
+    <string name="vault_tab_locked"><!-- review -->लॉक है</string>
+    <string name="vault_tab_aes"><!-- review -->इस फ़ोन पर AES-256</string>
+    <string name="vault_tab_relock"><!-- review -->ऐप छोड़ने पर अपने आप लॉक</string>
+
+    <plurals name="vault_tab_unlocked">
+        <item quantity="one"><!-- review -->%1$d दस्तावेज़ · खुला है</item>
+        <item quantity="other"><!-- review -->%1$d दस्तावेज़ · खुले हैं</item>
+    </plurals>
 
     <plurals name="sel_count">
         <item quantity="one"><!-- review -->%1$d चुना गया</item>
