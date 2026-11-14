@@ -513,9 +513,14 @@ class UiSmokeTest {
                 activity.commitPendingDelete()
             }
             val gone = pollUntil {
-                repo.listDocuments().first { it.id == id }.pageFiles.size == 2
+                runBlocking { repo.draftPages(id) }.size == 2
             }
-            assertTrue("page file should be deleted after the Undo window", gone)
+            assertTrue("page file should be deleted from the draft after the Undo window", gone)
+            assertEquals(
+                "the saved document must keep all three pages",
+                3,
+                repo.listDocuments().first { it.id == id }.pageFiles.size
+            )
         }
     }
 
@@ -902,14 +907,18 @@ class UiSmokeTest {
             }
 
             val cropped = pollUntil {
-                // The crop rewrites the file in place; a poll may catch the
-                // zero-length window, when listDocuments() omits the page.
-                val page = repo.listDocuments().firstOrNull { it.id == id }
-                    ?.pageFiles?.firstOrNull() ?: return@pollUntil false
+                // The crop writes a draft replacement; the base page is never rewritten.
+                val page = runBlocking { repo.draftPages(id) }.firstOrNull() ?: return@pollUntil false
                 val size = com.scanwhirl.app.util.ImageTools.imageSize(page.readBytes())
                 size != null && size.first in 240..256 && size.second in 360..376
             }
-            assertTrue("page should be cropped to ~(248, 368)", cropped)
+            assertTrue("page should be cropped to ~(248, 368) in the draft", cropped)
+            val basePage = repo.listDocuments().first { it.id == id }.pageFiles.first()
+            assertEquals(
+                "the saved page must keep its size",
+                310 to 444,
+                com.scanwhirl.app.util.ImageTools.imageSize(basePage.readBytes())
+            )
         }
     }
 
@@ -1123,9 +1132,14 @@ class UiSmokeTest {
                 activity.commitPendingDelete()
             }
             val gone = pollUntil {
-                repo.listDocuments().first { it.id == id }.pageFiles.size == 1
+                runBlocking { repo.draftPages(id) }.size == 1
             }
-            assertTrue("page file should be deleted after the Undo window", gone)
+            assertTrue("page file should be deleted from the draft after the Undo window", gone)
+            assertEquals(
+                "the saved document must keep both pages",
+                2,
+                repo.listDocuments().first { it.id == id }.pageFiles.size
+            )
         }
     }
 
@@ -1154,6 +1168,10 @@ class UiSmokeTest {
                 repo.listDocuments().first { it.id == id }.pageFiles.size == 2
             }
             assertTrue("page must survive an Undo", stillThere)
+            assertNull(
+                "Undo means no page edit was recorded in a draft",
+                runBlocking { repo.draftOf(id) }
+            )
         }
     }
 
@@ -1177,15 +1195,27 @@ class UiSmokeTest {
                 activity.reorderPages(0, 3)
             }
             val persisted = pollUntil {
-                val pages = repo.listDocuments().first { it.id == doc.id }.pageFiles
+                val pages = runBlocking { repo.draftPages(doc.id) }
                 pages.size == 4 &&
                     dominantColor(pages[0]) == "green" &&
                     dominantColor(pages[3]) == "red"
             }
-            val pages = repo.listDocuments().first { it.id == doc.id }.pageFiles
+            val pages = runBlocking { repo.draftPages(doc.id) }
             assertTrue(
-                "order not persisted: ${pages.joinToString { dominantColor(it) }}",
+                "order not persisted in the draft: ${pages.joinToString { dominantColor(it) }}",
                 persisted
+            )
+            assertEquals(
+                "the saved document still starts with red",
+                "red",
+                dominantColor(repo.listDocuments().first { it.id == doc.id }.pageFiles.first())
+            )
+            // Saving the draft is the only step that changes a copy.
+            val saved = runBlocking { repo.saveDraftAsNew(doc.id, null) }
+            assertEquals(
+                "the saved copy has the dragged order",
+                listOf("green", "blue", "yellow", "red"),
+                saved.pageFiles.map { dominantColor(it) }
             )
         }
     }
