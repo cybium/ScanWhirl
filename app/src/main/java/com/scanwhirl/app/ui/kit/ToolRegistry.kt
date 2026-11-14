@@ -130,7 +130,7 @@ object ToolRegistry {
                 }
             }
         ),
-        soon("business_card", ToolGroup.CREATE, R.string.tool_business_card, R.drawable.ic_sym_contacts, "business card contact email phone", pro = true, note = R.string.soon_business_card),
+        ready("business_card", ToolGroup.CREATE, R.string.tool_business_card, R.drawable.ic_sym_contacts, "business card contact email phone", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Organize (8)
         ready("merge", ToolGroup.ORGANIZE, R.string.tool_merge, R.drawable.ic_sym_call_merge, "merge join combine together", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
@@ -204,10 +204,9 @@ object ToolRegistry {
         ),
         ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
-        // Text (3)
+        // Text (2)
         ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy"),
-        soon("hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language, "hindi devanagari text", note = R.string.soon_hindi_text),
-        soon("translate", ToolGroup.TEXT, R.string.tool_translate, R.drawable.ic_sym_translate, "translate language", pro = true, note = R.string.soon_translate)
+        soon("hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language, "hindi devanagari text", note = R.string.soon_hindi_text)
     )
 
     private val byId: Map<String, SwTool> = all.associateBy { it.id }

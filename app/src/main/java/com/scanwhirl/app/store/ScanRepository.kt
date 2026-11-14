@@ -17,6 +17,7 @@ import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PageStamp
@@ -1159,12 +1160,22 @@ class ScanRepository(private val context: Context) {
     }
 
     /** Copies a document (pages + PDF) into a brand-new one. Used by "Save as new". */
+    /** The unique name for a tool output, stacking-free ([OutputNames]). */
+    fun outputName(baseName: String, toolLabel: String): String =
+        OutputNames.forTool(baseName, toolLabel, listDocuments(includeVaulted = true).map { it.name })
+
+    private fun existingDocumentNames(): List<String> =
+        listDocuments(includeVaulted = true).map { it.name }
+
     suspend fun duplicateDocument(id: String, suggestedName: String?): ScanDocument =
         withContext(Dispatchers.IO) {
             val src = File(docsDir, id)
             if (loadDocument(src) == null) throw IllegalStateException("Scan not found")
+            val sourceDoc = loadDocument(src)
             val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
-                ?: nextDocumentName()
+                ?: OutputNames.forTool(
+                    sourceDoc?.name ?: "Scan", "Copy", existingDocumentNames()
+                )
             // A copy keeps its original category when it has one.
             val inherited = File(src, "meta.txt").readLines().getOrNull(2)
                 ?.takeIf { CategoryRules.isValid(it) }
@@ -1204,7 +1215,10 @@ class ScanRepository(private val context: Context) {
             require(indices.isNotEmpty()) { "No pages selected" }
             require(indices.all { it in doc.pageFiles.indices }) { "No such page" }
 
-            val name = extractedName(doc.name, indices)
+            val first = indices.first() + 1
+            val last = indices.last() + 1
+            val label = if (first == last) "Page $first" else "Pages $first-$last"
+            val name = OutputNames.forTool(doc.name, label, existingDocumentNames())
             val chosen = indices.map { doc.pageFiles[it] }
             buildAndPublish(name, doc.category, chosen.sumOf { it.length() }) { staging ->
                 chosen.forEachIndexed { i, f -> stagePageCopy(f, staging, i) }
@@ -1658,7 +1672,7 @@ class ScanRepository(private val context: Context) {
     ): ScanDocument = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
-        buildAndPublish("${doc.name} (compressed)", null, doc.pageFiles.sumOf { it.length() }) { staging ->
+        buildAndPublish(outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }) { staging ->
             // One page's bytes are alive at a time; the source list is never materialised.
             doc.pageFiles.forEachIndexed { i, file ->
                 stagePageBytes(ImageTools.recompressJpeg(file.readBytes(), quality, maxDim), staging, i)
@@ -2345,7 +2359,9 @@ class ScanRepository(private val context: Context) {
             }
             ranges.map { span ->
                 val chosen = span.indices().map { doc.pageFiles[it] }
-                val name = "${doc.name} (${PageRanges.label(span)})"
+                val label = PageRanges.label(span)
+                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+                val name = OutputNames.forTool(doc.name, label, existingDocumentNames())
                 buildAndPublish(name, doc.category, chosen.sumOf { it.length() }) { staging ->
                     chosen.forEachIndexed { i, f -> stagePageCopy(f, staging, i) }
                 }
@@ -2556,7 +2572,7 @@ class ScanRepository(private val context: Context) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
-        buildAndPublish("${doc.name} (clean)", doc.category, doc.pageFiles.sumOf { it.length() }) { staging ->
+        buildAndPublish(outputName(doc.name, "Clean"), doc.category, doc.pageFiles.sumOf { it.length() }) { staging ->
             doc.pageFiles.forEachIndexed { i, page ->
                 val bitmap = BitmapFactory.decodeFile(page.path)
                     ?: throw IllegalStateException("Page ${page.name} can't be read")

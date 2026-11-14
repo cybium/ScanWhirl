@@ -86,7 +86,6 @@
     <string name="tool_remove_metadata">Remove metadata</string>
     <string name="tool_read_text">Read text</string>
     <string name="tool_hindi_text">Hindi text</string>
-    <string name="tool_translate">Translate</string>
 
     <string name="tool_coming_soon_title">Coming soon</string>
     <string name="tool_soon_tag">Soon</string>
@@ -99,7 +98,6 @@
     <string name="soon_to_excel">Turn table text into an Excel sheet.</string>
     <string name="soon_pdfa">Save a PDF/A archive copy that opens for decades.</string>
     <string name="soon_hindi_text">Read Hindi text as well as English, on this phone.</string>
-    <string name="soon_translate">Translate a page on this phone, with no upload.</string>
     <string name="soon_generic">This tool is being built. It will be here soon.</string>
 
     <string name="pro_title_prefix">ScanWhirl </string>

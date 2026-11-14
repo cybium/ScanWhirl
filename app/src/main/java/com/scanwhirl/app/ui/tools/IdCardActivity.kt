@@ -91,11 +91,9 @@ class IdCardActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
         setContentView(buildRoot())
-        if (suppressScannerForTest) {
-            showFrontSheet()
-        } else {
-            scan(Side.FRONT)
-        }
+        // The first step is always the choice sheet: people without a good camera angle can use
+        // the gallery, and the camera opens only when they ask for it.
+        showFrontSheet()
     }
 
     // ---- screen -----------------------------------------------------------
@@ -322,7 +320,7 @@ class IdCardActivity : BaseActivity() {
         SwSheet.builder(this)
             .setTitle(R.string.tools_id_front_title)
             .setMessage(R.string.tools_id_front_msg)
-            .setPrimary(R.string.tools_id_scan_front) { scan(Side.FRONT) }
+            .setPrimary(R.string.tools_id_scan_camera) { scan(Side.FRONT) }
             .setSecondary(R.string.tools_id_pick_gallery) { pickFromGallery(Side.FRONT) }
             .build()
             .show()
@@ -332,22 +330,22 @@ class IdCardActivity : BaseActivity() {
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.tools_id_back_title)
             .setMessage(R.string.tools_id_back_msg)
-            .setPrimary(R.string.tools_id_scan_back) { scan(Side.BACK) }
-            .setSecondary(R.string.tools_id_front_only) { showLayoutSheet() }
+            .setPrimary(R.string.tools_id_scan_camera) { scan(Side.BACK) }
+            .setSecondary(R.string.tools_id_pick_gallery) { pickFromGallery(Side.BACK) }
             .build()
-        val galleryRow = SwStyle.text(
+        val frontOnly = SwStyle.text(
             this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true
         ).apply {
-            text = getString(R.string.tools_id_pick_back_gallery)
+            text = getString(R.string.tools_id_front_only)
             gravity = Gravity.CENTER
             minimumHeight = SwStyle.dp(this@IdCardActivity, 44f)
             isClickable = true
             setOnClickListener {
                 sheet.dismiss()
-                pickFromGallery(Side.BACK)
+                showLayoutSheet()
             }
         }
-        sheet.setContent(galleryRow)
+        sheet.setContent(frontOnly)
         sheet.show()
     }
 
@@ -418,12 +416,6 @@ class IdCardActivity : BaseActivity() {
     }
 
     companion object {
-        /**
-         * Test seam: the ML Kit scanner cannot run under Robolectric, so the UI flow tests open
-         * the front sheet instead of the camera. Never set in the app.
-         */
-        internal var suppressScannerForTest = false
-
         fun intent(context: Context): Intent = Intent(context, IdCardActivity::class.java)
     }
 }

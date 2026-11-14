@@ -193,6 +193,24 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         })
 
         showTab(Tab.LIBRARY)
+        revealFromIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        revealFromIntent(intent)
+    }
+
+    /**
+     * v2 UI: 01_home_A — "Show in library" from a tool result opens the Library tab with that
+     * document's card highlighted and scrolled into view.
+     */
+    private fun revealFromIntent(source: Intent?) {
+        val docId = source?.getStringExtra(EXTRA_SHOW_DOC_ID) ?: return
+        source.removeExtra(EXTRA_SHOW_DOC_ID)
+        showTab(Tab.LIBRARY)
+        library.revealDocument(docId)
     }
 
     override fun onResume() {
@@ -767,5 +785,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     override fun toast(message: CharSequence, duration: Int) {
         Toast.makeText(this, message, duration).show()
+    }
+
+    companion object {
+        /** A tool result asks the Library tab to highlight this document. */
+        const val EXTRA_SHOW_DOC_ID = "show_doc_id"
+
+        fun intent(context: android.content.Context, docId: String? = null): Intent =
+            Intent(context, ShellActivity::class.java).apply {
+                if (!docId.isNullOrBlank()) putExtra(EXTRA_SHOW_DOC_ID, docId)
+            }
     }
 }

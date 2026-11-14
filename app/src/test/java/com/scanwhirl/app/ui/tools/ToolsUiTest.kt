@@ -48,8 +48,9 @@ class ToolsUiTest {
     private val repo get() = ScanRepository(app)
 
     private val l4Tools = listOf(
-        "id_card", "passport", "merge", "split", "extract", "duplicate", "compress",
-        "pdf_to_images", "long_image", "to_word", "to_powerpoint", "zip", "remove_metadata"
+        "id_card", "business_card", "passport", "merge", "split", "extract", "duplicate",
+        "compress", "pdf_to_images", "long_image", "to_word", "to_powerpoint", "zip",
+        "remove_metadata"
     )
 
     @Before
@@ -110,6 +111,10 @@ class ToolsUiTest {
                 "id_card" -> assertEquals(
                     "$id must open the ID card capture flow",
                     IdCardActivity::class.java.name, started.component?.className
+                )
+                "business_card" -> assertEquals(
+                    "$id must open the business card flow",
+                    BusinessCardActivity::class.java.name, started.component?.className
                 )
                 else -> {
                     assertEquals(

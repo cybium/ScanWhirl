@@ -103,14 +103,14 @@ class ShellScreenTest {
     }
 
     @Test
-    fun `the tools hub holds all 44 tiles and every tile is wired`() {
+    fun `the tools hub holds all 43 tiles and every tile is wired`() {
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val tiles = ToolsHubScreen.tiles(body)
-            assertEquals(44, tiles.size)
-            assertEquals(44, tiles.mapNotNull { it.tool?.id }.toSet().size)
+            assertEquals(43, tiles.size)
+            assertEquals(43, tiles.mapNotNull { it.tool?.id }.toSet().size)
             for (tile in tiles) {
                 assertTrue("${tile.tool?.id} has no tap action", tile.hasOnClickListeners())
             }

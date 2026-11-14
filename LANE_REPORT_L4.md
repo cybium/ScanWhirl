@@ -1,121 +1,91 @@
-# LANE_REPORT_L4 — Tools engine (To PowerPoint, Word pictures, ID card flow)
+# LANE_REPORT_L4 — Tools engine (QA batch: ID card choice, names, library, locks)
 
-Session: 2026-11-14 (second continuation). Branch `lane/L4-tools`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L4`.
-Merged `integration` first (fast-forward); the lead's changes are kept: long-image part limit **16,000 px**
-(E20) and the split test's 7,000 px pages, home "ID card" routed through the registry.
+Session: 2026-11-15. Branch `lane/L4-tools`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L4`.
+Merged `integration` (fast-forward) and kept the lead's changes (slideshow icon, `SW_HOSTCHECK_DIR`,
+L1 count tests from the catalogue).
 
-## Done
+## Done this batch (phone-QA feedback)
 
-### To PowerPoint (Pro, Convert) — `util/PptxWriter.kt` (new)
+### 1. ID card starts with a choice, not the camera
 
-A minimal, complete OOXML presentation with `java.util.zip` only:
+- Opening the tool now always shows the `SwSheet` **"Front side"** with **Scan with camera** and
+  **Pick from gallery**; the camera opens only when asked. The back step has the same two choices
+  plus a quiet **Front only** action. Works without a camera angle.
 
-- `[Content_Types].xml`, `_rels/.rels`, `ppt/presentation.xml` + rels;
-- one slide master (with its layout list, colour map, text styles), one blank slide layout, one theme;
-- one slide per page whose only shape is a picture of the page, fitted to the slide keeping aspect;
-- slide size follows the first page's aspect: A4 portrait **7,560,000 × 10,692,000 EMU**, landscape swapped;
-- the page's OCR text goes in the **speaker notes** when the page has text; that adds the notes
-  master and one notes slide per page (the same package stays valid without notes);
-- pages are encoded by a callback **one at a time** (sampled to ≤ 2000 px long side, JPEG 90), so a
-  long deck never holds every picture; the file is written as `.part` and renamed, failure deletes it.
+### 2. Stacking-free output names — `util/OutputNames.kt` (new)
 
-Registered as `to_powerpoint` (Convert, Pro, READY, my setup screen) with the "one slide per page,
-text in speaker notes" note. Strings in `strings_tools.xml` + Hindi.
+- `OutputNames.forTool(baseName, toolLabel, existingNames)` strips any suffix a previous tool added
+  (`- Compressed`, `(pages 2-3)`, `(signed)`, Hindi labels too), then appends ` - <label>`:
+  `Document 1 (page 1) (compressed) (signed) (watermarked)` becomes `Document 1 - Watermarked`.
+  A taken name gets ` (2)`, ` (3)` (case-insensitive).
+- Used by the repository's tool outputs: **Split** (`Contract - Pages 1-2` / `Contract - Page 4`),
+  **Extract**, **Compress** (both levels and the target-size path), **Remove metadata**, and the
+  default **Duplicate** name. The API is pure and ready for L5's stamp tools.
+- Old name assertions in `PageSelectTest`, `ScanRepositoryTest`, `ToolsEngineTest` were updated to
+  the new rule.
 
-> Icon: the tree has no Material "slideshow" drawable and `res/drawable/ic_sym_*` is L1's; the tool
-> uses the existing `ic_sym_table_chart` until L1 adds a dedicated icon.
+### 3. "Show in library" opens the Library tab and reveals the document
 
-### To Word — "Include page pictures"
+- `ToolResultActivity` sends the new document id to `ShellActivity`; the shell switches to the
+  Library tab and `LibraryScreen.revealDocument` highlights that card (cyan border), requests focus
+  and scrolls it into view. The highlight survives the shell's `onResume` reload.
+- Small L1-file edits were required: `ShellActivity` (intent extra + `onNewIntent`) and
+  `LibraryScreen` (reveal/highlight). No other shell behaviour changed.
 
-`exportWord(id, outFile, includePictures = true)` embeds each page's image (sampled ≤ 1600 px,
-JPEG 90) as an inline `w:drawing` fitted to the text column (9,638 twips = 6,120,130 EMU), followed
-by that page's OCR text. Pictures live in `word/media/page_NNN.jpg` with real document
-relationships. Off = the previous text-only export (no `word/media`, no jpg content type needed in
-practice). Both paths are written atomically; the setup screen has a kit-style toggle for it.
+### 4. Locked documents are no longer a dead end
 
-### ID card — the real flow (`ui/tools/IdCardActivity.kt`, new)
+- A locked row in the shared setup chooser shows a gold lock and its "N pages" line; tapping it opens
+  **L3's `UnlockSheet`**. A correct password unlocks the document in place (`repo.unlockPdf`), the
+  list refreshes and that document becomes the selection, so the tool continues. A wrong password
+  shows the tries-left line and changes nothing.
 
-1. Opening the tool starts Google's ML Kit document scanner (same integration as Scan; page limit 1,
-   JPEG, auto-crop) for the **front**. The scanner integration lives in `ui/tools` because
-   `tools/ScanLauncher.kt` is not this lane's file; it uses the identical `GmsDocumentScanning` client.
-2. After the front an `SwSheet` asks **"Add the back side?"** with *Scan back side* / *Front only*,
-   plus *Pick back side from gallery*; a cancelled scanner lands on a *Front side* sheet with
-   *Scan front side* / *Pick from gallery*, so the tool works without a camera.
-3. An `SwSheet` **Layout**: *Both sides on one page* (A4, real ID-1 85.6 × 54 mm boxes, front top,
-   back bottom, 24 px gap) or *Each side on its own page*. The choice is remembered in the tool's
-   own preference file (`IdCardPrefs`).
-4. The document is created through `ScanRepository.createDocument` (the publish path) and the
-   existing Result screen opens (Open · Share · Save · Show in library · Undo).
-5. `util/IdCard.kt` now draws into fixed **ID-1-proportioned** boxes, aspect preserved, never
-   stretched: `compose(front, back?)` (one A4 page; front only = front in the top slot) and
-   `composeSingle(side)` (one A4 page per side). The old one-page pixel test still passes.
+### 5. Count plurals (kept from the previous message)
 
-Cancelling the scanner, a gallery picker, a sheet or leaving the screen creates nothing.
+- `<plurals>` for every page/file/image/document count in setup lists, split/extract previews, the
+  long-image note and the result summary: **1 page** / **2 pages**, **1 file** / **2 files**,
+  **1 image** / **2 images**. `ToolsPluralsTest` pins the strings and the setup source list.
 
-## Tests added / updated
+### Earlier this session (already committed)
 
-- **`util/PptxWriterTest` (6)** — required parts, one slide per page with a picture referencing
-  `ppt/media/imageN.jpeg` (JPEG magic checked), **strict OPC validation** (every content-type
-  override names a real part, every relationship target resolves, unique ids), master→layout and
-  layout→master and master→theme relationships, landscape size, notes master + notes text (escaped),
-  failure leaves no visible file/`.part`, a non-image page is refused, deterministic parts.
-- **`store/ToolsEngineTest` (+4)** — Word with pictures: 2 media JPEGs, drawings + rels, text kept,
-  text-only export has no media, picture failure leaves no `.docx`; PowerPoint via the repository:
-  one slide per page, media, master/layout/theme, notes carry OCR text, locked source refused.
-- **`ui/tools/IdCardFlowTest` (6)** — front only → one A4 page (front colour on top, white bottom);
-  front+back one page → one page with both halves at the ID-1 boxes; "own pages" → two pages, colour
-  on each, layout remembered; leaving before Layout creates nothing; the front and back sheets carry
-  the expected scanner/gallery/front-only actions.
-- **`ui/tools/ToolsUiTest`** — To PowerPoint is READY and opens the setup screen; To Word's pictures
-  toggle exists and re-renders; ID card is expected to open the new capture flow.
-- **`store/HostSampleExportTest`** — builds `sample.pptx` and `sample.docx` from real fixtures (and
-  copies them to the Windows temp folder under WSL for the independent check).
-- Updated the L1 catalogue counts for the new tool: **44 tools, 19 Pro** (`ToolRegistryTest`,
-  `ShellScreenTest`).
+- **Business card** (Pro, Create, READY): ML Kit single-page capture + gallery, on-device OCR, pure
+  `ContactParser` (name, company, job, Indian/international phones, emails, website, address, OCR
+  noise, Hindi), editable kit form; **Save to contacts** (`ACTION_INSERT`, no permission),
+  **Share as vCard** (escaped vCard 3.0 via FileProvider), **Save card image** (document + Result).
+  Cancel creates nothing.
+- **Copy pass**: no long dash in user-visible strings; English copy <= 90 characters.
+
+## Tests added this batch
+
+- **`util/OutputNamesTest` (5)** — labels, no stacking (English and Hindi suffixes), uniqueness
+  `(2)`/`(4)`, case-insensitive, Hindi names/labels, odd input.
+- **`ui/tools/ShowInLibraryTest` (3)** — result sends the document id to the shell; the Library tab
+  shows the card highlighted (and not the Tools tab); the highlight survives a reload.
+- **`ui/tools/LockedSourceTest` (2)** — locked row has a lock icon, the unlock sheet opens, the right
+  password unlocks and selects the document; a wrong password shows the error and stays locked.
+- **`ToolsEngineTest` (+1)** — `compress` twice gives `Contract - Compressed` and
+  `Contract - Compressed (2)`; splitting the compressed copy gives `Contract - Pages 1-2` and
+  `... (2)` — no stacking.
+- `IdCardFlowTest` updated for the choice sheet (camera/gallery, Front only, layout).
 
 ## Gate result (last full run)
 
 ```
-tests: total=1046 failures=0 skipped=0
-GATE PASS L4 tests=1046 lint=[lint skipped (lead runs it at merge)]
+tests: total=1126 failures=0 skipped=0
+GATE PASS L4 tests=1126 lint=[lint skipped (lead runs it at merge)]
 ```
-
-## Host check (independent parsers, outside our code)
-
-Samples produced by `HostSampleExportTest` on this run:
-`C:\Users\Cybium\AppData\Local\Temp\scanwhirl-l4-hostcheck\{sample.pptx,sample.docx}`.
-
-```
-$ python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(z.testzip(), len(z.namelist()))" sample.pptx
-None 21
-$ python3 -c "... sample.docx"
-None 6
-
-$ python3 -c "from pptx import Presentation; ..."
-slides: 2
-size: 7560000 10692000
-shapes: [1, 1]
-pictures: [<MSO_SHAPE_TYPE.PICTURE: 13>, <MSO_SHAPE_TYPE.PICTURE: 13>]
-notes: ['text page_000.jpg', 'text page_001.jpg']
-
-$ python3 -c "from docx import Document; ..."
-paragraphs: 5
-inline shapes: 2
-text: ['', 'text page_000.jpg', '', '', 'text page_001.jpg']
-```
-
-python-pptx 1.0.2 and python-docx 1.2.0 are installed and open both files without repair prompts.
 
 ## Notes for the lead
 
-- Phone checks worth doing: scan a real specimen ID card front/back; verify the auto-cropped cards
-  sit in the ID-1 boxes and that "Each side on its own page" plus the remembered layout feel right.
-- PowerPoint icon: reuse `ic_sym_table_chart` (no L1 slideshow icon exists).
-- Home quick row "To Word" now opens the setup screen with the pictures toggle; the Text screen's
-  "To Word" (L1) is unchanged and remains text-only.
-- `LANE_REPORT.md` no longer exists on the branch; this is `LANE_REPORT_L4.md` as requested.
+- `ShellActivity` and `LibraryScreen` (L1 files) carry the small reveal change: one extra constant,
+  `onNewIntent`, and a `revealDocument` highlight. Please keep both sides on the next merge.
+- Locked sources still show the old "unlock first" message only if a tool is run against a document
+  that became locked elsewhere; the chooser itself now unlocks in place.
+- Phone checks worth doing: the ID card choice sheet on a dark card, a locked Split run, "Show in
+  library" from Merge, and a second Compress to see ` (2)`.
+- Business card still waits for the phone QA after this batch (as instructed).
 
 ## Commits
 
-- `32e4ff7` L4: To PowerPoint (minimal OOXML deck), Word page pictures, real ID card capture flow
+- `0808c52` L4: Business card (OCR form, contacts, vCard), count plurals, shorter tool copy
+- `e270c63` L4: ID card camera choice, stacking-free output names, library reveal, unlock locked sources
 - (this report) L4: report

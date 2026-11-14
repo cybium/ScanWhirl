@@ -71,7 +71,7 @@ class PageSelectTest {
         assertEquals("the selection only", 2, out.pageCount)
         assertEquals(
             "the name says which pages left",
-            "Contract (pages 1–3)",
+            "Contract - Pages 1-3",
             out.name
         )
         // Category inherited, like duplicateDocument.
@@ -103,7 +103,7 @@ class PageSelectTest {
         val out = repo.extractPages(src.id, listOf(1))
 
         assertEquals(1, out.pageCount)
-        assertEquals("Receipt (page 2)", out.name)
+        assertEquals("Receipt - Page 2", out.name)
         assertEquals(3, repo.getDocument(src.id)!!.pageCount)
     }
 
@@ -114,7 +114,7 @@ class PageSelectTest {
 
         // Unsorted input still yields pages 0 then 2 in disk order.
         val out = repo.extractPages(src.id, listOf(2, 0))
-        assertEquals("Sorted (pages 1–3)", out.name)
+        assertEquals("Sorted - Pages 1-3", out.name)
 
         runCatching { repo.extractPages(src.id, emptyList()) }
             .exceptionOrNull()

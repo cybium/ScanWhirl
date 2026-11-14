@@ -96,7 +96,7 @@ class ToolsEngineTest {
 
         val outputs = runBlocking { repo.splitByRange(id, ranges) }
 
-        assertEquals(listOf("Contract (pages 1-2)", "Contract (page 4)"), outputs.map { it.name })
+        assertEquals(listOf("Contract - Pages 1-2", "Contract - Page 4"), outputs.map { it.name })
         assertEquals(listOf(2, 1), outputs.map { it.pageCount })
         outputs.forEach {
             PdfInvariants.assertI1(repo, it.id)
@@ -125,6 +125,22 @@ class ToolsEngineTest {
         }
         assertTrue("a locked source must not be split", r.isFailure)
         assertEquals(before, repo.listDocuments().map { it.id }.toSet())
+    }
+
+    @Test
+    fun `tool outputs never stack suffixes and stay unique`() {
+        val id = DocFixtures.saved(repo, app, pages = 3, name = "Contract")
+
+        val first = runBlocking { repo.compressScan(id, 60, null) }
+        val second = runBlocking { repo.compressScan(id, 60, null) }
+        assertEquals("Contract - Compressed", first.name)
+        assertEquals("Contract - Compressed (2)", second.name)
+
+        val split = runBlocking { repo.splitByRange(first.id, listOf(PageRanges.Span(1, 2))) }
+        assertEquals("Contract - Pages 1-2", split.first().name)
+
+        val again = runBlocking { repo.splitByRange(first.id, listOf(PageRanges.Span(1, 2))) }
+        assertEquals("Contract - Pages 1-2 (2)", again.first().name)
     }
 
     // ---------------------------------------------------------------- PDF to images

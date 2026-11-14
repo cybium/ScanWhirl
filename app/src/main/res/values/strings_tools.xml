@@ -1,48 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- L4 tools lane strings. Every user-visible string of the tools engine and its screens lives here. -->
+<!-- L4 tools lane strings. Copy stays short: no long dash in user-visible text. -->
 <resources>
-    <string name="op_no_space">Not enough storage space. Free some space and try again.</string>
-    <string name="op_publish_failed">Could not add the new document. Try again.</string>
+    <string name="op_no_space">Not enough storage space. Free some and try again.</string>
+    <string name="op_publish_failed">Could not add the document. Try again.</string>
 
-    <!-- v2 UI: 03_tools_hub — shared setup screen -->
+    <!-- v2 UI: 03_tools_hub - shared setup screen -->
     <string name="tools_setup_back">Back</string>
     <string name="tools_setup_source">Source</string>
     <string name="tools_setup_options">Options</string>
-    <string name="tools_setup_doc_meta">%1$d pages · %2$s</string>
+    <plurals name="tools_setup_doc_meta">
+        <item quantity="one">%1$d page · %2$s</item>
+        <item quantity="other">%1$d pages · %2$s</item>
+    </plurals>
     <string name="tools_setup_no_docs">No documents yet. Scan something first.</string>
     <string name="tools_setup_pick_one">Choose a document first.</string>
+    <string name="tools_setup_locked">Locked</string>
     <string name="tools_setup_need_two">Choose at least two documents.</string>
     <string name="tools_setup_merge_device">Merge PDFs from this phone</string>
-    <string name="tools_setup_merge_note">Choose two or more documents. They are joined in the order you tap them.</string>
-    <string name="tools_setup_zip_note">Choose the documents to pack into one ZIP file.</string>
+    <string name="tools_setup_merge_note">Pick two or more documents. They join in the order you tap them.</string>
+    <string name="tools_setup_zip_note">Pick the documents to pack into one ZIP.</string>
     <string name="tools_setup_zip_name">ScanWhirl export</string>
     <string name="tools_setup_ranges_hint">1-3, 5, 8-</string>
-    <string name="tools_setup_ranges_example">Type the pages to use, for example 1-3, 5, 8-</string>
-    <string name="tools_setup_split_preview">%1$d new documents: %2$s</string>
-    <string name="tools_setup_extract_preview">%1$d pages kept: %2$s</string>
-    <string name="tools_setup_bad_ranges">Type page numbers like 1-3, 5, 8-</string>
+    <string name="tools_setup_ranges_example">Type pages, for example 1-3, 5, 8-</string>
+    <plurals name="tools_setup_split_preview">
+        <item quantity="one">%1$d new document: %2$s</item>
+        <item quantity="other">%1$d new documents: %2$s</item>
+    </plurals>
+    <plurals name="tools_setup_extract_preview">
+        <item quantity="one">%1$d page kept: %2$s</item>
+        <item quantity="other">%1$d pages kept: %2$s</item>
+    </plurals>
+    <string name="tools_setup_bad_ranges">Type pages like 1-3, 5, 8-</string>
     <string name="tools_setup_jpg">JPG</string>
     <string name="tools_setup_png">PNG</string>
     <string name="tools_setup_quality">Quality</string>
     <string name="tools_setup_quality_value">%1$d%%</string>
-    <string name="tools_setup_images_note">One page at a time. More than one page is packed into a ZIP.</string>
-    <string name="tools_setup_target_hint">Target size, e.g. 500 KB or 2 MB (optional)</string>
+    <string name="tools_setup_images_note">One page at a time. Several pages go in a ZIP.</string>
+    <string name="tools_setup_target_hint">Target size, e.g. 500 KB or 2 MB</string>
     <string name="tools_setup_bad_target">Type a size like 500 KB or 2 MB.</string>
     <string name="tools_setup_level_light">Light</string>
     <string name="tools_setup_level_medium">Medium</string>
     <string name="tools_setup_level_strong">Strong</string>
-    <string name="tools_setup_compress_note">A target size squeezes every page to fit; without one, the chosen quality is used.</string>
+    <string name="tools_setup_compress_note">A target size fits every page. Without one, quality is used.</string>
     <string name="tools_setup_name_hint">Name (optional)</string>
     <string name="tools_setup_long_calculating">Measuring the pages…</string>
-    <string name="tools_setup_long_note">Makes %1$d image(s), 1080 px wide, at most 16,000 px tall each. Nothing is squashed.</string>
+    <plurals name="tools_setup_long_note">
+        <item quantity="one">Makes %1$d image, 1080 px wide, up to 16,000 px tall.</item>
+        <item quantity="other">Makes %1$d images, 1080 px wide, up to 16,000 px tall.</item>
+    </plurals>
     <string name="tools_setup_long_failed">A page is too tall for one image. Reduce it first.</string>
-    <string name="tools_setup_word_note">Uses the recognised text: one paragraph per line and a page break between pages.</string>
+    <string name="tools_setup_word_note">One paragraph per OCR line, with a page break between pages.</string>
     <string name="tools_setup_word_pictures">Include page pictures</string>
-    <string name="tools_setup_word_pictures_note">Each page image is placed above the text of that page.</string>
-    <string name="tools_setup_pptx_note">One slide per page, each page fitted to the slide. The recognised text goes in the speaker notes.</string>
-    <string name="tools_setup_no_text">This document has no recognised text yet. Open it and read the text first.</string>
-    <string name="tools_setup_metadata_note">Creates a clean copy without EXIF, camera details or embedded thumbnails. The original stays as it is.</string>
-    <string name="tools_setup_id_note">Both sides go on one A4 page: the front on top, the back at the bottom.</string>
+    <string name="tools_setup_word_pictures_note">Each page image sits above the text of that page.</string>
+    <string name="tools_setup_pptx_note">One slide per page. The OCR text goes in the speaker notes.</string>
+    <string name="tools_setup_no_text">No recognised text yet. Open the document and read it first.</string>
+    <string name="tools_setup_metadata_note">A clean copy without EXIF or thumbnails. The original is kept.</string>
+    <string name="tools_setup_id_note">Front on top, back below, on one A4 page.</string>
     <string name="tools_setup_id_front">Front of the card</string>
     <string name="tools_setup_id_back">Back of the card</string>
     <string name="tools_setup_need_front">Choose the front of the card.</string>
@@ -54,28 +67,56 @@
     <string name="tools_setup_nothing">This tool has no options.</string>
     <string name="tools_id_card_name">ID card</string>
     <string name="tools_tool_to_powerpoint">To PowerPoint</string>
-    <string name="tools_id_hint">Scan the front, then add the back. Both sides go on one A4 page in real ID-1 proportions, or each side on its own page.</string>
+    <string name="tools_id_hint">Scan the front, then the back. Choose one page or one page per side.</string>
     <string name="tools_id_front_title">Front side</string>
-    <string name="tools_id_front_msg">Scan the front of the card, or pick a photo from the gallery.</string>
-    <string name="tools_id_scan_front">Scan front side</string>
+    <string name="tools_id_front_msg">Scan the front, or pick a photo from the gallery.</string>
+    <string name="tools_id_scan_camera">Scan with camera</string>
     <string name="tools_id_pick_gallery">Pick from gallery</string>
     <string name="tools_id_back_title">Add the back side?</string>
-    <string name="tools_id_back_msg">Most cards have a back side. It can go below the front on the same page.</string>
-    <string name="tools_id_scan_back">Scan back side</string>
+    <string name="tools_id_back_msg">A back side can go below the front on the same page.</string>
     <string name="tools_id_front_only">Front only</string>
-    <string name="tools_id_pick_back_gallery">Pick back side from gallery</string>
     <string name="tools_id_layout_title">Layout</string>
-    <string name="tools_id_layout_msg">How should the card be saved? Last time: %1$s.</string>
+    <string name="tools_id_layout_msg">How to save the card? Last time: %1$s.</string>
     <string name="tools_id_layout_one">Both sides on one page</string>
     <string name="tools_id_layout_own">Each side on its own page</string>
     <string name="tools_id_failed">Could not create the card: %1$s</string>
 
-    <!-- v2 UI: 03_tools_hub — result screen -->
+    <!-- v2 UI: 03_tools_hub - business card -->
+    <string name="tools_bc_hint">Scan a card, check the fields, then save or share it.</string>
+    <string name="tools_bc_scan_msg">Scan the card, or pick a photo from the gallery.</string>
+    <string name="tools_bc_scan">Scan card</string>
+    <string name="tools_bc_reading">Reading the card…</string>
+    <string name="tools_bc_no_text">No text was found. Try a sharper photo.</string>
+    <string name="tools_bc_failed">Could not read the card: %1$s</string>
+    <string name="tools_bc_name">Name</string>
+    <string name="tools_bc_company">Company</string>
+    <string name="tools_bc_job">Job title</string>
+    <string name="tools_bc_phone">Phone</string>
+    <string name="tools_bc_email">Email</string>
+    <string name="tools_bc_website">Website</string>
+    <string name="tools_bc_address">Address</string>
+    <string name="tools_bc_save_contact">Save to contacts</string>
+    <string name="tools_bc_share_vcard">Share as vCard</string>
+    <string name="tools_bc_save_image">Save card image</string>
+    <string name="tools_bc_need_name">Add a name first.</string>
+    <string name="tools_bc_contacts_failed">No contacts app can take this card.</string>
+    <string name="tools_bc_vcard_failed">Could not share the vCard: %1$s</string>
+    <string name="tools_bc_document_name">Business card</string>
+
+    <!-- v2 UI: 03_tools_hub - result screen -->
     <string name="tools_result_done">Done</string>
-    <string name="tools_result_summary_docs">%1$d documents · %2$d pages · %3$s</string>
-    <string name="tools_result_summary_one_doc">%1$d page · %2$s</string>
-    <string name="tools_result_summary_files">%1$d files · %2$s</string>
-    <string name="tools_result_summary_one_file">1 file · %1$s</string>
+    <plurals name="tools_result_summary_docs">
+        <item quantity="one">%1$d documents · %2$d page · %3$s</item>
+        <item quantity="other">%1$d documents · %2$d pages · %3$s</item>
+    </plurals>
+    <plurals name="tools_result_summary_one_doc">
+        <item quantity="one">%1$d page · %2$s</item>
+        <item quantity="other">%1$d pages · %2$s</item>
+    </plurals>
+    <plurals name="tools_result_summary_files">
+        <item quantity="one">%1$d file · %2$s</item>
+        <item quantity="other">%1$d files · %2$s</item>
+    </plurals>
     <string name="tools_result_open">Open</string>
     <string name="tools_result_share">Share</string>
     <string name="tools_result_save">Save</string>
@@ -87,8 +128,8 @@
     <string name="tools_result_save_failed">Could not save: %1$s</string>
     <string name="tools_result_undone">The new copy was removed.</string>
 
-    <!-- v2 UI: 03_tools_hub — passport crop preset -->
-    <string name="tools_passport_hint">Drag the four corners to the edges of the passport photo.</string>
+    <!-- v2 UI: 03_tools_hub - passport crop preset -->
+    <string name="tools_passport_hint">Drag the corners to the edges of the passport photo.</string>
     <string name="tools_passport_apply">Crop and save</string>
     <string name="tools_passport_name">Passport photo</string>
     <string name="tools_passport_failed">Could not crop the photo.</string>

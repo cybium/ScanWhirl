@@ -86,7 +86,6 @@
     <string name="tool_remove_metadata"><!-- review -->मेटाडेटा हटाएँ</string>
     <string name="tool_read_text"><!-- review -->टेक्स्ट पढ़ें</string>
     <string name="tool_hindi_text"><!-- review -->हिंदी टेक्स्ट</string>
-    <string name="tool_translate"><!-- review -->अनुवाद</string>
 
     <string name="tool_coming_soon_title"><!-- review -->जल्द आ रहा है</string>
     <string name="tool_soon_tag"><!-- review -->जल्द</string>
@@ -99,7 +98,6 @@
     <string name="soon_to_excel"><!-- review -->तालिका के टेक्स्ट को Excel शीट में बदलें।</string>
     <string name="soon_pdfa"><!-- review -->PDF/A संग्रह प्रति सहेजें जो वर्षों बाद भी खुले।</string>
     <string name="soon_hindi_text"><!-- review -->अंग्रेज़ी के साथ हिंदी टेक्स्ट भी इस फ़ोन पर पढ़ें।</string>
-    <string name="soon_translate"><!-- review -->बिना अपलोड पेज का इस फ़ोन पर अनुवाद करें।</string>
     <string name="soon_generic"><!-- review -->यह टूल बन रहा है। जल्द ही यहाँ होगा।</string>
 
     <string name="pro_title_prefix"><!-- review -->ScanWhirl </string>
