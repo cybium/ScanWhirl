@@ -128,7 +128,7 @@ class OcrStatusTest {
         Robolectric.buildActivity(OcrEditorActivity::class.java, editor(id, OcrEditorActivity.PROBLEM_UNAVAILABLE))
             .setup().use { c ->
                 val a = c.get()
-                assertTrue(status(a)!!.contains("not available on this device"))
+                assertTrue(status(a)!!.contains("not ready"))
                 assertTrue(retryVisible(a))
                 assertEquals("Not read", a.findViewById<TextView>(R.id.wordCount).text.toString())
                 val chips = a.findViewById<ChipGroup>(R.id.pageTabs)

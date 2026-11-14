@@ -70,16 +70,24 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <!-- v2 UI: 08_text_ocr — Page / Text switch. -->
+    <!-- v2 UI: 08_text_ocr — Page / Text switch, language chip on the right. -->
     <LinearLayout
+        android:id="@+id/ocrSegmentRow"
         android:layout_width="match_parent"
-        android:layout_height="38dp"
-        android:layout_marginStart="12dp"
-        android:layout_marginTop="6dp"
-        android:layout_marginEnd="12dp"
-        android:background="@drawable/bg_sw_segment"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="4dp">
+        android:paddingStart="12dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_sw_segment"
+            android:orientation="horizontal"
+            android:padding="4dp">
 
         <TextView
             android:id="@+id/ocrModePage"
@@ -109,6 +117,15 @@
             android:textColor="@color/cyan_primary"
             android:textSize="14sp"
             android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ocrLangHost"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal" />
     </LinearLayout>
 
     <!-- Page view: the scan itself while the text pane is hidden. -->
@@ -131,6 +148,13 @@
             android:contentDescription="@string/ocr_mode_page"
             android:padding="6dp"
             android:scaleType="fitCenter" />
+
+        <!-- v2 UI: 08_text_ocr — recognised line boxes over the page image. -->
+        <com.scanwhirl.app.ui.OcrLineOverlay
+            android:id="@+id/ocrPageOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="6dp" />
 
         <TextView
             android:id="@+id/ocrPagePaneNote"
@@ -165,152 +189,72 @@
         android:textColorHint="@color/text_hologram_dim"
         android:textSize="14sp" />
 
-    <!-- Word count + Undo/Redo row. -->
+    <!-- v2 UI: 08_text_ocr — Undo and Redo first, then the word count. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
+        android:paddingHorizontal="12dp"
         android:paddingTop="2dp"
-        android:paddingBottom="4dp">
+        android:paddingBottom="2dp">
+
+        <ImageButton
+            android:id="@+id/btnUndo"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/ocr_undo_desc"
+            android:src="@drawable/ic_sym_undo"
+            app:tint="@color/text_hologram_hi" />
+
+        <ImageButton
+            android:id="@+id/btnRedo"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/ocr_redo_desc"
+            android:src="@drawable/ic_sym_redo"
+            app:tint="@color/text_hologram_hi" />
 
         <TextView
             android:id="@+id/wordCount"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
             android:layout_weight="1"
-            android:textSize="12sp"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <ImageButton
-            android:id="@+id/btnUndo"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:src="@drawable/ic_undo"
-            android:contentDescription="@string/ocr_undo_desc"
-            app:tint="@color/text_hologram_hi"
-            android:background="?attr/selectableItemBackgroundBorderless" />
-
-        <ImageButton
-            android:id="@+id/btnRedo"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:src="@drawable/ic_redo"
-            android:contentDescription="@string/ocr_redo_desc"
-            app:tint="@color/text_hologram_hi"
-            android:background="?attr/selectableItemBackgroundBorderless" />
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Cleanup bar: Join lines · Fix spaces · Remove gaps. -->
+    <!-- v2 UI: 08_text_ocr — one "Tidy text" chip, the three fixes live in its sheet. -->
     <LinearLayout
+        android:id="@+id/ocrTidyRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
+        android:paddingHorizontal="12dp"
         android:paddingTop="2dp"
-        android:paddingBottom="4dp">
+        android:paddingBottom="4dp" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnJoinLines"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minHeight="48dp"
-            android:paddingHorizontal="8dp"
-            android:textSize="12sp"
-            android:maxLines="2"
-            android:text="@string/ocr_join_lines" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnFixSpaces"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minHeight="48dp"
-            android:paddingHorizontal="8dp"
-            android:textSize="12sp"
-            android:maxLines="2"
-            android:text="@string/ocr_fix_spaces" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnRemoveGaps"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minHeight="48dp"
-            android:paddingHorizontal="8dp"
-            android:textSize="12sp"
-            android:maxLines="2"
-            android:text="@string/ocr_remove_gaps" />
-    </LinearLayout>
-
-    <!-- v2 UI: 08_text_ocr — Copy · Share · Save · To Word. Horizontal scroll so
-         a 320dp phone at 200% text never squeezes a label (the mockup wraps). -->
+    <!-- v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word (chips). -->
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="16dp"
+        android:paddingHorizontal="12dp"
         android:paddingTop="2dp"
-        android:paddingBottom="2dp"
+        android:paddingBottom="4dp"
         android:scrollbars="none">
 
         <LinearLayout
+            android:id="@+id/ocrActions"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCopy"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="64dp"
-                android:minHeight="48dp"
-                android:paddingHorizontal="12dp"
-                android:text="@string/ocr_copy_btn" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnShare"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:minWidth="64dp"
-                android:minHeight="48dp"
-                android:paddingHorizontal="12dp"
-                android:text="@string/ocr_share_btn" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSave"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:minWidth="64dp"
-                android:minHeight="48dp"
-                android:paddingHorizontal="12dp"
-                android:text="@string/ocr_save_btn" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnToWord"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:minWidth="64dp"
-                android:minHeight="48dp"
-                android:paddingHorizontal="12dp"
-                android:text="@string/ocr_to_word_pro"
-                android:textColor="@color/gold_pro_primary" />
-        </LinearLayout>
+            android:orientation="horizontal" />
     </HorizontalScrollView>
 
-    <!-- v2 UI: 08_text_ocr — the honest footer. -->
+    <!-- v2 UI: 08_text_ocr — the honest footer, one short line. -->
     <TextView
         android:id="@+id/ocrFootNote"
         android:layout_width="match_parent"
@@ -322,6 +266,8 @@
         android:drawablePadding="6dp"
         android:drawableTint="@color/ok_green"
         android:fontFamily="@font/manrope"
+        android:maxLines="1"
+        android:singleLine="true"
         android:text="@string/ocr_foot_note"
         android:textColor="@color/text_hologram_dim"
         android:textSize="11.5sp"

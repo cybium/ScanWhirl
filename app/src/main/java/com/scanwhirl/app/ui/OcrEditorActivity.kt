@@ -228,6 +228,23 @@ class OcrEditorActivity : BaseActivity() {
         }
     }
 
+    /** v2 UI: 08_text_ocr — the language chip beside the Page/Text switch. */
+    private fun addLanguageChip() {
+        val chip = com.scanwhirl.app.ui.kit.SwChip(this).apply {
+            id = R.id.ocrLangChip
+            bind(R.drawable.ic_sym_language, getString(R.string.ocr_lang_english))
+            isClickable = false
+            isFocusable = false
+        }
+        binding.ocrLangHost.addView(
+            chip,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
+            )
+        )
+    }
+
     private fun setupPageTabs() {
         chipGroup = binding.pageTabs
         chipGroup.removeAllViews()
@@ -286,9 +303,88 @@ class OcrEditorActivity : BaseActivity() {
     }
 
     private fun setupCleanupBar() {
-        binding.btnJoinLines.setOnClickListener { applyCleanup { OcrCleanup.joinLines(it) } }
-        binding.btnFixSpaces.setOnClickListener { applyCleanup { OcrCleanup.fixSpaces(it) } }
-        binding.btnRemoveGaps.setOnClickListener { applyCleanup { OcrCleanup.removeGaps(it) } }
+        val chip = com.scanwhirl.app.ui.kit.SwChip(this).apply {
+            id = R.id.btnTidyText
+            bind(R.drawable.ic_sym_auto_fix_high, getString(R.string.ocr_tidy_text))
+            setOnClickListener { showTidySheet() }
+        }
+        binding.ocrTidyRow.addView(
+            chip,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
+            )
+        )
+    }
+
+    /** v2 UI: 08_text_ocr — the three text fixes live in one sheet. */
+    private fun showTidySheet() {
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.ocr_tidy_text)
+            .setContent(body)
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+        val rowId = intArrayOf(R.id.ocrTidyJoin, R.id.ocrTidySpaces, R.id.ocrTidyGaps)
+        val icons = intArrayOf(
+            R.drawable.ic_sym_notes_lines, R.drawable.ic_sym_format_list_numbered,
+            R.drawable.ic_sym_compress
+        )
+        val titles = intArrayOf(
+            R.string.ocr_join_lines, R.string.ocr_fix_spaces, R.string.ocr_remove_gaps
+        )
+        val descriptions = intArrayOf(
+            R.string.ocr_join_lines_desc, R.string.ocr_fix_spaces_desc, R.string.ocr_remove_gaps_desc
+        )
+        val actions = listOf<((String) -> String)>(
+            { OcrCleanup.joinLines(it) }, { OcrCleanup.fixSpaces(it) }, { OcrCleanup.removeGaps(it) }
+        )
+        for (i in 0..2) {
+            val row = LinearLayout(this).apply {
+                id = rowId[i]
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                isClickable = true
+                isFocusable = true
+                minimumHeight = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 56f)
+                setPadding(0, com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f), 0,
+                    com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f))
+                setOnClickListener {
+                    applyCleanup(actions[i])
+                    sheet.dismiss()
+                }
+            }
+            row.addView(
+                android.widget.ImageView(this).apply {
+                    setImageResource(icons[i])
+                    imageTintList = android.content.res.ColorStateList.valueOf(
+                        com.scanwhirl.app.ui.kit.SwStyle.color(this@OcrEditorActivity, R.color.cyan_primary)
+                    )
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                LinearLayout.LayoutParams(
+                    com.scanwhirl.app.ui.kit.SwStyle.dp(this, 22f),
+                    com.scanwhirl.app.ui.kit.SwStyle.dp(this, 22f)
+                ).apply { marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 12f) }
+            )
+            val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            text.addView(
+                com.scanwhirl.app.ui.kit.SwStyle.text(
+                    this, 15f,
+                    com.scanwhirl.app.ui.kit.SwStyle.color(this@OcrEditorActivity, R.color.text_hologram_hi),
+                    bold = true
+                ).apply { setText(titles[i]) }
+            )
+            text.addView(
+                com.scanwhirl.app.ui.kit.SwStyle.text(
+                    this, 12.5f,
+                    com.scanwhirl.app.ui.kit.SwStyle.color(this@OcrEditorActivity, R.color.text_hologram_dim)
+                ).apply { setText(descriptions[i]) }
+            )
+            row.addView(text, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            body.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        sheet.show()
     }
 
     private fun setupActionBar() {
@@ -297,16 +393,38 @@ class OcrEditorActivity : BaseActivity() {
         btnRedo = binding.btnRedo
         btnUndo.setOnClickListener { doUndo() }
         btnRedo.setOnClickListener { doRedo() }
-        binding.btnCopy.setOnClickListener { copyCurrent() }
-        binding.btnShare.setOnClickListener { shareCurrent() }
-        binding.btnSave.setOnClickListener { saveCurrent() }
-        binding.btnToWord.setOnClickListener {
-            com.scanwhirl.app.ui.kit.SwSheet.note(
-                this,
-                getString(R.string.ocr_to_word_pro),
-                getString(R.string.ocr_to_word_soon)
-            ).show()
+
+        // v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word as chips.
+        val actions = binding.ocrActions
+        fun chip(id: Int, icon: Int, label: Int, pro: Boolean = false): com.scanwhirl.app.ui.kit.SwChip {
+            val chip = com.scanwhirl.app.ui.kit.SwChip(this).apply {
+                this.id = id
+                bind(icon, getString(label))
+                if (pro) withProTag()
+            }
+            actions.addView(
+                chip,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
+                ).apply { marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f) }
+            )
+            return chip
         }
+        chip(R.id.btnCopy, R.drawable.ic_sym_content_copy, R.string.ocr_copy_btn)
+            .setOnClickListener { copyCurrent() }
+        chip(R.id.btnShare, R.drawable.ic_sym_share, R.string.ocr_share_btn)
+            .setOnClickListener { shareCurrent() }
+        chip(R.id.btnSave, R.drawable.ic_sym_notes, R.string.ocr_save_btn)
+            .setOnClickListener { saveCurrent() }
+        chip(R.id.btnToWord, R.drawable.ic_sym_description, R.string.ocr_to_word_pro, pro = true)
+            .setOnClickListener {
+                com.scanwhirl.app.ui.kit.SwSheet.note(
+                    this,
+                    getString(R.string.ocr_to_word_pro),
+                    getString(R.string.ocr_to_word_soon)
+                ).show()
+            }
         setupModeSwitch()
         updateWordCount()
         updateUndoRedoState()
@@ -315,6 +433,7 @@ class OcrEditorActivity : BaseActivity() {
     private fun setupModeSwitch() {
         binding.ocrModePage.setOnClickListener { setPageMode(true) }
         binding.ocrModeText.setOnClickListener { setPageMode(false) }
+        addLanguageChip()
         setPageMode(false)
     }
 
@@ -349,15 +468,47 @@ class OcrEditorActivity : BaseActivity() {
         val doc = docId?.let { repo.getDocument(it) }
         val file = doc?.pageFiles?.firstOrNull { it.name == key }
         val note = binding.ocrPagePaneNote
+        val overlay = binding.ocrPageOverlay
         if (file == null || !file.exists()) {
             binding.ocrPageImage.setImageDrawable(null)
+            overlay.setPage(emptyList(), 0, 0)
             note.isVisible = true
             return
         }
         note.isVisible = false
-        com.scanwhirl.app.ui.pagegrid.PageThumbLoader.load(
-            file, 1400, com.scanwhirl.app.util.ScanFilter.ORIGINAL, binding.ocrPageImage
-        )
+        val geometry = runCatching {
+            docId?.let { repo.ocrGeometry(it) }?.get(key)
+        }.getOrNull()
+        val token = key
+        lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                com.scanwhirl.app.util.ImageTools.decodeOriented(file, 1600)
+            }
+            if (token != currentPageKey || !pageMode) return@launch
+            if (bitmap == null) {
+                binding.ocrPageImage.setImageDrawable(null)
+                note.isVisible = true
+                return@launch
+            }
+            binding.ocrPageImage.setImageBitmap(bitmap)
+            overlay.setPage(
+                geometry?.lines.orEmpty(),
+                geometry?.width ?: bitmap.width,
+                geometry?.height ?: bitmap.height
+            )
+        }
+        overlay.onLineTap = { line -> jumpToLine(line) }
+    }
+
+    /** v2 UI: 08_text_ocr — a tapped line box opens the Text tab at that line. */
+    private fun jumpToLine(line: com.scanwhirl.app.model.OcrLine) {
+        setPageMode(false)
+        val text = editText.text.toString()
+        val at = text.indexOf(line.text)
+        if (at >= 0) {
+            editText.requestFocus()
+            editText.setSelection(at.coerceAtMost(text.length))
+        }
     }
 
     private fun updateSubtitle() {
@@ -374,7 +525,10 @@ class OcrEditorActivity : BaseActivity() {
     private fun showPage(key: String) {
         currentPageKey = key
         editText.hint = if (key in unreadKeys) getString(R.string.ocr_page_not_read_hint) else null
+        // Loading a page is not an edit: it must not fill the undo history.
+        applyingHistory = true
         editText.setText(pageTexts[key] ?: "")
+        applyingHistory = false
         editText.setSelection(editText.text.length)
         updatePageTabs()
         updateWordCount()
@@ -586,7 +740,7 @@ class OcrEditorActivity : BaseActivity() {
             val changedPages = pageTexts.filter { (k, v) -> v != (originalTexts[k] ?: "") }
             if (changedPages.isNotEmpty()) {
                 saving = true
-                binding.btnSave.isEnabled = false
+                findViewById<View>(R.id.btnSave).isEnabled = false
                 lifecycleScope.launch {
                     try {
                         withContext(NonCancellable + Dispatchers.IO) {
@@ -611,7 +765,7 @@ class OcrEditorActivity : BaseActivity() {
                             getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
                     } finally {
                         saving = false
-                        binding.btnSave.isEnabled = true
+                        findViewById<View>(R.id.btnSave).isEnabled = true
                     }
                 }
             } else if (finishAfterSave) finish()
@@ -637,7 +791,7 @@ class OcrEditorActivity : BaseActivity() {
         if (saving) return
         withStoragePermission {
             saving = true
-            binding.btnSave.isEnabled = false
+            findViewById<View>(R.id.btnSave).isEnabled = false
             lifecycleScope.launch {
                 try {
                     val saved = withContext(NonCancellable + Dispatchers.IO) {
@@ -650,13 +804,13 @@ class OcrEditorActivity : BaseActivity() {
                     }
                     Toast.makeText(this@OcrEditorActivity, message, Toast.LENGTH_LONG).show()
                     saving = false
-                    binding.btnSave.isEnabled = true
+                    findViewById<View>(R.id.btnSave).isEnabled = true
                     onSaved()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     saving = false
-                    binding.btnSave.isEnabled = true
+                    findViewById<View>(R.id.btnSave).isEnabled = true
                     Toast.makeText(
                         this@OcrEditorActivity,
                         getString(R.string.text_save_failed, e.message ?: e.javaClass.simpleName),

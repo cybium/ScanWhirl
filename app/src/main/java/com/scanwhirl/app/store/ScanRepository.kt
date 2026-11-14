@@ -1827,6 +1827,9 @@ class ScanRepository(private val context: Context) {
     /** OCR text of a document, when it exists: lines keyed by the page file name. */
     fun ocrDoc(id: String): Map<String, String> = ocrStore.readText(id)
 
+    /** Recognised line geometry per page key (empty when none was stored). */
+    fun ocrGeometry(id: String): Map<String, com.scanwhirl.app.model.OcrPage> = ocrStore.readGeo(id)
+
     /** True when this document has OCR text saved already. */
     fun hasOcr(id: String): Boolean = File(File(docsDir, id), "ocr.txt").exists()
 

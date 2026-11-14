@@ -1,0 +1,12 @@
+Material Symbols (Rounded, outlined and filled variants)
+========================================================
+
+The vector drawables in app/src/main/res/drawable/ic_sym_*.xml are from
+Google Material Symbols: https://fonts.google.com/icons
+
+Copyright Google LLC.
+Licensed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+
+You may obtain a copy of the License at the URL above. The icons are used
+unmodified, recoloured at runtime with the app's own tints.

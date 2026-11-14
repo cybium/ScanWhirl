@@ -93,7 +93,7 @@ abstract class ImportSheetBase {
             // order is still explained in Review, not in the chooser.
             val orderNote = sheet.findViewById<TextView>(R.id.importOrderNote)!!
             assertFalse("the order note is not shown in the chooser", orderNote.isVisible)
-            assertTrue(orderNote.text.contains("different order"))
+            assertTrue(orderNote.text.contains("page order"))
 
             val photosIcon = firstImage(sheet.findViewById(R.id.importPhotos))
             val pdfIcon = firstImage(sheet.findViewById(R.id.importPdf))

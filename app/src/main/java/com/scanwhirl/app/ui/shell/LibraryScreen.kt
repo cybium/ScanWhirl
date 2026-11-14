@@ -71,6 +71,16 @@ class LibraryScreen(
     private var category: String? = null
 
     private val quickIds = listOf("merge", "compress", "sign", "protect", "to_word", "read_text")
+
+    /** Short labels that fit one line in a sixth of a 360dp phone. */
+    private val quickLabels = mapOf(
+        "merge" to R.string.quick_merge,
+        "compress" to R.string.quick_compress,
+        "sign" to R.string.quick_sign,
+        "protect" to R.string.quick_protect,
+        "to_word" to R.string.quick_to_word,
+        "read_text" to R.string.quick_read_text
+    )
     private val maxDocCards = 60
     private val textCache by lazy { com.scanwhirl.app.store.OcrTextCache(repo) }
 
@@ -89,7 +99,7 @@ class LibraryScreen(
             id = R.id.swQuickRow
             orientation = HORIZONTAL
             gravity = Gravity.CENTER
-            val pad = SwStyle.dp(context, 12f)
+            val pad = SwStyle.dp(context, 8f)
             setPadding(pad, 0, pad, 0)
         }
         addView(quickRow)
@@ -191,8 +201,11 @@ class LibraryScreen(
             setPadding(padH, SwStyle.dp(context, 10f), padH, SwStyle.dp(context, 6f))
         }
         row.addView(
-            ImageView(context).apply { setImageResource(R.drawable.ic_whirl) },
-            LayoutParams(SwStyle.dp(context, 34f), SwStyle.dp(context, 34f))
+            ImageView(context).apply {
+                id = R.id.swBrandMark
+                setImageResource(R.drawable.ic_brand_mark)
+            },
+            LayoutParams(SwStyle.dp(context, 32f), SwStyle.dp(context, 32f))
                 .apply { marginEnd = SwStyle.dp(context, 10f) }
         )
         row.addView(
@@ -369,6 +382,7 @@ class LibraryScreen(
             tile.host = host
             tile.asQuick()
             tile.bind(tool)
+            quickLabels[id]?.let { tile.setLabel(context.getString(it)) }
             tile.layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
             quickRow.addView(tile)
         }
