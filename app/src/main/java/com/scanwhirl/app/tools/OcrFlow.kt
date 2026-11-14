@@ -13,6 +13,7 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.OcrEditorActivity
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrImagePrep
+import com.scanwhirl.app.util.OcrLanguageSettings
 import com.scanwhirl.app.util.PdfPageRenderer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -30,7 +31,9 @@ class OcrFlow(
     private val repo: ScanRepository,
     private val host: HomeHost,
     /** Seam so tests can exercise the picker flow without the ML Kit model. */
-    private val recognizeBitmap: suspend (Bitmap) -> String = OcrEngine::recognizeBitmap
+    private val recognizeBitmap: suspend (Bitmap) -> String = { bitmap ->
+        OcrEngine.recognizeBitmap(bitmap, OcrLanguageSettings.get(activity))
+    }
 ) {
 
     fun runOcrForScan(doc: ScanDocument) {
@@ -67,7 +70,9 @@ class OcrFlow(
                         val count = PdfPageRenderer.pageCount(fd)
                         (0 until count).mapNotNull { i ->
                             val page = PdfPageRenderer.renderPageJpeg(fd, i, 200f, 2400, 92)
-                            val t = OcrEngine.recognizeBytes(page).trim()
+                            val t = OcrEngine
+                                .recognizeBytes(page, OcrLanguageSettings.get(activity))
+                                .trim()
                             if (t.isEmpty()) null else "--- Page ${i + 1} ---\n$t"
                         }
                     }

@@ -206,7 +206,21 @@ object ToolRegistry {
 
         // Text (2)
         ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy"),
-        soon("hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language, "hindi devanagari text", note = R.string.soon_hindi_text)
+        SwTool(
+            "hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language,
+            false, ToolStatus.READY, "hindi devanagari text read ocr",
+            launch = { host, tool ->
+                val activity = host as? androidx.appcompat.app.AppCompatActivity
+                if (activity != null) {
+                    com.scanwhirl.app.tools.HindiTextLauncher.open(
+                        activity,
+                        com.scanwhirl.app.ScanWhirlApp.from(activity).repository
+                    )
+                } else {
+                    host.open(tool)
+                }
+            }
+        )
     )
 
     private val byId: Map<String, SwTool> = all.associateBy { it.id }

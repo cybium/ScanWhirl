@@ -1,6 +1,7 @@
 package com.scanwhirl.app.store
 
 import com.scanwhirl.app.util.OcrEngine
+import com.scanwhirl.app.util.OcrLanguageSettings
 import com.scanwhirl.app.util.Sha256
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -31,7 +32,9 @@ import java.io.File
 class OcrIndexer(
     private val repo: ScanRepository,
     private val scope: CoroutineScope,
-    private val recognize: suspend (File) -> OcrEngine.OcrResult = { OcrEngine.recognizeFile(it) },
+    private val recognize: suspend (File) -> OcrEngine.OcrResult = {
+        OcrEngine.recognizeFile(it, OcrLanguageSettings.get(repo.appContext()))
+    },
     private val autoRun: Boolean = true,
     private val afterIndexed: suspend (String) -> Unit = {}
 ) {

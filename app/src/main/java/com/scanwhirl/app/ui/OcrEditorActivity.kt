@@ -29,9 +29,12 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityOcrEditorBinding
 import com.scanwhirl.app.store.OcrIndexer
+import com.scanwhirl.app.store.OcrReindex
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.OcrCleanup
+import com.scanwhirl.app.util.OcrLanguage
+import com.scanwhirl.app.util.OcrLanguageSettings
 import com.scanwhirl.app.util.TextHistory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -232,9 +235,14 @@ class OcrEditorActivity : BaseActivity() {
     private fun addLanguageChip() {
         val chip = com.scanwhirl.app.ui.kit.SwChip(this).apply {
             id = R.id.ocrLangChip
-            bind(R.drawable.ic_sym_language, getString(R.string.ocr_lang_english))
-            isClickable = false
-            isFocusable = false
+            bind(
+                R.drawable.ic_sym_language,
+                getString(languageLabel(OcrLanguageSettings.get(this@OcrEditorActivity)))
+            )
+            // L2: the chip is now the OCR language switch (English / English + हिंदी / हिंदी).
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showLanguageSheet() }
         }
         binding.ocrLangHost.addView(
             chip,
@@ -243,6 +251,49 @@ class OcrEditorActivity : BaseActivity() {
                 com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
             )
         )
+    }
+
+    private fun languageLabel(language: OcrLanguage): Int = when (language) {
+        OcrLanguage.ENGLISH -> R.string.ocr_lang_english
+        OcrLanguage.ENGLISH_HINDI -> R.string.ocr_lang_english_hindi
+        OcrLanguage.HINDI -> R.string.ocr_lang_hindi
+    }
+
+    /** v2 UI: 08_text_ocr — pick the language; a doc-backed page is read again in it. */
+    private fun showLanguageSheet() {
+        val languages = listOf(OcrLanguage.ENGLISH, OcrLanguage.ENGLISH_HINDI, OcrLanguage.HINDI)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.ocr_lang_title)
+            .setMessage(R.string.ocr_lang_note)
+            .setOptions(languages.map { getString(languageLabel(it)) }) { which, _ ->
+                onLanguagePicked(languages[which.coerceIn(0, languages.lastIndex)])
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun onLanguagePicked(language: OcrLanguage) {
+        OcrLanguageSettings.set(this, language)
+        val id = docId
+        if (id == null) {
+            Toast.makeText(this, R.string.ocr_lang_saved, Toast.LENGTH_SHORT).show()
+            recreate()
+            return
+        }
+        Toast.makeText(this, R.string.ocr_lang_reading, Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            try {
+                OcrReindex(repo).reRecognise(id, language)
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@OcrEditorActivity,
+                    getString(R.string.ocr_lang_failed, e.message.orEmpty()),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            recreate()
+        }
     }
 
     private fun setupPageTabs() {

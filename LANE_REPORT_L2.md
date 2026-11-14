@@ -1,142 +1,122 @@
-﻿# LANE_REPORT_L2 - Vault + QR code
+# LANE_REPORT_L2 - Vault, QR code, OCR & Hindi
 
-Session 2026-11-14 (fourth pass). Branch `lane/L2-vault`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L2`.
-This pass: phone-QA fixes on build 435e0f3 (vault passcode, fingerprint offer, counts, sheet
-layout, locked placeholder, plurals) on top of the QR code reader.
+Session 2026-11-15 (fifth pass). Branch `lane/L2-vault`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L2`.
+This pass: text-recognition quality (U+FFFD and reading order), Hindi OCR with the lead-approved
+bundled Devanagari model, the text-language setting in two places, and Devanagari in the
+searchable-PDF text layer.
 
-## Phone QA (run2) - what I changed
+## OCR pipeline (files I now own)
 
-1. **Passcode did not unlock after the upgrade (silent close).** The unlock path no longer touches
-   the Keystore at all: the `_v2` wrap/repair work moved out of `unlockWithPasscode` /
-   `unlockWithRecovery` into a separate, prompt-authorized step. The sheet now
-   - sits above the IME (`applySystemBarsPadding` on the sheet root: edge-to-edge ignores
-     `adjustResize`, which is how the CTA could sit under the keypad and the tap land on the scrim),
-   - unlocks from the IME **Done** key as well as the button,
-   - shows **"Wrong passcode. N tries left."** (`vault_unlock_wrong_left` plurals) inside the sheet
-     and never dismisses on a failure,
-   - and if the sheet is dismissed while still locked, the screen keeps a **"Still locked. Tap
-     Unlock Vault and try again."** line, so an unlock can never fail silently.
-   - Upgrade test: a vault written by the previous build (old `keystore.bin`, no new Keystore key,
-     same `passcode.bin` / `recovery.bin` format) unlocks with its passcode and keeps its entries.
-2. **Fingerprint control + honest copy.** When the policy offers the fingerprint, the sheet shows a
-   **"Use fingerprint"** button with `ic_sym_fingerprint` and starts the prompt **once** when it
-   opens; when it is not offered the sheet says only **"Enter your passcode."** A cancelled
-   automatic prompt stays silent; a failed manual one is explained and returns to the passcode.
-   **Fingerprint is now actually created after setup/upgrade:** a per-use auth-bound Keystore key
-   can only encrypt with a prompt-authorized cipher, so the wrap is created through
-   `VaultStore.beginKeystoreWrap()` / `completeKeystoreWrap()` right after the passcode, setup or
-   restore succeeds ("Use fingerprint for the Vault?"). The old build could never have had a
-   working wrap under the new alias, which is why the option was missing.
-3. **Counts documents**: "1 document protected" / "N documents protected" (plurals over entries,
-   not files).
-4. **Setup sheet**: no auto-focus on the passcode fields, and every sheet gets the IME inset
-   padding, so the focused field and the primary button stay above the keyboard.
-5. **Locked vault**: "Private files" now has a small **"Unlock to see your files."** card instead
-   of empty space. `VaultActivity.intent(context, reason)` accepts the line another screen wants
-   shown in the unlock sheet (e.g. "Unlock the Vault to save this password.") - **L3 must pass it**
-   (`ui/protect/VaultPasswordsFlow.kt` currently toasts and starts the activity; the toast is L3's
-   file).
-6. **Plurals**: "1 page" / "N pages", "1 file" / "N files" in the list rows.
+- `util/OcrLayout.kt` (new) - reading order as a recursive XY-cut over boxes: a clean vertical
+  gutter splits columns (finish the left column, then the right one; a two-page spread is the
+  same rule), otherwise units are grouped into rows (top to bottom, left to right inside a row).
+  `rotationDegrees` maps a sideways page upright first. `sameLine` matches one visual line seen
+  by two recognizers.
+- `util/OcrMerge.kt` (new) - `OcrRawLine`/`OcrRawPage`, `OcrMerge.merge/pick/ordered/assemble`
+  and `OcrText.sanitize`. Merge rule: for one visual line the candidate that actually contains
+  Devanagari wins, otherwise the more confident one; lines only one model saw are kept. Text is
+  cleaned once at the recognizer boundary, then ordered, then joined (a larger vertical gap
+  becomes a paragraph break).
+- `util/OcrEngine.kt` - script-aware: `recognizeFile/recognizeBytes/recognizeBitmap(page,
+  language)`. Latin uses `TextRecognizerOptions.DEFAULT_OPTIONS`, Devanagari uses
+  `DevanagariTextRecognizerOptions.Builder().build()` from the new bundled dependency. EXIF
+  orientation of a page file is passed to ML Kit, so a sideways photo is read upright before
+  ordering. The recognizers sit behind `rawReader`/`rawBitmapReader` so Robolectric can supply
+  synthetic pages. `assemble(blocks)` keeps the old block API (geometry-less blocks keep the
+  old top/left order, blocks with geometry go through `OcrLayout`).
+- **U+FFFD**: the store (UTF-8 + Base64) and the exports were already lossless; the lossy
+  boundary was the PDF text layer, which wrote only WinAnsi and replaced every other character
+  with a space, and recognizer output itself. Both are fixed: `OcrText.sanitize` drops U+FFFD
+  and unpaired surrogates at the boundary (never splitting a surrogate pair), and the text layer
+  carries the exact line (see below).
+- `store/OcrReindex.kt` (new) - drops a document's stored text+geometry and reads every page
+  again with a given language, storing page by page (`putRecognizedPage` refuses a changed
+  image) and regenerating the searchable PDF.
+- `store/OcrStore.clearAll(id)` (new).
+- `store/OcrIndexer` - the default recognizer now follows the language setting.
 
-## QR code reader (Create group, Pro) - `ui/qr/**`
+## Hindi and the language setting (one source of truth)
 
-- `QrContent`: pure parse/action model for link, Wi-Fi (SSID/password/security, `\;` escapes),
-  vCard, MeCard, phone, email, SMS, geo and text, with actions per type (Open link, Add to
-  contacts, Call, Compose email, Open map, Copy, Share). Wi-Fi Copy copies the password.
-- `QrScanner` seam + `GoogleCodeScanner` (`GmsBarcodeScanning`, QR plus the common 1D/2D formats,
-  `enableAutoZoom`). No camera permission. **DEVICE-UNPROVEN** (module download / Play services).
-- `QrActivity`: kit-style result screen, scan again, local history (last 20, `qr_history.txt`,
-  clear), errors as `SwSheet`, cancel saves nothing. "Scan from photo" is **omitted**: image
-  decoding needs a barcode-scanning library I may not add; the approved artifact only wraps the
-  Google scanner UI.
-- `QrToolLauncher` gates the Pro tool with a sheet, like the other Pro tools; the registry entry
-  is the only Registry change.
-- Tests: `QrContentTest` (all types/actions), `QrHistoryTest` (cap 20, newest first, dedupe,
-  clear, damaged file), `QrActivityTest` (result per type, ACTION_VIEW/INSERT/DIAL, copy, cancel
-  saves nothing, failure sheet, 20-item history + clear, history row replay, empty code, close).
+- `util/OcrLanguage.kt` - `OcrLanguage` (ENGLISH / ENGLISH_HINDI / HINDI with its scripts) and
+  `OcrLanguageSettings` on `Prefs.ocrLanguage` ("en"/"en+hi"/"hi", default "en").
+- **Text screen** (`ui/OcrEditorActivity`, L1's file, only the language chip handler changed):
+  the chip shows the current language, taps open an SwSheet (English / English + हिंदी / हिंदी);
+  picking one saves the setting and, for a document-backed page, re-reads the document
+  (`OcrReindex`) and recreates the screen.
+- **Settings** (L1's file, `SettingsActivity`, only the new row): "Text language" with the
+  current value, right under the app language, same three options and the same setting + a
+  note that switching re-reads the document. Built in code so L1's layout is untouched.
+- **"Hindi text" tool** (Text group) is READY: pick a document, re-read it with the Devanagari
+  model, open the Text screen; it also switches the setting to Hindi. Unreadable pages use the
+  existing honest wording ("model still has to download" / "nothing found").
+- Strings only in `values/strings_ocr.xml` + `values-hi/strings_ocr.xml`; ids in `values/ids_ocr.xml`.
 
-## Vault copy rules
+## Searchable PDF with Devanagari (verified independently)
 
-No em dashes and no line over about 90 characters in `strings_vault.xml` (+hi); sentences use
-full stops, commas and colons. (L3's `strings_protect.xml` still has em dashes in the strength
-meter; that is L3's file.)
+`util/PdfTextLayer` now wraps every line in PDF 1.5 marked content with
+`/Span << /ActualText <FEFF...UTF-16BE...> >> BDC ... EMC`. Extraction tools return the exact
+Unicode line (Devanagari, curly quotes, "₹"), while the invisible Helvetica/WinAnsi `Tj` inside
+stays a sanitized fallback. Surrogate pairs are never split when a long line is cut. No font is
+embedded, so the APK does not grow.
+**Host check** (PyMuPDF 1.27, a one-page PDF with the same operators): `get_text()` returned
+`Hello world\nकुल राशि 1250\n` and `search_for("कुल राशि 1250")` found it.
 
-## Tests / gate
+## Tests added (all green)
 
-```
-tests: total=1129 failures=0 skipped=0
-GATE PASS L2 tests=1129 lint=[lint skipped (lead runs it at merge)]
-```
-
-New/changed tests this pass: `VaultStoreTest` (upgrade from the previous build; wrap through the
-prompt; invalidation, passcode, new wrap), `VaultActivityTest` (tries-left error + sheet stays
-open + status line; documents count; "1 page"; locked placeholder; reason extra; auto-prompt /
-cancelled prompt / manual failure / no-fingerprint copy / invalidation), `QrContentTest`,
-`QrHistoryTest`, `QrActivityTest`; `KitComponentsTest` now picks any Soon tool (QR is live).
+- `OcrLayoutTest` - single column, two columns (left finished before right), two-page spread
+  (left page then right page, page numbers last), heading over one column, reversed lines
+  (the QA "12..6 before 1..5" case), rotated page (90 degrees), `sameLine` positive/negative.
+- `OcrMergeTest` - English+Hindi merge keeps each script, lines only one model saw are kept,
+  Hindi-only output never contains U+FFFD, paragraph gap, two-column order, `sanitize`
+  (U+FFFD, unpaired surrogates, NBSP, tabs, emoji), script detection, `pick` rules.
+- `OcrLanguageSwitchTest` (Robolectric, recognizer seam) - setting persists, switching
+  re-reads the document in the new script and replaces the old text, English+Hindi keeps both
+  scripts in one pass, geometry is refreshed, a missing document is not an error, and the seam
+  drives the real `OcrEngine` end to end.
+- `PdfTextLayerTest` - `/ActualText` carries Devanagari exactly, UTF-16BE hex with BOM, no
+  replacement characters, surrogate pair never split, fallback stays within the line limit.
+- `Phase5ScreensTest` (L1's) - the Settings language card now has two rows (owner-requested
+  "Text language" row); rewritten with `// v2 UI: 08_text_ocr`.
 
 ## DEVICE-UNPROVEN
 
-- Keystore wrap creation through the prompt (`beginKeystoreWrap`) on a real per-use key, and the
-  "Use fingerprint for the Vault?" prompt after setup/upgrade.
-- The biometric unlock prompt (sensor, cancel, lockout), and the sheet being fully above the
-  keyboard (IME insets in an edge-to-edge BottomSheetDialog).
-- The Google code scanner (first-use module download, missing Play services).
+- Real model accuracy, especially **handwriting** (the owner's notebook photos) and mixed
+  Hindi/English print; the merge/pick rules are synthetic-tested but not tuned on real output.
+- The bundled Devanagari model on the phone (first use, APK size) and the `ActualText` layer in
+  Android viewers (PyMuPDF verified).
+- EXIF rotation of camera photos through ML Kit (the gallery path already rotates in
+  `OcrImagePrep`).
 
-## Earlier in this lane (still current)
+## Notes for the lead
 
-### Fingerprint unlock
-`androidx.biometric.BiometricPrompt` with a `CryptoObject` wrapping the auth-bound Keystore
-cipher (`BIOMETRIC_STRONG`, title "Unlock Vault", negative "Use passcode"); the decision is
-`VaultUnlockPolicy` (API 28 or newer + a valid Keystore wrap + `canAuthenticate == SUCCESS`,
-otherwise the passcode only). An invalidated key (KeyPermanentlyInvalidatedException) drops the
-wrap and the next passcode unlock offers a new one.
+- Robolectric needs `@GraphicsMode(NATIVE)` for anything that saves a page: `ImageTools` uses
+  `ImageDecoder.setTargetSampleSize`, and the legacy shadow throws `UnsupportedOperationException`
+  (I hit it in a new test only; existing tests already use NATIVE).
+- `LANE_REPORT_L2.md` (this file) replaces the earlier passes' notes; the code from them is
+  unchanged unless listed above.
 
-### `.swvault` backup
-Format version 2 carries `vault2/passwords.bin` next to the entries (still vault-key encrypted,
-verified with the restored key before publishing); version 1 files still restore.
+## Gate
 
-### Files
-- `store/vault/VaultStore.kt`: entries, locks, backup/restore, biometric challenge, prompt wrap.
-- `store/vault/VaultKeys.kt`: Keystore seam (`AndroidVaultKeys` DEVICE-UNPROVEN, `VaultKeyChallenge`).
-- `store/vault/VaultCrypto.kt`: AES-256-GCM chunks, PBKDF2 key wraps.
-- `store/vault/VaultSession.kt`: process-wide unlock state + 2-minute grace (`VaultSessionPolicy`).
-- `store/vault/VaultBackup.kt`: `.swvault` v2 (v1 readable).
-- `store/vault/VaultPasswords.kt`: PDF passwords for L3.
-- `ui/vault/VaultActivity.kt`, `VaultCard.kt`, `VaultUnlockPolicy.kt`: mockup `04_vault`.
-- `ui/qr/**`: QR code reader.
-
-## API for lane L3 - `VaultPasswords`
-
-```kotlin
-val passwords = VaultPasswords.of(context)   // any screen; application context is enough
-passwords.save(documentId, password)          // "Remember in Vault"
-val pw: String? = passwords.get(documentId)   // "Use password saved in Vault" -> null = none
-passwords.has(documentId)                     // show the row/button only when true
-passwords.remove(documentId)                  // "Remove protection" / remember unticked
-passwords.count()
 ```
-
-Encrypted with the vault key (AES-256-GCM) in `filesDir/vault2/passwords.bin`, keyed by document
-id; every call throws `VaultLockedException` while the Vault is locked (or past the 2-minute
-grace) and `VaultAuthException` when the blob was changed. Included in `.swvault` backups.
-`VaultActivity.intent(context, reason)` shows a reason line in the unlock sheet (L3 should pass
-it instead of toasting).
-
-## Not done / carried
-
-- `VaultScreen`'s tab button still carries L1's "Coming soon" label/note although it opens the
-  real Vault (L1's strings; I changed only the one call I was allowed to).
-- The "Unlock the Vault to save this password." toast lives in L3's `VaultPasswordsFlow`; my
-  activity accepts the reason extra, L3 must pass it.
-- A vault document open in `PdfViewerActivity` keeps its decrypted cache until the Vault screen
-  relocks; the key itself is dropped process-wide after the grace period.
-- Legacy 4-digit `Prefs` PIN entry is only verified; the entry itself is left for L1/lead.
+tests: total=1252 failures=0 skipped=0
+GATE PASS L2 tests=1252 lint=[lint skipped (lead runs it at merge)]
+```
 
 ## Commits
 
-- `a162028` v2 Vault UI
-- `96e0714` VaultSession + VaultPasswords
-- `56fb445` BiometricPrompt + passwords in the backup
-- `0edad3a` QR code reader + vault copy rules
-- (this pass) vault QA fixes
+- `649662b` OCR pipeline (wip) · `ac7c8bc` merge `integration` (`88b99a7`)
+- (this pass) OCR/Hindi: reading order, script merge, language setting + Settings row, Hindi
+  tool, ActualText text layer
 - (this report) L2: report
+
+
+## Earlier in this lane (still current)
+
+- **Vault** (`store/vault/**`, `ui/vault/**`): AES-256-GCM files, Keystore + recovery wraps,
+  process-wide `VaultSession` with the 2-minute relock, `.swvault` backup v2 (entries + remembered
+  PDF passwords, v1 readable), fingerprint unlock through `androidx.biometric` with a CryptoObject
+  and a prompt-authorized wrap, upgrade-safe passcode unlock with tries-left errors, documents
+  (not files) counted, `VaultPasswords` for L3.
+- **QR code reader** (`ui/qr/**`, Pro): Google code scanner behind a seam, per-type actions,
+  last-20 history with clear, errors as sheets.
+- **Copy**: no em dashes and no line over ~90 characters in `strings_vault.xml`.
