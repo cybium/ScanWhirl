@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Organize pages: the round selection check (owner revision). Empty circle when unselected. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#CC0E1316" />
+    <stroke
+        android:width="1.5dp"
+        android:color="@color/cyan_primary" />
+</shape>

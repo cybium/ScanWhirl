@@ -1,5 +1,6 @@
 package com.scanwhirl.app.store
 
+import com.scanwhirl.app.util.Durable
 import java.io.File
 import java.io.IOException
 
@@ -14,6 +15,25 @@ import java.io.IOException
  */
 internal object OpStaging {
     const val DIR = "op_staging"
+
+    /** PM-2.2b: a seal file inside a staged (or just-published) folder, finished by recovery. */
+    const val SEAL = ".publish"
+    private const val SEAL_HEADER = "scanwhirl-publish-v1"
+
+    /**
+     * What a draft publish promises: which draft it belongs to, and (for Replace) which document it
+     * replaces. Recovery uses [token] to find the Trash entry that carries `previous=<token>`.
+     */
+    class Seal(
+        val token: String,
+        val draft: String,
+        val draftCreated: Long,
+        val replaces: String?,
+        val pages: List<String>,
+        val pagesSha256: String,
+        val pdfSha256: String
+    )
+
     private val live: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet())
 
     fun root(filesDir: File): File = File(filesDir, DIR).apply { mkdirs() }
@@ -43,6 +63,51 @@ internal object OpStaging {
     /** Deletes every entry that is not live in this process. Returns how many were removed. */
     fun sweep(filesDir: File): Int = root(filesDir).listFiles().orEmpty()
         .filter { it.name !in live && it.deleteRecursively() }.size
+
+    /** PM-2.2b: writes the seal atomically (after every file is fsynced, before the rename). */
+    fun writeSeal(dir: File, seal: Seal) {
+        val text = buildString {
+            append(SEAL_HEADER).append('\n')
+            append("token=").append(seal.token).append('\n')
+            append("draft=").append(seal.draft).append('\n')
+            append("draftCreated=").append(seal.draftCreated).append('\n')
+            append("replaces=").append(seal.replaces ?: "-").append('\n')
+            append("pages=").append(seal.pages.joinToString(",")).append('\n')
+            append("pagesSha256=").append(seal.pagesSha256).append('\n')
+            append("pdfSha256=").append(seal.pdfSha256).append('\n')
+        }
+        Durable.atomicWriteText(File(dir, SEAL), text)
+    }
+
+    /**
+     * PM-2.2b: parses a seal; any missing or invalid field returns null (a broken seal is treated
+     * as "no seal", so recovery falls through to the ordinary sweep).
+     */
+    fun readSeal(dir: File): Seal? {
+        val file = File(dir, SEAL)
+        if (!file.isFile) return null
+        val lines = try {
+            file.readLines()
+        } catch (_: Exception) {
+            return null
+        }
+        if (lines.firstOrNull() != SEAL_HEADER) return null
+        val values = HashMap<String, String>()
+        for (line in lines.drop(1)) {
+            val eq = line.indexOf('=')
+            if (eq <= 0) return null
+            values[line.substring(0, eq)] = line.substring(eq + 1)
+        }
+        val token = values["token"]?.takeIf { it.isNotBlank() } ?: return null
+        val draft = values["draft"]?.takeIf { it.isNotBlank() } ?: return null
+        val draftCreated = values["draftCreated"]?.toLongOrNull() ?: return null
+        val replaces = values["replaces"]?.takeIf { it != "-" }
+        val pages = values["pages"]?.split(',')?.filter { it.isNotBlank() } ?: return null
+        if (pages.isEmpty()) return null
+        val pagesSha256 = values["pagesSha256"]?.takeIf { it.length == 64 } ?: return null
+        val pdfSha256 = values["pdfSha256"]?.takeIf { it.length == 64 } ?: return null
+        return Seal(token, draft, draftCreated, replaces, pages, pagesSha256, pdfSha256)
+    }
 
     internal fun resetForTests() = live.clear()
 }

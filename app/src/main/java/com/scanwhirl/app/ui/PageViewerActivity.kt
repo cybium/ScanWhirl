@@ -167,7 +167,8 @@ class PageViewerActivity : BaseActivity() {
             return false
         }
         document = doc
-        pages = doc.pageFiles.filter {
+        // PM-2.3b: the pager shows the draft's pages (base pages where nothing was edited).
+        pages = kotlinx.coroutines.runBlocking { repo.draftPages(id) }.filter {
             it.path != pendingDelete && it.path !in committingDeletes
         }
         pagerAdapter.filterFor = { file -> filterChoice[file.path] ?: ScanFilter.ORIGINAL }
@@ -241,7 +242,7 @@ class PageViewerActivity : BaseActivity() {
                 } else {
                     val id = docId ?: return@launch
                     withContext(Dispatchers.IO) { commitPendingDeleteNow() }
-                    repo.rotatePage(id, pos, clockwise)
+                    repo.draftRotate(id, pos, clockwise)
                 }
                 reload()
                 currentPos = pos.coerceAtMost(pages.lastIndex)
@@ -309,9 +310,12 @@ class PageViewerActivity : BaseActivity() {
     private fun applyFilter(id: String, pos: Int, file: File, filter: ScanFilter) {
         lifecycleScope.launch {
             try {
-                repo.setPageFilter(id, pos, filter)
-                filterChoice[file.path] = filter
+                repo.draftFilter(id, pos, filter)
+                // The edited page is a new file: map the choice onto its new path.
+                filterChoice.remove(file.path)
                 reload()
+                pages.getOrNull(pos)?.let { filterChoice[it.path] = filter }
+                pagerAdapter.notifyDataSetChanged()
                 currentPos = pos.coerceAtMost(pages.lastIndex)
                 binding.pager.scrollToPosition(currentPos)
                 updateIndicator()
@@ -406,6 +410,11 @@ class PageViewerActivity : BaseActivity() {
     private fun showCropOverlay(pos: Int, file: File) {
         cropIndex = pos
         cropPath = file.path
+        // Owner QA: only Cancel / Apply belong on screen while cropping; the page toolbar
+        // underneath must not keep visible or clickable areas.
+        binding.pageDock.isVisible = false
+        binding.btnClose.isVisible = false
+        binding.pageIndicator.isVisible = false
         binding.cropView.clearImage()
         binding.cropOverlay.visibility = View.VISIBLE
         // WP-22-7: ID/passport crop presets are free.
@@ -452,6 +461,10 @@ class PageViewerActivity : BaseActivity() {
 
     private fun closeCrop() {
         binding.cropOverlay.visibility = android.view.View.GONE
+        // Restore the page toolbar the crop mode hid.
+        binding.pageDock.isVisible = true
+        binding.btnClose.isVisible = true
+        binding.pageIndicator.isVisible = true
         binding.cropView.tag = null // drop any in-flight decode result
         binding.cropView.clearImage() // drop the view's reference BEFORE recycling
         cropBitmap?.takeIf { !it.isRecycled }?.recycle()
@@ -486,7 +499,7 @@ class PageViewerActivity : BaseActivity() {
                     withContext(Dispatchers.IO) { ImageTools.cropTo(file, fileRect) }
                 } else {
                     val id = docId ?: return@launch
-                    repo.cropPage(id, pos, fileRect)
+                    repo.draftCrop(id, pos, fileRect)
                 }
                 reload()
                 currentPos = pos.coerceAtMost(pages.lastIndex)
@@ -515,9 +528,9 @@ class PageViewerActivity : BaseActivity() {
         committingDeletes.add(path)
         deleteScope.launch {
             try {
-                val doc = repo.getDocument(id) ?: return@launch
-                val idx = doc.pageFiles.indexOfFirst { it.path == path }
-                if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
+                val now = repo.draftPages(id)
+                val idx = now.indexOfFirst { it.path == path }
+                if (idx >= 0 && now.size > 1) repo.draftDelete(id, idx)
             } catch (_: Exception) {
                 // Best effort; a failed delete leaves the page in place.
             }
@@ -540,9 +553,9 @@ class PageViewerActivity : BaseActivity() {
         pendingDelete = null
         val id = docId ?: return
         try {
-            val doc = repo.getDocument(id) ?: return
-            val idx = doc.pageFiles.indexOfFirst { it.path == path }
-            if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
+            val now = repo.draftPages(id)
+            val idx = now.indexOfFirst { it.path == path }
+            if (idx >= 0 && now.size > 1) repo.draftDelete(id, idx)
         } catch (_: Exception) {
             // Best effort.
         }
