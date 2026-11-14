@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L3 v2: the document chip at the top of the Protect sheet (mockup 05). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="16dp" />
+    <solid android:color="@color/void_nebula" />
+    <stroke
+        android:width="1dp"
+        android:color="#0FFFFFFF" />
+</shape>

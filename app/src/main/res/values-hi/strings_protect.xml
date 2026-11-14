@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L3 v2 Protect PDF + Unlock sheet. Hindi values await native review. -->
+    <string name="protect_sheet_title"><!-- review -->PDF सुरक्षित करें</string>
+    <string name="protect_change_title"><!-- review -->पासवर्ड बदलें</string>
+    <string name="protect_close"><!-- review -->बंद करें</string>
+    <string name="protect_sheet_note"><!-- review -->इस PDF को खोलने वाले को पासवर्ड डालना होगा — किसी भी PDF ऐप में, किसी भी डिवाइस पर।</string>
+    <string name="protect_doc_meta"><!-- review -->%1$d पेज · %2$s</string>
+    <string name="protect_label_password"><!-- review -->पासवर्ड</string>
+    <string name="protect_label_confirm"><!-- review -->फिर से लिखें</string>
+    <string name="protect_password_hint"><!-- review -->पासवर्ड</string>
+    <string name="protect_confirm_hint"><!-- review -->फिर से लिखें</string>
+    <string name="protect_show_password"><!-- review -->पासवर्ड दिखाएँ</string>
+    <string name="protect_hide_password"><!-- review -->पासवर्ड छिपाएँ</string>
+    <string name="protect_meter_too_short"><!-- review -->बहुत छोटा · कम से कम 6 अक्षर</string>
+    <string name="protect_meter_weak"><!-- review -->कमज़ोर · 10 या अधिक अक्षर लें</string>
+    <string name="protect_meter_good"><!-- review -->मज़बूत · %1$d अक्षर</string>
+    <string name="protect_meter_strong"><!-- review -->बहुत मज़बूत · %1$d अक्षर</string>
+    <string name="protect_confirm_ok"><!-- review -->पासवर्ड मिलते हैं</string>
+    <string name="protect_aes_title"><!-- review -->AES-256 एन्क्रिप्शन</string>
+    <string name="protect_aes_note"><!-- review -->आधुनिक मानक। मज़बूती आपके पासवर्ड पर निर्भर है — 10+ अक्षर रखें।</string>
+    <string name="protect_remember_title"><!-- review -->Vault में याद रखें</string>
+    <string name="protect_remember_note"><!-- review -->ताकि यह कभी न खोए। फिंगरप्रिंट से खुलेगा।</string>
+    <string name="protect_action_share"><!-- review -->सुरक्षित करें और शेयर करें</string>
+    <string name="protect_action_save"><!-- review -->सुरक्षित कॉपी सेव करें</string>
+    <string name="protect_action_change"><!-- review -->पासवर्ड बदलें</string>
+
+    <string name="unlock_sheet_title"><!-- review -->%1$s सुरक्षित है</string>
+    <string name="unlock_sheet_note"><!-- review -->खोलने के लिए इसका पासवर्ड डालें।</string>
+    <string name="unlock_open"><!-- review -->खोलें</string>
+    <string name="unlock_or"><!-- review -->या</string>
+    <string name="unlock_use_vault"><!-- review -->Vault में सेव पासवर्ड उपयोग करें</string>
+    <string name="unlock_cancel"><!-- review -->रद्द करें</string>
+    <string name="unlock_remove"><!-- review -->सुरक्षा हटाएँ…</string>
+    <string name="unlock_wrong_tries"><!-- review -->पासवर्ड मेल नहीं खाया। %2$d सेकंड के विराम से पहले %1$d कोशिशें बाकी।</string>
+    <string name="unlock_wrong_paused"><!-- review -->पासवर्ड मेल नहीं खाया। खोलना %1$d सेकंड के लिए रुका है।</string>
+    <string name="unlock_remove_title"><!-- review -->सुरक्षा हटाएँ?</string>
+    <string name="unlock_remove_msg"><!-- review -->यह PDF अब बिना पासवर्ड खुलेगा। इसके पेज जैसे हैं वैसे ही रहेंगे।</string>
+    <string name="unlock_remove_confirm"><!-- review -->सुरक्षा हटाएँ</string>
+    <string name="unlock_removed"><!-- review -->पासवर्ड हट गया — PDF खुल गया</string>
+</resources>
