@@ -94,6 +94,10 @@
     <!-- review -->
     <string name="stamp_signature_full"><!-- review -->आप 5 हस्ताक्षर तक रख सकते हैं। नया सहेजने के लिए एक हटाएँ।</string>
     <!-- review -->
+    <string name="stamp_signature_delete_title"><!-- review -->यह हस्ताक्षर हटाएँ?</string>
+    <!-- review -->
+    <string name="stamp_signature_delete_msg"><!-- review -->%1$s इस फ़ोन से हट जाएगा।</string>
+    <!-- review -->
     <string name="stamp_hint_draw"><!-- review -->एक उँगली से लिखें</string>
     <!-- review -->
     <string name="stamp_hint_highlight"><!-- review -->हाइलाइट करने के लिए पाठ पर खींचें</string>

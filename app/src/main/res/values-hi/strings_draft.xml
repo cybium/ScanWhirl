@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- L5 wave 2 Hindi draft — review before release. -->
+<!-- L5 wave 2 Hindi draft: review before release. -->
 <resources>
     <!-- Engine -->
     <string name="draft_open_refused"><!-- review -->पहले बिना सहेजे पेज बदलावों को सहेजें या हटाएँ।</string>
@@ -32,5 +32,23 @@
     <plurals name="draft_delete_title">
         <item quantity="one"><!-- review -->%1$d पेज हटाएँ?</item>
         <item quantity="other"><!-- review -->%1$d पेज हटाएँ?</item>
+    </plurals>
+
+    <!-- Insert pages (Free, Organize) -->
+    <string name="insert_pages_title"><!-- review -->पेज यहाँ से जोड़ें</string>
+    <string name="insert_from_camera"><!-- review -->कैमरे से स्कैन करें</string>
+    <string name="insert_from_photos"><!-- review -->फ़ोटो</string>
+    <string name="insert_from_document"><!-- review -->दूसरा दस्तावेज़</string>
+    <string name="insert_position_title"><!-- review -->कहाँ जोड़ें?</string>
+    <string name="insert_at_start"><!-- review -->शुरू में</string>
+    <string name="insert_after_page"><!-- review -->पेज के बाद…</string>
+    <string name="insert_at_end"><!-- review -->अंत में</string>
+    <string name="insert_page_hint"><!-- review -->पेज संख्या</string>
+    <string name="insert_page_invalid"><!-- review -->वह पेज मौजूद नहीं है।</string>
+    <string name="insert_none"><!-- review -->कोई पेज नहीं जोड़ा गया।</string>
+    <string name="grid_empty"><!-- review -->अभी कोई पेज नहीं है।</string>
+    <plurals name="insert_done">
+        <item quantity="one"><!-- review -->%1$d पेज जोड़ा गया</item>
+        <item quantity="other"><!-- review -->%1$d पेज जोड़े गए</item>
     </plurals>
 </resources>

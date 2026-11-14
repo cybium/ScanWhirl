@@ -14,12 +14,16 @@ import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityDocumentViewerBinding
@@ -27,12 +31,15 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.DraftStore
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.CompressFlow
+import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
@@ -46,6 +53,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
+import java.util.UUID
 
 class DocumentViewerActivity : BaseActivity(), HomeHost {
 
@@ -99,6 +108,43 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             if (granted) pendingDownload?.invoke()
             else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
             pendingDownload = null
+        }
+
+    // Insert pages (Free, Organize): camera pages, photos or another library document.
+    private val insertScanner =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
+            val uris = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
+                ?.pages.orEmpty().mapNotNull { it.imageUri }
+            if (uris.isEmpty()) {
+                toast(R.string.insert_none, Toast.LENGTH_SHORT)
+                return@registerForActivityResult
+            }
+            lifecycleScope.launch {
+                val files = withContext(Dispatchers.IO) {
+                    runCatching { copyInsertUris(uris) }.getOrNull()
+                }
+                if (files.isNullOrEmpty()) {
+                    toast(R.string.insert_none, Toast.LENGTH_SHORT)
+                } else {
+                    askInsertPosition(files)
+                }
+            }
+        }
+
+    private val insertPhotos =
+        registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            if (uris.isEmpty()) return@registerForActivityResult
+            lifecycleScope.launch {
+                val files = withContext(Dispatchers.IO) {
+                    runCatching { copyInsertUris(uris) }.getOrNull()
+                }
+                if (files.isNullOrEmpty()) {
+                    toast(R.string.insert_none, Toast.LENGTH_SHORT)
+                } else {
+                    askInsertPosition(files)
+                }
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -159,6 +205,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.btnSelExtract.setOnClickListener { extractSelected() }
         binding.btnSelShare.setOnClickListener { shareSelectedPages() }
         binding.btnSelMore.setOnClickListener { showSelectionMore() }
+        binding.btnEmptyAddPages.setOnClickListener { startInsertPages() }
         styleSelectionBars()
         // PM-2.2c: the draft bar appears after the first edit; every action is explicit.
         styleDraftBar()
@@ -184,6 +231,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         lifecycleScope.launch {
             if (!reloadDocument()) return@launch
             firstLoad = true
+            if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_INSERT_PAGES, false)) {
+                startInsertPages()
+            }
         }
     }
 
@@ -276,6 +326,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // Pages that vanished (deleted/screen closed) must not stay checked.
         selected.retainAll(visiblePages.map { it.path }.toSet())
         binding.pageList.submit(visiblePages)
+        binding.gridEmpty.isVisible = visiblePages.isEmpty()
+        binding.pageList.isVisible = visiblePages.isNotEmpty()
         binding.pageCount.text =
             resources.getQuantityString(R.plurals.pages, visiblePages.size, visiblePages.size)
         updateSelectionUi()
@@ -385,9 +437,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         ShareUtils.shareImages(this, files, doc.name)
     }
 
-    /** ⋯ for long documents: Rotate left and Move to… (one page). */
+    /** ⋯ for long documents: Add pages, Rotate left and Move to… (one page). */
     private fun showSelectionMore() {
         val labels = ArrayList<CharSequence>()
+        labels += getString(R.string.add_pages)
         labels += getString(R.string.draft_rotate_left)
         val canMove = visiblePages.size >= 10 && selected.size == 1
         if (canMove) labels += getString(R.string.draft_move_to)
@@ -396,7 +449,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .setTitle(R.string.more)
             .setOptions(labels) { index, _ ->
                 sheetRef?.dismiss()
-                if (index == 0) rotateSelected(clockwise = false) else promptMoveTo()
+                when (index) {
+                    0 -> startInsertPages()
+                    1 -> rotateSelected(clockwise = false)
+                    else -> promptMoveTo()
+                }
             }
             .setSecondary(R.string.draft_keep_editing)
             .build()
@@ -442,6 +499,150 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 reloadDocument()
                 selected.clear()
                 updateSelectionUi()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Insert pages (Free, Organize): into the draft, never the base
+    // ------------------------------------------------------------------
+
+    /** "Add pages from": camera, photos or another library document. */
+    internal fun startInsertPages() {
+        val options = listOf(
+            getString(R.string.insert_from_camera),
+            getString(R.string.insert_from_photos),
+            getString(R.string.insert_from_document)
+        )
+        SwSheet.builder(this)
+            .setTitle(R.string.insert_pages_title)
+            .setOptions(options) { which, _ ->
+                when (which) {
+                    0 -> scanForInsert()
+                    1 -> insertPhotos.launch("image/*")
+                    else -> pickDocumentForInsert()
+                }
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun scanForInsert() {
+        val options = GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(false)
+            .setScannerMode(
+                if (Prefs.autoEnhanceScan(this)) {
+                    GmsDocumentScannerOptions.SCANNER_MODE_FULL
+                } else {
+                    GmsDocumentScannerOptions.SCANNER_MODE_BASE
+                }
+            )
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            .setPageLimit(30)
+            .build()
+        GmsDocumentScanning.getClient(options).getStartScanIntent(this)
+            .addOnSuccessListener { sender ->
+                insertScanner.launch(IntentSenderRequest.Builder(sender).build())
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(
+                    this,
+                    getString(R.string.scanner_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+    }
+
+    private fun pickDocumentForInsert() {
+        val docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            .filter { it.id != docId && !it.isLocked && !it.isVaulted }
+        FlowUtil.pickScan(this, R.string.insert_pages_title, docs) { source ->
+            // Copies, never moves: the source document keeps every page.
+            askInsertPosition(source.pageFiles)
+        }
+    }
+
+    /** Copies picked camera/photo URIs into a temp folder of normalised JPEG pages. */
+    private fun copyInsertUris(uris: List<android.net.Uri>): List<File> {
+        val dir = File(cacheDir, "insert_${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+        val files = ArrayList<File>(uris.size)
+        uris.forEachIndexed { index, uri ->
+            val bytes = contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
+                ?: throw IllegalArgumentException("Page ${index + 1} could not be read")
+            val file = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index))
+            Durable.writeFile(file, ImageTools.normalizePage(bytes))
+            files += file
+        }
+        return files
+    }
+
+    /** Position picker: at the start, after page N, or at the end. */
+    private fun askInsertPosition(files: List<File>) {
+        if (files.isEmpty()) {
+            toast(R.string.insert_none, Toast.LENGTH_SHORT)
+            return
+        }
+        val options = listOf(
+            getString(R.string.insert_at_start),
+            getString(R.string.insert_after_page),
+            getString(R.string.insert_at_end)
+        )
+        SwSheet.builder(this)
+            .setTitle(R.string.insert_position_title)
+            .setOptions(options) { which, _ ->
+                when (which) {
+                    0 -> insertFiles(files, 0)
+                    1 -> promptInsertAfterPage(files)
+                    else -> insertFiles(files, visiblePages.size)
+                }
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun promptInsertAfterPage(files: List<File>) {
+        val max = visiblePages.size
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.insert_after_page)
+            .setInput(
+                hint = getString(R.string.insert_page_hint),
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            )
+            .setPrimary(R.string.insert_after_page)
+            .build()
+        sheet.keepOpenOnPrimary()
+        sheet.primaryButton.setOnClickListener {
+            val number = sheet.inputView?.text?.toString()?.toIntOrNull()
+            if (number == null || number !in 1..max) {
+                Toast.makeText(this, R.string.insert_page_invalid, Toast.LENGTH_SHORT).show()
+            } else {
+                sheet.dismiss()
+                insertFiles(files, number)
+            }
+        }
+        sheet.show()
+    }
+
+    /** Test seam and the one writer: copied pages enter the draft at [position]. */
+    internal fun insertFiles(files: List<File>, position: Int) {
+        val id = docId ?: return
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repo.draftInsertPages(id, files, position) }
+                reloadDocument()
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    resources.getQuantityString(R.plurals.insert_done, files.size, files.size),
+                    Toast.LENGTH_SHORT
+                ).show()
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
@@ -1192,7 +1393,28 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     companion object {
         private const val EXTRA_DOC_ID = "doc_id"
+        private const val EXTRA_INSERT_PAGES = "insert_pages"
+
         fun intent(context: Context, docId: String): Intent =
             Intent(context, DocumentViewerActivity::class.java).putExtra(EXTRA_DOC_ID, docId)
+
+        /** Open Organize and immediately offer "Add pages from" (Insert pages tool). */
+        fun insertIntent(context: Context, docId: String): Intent =
+            intent(context, docId).putExtra(EXTRA_INSERT_PAGES, true)
+
+        /** Insert pages tool: pick the target document first, then the source. */
+        fun openInsertPicker(activity: android.app.Activity) {
+            if (activity !is androidx.appcompat.app.AppCompatActivity) return
+            val docs = runCatching { ScanRepository(activity).listDocuments() }
+                .getOrDefault(emptyList())
+                .filter { !it.isLocked && !it.isVaulted }
+            if (docs.isEmpty()) {
+                Toast.makeText(activity, R.string.empty_title, Toast.LENGTH_SHORT).show()
+                return
+            }
+            FlowUtil.pickScan(activity, R.string.insert_pages_title, docs) { doc ->
+                activity.startActivity(insertIntent(activity, doc.id))
+            }
+        }
     }
 }

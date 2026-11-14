@@ -49,11 +49,13 @@
     <string name="stamp_signature_save">Save signature</string>
     <string name="stamp_signature_name">Signature %1$d</string>
     <string name="stamp_signature_empty">Draw your signature first.</string>
-    <string name="stamp_signature_full">You can keep up to 5 signatures. Delete one to save another.</string>
+    <string name="stamp_signature_full">Keep up to 5 signatures. Delete one to save another.</string>
+    <string name="stamp_signature_delete_title">Delete this signature?</string>
+    <string name="stamp_signature_delete_msg">%1$s will be removed from this phone.</string>
     <string name="stamp_hint_draw">Draw with one finger</string>
     <string name="stamp_hint_highlight">Drag over the text to highlight</string>
     <string name="stamp_hint_redact">Drag a box over what must be hidden</string>
-    <string name="stamp_hint_select">Tap a mark to move it; use the corner handles to resize</string>
+    <string name="stamp_hint_select">Tap a mark to move it; drag a corner to resize</string>
     <string name="stamp_no_ocr">No recognised text on this page yet.</string>
     <string name="stamp_no_suggestions">No Aadhaar, PAN, phone or account number found.</string>
     <string name="stamp_locked">This document is protected. Unlock it first.</string>
@@ -66,8 +68,8 @@
     <string name="stamp_choose_document">Choose a document</string>
     <string name="stamp_no_documents">No unlocked documents to edit. Scan or import one first.</string>
     <string name="stamp_text_required">Type the text first.</string>
-    <string name="stamp_pro_message">Sign, Add text, Draw, Highlight, Watermark, Page numbers, Stamp and Redact are part of Pro (one-time purchase). Billing is not switched on yet, so Pro tools stay free in test builds.</string>
+    <string name="stamp_pro_message">Sign, text and redaction are Pro. Test builds are free.</string>
     <string name="stamp_redact_warn_title">Redaction is permanent</string>
-    <string name="stamp_redact_warn_message">Hidden text and pixels are removed for good in the new copy. The original document is not changed.</string>
+    <string name="stamp_redact_warn_message">Hidden text and pixels are removed for good in the new copy.</string>
     <string name="stamp_redact_warn_save">Save redacted copy</string>
 </resources>

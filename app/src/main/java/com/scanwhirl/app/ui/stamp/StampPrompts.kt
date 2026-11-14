@@ -93,10 +93,21 @@ object StampPrompts {
         lateinit var sheet: SwSheet
         saved.forEach { signature ->
             list.addView(
-                row(activity, signature.name) {
-                    sheet.dismiss()
-                    onPick(signature)
-                }
+                row(
+                    activity,
+                    signature.name,
+                    onClick = {
+                        sheet.dismiss()
+                        onPick(signature)
+                    },
+                    onLongClick = {
+                        sheet.dismiss()
+                        confirmSignatureDelete(activity, store, signature) {
+                            // Show what is left so a deletion never looks like a crash.
+                            signature(activity, store, onPick)
+                        }
+                    }
+                )
             )
         }
         sheet = SwSheet.builder(activity)
@@ -175,7 +186,30 @@ object StampPrompts {
         sheet.show()
     }
 
-    private fun row(activity: Activity, text: String, onClick: () -> Unit): TextView =
+    private fun confirmSignatureDelete(
+        activity: Activity,
+        store: SignatureStore,
+        signature: SignatureStore.SavedSignature,
+        onDeleted: () -> Unit
+    ) {
+        SwSheet.builder(activity)
+            .setTitle(R.string.stamp_signature_delete_title)
+            .setMessage(activity.getString(R.string.stamp_signature_delete_msg, signature.name))
+            .setPrimary(R.string.stamp_delete) {
+                store.delete(signature.id)
+                onDeleted()
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun row(
+        activity: Activity,
+        text: String,
+        onLongClick: (() -> Unit)? = null,
+        onClick: () -> Unit
+    ): TextView =
         SwStyle.text(
             activity, 16f, SwStyle.color(activity, R.color.text_hologram_hi)
         ).apply {
@@ -195,6 +229,13 @@ object StampPrompts {
             isClickable = true
             isFocusable = true
             setOnClickListener { onClick() }
+            if (onLongClick != null) {
+                isLongClickable = true
+                setOnLongClickListener {
+                    onLongClick()
+                    true
+                }
+            }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
