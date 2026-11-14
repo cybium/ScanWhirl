@@ -1,6 +1,10 @@
 package com.scanwhirl.app.tools
 
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -9,6 +13,8 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.ExportResultActivity
 import com.scanwhirl.app.ui.SwDialog
+import com.scanwhirl.app.ui.kit.PasswordField
+import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.protect.ProtectSheet
 import com.scanwhirl.app.ui.protect.TryCooldown
 import com.scanwhirl.app.ui.protect.UnlockSheet
@@ -20,6 +26,7 @@ import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.ceil
 
 /**
  * Lock / Unlock for saved scans AND device PDFs (v2: Protect PDF + Unlock sheet).
@@ -99,14 +106,18 @@ class LockFlow(
 
     /** Mockup 05 with the "Change password" title: the current password is checked first. */
     private fun promptChangePassword(doc: ScanDocument) {
-        promptCurrentPassword(activity, doc.name) { current ->
-            if (!repo.verifyPdfPassword(doc.id, current)) {
-                Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
-            } else {
-                promptNewPasswordForScan(doc, current = current)
-            }
+        promptCurrentPassword(
+            activity = activity,
+            docName = doc.name,
+            cooldown = cooldownFor(doc.id),
+            verify = { current -> repo.verifyPdfPassword(doc.id, current) }
+        ) { current ->
+            promptNewPasswordForScan(doc, current = current)
         }
     }
+
+    /** Mockup 05 for a document the host already knows (the reader's More → Protect PDF). */
+    fun protectDocument(doc: ScanDocument) = promptNewPasswordForScan(doc)
 
     /**
      * Mockup 05. [current] is the verified current password when changing it; null when protecting
@@ -370,22 +381,111 @@ class LockFlow(
         /** Per-document, per-process pacing (an id is only reused within one app run). */
         private val cooldowns = HashMap<String, TryCooldown>()
 
-        /** Asks for the document's current password; [onEntered] receives it unchecked. */
-        fun promptCurrentPassword(activity: AppCompatActivity, docName: String, onEntered: (String) -> Unit) {
-            val (builder, input) = SwDialog.input(
-                activity,
-                hint = activity.getString(R.string.protect_hint),
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            )
-            builder
+        /**
+         * Asks for the document's current password in an [SwSheet] with the kit's [PasswordField]
+         * (mockup 09's field, strength meter off). With [verify], a wrong password stays in the sheet
+         * and follows the Unlock sheet's tries-left and pause pacing ([cooldown]); without it the text
+         * is handed to [onEntered] unchecked, as before.
+         */
+        fun promptCurrentPassword(
+            activity: AppCompatActivity,
+            docName: String,
+            cooldown: TryCooldown = TryCooldown(),
+            verify: ((String) -> Boolean)? = null,
+            onEntered: (String) -> Unit
+        ) {
+            val field = PasswordField(activity).apply {
+                showStrength = false
+                editText.id = R.id.unlockPassword
+                editText.hint = activity.getString(R.string.protect_password_hint)
+                editText.contentDescription = activity.getString(R.string.protect_label_password)
+            }
+            val sheet = SwSheet.builder(activity)
                 .setTitle(R.string.unlock_current_pw_title)
                 .setMessage(docName)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    onEntered(input.text?.toString().orEmpty())
+                .setContent(field)
+                .setPrimary(R.string.continue_label)
+                .build()
+
+            val handler = Handler(Looper.getMainLooper())
+
+            fun clearError() {
+                field.setError(null)
+            }
+
+            fun tickPause() {
+                if (!sheet.isShowing) return
+                val left = cooldown.remainingPauseMs()
+                if (left <= 0L && cooldown.canTry()) {
+                    sheet.primaryButton.isEnabled = true
+                    field.setError(null)
+                    return
                 }
-                .setNegativeButton(android.R.string.cancel, null)
-                .showSw(isSheet = false)
+                sheet.primaryButton.isEnabled = false
+                field.setError(
+                    activity.getString(R.string.unlock_wrong_paused, ceil(left / 1000.0).toInt())
+                )
+                handler.postDelayed({ tickPause() }, 1000L)
+            }
+
+            fun attempt() {
+                val text = field.text()
+                if (verify == null) {
+                    handler.removeCallbacksAndMessages(null)
+                    sheet.dismiss()
+                    onEntered(text)
+                    return
+                }
+                if (!cooldown.canTry()) {
+                    tickPause()
+                    return
+                }
+                if (text.isEmpty()) {
+                    field.setError(
+                        activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
+                    )
+                    return
+                }
+                if (verify(text)) {
+                    cooldown.reset()
+                    handler.removeCallbacksAndMessages(null)
+                    sheet.dismiss()
+                    onEntered(text)
+                    return
+                }
+                val pause = cooldown.registerFailure()
+                if (pause > 0L) {
+                    field.setError(
+                        activity.getString(R.string.unlock_wrong_paused, pause / 1000)
+                    )
+                    tickPause()
+                } else {
+                    field.setError(
+                        activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
+                    )
+                }
+            }
+
+            field.editText.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: Editable?) = clearError()
+            })
+            sheet.primaryButton.setOnClickListener { attempt() }
+            field.editText.setOnEditorActionListener { _, action, _ ->
+                if (action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                    attempt()
+                    true
+                } else {
+                    false
+                }
+            }
+
+            // A pause can still be running from an earlier sheet (the pacing survives dismissal).
+            if (!cooldown.canTry()) tickPause()
+
+            sheet.show()
+            field.editText.requestFocus()
         }
     }
 }
