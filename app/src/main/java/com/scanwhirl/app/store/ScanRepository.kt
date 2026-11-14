@@ -26,6 +26,7 @@ import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.PdfVerifier
+import com.scanwhirl.app.util.PptxWriter
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
@@ -1400,6 +1401,12 @@ class ScanRepository(private val context: Context) {
     // Shared page-file naming (page_000.jpg, page_001.jpg, …).
     private val PAGE_FORMAT = "page_%03d.jpg"
 
+    /** Long side of a page image embedded in an exported Word file. */
+    private val WORD_PICTURE_MAX_PX = 1600
+
+    /** Long side of a page image placed on a PowerPoint slide. */
+    private val PPTX_PICTURE_MAX_PX = 2000
+
     /** Creates a brand-new scan document from raw page JPEG bytes. */
     suspend fun createDocument(
         name: String?,
@@ -2113,9 +2120,14 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Writes a `.docx` from the document's recognised text (one paragraph per OCR line, page
-     * break between pages). Never rewrites the document itself.
+     * break between pages). With [includePictures] each page starts with its own page image
+     * (fitted to the text width) followed by that page's text. Never rewrites the document.
      */
-    suspend fun exportWord(id: String, outFile: File): File = withContext(Dispatchers.IO) {
+    suspend fun exportWord(
+        id: String,
+        outFile: File,
+        includePictures: Boolean = false
+    ): File = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         val text = ocrStore.readText(id)
@@ -2126,8 +2138,67 @@ class ScanRepository(private val context: Context) {
         require(pages.any { lines -> lines.any { it.isNotBlank() } }) {
             "Read the text first, then convert it to Word."
         }
-        DocxWriter.write(outFile, pages)
+        if (includePictures) {
+            val context = currentCoroutineContext()
+            DocxWriter.writeWithPictures(
+                outFile,
+                doc.pageFiles.size,
+                pageLines = { index -> pages[index] },
+                pagePicture = { index ->
+                    context.ensureActive()
+                    wordPageJpeg(doc.pageFiles[index])
+                }
+            )
+        } else {
+            DocxWriter.write(outFile, pages)
+        }
         outFile
+    }
+
+    /** A page for an embedded Word picture: at most 1600 px on the long side, JPEG 90. */
+    private fun wordPageJpeg(page: File): ByteArray {
+        val bitmap = ImageTools.decodeSampledFile(page, WORD_PICTURE_MAX_PX)
+        return try {
+            ImageTools.encodeJpeg(bitmap, 90)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    /**
+     * Writes a minimal valid `.pptx`: one slide per page, each slide a picture of the page
+     * fitted to the slide; the page's OCR text goes in the speaker notes. Slide size follows
+     * the first page's aspect (A4, portrait or landscape). Pages are encoded one at a time.
+     */
+    suspend fun exportPowerPoint(id: String, outFile: File): File = withContext(Dispatchers.IO) {
+        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        refuseLockedSources(listOf(doc))
+        require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
+        val text = ocrStore.readText(id)
+        val firstSize = ImageTools.imageSize(doc.pageFiles.first().readBytes())
+            ?: throw IllegalStateException("Page ${doc.pageFiles.first().name} can't be read")
+        val context = currentCoroutineContext()
+        PptxWriter.write(
+            outFile,
+            doc.pageFiles.size,
+            portrait = firstSize.second >= firstSize.first,
+            pageJpeg = { index ->
+                context.ensureActive()
+                slidePageJpeg(doc.pageFiles[index])
+            },
+            pageNotes = { index -> text[doc.pageFiles[index].name] }
+        )
+        outFile
+    }
+
+    /** A page for a slide: at most 2000 px on the long side, JPEG 90. */
+    private fun slidePageJpeg(page: File): ByteArray {
+        val bitmap = ImageTools.decodeSampledFile(page, PPTX_PICTURE_MAX_PX)
+        return try {
+            ImageTools.encodeJpeg(bitmap, 90)
+        } finally {
+            bitmap.recycle()
+        }
     }
 
     /**

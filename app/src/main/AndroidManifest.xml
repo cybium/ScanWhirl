@@ -93,6 +93,11 @@
             android:parentActivityName=".ui.shell.ShellActivity" />
 
         <activity
+            android:name=".ui.tools.IdCardActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity" />
+
+        <activity
             android:name=".ui.ExportResultActivity"
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />

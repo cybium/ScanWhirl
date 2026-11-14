@@ -49,7 +49,7 @@ class ToolsUiTest {
 
     private val l4Tools = listOf(
         "id_card", "passport", "merge", "split", "extract", "duplicate", "compress",
-        "pdf_to_images", "long_image", "to_word", "zip", "remove_metadata"
+        "pdf_to_images", "long_image", "to_word", "to_powerpoint", "zip", "remove_metadata"
     )
 
     @Before
@@ -102,17 +102,22 @@ class ToolsUiTest {
             tool.launch(host, tool)
 
             val started = requireNotNull(shadowOf(app).nextStartedActivity) { "$id launched nothing" }
-            if (id == "passport") {
-                assertEquals(
+            when (id) {
+                "passport" -> assertEquals(
                     "$id must open the passport crop preset",
                     PassportActivity::class.java.name, started.component?.className
                 )
-            } else {
-                assertEquals(
-                    "$id must open the shared setup screen",
-                    ToolSetupActivity::class.java.name, started.component?.className
+                "id_card" -> assertEquals(
+                    "$id must open the ID card capture flow",
+                    IdCardActivity::class.java.name, started.component?.className
                 )
-                assertEquals("$id must carry its tool id", id, ToolSetupActivity.toolIdOf(started))
+                else -> {
+                    assertEquals(
+                        "$id must open the shared setup screen",
+                        ToolSetupActivity::class.java.name, started.component?.className
+                    )
+                    assertEquals("$id must carry its tool id", id, ToolSetupActivity.toolIdOf(started))
+                }
             }
         }
         assertTrue("a ready tool must not fall back to Coming soon", host.events.isEmpty())
@@ -178,8 +183,7 @@ class ToolsUiTest {
     }
 
     @Test
-    fun `compress setup offers a target size`() {
-        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
+    fun `compress setup offers a target size`() {        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
             scenario.onActivity { activity ->
                 assertNotNull("Compress needs a target-size field", activity.findViewById<View>(R.id.toolSetupTarget))
                 assertNotNull(activity.findViewById<View>(R.id.toolSetupRun))
@@ -188,15 +192,38 @@ class ToolsUiTest {
     }
 
     @Test
-    fun `id card setup offers the two sides and needs both`() {
-        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "id_card")).use { scenario ->
+    fun `to word setup offers the page pictures option and toggles it`() {
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "to_word")).use { scenario ->
             scenario.onActivity { activity ->
-                assertNotNull(activity.findViewById<View>(R.id.toolSetupFront))
-                assertNotNull(activity.findViewById<View>(R.id.toolSetupBack))
-                activity.findViewById<View>(R.id.toolSetupRun).performClick()
+                val toggle = activity.findViewById<View>(R.id.toolSetupWordPictures)
+                assertNotNull("To Word needs the page-pictures option", toggle)
+                toggle.performClick()
                 idle()
-                val error = activity.findViewById<TextView>(R.id.toolSetupError)
-                assertTrue(error.isVisible)
+                val after = activity.findViewById<View>(R.id.toolSetupWordPictures)
+                assertNotNull("the option must survive the re-render", after)
+                assertTrue("the option is a real toggle", after.hasOnClickListeners())
+            }
+        }
+    }
+
+    @Test
+    fun `to powerpoint setup explains the slides and notes`() {
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "to_powerpoint")).use { scenario ->
+            scenario.onActivity { activity ->
+                assertNotNull(activity.findViewById<View>(R.id.toolSetupOptions))
+                val texts = mutableListOf<String>()
+                fun walk(view: View) {
+                    if (view is TextView) texts += view.text?.toString().orEmpty()
+                    if (view is android.view.ViewGroup) {
+                        for (i in 0 until view.childCount) walk(view.getChildAt(i))
+                    }
+                }
+                walk(activity.findViewById(R.id.toolSetupOptions))
+                assertTrue(
+                    "PowerPoint setup must describe the slides: $texts",
+                    texts.any { it.contains("slide", ignoreCase = true) }
+                )
+                assertNotNull(activity.findViewById<View>(R.id.toolSetupRun))
             }
         }
     }

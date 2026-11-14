@@ -240,6 +240,7 @@ class ToolResultActivity : BaseActivity() {
     private fun iconFor(file: File): Int = when {
         file.name.endsWith(".zip") -> R.drawable.ic_sym_archive
         file.name.endsWith(".docx") -> R.drawable.ic_sym_description
+        file.name.endsWith(".pptx") -> R.drawable.ic_sym_table_chart
         else -> R.drawable.ic_sym_image
     }
 
@@ -411,6 +412,8 @@ class ToolResultActivity : BaseActivity() {
         files.any { it.name.endsWith(".png") } -> "image/png"
         files.any { it.name.endsWith(".docx") } ->
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        files.any { it.name.endsWith(".pptx") } ->
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         else -> "image/jpeg"
     }
 
