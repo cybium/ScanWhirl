@@ -2276,6 +2276,9 @@ class ScanRepository(private val context: Context) {
         regeneratePdf(dir)
     }
 
+    /** App context for callers that need per-app settings (OCR language) without owning one. */
+    internal fun appContext(): Context = context
+
     /** Next default scan name: "Document 1", "Document 2", …
      *  Starts at max(existing Document-N)+1 so the sequence is predictable
      *  and already-deleted numbers are not reused.  Then advances further
