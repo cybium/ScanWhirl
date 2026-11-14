@@ -142,7 +142,20 @@ object ToolRegistry {
         // Secure (4)
         build("protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted, "protect password encrypt aes"),
         build("unlock", ToolGroup.SECURE, R.string.tool_unlock, R.drawable.ic_sym_lock_open, "unlock password remove protection"),
-        build("vault", ToolGroup.SECURE, R.string.tool_vault, R.drawable.ic_sym_shield_lock, "vault private encrypted hidden"),
+        SwTool(
+            "vault", ToolGroup.SECURE, R.string.tool_vault, R.drawable.ic_sym_shield_lock,
+            false, ToolStatus.READY, "vault private encrypted hidden",
+            launch = { host, tool ->
+                // A real host is the shell (a Context): open L2's Vault screen. Any other
+                // host (tests) still gets a real action through the normal open path.
+                val context = host as? android.content.Context
+                if (context != null) {
+                    context.startActivity(com.scanwhirl.app.ui.vault.VaultActivity.intent(context))
+                } else {
+                    host.open(tool)
+                }
+            }
+        ),
         ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_shield_lock, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Text (3)

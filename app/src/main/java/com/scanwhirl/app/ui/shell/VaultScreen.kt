@@ -87,7 +87,7 @@ class VaultScreen(
                 context, SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f
             )
             isClickable = true
-            setOnClickListener { onComingSoon() }
+            setOnClickListener { context.startActivity(com.scanwhirl.app.ui.vault.VaultActivity.intent(context)) }
         }
         addView(
             action,

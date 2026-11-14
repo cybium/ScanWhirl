@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L2 v2 Vault (04_vault). Hindi values await native review. -->
+    <string name="vault_screen_title"><!-- review -->वॉल्ट</string>
+    <plurals name="vault_files_protected">
+        <item quantity="one"><!-- review -->%d फ़ाइल सुरक्षित</item>
+        <item quantity="other"><!-- review -->%d फ़ाइलें सुरक्षित</item>
+    </plurals>
+    <string name="vault_stats_body"><!-- review -->AES-256 · कुंजी इस फ़ोन के सुरक्षित चिप में बंद है\nऐप छोड़ते ही वॉल्ट बंद हो जाता है</string>
+    <string name="vault_locked_title"><!-- review -->वॉल्ट बंद है</string>
+    <string name="vault_locked_body"><!-- review -->अपनी निजी फ़ाइलें देखने के लिए फ़िंगरप्रिंट या पासकोड से खोलें।</string>
+    <string name="vault_not_setup_title"><!-- review -->आपकी निजी जगह</string>
+    <string name="vault_not_setup_body"><!-- review -->इस फ़ोन पर फ़ाइलें एन्क्रिप्ट रखने के लिए वॉल्ट सेट करें। इन्हें सिर्फ़ आप खोल सकते हैं।</string>
+    <string name="vault_banner_phone_lock"><!-- review -->फ़ोन लॉक से खुला · 2 मिनट में फिर बंद</string>
+    <string name="vault_banner_passcode"><!-- review -->पासकोड से खुला · 2 मिनट में फिर बंद</string>
+    <string name="vault_banner_recovery"><!-- review -->रिकवरी कोड से खुला · 2 मिनट में फिर बंद</string>
+    <string name="vault_banner_locked"><!-- review -->बंद · फ़िंगरप्रिंट या पासकोड</string>
+    <string name="vault_private_files"><!-- review -->निजी फ़ाइलें</string>
+    <string name="vault_add_files"><!-- review -->+ फ़ाइलें जोड़ें</string>
+    <string name="vault_recovery_button"><!-- review -->रिकवरी कोड</string>
+    <string name="vault_backup_button"><!-- review -->बैकअप फ़ाइल</string>
+    <string name="vault_setup_button"><!-- review -->वॉल्ट सेट करें</string>
+    <string name="vault_unlock_button"><!-- review -->वॉल्ट खोलें</string>
+    <string name="vault_no_files_title"><!-- review -->अभी कोई निजी फ़ाइल नहीं</string>
+    <string name="vault_empty_body"><!-- review -->अपनी लाइब्रेरी से दस्तावेज़ जोड़ें। सादी कॉपी हटाने से पहले फ़ाइलें एन्क्रिप्ट हो जाती हैं।</string>
+    <string name="vault_locked_desc"><!-- review -->वॉल्ट बंद करें</string>
+    <string name="vault_more_desc"><!-- review -->वॉल्ट विकल्प</string>
+    <string name="vault_entry_meta"><!-- review -->%1$d पेज · %2$s · %3$s</string>
+    <string name="vault_entry_meta_files"><!-- review -->%1$d पेज · %2$d फ़ाइलें · %3$s</string>
+
+    <string name="vault_setup_sheet_title"><!-- review -->अपना वॉल्ट सेट करें</string>
+    <string name="vault_setup_note"><!-- review -->6 या ज़्यादा अंकों का पासकोड चुनें। यही इस फ़ोन पर वॉल्ट खोलता है।</string>
+    <string name="vault_passcode_hint"><!-- review -->पासकोड (6+ अंक)</string>
+    <string name="vault_passcode_confirm_hint"><!-- review -->पासकोड दोबारा</string>
+    <string name="vault_passcode_short"><!-- review -->कम से कम 6 अंक दें</string>
+    <string name="vault_passcode_mismatch"><!-- review -->पासकोड मेल नहीं खाते</string>
+    <string name="vault_setup_primary"><!-- review -->वॉल्ट बनाएँ</string>
+    <string name="vault_cancel"><!-- review -->रद्द करें</string>
+
+    <string name="vault_recovery_sheet_title"><!-- review -->यह रिकवरी कोड सँभालें</string>
+    <string name="vault_recovery_note"><!-- review -->पासकोड भूलने और यह फ़ोन खोने पर यही एकमात्र रास्ता है। इसे अभी लिख लें — यह सिर्फ़ एक बार दिखता है।</string>
+    <string name="vault_recovery_once"><!-- review -->इस फ़ोन पर एन्क्रिप्ट। रिकवरी कोड और यह फ़ोन दोनों खोने पर कोई इन फ़ाइलों को नहीं खोल सकता — हम भी नहीं।</string>
+    <string name="vault_recovery_copy"><!-- review -->कोड कॉपी करें</string>
+    <string name="vault_recovery_copy_warning"><!-- review -->इस कोड वाला कोई भी आपका बैकअप खोल सकता है। इसे ऑफ़लाइन रखें।</string>
+    <string name="vault_copy_done"><!-- review -->रिकवरी कोड कॉपी हो गया</string>
+    <string name="vault_recovery_saved"><!-- review -->मैंने सँभाल लिया</string>
+    <string name="vault_confirm_title"><!-- review -->4 अक्षर लिखें</string>
+    <string name="vault_confirm_note"><!-- review -->सेटअप पूरा करने के लिए अपने रिकवरी कोड के पहले 4 अक्षर लिखें।</string>
+    <string name="vault_confirm_hint"><!-- review -->पहले 4 अक्षर</string>
+    <string name="vault_confirm_wrong"><!-- review -->यह कोड से मेल नहीं खाता</string>
+    <string name="vault_finish"><!-- review -->सेटअप पूरा करें</string>
+
+    <string name="vault_unlock_sheet_title"><!-- review -->वॉल्ट खोलें</string>
+    <string name="vault_unlock_note"><!-- review -->अपना पासकोड डालें, या फ़ोन का लॉक (फ़िंगरप्रिंट, चेहरा या PIN) पुष्ट करें।</string>
+    <string name="vault_passcode_hint_generic"><!-- review -->पासकोड</string>
+    <string name="vault_unlock_primary"><!-- review -->खोलें</string>
+    <string name="vault_unlock_wrong"><!-- review -->ग़लत पासकोड</string>
+    <string name="vault_unlock_pause"><!-- review -->बहुत बार ग़लत। %1$d सेकंड बाद फिर कोशिश करें।</string>
+    <string name="vault_use_phone_lock"><!-- review -->फ़िंगरप्रिंट या फ़ोन लॉक इस्तेमाल करें</string>
+    <string name="vault_phone_lock_prompt_title"><!-- review -->ScanWhirl वॉल्ट खोलें</string>
+    <string name="vault_phone_lock_prompt_note"><!-- review -->वॉल्ट खोलने के लिए फ़ोन का लॉक पुष्ट करें</string>
+    <string name="vault_phone_lock_failed"><!-- review -->फ़ोन लॉक से वॉल्ट नहीं खुला। पासकोड इस्तेमाल करें।</string>
+    <string name="vault_phone_lock_unavailable"><!-- review -->इस फ़ोन पर फ़िंगरप्रिंट या स्क्रीन लॉक जोड़ें, या पासकोड इस्तेमाल करें।</string>
+    <string name="vault_use_recovery"><!-- review -->रिकवरी कोड इस्तेमाल करें</string>
+    <string name="vault_recovery_unlock_title"><!-- review -->रिकवरी कोड इस्तेमाल करें</string>
+    <string name="vault_recovery_unlock_note"><!-- review -->24 अक्षरों का रिकवरी कोड डालें।</string>
+    <string name="vault_recovery_hint"><!-- review -->XXXX XXXX XXXX XXXX XXXX XXXX</string>
+    <string name="vault_recovery_wrong"><!-- review -->यह कोड काम नहीं आया</string>
+    <string name="vault_unlock_first"><!-- review -->पहले वॉल्ट खोलें</string>
+
+    <string name="vault_more_title"><!-- review -->वॉल्ट विकल्प</string>
+    <string name="vault_lock_now"><!-- review -->अभी बंद करें</string>
+    <string name="vault_change_passcode"><!-- review -->पासकोड बदलें</string>
+    <string name="vault_new_passcode_title"><!-- review -->नया पासकोड</string>
+    <string name="vault_new_passcode_note"><!-- review -->6 या ज़्यादा अंकों का नया पासकोड चुनें।</string>
+    <string name="vault_save"><!-- review -->सहेजें</string>
+    <string name="vault_passcode_changed"><!-- review -->पासकोड बदल गया</string>
+    <string name="vault_new_recovery_title"><!-- review -->नया रिकवरी कोड</string>
+    <string name="vault_new_recovery_note"><!-- review -->पुराना कोड काम करना बंद कर देगा। नया कोड अभी लिख लें।</string>
+    <string name="vault_recovery_make_new"><!-- review -->नया कोड बनाएँ</string>
+    <string name="vault_recovery_explain"><!-- review -->रिकवरी कोड सेटअप के समय एक बार दिखा था। पासकोड भूलने पर यही एकमात्र रास्ता है।</string>
+
+    <string name="vault_add_sheet_title"><!-- review -->वॉल्ट में जोड़ें</string>
+    <string name="vault_add_sheet_note"><!-- review -->अपनी लाइब्रेरी से दस्तावेज़ चुनें।</string>
+    <string name="vault_add_empty"><!-- review -->लाइब्रेरी में कोई दस्तावेज़ नहीं। पहले स्कैन या इम्पोर्ट करें।</string>
+    <string name="vault_added"><!-- review -->वॉल्ट में जोड़ दिया</string>
+    <string name="vault_add_failed"><!-- review -->यह दस्तावेज़ नहीं जोड़ा जा सका: %1$s</string>
+
+    <string name="vault_open"><!-- review -->खोलें</string>
+    <string name="vault_remove"><!-- review -->वॉल्ट से हटाएँ</string>
+    <string name="vault_remove_note"><!-- review -->यह एन्क्रिप्टेड कॉपी हमेशा के लिए मिटा देगा। लाइब्रेरी की कॉपी पहले ही हट चुकी है।</string>
+    <string name="vault_removed"><!-- review -->वॉल्ट से हटा दिया</string>
+    <string name="vault_open_failed"><!-- review -->यह दस्तावेज़ नहीं खुल सका: %1$s</string>
+
+    <string name="vault_backup_name"><!-- review -->ScanWhirl-vault-%1$s.swvault</string>
+    <string name="vault_backup_done"><!-- review -->बैकअप सहेजा गया</string>
+    <string name="vault_backup_failed"><!-- review -->बैकअप नहीं सहेजा जा सका: %1$s</string>
+    <string name="vault_backup_note"><!-- review -->बैकअप एन्क्रिप्टेड है। रिकवरी कोड के बिना इसे नहीं खोला जा सकता।</string>
+    <string name="vault_backup_requires_setup"><!-- review -->पहले वॉल्ट सेट करें</string>
+    <string name="vault_restore_title"><!-- review -->बैकअप बहाल करें</string>
+    <string name="vault_restore_note"><!-- review -->इस बैकअप वाला रिकवरी कोड डालें।</string>
+    <string name="vault_restore_primary"><!-- review -->बहाल करें</string>
+    <string name="vault_restore_done"><!-- review -->बैकअप बहाल हो गया। इस फ़ोन पर नया पासकोड सेट करें।</string>
+    <string name="vault_restore_failed"><!-- review -->बैकअप बहाल नहीं हो सका: %1$s</string>
+    <string name="vault_restore_busy"><!-- review -->बहाल हो रहा है…</string>
+
+    <string name="vault_legacy_title"><!-- review -->पुराना PIN वॉल्ट</string>
+    <string name="vault_legacy_note"><!-- review -->पुरानी फ़ाइलें एन्क्रिप्टेड वॉल्ट में लाने के लिए एक बार पुराना 4-अंकों का PIN डालें।</string>
+    <string name="vault_legacy_pin_hint"><!-- review -->4-अंकों का PIN</string>
+    <string name="vault_legacy_wrong"><!-- review -->ग़लत PIN</string>
+    <string name="vault_legacy_continue"><!-- review -->जारी रखें</string>
+    <string name="vault_legacy_skip"><!-- review -->पुरानी फ़ाइलों के बिना सेट करें</string>
+    <string name="vault_legacy_migrated"><!-- review -->%1$d पुरानी फ़ाइलें वॉल्ट में आ गईं</string>
+    <string name="vault_legacy_later"><!-- review -->पुराना PIN वॉल्ट वॉल्ट विकल्पों से बाद में बदला जा सकता है।</string>
+    <string name="vault_migrate_legacy"><!-- review -->पुरानी PIN फ़ाइलें लाएँ</string>
+</resources>
