@@ -16,6 +16,7 @@ import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PageReplace
+import com.scanwhirl.app.util.PageStamp
 import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
@@ -1911,5 +1912,76 @@ class ScanRepository(private val context: Context) {
             }
         }
         return null
+    }
+
+    /**
+     * L5 Edit & sign: bakes [edits] (vector marks per page) into a **new copy** and returns it.
+     *
+     * Order matters for data safety:
+     *  1. the source is only read; a locked source is refused (its password cannot re-encrypt);
+     *  2. [duplicateDocument] makes the copy, so a failure can never leave the library half-edited;
+     *  3. each page is decoded once (≤ 3000 px), marked and swapped through [PageReplace];
+     *  4. a page carrying a redaction loses its OCR text/geometry and its kept `.orig`, then is
+     *     re-queued for recognition — the old text and unredacted pixels are not in the copy;
+     *  5. the PDF is regenerated and verified before the copy is handed back.
+     *
+     * Any failure deletes the unfinished copy and leaves the source byte-identical.
+     */
+    suspend fun stampDocument(
+        id: String,
+        edits: List<PageStamp.PageEdits>,
+        suggestedName: String?
+    ): ScanDocument = withContext(Dispatchers.IO) {
+        val source = loadDocument(File(docsDir, id))
+            ?: throw IllegalStateException(context.getString(R.string.stamp_not_found))
+        refuseLockedSources(listOf(source))
+
+        val effective = edits.mapNotNull { edit ->
+            val marks = edit.marks.filterNot { mark ->
+                mark is PageStamp.Mark.Text && mark.text.isBlank()
+            }
+            if (marks.isEmpty()) null else PageStamp.PageEdits(edit.pageIndex, marks)
+        }
+        require(effective.isNotEmpty()) { context.getString(R.string.stamp_no_marks) }
+        effective.forEach { edit ->
+            require(edit.pageIndex in source.pageFiles.indices) {
+                context.getString(R.string.stamp_no_page)
+            }
+        }
+
+        val copy = duplicateDocument(
+            id,
+            suggestedName?.trim()?.takeIf { it.isNotBlank() }
+                ?: PageStamp.outputName(source.name, effective.flatMap { it.marks })
+        )
+        val copyDir = File(docsDir, copy.id)
+        try {
+            val pages = pageFilesIn(copyDir)
+            effective.groupBy { it.pageIndex }.toSortedMap().forEach { (index, pageEdits) ->
+                val page = pages[index]
+                val marks = pageEdits.flatMap { it.marks }
+                PageStamp.applyPage(page, marks, index + 1, pages.size)
+                if (marks.any { it is PageStamp.Mark.Redact }) {
+                    // I9/E10: no unredacted pixels and no recognised text survive in the copy.
+                    File(page.parentFile, page.nameWithoutExtension + ".orig").delete()
+                    ocrStore.invalidate(copy.id, page.name)
+                }
+            }
+            regeneratePdf(copyDir)
+            PdfVerifier.verify(
+                File(copyDir, PdfProtection.PDF_FILE),
+                expectedImages = pageFilesIn(copyDir)
+            )
+            loadDocument(copyDir)
+                ?: throw IOException(context.getString(R.string.stamp_copy_failed))
+        } catch (t: Throwable) {
+            try {
+                deleteDocument(copy.id)
+            } catch (_: Exception) {
+                // The error below is the one worth showing; an incomplete copy is recovered by
+                // the existing trash sweep, and it is never offered as a finished document.
+            }
+            throw t
+        }
     }
 }
