@@ -399,6 +399,14 @@
     <string name="locked_no_pages"><!-- review -->इस दस्तावेज़ में पेज की तस्वीरें नहीं हैं, इसलिए इसका पासवर्ड बदला या हटाया नहीं जा सकता।</string>
     <string name="unlock_current_pw_title"><!-- review -->मौजूदा पासवर्ड</string>
     <string name="password_charset"><!-- review -->अंग्रेज़ी अक्षर, अंक और सामान्य चिह्न इस्तेमाल करें। PDF पासवर्ड में इमोजी और हिंदी अक्षर नहीं चलते।</string>
+    <string name="protection_repair_title"><!-- review -->सुरक्षा ठीक करनी है</string>
+    <string name="protection_repair_msg"><!-- review -->“%1$s” लॉक दिखता है, पर इसकी PDF पर पासवर्ड नहीं है। जो कॉपी आप पहले शेयर या सेव कर चुके हैं, वे इससे नहीं बदलेंगी। इसे फिर से सुरक्षित करने के लिए अपना पासवर्ड डालें।</string>
+    <string name="btn_protect_again"><!-- review -->फिर से सुरक्षित करें</string>
+    <string name="btn_remove_lock"><!-- review -->लॉक हटाएँ</string>
+    <string name="protection_not_now"><!-- review -->अभी नहीं</string>
+    <string name="protection_unknown_msg"><!-- review -->इस PDF पर ऐसा पासवर्ड है जो ScanWhirl नहीं जानता। क्या इसे आपके पेजों से बिना पासवर्ड के दोबारा बनाएँ?</string>
+    <string name="btn_rebuild_pdf"><!-- review -->PDF दोबारा बनाएँ</string>
+    <string name="protection_repaired"><!-- review -->फिर से सुरक्षित किया गया</string>
     <string name="vault_add_pdf"><!-- review -->Import a उपकरण PDF</string>
     <string name="vault_add_scan"><!-- review -->Move a सहेजा गया स्कैन here</string>
     <string name="vault_add_title"><!-- review -->Add को Hidden Vault</string>

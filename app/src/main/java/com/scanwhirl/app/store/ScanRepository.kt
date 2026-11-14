@@ -1623,6 +1623,60 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir)!!
         }
 
+    fun protectionState(id: String): PdfProtection.State = PdfProtection.state(File(docsDir, id))
+
+    /**
+     * PM-3.1c (A5): `locked.meta` sits beside a plain `scan.pdf`. With the right [password] the PDF is
+     * encrypted again through the same build-and-swap as [protectPdf] and I3 holds. The RC4 key needs
+     * the password, so this can never run without the user. A wrong password changes nothing.
+     */
+    suspend fun repairProtection(id: String, password: String): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            check(PdfProtection.state(dir) == PdfProtection.State.NEEDS_REPAIR) { "Protection does not need repair" }
+            if (!verifyPdfPassword(id, password)) {
+                throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
+            }
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            encryptInto(dir, doc, password, "repair")
+            recordLockIndex(File(dir, PdfProtection.PDF_FILE), id)
+            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after repair")
+        }
+
+    /**
+     * PM-3.1c: the user chose to drop a lock label that has no protected PDF behind it. Only
+     * `locked.meta` is deleted, and only after the right [password].
+     */
+    suspend fun removeProtectionLabel(id: String, password: String): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            check(PdfProtection.state(dir) == PdfProtection.State.NEEDS_REPAIR) { "Protection does not need repair" }
+            if (!verifyPdfPassword(id, password)) {
+                throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
+            }
+            synchronized(PDF_LOCK) {
+                File(dir, LOCK_FILE).delete()
+                Durable.syncDir(dir)
+            }
+            pruneLockIndex()
+            loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+        }
+
+    /**
+     * PM-3.1c: the PDF is encrypted with a password nobody here knows and there is no `locked.meta`.
+     * Rebuilds a plain PDF from the stored pages. Allowed because no lock record exists, so the
+     * generator's choke does not refuse; the swap is atomic.
+     */
+    suspend fun rebuildPlainPdf(id: String): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            check(PdfProtection.state(dir) == PdfProtection.State.UNKNOWN_PASSWORD) { "PDF is not an unknown-password PDF" }
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
+            regeneratePdf(dir)
+            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rebuild")
+        }
+
     /** Startup recovery for [OpStaging]: removes working folders left by a dead process. Returns the count. */
     fun recoverOperations(): Int = OpStaging.sweep(context.filesDir)
 

@@ -53,6 +53,28 @@ object PdfProtection {
         return text.substring(from, end).contains("/Encrypt")
     }
 
-    /** True when the PDF password and its lock hash agree: printable Latin-1 only (F15). */
-    fun isEncodable(pw: String): Boolean = pw.all { it in ' '..'~' || it in ' '..'ÿ' }
+    /** What a document's lock record and PDF say about each other (PM-3.1c, invariant I3). */
+    enum class State { NONE, LOCKED, NEEDS_REPAIR, UNKNOWN_PASSWORD, UNREADABLE }
+
+    /**
+     * Classifies [dir] by its lock record and its PDF's trailer (reads at most 4 KiB, never greps the file, G18).
+     * A missing or trailer-less PDF is [State.UNREADABLE].
+     */
+    fun state(dir: File): State {
+        val locked = File(dir, LOCK_FILE).exists()
+        val encrypted = isEncrypted(File(dir, PDF_FILE)) ?: return State.UNREADABLE
+        return when {
+            locked && encrypted -> State.LOCKED
+            locked -> State.NEEDS_REPAIR
+            encrypted -> State.UNKNOWN_PASSWORD
+            else -> State.NONE
+        }
+    }
+
+    /**
+     * True when the PDF password and its lock hash agree: non-empty printable Latin-1 only (F15).
+     * The ranges are U+0020..U+007E and U+00A0..U+00FF; the C1 controls U+007F..U+009F are excluded.
+     */
+    fun isEncodable(pw: String): Boolean =
+        pw.isNotEmpty() && pw.all { it in ' '..'~' || it in ' '..'ÿ' }
 }

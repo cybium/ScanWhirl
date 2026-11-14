@@ -311,6 +311,14 @@
     <string name="locked_no_pages">This document has no page images, so its password can’t be changed or removed.</string>
     <string name="unlock_current_pw_title">Current password</string>
     <string name="password_charset">Use letters, numbers and common symbols. Emoji and non-Latin letters can’t be used in a PDF password.</string>
+    <string name="protection_repair_title">Protection needs repair</string>
+    <string name="protection_repair_msg">“%1$s” is marked as locked, but its PDF is not password-protected. Copies you already shared or saved are not changed by this. Enter your password to protect it again.</string>
+    <string name="btn_protect_again">Protect again</string>
+    <string name="btn_remove_lock">Remove lock</string>
+    <string name="protection_not_now">Not now</string>
+    <string name="protection_unknown_msg">This PDF has a password ScanWhirl doesn’t know. Rebuild it from your pages without a password?</string>
+    <string name="btn_rebuild_pdf">Rebuild PDF</string>
+    <string name="protection_repaired">Protected again</string>
     <string name="ocr_title">Extracted Text (OCR)</string>
     <string name="ocr_running">Extracting text from pages…</string>
     <string name="ocr_empty">No printed text detected on these pages.</string>

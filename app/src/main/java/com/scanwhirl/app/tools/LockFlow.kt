@@ -185,7 +185,13 @@ class LockFlow(
                     .setTitle(R.string.protect_title)
                     .setMessage(R.string.protect_note)
                     .setPositiveButton(R.string.protect_apply) { _, _ ->
-                        runLockDevicePdf(uri, input.text?.toString().orEmpty())
+                        val pw = input.text?.toString().orEmpty()
+                        // PM-3.1b review C3: reject a non-Latin password BEFORE anything is imported.
+                        if (pw.isNotBlank() && !PdfProtection.isEncodable(pw)) {
+                            Toast.makeText(activity, R.string.password_charset, Toast.LENGTH_LONG).show()
+                        } else {
+                            runLockDevicePdf(uri, pw)
+                        }
                     }
                     .setNegativeButton(android.R.string.cancel, null)
                     .showSw(isSheet = false)
@@ -208,7 +214,14 @@ class LockFlow(
                 }
                 val name = FlowUtil.devicePdfName(repo, uri)
                 val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
-                val locked = withContext(Dispatchers.IO) { repo.protectPdf(doc.id, password) }
+                val locked = try {
+                    withContext(Dispatchers.IO) { repo.protectPdf(doc.id, password) }
+                } catch (e: Exception) {
+                    // PM-3.1b review C3: the user never keeps an unprotected copy they did not ask for.
+                    runCatching { withContext(Dispatchers.IO) { repo.moveToTrash(doc.id) } }
+                    host.refreshList()
+                    throw e
+                }
                 progress.dismiss()
                 host.refreshList()
                 Toast.makeText(activity, R.string.protect_done, Toast.LENGTH_LONG).show()

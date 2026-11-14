@@ -134,7 +134,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // test26 T5.2 (§4.5): one home per action. Dock = Share · Edit · Text ·
         // More; everything secondary lives in showMoreSheet(); page-level work
         // lives in Select pages mode or the page editor.
-        binding.btnShare.setOnClickListener { document?.let { ShareUtils.share(this, it) } }
+        binding.btnShare.setOnClickListener {
+            document?.let { doc ->
+                ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
+                    ShareUtils.share(this, doc)
+                }
+            }
+        }
         binding.btnEdit.setOnClickListener {
             docId?.let { id -> startActivity(PageViewerActivity.intent(this, id, 0)) }
         }
@@ -504,42 +510,45 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      */
     private fun savePdfToDocuments() {
         val doc = document ?: return
-        if (!doc.pdfFile.exists() || doc.pdfFile.length() == 0L) {
-            Toast.makeText(this, R.string.pdf_missing, Toast.LENGTH_SHORT).show()
-            return
-        }
-        withStoragePermission {
-            lifecycleScope.launch {
-                try {
-                    val saved = withContext(Dispatchers.IO) {
-                        DownloadSaver.savePdfFile(
-                            this@DocumentViewerActivity,
-                            doc.pdfFile,
-                            DownloadSaver.pdfNameFor(doc.name)
-                        ).also {
-                            // T4.8: remember the copy so delete can remove it. A failure to
-                            // record it must not turn a finished export into a failed one.
-                            try {
-                                repo.addExport(doc.id, it)
-                            } catch (_: Exception) {
+        // PM-3.1c: a document whose lock and PDF disagree is repaired first, never saved silently.
+        ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
+            if (!doc.pdfFile.exists() || doc.pdfFile.length() == 0L) {
+                Toast.makeText(this, R.string.pdf_missing, Toast.LENGTH_SHORT).show()
+                return@guardExport
+            }
+            withStoragePermission {
+                lifecycleScope.launch {
+                    try {
+                        val saved = withContext(Dispatchers.IO) {
+                            DownloadSaver.savePdfFile(
+                                this@DocumentViewerActivity,
+                                doc.pdfFile,
+                                DownloadSaver.pdfNameFor(doc.name)
+                            ).also {
+                                // T4.8: remember the copy so delete can remove it. A failure to
+                                // record it must not turn a finished export into a failed one.
+                                try {
+                                    repo.addExport(doc.id, it)
+                                } catch (_: Exception) {
+                                }
                             }
                         }
+                        SavedSnackbar.showExport(
+                            this@DocumentViewerActivity,
+                            binding.root,
+                            saved,
+                            R.string.pdf_saved_docs,
+                            doc.id
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            this@DocumentViewerActivity,
+                            getString(R.string.pdf_save_failed, e.message),
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
-                    SavedSnackbar.showExport(
-                        this@DocumentViewerActivity,
-                        binding.root,
-                        saved,
-                        R.string.pdf_saved_docs,
-                        doc.id
-                    )
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Toast.makeText(
-                        this@DocumentViewerActivity,
-                        getString(R.string.pdf_save_failed, e.message),
-                        Toast.LENGTH_LONG
-                    ).show()
                 }
             }
         }

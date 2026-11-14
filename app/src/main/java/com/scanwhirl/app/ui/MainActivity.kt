@@ -1429,7 +1429,7 @@ class MainActivity : BaseActivity(), HomeHost {
         }
         view.findViewById<View>(R.id.qaShare).setOnClickListener {
             sheet.dismiss()
-            ShareUtils.share(this, doc)
+            ProtectionDialogs.guardExport(this, repo, doc, onResolved = { refreshList() }) { ShareUtils.share(this, doc) }
         }
         view.findViewById<View>(R.id.qaDelete).setOnClickListener {
             sheet.dismiss()
@@ -1785,10 +1785,19 @@ class MainActivity : BaseActivity(), HomeHost {
                 val pw = input.text?.toString().orEmpty()
                 if (repo.verifyPdfPassword(doc.id, pw)) {
                     lifecycleScope.launch {
-                        withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, pw) } // pw verified above
-                        Toast.makeText(this@MainActivity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
-                        refreshList()
-                        onUnlocked()
+                        // PM-3.1b review C2: unlockPdf can still throw (for example locked_no_pages).
+                        try {
+                            withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, pw) } // pw verified above
+                            Toast.makeText(this@MainActivity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
+                            refreshList()
+                            onUnlocked()
+                        } catch (e: Exception) {
+                            Toast.makeText(
+                                this@MainActivity,
+                                getString(R.string.page_op_failed, e.message),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
                     }
                 } else {
                     Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()

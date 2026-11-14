@@ -4,6 +4,7 @@ import android.content.Context
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 
 /**
@@ -20,6 +21,8 @@ object AutoExport {
      */
     fun afterSave(context: Context, repo: ScanRepository, doc: ScanDocument): String? {
         if (!Prefs.autoCopyToDocuments(context) || !doc.pdfFile.exists() || doc.pdfFile.length() == 0L) return null
+        // PM-3.1c: never copy a PDF whose lock record says "protected" while the PDF is not.
+        if (PdfProtection.state(doc.pdfFile.parentFile!!) == PdfProtection.State.NEEDS_REPAIR) return null
         return try {
             val copy = DownloadSaver.savePdfFile(context, doc.pdfFile, DownloadSaver.pdfNameFor(doc.name))
             // T4.8: remember the copy so delete can remove it; failing to record it is not a failed export.

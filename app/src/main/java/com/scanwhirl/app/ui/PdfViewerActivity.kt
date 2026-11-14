@@ -144,6 +144,14 @@ class PdfViewerActivity : BaseActivity() {
             }
         }
         binding.pdfPager.post { updateIndicator() }
+
+        // PM-3.1c: a lock record without a protected PDF (or the reverse) is offered for repair when
+        // the reader opens. DEVICE-UNPROVEN: PdfRenderer does not run under Robolectric (F22).
+        if (docId != null) {
+            repo.getDocument(docId)?.let { doc ->
+                ProtectionDialogs.showFor(this, repo, doc) { recreate() }
+            }
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -227,7 +235,11 @@ class PdfViewerActivity : BaseActivity() {
                 if (doc == null) throw NoPdfException(R.string.doc_not_found)
                 docPageKeys = doc.pageFiles.map { it.name }
                 privateDoc = doc.isVaulted || doc.isLocked
-                val file = if (doc.isLocked && doc.pageFiles.isNotEmpty()) {
+                // PM-3.1c: an encrypted PDF with no lock record (unknown password) cannot be rendered
+                // either, so it is previewed from its pages exactly like a locked one.
+                val unknownPassword = (application as ScanWhirlApp).repository.protectionState(docId) ==
+                    com.scanwhirl.app.util.PdfProtection.State.UNKNOWN_PASSWORD
+                val file = if ((doc.isLocked || unknownPassword) && doc.pageFiles.isNotEmpty()) {
                     val preview = File(cacheDir, "preview_${doc.id}.pdf")
                     com.scanwhirl.app.util.PdfGenerator.imagesToPdf(doc.pageFiles, preview)
                     preview
