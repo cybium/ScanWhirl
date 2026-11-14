@@ -244,7 +244,7 @@ class VaultPasswordsWiringTest {
         setUpVault()
         VaultSession.close()
         var unlockRequests = 0
-        VaultPasswordsFlow.unlockLauncher = { _, onReturn ->
+        VaultPasswordsFlow.unlockLauncher = { _, _, onReturn ->
             unlockRequests++
             onReturn()
         }
@@ -326,7 +326,12 @@ class VaultPasswordsWiringTest {
 
             // The 2-minute grace expires while the sheet is open: tapping must unlock and retry.
             VaultSession.close()
-            VaultPasswordsFlow.unlockLauncher = { _, onReturn ->
+            VaultPasswordsFlow.unlockLauncher = { _, reason, onReturn ->
+                assertEquals(
+                    "the unlock sheet says why the Vault opened",
+                    app.getString(R.string.vault_reason_use_password),
+                    reason
+                )
                 assertTrue(vaultStore.unlockWithPasscode(passcode).ok)
                 onReturn()
             }

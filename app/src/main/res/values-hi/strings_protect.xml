@@ -47,6 +47,7 @@
     <string name="import_unlock_note"><!-- review -->इसके पृष्ठ आयात करने के लिए पासवर्ड डालें। मूल फ़ाइल नहीं बदलेगी।</string>
     <string name="import_unlock_unsupported"><!-- review -->यह PDF ऐसा पासवर्ड प्रारूप उपयोग करता है जिसे ScanWhirl नहीं खोल सकता। इसे बनाने वाले ऐप में हटाएँ।</string>
     <string name="import_unlock_failed"><!-- review -->यह PDF आयात नहीं हो सका: %1$s</string>
+    <string name="vault_reason_use_password"><!-- review -->सहेजा पासवर्ड उपयोग करने के लिए Vault खोलें।</string>
     <string name="vault_password_missing"><!-- review -->कोई सहेजा पासवर्ड नहीं। उसे टाइप करें।</string>
     <string name="vault_password_stale"><!-- review -->सहेजा पासवर्ड काम नहीं आया। उसे टाइप करें।</string>
 </resources>
