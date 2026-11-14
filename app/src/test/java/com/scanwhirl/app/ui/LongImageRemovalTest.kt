@@ -219,8 +219,17 @@ class LongImageRemovalTest {
         // Unit tests run with the module directory (app/) as the working dir.
         val main = File("src/main")
         assertTrue("src/main is reachable from the test working dir", main.isDirectory)
+        // v2 UI: 03_tools_hub — Long image is a new Build tool owned by L4. The
+        // catalogue entry (and its two strings) is the only allowed mention; the
+        // removed WP-08 implementation, ids and drawable stay banned below.
+        val v2Catalogue = setOf(
+            "src/main/java/com/scanwhirl/app/ui/kit/ToolRegistry.kt",
+            "src/main/res/values/strings_l1.xml",
+            "src/main/res/values-hi/strings_l1.xml"
+        )
         val offenders = main.walkTopDown()
             .filter { it.isFile && it.extension in setOf("kt", "java", "xml") }
+            .filter { it.path.replace('\\', '/') !in v2Catalogue }
             .filter { longImageText.containsMatchIn(it.readText()) || longImageText.containsMatchIn(it.name) }
             .map { it.path }
             .toList()
