@@ -12,6 +12,7 @@ object Prefs {
     private const val KEY_VIEWER = "default_viewer"
     private const val KEY_SORT = "sort_mode"
     private const val KEY_LOCALE = "locale_tag"
+    private const val KEY_OCR_LANGUAGE = "ocr_language"
     private const val KEY_GREETING = "show_greeting"
     private const val KEY_WALLPAPER_URI = "wallpaper_uri"
     private const val KEY_WALLPAPER_ON = "wallpaper_on"
@@ -106,6 +107,11 @@ object Prefs {
     fun makeSearchable(c: Context): Boolean = sp(c).getBoolean(KEY_MAKE_SEARCHABLE, true)
     fun setMakeSearchable(c: Context, v: Boolean) =
         sp(c).edit().putBoolean(KEY_MAKE_SEARCHABLE, v).apply()
+
+    /** OCR language: "en" (Latin, default), "en+hi" (both recognizers) or "hi" (Devanagari). */
+    fun ocrLanguage(c: Context): String = sp(c).getString(KEY_OCR_LANGUAGE, "en") ?: "en"
+    fun setOcrLanguage(c: Context, value: String) =
+        sp(c).edit().putString(KEY_OCR_LANGUAGE, value).apply()
 
     fun hasVaultPin(c: Context): Boolean =
         !sp(c).getString(KEY_VAULT_PIN, null).isNullOrBlank()

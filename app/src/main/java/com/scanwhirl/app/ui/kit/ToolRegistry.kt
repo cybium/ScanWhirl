@@ -160,7 +160,7 @@ object ToolRegistry {
         ready("long_image", ToolGroup.CONVERT, R.string.tool_long_image, R.drawable.ic_sym_view_day, "long image stitch pages", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("to_word", ToolGroup.CONVERT, R.string.tool_to_word, R.drawable.ic_sym_description, "word docx document text", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("to_powerpoint", ToolGroup.CONVERT, R.string.tools_tool_to_powerpoint, R.drawable.ic_sym_slideshow, "powerpoint pptx slides presentation deck", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        soon("to_excel", ToolGroup.CONVERT, R.string.tool_to_excel, R.drawable.ic_sym_table_chart, "excel xlsx table sheet", pro = true, note = R.string.soon_to_excel),
+        ready("to_excel", ToolGroup.CONVERT, R.string.tool_to_excel, R.drawable.ic_sym_table_chart, "excel xlsx table sheet", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("to_text", ToolGroup.CONVERT, R.string.tool_to_text, R.drawable.ic_sym_notes, "text txt export ocr"),
         ready("zip", ToolGroup.CONVERT, R.string.tool_zip, R.drawable.ic_sym_archive, "zip archive export batch", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "searchable text layer ocr pdf"),
@@ -221,7 +221,21 @@ object ToolRegistry {
 
         // Text (2)
         ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy"),
-        soon("hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language, "hindi devanagari text", note = R.string.soon_hindi_text)
+        SwTool(
+            "hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language,
+            false, ToolStatus.READY, "hindi devanagari text read ocr",
+            launch = { host, tool ->
+                val activity = host as? androidx.appcompat.app.AppCompatActivity
+                if (activity != null) {
+                    com.scanwhirl.app.tools.HindiTextLauncher.open(
+                        activity,
+                        com.scanwhirl.app.ScanWhirlApp.from(activity).repository
+                    )
+                } else {
+                    host.open(tool)
+                }
+            }
+        )
     )
 
     private val byId: Map<String, SwTool> = all.associateBy { it.id }

@@ -62,3 +62,4 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 - L5: Insert pages, then signature/stamp from photo (InkExtract), Mask Aadhaar tool.
 - QA: run3 on the next build: RUN3_CHECKLIST (42 bugs) + full map + owner material (no ML Kit camera judgments: phone face down; scanner gallery import CAN be tested).
 - Lead: review every eval preview and every run3 screenshot; merge after review; keep integration green; release test29 when run3 verdicts are clean.
+- 11-15 03:21 QA run3 partial (one session cannot hold the whole app). Lead reviewed all 75 run3 shots. New QA method: fresh small-scope QA sessions in sequence. QA-3b = ses_e23f51416ffe65yaEiFVyfkmTX (19 untested checklist rows). Dispatched: L1 search no-match/search mode/persisted query/empty clip/chooser height; L3 horizontal spine evidence.

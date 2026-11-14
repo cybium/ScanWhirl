@@ -304,10 +304,16 @@ class Phase5ScreensTest {
                     rowAbout.parent, rowPrivacy.parent)
                 assertEquals("about card: 2 rows + 1 divider", 3, (rowAbout.parent as ViewGroup).childCount)
 
-                // Language is a single-row card.
+                // Language is a card with the app language row and the OCR text-language row.
                 val rowLanguage = activity.findViewById<View>(R.id.rowLanguage)
                 val languageContainer = rowLanguage.parent as ViewGroup
-                assertEquals("language card: single row", 1, languageContainer.childCount)
+                // v2 UI: 08_text_ocr - the owner asked for "Text language" beside the app language.
+                assertEquals("language card: app language + text language", 2, languageContainer.childCount)
+                assertEquals(
+                    "the text-language row follows the app language row",
+                    1,
+                    languageContainer.indexOfChild(activity.findViewById<View>(R.id.rowOcrLanguage))
+                )
                 assertTrue("language row lives inside a MaterialCardView",
                     languageContainer.parent is com.google.android.material.card.MaterialCardView)
 

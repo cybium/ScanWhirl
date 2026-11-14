@@ -124,7 +124,9 @@ class PdfTextLayerTest {
     fun `sanitize truncates long lines`() {
         val long = "a".repeat(500)
         val out = PdfTextLayer.contentFor(page(100, 100, line(long, 0, 0, 10, 10)), 100, 100)
-        assertTrue(out.length <= 400 + 100) // snippet overhead
+        // The visible fallback inside ( … ) stays under the limit; /ActualText may be longer.
+        val fallback = out.substringAfter(" Tm (", "").substringBefore(") Tj")
+        assertTrue("fallback is short: ${fallback.length}", fallback.length <= 400)
     }
 
     @Test
@@ -133,6 +135,36 @@ class PdfTextLayerTest {
         val out = PdfTextLayer.contentFor(page(100, 100, *lines.toTypedArray()), 100, 100)
         val ops = out.count { it == '\n' }
         assertTrue("should emit at most 600 lines, got $ops", ops <= 600)
+    }
+
+    // ---- ActualText (searchable Devanagari) -------------------------------
+
+    @Test
+    fun `devanagari is carried exactly in ActualText`() {
+        val out = PdfTextLayer.contentFor(page(600, 800, line("कुल राशि 1250", 20, 40, 560, 70)), 600, 800)
+        assertTrue("the exact Unicode is in /ActualText: $out", out.contains("/ActualText <FEFF"))
+        assertTrue("Devanagari bytes are present", out.contains(PdfTextLayer.actualTextHex("कुल राशि 1250")!!))
+        assertTrue("the marked content is closed", out.contains("EMC"))
+        assertFalse("no replacement characters", out.contains('\uFFFD'))
+    }
+
+    @Test
+    fun `actualTextHex is UTF-16BE with a BOM`() {
+        assertEquals("<FEFF092A093E0920>", PdfTextLayer.actualTextHex("पाठ"))
+        assertEquals("<FEFF0041>", PdfTextLayer.actualTextHex("A"))
+        assertEquals(null, PdfTextLayer.actualTextHex(""))
+    }
+
+    @Test
+    fun `a surrogate pair is never split`() {
+        val emoji = "x".repeat(399) + "😀"
+        val out = PdfTextLayer.contentFor(page(600, 800, line(emoji, 0, 0, 500, 20)), 600, 800)
+        // The output is valid UTF-16: every high surrogate is followed by a low one.
+        for (i in out.indices) {
+            if (Character.isHighSurrogate(out[i])) {
+                assertTrue(i + 1 < out.length && Character.isLowSurrogate(out[i + 1]))
+            }
+        }
     }
 
     // ---- FONT_DICT --------------------------------------------------------

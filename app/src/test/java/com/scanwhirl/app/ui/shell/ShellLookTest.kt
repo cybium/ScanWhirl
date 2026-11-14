@@ -140,7 +140,7 @@ class ShellLookTest {
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val tile = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
-                .first { it.tool?.id == "to_excel" } // Pro + Soon
+                .first { it.tool?.id == "pdfa" } // Pro + Soon
             val soon = tile.findViewById<View>(R.id.swToolSoonTag)
             val pro = tile.findViewById<View>(R.id.swToolProTag)
             assertTrue("Soon wins", soon.isVisible)

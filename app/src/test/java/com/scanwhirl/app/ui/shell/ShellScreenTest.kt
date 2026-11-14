@@ -124,7 +124,7 @@ class ShellScreenTest {
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
-            val tile = ToolsHubScreen.tiles(body).first { it.tool?.id == "to_excel" }
+            val tile = ToolsHubScreen.tiles(body).first { it.tool?.id == "pdfa" }
             tile.performClick()
             idle()
             val dialog = ShadowDialog.getLatestDialog()

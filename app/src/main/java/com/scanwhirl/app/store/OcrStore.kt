@@ -407,6 +407,20 @@ class OcrStore(private val docsDir: File) {
         }
     }
 
+    /**
+     * Drops every page's text and geometry (a re-recognition in another language) and marks the
+     * document pending, so the indexer reads every page again. One atomic rewrite of each file.
+     */
+    fun clearAll(id: String) {
+        lock.withLock {
+            val dir = docDir(id)
+            if (!dir.isDirectory) return@withLock
+            File(dir, TEXT_FILE).delete()
+            File(dir, GEO_FILE).delete()
+        }
+        markPending(id)
+    }
+
     fun isPending(id: String): Boolean = File(docDir(id), PENDING_FILE).exists()
 
     fun hasText(id: String): Boolean = readText(id).isNotEmpty()
