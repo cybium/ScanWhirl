@@ -46,11 +46,14 @@ wsl -d Ubuntu bash -lc 'cd /mnt/c/Users/Cybium/Desktop/ScanWhirl && JAVA_HOME=/u
 **Progress.**
 - PM-0.2b done (`db454bb`, 814 tests).
 - PM-3.1b done (`8bd1d05`, 825 tests). It was not split; session A cannot compile alone.
-- Next: PM-3.1c.
+- PM-3.1c done (`4134cb6`, 832 tests).
+- Lead-engineer fix (`bb2c00e`, 833 tests): `repairProtection` refuses a non-Latin legacy password.
+- **Release 1 shipped as `1.1.1-test28`.** Device run D1 passed; see `docs/audit/2026-11-13/PDF_TOOLS_STATUS.md` §8.
+- Next: PM-2.1b.
 
-**Total adjustment.** PM-3.1c adds 7 tests (carry-over fix C1). Every expected total written in a card *after*
-PM-3.1c is therefore **+1**: 2.1b 841, 2.1c 849, 2.2b 860, 2.2c 866, 2.3b 871, 3.2b 877.
-The general rule still holds: the expected total is 807 + the new tests of every finished card.
+**Total adjustment.** The baseline is now **833**. Every expected total written in a card from PM-2.1b on is
+therefore **+2**: 2.1b **842**, 2.1c **850**, 2.2b **861** (session A 858), 2.2c **867**, 2.3b **872**, 3.2b **878**.
+General rule: the expected total is 833 + the new tests of every card finished after PM-3.1c.
 
 ---
 

@@ -426,3 +426,33 @@ not re-run; its remaining failures should be the A/B host artefacts only.
 - Immediately after closing Quick sort mid-queue, the Unsorted chip still read "Unsorted 2" while the library
   held one unsorted doc. The test now asserts the library state instead of the chip; worth a look when the
   chip rail is next touched.
+
+---
+
+## 8. Device run D1 — 2026-11-14 (Release 1: lock safety, `1.1.1-test28`)
+
+Owner approved wiping the test app's data (H1). Phone: Infinix X6711, API 34, serial `103223137I112880`.
+The steps were driven over adb (uiautomator taps), file states were read with `run-as` on the debug build, and screenshots were taken.
+
+**Debug build** (`assembleDebug -PtestBuild`, debuggable, tree `bb2c00e`), with a 3-page text PDF imported:
+
+| Check | Result |
+|---|---|
+| Import of a 3-page PDF | 3 pages, OCR text and geometry present, `text_layer.flag` present |
+| Protect with `1234` | `locked.meta` present; trailer has `/Encrypt`; no plaintext temporaries in the document folder; `op_staging` empty |
+| Rotate on the locked document (full-page view) | Toast "Page operation failed: Unlock this document to edit its pages."; `page_000.jpg` SHA-256 unchanged; still encrypted |
+| More → Unlock with `0000` | Asks "Current password"; toast "Incorrect password"; still locked and encrypted |
+| Simulated old bug (plain PDF behind `locked.meta`), then Home ⋯ → Share | Blocked; dialog "Protection needs repair" with Protect again / Remove lock / Not now |
+| Protect again with `1234` | Encrypted again; pages unchanged; no leftovers |
+| Independent check: PyMuPDF on the pulled PDF | needs password: yes; `0000` opens: no; `1234` opens: yes; 3 pages; page 1 text "PAGE 1"; renders |
+| More → Unlock with `1234` | No `/Encrypt`, no `locked.meta`, `op_staging` empty |
+| Crash log (`logcat -b crash`) | Empty for the whole session |
+
+**Release-signed test build** `builds/2026-11-14/ScanWhirl-1.1.1-test28.apk`:
+- versionCode 28, label "ScanWhirl Test".
+- Signer SHA-256 `16a5…0230`, the same key as the M08 candidate-D build.
+- Smoke test: import, lock, then rotate refused with the same message, and no crash.
+
+**INV-9** (old documents with `locked.meta` beside a plain PDF): not measurable. The approved wipe removed the old data. On fresh data the repair path is proven above.
+**INV-6** (`edit_snapshot_*`): moot after the wipe. H3 was dropped.
+**Not covered on device:** opening the shared PDF in a third-party viewer app. The independent PyMuPDF check covers the same property.
