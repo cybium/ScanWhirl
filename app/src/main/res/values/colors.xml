@@ -105,4 +105,26 @@
          navy, deepened toward the app ink). The mark itself reuses sw_scan (rings) and
          sw_paper (page): one accent, one paper, no second neon. -->
     <color name="sw_brand_ground">#16213A</color>
+
+    <!-- v2 design tokens (70_APP_DESIGN.md §2). Names are the sw.css roots. -->
+    <color name="ok_green">#38EF7D</color>
+    <color name="ok_green_soft">#1438EF7D</color>
+    <color name="ok_green_hair">#4038EF7D</color>
+    <color name="sw_cyan_hair">#2400F0FF</color>
+    <color name="sw_cyan_hair_strong">#4700F0FF</color>
+    <color name="sw_cyan_soft">#1F00F0FF</color>
+    <color name="sw_gold_hair">#59FFB800</color>
+    <color name="sw_gold_soft">#1FFFB800</color>
+    <color name="sw_scrim_sheet">#A805080A</color>
+    <color name="sw_sheet_grab">#2EFFFFFF</color>
+    <color name="sw_field_border">#14FFFFFF</color>
+    <color name="sw_chip_border">#0FFFFFFF</color>
+    <color name="sw_paper_thumb">#E9EDF0</color>
+    <color name="sw_thumb_locked">#1B2429</color>
+    <color name="sw_thumb_ink">#9AA6AE</color>
+    <color name="sw_disc_ink">#04262A</color>
+    <color name="sw_disc_light">#7FF8FF</color>
+    <color name="sw_disc_dark">#00A9B5</color>
+    <color name="sw_on_gold">#2B1D00</color>
+    <color name="sw_gold_light">#FFCB3D</color>
 </resources>

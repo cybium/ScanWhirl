@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L3 v2 Protect PDF + Unlock sheet (mockups 05_protect_pdf, 09_unlock_sheet). -->
+    <string name="protect_sheet_title">Protect PDF</string>
+    <string name="protect_change_title">Change password</string>
+    <string name="protect_close">Close</string>
+    <string name="protect_sheet_note">Anyone who opens this PDF will need the password — in any PDF app, on any device.</string>
+    <string name="protect_doc_meta">%1$d pages · %2$s</string>
+    <string name="protect_label_password">PASSWORD</string>
+    <string name="protect_label_confirm">TYPE IT AGAIN</string>
+    <string name="protect_password_hint">Password</string>
+    <string name="protect_confirm_hint">Type it again</string>
+    <string name="protect_show_password">Show password</string>
+    <string name="protect_hide_password">Hide password</string>
+    <string name="protect_meter_too_short">Too short · at least 6 characters</string>
+    <string name="protect_meter_weak">Weak · use 10 or more characters</string>
+    <string name="protect_meter_good">Strong · %1$d characters</string>
+    <string name="protect_meter_strong">Very strong · %1$d characters</string>
+    <string name="protect_confirm_ok">Passwords match</string>
+    <string name="protect_aes_title">AES-256 encryption</string>
+    <string name="protect_aes_note">The modern standard. Strength depends on your password — use 10+ characters.</string>
+    <string name="protect_remember_title">Remember in Vault</string>
+    <string name="protect_remember_note">So you never lose it. Opens with fingerprint.</string>
+    <string name="protect_action_share">Protect &amp; share</string>
+    <string name="protect_action_save">Save protected copy</string>
+    <string name="protect_action_change">Change password</string>
+
+    <string name="unlock_sheet_title">%1$s is protected</string>
+    <string name="unlock_sheet_note">Enter its password to open it.</string>
+    <string name="unlock_open">Open</string>
+    <string name="unlock_or">or</string>
+    <string name="unlock_use_vault">Use password saved in Vault</string>
+    <string name="unlock_cancel">Cancel</string>
+    <string name="unlock_remove">Remove protection…</string>
+    <string name="unlock_wrong_tries">That password didn’t match. %1$d tries left before a %2$d-second pause.</string>
+    <string name="unlock_wrong_paused">That password didn’t match. Open is paused for %1$d seconds.</string>
+    <string name="unlock_remove_title">Remove protection?</string>
+    <string name="unlock_remove_msg">This PDF will open without a password from now on. Its pages stay exactly as they are.</string>
+    <string name="unlock_remove_confirm">Remove protection</string>
+    <string name="unlock_removed">Password removed — the PDF is unlocked</string>
+</resources>

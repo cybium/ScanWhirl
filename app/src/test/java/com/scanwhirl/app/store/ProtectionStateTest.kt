@@ -66,12 +66,15 @@ class ProtectionStateTest {
         dirOf(id).walkTopDown().filter { it.isFile && it.name != "locked.meta" }
             .associate { it.relativeTo(dirOf(id)).path to Sha256.of(it) }
 
-    // Pins PdfProtection.isEncodable (carry-over fix C1).
-    @Test fun `password encoding accepts printable Latin-1 only`() {
+    // v2 security design (70 §4.2): R6 passwords are UTF-8, so any well-formed Unicode is valid;
+    // only malformed text (an unpaired surrogate) has no UTF-8 encoding and must be refused.
+    @Test fun `password encoding follows the v2 utf 8 rules`() {
         assertTrue(PdfProtection.isEncodable("abc 123!~"))
         assertTrue(PdfProtection.isEncodable("café"))
-        assertFalse("C1 control character must be rejected", PdfProtection.isEncodable("\u0080x"))
-        assertFalse(PdfProtection.isEncodable("पासवर्ड"))
+        assertTrue("Devanagari is a valid R6 password", PdfProtection.isEncodable("पासवर्ड"))
+        assertTrue("an emoji is a valid R6 password", PdfProtection.isEncodable("😀"))
+        assertFalse("a lone high surrogate cannot be UTF-8", PdfProtection.isEncodable("abc\uD800"))
+        assertFalse("a lone low surrogate cannot be UTF-8", PdfProtection.isEncodable("\uDC00x"))
         assertFalse(PdfProtection.isEncodable(""))
     }
 
@@ -133,19 +136,27 @@ class ProtectionStateTest {
         assertEquals(PdfProtection.State.NONE, repo.protectionState(id))
     }
 
-    // Pins the isEncodable guard in ScanRepository.repairProtection (lead-engineer fix after PM-3.1c):
-    // an old lock made with a non-Latin password verifies (UTF-8 hash) but cannot be a PDF password,
-    // so repair must refuse instead of encrypting with a password the user can never type.
-    @Test fun `repair refuses a legacy password the PDF cannot encode and changes nothing`() {
-        val legacy = "पासवर्ड1"
+    // v2 security design (70 §4.2): a legacy lock with a Unicode password now repairs to a working
+    // UTF-8 AES-256 password instead of being refused. Malformed text is still refused before writing.
+    @Test fun `repair accepts a Unicode password and refuses malformed text`() {
+        val unicode = "पासवर्ड1"
         val id = DocFixtures.saved(repo, app)
-        Durable.atomicWriteText(File(dirOf(id), "locked.meta"), Prefs.sha256("pdf_lock:$legacy"))
-        val before = PdfInvariants.dirDigest(dirOf(id))
-        val r = runCatching { runBlocking { repo.repairProtection(id, legacy) } }
-        assertTrue("repair must refuse a password outside Latin-1, got ${r.exceptionOrNull()}", r.isFailure)
+        Durable.atomicWriteText(File(dirOf(id), "locked.meta"), Prefs.sha256("pdf_lock:$unicode"))
+        runBlocking { repo.repairProtection(id, unicode) }
+        assertEquals(PdfProtection.State.LOCKED, repo.protectionState(id))
+        assertTrue("the Unicode password still verifies", repo.verifyPdfPassword(id, unicode))
+        PdfInvariants.assertI3(repo, id)
+        PdfInvariants.assertI1(repo, id)
+
+        val bad = "abc\uD800def"
+        val second = DocFixtures.saved(repo, app)
+        Durable.atomicWriteText(File(dirOf(second), "locked.meta"), Prefs.sha256("pdf_lock:$bad"))
+        val before = PdfInvariants.dirDigest(dirOf(second))
+        val r = runCatching { runBlocking { repo.repairProtection(second, bad) } }
+        assertTrue("repair must refuse malformed text, got ${r.exceptionOrNull()}", r.isFailure)
         assertEquals(app.getString(R.string.password_charset), r.exceptionOrNull()?.message)
-        assertEquals("a refused repair changed bytes", before, PdfInvariants.dirDigest(dirOf(id)))
-        assertEquals(PdfProtection.State.NEEDS_REPAIR, repo.protectionState(id))
+        assertEquals("a refused repair changed bytes", before, PdfInvariants.dirDigest(dirOf(second)))
+        assertEquals(PdfProtection.State.NEEDS_REPAIR, repo.protectionState(second))
     }
 
     private fun latestTitle(): String? =

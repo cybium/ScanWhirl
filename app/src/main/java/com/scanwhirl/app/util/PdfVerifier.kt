@@ -44,15 +44,22 @@ object PdfVerifier {
 
     /**
      * @param expectedPages required page count; when null it is taken from [expectedImages].
+     * @param decryption when the file is AES-encrypted (v2 Protect PDF), the key that opens its
+     *   streams; the content and image checks then run on the decrypted bytes.
      * @throws InvalidPdfException when the file is not a structurally sound PDF of that shape.
      */
-    fun verify(file: File, expectedPages: Int? = null, expectedImages: List<File>? = null) {
+    fun verify(
+        file: File,
+        expectedPages: Int? = null,
+        expectedImages: List<File>? = null,
+        decryption: PdfAes.Decryption? = null
+    ) {
         val expected = expectedImages?.size ?: expectedPages
         if (expectedPages != null && expectedImages != null && expectedPages != expectedImages.size) {
             throw InvalidPdfException("Expected page count disagrees with the page files")
         }
         if (!file.isFile) throw InvalidPdfException("PDF is missing")
-        RandomAccessFile(file, "r").use { Checker(it, expected, expectedImages).run() }
+        RandomAccessFile(file, "r").use { Checker(it, expected, expectedImages, decryption).run() }
     }
 
     private fun fail(message: String): Nothing = throw InvalidPdfException(message)
@@ -60,7 +67,8 @@ object PdfVerifier {
     private class Checker(
         private val raf: RandomAccessFile,
         private val expectedPages: Int?,
-        private val expectedImages: List<File>?
+        private val expectedImages: List<File>?,
+        private val decryption: PdfAes.Decryption?
     ) {
         private val size = raf.length()
         private lateinit var offsets: LongArray // index = object number; 0 unused
@@ -174,12 +182,19 @@ object PdfVerifier {
         /** Returns the /Root object number. */
         private fun readTrailer(): Int {
             val remaining = size - trailerStart
-            if (remaining <= 0 || remaining > 1024) fail("Unexpected data after the xref table")
+            if (remaining <= 0 || remaining > 4096) fail("Unexpected data after the xref table")
             val text = textAt(trailerStart, remaining.toInt())
-            val match = Regex("^trailer\\n<<([^>]*)>>\\nstartxref\\n(\\d+)\\n%%EOF\\n\\z").find(text)
+            // The dictionary may carry a nested `/Encrypt << … >>` (AES), so split on the trailer's
+            // own delimiters instead of matching a flat `[^>]*` body.
+            if (!text.startsWith("trailer\n")) fail("Malformed trailer")
+            val tailAt = text.lastIndexOf("\nstartxref\n")
+            if (tailAt < 0) fail("Malformed trailer")
+            val dict = text.substring("trailer\n".length, tailAt)
+            if (!dict.startsWith("<<") || !dict.endsWith(">>")) fail("Malformed trailer")
+            val after = text.substring(tailAt + 1)
+            val match = Regex("^startxref\\n(\\d+)\\n%%EOF\\n\\z").find(after)
                 ?: fail("Malformed trailer")
-            if (match.groupValues[2].toLong() != xrefOffset) fail("startxref disagrees with the trailer")
-            val dict = match.groupValues[1]
+            if (match.groupValues[1].toLong() != xrefOffset) fail("startxref disagrees with the trailer")
             val sizeEntry = Regex("/Size (\\d+)").find(dict)?.groupValues?.get(1)?.toInt()
             if (sizeEntry != offsets.size) fail("Trailer /Size $sizeEntry != xref count ${offsets.size}")
             val root = Regex("/Root (\\d+) 0 R").find(dict)?.groupValues?.get(1)?.toInt()
@@ -227,6 +242,18 @@ object PdfVerifier {
         }
 
         private class Stream(val dict: String, val dataStart: Long, val length: Long)
+
+        /** Reads a stream body; when the file is AES-encrypted, decrypts it first. */
+        private fun streamBytes(s: Stream): ByteArray {
+            if (s.length > Int.MAX_VALUE.toLong() - 1) fail("Stream is implausibly large")
+            val raw = readAt(s.dataStart, s.length.toInt())
+            val dec = decryption ?: return raw
+            return try {
+                dec.decryptStream(raw)
+            } catch (e: java.io.IOException) {
+                fail("AES stream does not decrypt: ${e.message}")
+            }
+        }
 
         /** Dictionary + data bounds of a stream object, proving `/Length` ends exactly on `endstream`. */
         private fun stream(num: Int, eolBeforeEndstream: Boolean): Stream {
@@ -282,8 +309,10 @@ object PdfVerifier {
             if (!used.add(contentNum) || !used.add(imageNum)) fail("Page $pageNum shares objects with another page")
 
             val content = stream(contentNum, eolBeforeEndstream = false)
-            if (content.length > MAX_CONTENT_STREAM) fail("Content stream of page $pageNum is too large")
-            val drawing = textAt(content.dataStart, content.length.toInt())
+            if (content.length > MAX_CONTENT_STREAM + 64) fail("Content stream of page $pageNum is too large")
+            val drawingBytes = streamBytes(content)
+            if (drawingBytes.size > MAX_CONTENT_STREAM) fail("Content stream of page $pageNum is too large")
+            val drawing = String(drawingBytes, Charsets.ISO_8859_1)
             if (!drawing.contains("/Im$index Do")) fail("Content stream of page $pageNum does not draw its image")
 
             val img = stream(imageNum, eolBeforeEndstream = true)
@@ -291,9 +320,21 @@ object PdfVerifier {
                 fail("Image $imageNum is not a DCT image")
             }
             if (img.length < 4) fail("Image $imageNum is empty")
-            val soi = readAt(img.dataStart, 2)
+            val imageBytes = if (decryption == null) null else streamBytes(img)
+            if (imageBytes != null && imageBytes.size < 4) fail("Image $imageNum is empty")
+            val soi = if (imageBytes != null) imageBytes.copyOfRange(0, 2) else readAt(img.dataStart, 2)
             if (soi[0] != 0xFF.toByte() || soi[1] != 0xD8.toByte()) fail("Image $imageNum is not a JPEG")
-            expectedImages?.get(index)?.let { compareImage(img, it, imageNum) }
+            expectedImages?.get(index)?.let { expected ->
+                if (imageBytes != null) {
+                    if (!expected.isFile || expected.length() != imageBytes.size.toLong() ||
+                        !expected.readBytes().contentEquals(imageBytes)
+                    ) {
+                        fail("Image $imageNum differs from its page file")
+                    }
+                } else {
+                    compareImage(img, expected, imageNum)
+                }
+            }
         }
 
         private fun compareImage(img: Stream, expected: File, imageNum: Int) {

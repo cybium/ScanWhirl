@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L3 v2: the Protect PDF sheet surface (mockup 05_protect_pdf, sw.css .sheet/.grab):
+     glass gradient, 1dp cyan hairline, 28dp top corners, 42x5 grab handle. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners
+                android:topLeftRadius="28dp"
+                android:topRightRadius="28dp" />
+            <gradient
+                android:angle="270"
+                android:endColor="#1C252A"
+                android:startColor="#161D21" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/protect_hair" />
+        </shape>
+    </item>
+    <item
+        android:gravity="top|center_horizontal"
+        android:top="4dp">
+        <shape android:shape="rectangle">
+            <size
+                android:width="42dp"
+                android:height="5dp" />
+            <corners android:radius="3dp" />
+            <solid android:color="#2EFFFFFF" />
+        </shape>
+    </item>
+</layer-list>
