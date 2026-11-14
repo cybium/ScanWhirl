@@ -27,7 +27,12 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 | L4 tools | ses_e2673ad8bffe8h4gyE8XU1TUWK | Phase A (2.1b, 2.1c, step 3) MERGED partially at 4f10678 (967 tests, lint 0); still running Phase B ToolSetup + Result; wire 12 tools | running |
 | L5 edit & sign | ses_e2673902dffe4adGDrfK9NBXAw | wave 1 MERGED (16:3x, 929 tests, lint 0). Now wave 2: PM-2.2b -> 2.2c -> 2.3b Organize draft | running |
 
+## Extra workers
+- QA (phone tester, no code edits): ses_e25ac0c75ffeEtMUJGpbRCXJyq - full tap-through of debug build from integration ac87cba; output C:\Users\Cybium\Desktop\.sw-qa\run1\REPORT.md + screenshots. Lead reviews every screenshot visually and writes the critique.
+
 ## Lead to-do
+- Copy pass: no long dashes, short text (tools/copy_audit.ps1). L1 does strings.xml + strings_l1; other lanes' files after their current tasks (protect 3 dashes, vault 2 dashes + 4 long, stamp 2 long, tools 1 long).
+- Assets prepared for L1: .sw-assets/symbols (official Material Symbols, 83 icons), .sw-assets/brand (ic_brand_mark from launcher icon).
 - Tell L1 (on its report): ToolRegistry icons swapped - Draw uses ic_sym_highlight, Highlight uses format_list_numbered; fix (draw = ic_sym_draw/gesture, highlight = ic_sym_highlight). Also kit-style the FlowUtil.pickScan chooser in the sweep.
 - Device test batch (one APK build through the queue) once L1 + L4 land: L5 phone checks = drag/resize/rotate, signature draw, redaction, Save-as-new-copy keeps original, Free/Pro.
 - After L3 lands: remove unused `protect_note` from strings.xml / values-hi (L1-owned file; lead does it on integration).
