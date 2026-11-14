@@ -118,7 +118,7 @@ object ToolRegistry {
         ready("import_pdf", ToolGroup.CREATE, R.string.tool_import_pdf, R.drawable.ic_sym_upload_file, "import pdf file open"),
         ready("passport", ToolGroup.CREATE, R.string.tool_passport, R.drawable.ic_sym_travel_explore, "passport crop preset size", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         soon("qr_code", ToolGroup.CREATE, R.string.tool_qr_code, R.drawable.ic_sym_qr_code_scanner, "qr code reader scan", pro = true, note = R.string.soon_qr_code),
-        soon("business_card", ToolGroup.CREATE, R.string.tool_business_card, R.drawable.ic_sym_contacts, "business card contact email phone", pro = true, note = R.string.soon_business_card),
+        ready("business_card", ToolGroup.CREATE, R.string.tool_business_card, R.drawable.ic_sym_contacts, "business card contact email phone", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Organize (8)
         ready("merge", ToolGroup.ORGANIZE, R.string.tool_merge, R.drawable.ic_sym_call_merge, "merge join combine together", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),

@@ -206,18 +206,22 @@ class ToolResultActivity : BaseActivity() {
             val pages = docs.sumOf { it.pageCount }
             val bytes = docs.sumOf { if (it.pdfFile.exists()) it.pdfFile.length() else 0L }
             summary.text = if (docs.size == 1) {
-                getString(R.string.tools_result_summary_one_doc, pages, StatusLine.formatBytes(bytes))
+                resources.getQuantityString(
+                    R.plurals.tools_result_summary_one_doc, pages, pages, StatusLine.formatBytes(bytes)
+                )
             } else {
-                getString(R.string.tools_result_summary_docs, docs.size, pages, StatusLine.formatBytes(bytes))
+                resources.getQuantityString(
+                    R.plurals.tools_result_summary_docs, pages, docs.size, pages,
+                    StatusLine.formatBytes(bytes)
+                )
             }
             previewPreview(docs.first().pageFiles.firstOrNull())
         } else if (files.isNotEmpty()) {
             val bytes = files.sumOf { it.length() }
-            summary.text = if (files.size == 1) {
-                getString(R.string.tools_result_summary_one_file, StatusLine.formatBytes(bytes))
-            } else {
-                getString(R.string.tools_result_summary_files, files.size, StatusLine.formatBytes(bytes))
-            }
+            summary.text = resources.getQuantityString(
+                R.plurals.tools_result_summary_files, files.size, files.size,
+                StatusLine.formatBytes(bytes)
+            )
             val image = files.firstOrNull { it.name.endsWith(".jpg") || it.name.endsWith(".png") }
             previewPreview(image)
             if (image == null) preview.setImageResource(iconFor(files.first()))

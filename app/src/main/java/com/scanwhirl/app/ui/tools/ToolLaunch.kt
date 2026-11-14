@@ -24,6 +24,7 @@ object ToolLaunch {
         val intent = when (toolId) {
             "passport" -> PassportActivity.intent(context)
             "id_card" -> IdCardActivity.intent(context)
+            "business_card" -> BusinessCardActivity.intent(context)
             else -> ToolSetupActivity.intent(context, toolId)
         }
         if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

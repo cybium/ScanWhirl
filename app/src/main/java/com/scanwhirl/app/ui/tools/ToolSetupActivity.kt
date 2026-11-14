@@ -300,7 +300,10 @@ class ToolSetupActivity : BaseActivity() {
             )
             row.addView(
                 SwStyle.text(this, 12f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
-                    text = getString(R.string.tools_setup_doc_meta, doc.pageCount, StatusLine.formatBytes(doc.pdfFile.length()))
+                    text = resources.getQuantityString(
+                        R.plurals.tools_setup_doc_meta, doc.pageCount, doc.pageCount,
+                        StatusLine.formatBytes(doc.pdfFile.length())
+                    )
                 }
             )
             list.addView(row, LinearLayout.LayoutParams(
@@ -429,9 +432,14 @@ class ToolSetupActivity : BaseActivity() {
             val spans = PageRanges.parse(rangesText, doc.pageCount)
             val labels = spans.joinToString(", ") { PageRanges.label(it) }
             preview.text = if (tool.id == "split") {
-                getString(R.string.tools_setup_split_preview, spans.size, labels)
+                resources.getQuantityString(
+                    R.plurals.tools_setup_split_preview, spans.size, spans.size, labels
+                )
             } else {
-                getString(R.string.tools_setup_extract_preview, spans.sumOf { it.size }, labels)
+                val pages = spans.sumOf { it.size }
+                resources.getQuantityString(
+                    R.plurals.tools_setup_extract_preview, pages, pages, labels
+                )
             }
             preview.setTextColor(SwStyle.color(this, R.color.ok_green))
         } catch (e: IllegalArgumentException) {
@@ -559,7 +567,7 @@ class ToolSetupActivity : BaseActivity() {
                 }.getOrNull()
             }
             if (plan != null && !isFinishing) {
-                info.text = getString(R.string.tools_setup_long_note, plan)
+                info.text = resources.getQuantityString(R.plurals.tools_setup_long_note, plan, plan)
             } else if (!isFinishing) {
                 info.text = getString(R.string.tools_setup_long_failed)
             }
