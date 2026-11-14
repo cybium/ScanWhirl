@@ -22,7 +22,7 @@
     <string name="vault_setup_button"><!-- review -->वॉल्ट सेट करें</string>
     <string name="vault_unlock_button"><!-- review -->वॉल्ट खोलें</string>
     <string name="vault_no_files_title"><!-- review -->अभी कोई निजी फ़ाइल नहीं</string>
-    <string name="vault_empty_body"><!-- review -->अपनी लाइब्रेरी से दस्तावेज़ जोड़ें। सादी कॉपी हटाने से पहले फ़ाइलें एन्क्रिप्ट हो जाती हैं।</string>
+    <string name="vault_empty_body"><!-- review -->लाइब्रेरी से दस्तावेज़ जोड़ें। सादी कॉपी हटाने से पहले फ़ाइलें एन्क्रिप्ट हो जाती हैं।</string>
     <string name="vault_locked_desc"><!-- review -->वॉल्ट बंद करें</string>
     <string name="vault_more_desc"><!-- review -->वॉल्ट विकल्प</string>
     <string name="vault_entry_meta"><!-- review -->%1$d पेज · %2$s · %3$s</string>
@@ -38,8 +38,8 @@
     <string name="vault_cancel"><!-- review -->रद्द करें</string>
 
     <string name="vault_recovery_sheet_title"><!-- review -->यह रिकवरी कोड सँभालें</string>
-    <string name="vault_recovery_note"><!-- review -->पासकोड भूलने और यह फ़ोन खोने पर यही एकमात्र रास्ता है। इसे अभी लिख लें — यह सिर्फ़ एक बार दिखता है।</string>
-    <string name="vault_recovery_once"><!-- review -->इस फ़ोन पर एन्क्रिप्ट। रिकवरी कोड और यह फ़ोन दोनों खोने पर कोई इन फ़ाइलों को नहीं खोल सकता — हम भी नहीं।</string>
+    <string name="vault_recovery_note"><!-- review -->पासकोड भूलने पर यही एकमात्र रास्ता है। यह सिर्फ़ एक बार दिखता है।</string>
+    <string name="vault_recovery_once"><!-- review -->रिकवरी कोड और यह फ़ोन दोनों खोने पर कोई इन फ़ाइलों को नहीं खोल सकता, हम भी नहीं।</string>
     <string name="vault_recovery_copy"><!-- review -->कोड कॉपी करें</string>
     <string name="vault_recovery_copy_warning"><!-- review -->इस कोड वाला कोई भी आपका बैकअप खोल सकता है। इसे ऑफ़लाइन रखें।</string>
     <string name="vault_copy_done"><!-- review -->रिकवरी कोड कॉपी हो गया</string>
@@ -60,7 +60,7 @@
     <string name="vault_use_passcode"><!-- review -->पासकोड इस्तेमाल करें</string>
     <string name="vault_fingerprint_failed"><!-- review -->फ़िंगरप्रिंट से वॉल्ट नहीं खुला। पासकोड इस्तेमाल करें।</string>
     <string name="vault_fingerprint_unavailable"><!-- review -->इस वॉल्ट के लिए फ़िंगरप्रिंट उपलब्ध नहीं है। पासकोड इस्तेमाल करें।</string>
-    <string name="vault_fingerprint_reset"><!-- review -->आपके फ़िंगरप्रिंट बदल गए, इसलिए वॉल्ट ने पासकोड माँगा। एक बार खोलने के बाद फ़िंगरप्रिंट फिर काम करेगा।</string>
+    <string name="vault_fingerprint_reset"><!-- review -->फ़िंगरप्रिंट बदल गए। एक बार पासकोड से खोलें, फिर फ़िंगरप्रिंट चालू हो जाएगा।</string>
     <string name="vault_fingerprint_locked"><!-- review -->बहुत बार फ़िंगरप्रिंट की कोशिश। पासकोड इस्तेमाल करें।</string>
     <string name="vault_use_recovery"><!-- review -->रिकवरी कोड इस्तेमाल करें</string>
     <string name="vault_recovery_unlock_title"><!-- review -->रिकवरी कोड इस्तेमाल करें</string>
@@ -79,7 +79,7 @@
     <string name="vault_new_recovery_title"><!-- review -->नया रिकवरी कोड</string>
     <string name="vault_new_recovery_note"><!-- review -->पुराना कोड काम करना बंद कर देगा। नया कोड अभी लिख लें।</string>
     <string name="vault_recovery_make_new"><!-- review -->नया कोड बनाएँ</string>
-    <string name="vault_recovery_explain"><!-- review -->रिकवरी कोड सेटअप के समय एक बार दिखा था। पासकोड भूलने पर यही एकमात्र रास्ता है।</string>
+    <string name="vault_recovery_explain"><!-- review -->सेटअप के समय एक बार दिखा था। पासकोड भूलने पर यही एकमात्र रास्ता है।</string>
 
     <string name="vault_add_sheet_title"><!-- review -->वॉल्ट में जोड़ें</string>
     <string name="vault_add_sheet_note"><!-- review -->अपनी लाइब्रेरी से दस्तावेज़ चुनें।</string>

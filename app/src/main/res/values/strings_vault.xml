@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- v2 UI: 04_vault (mockup 04_vault) — lane L2. -->
+    <!-- v2 UI: 04_vault (mockup 04_vault), lane L2. -->
     <string name="vault_screen_title">Vault</string>
     <plurals name="vault_files_protected">
         <item quantity="one">%d file protected</item>
@@ -22,7 +22,7 @@
     <string name="vault_setup_button">Set up Vault</string>
     <string name="vault_unlock_button">Unlock Vault</string>
     <string name="vault_no_files_title">No private files yet</string>
-    <string name="vault_empty_body">Add a document from your library. Its files are encrypted before the plain copy is removed.</string>
+    <string name="vault_empty_body">Add a library document. Files are encrypted before the plain copy is removed.</string>
     <string name="vault_locked_desc">Lock Vault</string>
     <string name="vault_more_desc">Vault options</string>
     <string name="vault_entry_meta">%1$d pages · %2$s · %3$s</string>
@@ -38,8 +38,8 @@
     <string name="vault_cancel">Cancel</string>
 
     <string name="vault_recovery_sheet_title">Save this recovery code</string>
-    <string name="vault_recovery_note">This is the only way back if you forget your passcode and this phone is lost. Write it down now — it is shown once.</string>
-    <string name="vault_recovery_once">Encrypted on this phone. If you lose the recovery code and this phone, nobody can open these files — not even us.</string>
+    <string name="vault_recovery_note">This is the only way back if you forget your passcode. It is shown once.</string>
+    <string name="vault_recovery_once">If you lose the recovery code and this phone, nobody can open these files, not even us.</string>
     <string name="vault_recovery_copy">Copy code</string>
     <string name="vault_recovery_copy_warning">Anyone with this code can open your backup. Keep it offline.</string>
     <string name="vault_copy_done">Recovery code copied</string>
@@ -60,7 +60,7 @@
     <string name="vault_use_passcode">Use passcode</string>
     <string name="vault_fingerprint_failed">Fingerprint did not unlock the Vault. Use your passcode.</string>
     <string name="vault_fingerprint_unavailable">Fingerprint is not available for this Vault. Use your passcode.</string>
-    <string name="vault_fingerprint_reset">Your fingerprints changed, so the Vault asked for the passcode. Fingerprint will work again after you unlock once.</string>
+    <string name="vault_fingerprint_reset">Fingerprints changed. Use the passcode once to turn fingerprint unlock back on.</string>
     <string name="vault_fingerprint_locked">Too many fingerprint tries. Use your passcode.</string>
     <string name="vault_use_recovery">Use recovery code</string>
     <string name="vault_recovery_unlock_title">Use recovery code</string>
@@ -79,7 +79,7 @@
     <string name="vault_new_recovery_title">New recovery code</string>
     <string name="vault_new_recovery_note">The old code stops working. Write the new one down now.</string>
     <string name="vault_recovery_make_new">Make a new code</string>
-    <string name="vault_recovery_explain">The recovery code was shown once when you set up the Vault. It is the only way back if you forget the passcode.</string>
+    <string name="vault_recovery_explain">Shown once at setup. It is the only way back if you forget the passcode.</string>
 
     <string name="vault_add_sheet_title">Add to Vault</string>
     <string name="vault_add_sheet_note">Choose a document from your library.</string>

@@ -138,7 +138,8 @@ class KitComponentsTest {
 
     @Test
     fun `coming soon sheet names the tool and explains it in one line`() {
-        val tool = ToolRegistry.byId("qr_code")!!
+        // v2 UI: 03_tools_hub - the QR code reader is a real tool now, so any Soon tool will do.
+        val tool = ToolRegistry.all.first { it.status == ToolStatus.SOON && it.soonNote != null }
         val sheet = SwSheet.comingSoon(app, tool)
         sheet.show()
         assertEquals(
