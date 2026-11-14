@@ -39,7 +39,18 @@ wsl -d Ubuntu bash -lc 'cd /mnt/c/Users/Cybium/Desktop/ScanWhirl && JAVA_HOME=/u
 - Lint must report **0 errors**. The baseline after PM-0.2b is 0 errors, 316 warnings, and new warnings must not come from the card's own files. Run lint with `--rerun-tasks`, because a cached lint result can be stale.
 - Run the second Linux suite with `--rerun-tasks -x lint`. An identical command is skipped as up-to-date.
 
-**Progress:** PM-0.2b done (`db454bb`, 814 tests). Next: PM-3.1b.
+- If the Linux build fails inside `app/build/intermediates/incremental/` (a Windows build left Windows paths there),
+  delete `app/build/intermediates/incremental/debug/mergeDebugResources` and `.../packageDebugResources`, then rerun.
+  Delete build output only, never source.
+
+**Progress.**
+- PM-0.2b done (`db454bb`, 814 tests).
+- PM-3.1b done (`8bd1d05`, 825 tests). It was not split; session A cannot compile alone.
+- Next: PM-3.1c.
+
+**Total adjustment.** PM-3.1c adds 7 tests (carry-over fix C1). Every expected total written in a card *after*
+PM-3.1c is therefore **+1**: 2.1b 841, 2.1c 849, 2.2b 860, 2.2c 866, 2.3b 871, 3.2b 877.
+The general rule still holds: the expected total is 807 + the new tests of every finished card.
 
 ---
 

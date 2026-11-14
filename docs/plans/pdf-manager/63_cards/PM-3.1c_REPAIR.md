@@ -2,6 +2,28 @@
 
 Rules and Gate G: `62_ENGINE_CARD_INDEX.md` §1-2. Decision A5: `61_ENGINE_DECISIONS.md` §2. Needs PM-3.1b.
 
+## 0. Carry-over fixes from PM-3.1b (do these FIRST, before §4)
+
+The lead engineer reviewed PM-3.1b (`8bd1d05`) and found three defects. Fix them in this card.
+
+| # | Where (re-confirm with Select-String) | Defect | Fix |
+|---|---|---|---|
+| C1 | `util/PdfProtection.kt` `isEncodable` (about `:57`) | The second range is `' '..'ÿ'`, which admits the C1 control characters U+007F–U+009F. | `pw.isNotEmpty() && pw.all { it in ' '..'~' \|\| it in ' '..'ÿ' }`. Write the escapes literally as `' '` and `'ÿ'`, not as pasted characters. |
+| C2 | `ui/MainActivity.kt`, the `unlock_pdf_remove` button inside `promptUnlockBeforeOpen` (the `lifecycleScope.launch { withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, pw) } … }` block) | An exception from `unlockPdf` (for example `locked_no_pages`) is uncaught inside `launch`, so the app crashes. | Wrap the `launch` body in `try { … } catch (e: Exception) { Toast.makeText(this@MainActivity, getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show() }`. Only the success path calls `refreshList()` and `onUnlocked()`. |
+| C3 | `tools/LockFlow.kt` `lockDevicePdf` / `runLockDevicePdf` (about `:173-211`) | A non-Latin password is rejected only **after** `importPdfAsScan`, which leaves an unprotected imported copy in the library. | In `lockDevicePdf`, where the password is read and **before** `runLockDevicePdf` is called: if `!PdfProtection.isEncodable(pw)`, toast `R.string.password_charset` and return. In `runLockDevicePdf`, if `protectPdf` throws, call `repo.moveToTrash(doc.id)` inside its own `runCatching`, then show the error. The user never keeps an unprotected copy they did not ask for. |
+
+**Red test first for C1** (add it to `ProtectionStateTest` as test 0, `password encoding accepts printable Latin-1 only`):
+
+- `isEncodable("abc 123!~")` is true.
+- `isEncodable("café")` is true (é = U+00E9).
+- `isEncodable("\u0080x")` is false; today's code returns true, so this assertion is the red one. The message is `"C1 control character must be rejected"`.
+- `isEncodable("पासवर्ड")` is false.
+- `isEncodable("")` is false.
+
+C2 and C3 are UI defensive fixes and get no new test. The reviewer reads the lines. Do not change any existing test for them.
+
+**Test count.** This card adds **7** tests, not 6: the C1 test plus the six in §4. So **832** is the expected total, not 831.
+
 ## 1. Goal
 
 Detect `locked.meta` beside a plain `scan.pdf` (left by the old bug, or by a PM-3.1b crash) and an encrypted
@@ -90,7 +112,7 @@ Add to `values` and `values-hi`; prefix each Hindi value with `<!-- review -->`.
 
 ## 6. Acceptance
 
-1. Gate G. Expected Linux total: **825 + 6 = 831**, 0 / 0, on both runs.
+1. Gate G. Expected Linux total: **825 + 7 = 832**, 0 / 0, on both runs.
 2. **DEVICE** (needs H1; part of D1). On a test document:
    - protect with `1234`;
    - with run-as, overwrite `files/documents/<id>/scan.pdf` with an unprotected copy;
@@ -120,5 +142,6 @@ M. One session.
 
 - [ ] `ProtectionDialogs.guardExport` wraps exactly the three export call sites, and AutoExport skips `NEEDS_REPAIR`.
 - [ ] Red output for tests 1, 3, 4, 5 and 6 is pasted.
-- [ ] Two Linux runs: 831 / 0 / 0. Lint has no new errors.
+- [ ] C1 is fixed and its red output pasted. C2 and C3 are fixed (reviewer reads the lines).
+- [ ] Two Linux runs: 832 / 0 / 0. Lint has 0 errors.
 - [ ] The device step is run or marked DEVICE-UNPROVEN. INV-9 is recorded as UNKNOWN with the settling command.
