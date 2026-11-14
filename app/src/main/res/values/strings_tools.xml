@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L4 tools lane strings. Every user-visible string of the tools engine and its screens lives here. -->
+<resources>
+    <string name="op_no_space">Not enough storage space. Free some space and try again.</string>
+    <string name="op_publish_failed">Could not add the new document. Try again.</string>
+</resources>

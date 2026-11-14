@@ -1074,36 +1074,13 @@ class ScanRepository(private val context: Context) {
         }
         refuseLockedSources(sources)
 
-        val id = UUID.randomUUID().toString().take(8)
-        val dir = File(docsDir, id).apply { mkdirs() }
-
-        var pageNum = 0
-        for (doc in sources) {
-            for (page in doc.pageFiles) {
-                if (!page.exists() || page.length() == 0L) continue
-                val out = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", pageNum))
-                page.copyTo(out, overwrite = true)
-                pageNum++
-            }
-        }
-        if (pageNum == 0) {
-            dir.deleteRecursively()
-            throw IllegalStateException("No pages to merge")
-        }
-
+        val pages = sources.flatMap { d -> d.pageFiles.filter { it.exists() && it.length() > 0 } }
+        if (pages.isEmpty()) throw IllegalStateException("No pages to merge")
         val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
             ?: "Merged scan ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())}"
-
-        writeMeta(dir, name)
-
-        val pdfFile = File(dir, "scan.pdf")
-        try {
-            PdfGenerator.imagesToPdf(pageFilesIn(dir), pdfFile)
-        } catch (e: Exception) {
-            pdfFile.delete()
+        buildAndPublish(name, null, pages.sumOf { it.length() }) { staging ->
+            pages.forEachIndexed { i, p -> stagePageCopy(p, staging, i) }
         }
-
-        loadDocument(dir)!!
     }
 
     /**
@@ -1304,6 +1281,121 @@ class ScanRepository(private val context: Context) {
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after filter")
         }
+
+    /**
+     * PM-2.1b: the one publish protocol for every tool output. [build] writes page files (and, with
+     * [copyPdf], a verified `scan.pdf`) into a private staging folder; only a fully verified folder is
+     * renamed into `documents/` as one new id. Any `Exception` releases the staging folder, so a
+     * failure, cancel or crash never leaves a visible partial document.
+     */
+    private suspend fun buildAndPublish(
+        name: String,
+        category: String?,
+        expectedBytes: Long,
+        copyPdf: Boolean = false,
+        build: suspend (File) -> Unit
+    ): ScanDocument {
+        if (expectedBytes > 0 && usableSpace(docsDir) < expectedBytes * 2 + (16L shl 20)) {
+            throw IOException(context.getString(R.string.op_no_space))
+        }
+        val staging = OpStaging.create(context.filesDir)
+        OpFaults.at("op:staged")
+        var id: String
+        try {
+            build(staging)
+            currentCoroutineContext().ensureActive()
+
+            val pages = pageFilesIn(staging)
+            val stageOcr = OcrStore(OpStaging.root(context.filesDir))
+            if (copyPdf) {
+                // The build copied a PDF it owns; verify the copy, never regenerate it.
+                val pdf = File(staging, "scan.pdf")
+                if (!pdf.isFile || pdf.length() <= 0L) throw IOException("Copy of the PDF is missing")
+                if (pages.isNotEmpty()) {
+                    pages.forEachIndexed { i, f ->
+                        if (f.name != String.format(Locale.ROOT, PAGE_FORMAT, i)) {
+                            throw IOException("Page order check failed")
+                        }
+                    }
+                    if (PdfProtection.isEncrypted(pdf) == true) {
+                        if (!File(staging, "locked.meta").exists()) {
+                            throw IOException("Protection record missing")
+                        }
+                    } else {
+                        PdfVerifier.verify(pdf, expectedPages = pages.size)
+                    }
+                }
+                OpFaults.at("op:pdf")
+            } else {
+                if (pages.isEmpty()) throw IOException("No pages to publish")
+                pages.forEachIndexed { i, f ->
+                    if (f.name != String.format(Locale.ROOT, PAGE_FORMAT, i)) {
+                        throw IOException("Page order check failed")
+                    }
+                }
+                val geo = if (Prefs.makeSearchable(context)) stageOcr.readGeo(staging.name) else emptyMap()
+                val layered = writePdfInto(staging, File(staging, "scan.pdf"), geo)
+                if (layered && pages.all { geo.containsKey(it.name) }) {
+                    Durable.writeFile(File(staging, "text_layer.flag"), ByteArray(0))
+                }
+                OpFaults.at("op:pdf")
+            }
+
+            writeMeta(staging, name, category)
+            OpFaults.at("op:meta")
+
+            // I10: the new document is either fully indexed or carries ocr_pending. The flag is
+            // written directly because OcrStore.markPending refuses non-library folders.
+            val texts = stageOcr.readText(staging.name)
+            if (pages.any { it.name !in texts }) {
+                Durable.writeFile(File(staging, "ocr_pending"), ByteArray(0))
+            }
+
+            if (!copyPdf) PdfVerifier.verify(File(staging, "scan.pdf"), expectedImages = pages)
+            val meta = File(staging, "meta.txt").readLines()
+            if (meta.size < 3 || meta[0].isBlank() || meta[1].toLongOrNull() == null) {
+                throw IOException("Metadata check failed")
+            }
+            OpFaults.at("op:verified")
+            Durable.syncDir(staging)
+
+            id = synchronized(TRASH_LOCK) {
+                val newId = freeLibraryId()
+                OpFaults.at("op:before_rename")
+                if (!staging.renameTo(File(docsDir, newId))) {
+                    throw IOException(context.getString(R.string.op_publish_failed))
+                }
+                newId
+            }
+            OpStaging.forget(staging)
+            OpFaults.at("op:after_rename")
+        } catch (e: Exception) {
+            OpStaging.release(staging)
+            throw e
+        }
+        Durable.syncDir(docsDir)
+        Durable.syncDir(OpStaging.root(context.filesDir))
+        return loadDocument(File(docsDir, id))
+            ?: throw IllegalStateException("Published document could not be opened")
+    }
+
+    /** Copies one source page into [staging] as `page_%03d.jpg`, fsynced, with a cancel check. */
+    private suspend fun stagePageCopy(src: File, staging: File, index: Int): File {
+        currentCoroutineContext().ensureActive()
+        val out = File(staging, String.format(Locale.ROOT, PAGE_FORMAT, index))
+        Durable.copyFile(src, out)
+        OpFaults.at("op:page:$index")
+        return out
+    }
+
+    /** Writes one page's bytes into [staging] as `page_%03d.jpg`, fsynced, with a cancel check. */
+    private suspend fun stagePageBytes(bytes: ByteArray, staging: File, index: Int): File {
+        currentCoroutineContext().ensureActive()
+        val out = File(staging, String.format(Locale.ROOT, PAGE_FORMAT, index))
+        Durable.writeFile(out, bytes)
+        OpFaults.at("op:page:$index")
+        return out
+    }
 
     /** Fresh document directory (never finalised: no meta yet). */
     private fun newDocDir(): Pair<String, File> {
@@ -1848,18 +1940,16 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
-     * Writes [out] from [dir]'s page files, with an invisible text layer built from
-     * `OcrStore.readGeo(id)` when `Prefs.makeSearchable` is on. Returns true when at
-     * least one page received a layer. Atomic via `.tmp` + rename inside the generator.
+     * Writes [out] from [dir]'s page files, with an invisible text layer built from the OCR
+     * geometry in [geo] when `Prefs.makeSearchable` is on. Returns true when at least one page
+     * received a layer. Atomic via `.tmp` + rename inside the generator.
      */
-    private fun writePdf(dir: File, out: File): Boolean = synchronized(PDF_LOCK) {
+    private fun writePdfInto(dir: File, out: File, geo: Map<String, OcrPage>): Boolean = synchronized(PDF_LOCK) {
         val pages = pageFilesIn(dir)
         if (pages.isEmpty()) {
             false
         } else {
-            val id = dir.name
             val textLayers = if (Prefs.makeSearchable(context)) {
-                val geo = ocrStore.readGeo(id)
                 pages.indices.filter { geo.containsKey("page_%03d.jpg".format(it)) }
                     .associate { i -> i to geo["page_%03d.jpg".format(i)]!! }
             } else {
@@ -1868,6 +1958,13 @@ class ScanRepository(private val context: Context) {
             PdfGenerator.imagesToPdf(pages, out, textLayers).isNotEmpty()
         }
     }
+
+    /** Writes [out] from [dir]'s page files, reading the document's own OCR geometry. */
+    private fun writePdf(dir: File, out: File): Boolean = writePdfInto(
+        dir,
+        out,
+        if (Prefs.makeSearchable(context)) ocrStore.readGeo(dir.name) else emptyMap()
+    )
 
     /**
      * Regenerates the document's PDF with a text layer after indexing completes.

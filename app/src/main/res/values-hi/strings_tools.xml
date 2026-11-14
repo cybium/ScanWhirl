@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L4 tools lane strings (Hindi). Every value carries a review marker for a native speaker. -->
+<resources>
+    <string name="op_no_space"><!-- review -->पर्याप्त जगह नहीं है। कुछ जगह खाली करके फिर कोशिश करें।</string>
+    <string name="op_publish_failed"><!-- review -->नया दस्तावेज़ नहीं जोड़ा जा सका। फिर कोशिश करें।</string>
+</resources>
