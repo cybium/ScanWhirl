@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- review -->
+    <string name="stamp_not_found"><!-- review -->स्कैन नहीं मिला</string>
+    <!-- review -->
+    <string name="stamp_no_marks"><!-- review -->पहले कोई चिह्न जोड़ें।</string>
+    <!-- review -->
+    <string name="stamp_no_page"><!-- review -->ऐसा कोई पृष्ठ नहीं है।</string>
+    <!-- review -->
+    <string name="stamp_copy_failed"><!-- review -->संपादित प्रति नहीं खोली जा सकी।</string>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L5 Edit & sign. Engine messages are shown from Snackbars/dialogs; screen copy
+         for the stamp editor is added with the editor itself. -->
+    <string name="stamp_not_found">Scan not found</string>
+    <string name="stamp_no_marks">Add a mark first.</string>
+    <string name="stamp_no_page">No such page.</string>
+    <string name="stamp_copy_failed">The edited copy could not be opened.</string>
+</resources>
