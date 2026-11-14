@@ -154,4 +154,18 @@
     <string name="shell_trash_title">Move “%1$s” to Trash?</string>
     <string name="shell_trash_note">It stays in Trash for 30 days. Nothing is uploaded.</string>
     <string name="shell_moved_to_trash">Moved to Trash</string>
+    <string name="reader_dock_pages">Pages</string>
+    <string name="reader_dock_text">Text</string>
+    <string name="reader_dock_sign">Sign</string>
+    <string name="reader_dock_more">More</string>
+    <string name="reader_text_unavailable">Text is available for ScanWhirl documents that have been read. This PDF was opened from a file, so there is no text layer to edit.</string>
+    <string name="reader_more_note">%1$d pages. Everything happens on this phone.</string>
+    <string name="ocr_mode_page">Page</string>
+    <string name="ocr_mode_text">Text</string>
+    <string name="ocr_page_pane_note">The page image is not available for this text file.</string>
+    <string name="ocr_to_word_pro">To Word · PRO</string>
+    <string name="ocr_foot_note">Read on this phone · searchable in ScanWhirl and the PDF</string>
+    <string name="ocr_to_word_soon">Word export is being built. It will make a .docx from this text, on this phone.</string>
+    <string name="ocr_screen_title">Text</string>
+    <string name="ocr_page_sub">%1$s · page %2$d of %3$d</string>
 </resources>

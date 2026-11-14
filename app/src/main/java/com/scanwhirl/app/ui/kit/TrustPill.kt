@@ -13,7 +13,7 @@ class TrustPill(context: Context) : TextView(context) {
 
     init {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
-        typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        typeface = SwType.bold(context)
         setTextColor(SwStyle.color(context, R.color.ok_green))
         background = SwStyle.pill(
             context,

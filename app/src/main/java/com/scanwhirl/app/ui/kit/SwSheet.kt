@@ -69,7 +69,7 @@ class SwSheet private constructor(
         }
         titleView = SwStyle.text(context, 21f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.swSheetTitle
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            typeface = SwType.bold(context)
         }
         header.addView(
             titleView,
@@ -108,7 +108,7 @@ class SwSheet private constructor(
             id = R.id.swSheetPrimary
             gravity = Gravity.CENTER
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            typeface = SwType.bold(context)
             setTextColor(SwStyle.color(context, R.color.sw_disc_ink))
             background = SwStyle.rounded(
                 context, SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f
@@ -127,7 +127,7 @@ class SwSheet private constructor(
             id = R.id.swSheetSecondary
             gravity = Gravity.CENTER
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            typeface = SwType.bold(context)
             setTextColor(SwStyle.color(context, R.color.text_hologram_mid))
             minHeight = (44 * density).toInt()
             isVisible = false

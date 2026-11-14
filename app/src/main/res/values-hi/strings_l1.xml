@@ -154,4 +154,18 @@
     <string name="shell_trash_title"><!-- review -->“%1$s” को कूड़ेदान में डालें?</string>
     <string name="shell_trash_note"><!-- review -->यह 30 दिन तक कूड़ेदान में रहेगा। कुछ भी अपलोड नहीं होता।</string>
     <string name="shell_moved_to_trash"><!-- review -->कूड़ेदान में डाल दिया</string>
+    <string name="reader_dock_pages"><!-- review -->पेज</string>
+    <string name="reader_dock_text"><!-- review -->टेक्स्ट</string>
+    <string name="reader_dock_sign"><!-- review -->हस्ताक्षर</string>
+    <string name="reader_dock_more"><!-- review -->और</string>
+    <string name="reader_text_unavailable"><!-- review -->टेक्स्ट उन ScanWhirl दस्तावेज़ों के लिए उपलब्ध है जिन्हें पढ़ा गया है। यह PDF फ़ाइल से खोली गई है, इसलिए इसमें संपादन योग्य टेक्स्ट नहीं है।</string>
+    <string name="reader_more_note"><!-- review -->%1$d पेज। सब कुछ इसी फ़ोन पर होता है।</string>
+    <string name="ocr_mode_page"><!-- review -->पेज</string>
+    <string name="ocr_mode_text"><!-- review -->टेक्स्ट</string>
+    <string name="ocr_page_pane_note"><!-- review -->इस टेक्स्ट फ़ाइल के लिए पेज की छवि उपलब्ध नहीं है।</string>
+    <string name="ocr_to_word_pro"><!-- review -->Word में · PRO</string>
+    <string name="ocr_foot_note"><!-- review -->इसी फ़ोन पर पढ़ा गया · ScanWhirl और PDF में खोजें</string>
+    <string name="ocr_to_word_soon"><!-- review -->Word निर्यात बन रहा है। यह इसी फ़ोन पर इस टेक्स्ट से .docx बनाएगा।</string>
+    <string name="ocr_screen_title"><!-- review -->टेक्स्ट</string>
+    <string name="ocr_page_sub"><!-- review -->%1$s · पेज %2$d / %3$d</string>
 </resources>
