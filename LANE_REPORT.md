@@ -1,155 +1,116 @@
-# LANE_REPORT — L3 Protect PDF
+# LANE_REPORT — L5 Edit & sign
 
-Session: 2026-11-14. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
+Session 2026-11-14. Branch `lane/L5-stamp`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L5`.
 
 ## Done
 
-### Phase A — engine (ISO 32000-2 Standard Security Handler V5 / R6, AESV3)
+### Phase A — engine (earlier session, `dc72a5a`)
 
-- **`util/PdfAes.kt` (new)** — AES-256 password protection for new PDFs.
-  - Algorithm **2.A** (user and owner file-key retrieval), **2.B** (hash: ≥ 64 rounds, then until
-    `E_last <= round - 32`), **8** (`/U`, `/UE`), **9** (`/O`, `/OE`, with the 48-byte `/U` as the
-    owner hash's user data), **10** (`/Perms`, AES-256-ECB).
-  - Passwords: Unicode **NFKC → UTF-8, cut at 127 bytes**, so Devanagari/emoji/CJK work.
-  - Streams: `16-byte random IV + AES-256-CBC/PKCS#7`; the file key is used directly (V5 has no
-    per-object keys).
-  - `/Encrypt` dictionary (`/V 5 /R 6 /Length 256 /CFM /AESV3`) and a matching `/ID`.
-- **`util/PdfGenerator.kt`** — optional `encryption: PdfAes.Encryption?` parameter: each stream body
-  is encrypted while writing, `/Length` is the real (larger) byte count, and the trailer gains
-  `/Encrypt` + `/ID`. Existing callers are unchanged (default `null`).
-- **`util/PdfVerifier.kt`** — optional `decryption` parameter: content `/Im<i> Do`, image SOI and the
-  byte-for-byte page comparison run on decrypted data. The trailer parser now accepts a nested
-  `/Encrypt << … >>` dictionary.
-- **`util/PdfEncryptor.kt`** — RC4 **write removed**; AES-256 now rewrites an existing generator PDF:
-  every object is copied, each stream re-encrypted with a new `/Length`, a fresh xref table and a
-  trailer with `/Encrypt` + `/ID`; the result is fsynced, verified with the key and published by
-  rename. No plaintext temporary.
-- **`util/PdfProtection.kt`** — `isEncodable` now accepts any well-formed Unicode (valid surrogate
-  pairs) instead of printable Latin-1. The lock hash and the PDF password still agree.
-- RC4 **read** is untouched: old RC4 files keep opening in any viewer and the old unlock code path is
-  unchanged (ScanWhirl rebuilds unlocked copies from page images).
+- **`util/PageStamp.kt`** — bakes vector marks into page pixels: signature ink path, text, freehand,
+  highlight (multiply), watermark (diagonal, opacity), page numbers (position/format), preset badges
+  (Paid/Approved/Draft/Received/Self-attested + date) and redaction boxes. Pages are decoded once at
+  ≤ 3000 px, written through `PageReplace`, then verified (box pixels solid, JPEG read-back).
+  `suggestRedactions()` finds Aadhaar/PAN/phone/account numbers in OCR geometry.
+- **`store/SignatureStore.kt`** — up to 5 signatures as normalised vector paths in app storage
+  (line protocol, atomic write, damaged files skipped, `delete(id)`).
+- **`ScanRepository.stampDocument`** — works on a duplicate only. A page with a redaction loses its
+  OCR text/geometry and its `.orig`; the PDF is regenerated and verified; any failure deletes the
+  unfinished copy and leaves the source byte-identical.
 
-### Phase B — UI (mockups 05_protect_pdf, 09_unlock_sheet)
+### Phase B — editor (earlier session `660f679`, restyled this session `9759931`)
 
-The L1 kit is not in `integration` yet (checked: `integration` is still at `7e039c7`), so the two
-sheets are self-contained in `ui/protect` and match the mockups' measurements from `sw.css`
-(28 dp sheet, 42×5 grab, 56 dp fields, 54 dp primary button, 4-segment meter).
+- `ui/stamp`: `StampEditorActivity` (page surface, bottom tool row, undo/redo, delete, Suggest,
+  Save as new copy), `StampCanvasView` (tap-select, drag, corner resize, rotate knob, one-gesture
+  Draw/Highlight/Redact), `SignaturePadView`, `StampEditorState` (marks per page, 50-step history,
+  clamped transforms) and `StampPrompts`.
+- **Every sheet is the kit's `SwSheet`**: text entry, watermark text, saved signatures, signature pad
+  and the badge picker. The four bespoke `sheet_stamp_*.xml` layouts are deleted and no reference to
+  them remains. Rows/fields use `SwStyle` colours and radii; ids moved to `values/ids_stamp.xml`.
+- The discard-edits prompt is a `SwSheet` too (was `SwDialog.card`).
 
-- **`ui/protect/ProtectSheet.kt`** — title + close, note, document chip, password field with
-  show/hide, 4-segment strength meter with the check icon, "type it again" with a match check,
-  AES-256 info row, Remember-in-Vault row, **Protect & share** and **Save protected copy**.
-  Protect stays disabled until the password is ≥ 6 characters and both fields match.
-- **`ui/protect/UnlockSheet.kt`** — gold lock badge, `<name> is protected`, password field, the
-  tries-left error line, Open, "or", "Use password saved in Vault" (hidden — L2 API not merged),
-  Cancel, and "Remove protection…" behind a second confirmation sheet.
-- **`ui/protect/ProtectPolicy.kt`** — pure policy: `ProtectPassword` (min 6, Weak < 10, 4 segments,
-  code-point length) and `TryCooldown` (5 wrong tries → 30 s pause, doubling, reset on success).
-- **`tools/LockFlow.kt`** — both flows now use the sheets: saved-scan Protect / Unlock / Change
-  password, device-PDF lock (imports then protects; the sheet does not invent page count or size)
-  and device-PDF unlock. "Protect & share" shares the protected PDF, "Save protected copy" opens the
-  existing save screen. Cooldowns are per document for the process.
-- Strings only in `values/strings_protect.xml` and `values-hi/strings_protect.xml` (Hindi starts with
-  `<!-- review -->`); new colours/ids in `values/colors_protect.xml`, `values/ids_protect.xml`;
-  layouts `sheet_protect.xml`, `sheet_unlock.xml`; drawables `bg_protect_*`, `ic_protect_visibility_off`.
+### Tools hub wiring (`2ca6231`)
 
-### Tests added / updated
+- All eight Edit & sign entries (`sign`, `add_text`, `draw`, `highlight`, `watermark`,
+  `page_numbers`, `stamp`, `redact`) are `READY` and Pro.
+- `StampToolLauncher`: Pro gate (`ProGate.isPro`, test builds unlock Pro) → the **existing**
+  Merge/Compress library chooser (`FlowUtil.pickScan`, locked/vaulted documents filtered out) →
+  `StampEditorActivity` with `EXTRA_TOOL` armed. No documents = one honest line, no empty picker.
+  Free build gets the Pro sheet (`pro_suite_title` + `stamp_pro_message`), never a dead tap.
 
-- **`PdfAesTest` (new)** — right/wrong user and owner passwords; an **independent** implementation of
-  Algorithms 2.B/8/9/10 in the test (salts, `/U`, `/UE`, `/O`, `/OE`, `/Perms`) recomputes everything;
-  Unicode password (NFKC ligature, decomposed accent, 127-byte cap); generator-time encryption
-  decrypts independently and the verifier accepts it; post-hoc encryption keeps the page JPEG
-  byte-identical; the `/Encrypt` value is a real `<< … >>` dictionary.
-- **`PdfEncryptorTest`** — rewritten from RC4 to AES-256 (as the lane allows): independent 2.B +
-  AES-CBC stream decryption, exact content streams and images, text layer, right/wrong password.
-- **`ProtectPolicyTest` (new)** — meter thresholds, 12-char mockup case, code-point counting,
-  confirmation match, five-try 30 s pause, doubling, reset.
-- **`ProtectSheetTest` (new, v2 UI: 05_protect_pdf)** — fields, disabled state, 3/4 segments at 12
-  characters, confirm check, both exits' callbacks, Vault row hidden unless wired.
-- **`UnlockSheetTest` (new, v2 UI: 09_unlock_sheet)** — title, tries-left line, right password closes
-  and hands over, fifth wrong try pauses Open, Remove protection needs the second confirmation.
-- **`LockUiTest`** — rewritten to the v2 sheet (was an AlertDialog) — same data-safety assertions.
-- **`LockGuardTest`** — Unicode password now protects/verifies/unlocks; a malformed surrogate is
-  refused before anything is written. Every PM-3.1b guard unchanged and green.
-- **`ProtectionStateTest`** — `isEncodable` v2 rules; repair with a Unicode password works, malformed
-  text is refused without touching bytes.
-- **`UiSmokeTest`** — the password-dictionary test now pins `/V 5 /R 6 /Length 256 /CFM /AESV3`.
+### Polish (`2ca6231`)
+
+- Activity layout on v2 tokens: `void_abyss` background, `text_hologram_*` text, `sw_cyan_hair`
+  divider, `sw_space_*` paddings, save button height `sw_btn_height`.
+- The activity paints its own chrome from `SwStyle` + `dimens_v2`: cyan 54dp Save (same as SwSheet's
+  primary), glass Undo/Redo, danger Delete, round page navigator and hint chip; disabled controls dim.
+- Tool row is built from kit `ToolTile`s; `StampCanvasView` selection/handles now use
+  `cyan_primary`/`void_abyss` and the handle radius from `dimens_v2` (no hex colours left).
+- **Redaction warning before saving**: if any page carries a redaction, Save opens a `SwSheet`
+  ("Redaction is permanent" / "Hidden text and pixels are removed for good in the new copy…") with
+  "Save redacted copy" and "Keep editing". Nothing is written until the user confirms.
+
+## Tests added / updated
+
+- `StampToolLauncherTest` (rewritten) — id→tool map; the shared Merge/Compress chooser lists the
+  library and opens the editor with doc + tool extras; empty library; locked document not offered;
+  **Free build shows the Pro sheet and starts nothing**; test build is Pro.
+- `StampToolWiringTest` (rewritten) — loops **all eight** entries: `READY` + Pro, chooser opens, and
+  the started intent carries the matching `EXTRA_TOOL` for that tool; non-Activity host still gets
+  the coming-soon sheet; empty library message.
+- `StampEditorActivityTest` — **redaction warns before saving** and writes nothing until confirmed;
+  existing page-strip, tool row, undo/redo, page numbers, text sheet, Suggest, requested-tool and
+  locked-document tests kept.
+- `StampEditorStateTest` — `hasRedaction()` across pages (ordinary marks are not redactions).
+- Existing engine tests unchanged and green: `PageStampTest` (pixels in a redact box, OCR removed,
+  original byte-identical, watermark opacity), `PageStampSuggestTest`, `SignatureStoreTest`.
 
 ## Not done / carried
 
-- **"Remember in Vault"** is built but hidden until L2's Vault API merges (`rememberAvailable`), and
-  the Unlock sheet's Vault button likewise. No plaintext password is stored anywhere.
-- **Change password** still asks the current password with the existing `SwDialog.input` card before
-  opening the Protect sheet. L1's "replace every SwDialog with SwSheet" sweep owns that dialog.
-- `ui/DocumentViewerActivity.kt` (not in any lane's file list) still shows the old protect dialog and
-  the old `protect_note` string in `strings.xml`, which says RC4-128. Both are now false for new
-  files. **Needs L1/lead:** point that dialog at `ProtectSheet` and remove/replace `protect_note`.
-- `tools/pdfcheck.py` crashes on any locked PDF (`doc.metadata` is `None` before authentication) —
-  see the host check. One-line fix for the lead: `(doc.metadata or {}).get("encryption")`.
-- Pre-existing: `AndroidManifest.xml` declares `INTERNET` and `ACCESS_NETWORK_STATE` (not added by
-  this lane; the design says no INTERNET permission). Not touched — outside L3's file ownership.
-- No phone run requested; no screenshots taken (Robolectric UI tests cover the sheets).
+- **Signature management**: the store can hold 5 and has `delete(id)`, but the sheets have no
+  delete-a-signature or "clear pad" affordance, so the "delete one to save another" line has no
+  button yet. Needs a lead decision (small follow-up).
+- The reader dock's **Sign** button (`07_reader_dock`, L1) does not open `StampEditorActivity`; the
+  Tools-hub entries are the only entry point today. The Pro gate lives in `StampToolLauncher`, so any
+  future direct caller must check `ProGate` itself.
+- The document chooser is intentionally `FlowUtil.pickScan` (per the lead's instruction to reuse the
+  Merge/Compress chooser). It is still an old-style `SwDialog`; L1's "replace every SwDialog with
+  SwSheet" sweep will restyle it. If the lead wants the kit look now, point `FlowUtil.pickScan` at
+  `SwSheet`.
+- Saved signatures are vector paths; no bitmap is stored. `SignatureStore`'s 5-slot limit and
+  corruption handling are unit-tested but the real finger drawing was not run (no phone in this lane).
+- Strings only in `values/strings_stamp.xml` + `values-hi/strings_stamp.xml` (Hindi values start
+  with `<!-- review -->`). No new libraries, no permissions.
 
 ## Gate result (last full run)
 
 ```
-tests: total=853 failures=0 skipped=0
-GATE PASS L3 tests=853 lint=[0 errors, 329 warnings]
+tests: total=929 failures=0 skipped=0
+GATE PASS L5 tests=929 lint=[lint skipped (lead runs it at merge)]
 ```
-
-## Host check (independent parser: PyMuPDF 1.27.1, not ScanWhirl code)
-
-Files produced by the committed classes (`L3HostCheck` runs `PdfGenerator.imagesToPdf(..., enc)` and
-`PdfEncryptor.encrypt`, no Gradle):
-
-```
-$ python3 pdfcheck_l3.py /tmp/l3gen.pdf pw1234      # encrypted while generating
-needs_password: True
-wrong_password_opens: False
-right_password_opens: True
-permissions: 6
-encryption: Standard V5 R6 256-bit AES
-pages: 1
-page1_renders: True
-
-$ python3 pdfcheck_l3.py /tmp/l3post.pdf pw1234     # PdfEncryptor rewrite of a plain PDF
-needs_password: True
-wrong_password_opens: False
-right_password_opens: True
-permissions: 6
-encryption: Standard V5 R6 256-bit AES
-pages: 1
-page1_renders: True
-
-$ python3 pdfcheck_l3.py /tmp/l3unicode.pdf 'पासवर्ड1'
-needs_password: True
-wrong_password_opens: False
-right_password_opens: True
-encryption: Standard V5 R6 256-bit AES
-pages: 1
-page1_renders: True
-```
-
-`pdfcheck_l3.py` is the lane's copy of `tools/pdfcheck.py` with the `None`-metadata line guarded.
-
-The **exact** repo tool was also run:
-
-```
-$ wsl -d Ubuntu --cd /tmp -- python3 /mnt/c/Users/Cybium/Desktop/ScanWhirl/tools/pdfcheck.py /tmp/l3post.pdf pw1234
-needs_password: True
-Traceback (most recent call last):
-  ...
-  File ".../tools/pdfcheck.py", line 13, in <module>
-    print("encryption:", doc.metadata.get("encryption"))
-AttributeError: 'NoneType' object has no attribute 'get'
-```
-
-i.e. the three required facts hold; the tool's own `doc.metadata` line is what fails, not the file.
-
-The three implemented algorithms were cross-checked against MuPDF's source
-(`source/pdf/pdf-crypt.c`, fetched) and against files MuPDF itself generated (`/U` and `/UE`
-reproduced round-for-round, 93 and 66 rounds in the two distinguishing samples).
 
 ## Commits
 
-- `7eaef61` L3: AES-256 Protect PDF (V5/R6 AESV3), Unicode passwords, Protect/Unlock sheets
-- (this report) L3: report
+- `dc72a5a` L5: PageStamp engine + SignatureStore; redaction drops OCR and `.orig` in a new copy
+- `660f679` L5: stamp editor UI (page surface, drag/resize/rotate, tool row, undo/redo, Save as new copy)
+- `faba66d` merge `integration` (earlier session)
+- `9759931` L5: stamp editor sheets on the kit — `SwSheet` for text/badges/signatures/pad, ToolTile row
+- `e1ee14f` merge `integration` (this session)
+- `2ca6231` L5: 8 Edit & sign tools wired through the shared chooser + ProGate; kit chrome; redaction warning
+- (this report) L5: report
+
+## What to check on the phone (lead)
+
+1. **Touch drag / resize / rotate** on text, signature, badge and redaction boxes; rotate handle only
+   on text/signature; a freehand mark only drags. Handles must be easy to hit with a thumb.
+2. **Signature drawing**: draw with one finger in the white pad, save, then place the signature and
+   drag/rotate it. Also the 5-signature limit message (no delete UI yet).
+3. **Draw / Highlight / Redact**: one-gesture ink and boxes; a redaction box burns solid black and the
+   saved copy reads as solid after JPEG.
+4. **Save as new copy**: the warning sheet appears only when a redaction exists; the original opens
+   unchanged; the copy is named `(signed)`/`(watermarked)`/`(redacted)`; OCR text of a redacted page
+   is gone (Text tab empty/queued).
+5. **Tools hub**: each of the 8 tiles → the library chooser → the editor already armed for that tool.
+6. **Free/Pro**: force Free (`ProGate.setTestOverride(context, false)`) and confirm the Pro sheet, then
+   reset; test builds are Pro by default.
+7. **Look**: tool row, Save button, page navigator, hint chip and the sheets against the kit on a real
+   density; system-bar insets at the top and the keyboard over the text sheet.
