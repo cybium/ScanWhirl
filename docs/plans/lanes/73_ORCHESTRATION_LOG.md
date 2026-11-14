@@ -24,7 +24,7 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 |---|---|---|---|
 | L1 shell & look | ses_e267412b0ffeZ84ZxoKo9gr68N | finish uncommitted Phase B; merge integration (TrustPill conflict); Manrope; reader dock 07, Text 08, SwSheet sweep | running |
 | L2 vault | ses_e2673f395ffesg3lAiuldphAaI | finish Phase B vault UI; biometric/passcode; backup/restore; migration; VaultPasswords API for L3 | running |
-| L3 protect | ses_e2673ceb8ffe1MYGfhQWbVUcue | viewer Protect -> ProtectSheet; Change password sheet; new tool Book pages | running |
+| L3 protect | ses_e2673ceb8ffe1MYGfhQWbVUcue | MERGED 57fcdb3 (1038 tests). Idle; next: Remember-in-Vault wiring after L2 BiometricPrompt lands; real-photo Book pages tuning after QA run 2 | idle |
 | L4 tools | ses_e2673ad8bffe8h4gyE8XU1TUWK | Phase A (2.1b, 2.1c, step 3) MERGED partially at 4f10678 (967 tests, lint 0); still running Phase B ToolSetup + Result; wire 12 tools | running |
 | L5 edit & sign | ses_e2673902dffe4adGDrfK9NBXAw | wave 1 MERGED (16:3x, 929 tests, lint 0). Now wave 2: PM-2.2b -> 2.2c -> 2.3b Organize draft | running |
 
