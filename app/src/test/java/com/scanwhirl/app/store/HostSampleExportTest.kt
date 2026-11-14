@@ -53,14 +53,11 @@ class HostSampleExportTest {
             )
         }
 
-        // WSL exposes the Windows disk at /mnt/c; copy there for the independent parser check.
-        val windowsHome = File("/mnt/c/Users/Cybium")
-        if (windowsHome.isDirectory) {
-            val host = File(windowsHome, "AppData/Local/Temp/scanwhirl-l4-hostcheck")
-            if (host.isDirectory || host.mkdirs()) {
-                pptx.copyTo(File(host, "sample.pptx"), overwrite = true)
-                docx.copyTo(File(host, "sample.docx"), overwrite = true)
-            }
+        // Lead: no copies outside the test sandbox. For a manual python-pptx/python-docx check, set
+        // SW_HOSTCHECK_DIR to a folder and run this test alone.
+        System.getenv("SW_HOSTCHECK_DIR")?.let { File(it) }?.takeIf { it.isDirectory || it.mkdirs() }?.let { host ->
+            pptx.copyTo(File(host, "sample.pptx"), overwrite = true)
+            docx.copyTo(File(host, "sample.docx"), overwrite = true)
         }
     }
 }

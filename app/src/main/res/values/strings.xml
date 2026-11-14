@@ -263,7 +263,6 @@
     <string name="protect_title">Password-protect</string>
     <string name="protect_hint">Password</string>
     <string name="protect_apply">Apply password</string>
-    <string name="protect_note">Uses the widely-compatible PDF standard password (RC4-128). It stops casual readers, not strong cryptography.</string>
     <string name="protect_done">PDF is password-protected</string>
     <string name="menu_protect_pdf">Lock PDF</string>
     <string name="btn_lock_pdf">Lock PDF</string>

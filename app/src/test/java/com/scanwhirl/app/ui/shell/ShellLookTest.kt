@@ -117,7 +117,7 @@ class ShellLookTest {
             layoutRoot(activity)
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val tiles = ToolsHubScreen.tiles(body)
-            assertEquals(43, tiles.size)
+            assertEquals(com.scanwhirl.app.ui.kit.ToolRegistry.all.size, tiles.size)
             for (tile in tiles) {
                 val label = tile.findViewById<TextView>(R.id.swToolLabel)
                 val l = label.layout

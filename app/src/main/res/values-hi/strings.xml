@@ -296,7 +296,6 @@
     <string name="protect_apply"><!-- review -->Apply पासवर्ड</string>
     <string name="protect_done"><!-- review -->PDF is पासवर्ड-सुरक्षित</string>
     <string name="protect_hint"><!-- review -->Password</string>
-    <string name="protect_note"><!-- review -->Uses the widely-compatible PDF standard पासवर्ड (RC4-128). It sकोps casual readers, नहीं strचालूg crypकोgraphy.</string>
     <string name="protect_title"><!-- review -->Password-प्रोtect</string>
     <string name="remove"><!-- review -->Remove</string>
     <string name="reorder_pages"><!-- review -->Drag को reorder</string>

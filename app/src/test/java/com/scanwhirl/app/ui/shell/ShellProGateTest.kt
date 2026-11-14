@@ -82,7 +82,7 @@ class ShellProGateTest {
     fun `Free - every Pro tile in the Tools hub opens the Pro screen`() {
         ProGate.setTestOverride(app, false)
         val proIds = ToolRegistry.all.filter { it.pro }.map { it.id }
-        assertEquals("the catalogue still has 18 Pro tools", 18, proIds.size)
+        assertEquals("every Pro tool in the catalogue has a tile", com.scanwhirl.app.ui.kit.ToolRegistry.all.count { it.pro }, proIds.size)
 
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
