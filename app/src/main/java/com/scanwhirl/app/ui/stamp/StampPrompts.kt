@@ -11,6 +11,7 @@ import android.widget.TextView
 import android.widget.Toast
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.SignatureStore
+import com.scanwhirl.app.store.StampStore
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.PageStamp
@@ -57,35 +58,35 @@ object StampPrompts {
             .setPrimary(R.string.stamp_add)
             .build()
         sheet.keepOpenOnPrimary()
+        val ime = activity.getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
         sheet.primaryButton.setOnClickListener {
             val value = input.text.toString().trim()
             if (value.isEmpty()) {
                 input.error = activity.getString(R.string.stamp_text_required)
             } else {
+                // Close the keyboard with the sheet, or the next Back only hides the IME.
+                ime.hideSoftInputFromWindow(input.windowToken, 0)
                 sheet.dismiss()
                 onAdd(value)
             }
         }
         sheet.show()
         input.requestFocus()
-        val ime = activity.getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
         ime.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
     }
 
     /**
-     * Saved signatures (vector paths), or the pad when none exist. A signature that cannot be
-     * saved — a sixth, or empty ink — says why and keeps the pad open.
+     * Saved signatures (vector or imported PNG), or the pad when none exist. A signature that
+     * cannot be saved (a sixth, or empty ink) says why and keeps the pad open. "From photo"
+     * imports ink from a gallery/camera image.
      */
     fun signature(
         activity: Activity,
         store: SignatureStore,
-        onPick: (SignatureStore.SavedSignature) -> Unit
+        onPick: (SignatureStore.SavedSignature) -> Unit,
+        onImportPhoto: () -> Unit = {}
     ) {
         val saved = store.list()
-        if (saved.isEmpty()) {
-            pad(activity, store, onPick)
-            return
-        }
         val list = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             id = R.id.stampSignatureRows
@@ -93,12 +94,29 @@ object StampPrompts {
         lateinit var sheet: SwSheet
         saved.forEach { signature ->
             list.addView(
-                row(activity, signature.name) {
-                    sheet.dismiss()
-                    onPick(signature)
-                }
+                row(
+                    activity,
+                    signature.name,
+                    onClick = {
+                        sheet.dismiss()
+                        onPick(signature)
+                    },
+                    onLongClick = {
+                        sheet.dismiss()
+                        confirmSignatureDelete(activity, store, signature) {
+                            // Show what is left so a deletion never looks like a crash.
+                            signature(activity, store, onPick, onImportPhoto)
+                        }
+                    }
+                )
             )
         }
+        list.addView(
+            row(activity, activity.getString(R.string.stamp_import_photo)) {
+                sheet.dismiss()
+                onImportPhoto()
+            }
+        )
         sheet = SwSheet.builder(activity)
             .setTitle(R.string.stamp_signature_title)
             .setContent(list)
@@ -147,7 +165,13 @@ object StampPrompts {
         sheet.show()
     }
 
-    fun badges(activity: Activity, onPick: (PageStamp.BadgeKind) -> Unit) {
+    fun badges(
+        activity: Activity,
+        stampStore: StampStore,
+        onPick: (PageStamp.BadgeKind) -> Unit,
+        onStamp: (StampStore.SavedStamp) -> Unit,
+        onImportPhoto: () -> Unit = {}
+    ) {
         val list = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             id = R.id.stampBadgeRows
@@ -168,6 +192,32 @@ object StampPrompts {
                 }
             )
         }
+        val stamps = stampStore.list()
+        list.addView(
+            SwStyle.text(
+                activity, 12f, SwStyle.color(activity, R.color.text_hologram_dim), bold = true
+            ).apply {
+                text = activity.getString(R.string.stamp_my_stamps)
+                setPadding(
+                    SwStyle.dp(activity, 6f), SwStyle.dp(activity, 10f),
+                    SwStyle.dp(activity, 6f), SwStyle.dp(activity, 4f)
+                )
+            }
+        )
+        stamps.forEach { stamp ->
+            list.addView(
+                row(activity, stamp.name) {
+                    sheet.dismiss()
+                    onStamp(stamp)
+                }
+            )
+        }
+        list.addView(
+            row(activity, activity.getString(R.string.stamp_stamp_import)) {
+                sheet.dismiss()
+                onImportPhoto()
+            }
+        )
         sheet = SwSheet.builder(activity)
             .setTitle(R.string.stamp_badge_title)
             .setContent(list)
@@ -175,7 +225,30 @@ object StampPrompts {
         sheet.show()
     }
 
-    private fun row(activity: Activity, text: String, onClick: () -> Unit): TextView =
+    private fun confirmSignatureDelete(
+        activity: Activity,
+        store: SignatureStore,
+        signature: SignatureStore.SavedSignature,
+        onDeleted: () -> Unit
+    ) {
+        SwSheet.builder(activity)
+            .setTitle(R.string.stamp_signature_delete_title)
+            .setMessage(activity.getString(R.string.stamp_signature_delete_msg, signature.name))
+            .setPrimary(R.string.stamp_delete) {
+                store.delete(signature.id)
+                onDeleted()
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun row(
+        activity: Activity,
+        text: String,
+        onLongClick: (() -> Unit)? = null,
+        onClick: () -> Unit
+    ): TextView =
         SwStyle.text(
             activity, 16f, SwStyle.color(activity, R.color.text_hologram_hi)
         ).apply {
@@ -195,6 +268,13 @@ object StampPrompts {
             isClickable = true
             isFocusable = true
             setOnClickListener { onClick() }
+            if (onLongClick != null) {
+                isLongClickable = true
+                setOnLongClickListener {
+                    onLongClick()
+                    true
+                }
+            }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT

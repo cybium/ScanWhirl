@@ -88,19 +88,32 @@ class ReaderDockTest {
         }
     }
 
+    // v2 UI: 07_reader_dock - Sign opens the stamp editor armed with Sign for this document.
     @Test
-    fun `sign opens the Coming soon sheet - never a dead tap`() {
+    fun `sign opens the stamp editor with the sign tool`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
         open(id, "Sign me") { activity ->
             activity.findViewById<View>(R.id.readerDockSign).performClick()
             shadowOf(android.os.Looper.getMainLooper()).idle()
-            val dialog = ShadowDialog.getLatestDialog()
-            assertNotNull("Sign must open something", dialog)
+            val started = requireNotNull(shadowOf(activity).nextStartedActivity) {
+                "Sign must open the editor"
+            }
             assertEquals(
-                activity.getString(R.string.tool_coming_soon_title),
-                dialog.findViewById<TextView>(R.id.swSheetTitle).text.toString()
+                com.scanwhirl.app.ui.stamp.StampEditorActivity::class.java.name,
+                started.component?.className
             )
-            dialog.dismiss()
+            assertEquals(
+                id,
+                started.getStringExtra(
+                    com.scanwhirl.app.ui.stamp.StampEditorActivity.EXTRA_DOC_ID
+                )
+            )
+            assertEquals(
+                com.scanwhirl.app.ui.stamp.StampEditorActivity.TOOL_SIGN,
+                started.getStringExtra(
+                    com.scanwhirl.app.ui.stamp.StampEditorActivity.EXTRA_TOOL
+                )
+            )
         }
     }
 

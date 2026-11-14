@@ -2753,6 +2753,8 @@ class ScanRepository(private val context: Context) {
         val copy = duplicateDocument(
             id,
             suggestedName?.trim()?.takeIf { it.isNotBlank() }
+                // TODO(OutputNames): switch to util/OutputNames.forTool(base, label, existing)
+                // once L4's helper is in integration (not present at this commit).
                 ?: PageStamp.outputName(source.name, effective.flatMap { it.marks })
         )
         val copyDir = File(docsDir, copy.id)
@@ -2808,7 +2810,7 @@ class ScanRepository(private val context: Context) {
                 ?: return@withContext getDocument(id)?.pageFiles.orEmpty()
             draft.entries.map { entry ->
                 entry.replacement?.let { drafts.fileOf(id, it) }
-                    ?: File(File(docsDir, id), entry.source)
+                    ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
             }
         }
     }
@@ -2887,6 +2889,51 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Inserts copies of [pages] at [position] (0 = start, entries.size = end). The files are
+     * copied into the draft folder and never moved, so the source document is untouched (I7).
+     * A `.orig` sibling is copied too, keeping filter-from-original behaviour.
+     */
+    internal suspend fun draftInsertPages(
+        id: String,
+        pages: List<File>,
+        position: Int
+    ): DraftStore.Draft = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) {
+            val doc = draftEditDoc(id)
+            val draft = draftFor(doc)
+            require(pages.isNotEmpty()) { "No pages to add" }
+            require(pages.all { it.isFile && it.length() > 0L }) { "A page could not be read" }
+            val dir = drafts.folderOf(id).apply { mkdirs() }
+            var n = draft.next
+            val inserted = ArrayList<DraftStore.Entry>(pages.size)
+            pages.forEach { page ->
+                val jpgName = "r_$n.jpg"
+                Durable.copyFile(page, File(dir, jpgName))
+                var origName: String? = null
+                val orig = File(page.parentFile, page.nameWithoutExtension + ".orig")
+                    .takeIf { it.isFile }
+                if (orig != null) {
+                    val oName = "r_$n.orig"
+                    Durable.copyFile(orig, File(dir, oName))
+                    origName = oName
+                }
+                inserted += DraftStore.Entry(null, null, jpgName, origName)
+                n++
+            }
+            OpFaults.at("draft:replacement_written")
+            val at = position.coerceIn(0, draft.entries.size)
+            storeDraft(
+                draft.copy(
+                    updated = System.currentTimeMillis(),
+                    changes = draft.changes + 1,
+                    next = n,
+                    entries = draft.entries.toMutableList().also { it.addAll(at, inserted) }
+                )
+            )
+        }
+    }
+
     /** Crops one draft page (and its kept original) into fresh `r_<n>` files. */
     internal suspend fun draftCrop(
         id: String,
@@ -2949,7 +2996,7 @@ class ScanRepository(private val context: Context) {
             if (filter == ScanFilter.ORIGINAL) {
                 if (unfiltered == null) return@withContext draft
                 val pureReference = entry.replacementOrig != null &&
-                    Sha256.of(unfiltered) == entry.sourceSha
+                    entry.sourceSha != null && Sha256.of(unfiltered) == entry.sourceSha
                 val newEntry: DraftStore.Entry
                 val newNext: Int
                 if (pureReference) {
@@ -2973,7 +3020,7 @@ class ScanRepository(private val context: Context) {
             } else {
                 val source = unfiltered
                     ?: entry.replacement?.let { drafts.fileOf(id, it) }
-                    ?: File(File(docsDir, id), entry.source)
+                    ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
                 val n = draft.next
                 val newOrig = entry.replacementOrig ?: run {
                     val outOrig = File(dir, "r_$n.orig")
@@ -3124,14 +3171,16 @@ class ScanRepository(private val context: Context) {
 
     private fun entryFile(id: String, entry: DraftStore.Entry): File =
         entry.replacement?.let { drafts.fileOf(id, it) }
-            ?: File(File(docsDir, id), entry.source)
+            ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
 
     private fun entryOrig(id: String, entry: DraftStore.Entry): File? =
         entry.replacementOrig?.let { drafts.fileOf(id, it) }
             ?: if (entry.replacement == null) baseOrig(id, entry) else null
 
-    private fun baseOrig(id: String, entry: DraftStore.Entry): File? =
-        origOf(File(File(docsDir, id), entry.source)).takeIf { it.exists() }
+    private fun baseOrig(id: String, entry: DraftStore.Entry): File? {
+        val source = entry.source ?: return null
+        return origOf(File(File(docsDir, id), source)).takeIf { it.exists() }
+    }
 
     /** Copies the chosen draft pages into [staging] and carries base OCR for untouched pages. */
     private suspend fun stageDraftPages(
@@ -3154,15 +3203,16 @@ class ScanRepository(private val context: Context) {
                     Durable.copyFile(drafts.fileOf(doc.id, it), origOf(out))
                 }
             } else {
-                val src = File(File(docsDir, doc.id), entry.source)
+                val source = requireNotNull(entry.source) { "Draft page has no source" }
+                val src = File(File(docsDir, doc.id), source)
                 if (!src.isFile) throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
                 Durable.copyFile(src, out)
                 if (Sha256.of(out) != entry.sourceSha) {
                     throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
                 }
                 origOf(src).takeIf { it.exists() }?.let { Durable.copyFile(it, origOf(out)) }
-                baseText[entry.source]?.let { texts[out.name] = it }
-                baseGeo[entry.source]?.let { geo[out.name] = it }
+                baseText[source]?.let { texts[out.name] = it }
+                baseGeo[source]?.let { geo[out.name] = it }
             }
             OpFaults.at("op:page:$i")
         }

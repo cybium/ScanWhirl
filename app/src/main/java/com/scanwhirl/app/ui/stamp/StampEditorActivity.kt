@@ -3,13 +3,24 @@ package com.scanwhirl.app.ui.stamp
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
@@ -17,6 +28,7 @@ import com.scanwhirl.app.databinding.ActivityStampEditorBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.SignatureStore
+import com.scanwhirl.app.store.StampStore
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -25,12 +37,16 @@ import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolGroup
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
+import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.InkExtract
 import com.scanwhirl.app.util.PageStamp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
+import java.util.UUID
 
 /**
  * L5 Phase B — the Stamp editor (70 §3 "Edit & sign", product spec §3.7).
@@ -60,6 +76,7 @@ class StampEditorActivity : BaseActivity() {
         const val TOOL_PAGE_NUMBERS = "page_numbers"
         const val TOOL_STAMP = "stamp"
         const val TOOL_REDACT = "redact"
+        const val TOOL_MASK_AADHAAR = "mask_aadhaar"
 
         private const val DISABLED_ALPHA = 0.38f
 
@@ -74,9 +91,38 @@ class StampEditorActivity : BaseActivity() {
     private lateinit var repo: ScanRepository
     private lateinit var document: ScanDocument
     private lateinit var signatureStore: SignatureStore
+    private lateinit var stampStore: StampStore
+
+    /** Which list a photo import feeds: the signatures sheet or My stamps. */
+    private enum class InkKind { SIGNATURE, STAMP }
+
+    private var inkKind = InkKind.SIGNATURE
+    private var pendingPhotoFile: File? = null
+
+    private val inkGallery = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val file = withContext(Dispatchers.IO) { copyPhotoToCache(uri) }
+            if (file == null) {
+                note(getString(R.string.stamp_ink_none))
+            } else {
+                loadInk(file)
+            }
+        }
+    }
+
+    private val inkCamera = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val file = pendingPhotoFile
+        pendingPhotoFile = null
+        if (!ok || file == null) return@registerForActivityResult
+        loadInk(file)
+    }
 
     internal lateinit var editor: StampEditorState
         private set
+
+    /** True for the "Mask Aadhaar" tool: save as "<name> - Masked" and seed redaction boxes. */
+    private var maskMode = false
 
     private var saving = false
 
@@ -89,6 +135,7 @@ class StampEditorActivity : BaseActivity() {
 
         repo = ScanRepository(this)
         signatureStore = SignatureStore(this)
+        stampStore = StampStore(this)
 
         val id = intent.getStringExtra(EXTRA_DOC_ID)
         val doc = id?.let { repo.getDocument(it) }
@@ -248,9 +295,13 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun promptBadges() {
-        StampPrompts.badges(this) { kind ->
-            addMark(PageStamp.Mark.Badge(kind, badgeBox()))
-        }
+        StampPrompts.badges(
+            this,
+            stampStore,
+            onPick = { kind -> addMark(PageStamp.Mark.Badge(kind, badgeBox())) },
+            onStamp = { stamp -> addMark(PageStamp.Mark.Picture(stamp.pngFile, badgeBox())) },
+            onImportPhoto = { startInkImport(InkKind.STAMP) }
+        )
     }
 
     private fun applyRequestedTool(tool: String?) {
@@ -263,6 +314,7 @@ class StampEditorActivity : BaseActivity() {
             TOOL_PAGE_NUMBERS -> addMarkToAll(PageStamp.Mark.PageNumber())
             TOOL_STAMP -> promptBadges()
             TOOL_REDACT -> arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
+            TOOL_MASK_AADHAAR -> maskAadhaar()
             else -> Unit
         }
     }
@@ -293,15 +345,25 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun pickSignature() {
-        StampPrompts.signature(this, signatureStore) { saved ->
-            addMark(
-                PageStamp.Mark.Signature(
-                    strokes = saved.strokes,
-                    box = signatureBox(),
-                    color = android.graphics.Color.BLACK
-                )
-            )
-        }
+        StampPrompts.signature(
+            this,
+            signatureStore,
+            onPick = { saved ->
+                val file = saved.pngFile
+                if (file != null) {
+                    addMark(PageStamp.Mark.Picture(file, signatureBox()))
+                } else {
+                    addMark(
+                        PageStamp.Mark.Signature(
+                            strokes = saved.strokes,
+                            box = signatureBox(),
+                            color = android.graphics.Color.BLACK
+                        )
+                    )
+                }
+            },
+            onImportPhoto = { startInkImport(InkKind.SIGNATURE) }
+        )
     }
 
     private fun suggestRedactions() {
@@ -321,6 +383,52 @@ class StampEditorActivity : BaseActivity() {
         editor.select(before + suggestions.size - 1)
         disarm()
         refresh()
+    }
+
+    /**
+     * Mask Aadhaar: find 12-digit Aadhaar / 16-digit VID numbers on every page (OCR geometry, or
+     * run recognition when a page has none), seed redaction boxes over the first 8 digits, and
+     * let the user adjust them. The save path uses the true redaction burn and names the copy
+     * "<name> - Masked".
+     */
+    private fun maskAadhaar() {
+        val id = document.id
+        lifecycleScope.launch {
+            val found = withContext(Dispatchers.IO) {
+                val geometries = runCatching { repo.ocrStore.readGeo(id) }.getOrDefault(emptyMap())
+                val pages = ArrayList<Pair<Int, List<PageStamp.Box>>>()
+                var count = 0
+                document.pageFiles.forEachIndexed { index, page ->
+                    val geo = geometries[page.name]
+                        ?: runCatching {
+                            com.scanwhirl.app.util.OcrEngine.recognizeFile(page).page
+                        }.getOrNull()
+                    if (geo != null) {
+                        val boxes = com.scanwhirl.app.util.AadhaarMask.find(geo)
+                        if (boxes.isNotEmpty()) {
+                            pages += index to boxes
+                            count += boxes.size
+                        }
+                    }
+                }
+                pages to count
+            }
+            val (pages, count) = found
+            if (count == 0) {
+                note(getString(R.string.mask_aadhaar_none))
+                return@launch
+            }
+            val start = editor.currentPage
+            pages.forEach { (index, boxes) ->
+                editor.currentPage = index
+                editor.addAll(boxes.map { PageStamp.Mark.Redact(it) })
+            }
+            editor.currentPage = start
+            maskMode = true
+            showPage()
+            binding.hint.setText(R.string.mask_aadhaar_hint)
+            binding.hint.visibility = android.view.View.VISIBLE
+        }
     }
 
     // ------------------------------------------------------------------ page and chrome
@@ -397,7 +505,11 @@ class StampEditorActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val copy = withContext(Dispatchers.IO) {
-                    repo.stampDocument(document.id, edits, null)
+                    repo.stampDocument(
+                        document.id,
+                        edits,
+                        if (maskMode) getString(R.string.mask_aadhaar_name, document.name) else null
+                    )
                 }
                 setResult(
                     RESULT_OK,
@@ -405,7 +517,8 @@ class StampEditorActivity : BaseActivity() {
                 )
                 Toast.makeText(
                     this@StampEditorActivity,
-                    getString(R.string.stamp_saved, copy.name),
+                    if (maskMode) getString(R.string.mask_aadhaar_saved, copy.name)
+                    else getString(R.string.stamp_saved, copy.name),
                     Toast.LENGTH_LONG
                 ).show()
                 finish()
@@ -421,6 +534,9 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun confirmExit() {
+        // A leftover IME would consume the first Back; drop it before asking.
+        (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
+            ?.hideSoftInputFromWindow(binding.root.windowToken, 0)
         if (editor.isEmpty() || saving) {
             finish()
             return
@@ -435,6 +551,155 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun dp(value: Float): Int = SwStyle.dp(this, value)
+
+    // ------------------------------------------------------------------ ink from a photo
+
+    /** "From photo": gallery or camera, then the preview/trim/recolour sheet. */
+    private fun startInkImport(kind: InkKind) {
+        inkKind = kind
+        SwSheet.builder(this)
+            .setTitle(R.string.stamp_import_photo)
+            .setOptions(
+                listOf(
+                    getString(R.string.stamp_import_choose),
+                    getString(R.string.stamp_import_camera)
+                )
+            ) { which, _ ->
+                if (which == 0) inkGallery.launch("image/*") else launchInkCamera()
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun launchInkCamera() {
+        val dir = File(cacheDir, "documents").apply { mkdirs() }
+        val file = File(dir, "ink_${UUID.randomUUID().toString().take(8)}.jpg")
+        pendingPhotoFile = file
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        inkCamera.launch(uri)
+    }
+
+    private fun copyPhotoToCache(uri: android.net.Uri): File? = try {
+        val dir = File(cacheDir, "documents").apply { mkdirs() }
+        val file = File(dir, "ink_${UUID.randomUUID().toString().take(8)}.jpg")
+        val bytes = contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
+        if (bytes == null) null else {
+            com.scanwhirl.app.util.Durable.writeFile(file, bytes)
+            file
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun loadInk(file: File) {
+        val bitmap = InkExtract.decodeSampled(file)
+        if (bitmap == null) {
+            note(getString(R.string.stamp_ink_none))
+            return
+        }
+        showInkPreview(bitmap)
+    }
+
+    /** Preview on a checkerboard, with Original / Black / Blue for a signature. */
+    private fun showInkPreview(source: Bitmap) {
+        var current: InkExtract.Extracted? =
+            InkExtract.extract(source, InkExtract.Recolor.ORIGINAL)
+        if (current == null) {
+            source.recycle()
+            note(getString(R.string.stamp_ink_none))
+            return
+        }
+
+        val preview = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(dp(10f), dp(10f), dp(10f), dp(10f))
+            background = checkerboard()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(210f)
+            )
+            setImageBitmap(current!!.bitmap)
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(preview)
+        }
+        if (inkKind == InkKind.SIGNATURE) {
+            val chips = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(0, dp(10f), 0, 0)
+            }
+            listOf(
+                InkExtract.Recolor.ORIGINAL to R.string.stamp_ink_original,
+                InkExtract.Recolor.BLACK to R.string.stamp_ink_black,
+                InkExtract.Recolor.BLUE to R.string.stamp_ink_blue
+            ).forEachIndexed { index, (recolor, label) ->
+                val chip = SwStyle.text(
+                    this@StampEditorActivity, 14f,
+                    SwStyle.color(this@StampEditorActivity, R.color.cyan_primary),
+                    bold = true
+                ).apply {
+                    text = getString(label)
+                    gravity = Gravity.CENTER
+                    minWidth = dp(84f)
+                    minHeight = dp(44f)
+                    setPadding(dp(10f), 0, dp(10f), 0)
+                }
+                chip.setOnClickListener {
+                    val next = InkExtract.extract(source, recolor) ?: return@setOnClickListener
+                    current?.bitmap?.recycle()
+                    current = next
+                    preview.setImageBitmap(next.bitmap)
+                }
+                chips.addView(chip, LinearLayout.LayoutParams(0, dp(48f), 1f))
+            }
+            content.addView(chips)
+        }
+
+        SwSheet.builder(this)
+            .setTitle(R.string.stamp_ink_title)
+            .setContent(content)
+            .setPrimary(R.string.stamp_ink_save) {
+                val bitmap = current?.bitmap ?: return@setPrimary
+                saveInk(bitmap)
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun saveInk(bitmap: Bitmap) {
+        try {
+            if (inkKind == InkKind.SIGNATURE) {
+                val name = getString(R.string.stamp_signature_name, signatureStore.list().size + 1)
+                val saved = signatureStore.saveBitmap(name, bitmap)
+                addMark(PageStamp.Mark.Picture(requireNotNull(saved.pngFile), signatureBox()))
+            } else {
+                val name = getString(R.string.stamp_stamp_name, stampStore.list().size + 1)
+                val saved = stampStore.save(name, bitmap)
+                addMark(PageStamp.Mark.Picture(saved.pngFile, badgeBox()))
+            }
+            bitmap.recycle()
+        } catch (e: Exception) {
+            note(e.message ?: getString(R.string.stamp_stamp_full))
+        }
+    }
+
+    private fun checkerboard(): Drawable {
+        val cell = 12
+        val tile = Bitmap.createBitmap(cell * 2, cell * 2, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(tile)
+        canvas.drawColor(0xFFEDEDED.toInt())
+        val paint = Paint().apply { color = 0xFFC9C9C9.toInt() }
+        canvas.drawRect(0f, 0f, cell.toFloat(), cell.toFloat(), paint)
+        canvas.drawRect(cell.toFloat(), cell.toFloat(), cell * 2f, cell * 2f, paint)
+        return BitmapDrawable(resources, tile).apply {
+            tileModeX = Shader.TileMode.REPEAT
+            tileModeY = Shader.TileMode.REPEAT
+        }
+    }
 
     private fun dimenDp(res: Int): Float =
         resources.getDimension(res) / resources.displayMetrics.density

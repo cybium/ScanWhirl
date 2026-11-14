@@ -137,7 +137,14 @@ object ToolRegistry {
         ready("split", ToolGroup.ORGANIZE, R.string.tool_split, R.drawable.ic_sym_call_split, "split range separate", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("extract", ToolGroup.ORGANIZE, R.string.tool_extract, R.drawable.ic_sym_content_cut, "extract pages pick remove", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         build("organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages, R.drawable.ic_sym_view_module, "organize reorder pages move"),
-        soon("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_note_add, "insert add pages into pdf"),
+        ready("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_note_add, "insert add pages into pdf", launch = { host, tool ->
+            val activity = host as? android.app.Activity
+            if (activity == null) {
+                host.comingSoon(tool)
+            } else {
+                com.scanwhirl.app.ui.DocumentViewerActivity.openInsertPicker(activity)
+            }
+        }),
         ready("duplicate", ToolGroup.ORGANIZE, R.string.tool_duplicate, R.drawable.ic_sym_content_copy, "duplicate copy clone", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = true),
         ready("batch_rename", ToolGroup.ORGANIZE, R.string.tool_batch_rename, R.drawable.ic_sym_drive_file_rename, "batch rename many files", pro = true),
@@ -184,6 +191,14 @@ object ToolRegistry {
         ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "redact") } ?: host.comingSoon(tool) }
         ),
+        ready("mask_aadhaar", ToolGroup.EDIT, R.string.tool_mask_aadhaar, R.drawable.ic_sym_visibility_off, "aadhaar mask uidai hide aadhar vid", launch = { host, tool ->
+            val activity = host as? android.app.Activity
+            if (activity == null) {
+                host.comingSoon(tool)
+            } else {
+                com.scanwhirl.app.ui.stamp.StampToolLauncher.openMaskAadhaar(activity)
+            }
+        }),
 
         // Secure (4)
         build("protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted, "protect password encrypt aes"),

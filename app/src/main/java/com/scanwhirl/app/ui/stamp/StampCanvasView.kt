@@ -225,6 +225,7 @@ class StampCanvasView @JvmOverloads constructor(
     private fun normalizedBounds(mark: PageStamp.Mark): RectF? = when (mark) {
         is PageStamp.Mark.Text -> box(mark.box)
         is PageStamp.Mark.Signature -> box(mark.box)
+        is PageStamp.Mark.Picture -> box(mark.box)
         is PageStamp.Mark.Highlight -> box(mark.box)
         is PageStamp.Mark.Badge -> box(mark.box)
         is PageStamp.Mark.Redact -> box(mark.box)
@@ -262,7 +263,9 @@ class StampCanvasView @JvmOverloads constructor(
     }
 
     private fun canRotate(mark: PageStamp.Mark): Boolean =
-        mark is PageStamp.Mark.Text || mark is PageStamp.Mark.Signature
+        mark is PageStamp.Mark.Text ||
+            mark is PageStamp.Mark.Signature ||
+            mark is PageStamp.Mark.Picture
 
     private fun hitTest(norm: PointF): Int {
         for (i in marks.indices.reversed()) {
