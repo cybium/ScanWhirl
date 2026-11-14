@@ -21,6 +21,11 @@ object ToolLaunch {
             ToolRegistry.byId(toolId)?.let { host.comingSoon(it) }
             return
         }
+        start(context, toolId)
+    }
+
+    /** The same launch from a screen that is only a Context (the Text screen). */
+    fun start(context: Context, toolId: String) {
         val intent = when (toolId) {
             "passport" -> PassportActivity.intent(context)
             "id_card" -> IdCardActivity.intent(context)

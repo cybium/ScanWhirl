@@ -89,7 +89,13 @@ class VaultActivity : BaseActivity() {
         @Volatile
         internal var fingerprintStarter: ((VaultKeyChallenge) -> Boolean)? = null
 
-        fun intent(context: Context): Intent = Intent(context, VaultActivity::class.java)
+        /** Extra: why another screen sent the user here (shown above the passcode field). */
+        const val EXTRA_REASON = "vault_reason"
+
+        fun intent(context: Context, reason: String? = null): Intent =
+            Intent(context, VaultActivity::class.java).apply {
+                if (reason != null) putExtra(EXTRA_REASON, reason)
+            }
     }
 
     private enum class UnlockMethod { PASSCODE, BIOMETRIC, RECOVERY }
@@ -100,10 +106,12 @@ class VaultActivity : BaseActivity() {
     private lateinit var statsTitle: TextView
     private lateinit var statsBody: TextView
     private lateinit var banner: TextView
+    private lateinit var statusLine: TextView
     private lateinit var filesHeader: LinearLayout
     private lateinit var addLink: TextView
     private lateinit var list: LinearLayout
     private lateinit var empty: LinearLayout
+    private lateinit var lockedPlaceholder: LinearLayout
     private lateinit var setupButton: TextView
     private lateinit var unlockButton: TextView
     private lateinit var lockButton: android.widget.ImageButton
@@ -114,6 +122,12 @@ class VaultActivity : BaseActivity() {
     private var shownUnlocked = false
     private var unlockMethod = UnlockMethod.PASSCODE
     private var unlockSheet: SwSheet? = null
+    private var attemptedUnlock = false
+    private var autoPrompted = false
+    private var fingerprintSetupAsked = false
+
+    /** Why another screen sent the user here ("Unlock the Vault to save this password."). */
+    private var reason: String? = null
 
     private val createBackup = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -127,6 +141,7 @@ class VaultActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
         store = storeOverride ?: VaultStore(this, repo)
+        reason = intent?.getStringExtra(EXTRA_REASON)
         runCatching { store.recover() }
 
         val root = buildScreen()
@@ -186,9 +201,11 @@ class VaultActivity : BaseActivity() {
         content.addView(statsCard())
         content.addView(actionRow())
         content.addView(bannerRow())
+        content.addView(statusRow())
         content.addView(primaryRow())
         content.addView(filesHeaderRow())
         content.addView(emptyCard())
+        content.addView(lockedCard())
         list = LinearLayout(this).apply {
             id = R.id.vaultList
             orientation = LinearLayout.VERTICAL
@@ -374,6 +391,28 @@ class VaultActivity : BaseActivity() {
         return banner
     }
 
+    /** "Still locked..." after a dismissed or failed attempt: the sheet never fails silently. */
+    private fun statusRow(): View {
+        statusLine = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger), bold = true).apply {
+            id = R.id.vaultStatus
+            background = SwStyle.rounded(
+                this@VaultActivity,
+                SwStyle.color(this@VaultActivity, R.color.sw_cyan_soft),
+                radiusDp = 14f,
+                stroke = SwStyle.color(this@VaultActivity, R.color.laser_danger)
+            )
+            setPadding(
+                SwStyle.dp(this@VaultActivity, 14f), SwStyle.dp(this@VaultActivity, 10f),
+                SwStyle.dp(this@VaultActivity, 14f), SwStyle.dp(this@VaultActivity, 10f)
+            )
+            isVisible = false
+        }
+        statusLine.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@VaultActivity, 12f) }
+        return statusLine
+    }
+
     private fun primaryRow(): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -466,6 +505,37 @@ class VaultActivity : BaseActivity() {
         return empty
     }
 
+    /** While locked, "Private files" says what is there instead of showing empty space. */
+    private fun lockedCard(): View {
+        lockedPlaceholder = LinearLayout(this).apply {
+            id = R.id.vaultLockedPlaceholder
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = SwStyle.card(this@VaultActivity, 16f)
+            val pad = SwStyle.dp(this@VaultActivity, 14f)
+            setPadding(pad, pad, pad, pad)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@VaultActivity, 10f) }
+            isVisible = false
+        }
+        lockedPlaceholder.addView(
+            ImageView(this).apply {
+                setImageResource(R.drawable.ic_sym_lock)
+                imageTintList = ColorStateList.valueOf(SwStyle.color(this@VaultActivity, R.color.text_hologram_dim))
+            },
+            LinearLayout.LayoutParams(SwStyle.dp(this, 20f), SwStyle.dp(this, 20f))
+        )
+        lockedPlaceholder.addView(
+            SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+                text = getString(R.string.vault_locked_placeholder)
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { marginStart = SwStyle.dp(this@VaultActivity, 10f) }
+        )
+        return lockedPlaceholder
+    }
+
     private fun outlineButton(textRes: Int, icon: Int): TextView =
         SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
             text = getString(textRes)
@@ -509,10 +579,9 @@ class VaultActivity : BaseActivity() {
         statsTitle.text = when {
             !setUp -> getString(R.string.vault_not_setup_title)
             !unlocked -> getString(R.string.vault_locked_title)
-            else -> {
-                val files = entries.sumOf { it.fileCount }
-                resources.getQuantityString(R.plurals.vault_files_protected, files, files)
-            }
+            else -> resources.getQuantityString(
+                R.plurals.vault_documents_protected, entries.size, entries.size
+            )
         }
         statsBody.text = when {
             !setUp -> getString(R.string.vault_not_setup_body)
@@ -525,10 +594,13 @@ class VaultActivity : BaseActivity() {
             UnlockMethod.RECOVERY -> getString(R.string.vault_banner_recovery)
             UnlockMethod.PASSCODE -> getString(R.string.vault_banner_passcode)
         }
+        statusLine.isVisible = setUp && !unlocked && attemptedUnlock
+        statusLine.text = getString(R.string.vault_still_locked)
         setupButton.isVisible = !setUp
         unlockButton.isVisible = setUp && !unlocked
         filesHeader.isVisible = setUp
         addLink.isVisible = unlocked
+        lockedPlaceholder.isVisible = setUp && !unlocked
         list.isVisible = unlocked && entries.isNotEmpty()
         empty.isVisible = unlocked && entries.isEmpty()
         recoveryButton.isEnabled = setUp
@@ -546,15 +618,14 @@ class VaultActivity : BaseActivity() {
             val meta = if (entry.pageCount > 0) {
                 getString(
                     R.string.vault_entry_meta,
-                    entry.pageCount,
+                    resources.getQuantityString(R.plurals.vault_pages, entry.pageCount, entry.pageCount),
                     Formatter.formatShortFileSize(this, entry.sizeBytes),
                     date
                 )
             } else {
                 getString(
                     R.string.vault_entry_meta_files,
-                    entry.pageCount,
-                    entry.fileCount,
+                    resources.getQuantityString(R.plurals.vault_file_count, entry.fileCount, entry.fileCount),
                     date
                 )
             }
@@ -614,7 +685,7 @@ class VaultActivity : BaseActivity() {
                     val setup = try {
                         store.setup(code)
                     } catch (e: Exception) {
-                        pass.setError(e.message ?: getString(R.string.vault_unlock_wrong))
+                        pass.setError(e.message ?: getString(R.string.vault_passcode_short))
                         return@setOnClickListener
                     }
                     sheet.dismiss()
@@ -625,7 +696,8 @@ class VaultActivity : BaseActivity() {
             }
         }
         sheet.show()
-        pass.editText.requestFocus()
+        sheet.view.applySystemBarsPadding(top = false)
+        // No auto-focus: opening the keyboard on this two-field sheet hid the primary button.
     }
 
     private fun showRecoveryCode(code: String, migrateLegacy: Boolean) {
@@ -688,6 +760,7 @@ class VaultActivity : BaseActivity() {
             showConfirmRecovery(code, migrateLegacy)
         }
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
     }
 
     private fun showConfirmRecovery(code: String, migrateLegacy: Boolean) {
@@ -709,9 +782,13 @@ class VaultActivity : BaseActivity() {
             }
             field.setError(null)
             sheet.dismiss()
-            if (migrateLegacy) migrateLegacyAsync() else render()
+            if (migrateLegacy) migrateLegacyAsync() else {
+                render()
+                offerFingerprintSetup()
+            }
         }
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
         field.editText.requestFocus()
     }
 
@@ -742,6 +819,7 @@ class VaultActivity : BaseActivity() {
             if (migrateOnly) migrateLegacyAsync() else showSetup(migrateLegacy = true)
         }
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
         pin.editText.requestFocus()
     }
 
@@ -750,6 +828,7 @@ class VaultActivity : BaseActivity() {
             try {
                 val moved = withContext(Dispatchers.IO) { store.migrateLegacyVault() }
                 render()
+                offerFingerprintSetup()
                 if (moved > 0) Toast.makeText(
                     this@VaultActivity,
                     getString(R.string.vault_legacy_migrated, moved),
@@ -769,9 +848,11 @@ class VaultActivity : BaseActivity() {
     private fun showUnlock() {
         if (!store.isSetUp() || store.isUnlocked()) return
         unlockSheet?.dismiss()
+        val offered = fingerprintOffered()
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val pass = passcodeField(R.string.vault_passcode_hint_generic, R.id.vaultUnlockPasscode)
         pass.errorView.id = R.id.vaultUnlockError
+        pass.editText.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
         content.addView(pass)
         val recoveryLink = SwStyle.text(this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
             id = R.id.vaultUseRecovery
@@ -784,34 +865,69 @@ class VaultActivity : BaseActivity() {
 
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.vault_unlock_sheet_title)
-            .setMessage(R.string.vault_unlock_note)
+            .setMessage(
+                reason ?: getString(
+                    if (offered) R.string.vault_unlock_note_fingerprint else R.string.vault_unlock_note_passcode
+                )
+            )
             .setContent(content)
             .build()
         recoveryLink.setOnClickListener {
             sheet.dismiss()
             showRecoveryUnlock()
         }
-        if (fingerprintOffered()) {
+        if (offered) {
             sheet.setSecondary(R.string.vault_use_fingerprint) { startFingerprintUnlock() }
+            sheet.secondaryButton.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                R.drawable.ic_sym_fingerprint, 0, 0, 0
+            )
+            sheet.secondaryButton.compoundDrawablePadding = SwStyle.dp(this@VaultActivity, 8f)
+            sheet.secondaryButton.compoundDrawableTintList =
+                ColorStateList.valueOf(SwStyle.color(this@VaultActivity, R.color.cyan_primary))
         }
         sheet.setPrimary(R.string.vault_unlock_primary)
         sheet.keepOpenOnPrimary()
-        sheet.primaryButton.setOnClickListener {
-            val result = store.unlockWithPasscode(pass.text())
-            if (result.ok) {
-                pass.setError(null)
-                unlockMethod = UnlockMethod.PASSCODE
-                sheet.dismiss()
-                render()
-            } else if (result.pauseMillis > 0) {
-                pass.setError(getString(R.string.vault_unlock_pause, (result.pauseMillis + 999) / 1000))
-            } else {
-                pass.setError(getString(R.string.vault_unlock_wrong))
-            }
+        val attempt = { onPasscodeEntered(sheet, pass) }
+        sheet.primaryButton.setOnClickListener { attempt() }
+        pass.editText.setOnEditorActionListener { _, _, _ ->
+            attempt()
+            true
         }
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
         unlockSheet = sheet
         pass.editText.requestFocus()
+        if (offered && !autoPrompted) {
+            autoPrompted = true
+            startFingerprintUnlock(auto = true)
+        }
+    }
+
+    /** The one place a passcode is checked: a failure is always visible, never a silent close. */
+    private fun onPasscodeEntered(sheet: SwSheet, pass: PasswordField) {
+        attemptedUnlock = true
+        val result = store.unlockWithPasscode(pass.text())
+        if (result.ok) {
+            pass.setError(null)
+            unlockMethod = UnlockMethod.PASSCODE
+            sheet.dismiss()
+            unlockSheet = null
+            render()
+            offerFingerprintSetup()
+            return
+        }
+        render()
+        if (result.pauseMillis > 0) {
+            pass.setError(
+                getString(R.string.vault_unlock_pause, (result.pauseMillis + 999) / 1000)
+            )
+        } else {
+            pass.setError(
+                resources.getQuantityString(
+                    R.plurals.vault_unlock_wrong_left, result.triesLeft, result.triesLeft
+                )
+            )
+        }
     }
 
     private fun showRecoveryUnlock() {
@@ -831,60 +947,74 @@ class VaultActivity : BaseActivity() {
                 unlockMethod = UnlockMethod.RECOVERY
                 sheet.dismiss()
                 render()
+                offerFingerprintSetup()
             } else {
                 field.setError(getString(R.string.vault_recovery_wrong))
             }
         }
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
         field.editText.requestFocus()
     }
+
+    /** The machine's answer for BIOMETRIC_STRONG (override-aware, so tests need no sensor). */
+    private fun canAuthenticateStatus(): Int {
+        biometricStatusOverride?.let { return it }
+        if (Build.VERSION.SDK_INT < VaultUnlockPolicy.MIN_API) {
+            return BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED
+        }
+        return try {
+            BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        } catch (e: Exception) {
+            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED
+        }
+    }
+
+    /** The hardware can prompt at all: the fingerprint is worth offering or setting up. */
+    private fun biometricHardwareReady(): Boolean =
+        Build.VERSION.SDK_INT >= VaultUnlockPolicy.MIN_API &&
+            canAuthenticateStatus() == BiometricManager.BIOMETRIC_SUCCESS
 
     /**
      * The fingerprint path is offered only when the platform can run the AndroidX prompt, this
      * phone has a valid auth-bound Keystore key, and `BIOMETRIC_STRONG` is enrollable/ready.
      * Otherwise the passcode sheet is the whole (working) offer.
      */
-    private fun fingerprintOffered(): Boolean {
-        val api = Build.VERSION.SDK_INT
-        val canAuthenticate = if (api >= VaultUnlockPolicy.MIN_API) {
-            try {
-                BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-            } catch (e: Exception) {
-                BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED
-            }
-        } else {
-            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED
-        }
-        return VaultUnlockPolicy.fingerprintOffered(
-            apiLevel = api,
-            haveKeystoreKey = store.canUseBiometric(),
-            canAuthenticate = biometricStatusOverride ?: canAuthenticate
-        )
-    }
+    private fun fingerprintOffered(): Boolean = VaultUnlockPolicy.fingerprintOffered(
+        apiLevel = Build.VERSION.SDK_INT,
+        haveKeystoreKey = store.canUseBiometric(),
+        canAuthenticate = canAuthenticateStatus()
+    )
 
     /**
      * Shows the AndroidX `BiometricPrompt` with a CryptoObject wrapping the auth-bound Keystore
      * cipher, so the vault key is unwrapped only by a successful BIOMETRIC_STRONG authentication.
+     * [auto] marks the prompt that starts with the sheet: cancelling it stays silent, while a
+     * failure from the "Use fingerprint" button is explained.
      * DEVICE-UNPROVEN (Robolectric has no biometric hardware); tests drive [fingerprintStarter].
      */
-    private fun startFingerprintUnlock() {
+    private fun startFingerprintUnlock(auto: Boolean = false) {
         val challenge = try {
             store.beginBiometricUnlock()
         } catch (e: VaultKeyInvalidatedException) {
             showError(getString(R.string.vault_fingerprint_reset))
             return
         } catch (e: Exception) {
-            showError(getString(R.string.vault_fingerprint_unavailable))
+            if (!auto) showError(getString(R.string.vault_fingerprint_unavailable))
             return
         }
         val starter = fingerprintStarter
         if (starter != null) {
-            if (starter(challenge)) onFingerprintAuthenticated(challenge) else showFingerprintFailed()
+            if (starter(challenge)) {
+                onFingerprintAuthenticated(challenge)
+            } else if (!auto) {
+                showFingerprintFailed()
+            }
             return
         }
         val cipher = challenge.cipher
         if (cipher == null || Build.VERSION.SDK_INT < VaultUnlockPolicy.MIN_API) {
-            showFingerprintFailed()
+            if (!auto) showFingerprintFailed()
             return
         }
         val prompt = BiometricPrompt(
@@ -896,11 +1026,12 @@ class VaultActivity : BaseActivity() {
                         // "Use passcode" / a cancelled prompt: the passcode sheet is already up.
                         BiometricPrompt.ERROR_NEGATIVE_BUTTON,
                         BiometricPrompt.ERROR_USER_CANCELED,
-                        BiometricPrompt.ERROR_CANCELED -> Unit
+                        BiometricPrompt.ERROR_CANCELED,
+                        BiometricPrompt.ERROR_TIMEOUT -> Unit
                         BiometricPrompt.ERROR_LOCKOUT,
                         BiometricPrompt.ERROR_LOCKOUT_PERMANENT ->
                             showError(getString(R.string.vault_fingerprint_locked))
-                        else -> showError(errString.toString())
+                        else -> if (!auto) showError(errString.toString())
                     }
                 }
 
@@ -917,7 +1048,12 @@ class VaultActivity : BaseActivity() {
             prompt.authenticate(
                 BiometricPrompt.PromptInfo.Builder()
                     .setTitle(getString(R.string.vault_unlock_sheet_title))
-                    .setSubtitle(getString(R.string.vault_unlock_note))
+                    .setSubtitle(
+                        getString(
+                            if (fingerprintOffered()) R.string.vault_unlock_note_fingerprint
+                            else R.string.vault_unlock_note_passcode
+                        )
+                    )
                     .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                     .setNegativeButtonText(getString(R.string.vault_use_passcode))
                     .setConfirmationRequired(false)
@@ -948,6 +1084,62 @@ class VaultActivity : BaseActivity() {
         showError(getString(R.string.vault_fingerprint_failed)) { showUnlock() }
     }
 
+    /**
+     * Creates the fingerprint wrap for a Vault that has none (fresh setup, restore, or an
+     * upgrade from a build whose Keystore key is gone). A per-use auth-bound Keystore key can
+     * only encrypt with a prompt-authorized cipher, so this is the one moment that can turn
+     * fingerprint unlock back on: right after the user proved the passcode. Never blocks the
+     * Vault and is asked at most once per screen.
+     * DEVICE-UNPROVEN on hardware; tests drive [fingerprintStarter].
+     */
+    private fun offerFingerprintSetup() {
+        if (fingerprintSetupAsked || !biometricHardwareReady() || store.canUseBiometric()) return
+        fingerprintSetupAsked = true
+        val challenge = try {
+            store.beginKeystoreWrap()
+        } catch (e: Exception) {
+            return
+        }
+        val starter = fingerprintStarter
+        if (starter != null) {
+            if (starter(challenge)) {
+                store.completeKeystoreWrap(challenge)
+                render()
+            }
+            return
+        }
+        val cipher = challenge.cipher ?: return
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    // "Not now" or a cancel: the Vault stays open, the passcode keeps working.
+                }
+
+                override fun onAuthenticationFailed() = Unit
+
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    if (store.completeKeystoreWrap(challenge)) render()
+                }
+            }
+        )
+        try {
+            prompt.authenticate(
+                BiometricPrompt.PromptInfo.Builder()
+                    .setTitle(getString(R.string.vault_fingerprint_setup_title))
+                    .setSubtitle(getString(R.string.vault_fingerprint_setup_note))
+                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                    .setNegativeButtonText(getString(R.string.vault_not_now))
+                    .setConfirmationRequired(false)
+                    .build(),
+                BiometricPrompt.CryptoObject(cipher)
+            )
+        } catch (e: Exception) {
+            // No wrap this time; the passcode and recovery code still open the Vault.
+        }
+    }
+
     // ------------------------------------------------------------------
     // Files
     // ------------------------------------------------------------------
@@ -976,6 +1168,7 @@ class VaultActivity : BaseActivity() {
         }
         sheet.setContent(body)
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
     }
 
     private fun pickRow(title: String, meta: String, onClick: () -> Unit): View =
@@ -1048,6 +1241,7 @@ class VaultActivity : BaseActivity() {
         }
         sheet.setContent(remove)
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
     }
 
     private fun confirmRemove(entry: VaultStore.Entry) {
@@ -1152,6 +1346,7 @@ class VaultActivity : BaseActivity() {
             }
         }
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
         field.editText.requestFocus()
     }
 
@@ -1204,6 +1399,7 @@ class VaultActivity : BaseActivity() {
         })
         sheet.setContent(body)
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
     }
 
     private fun optionRow(label: String, onClick: () -> Unit): View =
@@ -1274,6 +1470,7 @@ class VaultActivity : BaseActivity() {
                     }
                     sheet.dismiss()
                     render()
+                    offerFingerprintSetup()
                     Toast.makeText(this, R.string.vault_passcode_changed, Toast.LENGTH_SHORT).show()
                     if (afterRestore) Toast.makeText(
                         this@VaultActivity, R.string.vault_restore_done, Toast.LENGTH_LONG
@@ -1282,6 +1479,7 @@ class VaultActivity : BaseActivity() {
             }
         }
         sheet.show()
+        sheet.view.applySystemBarsPadding(top = false)
         pass.editText.requestFocus()
     }
 

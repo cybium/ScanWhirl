@@ -125,4 +125,16 @@ object Prefs {
         val digest = md.digest(input.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
+
+    // ---- v2 Library sort (03_tools_hub) ----------------------------------
+
+    private const val KEY_LIB_SORT = "library_sort"
+    const val LIB_NEWEST = "newest"
+    const val LIB_OLDEST = "oldest"
+    const val LIB_NAME_ASC = "name_asc"
+    const val LIB_NAME_DESC = "name_desc"
+    const val LIB_SIZE = "size"
+
+    fun librarySort(c: Context): String = sp(c).getString(KEY_LIB_SORT, LIB_NEWEST) ?: LIB_NEWEST
+    fun setLibrarySort(c: Context, v: String) = sp(c).edit().putString(KEY_LIB_SORT, v).apply()
 }

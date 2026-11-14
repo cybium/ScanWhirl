@@ -86,17 +86,16 @@ class OcrTextScreenTest {
     }
 
     @Test
-    fun `To Word opens an honest Coming soon sheet`() {
+    fun `To Word opens the real tool`() {
         launch { activity ->
             activity.findViewById<View>(R.id.btnToWord).performClick()
             shadowOf(android.os.Looper.getMainLooper()).idle()
-            val dialog = ShadowDialog.getLatestDialog()
-            assertNotNull(dialog)
+            val started = shadowOf(activity).nextStartedActivity
+            assertNotNull("To Word starts its tool screen", started)
             assertEquals(
-                activity.getString(R.string.ocr_to_word_soon),
-                dialog.findViewById<TextView>(R.id.swSheetMessage).text.toString()
+                com.scanwhirl.app.ui.tools.ToolSetupActivity::class.java.name,
+                started.component?.className
             )
-            dialog.dismiss()
         }
     }
 
