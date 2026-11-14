@@ -85,6 +85,14 @@
             android:exported="false"
             android:parentActivityName=".ui.DocumentViewerActivity" />
 
+        <!-- L5 Edit & sign: the stamp editor (Sign / text / draw / highlight / watermark /
+             page numbers / stamp / redact). Launched with a document id and optional tool. -->
+        <activity
+            android:name=".ui.stamp.StampEditorActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <activity
             android:name=".ui.ScanReviewActivity"
             android:exported="false"

@@ -1,0 +1,548 @@
+package com.scanwhirl.app.ui.stamp
+
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Typeface
+import android.os.Bundle
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.snackbar.Snackbar
+import com.scanwhirl.app.R
+import com.scanwhirl.app.databinding.ActivityStampEditorBinding
+import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.store.SignatureStore
+import com.scanwhirl.app.ui.BaseActivity
+import com.scanwhirl.app.ui.applySystemBarsPadding
+import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwTool
+import com.scanwhirl.app.ui.kit.ToolGroup
+import com.scanwhirl.app.ui.kit.ToolStatus
+import com.scanwhirl.app.ui.kit.ToolTile
+import com.scanwhirl.app.util.PageStamp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+
+/**
+ * L5 Phase B — the Stamp editor (70 §3 "Edit & sign", product spec §3.7).
+ *
+ * Page view with drag / resize / rotate handles, a tool row, undo/redo and **Save as a new
+ * copy**. Every tool bakes a real mark through [PageStamp]; Redact can suggest boxes from the
+ * page's OCR geometry. The source document is never written (see
+ * `ScanRepository.stampDocument`).
+ *
+ * The screen is a thin shell over [StampEditorState]; the page surface is [StampCanvasView].
+ * It is launched with [EXTRA_DOC_ID] and optionally [EXTRA_TOOL], so the Tools hub's
+ * Sign / Add text / Draw / Highlight / Watermark / Page numbers / Stamp / Redact tiles can
+ * open it already armed.
+ */
+class StampEditorActivity : BaseActivity() {
+
+    companion object {
+        const val EXTRA_DOC_ID = "com.scanwhirl.app.ui.stamp.DOC_ID"
+        const val EXTRA_TOOL = "com.scanwhirl.app.ui.stamp.TOOL"
+        const val EXTRA_NEW_DOC_ID = "com.scanwhirl.app.ui.stamp.NEW_DOC_ID"
+
+        const val TOOL_SIGN = "sign"
+        const val TOOL_TEXT = "text"
+        const val TOOL_DRAW = "draw"
+        const val TOOL_HIGHLIGHT = "highlight"
+        const val TOOL_WATERMARK = "watermark"
+        const val TOOL_PAGE_NUMBERS = "page_numbers"
+        const val TOOL_STAMP = "stamp"
+        const val TOOL_REDACT = "redact"
+
+        private const val DISABLED_ALPHA = 0.38f
+
+        /** Intent for a screen or the Tools hub: open [docId] with [tool] already armed. */
+        fun intent(context: android.content.Context, docId: String, tool: String? = null): Intent =
+            Intent(context, StampEditorActivity::class.java)
+                .putExtra(EXTRA_DOC_ID, docId)
+                .putExtra(EXTRA_TOOL, tool)
+    }
+
+    private lateinit var binding: ActivityStampEditorBinding
+    private lateinit var repo: ScanRepository
+    private lateinit var document: ScanDocument
+    private lateinit var signatureStore: SignatureStore
+
+    internal lateinit var editor: StampEditorState
+        private set
+
+    private var saving = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityStampEditorBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        binding.root.applySystemBarsPadding()
+        applyKitChrome()
+
+        repo = ScanRepository(this)
+        signatureStore = SignatureStore(this)
+
+        val id = intent.getStringExtra(EXTRA_DOC_ID)
+        val doc = id?.let { repo.getDocument(it) }
+        if (doc == null) {
+            note(getString(R.string.stamp_missing))
+            finish()
+            return
+        }
+        if (doc.isLocked) {
+            note(getString(R.string.stamp_locked))
+            finish()
+            return
+        }
+        document = doc
+        editor = StampEditorState(doc.pageCount)
+
+        binding.toolbar.setNavigationOnClickListener { confirmExit() }
+        binding.toolbar.setNavigationContentDescription(androidx.appcompat.R.string.abc_action_bar_up_description)
+
+        binding.canvas.listener = object : StampCanvasView.Listener {
+            override fun onSelect(index: Int?) {
+                editor.select(index)
+                refreshSelection()
+            }
+
+            override fun onMove(index: Int, dx: Float, dy: Float) {
+                if (editor.moveBy(index, dx, dy)) refresh()
+            }
+
+            override fun onResize(index: Int, box: PageStamp.Box) {
+                if (editor.resizeTo(index, box)) refresh()
+            }
+
+            override fun onRotate(index: Int, degrees: Float) {
+                if (editor.rotateBy(index, degrees)) refresh()
+            }
+
+            override fun onFreehand(strokes: List<PageStamp.Stroke>) {
+                addMark(PageStamp.Mark.Freehand(strokes))
+            }
+
+            override fun onBox(tool: StampCanvasView.Tool, box: PageStamp.Box) {
+                when (tool) {
+                    StampCanvasView.Tool.HIGHLIGHT -> addMark(PageStamp.Mark.Highlight(box))
+                    StampCanvasView.Tool.REDACT -> addMark(PageStamp.Mark.Redact(box))
+                    else -> Unit
+                }
+            }
+        }
+
+        binding.prevPage.setOnClickListener {
+            if (editor.currentPage > 0) {
+                editor.currentPage -= 1
+                showPage()
+            }
+        }
+        binding.nextPage.setOnClickListener {
+            if (editor.currentPage < editor.pageCount - 1) {
+                editor.currentPage += 1
+                showPage()
+            }
+        }
+
+        buildToolRow()
+        binding.deleteMark.setOnClickListener {
+            if (editor.removeSelected()) refresh()
+        }
+        binding.undo.setOnClickListener {
+            if (editor.undo()) refresh()
+        }
+        binding.redo.setOnClickListener {
+            if (editor.redo()) refresh()
+        }
+        binding.saveCopy.setOnClickListener { save() }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                confirmExit()
+            }
+        })
+
+        showPage()
+        applyRequestedTool(intent.getStringExtra(EXTRA_TOOL))
+    }
+
+    // ------------------------------------------------------------------ tools
+
+    /**
+     * The bottom tool row, made of kit [ToolTile]s so it matches the Tools hub and Home quick
+     * row. Ids stay `toolSignature`…`toolSuggest` for the screen tests.
+     */
+    private fun buildToolRow() {
+        val row = binding.stampToolRow
+        fun add(id: Int, title: Int, icon: Int, action: () -> Unit) {
+            row.addView(tile(id, title, icon, action))
+        }
+        add(R.id.toolSignature, R.string.stamp_tool_signature, R.drawable.ic_sym_signature) {
+            pickSignature()
+        }
+        add(R.id.toolText, R.string.stamp_tool_text, R.drawable.ic_sym_text_fields) {
+            promptText()
+        }
+        add(R.id.toolDraw, R.string.stamp_tool_draw, R.drawable.ic_sym_edit) {
+            arm(StampCanvasView.Tool.DRAW, R.string.stamp_hint_draw)
+        }
+        add(R.id.toolHighlight, R.string.stamp_tool_highlight, R.drawable.ic_sym_format_list_numbered) {
+            arm(StampCanvasView.Tool.HIGHLIGHT, R.string.stamp_hint_highlight)
+        }
+        add(R.id.toolWatermark, R.string.stamp_tool_watermark, R.drawable.ic_sym_watermark) {
+            promptWatermark()
+        }
+        add(R.id.toolPageNumbers, R.string.stamp_tool_page_numbers, R.drawable.ic_sym_notes_lines) {
+            addMarkToAll(PageStamp.Mark.PageNumber())
+        }
+        add(R.id.toolStamp, R.string.stamp_tool_stamp, R.drawable.ic_sym_approval) {
+            promptBadges()
+        }
+        add(R.id.toolRedact, R.string.stamp_tool_redact, R.drawable.ic_sym_ink_eraser) {
+            arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
+        }
+        add(R.id.toolSuggest, R.string.stamp_suggest, R.drawable.ic_sym_auto_fix_high) {
+            suggestRedactions()
+        }
+    }
+
+    private fun tile(id: Int, title: Int, icon: Int, action: () -> Unit): ToolTile {
+        val tool = SwTool(
+            id = "stamp_edit_$id",
+            group = ToolGroup.EDIT,
+            title = title,
+            icon = icon,
+            pro = false,
+            status = ToolStatus.READY,
+            keywords = "edit stamp"
+        )
+        return ToolTile(this).apply {
+            this.id = id
+            bind(tool)
+            setOnClickListener { action() }
+            layoutParams = LinearLayout.LayoutParams(dp(82f), dp(68f)).apply {
+                marginEnd = dp(2f)
+            }
+        }
+    }
+
+    private fun promptText() {
+        StampPrompts.text(
+            this, R.string.stamp_text_title, R.string.stamp_text_hint, ""
+        ) { text -> addMark(PageStamp.Mark.Text(text, textBox(), size = 0.05f)) }
+    }
+
+    private fun promptWatermark() {
+        StampPrompts.text(
+            this, R.string.stamp_watermark_title, R.string.stamp_watermark_hint,
+            getString(R.string.stamp_watermark_default)
+        ) { text -> addMarkToAll(PageStamp.Mark.Watermark(text)) }
+    }
+
+    private fun promptBadges() {
+        StampPrompts.badges(this) { kind ->
+            addMark(PageStamp.Mark.Badge(kind, badgeBox()))
+        }
+    }
+
+    private fun applyRequestedTool(tool: String?) {
+        when (tool) {
+            TOOL_SIGN -> pickSignature()
+            TOOL_TEXT -> promptText()
+            TOOL_DRAW -> arm(StampCanvasView.Tool.DRAW, R.string.stamp_hint_draw)
+            TOOL_HIGHLIGHT -> arm(StampCanvasView.Tool.HIGHLIGHT, R.string.stamp_hint_highlight)
+            TOOL_WATERMARK -> promptWatermark()
+            TOOL_PAGE_NUMBERS -> addMarkToAll(PageStamp.Mark.PageNumber())
+            TOOL_STAMP -> promptBadges()
+            TOOL_REDACT -> arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
+            else -> Unit
+        }
+    }
+
+    private fun arm(tool: StampCanvasView.Tool, hintRes: Int) {
+        editor.select(null)
+        binding.canvas.tool = tool
+        binding.hint.setText(hintRes)
+        binding.hint.visibility = android.view.View.VISIBLE
+        refreshSelection()
+    }
+
+    private fun disarm() {
+        binding.canvas.tool = StampCanvasView.Tool.SELECT
+        binding.hint.visibility = android.view.View.GONE
+    }
+
+    private fun addMark(mark: PageStamp.Mark) {
+        editor.add(mark)
+        disarm()
+        refresh()
+    }
+
+    private fun addMarkToAll(mark: PageStamp.Mark) {
+        editor.addToAll(mark)
+        disarm()
+        refresh()
+    }
+
+    private fun pickSignature() {
+        StampPrompts.signature(this, signatureStore) { saved ->
+            addMark(
+                PageStamp.Mark.Signature(
+                    strokes = saved.strokes,
+                    box = signatureBox(),
+                    color = android.graphics.Color.BLACK
+                )
+            )
+        }
+    }
+
+    private fun suggestRedactions() {
+        val page = document.pageFiles.getOrNull(editor.currentPage)
+        val geometry = page?.let { repo.ocrStore.readGeo(document.id)[it.name] }
+        if (geometry == null) {
+            note(getString(R.string.stamp_no_ocr))
+            return
+        }
+        val suggestions = PageStamp.suggestRedactions(geometry)
+        if (suggestions.isEmpty()) {
+            note(getString(R.string.stamp_no_suggestions))
+            return
+        }
+        val before = editor.marks().size
+        editor.addAll(suggestions.map { PageStamp.Mark.Redact(it.box) })
+        editor.select(before + suggestions.size - 1)
+        disarm()
+        refresh()
+    }
+
+    // ------------------------------------------------------------------ page and chrome
+
+    private fun showPage() {
+        val page = document.pageFiles.getOrNull(editor.currentPage) ?: return
+        val bitmap = loadPreview(page)
+        if (bitmap == null) {
+            note(getString(R.string.stamp_missing))
+            return
+        }
+        binding.canvas.pageNumber = editor.currentPage + 1
+        binding.canvas.pageCount = document.pageCount
+        binding.canvas.pageBitmap = bitmap
+        disarm()
+        refresh()
+    }
+
+    private fun refresh() {
+        binding.canvas.marks = editor.marks()
+        refreshSelection()
+        binding.canvas.invalidate()
+    }
+
+    private fun refreshSelection() {
+        binding.canvas.selectedIndex = editor.selected
+        binding.pageIndicator.text = getString(
+            R.string.stamp_page_indicator,
+            editor.currentPage + 1,
+            editor.pageCount
+        )
+        val hasPrev = editor.currentPage > 0
+        val hasNext = editor.currentPage < editor.pageCount - 1
+        binding.prevPage.isEnabled = hasPrev
+        binding.nextPage.isEnabled = hasNext
+        binding.undo.isEnabled = editor.canUndo
+        binding.redo.isEnabled = editor.canRedo
+        binding.deleteMark.isEnabled = editor.selected != null
+        binding.saveCopy.isEnabled = !editor.isEmpty() && !saving
+        // v2 kit: a flat TextView does not dim itself when disabled, so say so plainly.
+        binding.prevPage.alpha = if (hasPrev) 1f else DISABLED_ALPHA
+        binding.nextPage.alpha = if (hasNext) 1f else DISABLED_ALPHA
+        binding.undo.alpha = if (editor.canUndo) 1f else DISABLED_ALPHA
+        binding.redo.alpha = if (editor.canRedo) 1f else DISABLED_ALPHA
+        binding.deleteMark.alpha = if (editor.selected != null) 1f else DISABLED_ALPHA
+        binding.saveCopy.alpha = if (!editor.isEmpty() && !saving) 1f else DISABLED_ALPHA
+        binding.selectionHint.setText(
+            if (editor.selected != null) R.string.stamp_hint_select else R.string.stamp_no_selection
+        )
+    }
+
+    private fun save() {
+        if (saving || editor.isEmpty()) return
+        // I9/E10: redaction destroys pixels and text in the copy — warn before anything is written.
+        if (editor.hasRedaction()) {
+            SwSheet.builder(this)
+                .setTitle(R.string.stamp_redact_warn_title)
+                .setMessage(R.string.stamp_redact_warn_message)
+                .setPrimary(R.string.stamp_redact_warn_save) { writeCopy() }
+                .setSecondary(R.string.stamp_keep_editing)
+                .build()
+                .show()
+            return
+        }
+        writeCopy()
+    }
+
+    private fun writeCopy() {
+        if (saving || editor.isEmpty()) return
+        saving = true
+        binding.saveCopy.isEnabled = false
+        binding.saveCopy.setText(R.string.stamp_saving)
+        val edits = editor.edits()
+        lifecycleScope.launch {
+            try {
+                val copy = withContext(Dispatchers.IO) {
+                    repo.stampDocument(document.id, edits, null)
+                }
+                setResult(
+                    RESULT_OK,
+                    Intent().putExtra(EXTRA_NEW_DOC_ID, copy.id)
+                )
+                Toast.makeText(
+                    this@StampEditorActivity,
+                    getString(R.string.stamp_saved, copy.name),
+                    Toast.LENGTH_LONG
+                ).show()
+                finish()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                saving = false
+                binding.saveCopy.setText(R.string.stamp_save_copy)
+                binding.saveCopy.isEnabled = true
+                note(getString(R.string.stamp_save_failed, e.message ?: ""))
+            }
+        }
+    }
+
+    private fun confirmExit() {
+        if (editor.isEmpty() || saving) {
+            finish()
+            return
+        }
+        SwSheet.builder(this)
+            .setTitle(R.string.stamp_discard_title)
+            .setMessage(R.string.stamp_discard_message)
+            .setPrimary(R.string.stamp_discard) { finish() }
+            .setSecondary(R.string.stamp_keep_editing)
+            .build()
+            .show()
+    }
+
+    private fun dp(value: Float): Int = SwStyle.dp(this, value)
+
+    private fun dimenDp(res: Int): Float =
+        resources.getDimension(res) / resources.displayMetrics.density
+
+    // ------------------------------------------------------------------ kit chrome
+
+    /**
+     * v2 UI: 03_tools_hub — the screen's own buttons are painted by the kit: the 54dp cyan
+     * primary (the same as SwSheet's Save), glass secondary for Undo/Redo/Delete and the page
+     * navigator. Radii and the save height come from dimens_v2 so they follow the tokens.
+     */
+    private fun applyKitChrome() {
+        val radiusMedium = dimenDp(R.dimen.sw_radius_medium)
+        val radiusSmall = dimenDp(R.dimen.sw_radius_small)
+        val radiusLarge = dimenDp(R.dimen.sw_radius_large)
+
+        fun paint(view: TextView, fill: Int, ink: Int, stroke: Int?, radius: Float) {
+            view.background = SwStyle.rounded(this, fill, radiusDp = radius, stroke = stroke)
+            view.setTextColor(ink)
+            view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            view.gravity = Gravity.CENTER
+        }
+
+        paint(
+            binding.saveCopy,
+            SwStyle.color(this, R.color.cyan_primary),
+            SwStyle.color(this, R.color.sw_disc_ink),
+            null,
+            radiusMedium
+        )
+        paint(
+            binding.undo,
+            SwStyle.color(this, R.color.glass_surface_raised),
+            SwStyle.color(this, R.color.text_hologram_hi),
+            SwStyle.color(this, R.color.sw_cyan_hair),
+            radiusMedium
+        )
+        paint(
+            binding.redo,
+            SwStyle.color(this, R.color.glass_surface_raised),
+            SwStyle.color(this, R.color.text_hologram_hi),
+            SwStyle.color(this, R.color.sw_cyan_hair),
+            radiusMedium
+        )
+        paint(
+            binding.deleteMark,
+            SwStyle.color(this, R.color.laser_danger_surface),
+            SwStyle.color(this, R.color.laser_danger),
+            SwStyle.color(this, R.color.laser_danger_border),
+            radiusMedium
+        )
+        paint(
+            binding.prevPage,
+            SwStyle.color(this, R.color.glass_surface_high),
+            SwStyle.color(this, R.color.cyan_primary),
+            SwStyle.color(this, R.color.sw_cyan_hair),
+            999f
+        )
+        paint(
+            binding.nextPage,
+            SwStyle.color(this, R.color.glass_surface_high),
+            SwStyle.color(this, R.color.cyan_primary),
+            SwStyle.color(this, R.color.sw_cyan_hair),
+            999f
+        )
+        binding.pageNav.background = SwStyle.rounded(
+            this,
+            SwStyle.color(this, R.color.glass_surface_raised),
+            radiusDp = radiusLarge,
+            stroke = SwStyle.color(this, R.color.sw_cyan_hair_strong)
+        )
+        binding.hint.background = SwStyle.rounded(
+            this,
+            SwStyle.color(this, R.color.glass_surface),
+            radiusDp = radiusSmall,
+            stroke = SwStyle.color(this, R.color.sw_cyan_hair)
+        )
+    }
+
+    private fun note(message: String) {
+        Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
+    }
+
+    // ------------------------------------------------------------------ defaults and preview
+
+    private fun textBox() = PageStamp.Box(0.08f, 0.06f, 0.92f, 0.16f)
+
+    private fun signatureBox() = PageStamp.Box(0.22f, 0.58f, 0.78f, 0.72f)
+
+    private fun badgeBox() = PageStamp.Box(0.52f, 0.62f, 0.92f, 0.75f)
+
+    /** Display copy only: sampled to ≤ 1400 px, freed by [StampCanvasView] when replaced. */
+    private fun loadPreview(page: File): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(page.path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        var w = bounds.outWidth
+        var h = bounds.outHeight
+        while (w > 1400 || h > 1400) {
+            sample *= 2
+            w /= 2
+            h /= 2
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        return BitmapFactory.decodeFile(page.path, options)
+    }
+}

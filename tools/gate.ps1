@@ -49,16 +49,18 @@ while (-not $held) {
 Set-Content $holderFile "$Lane since $(Get-Date -Format HH:mm)"
 try {
     Write-Output "queue: got build slot for $Lane after $([int]((Get-Date) - $started).TotalMinutes) min"
-    # A Windows build leaves Windows paths in these folders; the Linux build then fails with an NPE.
-    foreach ($d in "mergeDebugResources", "packageDebugResources") {
-        Remove-Item -Recurse -Force "$root\app\build\intermediates\incremental\debug\$d" -ErrorAction SilentlyContinue
-    }
     Remove-Item -Recurse -Force "$root\app\build\test-results\testDebugUnitTest" -ErrorAction SilentlyContinue
-
+    # Build from a mirror on the Linux disk (~/swbuild/<lane>): reading/writing /mnt/c from WSL is several times slower.
+    # The mirror keeps its own build folder, so builds stay incremental and never mix with Windows (lint) outputs.
+    $mirror = "/home/cybium/swbuild/$Lane"
     $filter = if ($Tests) { "--tests '$Tests'" } else { "" }
-    $cmd = "cd $wslRoot && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild --no-daemon --continue -q $filter"
-    Write-Output "tests: $cmd"
-    $out = wsl -d Ubuntu bash -lc $cmd 2>&1
+    $sync = "mkdir -p $mirror && rsync -a --delete --exclude=/.git --exclude=/.gradle --exclude=/.kotlin --exclude=/build --exclude=/app/build --exclude=/builds --exclude=/keystore $wslRoot/ $mirror/ && rm -rf $mirror/app/build/test-results/testDebugUnitTest"
+    $back = "mkdir -p $wslRoot/app/build/test-results && rsync -a --delete $mirror/app/build/test-results/testDebugUnitTest/ $wslRoot/app/build/test-results/testDebugUnitTest/"
+    $cmd = "$sync && cd $mirror && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild --no-daemon --continue -q $filter; $back"
+    Write-Output "tests: building in WSL mirror $mirror $filter"
+    $buildStart = Get-Date
+    $out = wsl -d Ubuntu bash -lc $cmd 2>&1 | Where-Object { $_ -notmatch 'screen size is bogus' }
+    Write-Output ("tests: build+run took {0:N1} min" -f ((Get-Date) - $buildStart).TotalMinutes)
     $out | Select-String -Pattern 'error:|e: |FAILED|BUILD FAILED|What went wrong' | Select-Object -First 40 | ForEach-Object { Write-Output $_.Line }
 
     $t = 0; $f = 0; $s = 0; $failed = @()

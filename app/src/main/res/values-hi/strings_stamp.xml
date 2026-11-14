@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- review -->
+    <string name="stamp_not_found"><!-- review -->स्कैन नहीं मिला</string>
+    <!-- review -->
+    <string name="stamp_no_marks"><!-- review -->पहले कोई चिह्न जोड़ें।</string>
+    <!-- review -->
+    <string name="stamp_no_page"><!-- review -->ऐसा कोई पृष्ठ नहीं है।</string>
+    <!-- review -->
+    <string name="stamp_copy_failed"><!-- review -->संपादित प्रति नहीं खोली जा सकी।</string>
+
+    <!-- review -->
+    <string name="stamp_title"><!-- review -->संपादित करें और हस्ताक्षर करें</string>
+    <!-- review -->
+    <string name="stamp_tool_signature"><!-- review -->हस्ताक्षर</string>
+    <!-- review -->
+    <string name="stamp_tool_text"><!-- review -->पाठ</string>
+    <!-- review -->
+    <string name="stamp_tool_draw"><!-- review -->आरेखण</string>
+    <!-- review -->
+    <string name="stamp_tool_highlight"><!-- review -->हाइलाइट</string>
+    <!-- review -->
+    <string name="stamp_tool_watermark"><!-- review -->वॉटरमार्क</string>
+    <!-- review -->
+    <string name="stamp_tool_page_numbers"><!-- review -->पृष्ठ संख्या</string>
+    <!-- review -->
+    <string name="stamp_tool_stamp"><!-- review -->मोहर</string>
+    <!-- review -->
+    <string name="stamp_tool_redact"><!-- review -->छिपाएँ</string>
+    <!-- review -->
+    <string name="stamp_suggest"><!-- review -->सुझाव</string>
+    <!-- review -->
+    <string name="stamp_undo"><!-- review -->पूर्ववत करें</string>
+    <!-- review -->
+    <string name="stamp_redo"><!-- review -->फिर से करें</string>
+    <!-- review -->
+    <string name="stamp_delete"><!-- review -->हटाएँ</string>
+    <!-- review -->
+    <string name="stamp_save_copy"><!-- review -->नई प्रति के रूप में सहेजें</string>
+    <!-- review -->
+    <string name="stamp_saving"><!-- review -->प्रति सहेजी जा रही है…</string>
+    <!-- review -->
+    <string name="stamp_saved"><!-- review -->नई प्रति सहेजी गई: %1$s</string>
+    <!-- review -->
+    <string name="stamp_save_failed"><!-- review -->सहेजा नहीं जा सका: %1$s</string>
+    <!-- review -->
+    <string name="stamp_page_indicator"><!-- review -->%1$d / %2$d</string>
+    <!-- review -->
+    <string name="stamp_prev_page"><!-- review -->पिछला पृष्ठ</string>
+    <!-- review -->
+    <string name="stamp_next_page"><!-- review -->अगला पृष्ठ</string>
+    <!-- review -->
+    <string name="stamp_prev_symbol"><!-- review -->‹</string>
+    <!-- review -->
+    <string name="stamp_next_symbol"><!-- review -->›</string>
+    <!-- review -->
+    <string name="stamp_text_title"><!-- review -->पाठ जोड़ें</string>
+    <!-- review -->
+    <string name="stamp_text_hint"><!-- review -->जोड़ने के लिए पाठ</string>
+    <!-- review -->
+    <string name="stamp_watermark_title"><!-- review -->वॉटरमार्क</string>
+    <!-- review -->
+    <string name="stamp_watermark_hint"><!-- review -->हर पृष्ठ पर पाठ</string>
+    <!-- review -->
+    <string name="stamp_watermark_default"><!-- review -->गोपनीय</string>
+    <!-- review -->
+    <string name="stamp_add"><!-- review -->जोड़ें</string>
+    <!-- review -->
+    <string name="stamp_cancel"><!-- review -->रद्द करें</string>
+    <!-- review -->
+    <string name="stamp_badge_title"><!-- review -->मोहर चुनें</string>
+    <!-- review -->
+    <string name="stamp_badge_paid"><!-- review -->भुगतान</string>
+    <!-- review -->
+    <string name="stamp_badge_approved"><!-- review -->स्वीकृत</string>
+    <!-- review -->
+    <string name="stamp_badge_draft"><!-- review -->ड्राफ़्ट</string>
+    <!-- review -->
+    <string name="stamp_badge_received"><!-- review -->प्राप्त</string>
+    <!-- review -->
+    <string name="stamp_badge_self_attested"><!-- review -->स्व-प्रमाणित</string>
+    <!-- review -->
+    <string name="stamp_signature_title"><!-- review -->हस्ताक्षर चुनें</string>
+    <!-- review -->
+    <string name="stamp_signature_new"><!-- review -->नया हस्ताक्षर बनाएँ</string>
+    <!-- review -->
+    <string name="stamp_signature_sheet_title"><!-- review -->अपना हस्ताक्षर बनाएँ</string>
+    <!-- review -->
+    <string name="stamp_signature_save"><!-- review -->हस्ताक्षर सहेजें</string>
+    <!-- review -->
+    <string name="stamp_signature_name"><!-- review -->हस्ताक्षर %1$d</string>
+    <!-- review -->
+    <string name="stamp_signature_empty"><!-- review -->पहले अपना हस्ताक्षर बनाएँ।</string>
+    <!-- review -->
+    <string name="stamp_signature_full"><!-- review -->आप 5 हस्ताक्षर तक रख सकते हैं। नया सहेजने के लिए एक हटाएँ।</string>
+    <!-- review -->
+    <string name="stamp_hint_draw"><!-- review -->एक उँगली से लिखें</string>
+    <!-- review -->
+    <string name="stamp_hint_highlight"><!-- review -->हाइलाइट करने के लिए पाठ पर खींचें</string>
+    <!-- review -->
+    <string name="stamp_hint_redact"><!-- review -->जो छिपाना है उस पर बॉक्स खींचें</string>
+    <!-- review -->
+    <string name="stamp_hint_select"><!-- review -->चिह्न हिलाने के लिए उसे दबाएँ; आकार बदलने के लिए कोने के हैंडल उपयोग करें</string>
+    <!-- review -->
+    <string name="stamp_no_ocr"><!-- review -->इस पृष्ठ पर अभी कोई पहचाना गया पाठ नहीं है।</string>
+    <!-- review -->
+    <string name="stamp_no_suggestions"><!-- review -->कोई आधार, पैन, फ़ोन या खाता संख्या नहीं मिली।</string>
+    <!-- review -->
+    <string name="stamp_locked"><!-- review -->यह दस्तावेज़ सुरक्षित है। पहले इसे अनलॉक करें।</string>
+    <!-- review -->
+    <string name="stamp_missing"><!-- review -->यह दस्तावेज़ नहीं खोला जा सका।</string>
+    <!-- review -->
+    <string name="stamp_no_selection"><!-- review -->संपादित करने के लिए किसी चिह्न को दबाएँ</string>
+    <!-- review -->
+    <string name="stamp_discard_title"><!-- review -->बदलाव छोड़ें?</string>
+    <!-- review -->
+    <string name="stamp_discard_message"><!-- review -->अभी कोई प्रति सहेजी नहीं गई है।</string>
+    <!-- review -->
+    <string name="stamp_discard"><!-- review -->छोड़ें</string>
+    <!-- review -->
+    <string name="stamp_keep_editing"><!-- review -->संपादन जारी रखें</string>
+    <!-- review -->
+    <string name="stamp_choose_document"><!-- review -->दस्तावेज़ चुनें</string>
+    <!-- review -->
+    <string name="stamp_no_documents"><!-- review -->संपादित करने के लिए कोई अनलॉक दस्तावेज़ नहीं है। पहले स्कैन या आयात करें।</string>
+    <!-- review -->
+    <string name="stamp_text_required"><!-- review -->पहले पाठ लिखें।</string>
+    <!-- review -->
+    <string name="stamp_pro_message"><!-- review -->हस्ताक्षर, पाठ जोड़ें, चित्र बनाएँ, हाइलाइट, वॉटरमार्क, पृष्ठ संख्याएँ, स्टाम्प और रिडैक्ट Pro का हिस्सा हैं (एक बार खरीदें)। बिलिंग अभी चालू नहीं है, इसलिए टेस्ट बिल्ड में Pro टूल्स मुफ़्त रहते हैं।</string>
+    <!-- review -->
+    <string name="stamp_redact_warn_title"><!-- review -->रिडैक्शन स्थायी है</string>
+    <!-- review -->
+    <string name="stamp_redact_warn_message"><!-- review -->छिपाए गए पाठ और पिक्सेल नई प्रति से हमेशा के लिए हट जाते हैं। मूल दस्तावेज़ नहीं बदलता।</string>
+    <!-- review -->
+    <string name="stamp_redact_warn_save"><!-- review -->रिडैक्ट की गई प्रति सहेजें</string>
+</resources>

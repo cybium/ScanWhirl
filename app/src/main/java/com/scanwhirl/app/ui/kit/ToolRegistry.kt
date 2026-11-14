@@ -104,15 +104,31 @@ object ToolRegistry {
         ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "searchable text layer ocr pdf"),
         soon("pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_approval, "pdf a archive long term", pro = true, note = R.string.soon_pdfa),
 
-        // Edit & sign (8)
-        build("sign", ToolGroup.EDIT, R.string.tool_sign, R.drawable.ic_sym_signature, "sign signature ink", pro = true),
-        build("add_text", ToolGroup.EDIT, R.string.tool_add_text, R.drawable.ic_sym_text_fields, "add text type write", pro = true),
-        build("draw", ToolGroup.EDIT, R.string.tool_draw, R.drawable.ic_sym_highlight, "draw freehand pen", pro = true),
-        build("highlight", ToolGroup.EDIT, R.string.tool_highlight, R.drawable.ic_sym_format_list_numbered, "highlight marker yellow", pro = true),
-        build("watermark", ToolGroup.EDIT, R.string.tool_watermark, R.drawable.ic_sym_watermark, "watermark diagonal draft", pro = true),
-        build("page_numbers", ToolGroup.EDIT, R.string.tool_page_numbers, R.drawable.ic_sym_notes_lines, "page numbers footer header", pro = true),
-        build("stamp", ToolGroup.EDIT, R.string.tool_stamp, R.drawable.ic_sym_approval, "stamp paid approved date badge", pro = true),
-        build("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove", pro = true),
+        // Edit & sign (8) — L5: built in ui/stamp; a document is picked, then the editor opens armed.
+        ready("sign", ToolGroup.EDIT, R.string.tool_sign, R.drawable.ic_sym_signature, "sign signature ink", pro = true).copy(
+            launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "sign") } ?: host.comingSoon(tool) }
+        ),
+        ready("add_text", ToolGroup.EDIT, R.string.tool_add_text, R.drawable.ic_sym_text_fields, "add text type write", pro = true).copy(
+            launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "add_text") } ?: host.comingSoon(tool) }
+        ),
+        ready("draw", ToolGroup.EDIT, R.string.tool_draw, R.drawable.ic_sym_highlight, "draw freehand pen", pro = true).copy(
+            launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "draw") } ?: host.comingSoon(tool) }
+        ),
+        ready("highlight", ToolGroup.EDIT, R.string.tool_highlight, R.drawable.ic_sym_format_list_numbered, "highlight marker yellow", pro = true).copy(
+            launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "highlight") } ?: host.comingSoon(tool) }
+        ),
+        ready("watermark", ToolGroup.EDIT, R.string.tool_watermark, R.drawable.ic_sym_watermark, "watermark diagonal draft", pro = true).copy(
+            launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "watermark") } ?: host.comingSoon(tool) }
+        ),
+        ready("page_numbers", ToolGroup.EDIT, R.string.tool_page_numbers, R.drawable.ic_sym_notes_lines, "page numbers footer header", pro = true).copy(
+            launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "page_numbers") } ?: host.comingSoon(tool) }
+        ),
+        ready("stamp", ToolGroup.EDIT, R.string.tool_stamp, R.drawable.ic_sym_approval, "stamp paid approved date badge", pro = true).copy(
+            launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "stamp") } ?: host.comingSoon(tool) }
+        ),
+        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove", pro = true).copy(
+            launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "redact") } ?: host.comingSoon(tool) }
+        ),
 
         // Secure (4)
         build("protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted, "protect password encrypt aes"),
