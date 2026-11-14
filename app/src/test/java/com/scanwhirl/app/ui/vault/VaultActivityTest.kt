@@ -8,6 +8,7 @@ import android.os.Looper
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
+import androidx.biometric.BiometricManager
 import androidx.core.view.isVisible
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -17,6 +18,7 @@ import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.vault.FakeVaultKeys
 import com.scanwhirl.app.store.vault.VaultCrypto
+import com.scanwhirl.app.store.vault.VaultKeyChallenge
 import com.scanwhirl.app.store.vault.VaultPasscodeGate
 import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.store.vault.VaultSessionPolicy
@@ -70,6 +72,8 @@ class VaultActivityTest {
             iterations = 2_000
         )
         VaultActivity.storeOverride = store
+        VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED
+        VaultActivity.fingerprintStarter = null
         File(app.filesDir, "vault2").deleteRecursively()
         app.getSharedPreferences("scanwhirl_prefs", 0).edit().clear().commit()
     }
@@ -79,7 +83,8 @@ class VaultActivityTest {
         controller?.close()
         controller = null
         VaultActivity.storeOverride = null
-        VaultActivity.credentialIntentFactory = null
+        VaultActivity.biometricStatusOverride = null
+        VaultActivity.fingerprintStarter = null
         VaultSession.close()
         Faults.resetAll()
         File(app.filesDir, "vault2").deleteRecursively()
@@ -206,49 +211,101 @@ class VaultActivityTest {
     }
 
     @Test
-    fun `phone lock unlock asks the system keyguard and opens with the keystore key`() {
+    fun `fingerprint unlock offers the prompt and opens the vault through the keystore key`() {
         store.setup("246810")
         store.lock()
-        shadowOf(keyguard()).setIsDeviceSecure(true)
-        val prompt = Intent("test.CONFIRM_DEVICE_CREDENTIAL")
-        VaultActivity.credentialIntentFactory = { prompt }
+        VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
+        val challenges = ArrayList<VaultKeyChallenge>()
+        VaultActivity.fingerprintStarter = { challenge ->
+            challenges += challenge
+            true // the prompt authorized the cipher
+        }
         val activity = launch()
 
         val unlockSheet = sheet()
-        val useLock = unlockSheet.need<View>(R.id.swSheetSecondary)
-        assertTrue(useLock.isVisible)
-        assertEquals("Use fingerprint or phone lock", (useLock as TextView).text.toString())
-        useLock.performClick()
+        val useFingerprint = unlockSheet.need<View>(R.id.swSheetSecondary)
+        assertTrue(useFingerprint.isVisible)
+        assertEquals("Use fingerprint", (useFingerprint as TextView).text.toString())
+        useFingerprint.performClick()
         idle()
 
-        val request = shadowOf(activity).nextStartedActivityForResult
-        assertNotNull("the keyguard confirmation should start", request)
-        assertEquals(prompt.action, request.intent.action)
-
-        shadowOf(activity).receiveResult(prompt, Activity.RESULT_OK, null)
-        idle()
+        assertEquals(1, challenges.size)
+        assertNotNull("the CryptoObject cipher is offered to the prompt", challenges[0].cipher)
         assertTrue(store.isUnlocked())
         assertEquals(
-            "Unlocked with phone lock · relocks in 2 min",
+            "Unlocked with fingerprint · relocks in 2 min",
             activity.need<TextView>(R.id.vaultBanner).text.toString()
         )
     }
 
     @Test
-    fun `a cancelled phone lock leaves the vault locked`() {
+    fun `a failed fingerprint falls back to the passcode sheet and stays locked`() {
         store.setup("246810")
         store.lock()
-        shadowOf(keyguard()).setIsDeviceSecure(true)
-        val prompt = Intent("test.CONFIRM_DEVICE_CREDENTIAL")
-        VaultActivity.credentialIntentFactory = { prompt }
+        VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
+        VaultActivity.fingerprintStarter = { false }
         val activity = launch()
 
         sheet().need<View>(R.id.swSheetSecondary).performClick()
         idle()
-        shadowOf(activity).receiveResult(prompt, Activity.RESULT_CANCELED, null)
-        idle()
+
         assertFalse(store.isUnlocked())
         assertFalse(activity.need<View>(R.id.vaultBanner).isVisible)
+        // The failure is explained, then the passcode sheet comes back: never a dead end.
+        val error = sheet()
+        assertEquals(
+            "Fingerprint did not unlock the Vault. Use your passcode.",
+            error.need<TextView>(R.id.swSheetMessage).text.toString()
+        )
+        primary(error).performClick()
+        idle()
+        assertEquals("Unlock Vault", sheet().need<TextView>(R.id.swSheetTitle).text)
+    }
+
+    @Test
+    fun `no fingerprint option when biometrics are not enrolled`() {
+        store.setup("246810")
+        store.lock()
+        for (status in listOf(
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED,
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,
+            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE,
+            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED
+        )) {
+            VaultActivity.biometricStatusOverride = status
+            launch()
+            val unlockSheet = sheet()
+            assertFalse(
+                "status $status must not offer a fingerprint",
+                unlockSheet.findViewById<View>(R.id.swSheetSecondary)?.isVisible == true
+            )
+            assertEquals("Unlock Vault", unlockSheet.need<TextView>(R.id.swSheetTitle).text)
+            controller!!.close()
+            controller = null
+        }
+    }
+
+    @Test
+    fun `an invalidated keystore key asks for the passcode and re-wraps afterwards`() {
+        store.setup("246810")
+        store.lock()
+        keys.invalidate()
+        VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
+        var started = false
+        VaultActivity.fingerprintStarter = { started = true; false }
+        val activity = launch()
+
+        // No usable Keystore key -> the prompt is not even offered.
+        assertFalse(activity.need<View>(R.id.vaultBanner).isVisible)
+        val unlockSheet = sheet()
+        assertTrue("the fingerprint option disappears", unlockSheet.findViewById<View>(R.id.swSheetSecondary)?.isVisible != true)
+
+        unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
+        primary(unlockSheet).performClick()
+        idle()
+        assertTrue(store.isUnlocked())
+        assertFalse("no prompt was started", started)
+        assertTrue("the Keystore wrap was rebuilt", store.canUseBiometric())
     }
 
     @Test
@@ -324,7 +381,4 @@ class VaultActivityTest {
         assertFalse(store.isSetUp())
         assertNotNull(activity.need<View>(R.id.vaultSetupButton))
     }
-
-    private fun keyguard(): android.app.KeyguardManager =
-        app.getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
 }

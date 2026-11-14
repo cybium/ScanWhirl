@@ -11,7 +11,7 @@
     <string name="vault_locked_body">Unlock with your fingerprint or passcode to see your private files.</string>
     <string name="vault_not_setup_title">Your private space</string>
     <string name="vault_not_setup_body">Set up the Vault to keep files encrypted on this phone. Only you can open them.</string>
-    <string name="vault_banner_phone_lock">Unlocked with phone lock · relocks in 2 min</string>
+    <string name="vault_banner_fingerprint">Unlocked with fingerprint · relocks in 2 min</string>
     <string name="vault_banner_passcode">Unlocked with passcode · relocks in 2 min</string>
     <string name="vault_banner_recovery">Unlocked with recovery code · relocks in 2 min</string>
     <string name="vault_banner_locked">Locked · fingerprint or passcode</string>
@@ -51,16 +51,17 @@
     <string name="vault_finish">Finish setup</string>
 
     <string name="vault_unlock_sheet_title">Unlock Vault</string>
-    <string name="vault_unlock_note">Enter your passcode, or confirm your phone\'s lock (fingerprint, face or PIN).</string>
+    <string name="vault_unlock_note">Use your fingerprint, or enter your passcode.</string>
     <string name="vault_passcode_hint_generic">Passcode</string>
     <string name="vault_unlock_primary">Unlock</string>
     <string name="vault_unlock_wrong">Wrong passcode</string>
     <string name="vault_unlock_pause">Too many tries. Try again in %1$d s.</string>
-    <string name="vault_use_phone_lock">Use fingerprint or phone lock</string>
-    <string name="vault_phone_lock_prompt_title">Unlock ScanWhirl Vault</string>
-    <string name="vault_phone_lock_prompt_note">Confirm your phone lock to open the Vault</string>
-    <string name="vault_phone_lock_failed">Your phone lock did not open the Vault. Use the passcode.</string>
-    <string name="vault_phone_lock_unavailable">Add a fingerprint or a screen lock on this phone, or use the passcode.</string>
+    <string name="vault_use_fingerprint">Use fingerprint</string>
+    <string name="vault_use_passcode">Use passcode</string>
+    <string name="vault_fingerprint_failed">Fingerprint did not unlock the Vault. Use your passcode.</string>
+    <string name="vault_fingerprint_unavailable">Fingerprint is not available for this Vault. Use your passcode.</string>
+    <string name="vault_fingerprint_reset">Your fingerprints changed, so the Vault asked for the passcode. Fingerprint will work again after you unlock once.</string>
+    <string name="vault_fingerprint_locked">Too many fingerprint tries. Use your passcode.</string>
     <string name="vault_use_recovery">Use recovery code</string>
     <string name="vault_recovery_unlock_title">Use recovery code</string>
     <string name="vault_recovery_unlock_note">Enter the 24-character recovery code.</string>

@@ -1,6 +1,5 @@
 package com.scanwhirl.app.ui.vault
 
-import android.app.KeyguardManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -8,6 +7,7 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.InputFilter
 import android.text.InputType
@@ -23,6 +23,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
@@ -30,6 +33,8 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.vault.VaultCrypto
+import com.scanwhirl.app.store.vault.VaultKeyChallenge
+import com.scanwhirl.app.store.vault.VaultKeyInvalidatedException
 import com.scanwhirl.app.store.vault.VaultLockedException
 import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.store.vault.VaultStore
@@ -52,17 +57,16 @@ import java.util.Locale
  * v2 UI: 04_vault — the encrypted Vault tab (design §4.1).
  *
  * Setup: passcode ×2 → the recovery code is shown once → the user types its first 4
- * characters back. Unlock: the phone's own lock (fingerprint / face / PIN through the
- * system keyguard confirmation, which also authorizes the Keystore key wrap) or the Vault
- * passcode, with the five-try 30 s pause doubling. Files come from the library, are
- * encrypted into `filesDir/vault2`, verified, then the plain library copy is purged.
- * Backup and restore use the `.swvault` container and the recovery code alone.
+ * characters back. Unlock: fingerprint/face or the Vault passcode. The biometric path is
+ * `androidx.biometric.BiometricPrompt` with a CryptoObject wrapping the auth-bound Keystore
+ * cipher, so the vault key is unwrapped only by a successful BIOMETRIC_STRONG authentication;
+ * the passcode (with its five-try lockout) works on every device and is always the fallback.
+ * Files come from the library, are encrypted into `filesDir/vault2`, verified, then the plain
+ * library copy is purged. Backup and restore use the `.swvault` container and the recovery code
+ * alone.
  *
- * The framework `android.hardware.biometrics.BiometricPrompt` has no public constructor in
- * the Android SDK (it is system API); the app-facing prompt lives in the AndroidX biometric
- * library, which this lane may not add. `KeyguardManager`'s device-credential confirmation
- * is the documented no-library way to authorize an auth-bound Keystore key, and shows the
- * phone's own fingerprint/face/PIN prompt. DEVICE-UNPROVEN on real hardware.
+ * DEVICE-UNPROVEN: the real prompt, the hardware Keystore cipher, and KeyPermanentlyInvalidated
+ * behaviour. Robolectric tests use [fingerprintStarter] and the `VaultKeys` fake.
  */
 class VaultActivity : BaseActivity() {
 
@@ -71,14 +75,24 @@ class VaultActivity : BaseActivity() {
         @Volatile
         internal var storeOverride: VaultStore? = null
 
-        /** Test seam: the system keyguard confirmation (Robolectric has no keyguard service). */
+        /**
+         * Test seam: the machine's answer instead of `BiometricManager.canAuthenticate`
+         * (Robolectric has no biometric hardware).
+         */
         @Volatile
-        internal var credentialIntentFactory: (() -> Intent?)? = null
+        internal var biometricStatusOverride: Int? = null
+
+        /**
+         * Test seam: runs the fingerprint prompt instead of `BiometricPrompt` and returns
+         * whether the user authenticated (the real prompt reports through callbacks).
+         */
+        @Volatile
+        internal var fingerprintStarter: ((VaultKeyChallenge) -> Boolean)? = null
 
         fun intent(context: Context): Intent = Intent(context, VaultActivity::class.java)
     }
 
-    private enum class UnlockMethod { PASSCODE, PHONE_LOCK, RECOVERY }
+    private enum class UnlockMethod { PASSCODE, BIOMETRIC, RECOVERY }
 
     private lateinit var repo: ScanRepository
     private lateinit var store: VaultStore
@@ -99,6 +113,7 @@ class VaultActivity : BaseActivity() {
     private var promptShown = false
     private var shownUnlocked = false
     private var unlockMethod = UnlockMethod.PASSCODE
+    private var unlockSheet: SwSheet? = null
 
     private val createBackup = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -107,20 +122,6 @@ class VaultActivity : BaseActivity() {
     private val openBackup = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) readBackup(uri) }
-
-    /** The phone's own lock (fingerprint / face / PIN) confirmed: unlock with the Keystore wrap. */
-    private val confirmDeviceLock = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode != RESULT_OK) return@registerForActivityResult
-        if (store.unlockWithBiometric()) {
-            unlockMethod = UnlockMethod.PHONE_LOCK
-            promptShown = true
-            render()
-        } else {
-            showError(getString(R.string.vault_phone_lock_failed))
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -520,7 +521,7 @@ class VaultActivity : BaseActivity() {
         }
         banner.isVisible = setUp && unlocked
         banner.text = when (unlockMethod) {
-            UnlockMethod.PHONE_LOCK -> getString(R.string.vault_banner_phone_lock)
+            UnlockMethod.BIOMETRIC -> getString(R.string.vault_banner_fingerprint)
             UnlockMethod.RECOVERY -> getString(R.string.vault_banner_recovery)
             UnlockMethod.PASSCODE -> getString(R.string.vault_banner_passcode)
         }
@@ -767,6 +768,7 @@ class VaultActivity : BaseActivity() {
 
     private fun showUnlock() {
         if (!store.isSetUp() || store.isUnlocked()) return
+        unlockSheet?.dismiss()
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val pass = passcodeField(R.string.vault_passcode_hint_generic, R.id.vaultUnlockPasscode)
         pass.errorView.id = R.id.vaultUnlockError
@@ -789,8 +791,8 @@ class VaultActivity : BaseActivity() {
             sheet.dismiss()
             showRecoveryUnlock()
         }
-        if (phoneLockAvailable()) {
-            sheet.setSecondary(R.string.vault_use_phone_lock) { authenticateWithPhoneLock() }
+        if (fingerprintOffered()) {
+            sheet.setSecondary(R.string.vault_use_fingerprint) { startFingerprintUnlock() }
         }
         sheet.setPrimary(R.string.vault_unlock_primary)
         sheet.keepOpenOnPrimary()
@@ -808,6 +810,7 @@ class VaultActivity : BaseActivity() {
             }
         }
         sheet.show()
+        unlockSheet = sheet
         pass.editText.requestFocus()
     }
 
@@ -837,35 +840,112 @@ class VaultActivity : BaseActivity() {
     }
 
     /**
-     * The phone-lock path needs a Keystore key wrap on this phone and a secure device lock
-     * (fingerprint, face or PIN). Without either, the passcode always works.
+     * The fingerprint path is offered only when the platform can run the AndroidX prompt, this
+     * phone has a valid auth-bound Keystore key, and `BIOMETRIC_STRONG` is enrollable/ready.
+     * Otherwise the passcode sheet is the whole (working) offer.
      */
-    private fun phoneLockAvailable(): Boolean {
-        if (!store.hasBiometricKey()) return false
-        val keyguard = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager ?: return false
-        return keyguard.isDeviceSecure
+    private fun fingerprintOffered(): Boolean {
+        val api = Build.VERSION.SDK_INT
+        val canAuthenticate = if (api >= VaultUnlockPolicy.MIN_API) {
+            try {
+                BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            } catch (e: Exception) {
+                BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED
+            }
+        } else {
+            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED
+        }
+        return VaultUnlockPolicy.fingerprintOffered(
+            apiLevel = api,
+            haveKeystoreKey = store.canUseBiometric(),
+            canAuthenticate = biometricStatusOverride ?: canAuthenticate
+        )
     }
 
     /**
-     * Shows the system keyguard confirmation. Finishing it authenticates the user to the
-     * device, which authorizes the auth-bound Keystore key; [confirmDeviceLock] then unwraps
-     * the vault key. No new library and no new permission are needed for this.
+     * Shows the AndroidX `BiometricPrompt` with a CryptoObject wrapping the auth-bound Keystore
+     * cipher, so the vault key is unwrapped only by a successful BIOMETRIC_STRONG authentication.
+     * DEVICE-UNPROVEN (Robolectric has no biometric hardware); tests drive [fingerprintStarter].
      */
-    private fun authenticateWithPhoneLock() {
-        val keyguard = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
-        val intent = credentialIntentFactory?.invoke() ?: keyguard?.createConfirmDeviceCredentialIntent(
-            getString(R.string.vault_phone_lock_prompt_title),
-            getString(R.string.vault_phone_lock_prompt_note)
-        )
-        if (intent == null) {
-            showError(getString(R.string.vault_phone_lock_unavailable))
+    private fun startFingerprintUnlock() {
+        val challenge = try {
+            store.beginBiometricUnlock()
+        } catch (e: VaultKeyInvalidatedException) {
+            showError(getString(R.string.vault_fingerprint_reset))
+            return
+        } catch (e: Exception) {
+            showError(getString(R.string.vault_fingerprint_unavailable))
             return
         }
-        try {
-            confirmDeviceLock.launch(intent)
-        } catch (e: Exception) {
-            showError(getString(R.string.vault_phone_lock_unavailable))
+        val starter = fingerprintStarter
+        if (starter != null) {
+            if (starter(challenge)) onFingerprintAuthenticated(challenge) else showFingerprintFailed()
+            return
         }
+        val cipher = challenge.cipher
+        if (cipher == null || Build.VERSION.SDK_INT < VaultUnlockPolicy.MIN_API) {
+            showFingerprintFailed()
+            return
+        }
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    when (errorCode) {
+                        // "Use passcode" / a cancelled prompt: the passcode sheet is already up.
+                        BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                        BiometricPrompt.ERROR_USER_CANCELED,
+                        BiometricPrompt.ERROR_CANCELED -> Unit
+                        BiometricPrompt.ERROR_LOCKOUT,
+                        BiometricPrompt.ERROR_LOCKOUT_PERMANENT ->
+                            showError(getString(R.string.vault_fingerprint_locked))
+                        else -> showError(errString.toString())
+                    }
+                }
+
+                override fun onAuthenticationFailed() {
+                    // A single non-matching finger: the system keeps the prompt open.
+                }
+
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    onFingerprintAuthenticated(challenge)
+                }
+            }
+        )
+        try {
+            prompt.authenticate(
+                BiometricPrompt.PromptInfo.Builder()
+                    .setTitle(getString(R.string.vault_unlock_sheet_title))
+                    .setSubtitle(getString(R.string.vault_unlock_note))
+                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                    .setNegativeButtonText(getString(R.string.vault_use_passcode))
+                    .setConfirmationRequired(false)
+                    .build(),
+                BiometricPrompt.CryptoObject(cipher)
+            )
+        } catch (e: Exception) {
+            showFingerprintFailed()
+        }
+    }
+
+    private fun onFingerprintAuthenticated(challenge: VaultKeyChallenge) {
+        if (store.completeBiometricUnlock(challenge)) {
+            unlockMethod = UnlockMethod.BIOMETRIC
+            promptShown = true
+            unlockSheet?.dismiss()
+            unlockSheet = null
+            render()
+        } else {
+            showFingerprintFailed()
+        }
+    }
+
+    /** Never a dead end: the error says so, and the passcode sheet comes back. */
+    private fun showFingerprintFailed() {
+        unlockSheet?.dismiss()
+        unlockSheet = null
+        showError(getString(R.string.vault_fingerprint_failed)) { showUnlock() }
     }
 
     // ------------------------------------------------------------------
@@ -1235,11 +1315,11 @@ class VaultActivity : BaseActivity() {
         Toast.makeText(this, R.string.vault_copy_done, Toast.LENGTH_SHORT).show()
     }
 
-    private fun showError(message: String) {
+    private fun showError(message: String, after: (() -> Unit)? = null) {
         SwSheet.builder(this)
             .setTitle(R.string.vault_screen_title)
             .setMessage(message)
-            .setPrimary(R.string.sheet_got_it)
+            .setPrimary(R.string.sheet_got_it) { after?.invoke() }
             .build()
             .show()
     }

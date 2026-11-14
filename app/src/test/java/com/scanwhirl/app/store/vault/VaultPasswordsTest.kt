@@ -166,6 +166,52 @@ class VaultPasswordsTest {
         assertFalse(VaultSession.isUnlocked())
     }
 
+    @Test
+    fun `backup carries remembered passwords and restore returns them`() {
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Insurance policy")
+        val setup = store.setup("246810")
+        store.addDocument(id)
+        VaultPasswords.of(app).save(id, "pw-13579")
+
+        val backup = File(app.cacheDir, "passwords.swvault")
+        store.exportBackup(backup)
+        val blob = backup.readBytes()
+        assertFalse("the backup holds no readable password", contains(blob, "pw-13579".toByteArray()))
+
+        store.wipeAll()
+        assertFalse(file().exists())
+
+        val fresh = VaultStore(app, repo, FakeVaultKeys(), VaultPasscodeGate(), 2_000)
+        fresh.importBackup(backup, setup.recoveryCode)
+
+        assertEquals("pw-13579", VaultPasswords.of(app).get(id))
+        assertEquals(listOf(id), fresh.listEntries().map { it.id })
+    }
+
+    @Test
+    fun `a version 1 backup still restores its documents`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Old backup")
+        val setup = store.setup("246810")
+        store.addDocument(id)
+        VaultPasswords.of(app).save(id, "pw-24680")
+
+        val backup = File(app.cacheDir, "v1.swvault")
+        store.exportBackup(backup)
+        // A v1 container has no extras section: patching the version makes the reader stop
+        // after the entries, exactly as it did before remembered passwords existed.
+        val bytes = backup.readBytes()
+        val versionOffset = "SWVAULT1".length
+        bytes[versionOffset + 3] = 1
+        backup.writeBytes(bytes)
+
+        store.wipeAll()
+        val fresh = VaultStore(app, repo, FakeVaultKeys(), VaultPasscodeGate(), 2_000)
+        fresh.importBackup(backup, setup.recoveryCode)
+
+        assertEquals("documents still restore", listOf(id), fresh.listEntries().map { it.id })
+        assertFalse("a v1 backup has no passwords", file().exists())
+    }
+
     private fun contains(bytes: ByteArray, needle: ByteArray): Boolean {
         outer@ for (i in 0..bytes.size - needle.size) {
             for (j in needle.indices) if (bytes[i + j] != needle[j]) continue@outer

@@ -22,7 +22,7 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 /** The Vault key did not decrypt: a wrong code/passcode, or bytes changed on disk (GCM tag). */
-class VaultAuthException(message: String, cause: Throwable? = null) : IOException(message, cause)
+open class VaultAuthException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /** The Vault has no key in memory; unlock it first. */
 class VaultLockedException : IllegalStateException("The Vault is locked")

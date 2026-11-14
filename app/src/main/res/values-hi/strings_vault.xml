@@ -11,7 +11,7 @@
     <string name="vault_locked_body"><!-- review -->अपनी निजी फ़ाइलें देखने के लिए फ़िंगरप्रिंट या पासकोड से खोलें।</string>
     <string name="vault_not_setup_title"><!-- review -->आपकी निजी जगह</string>
     <string name="vault_not_setup_body"><!-- review -->इस फ़ोन पर फ़ाइलें एन्क्रिप्ट रखने के लिए वॉल्ट सेट करें। इन्हें सिर्फ़ आप खोल सकते हैं।</string>
-    <string name="vault_banner_phone_lock"><!-- review -->फ़ोन लॉक से खुला · 2 मिनट में फिर बंद</string>
+    <string name="vault_banner_fingerprint"><!-- review -->फ़िंगरप्रिंट से खुला · 2 मिनट में फिर बंद</string>
     <string name="vault_banner_passcode"><!-- review -->पासकोड से खुला · 2 मिनट में फिर बंद</string>
     <string name="vault_banner_recovery"><!-- review -->रिकवरी कोड से खुला · 2 मिनट में फिर बंद</string>
     <string name="vault_banner_locked"><!-- review -->बंद · फ़िंगरप्रिंट या पासकोड</string>
@@ -51,16 +51,17 @@
     <string name="vault_finish"><!-- review -->सेटअप पूरा करें</string>
 
     <string name="vault_unlock_sheet_title"><!-- review -->वॉल्ट खोलें</string>
-    <string name="vault_unlock_note"><!-- review -->अपना पासकोड डालें, या फ़ोन का लॉक (फ़िंगरप्रिंट, चेहरा या PIN) पुष्ट करें।</string>
+    <string name="vault_unlock_note"><!-- review -->अपना फ़िंगरप्रिंट इस्तेमाल करें, या पासकोड डालें।</string>
     <string name="vault_passcode_hint_generic"><!-- review -->पासकोड</string>
     <string name="vault_unlock_primary"><!-- review -->खोलें</string>
     <string name="vault_unlock_wrong"><!-- review -->ग़लत पासकोड</string>
     <string name="vault_unlock_pause"><!-- review -->बहुत बार ग़लत। %1$d सेकंड बाद फिर कोशिश करें।</string>
-    <string name="vault_use_phone_lock"><!-- review -->फ़िंगरप्रिंट या फ़ोन लॉक इस्तेमाल करें</string>
-    <string name="vault_phone_lock_prompt_title"><!-- review -->ScanWhirl वॉल्ट खोलें</string>
-    <string name="vault_phone_lock_prompt_note"><!-- review -->वॉल्ट खोलने के लिए फ़ोन का लॉक पुष्ट करें</string>
-    <string name="vault_phone_lock_failed"><!-- review -->फ़ोन लॉक से वॉल्ट नहीं खुला। पासकोड इस्तेमाल करें।</string>
-    <string name="vault_phone_lock_unavailable"><!-- review -->इस फ़ोन पर फ़िंगरप्रिंट या स्क्रीन लॉक जोड़ें, या पासकोड इस्तेमाल करें।</string>
+    <string name="vault_use_fingerprint"><!-- review -->फ़िंगरप्रिंट इस्तेमाल करें</string>
+    <string name="vault_use_passcode"><!-- review -->पासकोड इस्तेमाल करें</string>
+    <string name="vault_fingerprint_failed"><!-- review -->फ़िंगरप्रिंट से वॉल्ट नहीं खुला। पासकोड इस्तेमाल करें।</string>
+    <string name="vault_fingerprint_unavailable"><!-- review -->इस वॉल्ट के लिए फ़िंगरप्रिंट उपलब्ध नहीं है। पासकोड इस्तेमाल करें।</string>
+    <string name="vault_fingerprint_reset"><!-- review -->आपके फ़िंगरप्रिंट बदल गए, इसलिए वॉल्ट ने पासकोड माँगा। एक बार खोलने के बाद फ़िंगरप्रिंट फिर काम करेगा।</string>
+    <string name="vault_fingerprint_locked"><!-- review -->बहुत बार फ़िंगरप्रिंट की कोशिश। पासकोड इस्तेमाल करें।</string>
     <string name="vault_use_recovery"><!-- review -->रिकवरी कोड इस्तेमाल करें</string>
     <string name="vault_recovery_unlock_title"><!-- review -->रिकवरी कोड इस्तेमाल करें</string>
     <string name="vault_recovery_unlock_note"><!-- review -->24 अक्षरों का रिकवरी कोड डालें।</string>
