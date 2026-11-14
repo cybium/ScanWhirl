@@ -66,6 +66,23 @@
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
 
+        <!-- v2 UI: 03_tools_hub — the L4 shared setup, result and passport-crop screens. -->
+        <activity
+            android:name=".ui.tools.ToolSetupActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.tools.ToolResultActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity" />
+
+        <activity
+            android:name=".ui.tools.PassportActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity" />
+
         <activity
             android:name=".ui.ExportResultActivity"
             android:exported="false"

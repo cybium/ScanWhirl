@@ -3,4 +3,75 @@
 <resources>
     <string name="op_no_space">Not enough storage space. Free some space and try again.</string>
     <string name="op_publish_failed">Could not add the new document. Try again.</string>
+
+    <!-- v2 UI: 03_tools_hub — shared setup screen -->
+    <string name="tools_setup_back">Back</string>
+    <string name="tools_setup_source">Source</string>
+    <string name="tools_setup_options">Options</string>
+    <string name="tools_setup_doc_meta">%1$d pages · %2$s</string>
+    <string name="tools_setup_no_docs">No documents yet. Scan something first.</string>
+    <string name="tools_setup_pick_one">Choose a document first.</string>
+    <string name="tools_setup_need_two">Choose at least two documents.</string>
+    <string name="tools_setup_merge_device">Merge PDFs from this phone</string>
+    <string name="tools_setup_merge_note">Choose two or more documents. They are joined in the order you tap them.</string>
+    <string name="tools_setup_zip_note">Choose the documents to pack into one ZIP file.</string>
+    <string name="tools_setup_zip_name">ScanWhirl export</string>
+    <string name="tools_setup_ranges_hint">1-3, 5, 8-</string>
+    <string name="tools_setup_ranges_example">Type the pages to use, for example 1-3, 5, 8-</string>
+    <string name="tools_setup_split_preview">%1$d new documents: %2$s</string>
+    <string name="tools_setup_extract_preview">%1$d pages kept: %2$s</string>
+    <string name="tools_setup_bad_ranges">Type page numbers like 1-3, 5, 8-</string>
+    <string name="tools_setup_jpg">JPG</string>
+    <string name="tools_setup_png">PNG</string>
+    <string name="tools_setup_quality">Quality</string>
+    <string name="tools_setup_quality_value">%1$d%%</string>
+    <string name="tools_setup_images_note">One page at a time. More than one page is packed into a ZIP.</string>
+    <string name="tools_setup_target_hint">Target size, e.g. 500 KB or 2 MB (optional)</string>
+    <string name="tools_setup_bad_target">Type a size like 500 KB or 2 MB.</string>
+    <string name="tools_setup_level_light">Light</string>
+    <string name="tools_setup_level_medium">Medium</string>
+    <string name="tools_setup_level_strong">Strong</string>
+    <string name="tools_setup_compress_note">A target size squeezes every page to fit; without one, the chosen quality is used.</string>
+    <string name="tools_setup_name_hint">Name (optional)</string>
+    <string name="tools_setup_long_calculating">Measuring the pages…</string>
+    <string name="tools_setup_long_note">Makes %1$d image(s), 1080 px wide, at most 20,000 px tall each. Nothing is squashed.</string>
+    <string name="tools_setup_long_failed">A page is too tall for one image. Reduce it first.</string>
+    <string name="tools_setup_word_note">Uses the recognised text: one paragraph per line and a page break between pages.</string>
+    <string name="tools_setup_no_text">This document has no recognised text yet. Open it and read the text first.</string>
+    <string name="tools_setup_metadata_note">Creates a clean copy without EXIF, camera details or embedded thumbnails. The original stays as it is.</string>
+    <string name="tools_setup_id_note">Both sides go on one A4 page: the front on top, the back at the bottom.</string>
+    <string name="tools_setup_id_front">Front of the card</string>
+    <string name="tools_setup_id_back">Back of the card</string>
+    <string name="tools_setup_need_front">Choose the front of the card.</string>
+    <string name="tools_setup_need_back">Choose the back of the card.</string>
+    <string name="tools_setup_image_failed">That image cannot be read.</string>
+    <string name="tools_setup_run">Continue</string>
+    <string name="tools_setup_working">Working…</string>
+    <string name="tools_setup_failed">Could not finish: %1$s</string>
+    <string name="tools_setup_nothing">This tool has no options.</string>
+    <string name="tools_id_card_name">ID card</string>
+
+    <!-- v2 UI: 03_tools_hub — result screen -->
+    <string name="tools_result_done">Done</string>
+    <string name="tools_result_summary_docs">%1$d documents · %2$d pages · %3$s</string>
+    <string name="tools_result_summary_one_doc">%1$d page · %2$s</string>
+    <string name="tools_result_summary_files">%1$d files · %2$s</string>
+    <string name="tools_result_summary_one_file">1 file · %1$s</string>
+    <string name="tools_result_open">Open</string>
+    <string name="tools_result_share">Share</string>
+    <string name="tools_result_save">Save</string>
+    <string name="tools_result_library">Show in library</string>
+    <string name="tools_result_undo">Undo</string>
+    <string name="tools_result_nothing">Nothing was created.</string>
+    <string name="tools_result_open_failed">No app on this phone can open this file.</string>
+    <string name="tools_result_saved">Saved %1$s</string>
+    <string name="tools_result_save_failed">Could not save: %1$s</string>
+    <string name="tools_result_undone">The new copy was removed.</string>
+
+    <!-- v2 UI: 03_tools_hub — passport crop preset -->
+    <string name="tools_passport_hint">Drag the four corners to the edges of the passport photo.</string>
+    <string name="tools_passport_apply">Crop and save</string>
+    <string name="tools_passport_name">Passport photo</string>
+    <string name="tools_passport_failed">Could not crop the photo.</string>
+    <string name="tools_passport_failed_with">Could not crop the photo: %1$s</string>
 </resources>

@@ -320,8 +320,25 @@ class CompressFlow(
     // Exact-target compression helpers (PDF ≈ Σ page JPEGs + ~600 B/page)
     // ------------------------------------------------------------------
 
-    private fun fitFilesToTotal(files: List<File>, target: Long): List<ByteArray> {
-        if (files.isEmpty()) throw IllegalStateException("No pages to compress")
+    private fun fitFilesToTotal(files: List<File>, target: Long): List<ByteArray> =
+        SizeFit.compressPages(files, target)
+
+    private fun fitJpegsToTotal(pages: List<ByteArray>, target: Long): List<ByteArray> =
+        SizeFit.compressBytes(pages, target)
+
+    /** Never grows a page: keeps the original bytes when they already fit the share. */
+    private fun fitToShare(orig: ByteArray, share: Long): ByteArray = SizeFit.fitToShare(orig, share)
+}
+
+/**
+ * v2 UI: 03_tools_hub — exact target-size compression shared by the legacy Compress flow and
+ * the v2 Compress setup screen. A generated PDF is about the sum of its page JPEGs plus
+ * ~600 bytes per page, and a page never grows: bytes that already fit are kept unchanged.
+ */
+object SizeFit {
+
+    fun compressPages(files: List<File>, target: Long): List<ByteArray> {
+        require(files.isNotEmpty()) { "No pages to compress" }
         val budget = (target - (files.size * 600L + 1000L)).coerceAtLeast(2048L)
         val sizes = files.map { it.length().coerceAtLeast(1L) }
         val sum = sizes.sum().coerceAtLeast(1L)
@@ -330,8 +347,8 @@ class CompressFlow(
         }
     }
 
-    private fun fitJpegsToTotal(pages: List<ByteArray>, target: Long): List<ByteArray> {
-        if (pages.isEmpty()) throw IllegalStateException("No pages to compress")
+    fun compressBytes(pages: List<ByteArray>, target: Long): List<ByteArray> {
+        require(pages.isNotEmpty()) { "No pages to compress" }
         val budget = (target - (pages.size * 600L + 1000L)).coerceAtLeast(2048L)
         val sum = pages.sumOf { it.size.toLong() }.coerceAtLeast(1L)
         return pages.map { orig ->
@@ -339,8 +356,7 @@ class CompressFlow(
         }
     }
 
-    /** Never grows a page: keeps the original bytes when they already fit the share. */
-    private fun fitToShare(orig: ByteArray, share: Long): ByteArray {
+    fun fitToShare(orig: ByteArray, share: Long): ByteArray {
         if (orig.size.toLong() <= share) return orig
         val bmp = try {
             ImageTools.decodeSampled(orig, 3000)
