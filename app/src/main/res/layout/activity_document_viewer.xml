@@ -90,66 +90,48 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- test26 T5.2 (§4.5): Select pages — row A is the toggle; row B
-             (the contextual bar Rotate · Extract · Delete) only appears while
-             selection mode is on. Two rows on purpose: four buttons in one row
-             would clip at font scale 1.3. -->
+        <!-- Organize pages (owner revision): a CamScanner-style top bar. It exists only
+             while pages are selected; long-press enters this mode. -->
         <LinearLayout
-            android:id="@+id/selectRow"
+            android:id="@+id/selectionTopBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="16dp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSelectPages"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/select_pages" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/selContextRow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingHorizontal="16dp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp"
+            android:paddingHorizontal="@dimen/sw_space_3"
+            android:paddingVertical="@dimen/sw_space_1"
             android:visibility="gone">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCtxRotate"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="6dp"
-                android:text="@string/action_rotate"
-                android:textSize="13sp" />
+            <ImageButton
+                android:id="@+id/btnSelClose"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/sheet_close"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_sym_close"
+                app:tint="@color/text_hologram_hi" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCtxExtract"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+            <TextView
+                android:id="@+id/selCount"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/sw_space_2"
                 android:layout_weight="1"
-                android:layout_marginEnd="6dp"
-                android:text="@string/extract"
-                android:textSize="13sp" />
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCtxDelete"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/delete"
-                android:textSize="13sp" />
+            <TextView
+                android:id="@+id/btnSelAll"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:paddingHorizontal="@dimen/sw_space_3"
+                android:text="@string/draft_select_all"
+                android:textColor="@color/cyan_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <com.scanwhirl.app.ui.pagegrid.PageGridView
@@ -217,11 +199,90 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Organize pages (owner revision): the selection action bar replaces the dock while
+             pages are selected. Icons + short labels, kit colours (painted in code). -->
+        <LinearLayout
+            android:id="@+id/selectionActionBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="4dp"
+            android:paddingVertical="4dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/btnSelRotate"
+                android:layout_width="0dp"
+                android:layout_height="64dp"
+                android:layout_weight="1"
+                android:drawableTop="@drawable/ic_sw_rotate"
+                android:drawablePadding="3dp"
+                android:drawableTint="@color/cyan_primary"
+                android:gravity="center"
+                android:text="@string/action_rotate"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/btnSelDelete"
+                android:layout_width="0dp"
+                android:layout_height="64dp"
+                android:layout_weight="1"
+                android:drawableTop="@drawable/ic_sw_delete"
+                android:drawablePadding="3dp"
+                android:drawableTint="@color/laser_danger"
+                android:gravity="center"
+                android:text="@string/delete"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/btnSelExtract"
+                android:layout_width="0dp"
+                android:layout_height="64dp"
+                android:layout_weight="1"
+                android:drawableTop="@drawable/ic_sym_content_cut"
+                android:drawablePadding="3dp"
+                android:drawableTint="@color/cyan_primary"
+                android:gravity="center"
+                android:text="@string/extract"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/btnSelShare"
+                android:layout_width="0dp"
+                android:layout_height="64dp"
+                android:layout_weight="1"
+                android:drawableTop="@drawable/ic_sym_share"
+                android:drawablePadding="3dp"
+                android:drawableTint="@color/cyan_primary"
+                android:gravity="center"
+                android:text="@string/share_pdf"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/btnSelMore"
+                android:layout_width="0dp"
+                android:layout_height="64dp"
+                android:layout_weight="1"
+                android:drawableTop="@drawable/ic_sym_more_horiz"
+                android:drawablePadding="3dp"
+                android:drawableTint="@color/cyan_primary"
+                android:gravity="center"
+                android:text="@string/more"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="11sp" />
+        </LinearLayout>
+
         <!-- test26 T5.2 (§4.5/§5.4): the bottom dock is [Share w2][Edit][Text]
              [More] — four DockItem buttons, weighted 2/1/1/1, no fixed heights.
              The gold Pro Tools tray, the crown button and the old
              Delete/Share row are gone (N12: one home per action). -->
         <LinearLayout
+            android:id="@+id/bottomDock"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="8dp"

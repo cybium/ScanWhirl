@@ -1057,32 +1057,21 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `grid drop target works horizontally and across rows`() {
-        val id = seedDoc("Targets", pages = 4)
-        val intent = DocumentViewerActivity.intent(app, id)
-        ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
-            scenario.onActivity { activity ->
-                val grid = activity.findViewById<
-                    com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
-                forceLayout(grid)
-
-                fun centerOf(pos: Int): Pair<Float, Float> {
-                    val view = grid.findViewHolderForAdapterPosition(pos)!!.itemView
-                    return ((view.left + view.right) / 2f) to ((view.top + view.bottom) / 2f)
-                }
-
-                val c0 = centerOf(0)
-                val c1 = centerOf(1)
-                val c2 = centerOf(2)
-
-                // Drag page 3 (index 2) over page 1 (index 0): a cross-row drop.
-                assertEquals(0, grid.targetForPoint(c0.first, c0.second, 2))
-                // Drag page 3 over index 1: a purely horizontal target.
-                assertEquals(1, grid.targetForPoint(c1.first, c1.second, 2))
-                // Drag page 1 down over page 3 (index 2).
-                assertEquals(2, grid.targetForPoint(c2.first, c2.second, 0))
-            }
+    fun `grid reorders across rows and columns`() {
+        // v2 UI: Organize pages grid (owner revision) - long-press drag via ItemTouchHelper.
+        val files = (0 until 4).map { i ->
+            java.io.File(app.cacheDir, "targets_$i.jpg").apply { writeBytes(jpegBytes()) }
         }
+        val grid = com.scanwhirl.app.ui.pagegrid.PageGridView(app)
+        grid.submit(files)
+        assertTrue("long-press drag must be enabled", grid.dragEnabled)
+
+        // Row 2 -> row 1, and a purely horizontal move.
+        grid.moveItem(2, 0)
+        assertEquals(files[2], grid.pageAt(0))
+        grid.moveItem(0, 1)
+        assertEquals(files[2], grid.pageAt(1))
+        assertEquals(files[0], grid.pageAt(0))
     }
 
     @Test
@@ -1110,11 +1099,18 @@ class UiSmokeTest {
                 assertEquals("the action is Save-a-copy",
                     R.id.action_save_pdf, menu.getItem(0).itemId)
 
-                // Page actions moved to the contextual select bar: the views exist
-                // (inflated) and stay hidden until Select pages mode is switched on.
-                assertNotNull(activity.findViewById<android.view.View>(R.id.btnCtxRotate))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.btnCtxExtract))
-                assertNotNull(activity.findViewById<android.view.View>(R.id.btnCtxDelete))
+                // v2 UI: Organize pages grid (owner revision): the five page actions live in
+                // the bottom selection bar and stay hidden until a long-press selects a page.
+                assertEquals(
+                    android.view.View.GONE,
+                    activity.findViewById<android.view.View>(R.id.selectionActionBar).visibility
+                )
+                listOf(
+                    R.id.btnSelRotate, R.id.btnSelDelete, R.id.btnSelExtract,
+                    R.id.btnSelShare, R.id.btnSelMore
+                ).forEach { actionId ->
+                    assertNotNull(activity.findViewById<android.view.View>(actionId))
+                }
             }
         }
     }

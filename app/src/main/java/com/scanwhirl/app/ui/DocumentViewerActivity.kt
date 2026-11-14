@@ -118,19 +118,23 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         })
 
         binding.pageList.onTap = { index ->
-            docId?.let { id ->
-                startActivity(PageViewerActivity.intent(this, id, index))
+            if (selectMode) {
+                toggleSelected(index)
+            } else {
+                docId?.let { id ->
+                    startActivity(PageViewerActivity.intent(this, id, index))
+                }
             }
         }
         binding.pageList.onCheckToggle = { index -> toggleSelected(index) }
+        binding.pageList.onLongPress = { index -> enterSelection(index) }
         binding.pageList.checkedAt = { i ->
             selected.contains(visiblePages.getOrNull(i)?.path)
         }
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
 
-        // test26 T5.2 (§4.5): one home per action. Dock = Share · Edit · Text ·
-        // More; everything secondary lives in showMoreSheet(); page-level work
-        // lives in Select pages mode or the page editor.
+        // v2 UI: Organize pages (owner revision) — one clean dock; page work appears only
+        // after a long-press. Dock = Share · Edit · Text · More.
         binding.btnShare.setOnClickListener {
             document?.let { doc ->
                 ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
@@ -146,11 +150,16 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // T4.6: the header category chip is tappable now — it opens the
         // category picker (the old "Categorize" list dialog is gone).
         binding.docCategoryChip.setOnClickListener { promptCategorize() }
-        // Select pages (§4.5): the toggle + its contextual bar.
-        binding.btnSelectPages.setOnClickListener { toggleSelectMode() }
-        binding.btnCtxRotate.setOnClickListener { rotateSelected(clockwise = true) }
-        binding.btnCtxExtract.setOnClickListener { extractSelected() }
-        binding.btnCtxDelete.setOnClickListener { deleteSelectedPages() }
+        // Selection mode (owner revision): long-press enters it; the top bar counts,
+        // closes and selects all; the bottom bar acts on the ticked pages.
+        binding.btnSelClose.setOnClickListener { exitSelectMode() }
+        binding.btnSelAll.setOnClickListener { selectAllPages() }
+        binding.btnSelRotate.setOnClickListener { rotateSelected(clockwise = true) }
+        binding.btnSelDelete.setOnClickListener { confirmDeleteSelected() }
+        binding.btnSelExtract.setOnClickListener { extractSelected() }
+        binding.btnSelShare.setOnClickListener { shareSelectedPages() }
+        binding.btnSelMore.setOnClickListener { showSelectionMore() }
+        styleSelectionBars()
         // PM-2.2c: the draft bar appears after the first edit; every action is explicit.
         styleDraftBar()
         binding.btnDraftDiscard.setOnClickListener { discardFlow() }
@@ -273,11 +282,32 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     private fun updateSelectionUi() {
-        supportActionBar?.subtitle =
-            if (selected.isEmpty()) null
-            else resources.getQuantityString(
-                R.plurals.selected_count, selected.size, selected.size
-            )
+        val count = selected.size
+        if (selectMode && count == 0) selectMode = false
+        supportActionBar?.subtitle = null
+        binding.selectionTopBar.isVisible = selectMode
+        binding.selectionActionBar.isVisible = selectMode
+        binding.bottomDock.isVisible = !selectMode
+        binding.draftBar.isVisible = !selectMode && (draft?.changes ?: 0) > 0
+        binding.selCount.text = resources.getQuantityString(R.plurals.selected_count, count, count)
+        binding.btnSelAll.isEnabled = count < visiblePages.size
+        binding.pageList.checkboxesVisible = selectMode
+    }
+
+    /** Kit paint for the selection bars (icons already come from the layout). */
+    private fun styleSelectionBars() {
+        val density = resources.displayMetrics.density
+        fun dp(value: Float) = (value * density).toInt()
+        binding.selectionActionBar.background = SwStyle.card(this, 18f)
+        listOf(binding.btnSelRotate, binding.btnSelDelete, binding.btnSelExtract, binding.btnSelShare, binding.btnSelMore)
+            .forEach { view ->
+                view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+                view.minHeight = dp(64f)
+            }
+        binding.selCount.setTextColor(SwStyle.color(this, R.color.text_hologram_hi))
+        binding.selCount.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        binding.btnSelAll.setTextColor(SwStyle.color(this, R.color.cyan_primary))
+        binding.btnSelAll.typeface = Typeface.create("sans-serif", Typeface.BOLD)
     }
 
     /** Maps a grid (visible) index to the draft page index, or -1. */
@@ -287,40 +317,139 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     // ------------------------------------------------------------------
-    // Select pages mode (§4.5) + page actions (contextual bar)
+    // Selection mode (owner revision): long-press, top bar, action bar
     // ------------------------------------------------------------------
 
-    /** True while the Select pages mode is on: checkboxes + contextual bar. */
+    /** True while pages are selected: round checks + top bar + action bar. */
     private var selectMode = false
 
-    /** Enters or leaves Select pages mode; leaving clears the ticked set. */
-    private fun toggleSelectMode() {
-        if (selectMode) {
-            exitSelectMode()
-        } else {
+    /** Long-press: enter selection mode with this page selected (idempotent). */
+    private fun enterSelection(index: Int) {
+        val path = visiblePages.getOrNull(index)?.path ?: return
+        if (!selectMode) {
             selectMode = true
             binding.pageList.checkboxesVisible = true
-            binding.selContextRow.isVisible = true
-            binding.btnSelectPages.setText(R.string.select_done)
         }
+        selected.add(path)
+        binding.pageList.refresh()
+        updateSelectionUi()
     }
 
     private fun exitSelectMode() {
         selectMode = false
         selected.clear()
         binding.pageList.checkboxesVisible = false
-        binding.selContextRow.isVisible = false
-        binding.btnSelectPages.setText(R.string.select_pages)
         binding.pageList.refresh()
         updateSelectionUi()
     }
 
-    /** Ticks/untick a page. Called by the grid checkbox. */
+    /** Ticks/untick a page. A tap on a tile behaves the same while selecting. */
     internal fun toggleSelected(index: Int) {
         val path = visiblePages.getOrNull(index)?.path ?: return
         if (!selected.remove(path)) selected.add(path)
+        if (selected.isEmpty()) exitSelectMode() else updateSelectionUi()
+        binding.pageList.refresh()
+    }
+
+    private fun selectAllPages() {
+        visiblePages.mapTo(selected) { it.path }
+        if (selected.isNotEmpty() && !selectMode) {
+            selectMode = true
+            binding.pageList.checkboxesVisible = true
+        }
         binding.pageList.refresh()
         updateSelectionUi()
+    }
+
+    /** Delete asks first (owner revision): an SwSheet, then the draft delete with Undo. */
+    private fun confirmDeleteSelected() {
+        val count = selected.size
+        if (count == 0) return
+        SwSheet.builder(this)
+            .setTitle(resources.getQuantityString(R.plurals.draft_delete_title, count, count))
+            .setMessage(R.string.draft_delete_msg)
+            .setPrimary(R.string.delete) { deleteSelectedPages() }
+            .setSecondary(R.string.draft_keep_editing)
+            .build()
+            .show()
+    }
+
+    /** Share the ticked draft pages as images. */
+    private fun shareSelectedPages() {
+        val doc = document ?: return
+        val files = pages.filter { it.path in selected }
+        if (files.isEmpty()) {
+            Toast.makeText(this, R.string.select_pages_first, Toast.LENGTH_SHORT).show()
+            return
+        }
+        ShareUtils.shareImages(this, files, doc.name)
+    }
+
+    /** ⋯ for long documents: Rotate left and Move to… (one page). */
+    private fun showSelectionMore() {
+        val labels = ArrayList<CharSequence>()
+        labels += getString(R.string.draft_rotate_left)
+        val canMove = visiblePages.size >= 10 && selected.size == 1
+        if (canMove) labels += getString(R.string.draft_move_to)
+        var sheetRef: com.scanwhirl.app.ui.kit.SwSheet? = null
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.more)
+            .setOptions(labels) { index, _ ->
+                sheetRef?.dismiss()
+                if (index == 0) rotateSelected(clockwise = false) else promptMoveTo()
+            }
+            .setSecondary(R.string.draft_keep_editing)
+            .build()
+        sheetRef = sheet
+        sheet.show()
+    }
+
+    /** Move exactly one selected page to a typed page number (long documents only). */
+    private fun promptMoveTo() {
+        val max = visiblePages.size
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.draft_move_to)
+            .setInput(
+                hint = getString(R.string.draft_move_to_hint),
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            )
+            .setPrimary(R.string.draft_move_to)
+            .build()
+        sheet.keepOpenOnPrimary()
+        sheet.primaryButton.setOnClickListener {
+            val target = sheet.inputView?.text?.toString()?.toIntOrNull()
+            if (target == null || target !in 1..max) {
+                Toast.makeText(this, R.string.draft_move_invalid, Toast.LENGTH_SHORT).show()
+            } else {
+                sheet.dismiss()
+                moveSelectedPage(target - 1)
+            }
+        }
+        sheet.show()
+    }
+
+    private fun moveSelectedPage(to: Int) {
+        val id = docId ?: return
+        val path = selected.singleOrNull() ?: return
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    commitPendingDeletesNow()
+                    val now = repo.draftPages(id)
+                    val from = now.indexOfFirst { it.path == path }
+                    if (from >= 0 && from != to) repo.draftMove(id, from, to)
+                }
+                reloadDocument()
+                selected.clear()
+                updateSelectionUi()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun requireSelection(): List<String>? {
@@ -846,7 +975,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** `Draft · N pages · K changes`, visible only while K > 0. */
     private fun updateDraftBar() {
         val changes = draft?.changes ?: 0
-        binding.draftBar.isVisible = changes > 0
+        binding.draftBar.isVisible = !selectMode && changes > 0
         binding.draftHeader.text = getString(R.string.draft_header, pages.size, changes)
     }
 

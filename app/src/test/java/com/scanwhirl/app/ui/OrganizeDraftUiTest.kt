@@ -242,6 +242,50 @@ class OrganizeDraftUiTest {
     }
 
     @Test
+    fun `selection bar rotate and delete act on the draft`() {
+        val id = DocFixtures.saved(repo, app, pages = 3)
+        val d0 = digest(id)
+        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+            var cells = 0
+            assertTrue("the grid loads", pollUntil {
+                scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
+                cells == 3
+            })
+            scenario.onActivity { activity ->
+                val grid = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                grid.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
+                )
+                grid.layout(0, 0, 1080, 1920)
+                grid.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                activity.findViewById<android.view.View>(R.id.btnSelRotate)!!.performClick()
+            }
+            assertTrue("rotate writes to the draft", pollUntil { draftChanges(id) == 1 })
+            assertEquals("the saved document changed", d0, digest(id))
+
+            var selectedLabel = ""
+            assertTrue("the rotated page stays selected", pollUntil {
+                scenario.onActivity {
+                    selectedLabel = it.findViewById<TextView>(R.id.selCount)?.text?.toString().orEmpty()
+                }
+                selectedLabel.isNotEmpty() && !selectedLabel.startsWith("0")
+            })
+            scenario.onActivity { it.findViewById<android.view.View>(R.id.btnSelDelete)!!.performClick() }
+            idle()
+            val confirm = requireNotNull(sheet()) { "Delete asks first" }
+            assertTrue(
+                "the confirmation names the pages",
+                confirm.findViewById<TextView>(R.id.swSheetTitle)!!.text.contains("Delete")
+            )
+            primary()
+            scenario.onActivity { it.commitPendingDelete() }
+            assertTrue("delete writes to the draft", pollUntil { runBlocking { repo.draftPages(id) }.size == 2 })
+            assertEquals("the saved document still has all pages", d0, digest(id))
+        }
+    }
+
+    @Test
     fun `reopening after process death shows the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->

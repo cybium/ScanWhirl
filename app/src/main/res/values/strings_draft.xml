@@ -21,4 +21,16 @@
     <string name="draft_saved_new">Saved as “%1$s”</string>
     <string name="draft_replaced">Replaced. The previous version is in Trash.</string>
     <string name="trash_previous_version">%1$s (previous version)</string>
+
+    <!-- Selection mode (owner revision) -->
+    <string name="draft_select_all">Select all</string>
+    <string name="draft_delete_msg">The pages are removed from the draft. The saved document stays as it is.</string>
+    <string name="draft_rotate_left">Rotate left</string>
+    <string name="draft_move_to">Move to…</string>
+    <string name="draft_move_to_hint">Page number</string>
+    <string name="draft_move_invalid">That page does not exist.</string>
+    <plurals name="draft_delete_title">
+        <item quantity="one">Delete %1$d page?</item>
+        <item quantity="other">Delete %1$d pages?</item>
+    </plurals>
 </resources>
