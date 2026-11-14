@@ -49,3 +49,5 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 - integration has L1 (icons, brand, layout, Pro gating, Text screen), L2 (BiometricPrompt, backup v2), L3 (Remember in Vault, Book pages), L4 (PowerPoint, Word pictures, ID card flow), L5 wave 1. 1080 tests, lint 0 errors.
 - Running: L1 Folders & tags + Batch rename; L2 QR code + vault copy; L3 Book pages real-photo tuning + Keep as one page; L4 Business card + tools copy; L5 Organize draft (PM-2.2b/c, 2.3b, CamScanner-style grid); QA coverage run.
 - Next lead step: APK of integration -> phone -> QA continues coverage on the new build -> lead reviews every screenshot (SCREEN_MAP verdicts).
+
+- 23:05 L5 wave 2 MERGED (draft engine, grid, crop): integration 1c13819, 1118 tests, lint 0 errors. L5 now: Insert pages + carried items + copy.
