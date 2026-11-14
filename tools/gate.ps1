@@ -9,7 +9,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Lane,
     [string]$Tests = "",
     [switch]$Lint,
-    [switch]$NoLint   # accepted for old prompts; lint is off unless -Lint
+    [switch]$NoLint,  # accepted for old prompts; lint is off unless -Lint
+    [switch]$Apk      # lead only: build the debug test APK (no tests) -> app\build\outputs\apk\debug\app-debug.apk
 )
 $ErrorActionPreference = "Continue"
 $root = if ($Lane -eq "main") { "C:\Users\Cybium\Desktop\ScanWhirl" } else { "C:\Users\Cybium\Desktop\ScanWhirl-$Lane" }
@@ -55,6 +56,16 @@ try {
     $mirror = "/home/cybium/swbuild/$Lane"
     $filter = if ($Tests) { "--tests '$Tests'" } else { "" }
     $sync = "mkdir -p $mirror && rsync -a --delete --exclude=/.git --exclude=/.gradle --exclude=/.kotlin --exclude=/build --exclude=/app/build --exclude=/builds --exclude=/keystore $wslRoot/ $mirror/ && rm -rf $mirror/app/build/test-results/testDebugUnitTest"
+    if ($Apk) {
+        $apkOut = "$root\app\build\outputs\apk\debug\app-debug.apk"
+        Remove-Item $apkOut -Force -ErrorAction SilentlyContinue
+        $acmd = "$sync && cd $mirror && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:assembleDebug -PtestBuild --no-daemon -q && mkdir -p $wslRoot/app/build/outputs/apk/debug && cp $mirror/app/build/outputs/apk/debug/app-debug.apk $wslRoot/app/build/outputs/apk/debug/app-debug.apk"
+        $aStart = Get-Date
+        $aout = wsl -d Ubuntu bash -lc $acmd 2>&1 | Where-Object { $_ -notmatch 'screen size is bogus' }
+        $aout | Select-String -Pattern 'error:|e: |FAILED|What went wrong' | Select-Object -First 30 | ForEach-Object { Write-Output $_.Line }
+        Write-Output ("apk: build took {0:N1} min" -f ((Get-Date) - $aStart).TotalMinutes)
+        if (Test-Path $apkOut) { Write-Output "APK READY $apkOut"; exit 0 } else { Write-Output "APK FAIL"; exit 1 }
+    }
     $back = "mkdir -p $wslRoot/app/build/test-results && rsync -a --delete $mirror/app/build/test-results/testDebugUnitTest/ $wslRoot/app/build/test-results/testDebugUnitTest/"
     $cmd = "$sync && cd $mirror && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild --no-daemon --continue -q $filter; $back"
     Write-Output "tests: building in WSL mirror $mirror $filter"

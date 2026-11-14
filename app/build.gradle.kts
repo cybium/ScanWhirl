@@ -119,6 +119,8 @@ dependencies {
     // first use; keeps the APK small, consistent with the scanner).
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:18.0.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // Vault unlock (70_APP_DESIGN §4.1): in-app fingerprint/face sheet with device-credential fallback. Offline, no permission beyond USE_BIOMETRIC.
+    implementation("androidx.biometric:biometric:1.1.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
