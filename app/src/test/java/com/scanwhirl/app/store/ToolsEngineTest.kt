@@ -206,7 +206,8 @@ class ToolsEngineTest {
 
     @Test
     fun `long image splits instead of squashing`() {
-        val parts = LongImage.plan(listOf(8_000, 8_000, 8_000))
+        // Two 7,000 px pages plus the gap fit one 16,000 px part; the third starts a new part.
+        val parts = LongImage.plan(listOf(7_000, 7_000, 7_000))
         assertEquals(listOf(0..1, 2..2), parts)
         assertEquals(listOf(0..0, 1..1), LongImage.plan(listOf(100, 100), maxHeight = 150))
     }
