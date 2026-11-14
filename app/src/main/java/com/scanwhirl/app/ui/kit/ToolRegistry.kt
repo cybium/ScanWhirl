@@ -127,8 +127,8 @@ object ToolRegistry {
         build("organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages, R.drawable.ic_sym_view_module, "organize reorder pages move"),
         soon("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_note_add, "insert add pages into pdf"),
         ready("duplicate", ToolGroup.ORGANIZE, R.string.tool_duplicate, R.drawable.ic_sym_content_copy, "duplicate copy clone", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        soon("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = true, note = R.string.soon_folders),
-        soon("batch_rename", ToolGroup.ORGANIZE, R.string.tool_batch_rename, R.drawable.ic_sym_drive_file_rename, "batch rename many files", pro = true, note = R.string.soon_batch_rename),
+        ready("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = true),
+        ready("batch_rename", ToolGroup.ORGANIZE, R.string.tool_batch_rename, R.drawable.ic_sym_drive_file_rename, "batch rename many files", pro = true),
 
         // Optimize (4)
         ready("compress", ToolGroup.OPTIMIZE, R.string.tool_compress, R.drawable.ic_sym_compress, "compress smaller size reduce mb छोटा", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),

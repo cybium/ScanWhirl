@@ -731,6 +731,28 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val view = layoutInflater.inflate(R.layout.sheet_more_document, null)
         sheet.setContentView(view)
         val pro = ProGate.isPro(this)
+        fun icon(rowId: Int, res: Int, tint: Int = R.color.cyan_primary) {
+            val row = view.findViewById<android.widget.LinearLayout>(rowId) ?: return
+            if (row.getChildAt(0) is android.widget.ImageView) return
+            val glyph = android.widget.ImageView(this).apply {
+                setImageResource(res)
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    androidx.core.content.ContextCompat.getColor(this@DocumentViewerActivity, tint)
+                )
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            val size = (24 * resources.displayMetrics.density).toInt()
+            val lp = android.widget.LinearLayout.LayoutParams(size, size)
+                .apply { marginEnd = (14 * resources.displayMetrics.density).toInt() }
+            row.addView(glyph, 0, lp)
+        }
+        icon(R.id.rowMoreRename, R.drawable.ic_sym_edit)
+        icon(R.id.rowMoreMove, R.drawable.ic_sym_folder_open)
+        icon(R.id.rowMoreDuplicate, R.drawable.ic_sym_content_copy)
+        icon(R.id.rowMoreCompress, R.drawable.ic_sym_compress)
+        icon(R.id.rowMoreLock, R.drawable.ic_sym_encrypted)
+        icon(R.id.rowMoreVault, R.drawable.ic_sym_shield_lock)
+        icon(R.id.rowMoreDelete, R.drawable.ic_sym_delete, R.color.laser_danger)
 
         // Tools labels that flip with the document's own state.
         view.findViewById<android.widget.TextView>(R.id.labelLock).setText(

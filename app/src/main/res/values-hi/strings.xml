@@ -217,7 +217,7 @@
     <string name="lock_device_title"><!-- review -->Lock a उपकरण PDF</string>
     <string name="lock_source_lock_device"><!-- review -->Lock a उपकरण PDF</string>
     <string name="lock_source_unlock_device"><!-- review -->Unलॉक a लॉक किया गया PDF फ़ाइल</string>
-    <string name="menu_protect_pdf"><!-- review -->Lock PDF</string>
+    <string name="menu_protect_pdf"><!-- review -->PDF सुरक्षित करें</string>
     <string name="merge"><!-- review -->Merge</string>
     <string name="merge_action"><!-- review -->Merge</string>
     <string name="merge_builder_title"><!-- review -->Merge PDFs</string>

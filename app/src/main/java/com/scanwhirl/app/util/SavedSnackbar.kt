@@ -36,6 +36,11 @@ object SavedSnackbar {
     ): Snackbar {
         // M06: two-line outcome + actions need longer than LENGTH_LONG (~2.75 s) to read and act on.
         val snackbar = Snackbar.make(root, "", Snackbar.LENGTH_LONG).setDuration(ACTION_DURATION_MS)
+        // v2 UI: 01_home_A — never cover the dock: anchor the result above it and
+        // let the full file name wrap on two lines.
+        val dock = root.findViewById<View>(R.id.readerDockRoot)
+            ?: (root.findViewById<View>(R.id.btnShare)?.parent as? View)
+        if (dock != null) snackbar.setAnchorView(dock)
         val layout = snackbar.view
         layout.findViewById<View>(com.google.android.material.R.id.snackbar_text)
             ?.visibility = View.GONE

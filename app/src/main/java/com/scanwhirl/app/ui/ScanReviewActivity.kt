@@ -399,6 +399,14 @@ class ScanReviewActivity : BaseActivity() {
             }
             binding.categoryRail.addView(chip)
         }
+        // The last chip must not be cut at the right edge of the rail.
+        val end = (16 * resources.displayMetrics.density).toInt()
+        binding.categoryRail.setPadding(
+            binding.categoryRail.paddingLeft,
+            binding.categoryRail.paddingTop,
+            end,
+            binding.categoryRail.paddingBottom
+        )
         binding.titleInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
