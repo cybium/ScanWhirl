@@ -1,12 +1,15 @@
 # Gate for one lane worktree, serialized across all lanes (this PC has 7.4 GB RAM: one Gradle build at a time).
-# Usage:  powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane L3 [-Tests "com.scanwhirl.app.util.PdfAesTest"] [-NoLint]
+# Usage:  powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane L3 [-Tests "com.scanwhirl.app.util.PdfAesTest"] [-Lint]
 #   -Lane main   = the main checkout (C:\Users\Cybium\Desktop\ScanWhirl)
-#   -Tests       = run only matching tests (red/green loop); lint is skipped automatically
+#   -Tests       = run only matching tests (red/green loop)
+#   -Lint        = also run Android lint (slow, ~10 min; the lead runs it at merge time, lanes need not)
+# The queue is first-come-first-served; it prints your place in line every minute. Waiting is normal: do not cancel.
 # Prints "GATE PASS ..." or "GATE FAIL ..." as the last line. Exit code 0 = pass.
 param(
     [Parameter(Mandatory = $true)][string]$Lane,
     [string]$Tests = "",
-    [switch]$NoLint
+    [switch]$Lint,
+    [switch]$NoLint   # accepted for old prompts; lint is off unless -Lint
 )
 $ErrorActionPreference = "Continue"
 $root = if ($Lane -eq "main") { "C:\Users\Cybium\Desktop\ScanWhirl" } else { "C:\Users\Cybium\Desktop\ScanWhirl-$Lane" }
@@ -16,20 +19,36 @@ $wslRoot = "/mnt/c" + (($root.Substring(2)) -replace '\\', '/')
 # ---- queue ----
 $lockDir = "C:\Users\Cybium\Desktop\.sw-locks"; New-Item -ItemType Directory -Force $lockDir | Out-Null
 $lock = Join-Path $lockDir "build.lock"
-$held = $null; $waited = 0
-while (-not $held) {
-    try {
-        $held = [IO.File]::Open($lock, 'CreateNew', 'Write', 'None')
-        $w = New-Object IO.StreamWriter($held); $w.Write("$Lane $(Get-Date -Format o)"); $w.Flush()
-    } catch {
-        $age = (Get-Date) - (Get-Item $lock -ErrorAction SilentlyContinue).LastWriteTime
-        if ($age.TotalMinutes -gt 120) { Remove-Item $lock -Force -ErrorAction SilentlyContinue; continue }
-        if ($waited % 60 -eq 0) { Write-Output "queue: waiting for build slot (held by: $(Get-Content $lock -ErrorAction SilentlyContinue))" }
-        Start-Sleep -Seconds 10; $waited += 10
-    }
-}
+$holderFile = Join-Path $lockDir "holder.txt"
+$qDir = Join-Path $lockDir "queue"; New-Item -ItemType Directory -Force $qDir | Out-Null
+# FIFO ticket: <ticks>_<lane>_<pid>.t ; tickets of dead processes are discarded.
+$ticket = Join-Path $qDir ("{0:D20}_{1}_{2}.t" -f (Get-Date).Ticks, $Lane, $PID)
+New-Item -ItemType File -Force $ticket | Out-Null
+$held = $null; $waited = 0; $started = Get-Date
 try {
-    Write-Output "queue: got build slot for $Lane"
+while (-not $held) {
+    $live = @(Get-ChildItem $qDir -Filter *.t | Sort-Object Name | Where-Object {
+        $p = [int]($_.BaseName.Split('_')[-1])
+        if (Get-Process -Id $p -ErrorAction SilentlyContinue) { $true } else { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue; $false }
+    })
+    $pos = [Array]::IndexOf(@($live | ForEach-Object { $_.FullName }), $ticket)
+    if ($pos -le 0) {
+        try { $held = [IO.File]::Open($lock, 'CreateNew', 'Write', 'None'); break } catch {
+            # A lock nobody holds open is left over from a killed gate: remove it.
+            try { $probe = [IO.File]::Open($lock, 'Open', 'Read', 'ReadWrite'); $probe.Close(); Remove-Item $lock -Force -ErrorAction SilentlyContinue; continue } catch {}
+        }
+    }
+    if ($waited % 60 -eq 0) {
+        $ahead = if ($pos -gt 0) { ($live[0..($pos - 1)] | ForEach-Object { $_.BaseName.Split('_')[1] }) -join ', ' } else { "-" }
+        Write-Output ("queue: waiting {0} min, place {1} in line; building now: {2}; ahead of you: {3}. Waiting is normal, do not cancel." -f `
+            [int]((Get-Date) - $started).TotalMinutes, ($pos + 1), (Get-Content $holderFile -ErrorAction SilentlyContinue), $ahead)
+    }
+    Start-Sleep -Seconds 10; $waited += 10
+}
+} finally { Remove-Item $ticket -Force -ErrorAction SilentlyContinue }
+Set-Content $holderFile "$Lane since $(Get-Date -Format HH:mm)"
+try {
+    Write-Output "queue: got build slot for $Lane after $([int]((Get-Date) - $started).TotalMinutes) min"
     # A Windows build leaves Windows paths in these folders; the Linux build then fails with an NPE.
     foreach ($d in "mergeDebugResources", "packageDebugResources") {
         Remove-Item -Recurse -Force "$root\app\build\intermediates\incremental\debug\$d" -ErrorAction SilentlyContinue
@@ -55,8 +74,8 @@ try {
     Write-Output "tests: total=$t failures=$f skipped=$s"
     $ok = ($t -gt 0 -and $f -eq 0 -and $s -eq 0)
 
-    $lintMsg = "lint skipped"
-    if ($ok -and -not $Tests -and -not $NoLint) {
+    $lintMsg = "lint skipped (lead runs it at merge)"
+    if ($ok -and -not $Tests -and $Lint) {
         Push-Location $root
         & .\gradlew.bat lintDebug -PtestBuild --no-daemon --rerun-tasks -q 2>&1 | Out-Null
         Pop-Location
@@ -68,5 +87,5 @@ try {
     else { Write-Output "GATE FAIL $Lane tests=$t failures=$f skipped=$s lint=[$lintMsg]"; exit 1 }
 } finally {
     if ($held) { $held.Close() }
-    Remove-Item $lock -Force -ErrorAction SilentlyContinue
+    Remove-Item $lock, $holderFile -Force -ErrorAction SilentlyContinue
 }
