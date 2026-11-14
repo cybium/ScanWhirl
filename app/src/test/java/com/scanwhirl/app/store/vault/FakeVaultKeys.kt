@@ -21,23 +21,27 @@ class FakeVaultKeys(var available: Boolean = true) : VaultKeys {
 
     override fun hasKey(): Boolean = !invalidated && wrapped.isNotEmpty()
 
-    override fun wrap(vaultKey: ByteArray): ByteArray {
+    override fun wrapChallenge(vaultKey: ByteArray): VaultKeyChallenge {
         check(available) { "keystore unavailable" }
-        invalidated = false
         val token = "fake-keystore-${UUID.randomUUID()}"
-        wrapped[token] = vaultKey.copyOf()
-        return token.toByteArray(Charsets.UTF_8)
+        val cipher = fakeCipher()
+        return VaultKeyChallenge(cipher) {
+            invalidated = false
+            wrapped[token] = vaultKey.copyOf()
+            token.toByteArray(Charsets.UTF_8)
+        }
     }
 
     override fun challenge(blob: ByteArray): VaultKeyChallenge {
         if (invalidated) throw VaultKeyInvalidatedException("fake: key invalidated")
         val token = String(blob, Charsets.UTF_8)
         val key = wrapped[token] ?: throw VaultAuthException("fake: no such key")
-        // A real Cipher instance, like the Keystore hands to BiometricPrompt.
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(Cipher.ENCRYPT_MODE, SecretKeySpec(ByteArray(32), "AES"))
-        }
-        return VaultKeyChallenge(cipher) { key.copyOf() }
+        return VaultKeyChallenge(fakeCipher()) { key.copyOf() }
+    }
+
+    /** A real Cipher instance, like the Keystore hands to BiometricPrompt. */
+    private fun fakeCipher(): Cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
+        init(Cipher.ENCRYPT_MODE, SecretKeySpec(ByteArray(32), "AES"))
     }
 
     override fun delete() {

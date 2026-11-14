@@ -81,7 +81,7 @@ class VaultStore(
         val pdfFile: File
     )
 
-    data class UnlockResult(val ok: Boolean, val pauseMillis: Long = 0)
+    data class UnlockResult(val ok: Boolean, val pauseMillis: Long = 0, val triesLeft: Int = 0)
 
     private data class FileRecord(val rel: String, val stored: String, val size: Long, val sha: String)
 
@@ -147,7 +147,6 @@ class VaultStore(
         val recoveryBlob = VaultKeyWrap.seal(key, recoveryCode, VaultCrypto.newSalt(), iterations)
 
         Durable.atomicWrite(File(vaultDir, PASSCODE_FILE), passBlob)
-        writeKeystoreWrap(key)
         // Written last: its presence is the "set up" marker.
         Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
         Durable.syncDir(vaultDir)
@@ -157,7 +156,7 @@ class VaultStore(
 
     fun unlockWithPasscode(passcode: String): UnlockResult = synchronized(LOCK) {
         val paused = gate.pauseMillis()
-        if (paused > 0) return UnlockResult(false, paused)
+        if (paused > 0) return UnlockResult(false, paused, gate.triesLeft())
         if (!isSetUp()) return UnlockResult(false)
 
         val key = try {
@@ -166,12 +165,11 @@ class VaultStore(
             null
         }
         if (key == null) {
-            return UnlockResult(false, gate.onWrong())
+            return UnlockResult(false, gate.onWrong(), gate.triesLeft())
         }
         gate.onSuccess()
         VaultSession.open(key)
-        repairKeystoreWrap(key)
-        UnlockResult(true)
+        UnlockResult(true, triesLeft = gate.triesLeft())
     }
 
     /** Recovery-code unlock (also after restoring a backup on a new phone). */
@@ -187,7 +185,6 @@ class VaultStore(
         } ?: return false
         gate.onSuccess()
         VaultSession.open(key)
-        repairKeystoreWrap(key)
         true
     }
 
@@ -474,10 +471,10 @@ class VaultStore(
                     if (extra.name == VaultPasswords.FILE_NAME && to.exists()) to.delete()
                     if (!extra.renameTo(to)) throw IOException("Could not restore the Vault settings")
                 }
-                // Portable state: the key wrapped by the code, then a new Keystore wrap.
+                // Portable state: the key wrapped by the code. The fingerprint wrap is created
+                // separately (it needs a prompt), by beginKeystoreWrap/completionKeystoreWrap.
                 Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), contents.recoveryBlob)
                 File(vaultDir, PASSCODE_FILE).delete()
-                writeKeystoreWrap(key)
             } catch (e: Exception) {
                 moved.forEach { it.deleteRecursively() }
                 throw e
@@ -553,25 +550,32 @@ class VaultStore(
         }
     }
 
-    private fun writeKeystoreWrap(key: ByteArray) {
-        if (!keys.isAvailable()) return
-        try {
-            Durable.atomicWrite(File(vaultDir, KEYSTORE_FILE), keys.wrap(key))
-        } catch (_: Exception) {
-            // The passcode and recovery code still open the Vault.
+    /**
+     * Prepares the fingerprint key wrap: an encrypt cipher the prompt must authorize. Called at
+     * setup, after an unlock that found no usable key, and after a restore. A per-use auth-bound
+     * Keystore key cannot encrypt without a fresh authentication, so the wrap is always created
+     * through the prompt ([completeKeystoreWrap]) and never silently.
+     */
+    fun beginKeystoreWrap(): VaultKeyChallenge = synchronized(LOCK) {
+        keys.wrapChallenge(requireKey())
+    }
+
+    /** Stores the wrap after the prompt authorized [challenge]; false when it could not be written. */
+    fun completeKeystoreWrap(challenge: VaultKeyChallenge): Boolean = synchronized(LOCK) {
+        val blob = try {
+            challenge.complete()
+        } catch (e: Exception) {
+            return false
+        }
+        if (blob.isEmpty()) return false
+        return try {
+            vaultDir.mkdirs()
+            Durable.atomicWrite(File(vaultDir, KEYSTORE_FILE), blob)
+            true
+        } catch (e: Exception) {
+            false
         }
     }
-
-    /**
-     * After a passcode/recovery unlock, rebuild the fingerprint wrap when it is missing or its
-     * Keystore key was invalidated (a new fingerprint/face was enrolled). The user just proved
-     * who they are, so this is the right moment to create the fresh auth-bound key.
-     */
-    private fun repairKeystoreWrap(key: ByteArray) {
-        if (File(vaultDir, KEYSTORE_FILE).isFile && keys.hasKey()) return
-        writeKeystoreWrap(key)
-    }
-
     private fun entryDirs(): List<File> =
         vaultDir.listFiles()
             ?.filter { it.isDirectory && !it.name.startsWith(".") && File(it, MANIFEST_FILE).isFile }

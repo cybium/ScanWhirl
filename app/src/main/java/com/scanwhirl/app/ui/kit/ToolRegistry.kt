@@ -117,7 +117,18 @@ object ToolRegistry {
         ready("photos_pdf", ToolGroup.CREATE, R.string.tool_photos_pdf, R.drawable.ic_sym_photo_library, "photos gallery images jpg png"),
         ready("import_pdf", ToolGroup.CREATE, R.string.tool_import_pdf, R.drawable.ic_sym_upload_file, "import pdf file open"),
         ready("passport", ToolGroup.CREATE, R.string.tool_passport, R.drawable.ic_sym_travel_explore, "passport crop preset size", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        soon("qr_code", ToolGroup.CREATE, R.string.tool_qr_code, R.drawable.ic_sym_qr_code_scanner, "qr code reader scan", pro = true, note = R.string.soon_qr_code),
+        SwTool(
+            "qr_code", ToolGroup.CREATE, R.string.tool_qr_code, R.drawable.ic_sym_qr_code_scanner,
+            true, ToolStatus.READY, "qr code reader scan link wifi contact phone email text",
+            launch = { host, tool ->
+                val activity = host as? android.app.Activity
+                if (activity != null) {
+                    com.scanwhirl.app.ui.qr.QrToolLauncher.open(activity)
+                } else {
+                    host.open(tool)
+                }
+            }
+        ),
         soon("business_card", ToolGroup.CREATE, R.string.tool_business_card, R.drawable.ic_sym_contacts, "business card contact email phone", pro = true, note = R.string.soon_business_card),
 
         // Organize (8)
