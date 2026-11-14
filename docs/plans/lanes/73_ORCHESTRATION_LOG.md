@@ -42,3 +42,8 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 - Release test29 from integration once L1+L4 Phase B are merged and device-checked.
 - Wave 2 candidates: Organize draft (PM-2.2b/c, 2.3b), Insert pages, QR (needs ML Kit barcode: library approval),
   Folders & tags, Batch rename, To Excel, PDF/A, Hindi OCR, Translate, PM-1.5 manifest.
+
+## Status 2026-11-14 ~21:00
+- integration has L1 (icons, brand, layout, Pro gating, Text screen), L2 (BiometricPrompt, backup v2), L3 (Remember in Vault, Book pages), L4 (PowerPoint, Word pictures, ID card flow), L5 wave 1. 1080 tests, lint 0 errors.
+- Running: L1 Folders & tags + Batch rename; L2 QR code + vault copy; L3 Book pages real-photo tuning + Keep as one page; L4 Business card + tools copy; L5 Organize draft (PM-2.2b/c, 2.3b, CamScanner-style grid); QA coverage run.
+- Next lead step: APK of integration -> phone -> QA continues coverage on the new build -> lead reviews every screenshot (SCREEN_MAP verdicts).
