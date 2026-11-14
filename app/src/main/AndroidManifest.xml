@@ -71,6 +71,12 @@
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
 
+        <!-- L3: Book pages — split a photographed two-page spread (Create group). -->
+        <activity
+            android:name=".ui.book.BookPagesActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity" />
+
         <activity
             android:name=".ui.PageViewerActivity"
             android:exported="false"
