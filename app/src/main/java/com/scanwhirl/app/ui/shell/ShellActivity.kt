@@ -25,6 +25,7 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.HomeHost
+import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
@@ -42,6 +43,7 @@ import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.launchTool
+import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -552,10 +554,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private fun importPdf(uri: android.net.Uri) {
         var job: kotlinx.coroutines.Job? = null
+        var name: String? = null
         val progress = SwDialog.progress(this, titleRes = R.string.import_pdf_progress) { job?.cancel() }
         job = lifecycleScope.launch {
             try {
-                val name = withContext(Dispatchers.IO) {
+                name = withContext(Dispatchers.IO) {
                     runCatching { repo.displayNameOf(uri) }.getOrNull()
                 }?.removeSuffix(".pdf")?.removeSuffix(".PDF")
                     ?.takeIf { it.isNotBlank() } ?: "Imported PDF"
@@ -574,12 +577,18 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 throw e
             } catch (e: Exception) {
                 progress.dismiss()
-                SwSheet.builder(this@ShellActivity)
-                    .setTitle(getString(R.string.import_title))
-                    .setMessage(e.message ?: getString(R.string.import_failed_save))
-                    .setPrimary(R.string.sheet_got_it)
-                    .build()
-                    .show()
+                if (e is PdfImport.ImportException && e.reason == PdfImport.Reason.PASSWORD) {
+                    // Not a dead end: ask for the password, then import the decrypted pages.
+                    LockFlow(this@ShellActivity, repo, this@ShellActivity, { emptyList() }, { _ -> })
+                        .importProtectedPdf(uri, name)
+                } else {
+                    SwSheet.builder(this@ShellActivity)
+                        .setTitle(getString(R.string.import_title))
+                        .setMessage(e.message ?: getString(R.string.import_failed_save))
+                        .setPrimary(R.string.sheet_got_it)
+                        .build()
+                        .show()
+                }
             }
         }
     }

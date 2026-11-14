@@ -10,10 +10,15 @@
     <string name="book_splitting">Splitting the spreads…</string>
     <string name="book_spread">Spread %1$d</string>
     <string name="book_gutter_found">Gutter found. Drag the line to adjust.</string>
-    <string name="book_gutter_middle">Using the middle. Drag the line to adjust.</string>
-    <string name="book_gutter_moved">Gutter set by hand</string>
-    <string name="book_doc_name">Book pages %1$s</string>
-    <string name="book_created">%1$d pages created</string>
+    <string name="book_gutter_middle">Using the middle. Check the line.</string>
+    <string name="book_gutter_moved">Gutter set by hand.</string>
+    <string name="book_one_page_note">Looks like one page. Keep it whole or drag to split.</string>
+    <string name="book_keep_one_page">Keep as one page</string>
+    <string name="book_doc_name">Book %1$s</string>
+    <plurals name="book_created">
+        <item quantity="one">%1$d page created</item>
+        <item quantity="other">%1$d pages created</item>
+    </plurals>
     <string name="book_failed">Could not split the photos: %1$s</string>
     <string name="book_no_images">No photos chosen yet.</string>
     <string name="book_read_failed">Could not read one of those photos.</string>

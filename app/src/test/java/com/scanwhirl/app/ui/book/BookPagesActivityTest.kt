@@ -21,6 +21,7 @@ import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -122,6 +123,93 @@ class BookPagesActivityTest {
             assertEquals("two pages per picked spread", 4, doc.pageCount)
             assertEquals(4, doc.pageFiles.count { it.length() > 0 })
             assertTrue("the new document has a PDF", doc.pdfFile.length() > 0)
+        }
+    }
+
+    /** A close-up of one page on a dark table: one text block, no fold. */
+    private fun jpegSinglePage(): ByteArray {
+        val bitmap = Bitmap.createBitmap(800, 600, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.rgb(45, 42, 40))
+        val canvas = Canvas(bitmap)
+        canvas.drawRect(60f, 40f, 760f, 560f, Paint().apply { color = Color.rgb(242, 238, 228) })
+        val ink = Paint().apply { color = Color.rgb(40, 38, 36); strokeWidth = 2f }
+        var y = 90f
+        while (y < 540f) {
+            canvas.drawLine(120f, y, 700f, y, ink)
+            y += 12f
+        }
+        val out = ByteArrayOutputStream()
+        assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out))
+        bitmap.recycle()
+        return out.toByteArray()
+    }
+
+    @Test
+    fun `a one-page photo is kept whole by default`() {
+        val uri = register(jpegSinglePage(), "single")
+        ActivityScenario.launch(BookPagesActivity::class.java).use { scenario ->
+            scenario.onActivity { it.loadImages(listOf(uri)) }
+            assertTrue("the preview decodes", pollUntil {
+                var count = 0
+                scenario.onActivity { count = it.previews.size }
+                count == 1
+            })
+
+            scenario.onActivity { activity ->
+                val toggle = activity.onePageSwitch(0)
+                assertNotNull("Keep as one page is offered", toggle)
+                assertTrue("and it is the default for this photo", toggle!!.isChecked)
+                assertTrue("the card will make one page", activity.keepsAsOnePage(0))
+                assertFalse("the split line is hidden", activity.previews[0].lineVisible)
+                activity.createButton().performClick()
+            }
+
+            assertTrue("one page is created", pollUntil {
+                repo.listDocuments().any { it.pageCount == 1 && it.pdfFile.length() > 0 }
+            })
+            assertEquals(1, repo.listDocuments().first().pageCount)
+        }
+    }
+
+    @Test
+    fun `turning Keep as one page off splits the photo again`() {
+        val uri = register(jpegSinglePage(), "single-again")
+        ActivityScenario.launch(BookPagesActivity::class.java).use { scenario ->
+            scenario.onActivity { it.loadImages(listOf(uri)) }
+            assertTrue(pollUntil {
+                var count = 0
+                scenario.onActivity { count = it.previews.size }
+                count == 1
+            })
+
+            scenario.onActivity { activity ->
+                val toggle = activity.onePageSwitch(0)!!
+                toggle.isChecked = false
+                assertFalse(activity.keepsAsOnePage(0))
+                assertTrue("the line comes back", activity.previews[0].lineVisible)
+                activity.createButton().performClick()
+            }
+
+            assertTrue("the split makes two pages", pollUntil {
+                repo.listDocuments().any { it.pageCount == 2 && it.pdfFile.length() > 0 }
+            })
+        }
+    }
+
+    @Test
+    fun `new documents are named Book plus the date and numbered when repeated`() {
+        val fixed = java.util.GregorianCalendar(2026, java.util.Calendar.NOVEMBER, 14).time
+        ActivityScenario.launch(BookPagesActivity::class.java).use { scenario ->
+            var first = ""
+            scenario.onActivity { first = it.nextBookName(fixed) }
+            assertEquals("Book 14 Nov", first)
+
+            kotlinx.coroutines.runBlocking {
+                repo.createDocument("Book 14 Nov", listOf(jpegSinglePage()))
+            }
+            var second = ""
+            scenario.onActivity { second = it.nextBookName(fixed) }
+            assertEquals("Book 14 Nov (2)", second)
         }
     }
 

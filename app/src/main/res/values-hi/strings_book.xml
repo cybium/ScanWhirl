@@ -10,10 +10,15 @@
     <string name="book_splitting"><!-- review -->फैलाव अलग किए जा रहे हैं…</string>
     <string name="book_spread"><!-- review -->फैलाव %1$d</string>
     <string name="book_gutter_found"><!-- review -->मोड़ मिल गया। समायोजित करने के लिए रेखा खींचें।</string>
-    <string name="book_gutter_middle"><!-- review -->बीच का उपयोग हो रहा है। समायोजित करने के लिए रेखा खींचें।</string>
-    <string name="book_gutter_moved"><!-- review -->रेखा हाथ से सेट की गई</string>
-    <string name="book_doc_name"><!-- review -->पुस्तक पृष्ठ %1$s</string>
-    <string name="book_created"><!-- review -->%1$d पृष्ठ बनाए गए</string>
+    <string name="book_gutter_middle"><!-- review -->बीच का उपयोग हो रहा है। रेखा जाँचें।</string>
+    <string name="book_gutter_moved"><!-- review -->रेखा हाथ से सेट की गई।</string>
+    <string name="book_one_page_note"><!-- review -->एक पृष्ठ लगता है। इसे पूरा रखें या बाँटने के लिए रेखा खींचें।</string>
+    <string name="book_keep_one_page"><!-- review -->एक पृष्ठ रखें</string>
+    <string name="book_doc_name"><!-- review -->पुस्तक %1$s</string>
+    <plurals name="book_created">
+        <item quantity="one"><!-- review -->%1$d पृष्ठ बनाया गया</item>
+        <item quantity="other"><!-- review -->%1$d पृष्ठ बनाए गए</item>
+    </plurals>
     <string name="book_failed"><!-- review -->फ़ोटो अलग नहीं कर सके: %1$s</string>
     <string name="book_no_images"><!-- review -->अभी कोई फ़ोटो नहीं चुनी गई।</string>
     <string name="book_read_failed"><!-- review -->उनमें से एक फ़ोटो पढ़ी नहीं जा सकी।</string>

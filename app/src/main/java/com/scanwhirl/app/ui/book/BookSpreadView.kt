@@ -35,6 +35,13 @@ class BookSpreadView(context: Context) : View(context) {
     var autoGutter: Boolean = true
         private set
 
+    /** False when the owner chose "Keep as one page": the line and handle disappear. */
+    var lineVisible: Boolean = true
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     /** Called while the owner drags the line. */
     var onGutterMoved: (() -> Unit)? = null
 
@@ -98,6 +105,7 @@ class BookSpreadView(context: Context) : View(context) {
         val top = (height - drawnHeight) / 2f
         dst.set(left, top, left + drawnWidth, top + drawnHeight)
         canvas.drawBitmap(source, null, dst, bitmapPaint)
+        if (!lineVisible) return
 
         // The crop lines: a crisp vertical line plus a knob at its middle.
         val x = left + ratio * drawnWidth
@@ -112,7 +120,7 @@ class BookSpreadView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (bitmap == null || dst.width() <= 0f) return false
+        if (!lineVisible || bitmap == null || dst.width() <= 0f) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val lineX = dst.left + ratio * dst.width()
