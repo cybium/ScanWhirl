@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="sw.css">
+<style>
+.top{display:flex;align-items:center;gap:6px;padding:6px 8px}
+.lang{font-size:12px;font-weight:800;padding:6px 10px;border-radius:999px;background:var(--glass2);border:1px solid var(--hair);color:var(--cyan)}
+.img{margin:6px 18px 0;height:280px;border-radius:14px;background:#f2f3f0;position:relative;overflow:hidden;color:#33383c;padding:18px 20px;font-size:10.5px;line-height:1.9}
+.img .hl{background:rgba(0,240,255,.22);outline:1.5px solid rgba(0,170,190,.65);border-radius:3px;padding:0 2px}
+.img .sel{background:rgba(0,240,255,.45);outline:2px solid #00a9b5}
+.seg{margin:14px 18px 0;height:42px;border-radius:14px;background:var(--glass);border:1px solid var(--hair);display:grid;grid-template-columns:1fr 1fr;padding:4px}
+.seg div{display:grid;place-items:center;font-weight:800;font-size:14px;color:var(--dim);border-radius:10px}.seg .on{background:var(--cyan-soft);color:var(--cyan)}
+.txt{margin:12px 18px 0;padding:16px;font-size:14.5px;line-height:1.6;color:var(--hi);font-weight:500;height:230px}
+.txt mark{background:rgba(0,240,255,.25);color:var(--hi);border-radius:3px}
+.acts{display:flex;gap:8px;padding:12px 18px 0;flex-wrap:wrap}
+.acts > span{height:38px;padding:0 13px;border-radius:12px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;background:var(--glass2);border:1px solid var(--hair)}
+.acts > span > .ms{font-size:18px;color:var(--cyan)}
+.foot{position:absolute;bottom:22px;left:18px;right:18px;font-size:12px;color:var(--dim);font-weight:600;display:flex;gap:6px;align-items:center}
+</style></head><body>
+<div class="screen">
+  <div class="status"><span>9:41</span><span class="r"><span class="ms">signal_cellular_alt</span><span class="ms">battery_5_bar</span></span></div>
+  <div class="top"><span class="iconbtn"><span class="ms">arrow_back</span></span>
+    <div style="flex:1"><div style="font-size:18px;font-weight:800">Text</div><div style="font-size:12px;color:var(--dim);font-weight:700">Invoice 0231 · page 1 of 3</div></div>
+    <span class="lang">English + हिंदी</span><span class="iconbtn"><span class="ms">edit</span></span></div>
+  <div class="img">
+    <b style="font-size:14px">TAX INVOICE</b><br>
+    <span class="hl">Invoice No. 0231</span> &nbsp; <span class="hl">Date: 12/11/2026</span><br>
+    <span class="hl">Sharma Electricals, MG Road, Pune</span><br>
+    <span class="hl">LED panel 18W × 4 ........ ₹2,240</span><br>
+    <span class="hl">Wiring &amp; fitting ............... ₹1,600</span><br>
+    <span class="hl">GST 18% ............................ ₹720</span><br>
+    <span class="hl sel">Total payable ₹4,560</span><br>
+    <span class="hl">धन्यवाद — Thank you</span>
+  </div>
+  <div class="seg"><div>Page</div><div class="on">Text</div></div>
+  <div class="txt card">TAX INVOICE<br>Invoice No. 0231 · Date: 12/11/2026<br>Sharma Electricals, MG Road, Pune<br>LED panel 18W × 4 — ₹2,240<br>Wiring &amp; fitting — ₹1,600<br>GST 18% — ₹720<br><mark>Total payable ₹4,560</mark><br>धन्यवाद — Thank you</div>
+  <div class="acts"><span><span class="ms">content_copy</span>Copy all</span><span><span class="ms">share</span>Share text</span><span><span class="ms">notes</span>Save .txt</span><span><span class="ms">description</span>To Word<b class="pill pro" style="margin-left:4px">PRO</b></span></div>
+  <div class="foot"><span class="ms f" style="font-size:16px;color:var(--ok)">check_circle</span>Read on this phone · searchable in ScanWhirl and in the PDF</div>
+</div></body></html>

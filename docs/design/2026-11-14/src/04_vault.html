@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="sw.css">
+<style>
+.screen{background:radial-gradient(520px 360px at 50% -40px,rgba(0,240,255,.10),transparent 70%),#0B1214}
+.emb{position:relative;height:104px;display:grid;place-items:center;margin-top:4px}
+.emb .shield{width:60px;height:60px;border-radius:24px;display:grid;place-items:center;background:linear-gradient(160deg,rgba(0,240,255,.25),rgba(0,240,255,.04));border:1px solid var(--hair2)}
+.emb .shield .ms{font-size:40px;color:var(--cyan)}
+.stat{margin:0 18px;padding:16px;display:flex;gap:14px;align-items:center}
+.stat .big{font-size:22px;font-weight:800}.stat .s{font-size:12.5px;color:var(--mid);font-weight:600;margin-top:3px}
+.banner{margin:12px 18px 0;padding:10px 14px;border-radius:14px;background:rgba(56,239,125,.07);border:1px solid rgba(56,239,125,.22);font-size:13px;font-weight:700;color:var(--ok);display:flex;gap:8px;align-items:center}
+.fab{position:absolute;right:18px;bottom:118px;z-index:3;height:52px;padding:0 20px;border-radius:18px;background:var(--cyan);color:#03272b;font-weight:800;display:flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(0,240,255,.3)}
+</style></head><body>
+<div class="screen">
+  <div class="status"><span>9:41</span><span class="r"><span class="ms">signal_cellular_alt</span><span class="ms">battery_5_bar</span></span></div>
+  <div class="appbar"><div class="brand" style="font-size:24px">Vault</div><div class="spacer"></div>
+    <span class="iconbtn"><span class="ms">lock</span></span><span class="iconbtn"><span class="ms">more_vert</span></span></div>
+  <div class="emb">
+    <div class="orbit" style="width:130px;height:130px;left:50%;top:50%;transform:translate(-50%,-50%)"></div>
+    <div class="orbit" style="width:190px;height:190px;left:50%;top:50%;transform:translate(-50%,-50%)"></div>
+    <div class="orbit" style="width:260px;height:260px;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.6"></div>
+    <div class="shield"><span class="ms f">shield_lock</span></div>
+  </div>
+  <div class="stat card">
+    <div style="flex:1"><div class="big">12 files protected</div>
+      <div class="s">AES-256 · key sealed in this phone’s secure chip<br>Locks itself when you leave the app</div></div>
+  </div>
+  <div class="row" style="margin:10px 18px 0;gap:10px">
+    <div class="btn o" style="flex:1;height:46px;font-size:14px"><span class="ms" style="color:var(--cyan)">key</span>Recovery code</div>
+    <div class="btn o" style="flex:1;height:46px;font-size:14px"><span class="ms" style="color:var(--cyan)">archive</span>Backup file</div>
+  </div>
+  <div class="banner"><span class="ms f" style="font-size:18px">fingerprint</span>Unlocked with fingerprint · relocks in 2 min</div>
+  <div class="h2">Private files <a>+ Add files</a></div>
+  <div class="doc card"><div class="thumb id"><span class="n">2</span></div><div class="t"><div class="name">Aadhaar card</div><div class="meta">2 pages · front &amp; back · 3 Nov</div></div><span class="iconbtn"><span class="ms">more_vert</span></span></div>
+  <div class="doc card"><div class="thumb"><span class="n">5</span></div><div class="t"><div class="name">Bank statement Sept</div><div class="meta">5 pages · 1.8 MB · 2 Oct</div></div><span class="iconbtn"><span class="ms">more_vert</span></span></div>
+  <div class="doc card"><div class="thumb"><span class="n">3</span></div><div class="t"><div class="name">Medical report</div><div class="meta">3 pages · 920 KB · 18 Sep</div></div><span class="iconbtn"><span class="ms">more_vert</span></span></div><div style="height:70px"></div>
+  
+  <div class="nav"></div>
+  <div class="navbar">
+    <div class="it"><span class="ms">folder_open</span>Library</div><div class="it"><span class="ms">apps</span>Tools</div><div></div>
+    <div class="it on"><span class="ms f">shield_lock</span>Vault</div><div class="it"><span class="ms">person</span>Me</div></div>
+  <div class="disc"><span class="ms">document_scanner</span></div>
+</div></body></html>

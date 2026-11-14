@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="sw.css">
+<style>
+.hero{margin:12px 18px 0;height:210px;border-radius:var(--r-l);position:relative;overflow:hidden;
+  background:radial-gradient(240px 200px at 50% 45%,rgba(0,240,255,.16),transparent 70%),linear-gradient(180deg,var(--glass2),var(--glass));border:1px solid var(--hair)}
+.hero .ring{position:absolute;left:50%;top:84px;transform:translate(-50%,-50%);border-radius:50%;border:1px solid rgba(0,240,255,.16)}
+.hero .big{position:absolute;left:50%;top:84px;transform:translate(-50%,-50%);width:96px;height:96px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#7ff8ff,var(--cyan) 45%,#00a9b5);display:grid;place-items:center;box-shadow:0 10px 34px rgba(0,240,255,.35)}
+.hero .big .ms{font-size:42px;color:#04262a}
+.hero .lbl{position:absolute;top:142px;width:100%;text-align:center;font-weight:800;font-size:15px}
+.hero .pills{position:absolute;bottom:14px;width:100%;display:flex;justify-content:center;gap:10px}
+.hero .pills span{height:34px;padding:0 14px;border-radius:999px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;background:var(--void2);border:1px solid var(--hair)}
+.hero .pills .ms{font-size:18px;color:var(--cyan)}
+.g8{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 18px}
+.g8 .tile{background:var(--glass);border:1px solid var(--hair);height:76px}
+.docs2{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 18px}
+.d2{border-radius:16px;background:var(--glass);border:1px solid var(--hair);padding:10px}
+.d2 .thumb{width:100%;height:90px}
+.d2 .nm{font-size:13.5px;font-weight:700;margin-top:8px}.d2 .mt{font-size:11.5px;color:var(--dim);font-weight:600}
+.navbar.four{grid-template-columns:repeat(4,1fr)}
+</style></head><body>
+<div class="screen">
+  <div class="status"><span>9:41</span><span class="r"><span class="ms">signal_cellular_alt</span><span class="ms">battery_5_bar</span></span></div>
+  <div class="appbar"><div class="logo"></div><div class="brand">ScanWhirl</div><div class="spacer"></div>
+    <span class="iconbtn"><span class="ms">delete</span></span><span class="iconbtn"><span class="ms">tune</span></span></div>
+  <div class="hero">
+    <div class="ring" style="width:150px;height:150px"></div><div class="ring" style="width:210px;height:210px"></div><div class="ring" style="width:280px;height:280px"></div>
+    <div class="big"><span class="ms">document_scanner</span></div>
+    <div class="lbl">Scan document</div>
+    <div class="pills"><span><span class="ms">photo_library</span>From photos</span><span><span class="ms">upload_file</span>Import PDF</span></div>
+  </div>
+  <div class="search" style="margin-top:12px"><span class="ms">search</span>Search any word in your documents</div>
+  <div class="h2">Tools <a>All 40 ›</a></div>
+  <div class="g8">
+    <div class="tile"><span class="ms">call_merge</span>Merge</div><div class="tile"><span class="ms">call_split</span>Split</div>
+    <div class="tile"><span class="ms">compress</span>Compress</div><div class="tile"><span class="ms">signature</span>Sign<b class="pill pro">PRO</b></div>
+    <div class="tile"><span class="ms">encrypted</span>Protect</div><div class="tile"><span class="ms">description</span>To Word<b class="pill pro">PRO</b></div>
+    <div class="tile"><span class="ms">image</span>To images</div><div class="tile"><span class="ms">apps</span>All tools</div>
+  </div>
+  <div class="h2">Documents <span class="sub">Newest ▾</span></div>
+  <div class="docs2">
+    <div class="d2"><div class="thumb id"></div><div class="nm">Passport copy</div><div class="mt">2 p · Today</div></div>
+    <div class="d2"><div class="thumb"></div><div class="nm">Invoice 0231</div><div class="mt">1 p · Yesterday</div></div>
+  </div>
+  <div class="nav"></div>
+  <div class="navbar four">
+    <div class="it on"><span class="ms f">home</span>Home</div><div class="it"><span class="ms">folder_open</span>Library</div>
+    <div class="it"><span class="ms">shield_lock</span>Vault</div><div class="it"><span class="ms">person</span>Me</div></div>
+</div></body></html>
