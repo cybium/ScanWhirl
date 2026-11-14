@@ -4,12 +4,15 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,10 +26,14 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityDocumentViewerBinding
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.store.DraftStore
+import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.OcrFlow
+import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
@@ -61,6 +68,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private var document: ScanDocument? = null
     private var docId: String? = null
 
+    /** The draft's page list (a replacement file where an edit wrote one, else the base page). */
+    private var pages: List<java.io.File> = emptyList()
+
+    /** The open page draft, or null. The first page edit creates it; opening writes nothing. */
+    private var draft: DraftStore.Draft? = null
+
     /** Pages shown in the grid (document pages minus any pending Undo deletes). */
     private var visiblePages: List<java.io.File> = emptyList()
 
@@ -77,24 +90,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** Pages whose delete has been triggered but not landed yet (no flash-back). */
     private val committingDeletes = mutableSetOf<String>()
 
-    /** True once this editing session changed anything (drives the Back prompt). */
-    private var dirty = false
-
-    /** Pre-edit copy of the document directory, for "Save as new". */
-    private var snapshotDir: File? = null
-
-    /** File signature at open; a diff on resume means the page view edited files. */
-    private var startSignature: String = ""
-
     /** True once onCreate has finished its async first load. */
     private var firstLoad = false
 
     /** Not lifecycle-bound: a pending delete must land even during onDestroy. */
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-    /** Background snapshot of the pre-edit document (keeps opening large docs fast). */
-    private val snapshotScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var snapshotJob: Job? = null
 
     private var pendingDownload: (() -> Unit)? = null
     private val permissionLauncher =
@@ -154,6 +154,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.btnCtxRotate.setOnClickListener { rotateSelected(clockwise = true) }
         binding.btnCtxExtract.setOnClickListener { extractSelected() }
         binding.btnCtxDelete.setOnClickListener { deleteSelectedPages() }
+        // PM-2.2c: the draft bar appears after the first edit; every action is explicit.
+        styleDraftBar()
+        binding.btnDraftDiscard.setOnClickListener { discardFlow() }
+        binding.btnDraftReplace.setOnClickListener { replaceFlow() }
+        binding.btnDraftSave.setOnClickListener { saveDraftFlow() }
         // Title tappable → Rename (replaces the deleted toolbar rename icon).
         binding.toolbar.setOnClickListener { promptRename() }
         // The ONLY toolbar action: one always-shown download icon, no overflow (⋮).
@@ -169,20 +174,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // Checkboxes stay hidden until Select pages is tapped (§4.5, D-D).
         binding.pageList.checkboxesVisible = false
 
-        // First load (off the main thread), then start the pre-edit snapshot.
+        // First load (off the main thread). Opening a document writes no draft (G14).
         lifecycleScope.launch {
             if (!reloadDocument()) return@launch
-            startSignature = signature()
             firstLoad = true
-            // Editing happens in place; keep a pre-edit copy so Back can offer
-            // "Save as new" (original restored) as well as "Overwrite".
-            docId?.let { id ->
-                if (snapshotDir == null) {
-                    snapshotJob = snapshotScope.launch {
-                        snapshotDir = takeSnapshot(id)
-                    }
-                }
-            }
         }
     }
 
@@ -203,10 +198,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // Leaving the screen makes any pending delete permanent (rule: Undo
         // only lives as long as this screen).
         if (!isChangingConfigurations) {
-            snapshotJob?.cancel()
             commitPendingDelete()
-            snapshotDir?.deleteRecursively()
-            snapshotDir = null
         }
         super.onDestroy()
     }
@@ -216,14 +208,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // AppCompat re-syncs the toolbar title from the manifest label during resume;
         // re-apply the document name so it wins.
         document?.let { binding.toolbar.title = it.name }
-        // Returning from the full-screen page view: rotate/filter/delete may
-        // have changed the document.
+        // Returning from the full-screen page view: a draft edit may have been committed.
         if (document != null && firstLoad) {
-            lifecycleScope.launch {
-                if (reloadDocument() && startSignature.isNotEmpty() && signature() != startSignature) {
-                    dirty = true
-                }
-            }
+            lifecycleScope.launch { reloadDocument() }
         }
     }
 
@@ -242,6 +229,22 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             return false
         }
         document = doc
+        val state = withContext(Dispatchers.IO) {
+            runCatching { repo.draftPages(id) to repo.draftOf(id) }
+        }
+        val failure = state.exceptionOrNull()
+        if (failure is DraftStore.DraftDamaged) {
+            // Never invent pages from a damaged manifest: show the base and offer Discard only.
+            pages = doc.pageFiles
+            draft = null
+            showDraftUnusable(failure.message ?: getString(R.string.draft_damaged))
+        } else if (failure != null) {
+            throw failure
+        } else {
+            val (draftPages, openDraft) = state.getOrThrow()
+            pages = draftPages
+            draft = openDraft
+        }
         binding.toolbar.title = doc.name
         binding.docLockBadge.isVisible = doc.isLocked
         binding.docVaultBadge.isVisible = doc.isVaulted
@@ -254,14 +257,14 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         )
         binding.docCategoryChip.isVisible = true
         refreshGrid()
+        updateDraftBar()
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
         return true
     }
 
     /** Pushes the visible page list (minus pending deletes) to the grid. */
     private fun refreshGrid() {
-        val doc = document ?: return
-        visiblePages = doc.pageFiles.filter {
+        visiblePages = pages.filter {
             it.path !in pendingDeletes && it.path !in committingDeletes
         }
         // Pages that vanished (deleted/screen closed) must not stay checked.
@@ -280,10 +283,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             )
     }
 
-    /** Maps a grid (visible) index to the document's on-disk index, or -1. */
+    /** Maps a grid (visible) index to the draft page index, or -1. */
     private fun diskIndex(visibleIndex: Int): Int {
         val file = visiblePages.getOrNull(visibleIndex) ?: return -1
-        return document?.pageFiles?.indexOfFirst { it.path == file.path } ?: -1
+        return pages.indexOfFirst { it.path == file.path }
     }
 
     // ------------------------------------------------------------------
@@ -331,23 +334,28 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         return selected.toList()
     }
 
-    /** Rotates every ticked page (a single selection rotates just that page). */
+    /** Rotates every ticked page (a single selection rotates just that page), in the draft. */
     internal fun rotateSelected(clockwise: Boolean) {
         val paths = requireSelection() ?: return
         val id = docId ?: return
         lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    // Land pending deletes first so disk indices are stable.
+                val rotated = withContext(Dispatchers.IO) {
+                    // Land pending deletes first so draft indices are stable.
                     commitPendingDeletesNow()
-                    for (path in paths) {
-                        val doc = repo.getDocument(id) ?: break
-                        val idx = doc.pageFiles.indexOfFirst { it.path == path }
-                        if (idx >= 0) repo.rotatePage(id, idx, clockwise)
+                    val now = repo.draftPages(id)
+                    val indices = paths.mapNotNull { path ->
+                        now.indexOfFirst { it.path == path }.takeIf { it >= 0 }
                     }
+                    indices.forEach { repo.draftRotate(id, it, clockwise) }
+                    indices
                 }
-                dirty = true
                 reloadDocument()
+                // A rotated page gets a new file: re-select by index.
+                selected.clear()
+                rotated.mapNotNull { pages.getOrNull(it)?.path }.forEach { selected.add(it) }
+                binding.pageList.refresh()
+                updateSelectionUi()
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
@@ -376,7 +384,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         pendingDeletes.addAll(paths)
         selected.clear()
         refreshGrid()
-        dirty = true
 
         val batch = paths.toList()
         Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
@@ -401,15 +408,23 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val id = docId ?: return
         lifecycleScope.launch {
             try {
-                // Land pending deletes first so disk indices are stable.
-                withContext(Dispatchers.IO) { commitPendingDeletesNow() }
-                val fresh = repo.getDocument(id) ?: return@launch
-                val wanted = paths.toSet()
-                val indices = fresh.pageFiles.indices.filter {
-                    fresh.pageFiles[it].path in wanted
+                val indices = withContext(Dispatchers.IO) {
+                    // Land pending deletes first so draft indices are stable.
+                    commitPendingDeletesNow()
+                    val now = repo.draftPages(id)
+                    val wanted = paths.toSet()
+                    now.indices.filter { now[it].path in wanted }
                 }
                 if (indices.isEmpty()) return@launch
-                withContext(Dispatchers.IO) { repo.extractPages(id, indices) }
+                val doc = document ?: return@launch
+                withContext(Dispatchers.IO) {
+                    if (repo.draftOf(id) == null) {
+                        repo.extractPages(id, indices)
+                    } else {
+                        // Extracting from a draft extracts its edited pages and leaves the draft.
+                        repo.saveDraftAsNew(id, repo.extractedName(doc.name, indices), indices)
+                    }
+                }
                 exitSelectMode()
                 Toast.makeText(
                     this@DocumentViewerActivity,
@@ -429,7 +444,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** Deletes all Undo-pending pages for good. No-op when nothing is pending. */
     internal fun commitPendingDelete() = commitPendingDeletes(pendingDeletes.toList())
 
-    /** Deletes the given Undo-pending paths (idempotent; recomputes each index). */
+    /** Deletes the given Undo-pending paths from the draft (idempotent; recomputes each index). */
     internal fun commitPendingDeletes(paths: Collection<String>) {
         val id = docId ?: return
         val toDelete = paths.filter { pendingDeletes.contains(it) }
@@ -439,15 +454,15 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         deleteScope.launch {
             try {
                 for (path in toDelete) {
-                    val doc = repo.getDocument(id) ?: break
-                    val idx = doc.pageFiles.indexOfFirst { it.path == path }
-                    if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
+                    val now = repo.draftPages(id)
+                    val idx = now.indexOfFirst { it.path == path }
+                    if (idx >= 0 && now.size > 1) repo.draftDelete(id, idx)
                 }
             } catch (_: Exception) {
                 // Best effort; a failed delete leaves the page in place.
             }
             committingDeletes.removeAll(toDelete.toSet())
-            // Refresh only now: the pages are gone from disk, so they can't flash back.
+            // Refresh only now: the pages are gone from the draft, so they can't flash back.
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
                     lifecycleScope.launch { reloadDocument() }
@@ -463,9 +478,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         if (toDelete.isEmpty()) return
         pendingDeletes.removeAll(toDelete.toSet())
         for (path in toDelete) {
-            val doc = repo.getDocument(id) ?: return
-            val idx = doc.pageFiles.indexOfFirst { it.path == path }
-            if (idx >= 0 && doc.pageFiles.size > 1) repo.deletePage(id, idx)
+            val now = repo.draftPages(id)
+            val idx = now.indexOfFirst { it.path == path }
+            if (idx >= 0 && now.size > 1) repo.draftDelete(id, idx)
         }
     }
 
@@ -473,19 +488,20 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     // Reorder
     // ------------------------------------------------------------------
 
-    /** Persists a finished drag: the grid's new order becomes the disk order. */
+    /** Persists a finished drag: the grid's new order becomes the draft order. */
     internal fun reorderPages(from: Int, to: Int) {
         val id = docId ?: return
         // The grid's pre-drag base order is exactly `visiblePages` (snapshot).
         val baseFile = visiblePages.getOrNull(from) ?: return
         lifecycleScope.launch {
             try {
-                // Any pending delete must land first so grid indices == disk indices.
-                withContext(Dispatchers.IO) { commitPendingDeletesNow() }
-                val doc = repo.getDocument(id) ?: return@launch
-                val baseFrom = doc.pageFiles.indexOfFirst { it.path == baseFile.path }
-                if (baseFrom >= 0 && baseFrom != to) repo.movePage(id, baseFrom, to)
-                dirty = true
+                withContext(Dispatchers.IO) {
+                    // Any pending delete must land first so grid indices == draft indices.
+                    commitPendingDeletesNow()
+                    val now = repo.draftPages(id)
+                    val draftFrom = now.indexOfFirst { it.path == baseFile.path }
+                    if (draftFrom >= 0 && draftFrom != to) repo.draftMove(id, draftFrom, to)
+                }
                 reloadDocument()
             } catch (e: Exception) {
                 Toast.makeText(
@@ -771,7 +787,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 val newName = input.text?.toString()
                 if (!newName.isNullOrBlank()) {
                     repo.renameDocument(doc.id, newName.trim())
-                    dirty = true
                     lifecycleScope.launch { reloadDocument() }
                 }
             }
@@ -811,95 +826,222 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     // ------------------------------------------------------------------
-    // Leaving the editor: Overwrite / Save as new / Cancel
+    // Leaving the editor: the draft (PM-2.2c)
     // ------------------------------------------------------------------
 
     private fun handleEditorBack() {
-        if (!dirty) {
+        if ((draft?.changes ?: 0) == 0) {
             finish()
             return
         }
-        SwDialog.card(this)
-            .setTitle(R.string.save_changes_title)
-            .setMessage(R.string.save_changes_msg)
-            .setPositiveButton(R.string.overwrite_pdf) { _, _ -> finish() }
-            .setNeutralButton(R.string.save_as_new) { _, _ -> saveAsNewDocument() }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+        SwSheet.builder(this)
+            .setTitle(R.string.draft_back_title)
+            .setMessage(R.string.draft_back_msg)
+            .setPrimary(R.string.draft_save_new) { saveDraftFlow() }
+            .setSecondary(R.string.draft_discard) { discardNow() }
+            .build()
+            .show()
     }
 
-    /**
-     * Copies the edited state to a new document, then puts the pre-edit
-     * snapshot back over the original so "Save as new" never touches it.
-     */
-    private fun saveAsNewDocument() {
+    /** `Draft · N pages · K changes`, visible only while K > 0. */
+    private fun updateDraftBar() {
+        val changes = draft?.changes ?: 0
+        binding.draftBar.isVisible = changes > 0
+        binding.draftHeader.text = getString(R.string.draft_header, pages.size, changes)
+    }
+
+    /** Kit paint for the bar: glass card, cyan Save, quiet Discard/Replace. */
+    private fun styleDraftBar() {
+        val density = resources.displayMetrics.density
+        fun dp(value: Float) = (value * density).toInt()
+        binding.draftBar.background = SwStyle.card(this, 18f)
+        binding.draftHeader.setTextColor(SwStyle.color(this, R.color.text_hologram_hi))
+        binding.draftHeader.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+
+        fun paint(view: android.widget.TextView, fill: Int, ink: Int) {
+            view.background = SwStyle.rounded(this, fill, radiusDp = 14f)
+            view.setTextColor(ink)
+            view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            view.gravity = Gravity.CENTER
+            view.minHeight = dp(44f)
+            view.setPadding(dp(10f), 0, dp(10f), 0)
+        }
+        paint(
+            binding.btnDraftDiscard,
+            SwStyle.color(this, R.color.glass_surface_raised),
+            SwStyle.color(this, R.color.text_hologram_hi)
+        )
+        paint(
+            binding.btnDraftReplace,
+            SwStyle.color(this, R.color.glass_surface_raised),
+            SwStyle.color(this, R.color.text_hologram_hi)
+        )
+        paint(
+            binding.btnDraftSave,
+            SwStyle.color(this, R.color.cyan_primary),
+            SwStyle.color(this, R.color.sw_disc_ink)
+        )
+    }
+
+    /** Save as new copy: commit pending deletes, ask for a name (prefilled), publish. */
+    private fun saveDraftFlow() {
         val id = docId ?: return
+        val doc = document ?: return
         lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    // Make sure the pre-edit snapshot is complete before restoring.
-                    snapshotJob?.join()
-                    commitPendingDeletesNow()
-                    val currentName = repo.getDocument(id)?.name ?: "Document"
-                    repo.duplicateDocument(id, "$currentName (edited)")
-                    restoreSnapshot(id)
+                withContext(Dispatchers.IO) { commitPendingDeletesNow() }
+                promptDraftName(getString(R.string.draft_edited_name, doc.name)) { name ->
+                    lifecycleScope.launch {
+                        try {
+                            val copy = withContext(Dispatchers.IO) {
+                                repo.saveDraftAsNew(id, name)
+                            }
+                            Toast.makeText(
+                                this@DocumentViewerActivity,
+                                getString(R.string.draft_saved_new, copy.name),
+                                Toast.LENGTH_LONG
+                            ).show()
+                            finish()
+                        } catch (e: Exception) {
+                            showDraftError(e)
+                        }
+                    }
                 }
-                dirty = false
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    R.string.saved_as_new,
-                    Toast.LENGTH_LONG
-                ).show()
-                finish()
             } catch (e: Exception) {
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
+                showDraftError(e)
             }
         }
     }
 
-    /** Pre-edit copy of the document directory (persistent files dir, never listed). */
-    private fun takeSnapshot(id: String): File? = try {
-        val src = File(filesDir, "documents/$id")
-        // Files dir, not cache: a process death mid-edit must not lose the
-        // revert copy, because the edits themselves are destructive.
-        val dest = File(filesDir, "edit_snapshot_$id")
-        dest.deleteRecursively()
-        dest.mkdirs()
-        src.listFiles()?.forEach { f ->
-            if (f.isFile) f.copyTo(File(dest, f.name), overwrite = true)
-        }
-        dest
-    } catch (_: Exception) {
-        null
-    }
-
-    /** Restores the pre-edit files over the original document, then drops them. */
-    private fun restoreSnapshot(id: String) {
-        val snap = snapshotDir ?: return
-        val dest = File(filesDir, "documents/$id")
-        dest.listFiles()?.forEach { if (it.isFile) it.delete() }
-        snap.listFiles()?.forEach { f ->
-            if (f.isFile) f.copyTo(File(dest, f.name), overwrite = true)
-        }
-        snap.deleteRecursively()
-        snapshotDir = null
-    }
-
-    /** Cheap change fingerprint: page names/sizes/timestamps + PDF size. */
-    private fun signature(): String {
-        val doc = document ?: return ""
-        return buildString {
-            append(doc.pageCount).append('|').append(doc.pdfFile.length())
-            doc.pageFiles.forEach { f ->
-                append('|').append(f.name)
-                    .append(':').append(f.length())
-                    .append(':').append(f.lastModified())
+    /** Replace original: confirm, then the two-rename publish (previous version goes to Trash). */
+    private fun replaceFlow() {
+        val id = docId ?: return
+        val doc = document ?: return
+        SwSheet.builder(this)
+            .setTitle(getString(R.string.draft_replace_title, doc.name))
+            .setMessage(getString(R.string.draft_replace_msg, doc.name))
+            .setPrimary(R.string.draft_replace) {
+                lifecycleScope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            commitPendingDeletesNow()
+                            repo.replaceWithDraft(id)
+                        }
+                        Toast.makeText(
+                            this@DocumentViewerActivity,
+                            R.string.draft_replaced,
+                            Toast.LENGTH_LONG
+                        ).show()
+                        reloadDocument()
+                    } catch (e: Exception) {
+                        showDraftError(e)
+                    }
+                }
             }
+            .setSecondary(R.string.draft_keep_editing)
+            .build()
+            .show()
+    }
+
+    /** Discard from the bar: confirm first, then drop only the draft. */
+    private fun discardFlow() {
+        val changes = draft?.changes ?: 0
+        if (changes == 0) return
+        SwSheet.builder(this)
+            .setTitle(R.string.draft_discard)
+            .setMessage(getString(R.string.draft_discard_msg, changes))
+            .setPrimary(R.string.draft_discard) {
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { repo.discardDraft(docId ?: return@withContext) }
+                    pendingDeletes.clear()
+                    reloadDocument()
+                }
+            }
+            .setSecondary(R.string.draft_keep_editing)
+            .build()
+            .show()
+    }
+
+    /** Discard with no further question (the Back prompt already explained it). */
+    private fun discardNow() {
+        val id = docId ?: return
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { repo.discardDraft(id) }
+            pendingDeletes.clear()
+            finish()
         }
+    }
+
+    /** A damaged/stale draft can only be discarded (PM-2.2b §5.2). */
+    private fun showDraftUnusable(message: String) {
+        SwSheet.builder(this)
+            .setTitle(R.string.draft_back_title)
+            .setMessage(message)
+            .setPrimary(R.string.draft_discard) { discardNowAndReload() }
+            .build()
+            .show()
+    }
+
+    private fun discardNowAndReload() {
+        val id = docId ?: return
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { repo.discardDraft(id) }
+            }
+            pendingDeletes.clear()
+            reloadDocument()
+        }
+    }
+
+    private fun showDraftError(e: Exception) {
+        if (e is DraftStore.DraftStale || e is DraftStore.DraftDamaged) {
+            showDraftUnusable(e.message ?: getString(R.string.draft_stale))
+        } else {
+            Toast.makeText(
+                this,
+                getString(R.string.page_op_failed, e.message),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    /** Kit-style name sheet (no AlertDialog): one field, prefilled, with Add/Save. */
+    private fun promptDraftName(initial: String, onOk: (String) -> Unit) {
+        val input = EditText(this).apply {
+            id = R.id.draftNameInput
+            setText(initial)
+            setSelection(text.length)
+            setTextColor(SwStyle.color(this@DocumentViewerActivity, R.color.text_hologram_hi))
+            setHintTextColor(SwStyle.color(this@DocumentViewerActivity, R.color.text_hologram_dim))
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            maxLines = 1
+            minHeight = SwStyle.dp(this@DocumentViewerActivity, 52f)
+            setPadding(
+                SwStyle.dp(this@DocumentViewerActivity, 14f),
+                SwStyle.dp(this@DocumentViewerActivity, 12f),
+                SwStyle.dp(this@DocumentViewerActivity, 14f),
+                SwStyle.dp(this@DocumentViewerActivity, 12f)
+            )
+            background = SwStyle.rounded(
+                this@DocumentViewerActivity,
+                SwStyle.color(this@DocumentViewerActivity, R.color.glass_surface_raised),
+                radiusDp = 14f,
+                stroke = SwStyle.color(this@DocumentViewerActivity, R.color.sw_field_border)
+            )
+        }
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.draft_save_new)
+            .setContent(input)
+            .setPrimary(R.string.save)
+            .build()
+        sheet.keepOpenOnPrimary()
+        sheet.primaryButton.setOnClickListener {
+            sheet.dismiss()
+            onOk(input.text.toString())
+        }
+        sheet.show()
+        input.requestFocus()
     }
 
     // ------------------------------------------------------------------

@@ -160,6 +160,63 @@
             android:clipToPadding="false"
             android:padding="12dp" />
 
+        <!-- PM-2.2c: the draft bar appears after the first page edit. Discard always
+             works; the saved document changes only on Save as new or Replace. -->
+        <LinearLayout
+            android:id="@+id/draftBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="6dp"
+            android:orientation="vertical"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/draftHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btnDraftDiscard"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="@string/draft_discard"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/btnDraftReplace"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="@string/draft_replace"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/btnDraftSave"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1.2"
+                    android:gravity="center"
+                    android:text="@string/draft_save_new"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </LinearLayout>
+
         <!-- test26 T5.2 (§4.5/§5.4): the bottom dock is [Share w2][Edit][Text]
              [More] — four DockItem buttons, weighted 2/1/1/1, no fixed heights.
              The gold Pro Tools tray, the crown button and the old
