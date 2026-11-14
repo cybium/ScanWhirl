@@ -1,8 +1,9 @@
-package com.scanwhirl.app.ui.vault
+package com.scanwhirl.app.store.vault
 
 /**
- * v2 UI: 04_vault — the Vault relocks after the app has been in the background for the
- * 2-minute grace period (design §4.1). Pure so the timer is testable without sleeping.
+ * v2 UI: 04_vault — when the Vault locks itself after the app has been in the background
+ * (design §4.1: a 2-minute grace period, configurable). Pure so the timer is testable
+ * without sleeping.
  */
 object VaultSessionPolicy {
 

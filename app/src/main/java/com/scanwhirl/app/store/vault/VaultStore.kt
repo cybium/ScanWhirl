@@ -21,6 +21,12 @@ import java.util.UUID
  *   - `keystore.bin`: the same key wrapped by the Android Keystore key (fingerprint/face path).
  *   - `<documentId>/`: `manifest.enc` plus one `fNNNN.enc` per source file. Manifests and
  *     every file are AES-256-GCM; nothing under this directory is readable plaintext.
+ *   - `passwords.bin`: PDF passwords remembered for documents ([VaultPasswords]), the same
+ *     AES-256-GCM container under the vault key.
+ *
+ * The unlocked key lives in [VaultSession], not in this object, so every screen (the Vault
+ * screen, a PDF viewer, [VaultPasswords] for lane L3) sees one lock state and the 2-minute
+ * background grace expires the key once for all of them.
  *
  * [addDocument] encrypts every file of a library document into a hidden staging folder,
  * decrypts it again to verify every SHA-256, publishes the entry atomically, then moves the
@@ -105,15 +111,13 @@ class VaultStore(
     private val openDir: File
         get() = File(context.cacheDir, OPEN_DIR)
 
-    private var vaultKey: ByteArray? = null
-
     // ------------------------------------------------------------------
     // Setup and unlock
     // ------------------------------------------------------------------
 
     fun isSetUp(): Boolean = File(vaultDir, RECOVERY_FILE).let { it.isFile && it.length() > 0 }
 
-    fun isUnlocked(): Boolean = vaultKey != null
+    fun isUnlocked(): Boolean = VaultSession.isUnlocked()
 
     /** True when a Keystore wrap exists on this phone and the Keystore is reachable. */
     fun hasBiometricKey(): Boolean =
@@ -142,7 +146,7 @@ class VaultStore(
         // Written last: its presence is the "set up" marker.
         Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
         Durable.syncDir(vaultDir)
-        vaultKey = key
+        VaultSession.open(key)
         Setup(VaultCrypto.formatRecoveryCode(recoveryCode))
     }
 
@@ -160,7 +164,7 @@ class VaultStore(
             return UnlockResult(false, gate.onWrong())
         }
         gate.onSuccess()
-        vaultKey = key
+        VaultSession.open(key)
         UnlockResult(true)
     }
 
@@ -176,7 +180,7 @@ class VaultStore(
             null
         } ?: return false
         gate.onSuccess()
-        vaultKey = key
+        VaultSession.open(key)
         true
     }
 
@@ -191,14 +195,13 @@ class VaultStore(
         } ?: return false
         if (key.size != VaultCrypto.KEY_BYTES) return false
         gate.onSuccess()
-        vaultKey = key
+        VaultSession.open(key)
         true
     }
 
     /** Drops the key and every decrypted copy. */
     fun lock() = synchronized(LOCK) {
-        vaultKey?.fill(0)
-        vaultKey = null
+        VaultSession.close()
         openDir.deleteRecursively()
     }
 
@@ -445,7 +448,7 @@ class VaultStore(
                 throw e
             }
 
-            vaultKey = key
+            VaultSession.open(key)
             listEntries()
         } finally {
             staging.deleteRecursively()
@@ -491,8 +494,7 @@ class VaultStore(
 
     /** Removes every Vault file and key (used by "remove all" and by restore tests). */
     fun wipeAll() = synchronized(LOCK) {
-        vaultKey?.fill(0)
-        vaultKey = null
+        VaultSession.close()
         vaultDir.deleteRecursively()
         openDir.deleteRecursively()
         File(context.cacheDir, "vault_verify").deleteRecursively()
@@ -508,7 +510,7 @@ class VaultStore(
     // ------------------------------------------------------------------
 
     private fun requireKey(): ByteArray =
-        vaultKey ?: throw VaultLockedException()
+        VaultSession.keyOrNull() ?: throw VaultLockedException()
 
     private fun requireValidPasscode(passcode: String) {
         require(passcode.length >= MIN_PASSCODE_LENGTH && passcode.all { it.isDigit() }) {

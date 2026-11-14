@@ -1,4 +1,4 @@
-package com.scanwhirl.app.ui.vault
+package com.scanwhirl.app.store.vault
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

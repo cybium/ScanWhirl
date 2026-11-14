@@ -31,6 +31,7 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.vault.VaultCrypto
 import com.scanwhirl.app.store.vault.VaultLockedException
+import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.PdfViewerActivity
@@ -96,7 +97,7 @@ class VaultActivity : BaseActivity() {
     private lateinit var backupButton: TextView
 
     private var promptShown = false
-    private var lastBackgroundAt = 0L
+    private var shownUnlocked = false
     private var unlockMethod = UnlockMethod.PASSCODE
 
     private val createBackup = registerForActivityResult(
@@ -136,20 +137,20 @@ class VaultActivity : BaseActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (VaultSessionPolicy.shouldRelock(lastBackgroundAt, System.currentTimeMillis())) {
-            lastBackgroundAt = 0L
-            if (store.isUnlocked()) {
-                store.lock()
-                unlockMethod = UnlockMethod.PASSCODE
-                render()
-                promptShown = false
-                maybePromptOnOpen()
-            }
+        // VaultSession drops the key itself once the 2-minute background grace is over.
+        if (shownUnlocked && !store.isUnlocked()) {
+            store.lock() // also wipes the decrypted cache copies
+            unlockMethod = UnlockMethod.PASSCODE
+            promptShown = false
+            render()
+            maybePromptOnOpen()
+        } else if (store.isUnlocked()) {
+            VaultSession.onForeground()
         }
     }
 
     override fun onStop() {
-        if (!isChangingConfigurations) lastBackgroundAt = System.currentTimeMillis()
+        if (!isChangingConfigurations) VaultSession.onBackground()
         super.onStop()
     }
 
@@ -501,6 +502,7 @@ class VaultActivity : BaseActivity() {
     private fun render() {
         val setUp = store.isSetUp()
         val unlocked = store.isUnlocked()
+        shownUnlocked = unlocked
         val entries = if (unlocked) runCatching { store.listEntries() }.getOrDefault(emptyList()) else emptyList()
 
         statsTitle.text = when {

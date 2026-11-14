@@ -18,6 +18,8 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.vault.FakeVaultKeys
 import com.scanwhirl.app.store.vault.VaultCrypto
 import com.scanwhirl.app.store.vault.VaultPasscodeGate
+import com.scanwhirl.app.store.vault.VaultSession
+import com.scanwhirl.app.store.vault.VaultSessionPolicy
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.util.Prefs
 import org.junit.After
@@ -56,6 +58,7 @@ class VaultActivityTest {
 
     @Before
     fun setUp() {
+        VaultSession.close()
         app = ApplicationProvider.getApplicationContext()
         repo = ScanRepository(app)
         keys = FakeVaultKeys()
@@ -77,6 +80,7 @@ class VaultActivityTest {
         controller = null
         VaultActivity.storeOverride = null
         VaultActivity.credentialIntentFactory = null
+        VaultSession.close()
         Faults.resetAll()
         File(app.filesDir, "vault2").deleteRecursively()
         File(app.cacheDir, "vault_open").deleteRecursively()
@@ -285,6 +289,23 @@ class VaultActivityTest {
         assertTrue(
             started.intent.getStringExtra(Intent.EXTRA_TITLE).orEmpty().endsWith(".swvault")
         )
+    }
+
+    @Test
+    fun `the vault relocks itself after two minutes in the background`() {
+        store.setup("246810")
+        val activity = launch()
+        assertTrue(activity.need<View>(R.id.vaultBanner).isVisible)
+
+        controller!!.pause().stop()
+        // The screen recorded "background" on stop; pretend it was more than the grace ago.
+        VaultSession.onBackground(System.currentTimeMillis() - VaultSessionPolicy.GRACE_MILLIS - 1_000)
+        controller!!.start().resume()
+        idle()
+
+        assertFalse("the key is gone", store.isUnlocked())
+        assertFalse("no unlocked banner", activity.need<View>(R.id.vaultBanner).isVisible)
+        assertEquals("Unlock Vault", sheet().need<TextView>(R.id.swSheetTitle).text)
     }
 
     @Test

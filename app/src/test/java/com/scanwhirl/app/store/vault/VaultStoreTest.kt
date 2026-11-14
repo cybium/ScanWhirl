@@ -44,6 +44,7 @@ class VaultStoreTest {
 
     @Before
     fun setUp() {
+        VaultSession.close()
         app = ApplicationProvider.getApplicationContext()
         repo = ScanRepository(app)
         keys = FakeVaultKeys()
@@ -51,6 +52,7 @@ class VaultStoreTest {
 
     @After
     fun tearDown() {
+        VaultSession.close()
         Faults.resetAll()
         // Keep Robolectric's app data clean for the next test class run.
         File(app.filesDir, "vault2").deleteRecursively()
