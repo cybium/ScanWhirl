@@ -214,6 +214,7 @@
     <string name="batch_done"><!-- review -->%1$d दस्तावेज़ों का नाम बदला</string>
     <string name="batch_select_hint"><!-- review -->नाम बदलने के लिए दो या अधिक दस्तावेज़ चुनें</string>
     <string name="undo_action"><!-- review -->वापस</string>
+    <string name="tools_clear_search"><!-- review -->खोज मिटाएँ</string>
     <string name="sort_title"><!-- review -->क्रम</string>
     <string name="sort_newest"><!-- review -->नवीनतम</string>
     <string name="sort_oldest"><!-- review -->सबसे पुराना</string>

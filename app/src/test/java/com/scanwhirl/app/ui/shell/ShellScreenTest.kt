@@ -143,7 +143,7 @@ class ShellScreenTest {
             idle()
             val tiles = ToolsHubScreen.tiles(activity.findViewById<View>(R.id.swToolsBody))
             assertEquals(
-                ToolRegistry.search("smaller").map { it.id },
+                ToolRegistry.search(activity, "smaller").map { it.id },
                 tiles.mapNotNull { it.tool?.id }
             )
             assertTrue(tiles.any { it.tool?.id == "compress" })

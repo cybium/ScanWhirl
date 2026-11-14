@@ -74,7 +74,9 @@ class TrashActivity : BaseActivity() {
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        menu.findItem(R.id.action_empty_trash)?.isEnabled = items.isNotEmpty()
+        val item = menu.findItem(R.id.action_empty_trash)
+        item?.isEnabled = items.isNotEmpty()
+        item?.isVisible = items.isNotEmpty()
         return super.onPrepareOptionsMenu(menu)
     }
 

@@ -194,20 +194,6 @@ class LibraryScreen(
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                     .apply { topMargin = SwStyle.dp(context, 6f) }
             )
-            val scan = SwStyle.text(context, 15f, SwStyle.color(context, R.color.sw_disc_ink), bold = true).apply {
-                text = context.getString(R.string.shell_nav_scan)
-                gravity = Gravity.CENTER
-                background = SwStyle.rounded(
-                    context, SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f
-                )
-                isClickable = true
-                setOnClickListener { callbacks.onScan() }
-            }
-            addView(
-                scan,
-                LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f))
-                    .apply { topMargin = SwStyle.dp(context, 16f) }
-            )
         }
         addView(emptyView)
 
