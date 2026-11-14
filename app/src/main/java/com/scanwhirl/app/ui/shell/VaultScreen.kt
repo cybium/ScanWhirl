@@ -34,7 +34,7 @@ class VaultScreen(
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
-        bar.addView(TrustPill.noAds(context))
+        bar.addView(TrustPill.offlineNoAds(context))
         addView(bar)
 
         // Emblem: the shield on the kit's glass tile, centred like the mockup.

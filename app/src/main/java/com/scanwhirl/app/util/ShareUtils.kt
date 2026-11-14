@@ -30,6 +30,28 @@ object ShareUtils {
         shareSingle(context, file, mime)
     }
 
+    /** Shares a chosen set of page images (Organize selection). */
+    fun shareImages(context: Context, files: List<File>, docName: String) {
+        if (files.isEmpty()) {
+            Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uris = ArrayList<Uri>(files.size)
+        files.forEachIndexed { i, page ->
+            val named = namedCopy(context, page, "${sanitize(docName)} - page ${i + 1}.jpg")
+            uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", named))
+        }
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "image/*"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            val clip = ClipData.newRawUri("pages", uris[0])
+            for (i in 1 until uris.size) clip.addItem(ClipData.Item(uris[i]))
+            clipData = clip
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
+    }
+
     /** Public alias of the private sanitizer for reuse by export jobs. */
     fun sanitizeName(name: String): String = sanitize(name)
 

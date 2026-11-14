@@ -603,8 +603,9 @@ class Phase5ScreensTest {
     }
 
     @Test
-    fun `select pages mode gates the checkboxes and the contextual bar`() {
-        val id = seedDoc("Select pages", pages = 2)
+    fun `long press selects a page and shows the selection bars`() {
+        // v2 UI: Organize pages grid (owner revision) - no toggle row, no checkbox outside selection.
+        val id = seedDoc("Select pages", pages = 3)
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             assertTrue("document must load first",
@@ -613,27 +614,44 @@ class Phase5ScreensTest {
             scenario.onActivity { activity ->
                 val grid = activity.findViewById<
                     com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
-                val ctx = activity.findViewById<View>(R.id.selContextRow)
-                val toggle =
-                    activity.findViewById<android.widget.Button>(R.id.btnSelectPages)
+                val top = activity.findViewById<View>(R.id.selectionTopBar)
+                val actions = activity.findViewById<View>(R.id.selectionActionBar)
+                val count = activity.findViewById<TextView>(R.id.selCount)
 
-                // Closed by default (D-D): no checkboxes, no contextual bar.
-                assertFalse("checkboxes hidden until Select", grid.checkboxesVisible)
-                assertEquals(View.GONE, ctx.visibility)
-                assertFalse("cell checkboxes hidden", cellCheckboxShown(grid))
+                // Normal state: clean tiles, no checks, no bars.
+                assertFalse("checks hidden until a long-press", grid.checkboxesVisible)
+                assertEquals(View.GONE, top.visibility)
+                assertEquals(View.GONE, actions.visibility)
+                assertFalse("cell checks hidden", cellCheckboxShown(grid))
 
-                toggle.performClick()
-                assertTrue("Select turns the checkboxes on", grid.checkboxesVisible)
-                assertEquals(View.VISIBLE, ctx.visibility)
-                assertEquals(activity.getString(R.string.select_done), toggle.text.toString())
-                assertTrue("cell checkboxes shown in Select mode", cellCheckboxShown(grid))
+                // Long-press page 1: selection mode with that page selected.
+                grid.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
+                )
+                grid.layout(0, 0, 1080, 1920)
+                val cell = grid.findViewHolderForAdapterPosition(0)!!.itemView
+                assertTrue(cell.performLongClick())
+                assertTrue("long-press turns the checks on", grid.checkboxesVisible)
+                assertEquals(View.VISIBLE, top.visibility)
+                assertEquals(View.VISIBLE, actions.visibility)
+                assertEquals(
+                    activity.resources.getQuantityString(R.plurals.selected_count, 1, 1),
+                    count.text.toString()
+                )
+                assertTrue("cell check shown in selection mode", cellCheckboxShown(grid))
 
-                // Tapping Done leaves the mode and clears it.
-                toggle.performClick()
-                assertFalse("Done leaves Select mode", grid.checkboxesVisible)
-                assertEquals(View.GONE, ctx.visibility)
-                assertEquals(activity.getString(R.string.select_pages), toggle.text.toString())
-                assertFalse("cell checkboxes hidden again", cellCheckboxShown(grid))
+                // Select all, then close.
+                activity.findViewById<View>(R.id.btnSelAll).performClick()
+                assertEquals(
+                    activity.resources.getQuantityString(R.plurals.selected_count, 3, 3),
+                    count.text.toString()
+                )
+                activity.findViewById<View>(R.id.btnSelClose).performClick()
+                assertEquals(View.GONE, top.visibility)
+                assertEquals(View.GONE, actions.visibility)
+                assertFalse(grid.checkboxesVisible)
+                assertFalse("cell checks hidden again", cellCheckboxShown(grid))
             }
         }
     }

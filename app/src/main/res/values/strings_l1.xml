@@ -178,4 +178,59 @@
     <string name="ocr_remove_gaps_desc">Remove blank lines.</string>
     <string name="ocr_lang_english">English</string>
     <string name="ocr_page_sub">%1$s · page %2$d of %3$d</string>
+
+    <!-- v2 UI: 03_tools_hub — folders, tags, selection and batch rename. -->
+    <string name="folder_all">All</string>
+    <string name="folder_new">+ New folder</string>
+    <string name="folder_hint">Long-press a folder to rename or delete it</string>
+    <string name="folder_name_hint">Folder name</string>
+    <string name="folder_create">Create</string>
+    <string name="folder_exists">That folder already exists</string>
+    <string name="folder_options_note">Rename it, or delete it and keep every document.</string>
+    <string name="folder_rename">Rename folder</string>
+    <string name="folder_delete">Delete folder</string>
+    <string name="folder_delete_title">Delete this folder?</string>
+    <string name="folder_delete_msg">“%1$s” is removed. Its documents stay in All.</string>
+    <string name="folder_deleted">Folder deleted. Documents kept.</string>
+    <string name="folder_move_title">Move to folder</string>
+    <string name="folder_all_documents">All documents (no folder)</string>
+    <string name="sel_done">Done</string>
+    <string name="sel_move">Move</string>
+    <string name="sel_tags">Tags</string>
+    <string name="sel_share">Share</string>
+    <string name="sel_rename">Rename</string>
+    <string name="sel_delete">Delete</string>
+    <string name="sel_delete_title">Move %1$d documents to Trash?</string>
+    <string name="tags_title">Tags</string>
+    <string name="tags_new">New tag</string>
+    <string name="tags_add">Add tag</string>
+    <string name="tags_done">Done</string>
+    <string name="tags_empty">No tags yet</string>
+    <string name="tags_hint">Tag name</string>
+    <string name="batch_rename_title">Batch rename</string>
+    <string name="batch_rename_note">Use {name}, {n} (1, 2, 3…) and {date}.</string>
+    <string name="batch_pattern_hint">{name} ({n})</string>
+    <string name="batch_preview_title">Preview:</string>
+    <string name="batch_apply">Rename all</string>
+    <string name="batch_done">%1$d documents renamed</string>
+    <string name="batch_select_hint">Select two or more documents to rename</string>
+    <string name="undo_action">Undo</string>
+    <string name="sort_title">Sort by</string>
+    <string name="sort_newest">Newest</string>
+    <string name="sort_oldest">Oldest</string>
+    <string name="sort_name_az">Name A-Z</string>
+    <string name="sort_name_za">Name Z-A</string>
+    <string name="sort_size">Size</string>
+    <string name="home_no_match_for">No matches for “%1$s”</string>
+    <string name="make_searchable_title">Make searchable</string>
+    <string name="make_searchable_note">%1$s becomes a PDF with an invisible text layer, so any PDF app can find words in it.</string>
+    <string name="make_searchable_already">%1$s already has a searchable text layer.</string>
+    <string name="make_searchable_action">Make it</string>
+    <string name="make_searchable_done">%1$s is searchable now</string>
+    <string name="make_searchable_unavailable">%1$s has no recognised text yet. Open its Text screen first.</string>
+
+    <plurals name="sel_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
 </resources>

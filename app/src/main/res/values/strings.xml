@@ -264,7 +264,7 @@
     <string name="protect_hint">Password</string>
     <string name="protect_apply">Apply password</string>
     <string name="protect_done">PDF is password-protected</string>
-    <string name="menu_protect_pdf">Lock PDF</string>
+    <string name="menu_protect_pdf">Protect PDF</string>
     <string name="btn_lock_pdf">Lock PDF</string>
     <string name="btn_change_pw">Password</string>
     <string name="btn_unlock_pdf">Unlock PDF</string>

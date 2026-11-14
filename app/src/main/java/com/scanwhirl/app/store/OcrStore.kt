@@ -166,6 +166,18 @@ class OcrStore(private val docsDir: File) {
         merged
     }
 
+    /**
+     * PM-2.2b: writes the OCR carried over from a draft's base into a staging folder in one go.
+     * Geometry goes first; the text rename is the commit point (`OcrStore.kt` write order).
+     */
+    internal fun putAll(id: String, texts: Map<String, String>, geo: Map<String, OcrPage>) {
+        lock.withLock {
+            docDir(id).mkdirs()
+            if (geo.isNotEmpty()) writeGeometry(id, geo.filterKeys { it in texts }, texts)
+            if (texts.isNotEmpty()) writeTexts(id, texts)
+        }
+    }
+
     private fun writeTexts(id: String, texts: Map<String, String>) = atomicWrite(
         File(docDir(id), TEXT_FILE),
         (listOf(OCR_HEADER) + texts.map { (key, text) -> "$key\t${encodeText(text)}" }).joinToString("\n")

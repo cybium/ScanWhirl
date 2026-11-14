@@ -3,34 +3,28 @@ package com.scanwhirl.app.ui.pagegrid
 import android.content.Context
 import android.util.AttributeSet
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ItemPageGridBinding
 import com.scanwhirl.app.util.ScanFilter
 import java.io.File
-import kotlin.math.abs
 
 /**
- * The one page-grid component used by the saved-document viewer and the scan
- * review screen: a vertical 2-column grid of downsampled, cached thumbs in
- * fixed 3:4 cells.
+ * v2 UI: Organize pages grid (owner revision) — the one page grid used by the saved-document
+ * viewer and the scan review screen.
  *
- * Gestures are deliberately separate:
- *  - tap the cell            -> [onTap] (open the page)
- *  - tap the checkbox        -> [onCheckToggle] (multi-select; no drag/menu)
- *  - drag the grip handle    -> reorder, then [onDropped] once with the
- *                               pre-drag and final indices
+ *  - Normal state: a clean thumbnail with its page number. Tap opens the page.
+ *  - Long-press enters the host's selection mode and selects that page; dragging after the
+ *    long-press reorders (ItemTouchHelper, both axes) and reports one [onDropped].
+ *  - The small round check is shown only while [checkboxesVisible] is true (selection mode).
  *
- * Reordering is a real two-dimensional drag: the grabbed thumbnail floats
- * under the finger and the cell under its center is the drop target. This is
- * why a page can be dragged left/right as well as up/down (ItemTouchHelper is
- * one-dimensional and cannot do that reliably in a grid).
+ * Scan review keeps checkboxes visible in its Arrange mode; the saved-document viewer turns
+ * them on only after a long-press.
  */
 class PageGridView @JvmOverloads constructor(
     context: Context,
@@ -40,8 +34,11 @@ class PageGridView @JvmOverloads constructor(
     /** Called with the page index when a cell is tapped. */
     var onTap: ((Int) -> Unit)? = null
 
-    /** Called when a cell's checkbox is tapped (host owns the selected set). */
+    /** Called when a cell's check is tapped (host owns the selected set). */
     var onCheckToggle: ((Int) -> Unit)? = null
+
+    /** Long-press: the host enters selection mode and selects this page. */
+    var onLongPress: ((Int) -> Unit)? = null
 
     /** Drag finished after moving: indices are pre-drag positions of the item. */
     var onDropped: ((from: Int, to: Int) -> Unit)? = null
@@ -49,17 +46,13 @@ class PageGridView @JvmOverloads constructor(
     /** Which filter a cell's file should display (file-based so it stays correct mid-drag). */
     var filterFor: (File) -> ScanFilter = { ScanFilter.ORIGINAL }
 
-    /** Whether the cell at [index] shows a ticked checkbox (host state). */
+    /** Whether the cell at [index] shows a ticked check (host state). */
     var checkedAt: (Int) -> Boolean = { false }
 
-    /** Set false to disable reordering (the grip simply stops responding). */
+    /** Set false to disable long-press reordering. */
     var dragEnabled: Boolean = true
 
-    /**
-     * test26 T5.2 (§4.5): whether cells show their selection checkbox. The
-     * document viewer gates selection behind its Select pages button (false
-     * until tapped); Scan Review keeps the default `true`.
-     */
+    /** Whether cells show their round selection check (selection mode). */
     var checkboxesVisible: Boolean = true
         set(value) {
             if (field == value) return
@@ -68,9 +61,8 @@ class PageGridView @JvmOverloads constructor(
         }
 
     /**
-     * Review slice 1: the page shown in Review's Focus mode. It wears the
-     * accent ring (`state_activated`) and an accent number badge. The saved-
-     * document viewer never sets this, so its cells are unchanged.
+     * Review slice 1: the page shown in Review's Focus mode. It wears the accent ring
+     * (`state_activated`) and an accent number badge.
      */
     var currentAt: (Int) -> Boolean = { false }
 
@@ -86,22 +78,68 @@ class PageGridView @JvmOverloads constructor(
 
     private val gridAdapter = GridAdapter()
 
-    // --- 2D drag state -------------------------------------------------
-    private var dragVH: ViewHolder? = null
+    // Drag bookkeeping: ItemTouchHelper moves the cells; the host hears one drop.
     private var dragFrom = NO_POSITION
-    private var dragStartRawX = 0f
-    private var dragStartRawY = 0f
-    private var grabOffsetX = 0f
-    private var grabOffsetY = 0f
+    private var dragTo = NO_POSITION
     private var originalElevation = 0f
-    private var dragMoved = false
-    private val rvLocation = IntArray(2)
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+
+    private val dragCallback = object : ItemTouchHelper.SimpleCallback(
+        ItemTouchHelper.UP or ItemTouchHelper.DOWN or
+            ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT,
+        0
+    ) {
+        override fun isLongPressDragEnabled(): Boolean = dragEnabled
+
+        override fun onMove(
+            recyclerView: RecyclerView,
+            viewHolder: ViewHolder,
+            target: ViewHolder
+        ): Boolean {
+            val from = viewHolder.bindingAdapterPosition
+            val to = target.bindingAdapterPosition
+            if (from == NO_POSITION || to == NO_POSITION || from == to) return false
+            gridAdapter.move(from, to)
+            if (dragFrom != NO_POSITION) dragTo = to
+            return true
+        }
+
+        override fun onSwiped(viewHolder: ViewHolder, direction: Int) = Unit
+
+        override fun onSelectedChanged(viewHolder: ViewHolder?, actionState: Int) {
+            super.onSelectedChanged(viewHolder, actionState)
+            if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && viewHolder != null) {
+                dragFrom = viewHolder.bindingAdapterPosition
+                dragTo = dragFrom
+                originalElevation = viewHolder.itemView.elevation
+                viewHolder.itemView.elevation = 12f * resources.displayMetrics.density
+                viewHolder.itemView.scaleX = 1.04f
+                viewHolder.itemView.scaleY = 1.04f
+                if (dragFrom != NO_POSITION) onLongPress?.invoke(dragFrom)
+            }
+        }
+
+        override fun clearView(recyclerView: RecyclerView, viewHolder: ViewHolder) {
+            super.clearView(recyclerView, viewHolder)
+            viewHolder.itemView.elevation = originalElevation
+            viewHolder.itemView.scaleX = 1f
+            viewHolder.itemView.scaleY = 1f
+            val from = dragFrom
+            val to = dragTo
+            dragFrom = NO_POSITION
+            dragTo = NO_POSITION
+            if (from != NO_POSITION && to != NO_POSITION && from != to) {
+                onDropped?.invoke(from, to)
+            }
+        }
+    }
+
+    private val dragHelper = ItemTouchHelper(dragCallback)
 
     init {
         layoutManager = GridLayoutManager(context, 2)
         adapter = gridAdapter
         itemAnimator = null
+        dragHelper.attachToRecyclerView(this)
     }
 
     /** Replaces the displayed pages. The list is copied; callers may pass a temp. */
@@ -143,171 +181,6 @@ class PageGridView @JvmOverloads constructor(
         return (cell * 3 / 2).coerceAtLeast(160)
     }
 
-    // ------------------------------------------------------------------
-    // Touch handling: start only from the grip, track in 2D, drop on release
-    // ------------------------------------------------------------------
-
-    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
-        if (e.actionMasked == MotionEvent.ACTION_DOWN && dragEnabled) {
-            val itemView = findChildViewUnder(e.x, e.y)
-            if (itemView != null && isPointOnGrip(itemView, e.x, e.y)) {
-                val vh = findContainingViewHolder(itemView) ?: return super.onInterceptTouchEvent(e)
-                if (beginDrag(vh, e)) {
-                    // Consume the rest of the gesture ourselves.
-                    return true
-                }
-            }
-        }
-        return super.onInterceptTouchEvent(e)
-    }
-
-    override fun onTouchEvent(e: MotionEvent): Boolean {
-        if (dragVH != null) {
-            when (e.actionMasked) {
-                MotionEvent.ACTION_MOVE -> {
-                    trackDrag(e)
-                    return true
-                }
-                MotionEvent.ACTION_UP -> {
-                    endDrag(cancelled = false)
-                    return true
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    endDrag(cancelled = true)
-                    return true
-                }
-                else -> return true
-            }
-        }
-        return super.onTouchEvent(e)
-    }
-
-    /** True when (x, y) — RecyclerView coordinates — is over this cell's grip. */
-    private fun isPointOnGrip(itemView: View, x: Float, y: Float): Boolean {
-        val grip = itemView.findViewById<View>(R.id.dragHandle) ?: return false
-        if (grip.width == 0 || grip.height == 0) return false
-        val gripLoc = IntArray(2)
-        grip.getLocationOnScreen(gripLoc)
-        getLocationOnScreen(rvLocation)
-        val left = gripLoc[0] - rvLocation[0]
-        val top = gripLoc[1] - rvLocation[1]
-        return x >= left && x <= left + grip.width && y >= top && y <= top + grip.height
-    }
-
-    private fun beginDrag(vh: ViewHolder, e: MotionEvent): Boolean {
-        val pos = vh.bindingAdapterPosition
-        if (pos == NO_POSITION) return false
-        val view = vh.itemView
-        dragVH = vh
-        dragFrom = pos
-        dragMoved = false
-        dragStartRawX = e.rawX
-        dragStartRawY = e.rawY
-
-        // Offset from the finger to the cell's center keeps the thumbnail
-        // under the finger on the first frame instead of jumping.
-        getLocationOnScreen(rvLocation)
-        val fingerX = e.rawX - rvLocation[0]
-        val fingerY = e.rawY - rvLocation[1]
-        grabOffsetX = fingerX - (view.left + view.width / 2f)
-        grabOffsetY = fingerY - (view.top + view.height / 2f)
-
-        originalElevation = view.elevation
-        view.elevation = 12f * resources.displayMetrics.density
-        view.scaleX = 1.04f
-        view.scaleY = 1.04f
-        parent?.requestDisallowInterceptTouchEvent(true)
-        return true
-    }
-
-    private fun trackDrag(e: MotionEvent) {
-        val vh = dragVH ?: return
-        val dx = e.rawX - dragStartRawX
-        val dy = e.rawY - dragStartRawY
-        if (!dragMoved && (abs(dx) > touchSlop || abs(dy) > touchSlop)) dragMoved = true
-        positionUnderFinger(vh, e.rawX, e.rawY)
-    }
-
-    /** Puts the cell's visual center where the finger is (minus the grab offset). */
-    private fun positionUnderFinger(vh: ViewHolder, rawX: Float, rawY: Float) {
-        val view = vh.itemView
-        getLocationOnScreen(rvLocation)
-        val fingerX = rawX - rvLocation[0]
-        val fingerY = rawY - rvLocation[1]
-        view.translationX = (fingerX - grabOffsetX) - (view.left + view.width / 2f)
-        view.translationY = (fingerY - grabOffsetY) - (view.top + view.height / 2f)
-    }
-
-    private fun endDrag(cancelled: Boolean) {
-        val vh = dragVH ?: return
-        val view = vh.itemView
-        val from = dragFrom
-
-        // The drop target is whichever cell sits under the floating center.
-        val centerX = view.left + view.width / 2f + view.translationX
-        val centerY = view.top + view.height / 2f + view.translationY
-        val to = targetIndexAt(centerX, centerY, from)
-
-        resetDragVisuals(vh)
-        dragVH = null
-        dragFrom = NO_POSITION
-        parent?.requestDisallowInterceptTouchEvent(false)
-
-        if (!cancelled && dragMoved && to != NO_POSITION && to != from) {
-            gridAdapter.move(from, to)
-            onDropped?.invoke(from, to)
-        }
-    }
-
-    private fun resetDragVisuals(vh: ViewHolder) {
-        val view = vh.itemView
-        view.translationX = 0f
-        view.translationY = 0f
-        view.scaleX = 1f
-        view.scaleY = 1f
-        view.elevation = originalElevation
-    }
-
-    /**
-     * Which adapter position owns the point, in two dimensions. A cell under
-     * the point wins; otherwise the nearest cell center does. Returns [from]
-     * while the point is still inside the dragged cell so a tiny wobble
-     * doesn't reorder anything.
-     */
-    private fun targetIndexAt(cx: Float, cy: Float, from: Int): Int {
-        val fromView = findViewHolderForAdapterPosition(from)?.itemView
-        if (fromView != null &&
-            cx >= fromView.left && cx <= fromView.right &&
-            cy >= fromView.top && cy <= fromView.bottom
-        ) {
-            return from
-        }
-        var nearest = NO_POSITION
-        var bestDist = Float.MAX_VALUE
-        for (i in 0 until childCount) {
-            val child = getChildAt(i) ?: continue
-            val pos = getChildAdapterPosition(child)
-            if (pos == NO_POSITION || pos == from) continue
-            if (cx >= child.left && cx <= child.right &&
-                cy >= child.top && cy <= child.bottom
-            ) {
-                return pos
-            }
-            val dx = cx - (child.left + child.right) / 2f
-            val dy = cy - (child.top + child.bottom) / 2f
-            val dist = dx * dx + dy * dy
-            if (dist < bestDist) {
-                bestDist = dist
-                nearest = pos
-            }
-        }
-        return nearest
-    }
-
-    /** Test seam: the drop index for a point, without a real gesture. */
-    internal fun targetForPoint(cx: Float, cy: Float, from: Int): Int =
-        targetIndexAt(cx, cy, from)
-
     private inner class GridAdapter : Adapter<VH>() {
         var pages: MutableList<File> = mutableListOf()
 
@@ -319,11 +192,7 @@ class PageGridView @JvmOverloads constructor(
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val binding = ItemPageGridBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            // test25 Phase 5B: the glass card face. Set in code — MaterialCardView
-            // silently drops XML android:background (setBackgroundDrawable early-
-            // returns until initialization finishes). Overwriting the background
-            // also disables the card's own stroke, so selection is driven through
-            // the drawable's state_selected branch (see bind).
+            // The glass card face: set in code (MaterialCardView drops XML backgrounds).
             binding.root.setBackgroundResource(R.drawable.bg_glass_card_ripple)
             return VH(binding)
         }
@@ -360,26 +229,25 @@ class PageGridView @JvmOverloads constructor(
                 binding.pageThumb
             )
 
-            // Checkbox = selection only; visible only in Select pages mode (T5.2).
+            // The round check exists only in selection mode; it is not a drag handle.
             binding.checkSelect.isVisible = checkboxesVisible
-            binding.checkSelect.isChecked = checkedAt(index)
+            binding.checkSelect.imageAlpha = if (checkedAt(index)) 255 else 0
             binding.checkSelect.setOnClickListener {
                 val pos = bindingAdapterPosition
                 if (pos != NO_POSITION) onCheckToggle?.invoke(pos)
             }
 
-            // The grip is a visual affordance only: the RecyclerView intercepts
-            // the gesture itself (onInterceptTouchEvent) when a touch lands here.
-            binding.dragHandle.isClickable = false
-            binding.dragHandle.isFocusable = false
-
             binding.root.setOnClickListener {
                 val pos = bindingAdapterPosition
                 if (pos != NO_POSITION) onTap?.invoke(pos)
             }
-            // Selected state → the glass drawable's state_selected branch paints
-            // the 2dp cyan stroke + tinted fill (the card's own stroke can no
-            // longer render once the background is overwritten).
+            // Long-press enters selection; ItemTouchHelper also starts the drag from here.
+            binding.root.setOnLongClickListener {
+                val pos = bindingAdapterPosition
+                if (pos != NO_POSITION) onLongPress?.invoke(pos)
+                true
+            }
+            // Selected state paints the cyan stroke + tinted fill via the drawable.
             binding.root.isSelected = checkedAt(index)
         }
     }

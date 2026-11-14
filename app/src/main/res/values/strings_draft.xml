@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L5 wave 2: Organize page draft (PM-2.2b engine messages, PM-2.2c draft bar and prompts). -->
+<resources>
+    <!-- Engine -->
+    <string name="draft_open_refused">Finish or discard the unsaved page edits first.</string>
+    <string name="draft_stale">This document changed after these edits started. They can only be discarded.</string>
+    <string name="draft_damaged">These unsaved edits are damaged and can only be discarded.</string>
+    <string name="draft_edited_name">%1$s (edited)</string>
+
+    <!-- Organize screen -->
+    <string name="draft_header">Draft · %1$d pages · %2$d changes</string>
+    <string name="draft_save_new">Save as new copy</string>
+    <string name="draft_replace">Replace original</string>
+    <string name="draft_discard">Discard</string>
+    <string name="draft_keep_editing">Keep editing</string>
+    <string name="draft_back_title">Unsaved page edits</string>
+    <string name="draft_back_msg">Your saved document hasn’t changed. Save these edits as a new copy, or discard them.</string>
+    <string name="draft_replace_title">Replace “%1$s”?</string>
+    <string name="draft_replace_msg">The current version moves to Trash as “%1$s (previous version)”. You can restore it from there.</string>
+    <string name="draft_discard_msg">Discard %1$d page edits? The saved document stays as it is.</string>
+    <string name="draft_saved_new">Saved as “%1$s”</string>
+    <string name="draft_replaced">Replaced. The previous version is in Trash.</string>
+    <string name="trash_previous_version">%1$s (previous version)</string>
+
+    <!-- Selection mode (owner revision) -->
+    <string name="draft_select_all">Select all</string>
+    <string name="draft_delete_msg">The pages are removed from the draft. The saved document stays as it is.</string>
+    <string name="draft_rotate_left">Rotate left</string>
+    <string name="draft_move_to">Move to…</string>
+    <string name="draft_move_to_hint">Page number</string>
+    <string name="draft_move_invalid">That page does not exist.</string>
+    <plurals name="draft_delete_title">
+        <item quantity="one">Delete %1$d page?</item>
+        <item quantity="other">Delete %1$d pages?</item>
+    </plurals>
+</resources>
