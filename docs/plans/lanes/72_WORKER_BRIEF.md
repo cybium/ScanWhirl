@@ -22,7 +22,9 @@ merges your work, and reads your final reply. There is no human to answer questi
 - Red/green loop on one test class:
   `powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane <LANE> -Tests "com.scanwhirl.app.<pkg>.<Class>"`
 - Full gate before every commit: `powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane <LANE>`
-- ALWAYS run the gate with a shell timeout of 5400000 ms (90 min). It may wait in line; that is normal, never cancel it.
+- ALWAYS run the gate in the FOREGROUND with a shell timeout of 5400000 ms (90 min). NEVER run it in the background and
+  NEVER end your turn while a gate is waiting: ending your turn ends your session and the lead must restart you.
+  It may wait in line; that is normal, never cancel it.
   Your first build is ~3 min (cold), later ones ~1 min. The last line says GATE PASS or GATE FAIL.
 - Never run gradle yourself (no gradlew, no assemble): only through the gate.
 
