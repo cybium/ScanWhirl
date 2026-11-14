@@ -133,6 +133,21 @@ class ProtectionStateTest {
         assertEquals(PdfProtection.State.NONE, repo.protectionState(id))
     }
 
+    // Pins the isEncodable guard in ScanRepository.repairProtection (lead-engineer fix after PM-3.1c):
+    // an old lock made with a non-Latin password verifies (UTF-8 hash) but cannot be a PDF password,
+    // so repair must refuse instead of encrypting with a password the user can never type.
+    @Test fun `repair refuses a legacy password the PDF cannot encode and changes nothing`() {
+        val legacy = "पासवर्ड1"
+        val id = DocFixtures.saved(repo, app)
+        Durable.atomicWriteText(File(dirOf(id), "locked.meta"), Prefs.sha256("pdf_lock:$legacy"))
+        val before = PdfInvariants.dirDigest(dirOf(id))
+        val r = runCatching { runBlocking { repo.repairProtection(id, legacy) } }
+        assertTrue("repair must refuse a password outside Latin-1, got ${r.exceptionOrNull()}", r.isFailure)
+        assertEquals(app.getString(R.string.password_charset), r.exceptionOrNull()?.message)
+        assertEquals("a refused repair changed bytes", before, PdfInvariants.dirDigest(dirOf(id)))
+        assertEquals(PdfProtection.State.NEEDS_REPAIR, repo.protectionState(id))
+    }
+
     private fun latestTitle(): String? =
         ShadowDialog.getLatestDialog()
             ?.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.text?.toString()

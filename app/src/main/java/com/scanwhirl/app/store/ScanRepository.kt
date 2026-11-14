@@ -1637,6 +1637,12 @@ class ScanRepository(private val context: Context) {
             if (!verifyPdfPassword(id, password)) {
                 throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
             }
+            // A legacy lock made with a non-Latin password verifies (the hash is UTF-8) but the PDF
+            // password is ISO-8859-1, so encrypting would lock the file with a password nobody can type.
+            // Refuse; the user can choose Remove lock instead.
+            if (!PdfProtection.isEncodable(password)) {
+                throw IllegalArgumentException(context.getString(R.string.password_charset))
+            }
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             encryptInto(dir, doc, password, "repair")
             recordLockIndex(File(dir, PdfProtection.PDF_FILE), id)
