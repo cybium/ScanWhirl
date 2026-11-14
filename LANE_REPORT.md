@@ -1,124 +1,109 @@
-# LANE_REPORT — L5 Edit & sign / Organize draft
+# LANE_REPORT — L5 Edit & sign / Organize / Mask Aadhaar
 
-Wave 2 session 2026-11-14. Branch `lane/L5-stamp`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L5`.
+Wave 2 sessions 2026-11-14/15. Branch `lane/L5-stamp`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L5`.
 
-## Done — PM-2.2b draft engine
+## Done — Organize draft (PM-2.2b / 2.2c / 2.3b)
 
-- **`store/DraftStore.kt` (new)** — `drafts/<id>/draft.txt` manifest over the immutable base:
-  header, base id + page digest, created/updated/counters and one `p=<source>\t<sha>\t<r_n.jpg|->\t<r_n.orig|->`
-  line per page. Strict validation (never a partial draft), unreferenced `r_*` pruned on load,
-  atomic manifest replace, discard renames the folder aside first.
-- **Draft API at the END of `ScanRepository.kt`** — `draftOf`, `draftPages`, `draftRotate`,
-  `draftDelete`, `draftMove`, `draftCrop`, `draftFilter`, `discardDraft`, `saveDraftAsNew`
-  (full copy or extract subset) and `replaceWithDraft`, all under one `DRAFT_LOCK`.
-- **Lease (I7)**: `requireEditable` refuses in-place page edits while a draft exists;
-  `protectPdf` refuses too. `requireUnlocked` is unchanged, so OCR PDF refresh stays allowed.
-- **`buildAndPublish(seal)`** — seal file (`OpStaging.SEAL`) written after verification, before the
-  rename. Replace = two renames under `PDF_LOCK → OcrStore → TRASH_LOCK`, with
-  `previous=<token>` in the Trash marker. A death between them raises `PublishPending` and leaves the
-  sealed staging; recovery rolls it forward.
-- **`trashUnderLocks`** extracted (behaviour identical; `TrashTest` unedited) and
-  `TrashedDocument.previousToken` parsed. `OcrStore.putAll` carries base OCR for untouched pages
-  (I9: replaced pages lose text and get `ocr_pending`).
-- **`recoverOperations`** (order): roll forward sealed Replace → finish `.publish` in documents
-  (discard the matching draft, delete the seal) → drop `.discard-*` and drafts whose base is gone
-  from docs **and** Trash (only manifests we can read) → sweep staging. Returns roll-forward + sweep
-  count, so MainActivity refreshes when a Replace is finished.
-- MainActivity startup refreshes the list when recovery rolled a Replace forward.
-- Strings in `values/strings_draft.xml` + `values-hi/strings_draft.xml` (Hindi starts
-  `<!-- review -->`).
+- `store/DraftStore.kt`: manifest over the immutable base (`drafts/<id>/draft.txt`), strict
+  validation, atomic replace, pruning, discard; `ScanRepository` draft API at the end of the class
+  (`draftOf/Pages/Rotate/Delete/Move/Crop/Filter/InsertPages`, `discardDraft`, `saveDraftAsNew`,
+  `replaceWithDraft`) under one `DRAFT_LOCK`.
+- Lease (I7): `requireEditable` and `protectPdf` refuse while a draft exists. Save/Replace use
+  `buildAndPublish(seal)`; Replace is two renames with `previous=<token>` in Trash, rolled forward by
+  `recoverOperations`. OCR carry-over for untouched pages; replaced pages lose text and get
+  `ocr_pending` (I9). `TrashTest` unedited.
+- Organize screen: draft bar, kit Back/Replace/Discard sheets, previous-version Trash label; owner
+  revision of the grid (clean tiles, long-press selection, ItemTouchHelper drag, top/bottom kit bars,
+  SwSheet Delete, share/extract/rotate on the draft).
+- Full-page editor: crop/filter/rotate/delete on the draft; filters never stack; Original restores the
+  base reference.
+- Crop QA: presets reshape the frame (centred/clamped), 4 corner + 4 edge cyan handles (24dp),
+  scrollable chip row with end padding, page toolbar hidden in crop mode.
+- Insert pages (Free, Organize): camera / photos / another library document → position sheet →
+  copied into the draft at the start / after page N / end; also in the selection ⋯ and the empty
+  state. Inserted pages have no base source; the base is never touched.
 
-## Done — PM-2.2c Organize screen
+## Done — Import signature / stamp from a photo
 
-- Page edits (rotate/delete/move/reorder/extract-from-selection) write to the draft; opening creates
-  nothing. `draftBar` shows `Draft · N pages · K changes` with Discard / Replace / Save as new.
-- Back prompt is a kit `SwSheet`: Save as new copy · Discard (X = keep editing). Replace confirmation
-  and Discard confirmation are `SwSheet`s. Save-as-new name uses `SwSheet.setInput`.
-- Damaged/stale drafts show their message with a single Discard action.
-- Trash rows show `‹name› (previous version)` for a Replace entry.
-- **Owner revision of the Organize grid**:
-  - clean tiles (page number only); no drag-handle box; tap opens the page;
-  - long-press enters selection mode and selects that tile; round check (kit cyan) only in selection
-    mode; top bar `N selected` with close (X) and Select all;
-  - reorder is `ItemTouchHelper` long-press drag in normal and selection mode, one `onDropped`;
-  - bottom selection bar, kit style: Rotate · Delete · Extract · Share · ⋯. Delete asks in a
-    `SwSheet`; ⋯ has Rotate left and, for 10+ pages with one selected, Move to… (typed page number);
-  - Share exports the selected draft pages as images (`ShareUtils.shareImages`).
-- `extractedName()` extracted for both the plain extract path and draft extract.
+- `util/InkExtract.kt`: sampled decode (≤ 2000 px), local 80th-percentile paper estimate + closing,
+  smooth alpha, ink hue (black/blue/other), Original/Black/Blue recolour, trimmed transparent PNG.
+- `SignatureStore` stores bitmap signatures (v2 manifest + PNG) beside vector ones, 5 total.
+- `store/StampStore.kt`: "My stamps", up to 10 transparent PNGs, colour and round shape kept.
+- `PageStamp.Mark.Picture`: imported ink renders, moves, resizes and rotates like a signature;
+  `outputName` calls it signed.
+- UI: signatures sheet has "From photo" (gallery/camera) plus Draw; badges sheet has My stamps and
+  Import a stamp from a photo; checkerboard preview with recolour options.
 
-## Done — PM-2.3b full-page editor
+## Done — Mask Aadhaar (Free, Edit & sign)
 
-- `PageViewerActivity` crop/filter/rotate/delete write to the draft; staging mode is untouched.
-- Filters always start from the unfiltered version; `Original` returns a pure base reference, so OCR
-  carry-over works again.
+- `util/AadhaarMask.kt`: OCR noise (O/o→0, l/I/|→1), 12-digit Aadhaar and 16-digit VID, spaces or
+  not; boxes cover exactly the first 8 digits.
+- New tool `mask_aadhaar`: pick a document → stamp editor seeded with redaction boxes on every page
+  (stored OCR, or ML Kit recognition when missing) → adjust/add boxes → save through true redaction
+  into a new copy named `<name> - Masked`; the copy's OCR text for those pages is gone and re-queued.
+- Optional QR masking was left out (lead marked it optional); the user can add a box.
 
-## Done — crop panel phone QA (run 1, 022/023)
+## Done — QA run 2 Back behaviour
 
-- **Presets reshape the frame**: `CropView.aspectRatio` setter fits the largest rect of that ratio
-  inside the image, centred on the current frame and clamped (Free = no reshape).
-- **Eight handles**: 4 corner dots + 4 edge bars, kit cyan, 24dp touch radius; corners and edges drag
-  in image pixels; a preset keeps its ratio while dragging.
-- **Preset row**: `clipToPadding=false` + 28dp end padding, so `Visa 5:7` is no longer clipped.
-- **Crop mode chrome**: the page dock, close button and page indicator are hidden while cropping;
-  only Cancel / Apply plus the preset row remain. Restored on cancel/apply.
+- Stamp editor: first Back with unsaved marks shows the kit discard sheet; no marks closes at once.
+  The text sheet now hides the IME on save so a stale keyboard cannot swallow the first Back.
+- Page viewer: Back keeps the draft rotate and Organize shows `Draft · 2 pages · 1 changes`; staging
+  Back keeps the staged rotate; Scan Review's Back asks "Discard this scan?" with Keep editing.
 
-## Tests added / updated
+## Tests
 
-- `DraftEngineTest` (11) — base untouched; crash at `draft:saved`/`draft:replacement_written` and
-  pruning; discard isolation; Save as new (rotated size, OCR carry, I1/I4/I10); Replace (same id,
-  byte-identical meta, one previous version in Trash, restore byte-identical, I8); roll-forward after
-  `replace:base_trashed` and sealed death; lease (rotate + protect refused); stale base keeps the
-  draft; OCR carry-over/pending after Replace; recovery keeps a draft whose base is in Trash and drops
-  one whose base is gone; locked document cannot start a draft.
-- `OrganizeDraftUiTest` (7) — rotate leaves the base byte-identical; Back sheet has Save/Discard;
-  Discard restores; Save as new; Replace + previous-version Trash label; long-press/selection bar
-  rotate+delete act on the draft; reopening after process death shows the draft.
-- `PageEditorDraftTest` (5) — crop in the viewer writes the draft; filters never stack, Original
-  returns to the base; rotate/delete write the draft; crop+discard; saved copy cropped with its
-  original.
-- `CropPanelTest` (6) — preset aspect + clamping; corner and edge handles move the frame; aspect kept
-  while dragging; 8 handles in view; crop mode hides the toolbar; preset chip reshapes the frame and
-  the row has end padding.
-- Rewritten old UI-shape tests with `// v2 UI:` notes: `Phase5ScreensTest` long-press selection,
-  `UiSmokeTest` grid drag + viewer toolbar test. Card-mandated rewrites: `UiSmokeTest` page-viewer
-  delete/crop, viewer delete/undo/reorder.
-- Full suite green: **1118 tests, 0 failures, 0 skipped** (final merged tree, two consecutive runs).
+- `DraftEngineTest` (15) — manifest/crash/prune/discard/Save/Replace/lease/stale/OCR/recovery/insert.
+- `OrganizeDraftUiTest` (8) — base untouched, Back sheet, discard, save, replace, selection bar,
+  insert pages, process death.
+- `PageEditorDraftTest` (7) — crop/filter/rotate/delete on the draft; crop discard; saved copy;
+  page-viewer Back keeps edits; staging Back keeps the rotate.
+- `CropPanelTest` (6), `InkExtractTest` (3), `SignatureStoreBitmapTest` (2),
+  `PageStampPictureTest` (2), `AadhaarMaskTest` (4), `MaskAadhaarFlowTest` (1),
+  `SignatureDeleteTest` (1), `ScanReviewBackTest` (1).
+- Rewritten old UI-shape tests with `// v2 UI:` notes (Phase5 grid, UiSmoke grid/toolbar, tool counts
+  for the 44-tool catalogue).
+- All owner "normal always-on" cases are covered; the masked-copy test proves the original is
+  byte-identical with `dirDigest`.
 
-## Not done / notes for the lead
+## Evaluation (owner material, never committed)
 
-- I edited `ui/MainActivity.kt` (startup recovery refresh) and `util/ShareUtils.kt`
-  (`shareImages` for the selection Share) beyond the stated owner list; both are small and required by
-  PM-2.2b §5.4 / the owner's Share action. No protect/RC4 path was touched in DocumentViewer.
-- `moveToTrash` writes the `previous=` marker best-effort, like the rest of the marker.
-- Damaged drafts are never deleted by recovery (only parsed drafts whose base is gone); the user gets
-  the Discard sheet in the editor.
-- Card Gate G's old totals are obsolete; use the gate line below.
+`L5OwnerEvalTest` runs only when `…\.sw-qa\owner\EVAL_ON` exists and writes previews to
+`…\.sw-qa\owner\out\L5\`. `EVAL_ON` was created, the class run with `-Tests`, then deleted.
+
+- Signatures: black (338x446), black JPG (456x354), blue-on-grey (618x279, hue BLUE) — transparent
+  background, blue kept.
+- Stamp `images(3).jpg`: round purple seal, 363x364, background removed.
+- Aadhaar: this host has no ML Kit text model, so the four previews use a FAKE OCR geometry (a
+  plausible lower-middle line) as allowed; `notes.txt` says `OCR=FAKE`. On `1(1).jpg` the box covers
+  `9233 6926` and leaves `4947` visible. The device path uses ML Kit boxes.
+
+## Not done / notes
+
+- `util/OutputNames.forTool` is not in integration; `ScanRepository.stampDocument` keeps a
+  `TODO(OutputNames)` line next to `PageStamp.outputName`.
+- Mask boxes are estimated inside OCR line boxes (character fraction), not per glyph; adjustable.
+- Stamps have no delete UI yet (store API exists).
+- Copy: no long dash in user-visible strings; English values short, Hindi values stay long.
 
 ## Device checks (lead)
 
-1. Organize: long-press a page → check + top bar; tap tiles to toggle; Select all; X leaves.
-2. Drag a tile (normal and selection mode) → drop reorders the draft; Home order unchanged until
-   Save/Replace.
-3. Selection bar Rotate/Delete (SwSheet)/Extract/Share/⋯; Share opens the sheet with the selected
-   images; Move to… on a 10+ page document.
-4. Draft bar: force-stop and reopen → draft intact; Discard; Save as new; Replace → Trash shows
-   “(previous version)” and restores.
-5. Crop: pick ID card/Passport/Visa → frame jumps to the ratio; drag corners and edge bars; Visa chip
-   fully scrolls into view; no page dock/close behind the crop panel; Cancel/Apply only.
-6. Full-page editor: crop/filter/rotate/delete → Organize shows K changes; Original filter restores.
+1. Signature From photo (gallery + camera), recolour, place, resize/rotate.
+2. Stamp import: colour kept, round, listed under My stamps.
+3. Mask Aadhaar on the owner cards: first 8 digits boxed, last 4 visible; adjust; save → "… - Masked",
+   solid black, OCR text gone.
+4. Back behaviour (stamp editor, page viewer, Scan Review) from QA run 2.
+5. Insert pages: position sheet, draft bar, Discard/Save/Replace.
+6. Crop presets and all 8 handles; no toolbar behind the crop panel.
 
-## Commits
+## Commits (latest batch)
 
-- `e542bd0` PM-2.2b draft engine (manifest, Save as new, Replace, roll-forward, lease)
-- `7da3b77` PM-2.2c Organize screen on the draft (bar, sheets, previous-version label)
-- `0e41523` PM-2.3b full-page editor on the draft (crop/filter/rotate/delete)
-- `41ec1fb` merge integration; `529f965` Organize grid owner revision
-- `976557c` merge integration; `2f980b3` crop panel QA fixes; `e260dc1` merge integration
-- (this report) L5: report
+- `acf1e2d` import signature/stamp ink from photos, Mask Aadhaar, owner eval, tests
+- `833d510` merge integration (44-tool catalogue)
+- (report) L5: report
 
 ## Last gate
 
 ```
-tests: total=1118 failures=0 skipped=0
-GATE PASS L5 tests=1118 lint=[lint skipped (lead runs it at merge)]
+tests: total=1250 failures=0 skipped=0
+GATE PASS L5 tests=1250 lint=[lint skipped (lead runs it at merge)]
 ```
