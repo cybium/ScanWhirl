@@ -9,6 +9,8 @@
     <item name="swSheetContent" type="id" />
     <item name="swSheetPrimary" type="id" />
     <item name="swSheetSecondary" type="id" />
+    <item name="swSheetItems" type="id" />
+    <item name="swSheetInput" type="id" />
 
     <item name="swPasswordField" type="id" />
     <item name="swPasswordToggle" type="id" />

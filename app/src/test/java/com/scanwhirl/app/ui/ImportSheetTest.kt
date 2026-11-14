@@ -152,7 +152,8 @@ abstract class ImportSheetBase {
             val text = confirm.window!!.decorView.allText()
             assertTrue("title kept", text.contains(app.getString(R.string.edit_pdf_note_title)))
             assertTrue("rasterize warning kept", text.contains(app.getString(R.string.pdf_rasterize_note)))
-            confirm.findViewById<View>(android.R.id.button2).performClick() // Cancel
+            // v2 UI: 09_unlock_sheet — Cancel is the sheet's secondary button.
+            confirm.findViewById<View>(R.id.swSheetSecondary).performClick() // Cancel
             assertEquals("cancel imports nothing", 0, docCount())
         }
     }

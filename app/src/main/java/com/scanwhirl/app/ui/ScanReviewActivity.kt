@@ -930,15 +930,14 @@ class ScanReviewActivity : BaseActivity() {
         if (refuseWhileBusy()) return
         val all = ScanFilter.entries
         val index = currentIndex
-        SwDialog.sheet(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.filter_title)
-            .setSingleChoiceItems(
-                all.map { getString(it.labelRes) }.toTypedArray(),
+            .setOptions(
+                all.map { getString(it.labelRes) },
                 all.indexOf(filters[file.path] ?: ScanFilter.ORIGINAL)
-            ) { dialog, which ->
-                dialog.dismiss()
+            ) { which, _ ->
                 val chosen = all[which]
-                if (chosen == (filters[file.path] ?: ScanFilter.ORIGINAL) || !file.exists()) return@setSingleChoiceItems
+                if (chosen == (filters[file.path] ?: ScanFilter.ORIGINAL) || !file.exists()) return@setOptions
                 filters[file.path] = chosen
                 filtersEdited = true
                 writeFilters()
@@ -946,8 +945,9 @@ class ScanReviewActivity : BaseActivity() {
                 renderPages()
                 snack(getString(R.string.review_filter_set, index + 1, getString(chosen.labelRes)), null)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     /** Rewrites filters.txt; entries for pages hidden by a pending delete are kept for Undo. */
@@ -980,15 +980,15 @@ class ScanReviewActivity : BaseActivity() {
     private fun showMoveTo() {
         if (pages.size < 2 || refuseWhileBusy()) return
         val from = currentIndex
-        val labels = pages.indices.map { getString(R.string.review_move_position, it + 1) }.toTypedArray()
-        SwDialog.sheet(this)
+        val labels = pages.indices.map { getString(R.string.review_move_position, it + 1) }
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(getString(R.string.review_move_title, from + 1))
-            .setSingleChoiceItems(labels, from) { dialog, which ->
-                dialog.dismiss()
+            .setOptions(labels, from) { which, _ ->
                 if (which != from) reorderStaging(from, which, announce = true)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun deletePage(file: File) {
@@ -1254,24 +1254,25 @@ class ScanReviewActivity : BaseActivity() {
         } else {
             R.string.review_conflict_modified
         }
-        SwDialog.card(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.review_conflict_title)
             .setMessage(message)
-            .setPositiveButton(R.string.review_conflict_save_new) { _, _ -> saveAndFinish(SavedCopyPolicy.SAVE_AS_NEW) }
-            .setNeutralButton(R.string.review_conflict_open) { _, _ ->
+            .setPrimary(R.string.review_conflict_save_new) { saveAndFinish(SavedCopyPolicy.SAVE_AS_NEW) }
+            .setSecondary(R.string.review_conflict_open) {
                 startActivity(DocumentViewerActivity.intent(this, conflict.documentId))
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .build()
+            .show()
     }
 
     private fun confirmDiscard() {
-        SwDialog.danger(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.review_discard_title)
             .setMessage(R.string.review_discard_msg)
-            .setPositiveButton(R.string.discard) { _, _ -> discard() }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .setPrimary(R.string.discard) { discard() }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun discard() {

@@ -145,6 +145,10 @@ class SwSheet private constructor(
         dialog.behavior.peekHeight = (context.resources.displayMetrics.heightPixels * 0.45f).toInt()
     }
 
+    /** The sheet's text field, created by [setInput]; tests find it as swSheetInput. */
+    var inputView: android.widget.EditText? = null
+        private set
+
     fun setTitle(text: CharSequence): SwSheet = apply { titleView.text = text }
     fun setTitle(res: Int): SwSheet = setTitle(view.context.getString(res))
 
@@ -159,6 +163,127 @@ class SwSheet private constructor(
         contentContainer.removeAllViews()
         contentContainer.addView(content)
         contentContainer.isVisible = true
+    }
+
+    /** A quiet text field for rename / merge-name sheets. */
+    fun setInput(
+        initial: String? = null,
+        hint: CharSequence? = null,
+        inputType: Int = android.text.InputType.TYPE_CLASS_TEXT
+    ): SwSheet = apply {
+        val context = view.context
+        val field = android.widget.EditText(context).apply {
+            id = R.id.swSheetInput
+            this.hint = hint
+            setHintTextColor(SwStyle.color(context, R.color.text_hologram_dim))
+            setTextColor(SwStyle.color(context, R.color.text_hologram_hi))
+            typeface = SwType.regular(context)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
+            this.inputType = inputType
+            background = SwStyle.rounded(
+                context,
+                SwStyle.color(context, R.color.glass_surface_raised),
+                14f,
+                stroke = SwStyle.color(context, R.color.sw_cyan_hair)
+            )
+            val padH = SwStyle.dp(context, 14f)
+            val padV = SwStyle.dp(context, 12f)
+            setPadding(padH, padV, padH, padV)
+            minHeight = SwStyle.dp(context, 48f)
+            includeFontPadding = false
+            if (!initial.isNullOrEmpty()) {
+                setText(initial)
+                setSelection(initial.length)
+            }
+        }
+        inputView = field
+        setContent(field)
+    }
+
+    /**
+     * v2 UI: 05_protect_pdf / 09_unlock_sheet — the one list in the app.
+     *
+     * Rows live in `R.id.swSheetItems` in order (tests click a row by index).
+     * A single-choice pick calls [onPick] and closes; multi-choice rows toggle
+     * and leave the sheet open for the primary button.
+     */
+    fun setOptions(
+        labels: List<CharSequence>,
+        checked: Int = -1,
+        multiChecked: BooleanArray? = null,
+        onPick: (Int, Boolean) -> Unit
+    ): SwSheet = apply {
+        val context = view.context
+        val multi = multiChecked != null
+        val selected = multiChecked?.copyOf() ?: BooleanArray(labels.size) { it == checked }
+        val ripple = android.util.TypedValue().also {
+            context.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
+        }
+        val list = LinearLayout(context).apply {
+            id = R.id.swSheetItems
+            orientation = LinearLayout.VERTICAL
+        }
+        fun render() {
+            list.removeAllViews()
+            labels.forEachIndexed { index, label ->
+                val row = LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    isClickable = true
+                    isFocusable = true
+                    minimumHeight = SwStyle.dp(context, 48f)
+                    tag = index
+                    contentDescription = label
+                    setBackgroundResource(ripple.resourceId)
+                    setPadding(
+                        SwStyle.dp(context, 6f), SwStyle.dp(context, 6f),
+                        SwStyle.dp(context, 6f), SwStyle.dp(context, 6f)
+                    )
+                }
+                row.addView(
+                    SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi)).apply {
+                        text = label
+                    },
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                )
+                if (selected[index]) {
+                    row.addView(android.widget.ImageView(context).apply {
+                        setImageResource(R.drawable.ic_sym_check)
+                        imageTintList = android.content.res.ColorStateList.valueOf(
+                            SwStyle.color(context, R.color.cyan_primary)
+                        )
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                        layoutParams = LinearLayout.LayoutParams(
+                            SwStyle.dp(context, 20f), SwStyle.dp(context, 20f)
+                        )
+                    })
+                }
+                row.setOnClickListener {
+                    if (multi) {
+                        selected[index] = !selected[index]
+                        render()
+                        onPick(index, selected[index])
+                    } else {
+                        onPick(index, true)
+                        dialog.dismiss()
+                    }
+                }
+                list.addView(row)
+            }
+        }
+        render()
+        val scroll = androidx.core.widget.NestedScrollView(context).apply {
+            isFillViewport = false
+            addView(list)
+        }
+        val tall = labels.size > 8
+        setContent(scroll)
+        if (tall) {
+            scroll.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (context.resources.displayMetrics.heightPixels * 0.5f).toInt()
+            )
+        }
     }
 
     fun setPrimary(text: CharSequence, onClick: (() -> Unit)? = null): SwSheet = apply {
@@ -190,6 +315,19 @@ class SwSheet private constructor(
         primaryButton.setOnClickListener(null)
     }
 
+    /**
+     * A primary whose work decides when to close: the sheet stays open (a
+     * failed save keeps the retry in place) and the caller dismisses it.
+     */
+    fun setPrimaryStayOpen(text: CharSequence, onClick: (() -> Unit)? = null): SwSheet = apply {
+        primaryButton.text = text
+        primaryButton.isVisible = true
+        primaryButton.setOnClickListener { onClick?.invoke() }
+    }
+
+    fun setPrimaryStayOpen(res: Int, onClick: (() -> Unit)? = null): SwSheet =
+        setPrimaryStayOpen(view.context.getString(res), onClick)
+
     fun show(): SwSheet = apply {
         dialog.setOnShowListener {
             // The Material sheet frame paints its own light background; the kit's
@@ -213,6 +351,18 @@ class SwSheet private constructor(
         fun setMessage(text: CharSequence) = apply { sheet.setMessage(text) }
         fun setMessage(res: Int) = apply { sheet.setMessage(res) }
         fun setContent(content: View) = apply { sheet.setContent(content) }
+        fun setInput(
+            initial: String? = null,
+            hint: CharSequence? = null,
+            inputType: Int = android.text.InputType.TYPE_CLASS_TEXT
+        ) = apply { sheet.setInput(initial, hint, inputType) }
+
+        fun setOptions(
+            labels: List<CharSequence>,
+            checked: Int = -1,
+            multiChecked: BooleanArray? = null,
+            onPick: (Int, Boolean) -> Unit
+        ) = apply { sheet.setOptions(labels, checked, multiChecked, onPick) }
         fun setPrimary(text: CharSequence, onClick: (() -> Unit)? = null) = apply {
             sheet.setPrimary(text, onClick)
         }
@@ -223,6 +373,9 @@ class SwSheet private constructor(
         }
 
         fun setSecondary(res: Int, onClick: (() -> Unit)? = null) = apply { sheet.setSecondary(res, onClick) }
+        fun setPrimaryStayOpen(res: Int, onClick: (() -> Unit)? = null) = apply {
+            sheet.setPrimaryStayOpen(res, onClick)
+        }
         fun build(): SwSheet = sheet
     }
 

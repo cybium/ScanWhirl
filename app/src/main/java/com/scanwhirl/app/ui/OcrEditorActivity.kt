@@ -745,16 +745,16 @@ class OcrEditorActivity : BaseActivity() {
     // ------------------------------------------------------------------
 
     private fun showUnsavedConfirm() {
-        SwDialog.card(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ocr_unsaved_title)
             .setMessage(R.string.ocr_unsaved_msg)
-            .setPositiveButton(R.string.ocr_save_btn) { _, _ ->
+            .setPrimaryStayOpen(R.string.ocr_save_btn) {
                 saveCurrent(finishAfterSave = true)
             }
-            .setNegativeButton(R.string.ocr_discard_btn) { _, _ ->
+            .setSecondary(R.string.ocr_discard_btn) {
                 finish()
             }
-            .setNeutralButton(android.R.string.cancel, null)
+            .build()
             .show()
     }
 

@@ -121,10 +121,12 @@ class ResizeFlow(
             dialogBinding.checkAdvanced.isChecked = false
         }
 
-        SwDialog.sheet(activity)
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.resize_title)
-            .setView(dialogBinding.root)
-            .setPositiveButton(R.string.resize_action) { _, _ ->
+            .setContent(dialogBinding.root)
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.setPrimaryStayOpen(R.string.resize_action) {
                 val ratio = dialogBinding.checkRatio.isChecked
                 val ew = dialogBinding.editWidth.text.toString().toIntOrNull()
                 val eh = dialogBinding.editHeight.text.toString().toIntOrNull()
@@ -133,7 +135,7 @@ class ResizeFlow(
                 val target = if (targetText.isNullOrBlank()) null else ImageTools.parseSizeInput(targetText)
                 if (!targetText.isNullOrBlank() && target == null) {
                     Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
-                    return@setPositiveButton
+                    return@setPrimaryStayOpen
                 }
 
                 val (w, h) = when {
@@ -144,8 +146,9 @@ class ResizeFlow(
                 }
                 if (w !in 1..12000 || h !in 1..12000) {
                     Toast.makeText(activity, R.string.resize_invalid_size, Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
+                    return@setPrimaryStayOpen
                 }
+                sheet.dismiss()
                 // DPI is intentionally not exposed: a DPI tag alone does not change
                 // pixels, so only real pixel dimensions + target size are offered,
                 // and no DPI metadata is stamped the user didn't ask for.
@@ -156,9 +159,8 @@ class ResizeFlow(
                         maxBytes = target, keepPng = false, dpi = 0
                     )
                 )
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = true)
+        }
+        sheet.show()
     }
 
     private fun derive(from: Int, fromOrig: Int, toOrig: Int): Int =

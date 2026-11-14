@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import android.os.Looper
-import androidx.appcompat.app.AlertDialog
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.model.OcrLine
@@ -385,20 +384,32 @@ class SaveReviewIdentityTest {
                 shadow = shadowOf(activity)
                 activity.findViewById<android.view.View>(com.scanwhirl.app.R.id.btnSavePdf).performClick()
             }
-            var dialog: AlertDialog? = null
+            // v2 UI: 09_unlock_sheet — the save conflict is a SwSheet; find its
+            // buttons by id while the progress dialog is still up.
+            var dialog: android.app.Dialog? = null
             await {
-                dialog = ShadowDialog.getLatestDialog() as? AlertDialog
-                // Saving is also an AlertDialog. Wait for the actual conflict choice.
-                dialog?.isShowing == true && dialog?.getButton(AlertDialog.BUTTON_POSITIVE)?.text?.toString() ==
+                dialog = ShadowDialog.getLatestDialog()
+                dialog?.isShowing == true &&
+                    dialog?.findViewById<android.widget.TextView>(com.scanwhirl.app.R.id.swSheetPrimary)
+                        ?.text?.toString() ==
                     app.getString(com.scanwhirl.app.R.string.review_conflict_save_new)
             }
-            assertEquals(app.getString(com.scanwhirl.app.R.string.review_conflict_save_new), dialog!!.getButton(AlertDialog.BUTTON_POSITIVE).text.toString())
-            assertEquals(app.getString(com.scanwhirl.app.R.string.review_conflict_open), dialog!!.getButton(AlertDialog.BUTTON_NEUTRAL).text.toString())
+            assertEquals(
+                app.getString(com.scanwhirl.app.R.string.review_conflict_save_new),
+                dialog!!.findViewById<android.widget.TextView>(com.scanwhirl.app.R.id.swSheetPrimary)
+                    .text.toString()
+            )
+            assertEquals(
+                app.getString(com.scanwhirl.app.R.string.review_conflict_open),
+                dialog!!.findViewById<android.widget.TextView>(com.scanwhirl.app.R.id.swSheetSecondary)
+                    .text.toString()
+            )
             assertEquals("nothing saved, replaced or deleted yet", listOf(first.id), docDirs())
             assertTrue(s.dir.isDirectory)
 
             // "Open earlier document" opens it and keeps the review.
-            dialog!!.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+            dialog!!.findViewById<android.view.View>(com.scanwhirl.app.R.id.swSheetSecondary)
+                .performClick()
             shadowOf(Looper.getMainLooper()).idle()
             val opened = shadow!!.nextStartedActivity
             assertEquals(DocumentViewerActivity::class.java.name, opened.component?.className)
@@ -411,11 +422,14 @@ class SaveReviewIdentityTest {
                 activity.findViewById<android.view.View>(com.scanwhirl.app.R.id.btnSavePdf).performClick()
             }
             await {
-                dialog = ShadowDialog.getLatestDialog() as? AlertDialog
-                dialog?.isShowing == true && dialog?.getButton(AlertDialog.BUTTON_POSITIVE)?.text?.toString() ==
+                dialog = ShadowDialog.getLatestDialog()
+                dialog?.isShowing == true &&
+                    dialog?.findViewById<android.widget.TextView>(com.scanwhirl.app.R.id.swSheetPrimary)
+                        ?.text?.toString() ==
                     app.getString(com.scanwhirl.app.R.string.review_conflict_save_new)
             }
-            dialog!!.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            dialog!!.findViewById<android.view.View>(com.scanwhirl.app.R.id.swSheetPrimary)
+                .performClick()
             shadowOf(Looper.getMainLooper()).idle()
             await { repo.listDocuments().size == 2 }
         }

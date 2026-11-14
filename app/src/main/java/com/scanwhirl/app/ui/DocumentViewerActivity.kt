@@ -560,10 +560,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      */
     private fun showProPanel() {
         val dossier = layoutInflater.inflate(R.layout.dialog_pro_panel, null)
-        SwDialog.sheet(this)
-            .setView(dossier)
-            .setPositiveButton(android.R.string.ok, null)
-            .showSw(isSheet = true)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.pro_suite_title)
+            .setContent(dossier)
+            .setPrimary(android.R.string.ok)
+            .build()
+            .show()
     }
 
     /**
@@ -764,19 +766,20 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     private fun promptRename() {
         val doc = document ?: return
-        val (builder, input) = SwDialog.input(this, hint = getString(R.string.rename_title), initial = doc.name)
-        builder
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.rename_title)
-            .setPositiveButton(R.string.save) { _, _ ->
-                val newName = input.text?.toString()
-                if (!newName.isNullOrBlank()) {
-                    repo.renameDocument(doc.id, newName.trim())
-                    dirty = true
-                    lifecycleScope.launch { reloadDocument() }
-                }
+            .setInput(initial = doc.name, hint = getString(R.string.rename_title))
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.setPrimary(R.string.save) {
+            val newName = sheet.inputView?.text?.toString()
+            if (!newName.isNullOrBlank()) {
+                repo.renameDocument(doc.id, newName.trim())
+                dirty = true
+                lifecycleScope.launch { reloadDocument() }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+        }
+        sheet.show()
     }
 
     /**
@@ -819,13 +822,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             finish()
             return
         }
-        SwDialog.card(this)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.save_changes_title)
             .setMessage(R.string.save_changes_msg)
-            .setPositiveButton(R.string.overwrite_pdf) { _, _ -> finish() }
-            .setNeutralButton(R.string.save_as_new) { _, _ -> saveAsNewDocument() }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .setPrimary(R.string.overwrite_pdf) { finish() }
+            .setSecondary(R.string.save_as_new) { saveAsNewDocument() }
+            .build()
+            .show()
     }
 
     /**
@@ -950,12 +953,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val copies = DeleteExports.copiesFor(repo, doc.id)
         val body = DeleteExports.dialogBody(this, copies.size)
         val box: android.widget.CheckBox? = body.findViewById(R.id.deleteCopiesBox)
-        val builder = SwDialog.danger(this)
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.delete_title)
             .setMessage(getString(R.string.delete_vault_message, doc.name))
-            .setView(body)
-        builder
-            .setPositiveButton(R.string.delete) { _, _ ->
+            .setContent(body)
+            .setSecondary(android.R.string.cancel)
+            .setPrimary(R.string.delete) {
                 repo.deleteDocument(doc.id) // never blocked by copy removal
                 if (box?.isChecked == true && copies.isNotEmpty()) {
                     lifecycleScope.launch {
@@ -981,8 +984,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                     finish()
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+            .build()
+        sheet.show()
     }
 
     companion object {

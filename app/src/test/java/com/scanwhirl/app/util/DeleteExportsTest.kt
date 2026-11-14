@@ -2,7 +2,7 @@ package com.scanwhirl.app.util
 
 import android.app.Application
 import android.content.pm.ProviderInfo
-import androidx.appcompat.app.AlertDialog
+import android.view.View
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -129,7 +129,8 @@ class DeleteExportsTest {
             val note = dialog.findViewById<android.widget.TextView>(R.id.deleteCopiesNote)
             assertNotNull("the dialog says unproven copies stay", note)
             assertEquals(app.getString(R.string.delete_copies_unproven_note), note!!.text.toString())
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            // v2 UI: 09_unlock_sheet — the confirmation is a SwSheet; find its primary by id.
+            dialog.findViewById<View>(R.id.swSheetPrimary).performClick()
             assertTrue(poll { repo.listTrash().isEmpty() })
         }
         assertEquals("the older copy is kept", 1, media.scanwhirlPdfs().size)
@@ -197,17 +198,18 @@ class DeleteExportsTest {
             assertNotNull("the checkbox row appears for a proven copy (Q8)", box)
             assertTrue("default checked (Q8)", box!!.isChecked)
             if (uncheck) box.isChecked = false
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            dialog.findViewById<View>(R.id.swSheetPrimary).performClick()
             return awaitSnackbarText(scenario)
         }
     }
 
-    private fun awaitDialog(): AlertDialog {
+    private fun awaitDialog(): android.app.Dialog {
         val deadline = System.currentTimeMillis() + 8000
         while (System.currentTimeMillis() < deadline) {
             shadowOf(android.os.Looper.getMainLooper()).idle()
             val d = ShadowDialog.getLatestDialog()
-            if (d is AlertDialog && d.isShowing) return d
+            // v2 UI: 09_unlock_sheet — confirmations are SwSheets (found by id).
+            if (d != null && d.isShowing && d.findViewById<View>(R.id.swSheetPrimary) != null) return d
             Thread.sleep(30)
         }
         throw AssertionError("dialog never appeared")

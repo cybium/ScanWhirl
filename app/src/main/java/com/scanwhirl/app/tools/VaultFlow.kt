@@ -41,51 +41,51 @@ class VaultFlow(
             onNewVaultUnavailable()
             return
         }
-        val (builder, input) = SwDialog.input(
-            activity,
-            hint = activity.getString(R.string.vault_pin_hint),
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        )
-        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        builder
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.vault_enter_pin_title)
             .setMessage(R.string.vault_enter_pin_msg)
-            .setPositiveButton(R.string.unlock_pdf_open) { _, _ ->
-                val pin = input.text?.toString()?.trim().orEmpty()
-                if (Prefs.verifyVaultPin(activity, pin)) {
-                    setVaultMode(true)
-                } else {
-                    Toast.makeText(activity, R.string.vault_pin_wrong, Toast.LENGTH_LONG).show()
-                }
+            .setInput(
+                hint = activity.getString(R.string.vault_pin_hint),
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            )
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.inputView?.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        sheet.setPrimary(R.string.unlock_pdf_open) {
+            val pin = sheet.inputView?.text?.toString()?.trim().orEmpty()
+            if (Prefs.verifyVaultPin(activity, pin)) {
+                setVaultMode(true)
+            } else {
+                Toast.makeText(activity, R.string.vault_pin_wrong, Toast.LENGTH_LONG).show()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+        }
+        sheet.show()
     }
 
     fun promptSetVaultPin(onSuccess: () -> Unit) {
-        val (builder, input) = SwDialog.input(
-            activity,
-            hint = activity.getString(R.string.vault_pin_hint),
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        )
-        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        builder
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.vault_set_pin_title)
             .setMessage(R.string.vault_set_pin_msg)
-            .setPositiveButton(R.string.save) { _, _ ->
-                val pin = input.text?.toString()?.trim().orEmpty()
-                if (pin.length != 4 || !pin.all { it.isDigit() }) {
-                    Toast.makeText(activity, R.string.vault_pin_invalid, Toast.LENGTH_LONG).show()
-                } else {
-                    Prefs.setVaultPin(activity, pin)
-                    Toast.makeText(activity, R.string.vault_pin_saved, Toast.LENGTH_SHORT).show()
-                    onSuccess()
-                }
+            .setInput(
+                hint = activity.getString(R.string.vault_pin_hint),
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            )
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet.inputView?.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        sheet.setPrimary(R.string.save) {
+            val pin = sheet.inputView?.text?.toString()?.trim().orEmpty()
+            if (pin.length != 4 || !pin.all { it.isDigit() }) {
+                Toast.makeText(activity, R.string.vault_pin_invalid, Toast.LENGTH_LONG).show()
+            } else {
+                Prefs.setVaultPin(activity, pin)
+                Toast.makeText(activity, R.string.vault_pin_saved, Toast.LENGTH_SHORT).show()
+                onSuccess()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .showSw(isSheet = false)
+        }
+        sheet.show()
     }
 
     fun addToVault() {
