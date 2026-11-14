@@ -69,6 +69,7 @@ class LibraryScreen(
     private var docs: List<ScanDocument> = emptyList()
     private var query = ""
     private var category: String? = null
+    private var revealId: String? = null
 
     private val quickIds = listOf("merge", "compress", "sign", "protect", "to_word", "read_text")
 
@@ -189,6 +190,15 @@ class LibraryScreen(
         docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
         renderChips()
         renderDocs()
+    }
+
+    /**
+     * v2 UI: 01_home_A — highlight and scroll to a document after a tool's "Show in library".
+     * The target is kept so the post-onResume reload shows it highlighted too.
+     */
+    fun revealDocument(id: String) {
+        revealId = id
+        reload()
     }
 
     // ---- pieces -----------------------------------------------------------
@@ -463,6 +473,22 @@ class LibraryScreen(
                     setMargins(m, 0, m, SwStyle.dp(context, 10f))
                 }
             )
+            if (doc.id == revealId) {
+                card.isSelected = true
+                card.background = SwStyle.gradient(
+                    context,
+                    SwStyle.color(context, R.color.glass_surface_raised),
+                    SwStyle.color(context, R.color.glass_surface),
+                    18f,
+                    SwStyle.color(context, R.color.cyan_primary)
+                )
+                card.requestFocus()
+                card.post {
+                    card.requestRectangleOnScreen(
+                        android.graphics.Rect(0, 0, card.width, card.height), true
+                    )
+                }
+            }
         }
         emptyView.isVisible = docs.isEmpty()
         if (docs.isEmpty()) {

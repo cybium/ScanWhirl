@@ -14,6 +14,7 @@
     </plurals>
     <string name="tools_setup_no_docs">No documents yet. Scan something first.</string>
     <string name="tools_setup_pick_one">Choose a document first.</string>
+    <string name="tools_setup_locked">Locked</string>
     <string name="tools_setup_need_two">Choose at least two documents.</string>
     <string name="tools_setup_merge_device">Merge PDFs from this phone</string>
     <string name="tools_setup_merge_note">Pick two or more documents. They join in the order you tap them.</string>
@@ -69,13 +70,11 @@
     <string name="tools_id_hint">Scan the front, then the back. Choose one page or one page per side.</string>
     <string name="tools_id_front_title">Front side</string>
     <string name="tools_id_front_msg">Scan the front, or pick a photo from the gallery.</string>
-    <string name="tools_id_scan_front">Scan front side</string>
+    <string name="tools_id_scan_camera">Scan with camera</string>
     <string name="tools_id_pick_gallery">Pick from gallery</string>
     <string name="tools_id_back_title">Add the back side?</string>
     <string name="tools_id_back_msg">A back side can go below the front on the same page.</string>
-    <string name="tools_id_scan_back">Scan back side</string>
     <string name="tools_id_front_only">Front only</string>
-    <string name="tools_id_pick_back_gallery">Pick back side from gallery</string>
     <string name="tools_id_layout_title">Layout</string>
     <string name="tools_id_layout_msg">How to save the card? Last time: %1$s.</string>
     <string name="tools_id_layout_one">Both sides on one page</string>

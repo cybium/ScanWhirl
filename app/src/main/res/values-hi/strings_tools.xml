@@ -13,6 +13,7 @@
     </plurals>
     <string name="tools_setup_no_docs"><!-- review -->अभी कोई दस्तावेज़ नहीं। पहले स्कैन करें।</string>
     <string name="tools_setup_pick_one"><!-- review -->पहले दस्तावेज़ चुनें।</string>
+    <string name="tools_setup_locked"><!-- review -->लॉक है</string>
     <string name="tools_setup_need_two"><!-- review -->कम से कम दो दस्तावेज़ चुनें।</string>
     <string name="tools_setup_merge_device"><!-- review -->फ़ोन की PDF जोड़ें</string>
     <string name="tools_setup_merge_note"><!-- review -->दो या अधिक दस्तावेज़ चुनें। क्रम वही रहेगा।</string>
@@ -68,13 +69,11 @@
     <string name="tools_id_hint"><!-- review -->आगे, फिर पीछे स्कैन करें। एक पृष्ठ या अलग पृष्ठ।</string>
     <string name="tools_id_front_title"><!-- review -->आगे का भाग</string>
     <string name="tools_id_front_msg"><!-- review -->आगे का भाग स्कैन करें, या गैलरी से फ़ोटो चुनें।</string>
-    <string name="tools_id_scan_front"><!-- review -->आगे स्कैन करें</string>
+    <string name="tools_id_scan_camera"><!-- review -->कैमरे से स्कैन करें</string>
     <string name="tools_id_pick_gallery"><!-- review -->गैलरी से चुनें</string>
     <string name="tools_id_back_title"><!-- review -->पीछे का भाग जोड़ें?</string>
     <string name="tools_id_back_msg"><!-- review -->पीछे का भाग उसी पृष्ठ पर नीचे जा सकता है।</string>
-    <string name="tools_id_scan_back"><!-- review -->पीछे स्कैन करें</string>
     <string name="tools_id_front_only"><!-- review -->सिर्फ़ आगे</string>
-    <string name="tools_id_pick_back_gallery"><!-- review -->पीछे गैलरी से चुनें</string>
     <string name="tools_id_layout_title"><!-- review -->लेआउट</string>
     <string name="tools_id_layout_msg"><!-- review -->कार्ड कैसे सहेजें? पिछली बार: %1$s।</string>
     <string name="tools_id_layout_one"><!-- review -->दोनों एक पृष्ठ पर</string>

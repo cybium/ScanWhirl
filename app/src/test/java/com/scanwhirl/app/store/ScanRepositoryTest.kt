@@ -292,14 +292,14 @@ class ScanRepositoryTest {
 
         val compressed = repo.compressScan(doc.id, quality = 20, maxDim = 400)
 
-        assertEquals("${doc.name} (compressed)", compressed.name)
+        assertEquals("${doc.name} - Compressed", compressed.name)
         assertEquals(3, compressed.pageCount)
         assertTrue(compressed.pdfFile.exists())
         assertTrue("/Count 3" in compressed.pdfFile.readText(Charsets.ISO_8859_1))
         // source untouched
         val source = repo.listDocuments().first { it.id == doc.id }
         assertEquals(3, source.pageCount)
-        assertTrue(!source.name.contains("(compressed)"))
+        assertTrue(!source.name.contains(" - Compressed"))
         // downscale applied
         for (page in compressed.pageFiles) {
             val (w, h) = com.scanwhirl.app.util.ImageTools.imageSize(page.readBytes())!!

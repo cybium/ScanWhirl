@@ -380,8 +380,9 @@ class ToolResultActivity : BaseActivity() {
     }
 
     private fun showInLibrary() {
+        val docId = docIds.firstOrNull()
         startActivity(
-            Intent(this, ShellActivity::class.java).addFlags(
+            ShellActivity.intent(this, docId).addFlags(
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
         )

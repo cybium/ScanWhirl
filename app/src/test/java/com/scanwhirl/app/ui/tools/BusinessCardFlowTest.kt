@@ -183,12 +183,13 @@ class BusinessCardFlowTest {
             assertTrue("the vCard is written", waitUntil {
                 shareDir.listFiles()?.any { it.name.endsWith(".vcf") } == true
             })
-            scenario.onActivity { activity ->
-                idle()
-                val chooser = shadowOf(activity).nextStartedActivity
-                assertNotNull("sharesheet must open", chooser)
-                assertEquals(Intent.ACTION_CHOOSER, chooser.action)
-            }
+            assertTrue("the sharesheet opens", waitUntil {
+                var opened = false
+                scenario.onActivity { activity ->
+                    opened = shadowOf(activity).peekNextStartedActivity()?.action == Intent.ACTION_CHOOSER
+                }
+                opened
+            })
         }
         val vcf = File(app.cacheDir, "documents/share").listFiles()!!.first { it.name.endsWith(".vcf") }
         val text = vcf.readText()
@@ -208,11 +209,14 @@ class BusinessCardFlowTest {
             assertTrue("the card document is created", waitUntil {
                 repo.listDocuments().isNotEmpty()
             })
-            scenario.onActivity { activity ->
-                idle()
-                val started = shadowOf(activity).peekNextStartedActivity()
-                assertEquals(ToolResultActivity::class.java.name, started?.component?.className)
-            }
+            assertTrue("the result screen opens", waitUntil {
+                var open = false
+                scenario.onActivity { activity ->
+                    open = shadowOf(activity).peekNextStartedActivity()?.component?.className ==
+                        ToolResultActivity::class.java.name
+                }
+                open
+            })
         }
         val doc = repo.listDocuments().first()
         assertEquals("the card is named after its contact", "Rahul Sharma", doc.name)
