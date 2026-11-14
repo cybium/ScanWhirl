@@ -72,6 +72,9 @@
     <item name="swBatchInput" type="id" />
     <item name="swBatchPreview" type="id" />
     <item name="swSort" type="id" />
+    <item name="swVaultStatus" type="id" />
+    <item name="swDocPickerList" type="id" />
+    <item name="swDocPickerSearch" type="id" />
     <item name="swNavMe" type="id" />
     <item name="swShellTab" type="id" />
     <item name="swHomeSearch" type="id" />
