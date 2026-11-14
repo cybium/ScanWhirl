@@ -453,7 +453,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private val libraryCallbacks = object : LibraryScreen.Callbacks {
         override fun onScan() = scanLauncher.launchScanner()
-        override fun onCreatePhotos() = pickGalleryImages.launch("image/*")
+        override fun onCreatePhotos() = showPhotoImportSheet()
         override fun onCreateImport() {
             ImportSheet.show(
                 this@ShellActivity,
@@ -499,6 +499,39 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private fun openDocument(id: String) {
         startActivity(DocumentViewerActivity.intent(this, id))
+    }
+
+    /**
+     * v2 UI: 01_home_A — Photos: auto-cropped pages (the ML Kit gallery import:
+     * corner detection, perspective crop, rotate) or the photos exactly as they are.
+     * The last choice is remembered and pre-selected.
+     */
+    private fun showPhotoImportSheet() {
+        val auto = com.scanwhirl.app.util.Prefs.galleryAutoCrop(this)
+        SwSheet.builder(this)
+            .setTitle(R.string.photos_add_title)
+            .setOptions(
+                listOf(
+                    getString(R.string.photos_auto_crop),
+                    getString(R.string.photos_keep)
+                ),
+                checked = if (auto) 0 else 1
+            ) { which, _ ->
+                com.scanwhirl.app.util.Prefs.setGalleryAutoCrop(this, which == 0)
+                if (which == 0) {
+                    com.scanwhirl.app.tools.launchGalleryCrop(
+                        this,
+                        maxPages = 30,
+                        onResult = { uris -> if (uris.isNotEmpty()) scanLauncher.saveScanned(uris) },
+                        onFallback = { uris -> if (uris.isNotEmpty()) scanLauncher.stageAndReview(uris) }
+                    )
+                } else {
+                    pickGalleryImages.launch("image/*")
+                }
+            }
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+            .show()
     }
 
     /** v2 UI: 03_tools_hub — Searchable PDF is a real tool, never a jump to Settings. */
@@ -616,7 +649,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     override fun open(tool: SwTool) {
         when (tool.id) {
             "scan" -> scanLauncher.launchScanner()
-            "photos_pdf" -> pickGalleryImages.launch("image/*")
+            "photos_pdf" -> showPhotoImportSheet()
             "import_pdf" -> ImportSheet.show(
                 this,
                 onPhotos = { pickGalleryImages.launch("image/*") },
