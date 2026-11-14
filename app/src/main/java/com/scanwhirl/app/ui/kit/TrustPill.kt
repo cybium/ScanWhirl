@@ -3,13 +3,13 @@ package com.scanwhirl.app.ui.kit
 import android.content.Context
 import android.content.res.ColorStateList
 import android.util.TypedValue
-import android.widget.TextView
+import androidx.appcompat.widget.AppCompatTextView
 import com.scanwhirl.app.R
 
 /**
  * v2 UI: 01_home_A / 06_pro — green promise pill: "Offline · No ads".
  */
-class TrustPill(context: Context) : TextView(context) {
+class TrustPill(context: Context) : AppCompatTextView(context) {
 
     init {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
