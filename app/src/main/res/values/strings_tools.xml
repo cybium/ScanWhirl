@@ -37,6 +37,9 @@
     <string name="tools_setup_long_note">Makes %1$d image(s), 1080 px wide, at most 16,000 px tall each. Nothing is squashed.</string>
     <string name="tools_setup_long_failed">A page is too tall for one image. Reduce it first.</string>
     <string name="tools_setup_word_note">Uses the recognised text: one paragraph per line and a page break between pages.</string>
+    <string name="tools_setup_word_pictures">Include page pictures</string>
+    <string name="tools_setup_word_pictures_note">Each page image is placed above the text of that page.</string>
+    <string name="tools_setup_pptx_note">One slide per page, each page fitted to the slide. The recognised text goes in the speaker notes.</string>
     <string name="tools_setup_no_text">This document has no recognised text yet. Open it and read the text first.</string>
     <string name="tools_setup_metadata_note">Creates a clean copy without EXIF, camera details or embedded thumbnails. The original stays as it is.</string>
     <string name="tools_setup_id_note">Both sides go on one A4 page: the front on top, the back at the bottom.</string>
@@ -50,6 +53,22 @@
     <string name="tools_setup_failed">Could not finish: %1$s</string>
     <string name="tools_setup_nothing">This tool has no options.</string>
     <string name="tools_id_card_name">ID card</string>
+    <string name="tools_tool_to_powerpoint">To PowerPoint</string>
+    <string name="tools_id_hint">Scan the front, then add the back. Both sides go on one A4 page in real ID-1 proportions, or each side on its own page.</string>
+    <string name="tools_id_front_title">Front side</string>
+    <string name="tools_id_front_msg">Scan the front of the card, or pick a photo from the gallery.</string>
+    <string name="tools_id_scan_front">Scan front side</string>
+    <string name="tools_id_pick_gallery">Pick from gallery</string>
+    <string name="tools_id_back_title">Add the back side?</string>
+    <string name="tools_id_back_msg">Most cards have a back side. It can go below the front on the same page.</string>
+    <string name="tools_id_scan_back">Scan back side</string>
+    <string name="tools_id_front_only">Front only</string>
+    <string name="tools_id_pick_back_gallery">Pick back side from gallery</string>
+    <string name="tools_id_layout_title">Layout</string>
+    <string name="tools_id_layout_msg">How should the card be saved? Last time: %1$s.</string>
+    <string name="tools_id_layout_one">Both sides on one page</string>
+    <string name="tools_id_layout_own">Each side on its own page</string>
+    <string name="tools_id_failed">Could not create the card: %1$s</string>
 
     <!-- v2 UI: 03_tools_hub — result screen -->
     <string name="tools_result_done">Done</string>

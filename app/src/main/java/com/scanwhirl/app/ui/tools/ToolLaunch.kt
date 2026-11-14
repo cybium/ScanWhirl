@@ -21,10 +21,10 @@ object ToolLaunch {
             ToolRegistry.byId(toolId)?.let { host.comingSoon(it) }
             return
         }
-        val intent = if (toolId == "passport") {
-            PassportActivity.intent(context)
-        } else {
-            ToolSetupActivity.intent(context, toolId)
+        val intent = when (toolId) {
+            "passport" -> PassportActivity.intent(context)
+            "id_card" -> IdCardActivity.intent(context)
+            else -> ToolSetupActivity.intent(context, toolId)
         }
         if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
