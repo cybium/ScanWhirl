@@ -222,7 +222,12 @@ class TrashActivity : BaseActivity() {
 
         fun bind(item: ScanRepository.TrashedDocument) {
             val doc = item.document
-            b.trashName.text = doc.name
+            // PM-2.2c: a version moved aside by "Replace original" says so in the row title.
+            b.trashName.text = if (item.previousToken != null) {
+                getString(R.string.trash_previous_version, doc.name)
+            } else {
+                doc.name
+            }
             val pages = resources.getQuantityString(R.plurals.trash_pages, doc.pageCount, doc.pageCount)
             val whenText = DateUtils.formatDateTime(
                 this@TrashActivity, item.trashedAt,

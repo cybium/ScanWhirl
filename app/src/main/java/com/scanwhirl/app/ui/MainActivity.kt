@@ -408,8 +408,10 @@ class MainActivity : BaseActivity(), HomeHost {
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching { repo.recoverTrash() }
             runCatching { repo.recoverImports() }
-            // PM-3.1b: working folders of protect/unlock/change-password that died with the old process.
-            runCatching { repo.recoverOperations() }
+            // PM-2.2b: finish a Replace that died between its two renames, finish draft cleanup,
+            // then sweep dead working folders. A rolled-forward document must show up at once.
+            val rolled = runCatching { repo.recoverOperations() }.getOrDefault(0)
+            if (rolled > 0) withContext(Dispatchers.Main) { refreshList() }
         }
 
         updateSelectionHeader()
