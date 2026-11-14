@@ -1,5 +1,11 @@
 # LANE_REPORT — L5 Edit & sign
 
+## Wave 2 (Organize draft: PM-2.2b/c, PM-2.3b) — BLOCKED
+
+The three cards need PM-2.1b (`buildAndPublish` + `OpStaging.Seal`), which is not in `integration`
+(only on `lane/L4-tools`, `e449125`); see `LANE_BLOCKED.md` for the exact evidence. No source was
+edited. Waiting for L4 to be merged, then the cards run in order 6 → 7 → 8.
+
 Session 2026-11-14. Branch `lane/L5-stamp`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L5`.
 
 ## Done
