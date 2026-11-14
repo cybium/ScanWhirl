@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2 component ids (L4 tools). Kept in the lane's own file so lanes never edit ids.xml. -->
+<resources>
+    <item name="toolSetupScroll" type="id" />
+    <item name="toolSetupSource" type="id" />
+    <item name="toolSetupDocRow" type="id" />
+    <item name="toolSetupOptions" type="id" />
+    <item name="toolSetupRanges" type="id" />
+    <item name="toolSetupRangePreview" type="id" />
+    <item name="toolSetupFormatJpg" type="id" />
+    <item name="toolSetupFormatPng" type="id" />
+    <item name="toolSetupQuality" type="id" />
+    <item name="toolSetupQualityValue" type="id" />
+    <item name="toolSetupTarget" type="id" />
+    <item name="toolSetupName" type="id" />
+    <item name="toolSetupFront" type="id" />
+    <item name="toolSetupBack" type="id" />
+    <item name="toolSetupRun" type="id" />
+    <item name="toolSetupError" type="id" />
+    <item name="toolSetupProgress" type="id" />
+    <item name="toolSetupInfo" type="id" />
+    <item name="toolSetupLevel" type="id" />
+    <item name="toolResultSummary" type="id" />
+    <item name="toolResultOpen" type="id" />
+    <item name="toolResultShare" type="id" />
+    <item name="toolResultSave" type="id" />
+    <item name="toolResultLibrary" type="id" />
+    <item name="toolResultUndo" type="id" />
+    <item name="toolResultPreview" type="id" />
+    <item name="toolResultError" type="id" />
+    <item name="toolCropView" type="id" />
+    <item name="toolCropApply" type="id" />
+</resources>
