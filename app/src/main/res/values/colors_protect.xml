@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L3 v2 Protect PDF tokens (70_APP_DESIGN.md §2, mockups 05 and 09).
+         L1 owns colors.xml; these are the two values the design adds that L3 needs today. -->
+    <color name="protect_ok">#38EF7D</color>
+    <color name="protect_warn">#FFB800</color>
+    <color name="protect_info_fill">#0F00F0FF</color>
+    <color name="protect_hair">#2400F0FF</color>
+    <color name="protect_field_line">#26FFFFFF</color>
+    <color name="protect_meter_off">#1AFFFFFF</color>
+    <color name="protect_gold_soft">#1FFFB800</color>
+    <color name="protect_gold_hair">#55FFB800</color>
+</resources>
