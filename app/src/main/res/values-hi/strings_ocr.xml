@@ -11,4 +11,5 @@
     <string name="ocr_hindi_pick"><!-- review -->हिंदी टेक्स्ट</string>
     <string name="ocr_hindi_reading"><!-- review -->हिंदी टेक्स्ट पढ़ा जा रहा है…</string>
     <string name="ocr_hindi_nothing"><!-- review -->इन पेजों पर कोई टेक्स्ट नहीं मिला।</string>
+    <string name="settings_ocr_language"><!-- review -->टेक्स्ट की भाषा</string>
 </resources>

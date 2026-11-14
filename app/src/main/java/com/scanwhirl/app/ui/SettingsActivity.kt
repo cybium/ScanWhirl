@@ -21,6 +21,9 @@ class SettingsActivity : BaseActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
 
+    /** L2: the "Text language" summary (built programmatically in [addTextLanguageRow]). */
+    private lateinit var subOcrLanguage: android.widget.TextView
+
     private val pickWallpaper =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@registerForActivityResult
@@ -91,8 +94,95 @@ class SettingsActivity : BaseActivity() {
         binding.rowAbout.setOnClickListener { showAbout() }
         binding.rowTrash.setOnClickListener { startActivity(TrashActivity.intent(this)) }
 
+        // L2: OCR text language - the same setting the Text screen's language chip changes.
+        addTextLanguageRow()
+
         updateSummaries()
     }
+
+    /** L2: one compact row under the app language, built here so L1's layout stays untouched. */
+    private fun addTextLanguageRow() {
+        val parent = binding.rowLanguage.parent as? android.view.ViewGroup ?: return
+        val density = resources.displayMetrics.density
+        val pad = (16 * density).toInt()
+        val row = android.widget.LinearLayout(this).apply {
+            id = R.id.rowOcrLanguage
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(pad, pad, pad, pad)
+            isClickable = true
+            isFocusable = true
+            setBackgroundResource(android.R.drawable.list_selector_background)
+            setOnClickListener { chooseOcrLanguage() }
+        }
+        row.addView(
+            android.widget.ImageView(this).apply {
+                setImageResource(R.drawable.ic_sym_language)
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_primary)
+                )
+            },
+            android.widget.LinearLayout.LayoutParams((22 * density).toInt(), (22 * density).toInt())
+        )
+        val texts = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        texts.addView(
+            android.widget.TextView(this).apply {
+                setText(R.string.settings_ocr_language)
+                setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_hi))
+                textSize = 15f
+            }
+        )
+        subOcrLanguage = android.widget.TextView(this).apply {
+            id = R.id.subOcrLanguage
+            setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_mid))
+            textSize = 12.5f
+            setPadding(0, (2 * density).toInt(), 0, 0)
+        }
+        texts.addView(subOcrLanguage)
+        row.addView(
+            texts,
+            android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginStart = (12 * density).toInt() }
+        )
+        row.addView(
+            android.widget.ImageView(this).apply {
+                setImageResource(R.drawable.ic_sym_chevron_right)
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_dim)
+                )
+            },
+            android.widget.LinearLayout.LayoutParams((20 * density).toInt(), (20 * density).toInt())
+        )
+        val index = parent.indexOfChild(binding.rowLanguage)
+        parent.addView(row, if (index >= 0) index + 1 else parent.childCount)
+    }
+
+    private fun chooseOcrLanguage() {
+        val languages = com.scanwhirl.app.util.OcrLanguage.entries
+        val labels = languages.map { getString(ocrLanguageLabel(it)) }
+        val checked = languages.indexOf(com.scanwhirl.app.util.OcrLanguageSettings.get(this)).coerceAtLeast(0)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.settings_ocr_language)
+            .setMessage(R.string.ocr_lang_note)
+            .setOptions(labels, checked) { which, _ ->
+                com.scanwhirl.app.util.OcrLanguageSettings.set(this, languages[which])
+                updateSummaries()
+                Toast.makeText(this, R.string.ocr_lang_saved, Toast.LENGTH_SHORT).show()
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun ocrLanguageLabel(language: com.scanwhirl.app.util.OcrLanguage): Int =
+        when (language) {
+            com.scanwhirl.app.util.OcrLanguage.ENGLISH -> R.string.ocr_lang_english
+            com.scanwhirl.app.util.OcrLanguage.ENGLISH_HINDI -> R.string.ocr_lang_english_hindi
+            com.scanwhirl.app.util.OcrLanguage.HINDI -> R.string.ocr_lang_hindi
+        }
+
 
     override fun onResume() {
         super.onResume()
@@ -130,6 +220,11 @@ class SettingsActivity : BaseActivity() {
         binding.subWallpaper.setText(
             if (Prefs.showWallpaper(this)) R.string.wallpaper_on else R.string.wallpaper_off
         )
+        if (::subOcrLanguage.isInitialized) {
+            subOcrLanguage.setText(
+                ocrLanguageLabel(com.scanwhirl.app.util.OcrLanguageSettings.get(this))
+            )
+        }
     }
 
     private fun openPrivacy() {

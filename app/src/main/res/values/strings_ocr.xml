@@ -11,4 +11,5 @@
     <string name="ocr_hindi_pick">Hindi text</string>
     <string name="ocr_hindi_reading">Reading Hindi text…</string>
     <string name="ocr_hindi_nothing">No text was found on these pages.</string>
+    <string name="settings_ocr_language">Text language</string>
 </resources>

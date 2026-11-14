@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v2 UI: 08_text_ocr - ids owned by lane L2. -->
+    <item name="rowOcrLanguage" type="id" />
+    <item name="subOcrLanguage" type="id" />
+</resources>

@@ -100,8 +100,9 @@ object OcrEngine {
         } else {
             val bitmap = BitmapFactory.decodeFile(page.path)
                 ?: throw IllegalStateException("Unreadable page")
+            val rotation = exifRotation(page)
             try {
-                language.scripts.map { script -> mlKit(bitmap, script) }
+                language.scripts.map { script -> mlKit(bitmap, script, rotation) }
             } finally {
                 if (!bitmap.isRecycled) bitmap.recycle()
             }
@@ -180,11 +181,11 @@ object OcrEngine {
         return OcrResult(OcrMerge.assemble(page), OcrPage(page.width, page.height, lines))
     }
 
-    private suspend fun mlKit(bitmap: Bitmap, script: OcrScript): OcrRawPage {
+    private suspend fun mlKit(bitmap: Bitmap, script: OcrScript, rotationDegrees: Int = 0): OcrRawPage {
         val recognizer = OcrScriptRecognizers.create(script)
         try {
             val text = suspendCancellableCoroutine<Text> { cont ->
-                recognizer.process(InputImage.fromBitmap(bitmap, 0))
+                recognizer.process(InputImage.fromBitmap(bitmap, rotationDegrees))
                     .addOnSuccessListener { result -> if (cont.isActive) cont.resume(result) }
                     .addOnFailureListener { e -> if (cont.isActive) cont.resumeWithException(e) }
             }
@@ -213,6 +214,26 @@ object OcrEngine {
         OcrScript.DEVANAGARI -> if (OcrText.hasDevanagari(text)) 1f else 0.2f
         OcrScript.LATIN -> if (OcrText.looksLatin(text)) 1f else 0.2f
     }
+
+    /**
+     * EXIF orientation of a page file in degrees (0/90/180/270). ML Kit is given the rotation so
+     * it returns upright boxes; a sideways notebook photo therefore does not scramble the
+     * reading order. Unreadable EXIF means "upright".
+     */
+    internal fun exifRotation(file: File): Int = try {
+        val exif = androidx.exifinterface.media.ExifInterface(file.absolutePath)
+        when (exif.getAttributeInt(
+            androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
+            androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+        )) {
+            androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
+            androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
+            androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
+            else -> 0
+        }
+    } catch (e: Exception) {
+        0
+    }
 }
 
 /** Creates the ML Kit client for one script. DEVICE-UNPROVEN (needs Play services / bundled model). */
@@ -223,7 +244,7 @@ internal object OcrScriptRecognizers {
             TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         OcrScript.DEVANAGARI ->
             TextRecognition.getClient(
-                com.google.mlkit.vision.text.devanagari.TextRecognizerOptions.DEFAULT_OPTIONS
+                com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions.Builder().build()
             )
     }
 }

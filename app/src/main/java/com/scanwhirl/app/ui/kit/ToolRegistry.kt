@@ -220,8 +220,7 @@ object ToolRegistry {
                     host.open(tool)
                 }
             }
-        ),
-        soon("translate", ToolGroup.TEXT, R.string.tool_translate, R.drawable.ic_sym_translate, "translate language", pro = true, note = R.string.soon_translate)
+        )
     )
 
     private val byId: Map<String, SwTool> = all.associateBy { it.id }

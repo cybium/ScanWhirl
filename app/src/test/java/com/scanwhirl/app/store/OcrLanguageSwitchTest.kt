@@ -19,6 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
@@ -27,6 +28,7 @@ import java.io.File
  * [OcrEngine.rawReader]: ML Kit cannot run in a Robolectric JVM.
  */
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class OcrLanguageSwitchTest {
 
@@ -124,7 +126,9 @@ class OcrLanguageSwitchTest {
         val geo = repo.ocrGeometry(id)
         assertTrue(geo.isNotEmpty())
         val lines = geo.values.first().lines
-        assertEquals(listOf(70, 150, 230), lines.map { it.bottom })
+        // HINDI runs only the Devanagari model: its two lines, in reading order.
+        assertEquals(listOf(150, 230), lines.map { it.bottom })
+        assertEquals("Devanagari geometry keeps the page size", 600, geo.values.first().width)
     }
 
     @Test
@@ -134,7 +138,7 @@ class OcrLanguageSwitchTest {
     }
 
     @Test
-    fun `the recognizer seam feeds the real engine`() = runBlocking {
+    fun `the recognizer seam feeds the real engine`() = runBlocking<Unit> {
         val file = File(app.cacheDir, "ocr_seam_page.jpg")
         file.writeBytes(ByteArray(4) { 1 })
         val result = OcrEngine.recognizeFile(file, OcrLanguage.ENGLISH_HINDI)
