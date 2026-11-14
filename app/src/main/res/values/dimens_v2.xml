@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v2 design tokens (70_APP_DESIGN.md §2, docs/design/2026-11-14/src/sw.css). -->
+    <dimen name="sw_radius_small">12dp</dimen>
+    <dimen name="sw_radius_medium">18dp</dimen>
+    <dimen name="sw_radius_large">26dp</dimen>
+    <dimen name="sw_radius_sheet">28dp</dimen>
+
+    <dimen name="sw_space_1">4dp</dimen>
+    <dimen name="sw_space_2">8dp</dimen>
+    <dimen name="sw_space_3">12dp</dimen>
+    <dimen name="sw_space_4">16dp</dimen>
+    <dimen name="sw_space_5">20dp</dimen>
+    <dimen name="sw_space_6">24dp</dimen>
+
+    <dimen name="sw_page_margin">18dp</dimen>
+    <dimen name="sw_nav_height">64dp</dimen>
+    <dimen name="sw_nav_inset">12dp</dimen>
+    <dimen name="sw_disc_size">74dp</dimen>
+    <dimen name="sw_field_height">56dp</dimen>
+    <dimen name="sw_btn_height">54dp</dimen>
+    <dimen name="sw_tile_height">78dp</dimen>
+    <dimen name="sw_tile_height_hub">72dp</dimen>
+    <dimen name="sw_thumb_width">54dp</dimen>
+    <dimen name="sw_thumb_height">70dp</dimen>
+</resources>

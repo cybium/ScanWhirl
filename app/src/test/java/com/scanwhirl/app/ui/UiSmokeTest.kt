@@ -1495,9 +1495,11 @@ class UiSmokeTest {
         val after = dst.readText(Charsets.ISO_8859_1)
         assertTrue("/Encrypt" in after)
         assertTrue("/Filter /Standard" in after)
-        assertTrue("/V 2" in after && "/R 3" in after && "/Length 128" in after)
+        // v2 security design (70 §4.2): V5/R6 AES-256 for new files; RC4 is never written.
+        assertTrue("/V 5" in after && "/R 6" in after && "/Length 256" in after)
+        assertTrue("AESV3 crypt filter", "/CFM /AESV3" in after)
         assertTrue("file id present", "/ID [" in after)
-        // RC4 preserves lengths, so the honest page count must survive.
+        // The page tree is not encrypted, so the honest page count must survive.
         assertEquals("/Count 1", Regex("/Count (\\d+)").find(after)!!.value)
         dir.deleteRecursively()
         Unit

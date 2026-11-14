@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L1 shell and kit: Hindi. Each value carries a review marker for a native speaker. -->
+    <string name="trust_offline_no_ads"><!-- review -->ऑफ़लाइन · कोई विज्ञापन नहीं</string>
+    <string name="trust_all_offline"><!-- review -->पूरी तरह ऑफ़लाइन</string>
+    <string name="trust_no_ads"><!-- review -->कोई विज्ञापन नहीं</string>
+    <string name="trust_no_account"><!-- review -->कोई खाता नहीं</string>
+    <string name="trust_offline"><!-- review -->ऑफ़लाइन</string>
+
+    <string name="shell_nav_library"><!-- review -->लाइब्रेरी</string>
+    <string name="shell_nav_tools"><!-- review -->टूल्स</string>
+    <string name="shell_nav_scan"><!-- review -->स्कैन</string>
+    <string name="shell_nav_vault"><!-- review -->वॉल्ट</string>
+    <string name="shell_nav_me"><!-- review -->मैं</string>
+    <string name="shell_scan_disc_desc"><!-- review -->दस्तावेज़ स्कैन करें</string>
+
+    <string name="home_search_hint"><!-- review -->नाम और पेजों के शब्द खोजें</string>
+    <string name="home_create_id_card"><!-- review -->आईडी कार्ड</string>
+    <string name="home_create_photos"><!-- review -->फ़ोटो</string>
+    <string name="home_create_import"><!-- review -->PDF लाएँ</string>
+    <string name="home_quick_tools"><!-- review -->त्वरित टूल्स</string>
+    <string name="home_all_tools"><!-- review -->सभी टूल्स ›</string>
+    <string name="home_recent"><!-- review -->हाल के</string>
+    <string name="home_newest"><!-- review -->नवीनतम ▾</string>
+    <string name="home_chip_all"><!-- review -->सभी %1$d</string>
+    <string name="home_chip_category"><!-- review -->%1$s %2$d</string>
+    <string name="home_empty_title"><!-- review -->अपना पहला दस्तावेज़ स्कैन करें</string>
+    <string name="home_empty_body"><!-- review -->आपके स्कैन इसी फ़ोन पर रहते हैं। कोई खाता नहीं, कोई अपलोड नहीं।</string>
+    <string name="home_no_match"><!-- review -->आपकी खोज से कोई दस्तावेज़ नहीं मिला।</string>
+    <string name="home_page_count"><!-- review -->%1$d पेज</string>
+    <string name="home_protected"><!-- review -->सुरक्षित</string>
+
+    <string name="tools_title"><!-- review -->टूल्स</string>
+    <string name="tools_search_hint"><!-- review -->टूल खोजें — जैसे “sign”, “smaller”</string>
+    <string name="tools_no_match"><!-- review -->“%1$s” से कोई टूल नहीं मिला।</string>
+    <string name="tools_group_create"><!-- review -->बनाएँ</string>
+    <string name="tools_group_organize"><!-- review -->व्यवस्थित करें</string>
+    <string name="tools_group_optimize"><!-- review -->अनुकूलित करें</string>
+    <string name="tools_group_convert"><!-- review -->बदलें</string>
+    <string name="tools_group_edit"><!-- review -->संपादन और हस्ताक्षर</string>
+    <string name="tools_group_secure"><!-- review -->सुरक्षा</string>
+    <string name="tools_group_text"><!-- review -->टेक्स्ट</string>
+
+    <string name="tool_scan"><!-- review -->स्कैन</string>
+    <string name="tool_id_card"><!-- review -->आईडी कार्ड</string>
+    <string name="tool_book_pages"><!-- review -->किताब के पेज</string>
+    <string name="tool_photos_pdf"><!-- review -->फ़ोटो से PDF</string>
+    <string name="tool_import_pdf"><!-- review -->PDF लाएँ</string>
+    <string name="tool_passport"><!-- review -->पासपोर्ट</string>
+    <string name="tool_qr_code"><!-- review -->QR कोड</string>
+    <string name="tool_business_card"><!-- review -->बिज़नेस कार्ड</string>
+    <string name="tool_split"><!-- review -->विभाजित करें</string>
+    <string name="tool_extract"><!-- review -->पेज निकालें</string>
+    <string name="tool_organize_pages"><!-- review -->पेज व्यवस्थित करें</string>
+    <string name="tool_insert_pages"><!-- review -->पेज जोड़ें</string>
+    <string name="tool_duplicate"><!-- review -->प्रतिलिपि</string>
+    <string name="tool_folders"><!-- review -->फ़ोल्डर और टैग</string>
+    <string name="tool_batch_rename"><!-- review -->एक साथ नाम बदलें</string>
+    <string name="tool_enhance"><!-- review -->साफ़ करें</string>
+    <string name="tool_bw"><!-- review -->काला और सफ़ेद</string>
+    <string name="tool_pdf_to_images"><!-- review -->PDF से चित्र</string>
+    <string name="tool_long_image"><!-- review -->लंबी छवि</string>
+    <string name="tool_to_word"><!-- review -->Word में</string>
+    <string name="tool_to_excel"><!-- review -->Excel में</string>
+    <string name="tool_to_text"><!-- review -->टेक्स्ट में</string>
+    <string name="tool_zip"><!-- review -->ZIP निर्यात</string>
+    <string name="tool_searchable_pdf"><!-- review -->खोजने योग्य PDF</string>
+    <string name="tool_pdfa"><!-- review -->PDF/A</string>
+    <string name="tool_sign"><!-- review -->हस्ताक्षर</string>
+    <string name="tool_add_text"><!-- review -->टेक्स्ट जोड़ें</string>
+    <string name="tool_draw"><!-- review -->चित्र बनाएँ</string>
+    <string name="tool_highlight"><!-- review -->हाइलाइट</string>
+    <string name="tool_watermark"><!-- review -->वॉटरमार्क</string>
+    <string name="tool_page_numbers"><!-- review -->पेज नंबर</string>
+    <string name="tool_stamp"><!-- review -->मोहर</string>
+    <string name="tool_redact"><!-- review -->नामेट करें</string>
+    <string name="tool_protect"><!-- review -->PDF सुरक्षित करें</string>
+    <string name="tool_unlock"><!-- review -->PDF खोलें</string>
+    <string name="tool_vault"><!-- review -->वॉल्ट</string>
+    <string name="tool_remove_metadata"><!-- review -->मेटाडेटा हटाएँ</string>
+    <string name="tool_read_text"><!-- review -->टेक्स्ट पढ़ें</string>
+    <string name="tool_hindi_text"><!-- review -->हिंदी टेक्स्ट</string>
+    <string name="tool_translate"><!-- review -->अनुवाद</string>
+
+    <string name="tool_coming_soon_title"><!-- review -->जल्द आ रहा है</string>
+    <string name="tool_soon_tag"><!-- review -->जल्द</string>
+    <string name="tool_coming_soon_note"><!-- review -->यह टूल बन रहा है। जल्द ही यहाँ होगा।</string>
+    <string name="soon_book_pages"><!-- review -->दो पेजों वाली एक फ़ोटो को दो साफ़ पेजों में बाँटें।</string>
+    <string name="soon_qr_code"><!-- review -->बिना इंटरनेट इस फ़ोन पर QR कोड पढ़ें।</string>
+    <string name="soon_business_card"><!-- review -->कार्ड की फ़ोटो से नाम, फ़ोन और ईमेल निकालें।</string>
+    <string name="soon_folders"><!-- review -->दस्तावेज़ों को फ़ोल्डर में रखें और टैग करें।</string>
+    <string name="soon_batch_rename"><!-- review -->एक पैटर्न से कई दस्तावेज़ों के नाम बदलें।</string>
+    <string name="soon_to_excel"><!-- review -->तालिका के टेक्स्ट को Excel शीट में बदलें।</string>
+    <string name="soon_pdfa"><!-- review -->PDF/A संग्रह प्रति सहेजें जो वर्षों बाद भी खुले।</string>
+    <string name="soon_hindi_text"><!-- review -->अंग्रेज़ी के साथ हिंदी टेक्स्ट भी इस फ़ोन पर पढ़ें।</string>
+    <string name="soon_translate"><!-- review -->बिना अपलोड पेज का इस फ़ोन पर अनुवाद करें।</string>
+    <string name="soon_generic"><!-- review -->यह टूल बन रहा है। जल्द ही यहाँ होगा।</string>
+
+    <string name="pro_title_prefix"><!-- review -->ScanWhirl </string>
+    <string name="pro_title_pro"><!-- review -->Pro</string>
+    <string name="pro_sub"><!-- review -->पूरा PDF सूट। आपके फ़ोन पर। हमेशा आपका।</string>
+    <string name="pro_price"><!-- review -->₹100</string>
+    <string name="pro_one_time"><!-- review -->एक बार</string>
+    <string name="pro_price_note"><!-- review -->कोई सदस्यता नहीं। फ़ैमिली शेयरिंग शामिल।</string>
+    <string name="pro_unlock"><!-- review -->Pro अनलॉक करें</string>
+    <string name="pro_restore"><!-- review -->खरीद वापस लाएँ</string>
+    <string name="pro_see_all"><!-- review -->सभी 18 Pro टूल्स देखें ›</string>
+    <string name="pro_buy_coming"><!-- review -->भुगतान अभी चालू नहीं है। टेस्ट बिल्ड में Pro टूल्स मुफ़्त रहते हैं।</string>
+    <string name="pro_feat_sign"><!-- review -->हस्ताक्षर और मोहर</string>
+    <string name="pro_feat_word"><!-- review -->Word और Excel</string>
+    <string name="pro_feat_split"><!-- review -->रेंज से विभाजन</string>
+    <string name="pro_feat_watermark"><!-- review -->वॉटरमार्क</string>
+    <string name="pro_feat_redact"><!-- review -->सच्चा नामेटन</string>
+    <string name="pro_feat_scan"><!-- review -->किताब और QR स्कैन</string>
+    <string name="pro_feat_batch"><!-- review -->बैच टूल्स</string>
+    <string name="pro_feat_folders"><!-- review -->फ़ोल्डर और टैग</string>
+
+    <string name="me_title"><!-- review -->मैं</string>
+    <string name="me_pro"><!-- review -->ScanWhirl Pro</string>
+    <string name="me_pro_summary"><!-- review -->पूरा सूट अनलॉक करें</string>
+    <string name="me_settings"><!-- review -->सेटिंग्स</string>
+    <string name="me_settings_summary"><!-- review -->रूप, टेक्स्ट, गोपनीयता</string>
+    <string name="me_trash"><!-- review -->कूड़ेदान</string>
+    <string name="me_trash_summary"><!-- review -->हटाए दस्तावेज़, 30 दिन</string>
+    <string name="me_about"><!-- review -->ScanWhirl के बारे में</string>
+    <string name="me_about_summary"><!-- review -->संस्करण, गोपनीयता, लाइसेंस</string>
+
+    <string name="vault_tab_title"><!-- review -->वॉल्ट</string>
+    <string name="vault_tab_note"><!-- review -->इस फ़ोन पर एन्क्रिप्टेड। अगर रिकवरी कोड और यह फ़ोन दोनों खो जाएँ, तो ये फ़ाइलें कोई नहीं खोल सकता — हम भी नहीं।</string>
+    <string name="vault_tab_coming"><!-- review -->नया एन्क्रिप्टेड वॉल्ट बन रहा है। इस बिल्ड में आपका पुराना PIN वॉल्ट अभी भी काम करता है।</string>
+    <string name="vault_tab_open"><!-- review -->जल्द आ रहा है</string>
+
+    <string name="sheet_cancel"><!-- review -->रद्द करें</string>
+    <string name="sheet_got_it"><!-- review -->समझ गया</string>
+    <string name="sheet_close"><!-- review -->बंद करें</string>
+
+    <string name="pw_show"><!-- review -->पासवर्ड दिखाएँ</string>
+    <string name="pw_hint"><!-- review -->पासवर्ड</string>
+    <string name="pw_hide"><!-- review -->पासवर्ड छिपाएँ</string>
+    <string name="pw_strength_weak"><!-- review -->कमज़ोर पासवर्ड</string>
+    <string name="pw_strength_fair"><!-- review -->ठीक पासवर्ड</string>
+    <string name="pw_strength_good"><!-- review -->अच्छा पासवर्ड</string>
+    <string name="pw_strength_strong"><!-- review -->मज़बूत पासवर्ड</string>
+
+    <string name="tool_pick_document"><!-- review -->दस्तावेज़ चुनें</string>
+    <string name="tool_pick_document_note"><!-- review -->पहले अपनी लाइब्रेरी से दस्तावेज़ चुनें।</string>
+    <string name="tool_pick_pdf"><!-- review -->PDF चुनें</string>
+    <string name="tool_pick_image"><!-- review -->छवि चुनें</string>
+    <string name="shell_today"><!-- review -->आज</string>
+    <string name="shell_yesterday"><!-- review -->कल</string>
+    <string name="shell_doc_actions_note"><!-- review -->इस दस्तावेज़ को खोलें, साझा करें, या कूड़ेदान में डालें।</string>
+    <string name="shell_open"><!-- review -->खोलें</string>
+    <string name="shell_move_to_trash"><!-- review -->कूड़ेदान में डालें</string>
+    <string name="shell_trash_title"><!-- review -->“%1$s” को कूड़ेदान में डालें?</string>
+    <string name="shell_trash_note"><!-- review -->यह 30 दिन तक कूड़ेदान में रहेगा। कुछ भी अपलोड नहीं होता।</string>
+    <string name="shell_moved_to_trash"><!-- review -->कूड़ेदान में डाल दिया</string>
+</resources>

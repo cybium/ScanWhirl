@@ -1,10 +1,12 @@
 package com.scanwhirl.app.ui
 
 import android.app.Application
+import android.app.Dialog
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -27,7 +29,10 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
 
-/** PM-3.1b: the Tools → Lock → Unlock entry point needs the current password (F9). */
+/**
+ * PM-3.1b: the Tools → Lock → Unlock entry point needs the current password (F9).
+ * v2 UI: 09_unlock_sheet — the password is asked in the Unlock sheet, not an AlertDialog.
+ */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
@@ -69,15 +74,16 @@ class LockUiTest {
         return out
     }
 
-    private fun passwordDialog(): AlertDialog? {
-        val d = ShadowDialog.getLatestDialog() as? AlertDialog ?: return null
-        return d.takeIf { dlg -> allViews(dlg.window!!.decorView).any { it is EditText } }
+    /** v2 UI: 09_unlock_sheet — the latest dialog that carries the unlock password field. */
+    private fun unlockSheet(): Dialog? {
+        val d = ShadowDialog.getLatestDialog() ?: return null
+        return d.takeIf { it.findViewById<View>(R.id.unlockPassword) != null }
     }
 
-    private fun submit(dialog: AlertDialog, text: String) {
-        allViews(dialog.window!!.decorView).filterIsInstance<EditText>().first().setText(text)
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        idle() // AlertDialog dispatches button clicks through a Handler message
+    private fun submitUnlock(dialog: Dialog, text: String) {
+        dialog.findViewById<EditText>(R.id.unlockPassword)!!.setText(text)
+        dialog.findViewById<View>(R.id.unlockOpen)!!.performClick()
+        idle()
     }
 
     private fun clickItem(index: Int) {
@@ -116,22 +122,21 @@ class LockUiTest {
 
             // Unlock must ask first, and must not have unlocked anything yet.
             scenario.onActivity { chooseUnlock(it) }
-            val first = passwordDialog()
+            val first = unlockSheet()
             assertNotNull("Unlock must ask for the current password", first)
             assertTrue("document must still be locked while the prompt is open", repo.getDocument(id)!!.isLocked)
+            assertTrue("the sheet has an error line, hidden before a wrong try",
+                allViews(first!!.window!!.decorView).none { it.id == R.id.unlockError && it.isVisible })
 
             // A wrong password: error toast, still locked.
-            submit(first!!, "0000")
-            assertTrue("wrong password shows the error", pollUntil {
-                ShadowToast.getTextOfLatestToast()?.toString() == app.getString(R.string.unlock_pdf_wrong)
-            })
-            assertTrue("still locked after a wrong password", repo.getDocument(id)!!.isLocked)
+            submitUnlock(first, "0000")
+            assertTrue("a wrong password leaves the document locked", repo.getDocument(id)!!.isLocked)
 
             // The right password unlocks.
             scenario.onActivity { chooseUnlock(it) }
-            val second = passwordDialog()
+            val second = unlockSheet()
             assertNotNull("Unlock asks again", second)
-            submit(second!!, "1234")
+            submitUnlock(second!!, "1234")
             assertTrue("the right password unlocks", pollUntil { !repo.getDocument(id)!!.isLocked })
             assertEquals(false, com.scanwhirl.app.util.PdfProtection.isEncrypted(repo.getDocument(id)!!.pdfFile))
         }
