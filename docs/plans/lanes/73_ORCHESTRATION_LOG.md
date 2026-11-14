@@ -32,6 +32,8 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 - QA (phone tester, no code edits): ses_e25ac0c75ffeEtMUJGpbRCXJyq - full tap-through of debug build from integration ac87cba; output C:\Users\Cybium\Desktop\.sw-qa\run1\REPORT.md + screenshots. Lead reviews every screenshot visually and writes the critique.
 
 ## Lead to-do
+- QA run1 (old build) findings sent: L1 #1-9 (search broken CRITICAL, sort dead, IME nav, Searchable PDF->Settings, launch consistency, snackbar, translucent sheet, Text screen actions, review rail); L5 crop presets/handles; L4 plurals. PENDING for L3 after Book pages: OCR quality - U+FFFD chars and wrong block reading order (.sw-qa/run1/doc2_ocr.txt).
+- Verdicts in SCREEN_MAP are written from run2 (build 435e0f3) screenshots, not run1.
 - Real-world test photos ready: C:\Users\Cybium\Desktop\.sw-qa\realworld (7 book photos from Pexels + README with EXPECTED results; ID specimens still blocked by Wikimedia 429, only id_lux_back; retry tools/fetch_realworld.ps1 later). Use for QA run 2 and L3 Book pages tuning (incl. new requirement: 'Not a two-page photo? Keep as one page').
 - Copy pass: no long dashes, short text (tools/copy_audit.ps1). L1 does strings.xml + strings_l1; other lanes' files after their current tasks (protect 3 dashes, vault 2 dashes + 4 long, stamp 2 long, tools 1 long).
 - Assets prepared for L1: .sw-assets/symbols (official Material Symbols, 83 icons), .sw-assets/brand (ic_brand_mark from launcher icon).
