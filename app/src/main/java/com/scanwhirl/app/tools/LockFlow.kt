@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.ui.ExportResultActivity
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.kit.PasswordField
@@ -18,6 +19,7 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.protect.ProtectSheet
 import com.scanwhirl.app.ui.protect.TryCooldown
 import com.scanwhirl.app.ui.protect.UnlockSheet
+import com.scanwhirl.app.ui.protect.VaultPasswordsFlow
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.PdfProtection
@@ -76,9 +78,10 @@ class LockFlow(
             documentName = doc.name,
             verify = { candidate -> repo.verifyPdfPassword(doc.id, candidate) },
             cooldown = cooldownFor(doc.id),
-            vaultAvailable = false, // L2's Vault password store is not merged yet
+            vaultAvailable = VaultPasswordsFlow.has(activity, doc.id),
             onUnlocked = { password -> runUnlockScan(doc, password) },
-            onRemoveProtection = { password -> runUnlockScan(doc, password) }
+            onRemoveProtection = { password -> runUnlockScan(doc, password) },
+            onUseVault = { useVaultPassword(doc) { password -> runUnlockScan(doc, password) } }
         )
     }
 
@@ -86,7 +89,11 @@ class LockFlow(
         activity.lifecycleScope.launch {
             val progress = host.showProgress()
             try {
-                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, password) }
+                withContext(Dispatchers.IO) {
+                    repo.unlockPdf(doc.id, password)
+                    // The clean PDF no longer needs the remembered password.
+                    VaultPasswordsFlow.forget(activity, doc.id)
+                }
                 progress.dismiss()
                 Toast.makeText(activity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
                 host.refreshList()
@@ -136,8 +143,9 @@ class LockFlow(
             titleRes = if (changing) R.string.protect_change_title else R.string.protect_sheet_title,
             primaryTextRes = if (changing) R.string.protect_action_change else R.string.protect_action_share,
             secondaryVisible = !changing,
-            rememberAvailable = false // L2's Vault password store is not merged yet
-        ) { password, _remember, shareNow ->
+            // The row exists only when a Vault is set up; it is ON by default.
+            rememberAvailable = vaultIsSetUp()
+        ) { password, remember, shareNow ->
             activity.lifecycleScope.launch {
                 val progress = host.showProgress()
                 try {
@@ -148,7 +156,17 @@ class LockFlow(
                     progress.dismiss()
                     Toast.makeText(activity, R.string.protect_done, Toast.LENGTH_LONG).show()
                     host.refreshList()
-                    if (!changing) offerProtectedCopy(updated, shareNow)
+                    if (remember) {
+                        VaultPasswordsFlow.remember(activity, doc.id, password) { saved ->
+                            if (!saved) {
+                                Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
+                            }
+                            if (!changing) offerProtectedCopy(updated, shareNow)
+                        }
+                    } else {
+                        withContext(Dispatchers.IO) { VaultPasswordsFlow.forget(activity, doc.id) }
+                        if (!changing) offerProtectedCopy(updated, shareNow)
+                    }
                 } catch (e: PdfProtection.WrongPassword) {
                     progress.dismiss()
                     Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
@@ -160,6 +178,26 @@ class LockFlow(
                         Toast.LENGTH_LONG
                     ).show()
                 }
+            }
+        }
+    }
+
+    /** True when L2's Vault has been set up on this phone. */
+    private fun vaultIsSetUp(): Boolean =
+        runCatching { VaultStore(activity, repo).isSetUp() }.getOrDefault(false)
+
+    /**
+     * Fills the Unlock sheet from the Vault. A missing, stale or unreadable entry never closes
+     * the sheet: the owner can still type the password.
+     */
+    private fun useVaultPassword(doc: ScanDocument, open: (String) -> Unit) {
+        VaultPasswordsFlow.readForUnlock(activity, doc.id) { password ->
+            when {
+                password == null ->
+                    Toast.makeText(activity, R.string.vault_password_missing, Toast.LENGTH_LONG).show()
+                !repo.verifyPdfPassword(doc.id, password) ->
+                    Toast.makeText(activity, R.string.vault_password_stale, Toast.LENGTH_LONG).show()
+                else -> open(password)
             }
         }
     }
@@ -225,16 +263,17 @@ class LockFlow(
             .setPositiveButton(R.string.continue_label) { _, _ ->
                 ProtectSheet.show(
                     activity = activity,
-                    doc = ProtectSheet.Doc(name = "", pages = 0, sizeBytes = 0L)
-                ) { password, _remember, shareNow ->
-                    runLockDevicePdf(uri, password, shareNow)
+                    doc = ProtectSheet.Doc(name = "", pages = 0, sizeBytes = 0L),
+                    rememberAvailable = vaultIsSetUp()
+                ) { password, remember, shareNow ->
+                    runLockDevicePdf(uri, password, shareNow, remember)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .showSw(isSheet = false)
     }
 
-    private fun runLockDevicePdf(uri: Uri, password: String, share: Boolean) {
+    private fun runLockDevicePdf(uri: Uri, password: String, share: Boolean, remember: Boolean) {
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
@@ -255,25 +294,37 @@ class LockFlow(
                 progress.dismiss()
                 host.refreshList()
                 Toast.makeText(activity, R.string.protect_done, Toast.LENGTH_LONG).show()
-                if (share) {
-                    ShareUtils.share(activity, locked)
-                } else {
-                    activity.startActivity(
-                        ExportResultActivity.intent(
-                            activity,
-                            outputPath = locked.pdfFile.path,
-                            previewPath = locked.pageFiles.firstOrNull()?.path,
-                            mime = "application/pdf",
-                            displayName = DownloadSaver.pdfNameFor(locked.name),
-                            beforeBytes = before,
-                            afterBytes = locked.pdfFile.length(),
-                            width = 0,
-                            height = 0,
-                            title = activity.getString(R.string.lock_device_title),
-                            warning = activity.getString(R.string.lock_device_note),
-                            docId = locked.id // T4.8: record the saved copy on this document
+                val present = {
+                    if (share) {
+                        ShareUtils.share(activity, locked)
+                    } else {
+                        activity.startActivity(
+                            ExportResultActivity.intent(
+                                activity,
+                                outputPath = locked.pdfFile.path,
+                                previewPath = locked.pageFiles.firstOrNull()?.path,
+                                mime = "application/pdf",
+                                displayName = DownloadSaver.pdfNameFor(locked.name),
+                                beforeBytes = before,
+                                afterBytes = locked.pdfFile.length(),
+                                width = 0,
+                                height = 0,
+                                title = activity.getString(R.string.lock_device_title),
+                                warning = activity.getString(R.string.lock_device_note),
+                                docId = locked.id // T4.8: record the saved copy on this document
+                            )
                         )
-                    )
+                    }
+                }
+                if (remember) {
+                    VaultPasswordsFlow.remember(activity, locked.id, password) { saved ->
+                        if (!saved) {
+                            Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
+                        }
+                        present()
+                    }
+                } else {
+                    present()
                 }
             } catch (e: Exception) {
                 progress.dismiss()
@@ -328,9 +379,10 @@ class LockFlow(
             documentName = doc.name,
             verify = { candidate -> repo.verifyPdfPassword(doc.id, candidate) },
             cooldown = cooldownFor(doc.id),
-            vaultAvailable = false, // L2
+            vaultAvailable = VaultPasswordsFlow.has(activity, doc.id),
             onUnlocked = { password -> runUnlockDevicePdf(doc, uri, password) },
-            onRemoveProtection = { password -> runUnlockDevicePdf(doc, uri, password) }
+            onRemoveProtection = { password -> runUnlockDevicePdf(doc, uri, password) },
+            onUseVault = { useVaultPassword(doc) { password -> runUnlockDevicePdf(doc, uri, password) } }
         )
     }
 

@@ -4,7 +4,7 @@
     <string name="protect_sheet_title">Protect PDF</string>
     <string name="protect_change_title">Change password</string>
     <string name="protect_close">Close</string>
-    <string name="protect_sheet_note">Anyone who opens this PDF will need the password — in any PDF app, on any device.</string>
+    <string name="protect_sheet_note">Anyone who opens this PDF will need the password, in any PDF app, on any device.</string>
     <string name="protect_doc_meta">%1$d pages · %2$s</string>
     <string name="protect_label_password">PASSWORD</string>
     <string name="protect_label_confirm">TYPE IT AGAIN</string>
@@ -18,7 +18,7 @@
     <string name="protect_meter_strong">Very strong · %1$d characters</string>
     <string name="protect_confirm_ok">Passwords match</string>
     <string name="protect_aes_title">AES-256 encryption</string>
-    <string name="protect_aes_note">The modern standard. Strength depends on your password — use 10+ characters.</string>
+    <string name="protect_aes_note">The modern standard. Strength depends on your password. Use 10+ characters.</string>
     <string name="protect_remember_title">Remember in Vault</string>
     <string name="protect_remember_note">So you never lose it. Opens with fingerprint.</string>
     <string name="protect_action_share">Protect &amp; share</string>
@@ -37,5 +37,11 @@
     <string name="unlock_remove_title">Remove protection?</string>
     <string name="unlock_remove_msg">This PDF will open without a password from now on. Its pages stay exactly as they are.</string>
     <string name="unlock_remove_confirm">Remove protection</string>
-    <string name="unlock_removed">Password removed — the PDF is unlocked</string>
+    <string name="unlock_removed">Password removed. The PDF is unlocked.</string>
+
+    <!-- L3 + L2: remembered PDF passwords in the Vault. Short, plain lines. -->
+    <string name="vault_password_not_saved">Password not saved in Vault.</string>
+    <string name="vault_password_missing">No saved password. Type it instead.</string>
+    <string name="vault_password_stale">The saved password did not work. Type it instead.</string>
+    <string name="vault_unlock_to_save">Unlock the Vault to save this password.</string>
 </resources>

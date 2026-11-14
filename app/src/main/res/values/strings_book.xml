@@ -9,8 +9,8 @@
     <string name="book_loading">Preparing the previews…</string>
     <string name="book_splitting">Splitting the spreads…</string>
     <string name="book_spread">Spread %1$d</string>
-    <string name="book_gutter_found">Gutter found — drag the line to adjust</string>
-    <string name="book_gutter_middle">Using the middle — drag the line to adjust</string>
+    <string name="book_gutter_found">Gutter found. Drag the line to adjust.</string>
+    <string name="book_gutter_middle">Using the middle. Drag the line to adjust.</string>
     <string name="book_gutter_moved">Gutter set by hand</string>
     <string name="book_doc_name">Book pages %1$s</string>
     <string name="book_created">%1$d pages created</string>
