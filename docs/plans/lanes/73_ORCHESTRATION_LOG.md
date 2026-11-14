@@ -53,3 +53,12 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 - 23:05 L5 wave 2 MERGED (draft engine, grid, crop): integration 1c13819, 1118 tests, lint 0 errors. L5 now: Insert pages + carried items + copy.
 
 - 11-15 00:03 L2 MERGED (vault QA fixes + QR). L2 now: OCR quality (U+FFFD, reading order) + Hindi OCR (lead adds com.google.mlkit:text-recognition-devanagari:16.0.1 bundled after current gate). OCR quality moved from L3's queue to L2.
+
+## Night plan 11-15 01:37 (owner asleep; owner material in C:\Users\Cybium\Desktop\.sw-qa\owner\ + README)
+- L1: ScanLauncher.launchGalleryCrop (ML Kit scanner gallery import = auto-crop) + Photos import sheet.
+- L2: OCR quality + Hindi (chip + Settings row).
+- L3: Book pages crop-first + HORIZONTAL spines (owner shoots books sideways) + owner photo eval + Isartor/broken.pdf parser robustness.
+- L4: To Excel, then huge-PDF import (range, estimate, progress/cancel, storage guard), ID card gallery via launchGalleryCrop.
+- L5: Insert pages, then signature/stamp from photo (InkExtract), Mask Aadhaar tool.
+- QA: run3 on the next build: RUN3_CHECKLIST (42 bugs) + full map + owner material (no ML Kit camera judgments: phone face down; scanner gallery import CAN be tested).
+- Lead: review every eval preview and every run3 screenshot; merge after review; keep integration green; release test29 when run3 verdicts are clean.
