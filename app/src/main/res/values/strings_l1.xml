@@ -215,6 +215,7 @@
     <string name="batch_done">%1$d documents renamed</string>
     <string name="batch_select_hint">Select two or more documents to rename</string>
     <string name="undo_action">Undo</string>
+    <string name="tools_clear_search">Clear search</string>
     <string name="sort_title">Sort by</string>
     <string name="sort_newest">Newest</string>
     <string name="sort_oldest">Oldest</string>

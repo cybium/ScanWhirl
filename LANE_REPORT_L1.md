@@ -5,6 +5,39 @@ Branch `lane/L1-shell`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L1`.
 
 ## Done this session (after the folders/tags pass)
 
+### QA round (build 435e0f3, run2)
+1. Empty library: removed the stray full-width cyan "Scan" bar from the empty state (the nav disc is the scan CTA);
+   the empty state now ends at its body line, fully above the nav.
+2. Tools search: a clear (X) button appears while there is a query; re-entering the Tools tab from the nav clears the
+   query and shows the full catalogue.
+3. Tools search ranking: title starts-with → title word starts-with → keyword/id word starts-with → substring, ties in
+   catalogue order. Search now uses the localised titles (`ToolRegistry.search(context, query)`), so "read" lists
+   Read text first, "pdf" lists PDF to images first, "sign" lists Sign, "small" lists Compress.
+4. Trash: the "Empty Trash" menu item is hidden (and disabled) whenever the Trash is empty — never a silent no-op.
+
+### Wave 3 preparation: tests still driving the legacy `MainActivity`
+QA confirmed the legacy Home is unreachable for users. Tests that still launch/assert `MainActivity` (27 files):
+`BrandIdentityTest`, `CategoryPickerSheetTest`, `ChangePasswordSheetTest`, `DirectScanSaveTest`,
+`FreeLegacyVaultEntryPointTest`, `HomeCategoryActionsTest`, `HomeFontScaleTest`, `HomeKeyboardFocusTest`,
+`HomeM06Test`, `HomeScreenTest`, `HomeSlice2Test`, `ImageImportPipelineTest`, `ImportSheetTest`, `LockUiTest`,
+`LongImageTest`, `OcrGalleryImageFlowTest`, `ProtectHostActivity`, `QuickSortTest`, `RetrievalSlice5Test`,
+`SaveTransactionTest`, `SelectionBarTest`, `StatusLineScreenTest`, `TextFitTest`, `UiSmokeTest`,
+`VaultPasswordsWiringTest` (plus shared helpers used by them).
+
+Migration plan to `ShellActivity`:
+- Phase 1 (mechanical): give the shell the seams these tests need — a public `ShellActivity.showTab`, `library`,
+  `toolsHub`, `showPro`, `showDocActions`, and stable ids already exist; replace `scanList` → `swDocList`,
+  `statusLine`/`headerCount` → the shell equivalents, `dockRoot` → `swShellNav`/`swTabContent`.
+- Phase 2 (feature parity): port the behaviours the legacy tests pin that the shell lacks — multi-select bar on Home
+  (already in the library selection mode), status header line, greeting, wallpaper, quick-sort entry, and the import
+  pipeline state copy. Keep the engine-level assertions (ScanLauncher, OcrIndexer, repository) unchanged.
+- Phase 3: rewrite each test class to launch `ShellActivity`, keeping data-safety assertions intact and marking UI
+  shape changes with `// v2 UI: <mockup>`.
+- Phase 4: when no test references `MainActivity`, delete `MainActivity`, `activity_main.xml` and its exclusive
+  adapters/drawables, and run the full gate + lint.
+
+## Items 11-15 (previous round)
+
 ### Merge
 - `git merge integration` clean; L5's `DraftStore`, Organize grid and page-grid draft code kept intact.
 
@@ -37,11 +70,13 @@ Branch `lane/L1-shell`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L1`.
 - `ShellQaFixesTest` now also covers: compact chooser + search past 8 docs, tag/icon bounds for every tile, Vault
   live status + shared pill, list bottom padding. `DeleteExportsTest` confirms the new Trash sheet.
 - Full gate: `GATE PASS L1 tests=1135 failures=0 skipped=0 lint=[lint skipped (lead runs it at merge)]`.
+- QA round: `GATE PASS L1 tests=1178 failures=0 skipped=0 lint=[lint skipped (lead runs it at merge)]`.
 
 ## Commits
 - `b475148` phone-review pass (icons, brand, quick/tools layout, Pro gating, Text chips)
 - `2fd4fbd` folders & tags, batch rename, phone-QA fixes 1-10
 - (this session) QA 11-15: compact chooser, tag bounds, Vault status, list padding, Trash confirms
+- (latest) QA round 2: empty-state stray bar, tools clear + re-entry reset, title-first search ranking, empty-Trash menu hidden; legacy MainActivity test inventory + migration plan
 
 
 ## Done this session

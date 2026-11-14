@@ -91,6 +91,19 @@ class ToolRegistryTest {
         }
     }
 
+    @Test
+    fun `search ranks title matches before keyword matches`() {
+        val app = androidx.test.core.app.ApplicationProvider
+            .getApplicationContext<android.app.Application>()
+        fun ids(q: String) = ToolRegistry.search(app, q).map { it.id }
+
+        assertEquals("a title starts-with wins", "read_text", ids("read").first())
+        assertEquals("Sign is the Sign tool", "sign", ids("sign").first())
+        assertEquals("a PDF title starts-with wins", "pdf_to_images", ids("pdf").first())
+        assertEquals("keyword 'smaller' finds Compress", "compress", ids("small").first())
+        assertTrue("a keyword substring still matches", ids("scan").contains("scan"))
+    }
+
     private class RecordingHost : ToolHost {
         val events = mutableListOf<String>()
         override fun open(tool: SwTool) {

@@ -322,7 +322,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 library.reload()
                 scroll(library)
             }
-            Tab.TOOLS -> scroll(toolsHub)
+            Tab.TOOLS -> scroll(toolsHub).also { toolsHub.clearSearch() }
             Tab.VAULT -> {
                 vaultScreen.refreshStatus()
                 scroll(vaultScreen)

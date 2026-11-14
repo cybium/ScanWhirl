@@ -75,6 +75,7 @@
     <item name="swVaultStatus" type="id" />
     <item name="swDocPickerList" type="id" />
     <item name="swDocPickerSearch" type="id" />
+    <item name="swToolsClear" type="id" />
     <item name="swNavMe" type="id" />
     <item name="swShellTab" type="id" />
     <item name="swHomeSearch" type="id" />

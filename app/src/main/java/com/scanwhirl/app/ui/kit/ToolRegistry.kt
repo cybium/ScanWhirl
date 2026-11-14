@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.kit
 
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.tools.ToolLaunch
+import java.util.Locale
 
 /** v2 UI: 03_tools_hub — the seven catalogue groups, in mockup order. */
 enum class ToolGroup { CREATE, ORGANIZE, OPTIMIZE, CONVERT, EDIT, SECURE, TEXT }
@@ -211,14 +212,6 @@ object ToolRegistry {
 
     private val byId: Map<String, SwTool> = all.associateBy { it.id }
 
-    private val searchIndex: Map<String, String> = all.associate { tool ->
-        tool.id to buildString {
-            append(tool.id.replace('_', ' '))
-            append(' ')
-            append(tool.keywords)
-        }.lowercase()
-    }
-
     fun byId(id: String): SwTool? = byId[id]
 
     fun byGroup(group: ToolGroup): List<SwTool> = all.filter { it.group == group }
@@ -228,9 +221,32 @@ object ToolRegistry {
         ToolGroup.entries.map { group -> group to byGroup(group) }.filter { it.second.isNotEmpty() }
 
     /** Title + keyword search; a blank query returns nothing (the hub shows all). */
-    fun search(query: String): List<SwTool> {
-        val q = query.trim().lowercase()
+    fun search(query: String): List<SwTool> = rankedSearch(query) { null }
+
+    /**
+     * v2 UI: 03_tools_hub — the hub's search with the real (localised) titles.
+     * Ranking: title starts-with, then a title word starts-with, then a keyword
+     * word starts-with, then any substring; ties keep catalogue order.
+     */
+    fun search(context: android.content.Context, query: String): List<SwTool> =
+        rankedSearch(query) { context.getString(it.title) }
+
+    private fun rankedSearch(query: String, titleOf: (SwTool) -> String?): List<SwTool> {
+        val q = query.trim().lowercase(Locale.getDefault())
         if (q.isEmpty()) return emptyList()
-        return all.filter { searchIndex[it.id]?.contains(q) == true }
+        val hits = all.withIndex().mapNotNull { (index, tool) ->
+            val title = (titleOf(tool) ?: tool.id.replace('_', ' ')).lowercase(Locale.getDefault())
+            val idWords = tool.id.replace('_', ' ')
+            val keywords = tool.keywords.lowercase(Locale.getDefault())
+            val rank = when {
+                title.startsWith(q) -> 0
+                title.split(' ').any { it.startsWith(q) } -> 1
+                (keywords + " " + idWords).split(' ').any { it.startsWith(q) } -> 2
+                title.contains(q) || keywords.contains(q) || idWords.contains(q) -> 3
+                else -> null
+            }
+            rank?.let { index to it }
+        }
+        return hits.sortedWith(compareBy({ it.second }, { it.first })).map { all[it.first] }
     }
 }

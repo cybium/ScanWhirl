@@ -297,8 +297,46 @@ class ShellQaFixesTest {
         }
     }
     @Test
-    fun `the library list keeps room above the nav bar`() {
-        DocFixtures.saved(repo, app, pages = 1, name = "Bottom padding")
+    fun `the empty library has no stray button under the state`() {
+        launch { activity ->
+            val empty = activity.findViewById<ViewGroup>(R.id.swHomeEmpty)
+            assertTrue("the empty state is shown", empty.isVisible)
+            assertEquals("image, title, body only", 3, empty.childCount)
+        }
+    }
+
+    @Test
+    fun `tools search has a clear button, clears on re-entry and ranks titles first`() {
+        launch { activity ->
+            activity.findViewById<View>(R.id.swNavTools).performClick()
+            idle()
+            val search = activity.findViewById<EditText>(R.id.swToolsSearch)
+            val clear = activity.findViewById<View>(R.id.swToolsClear)
+            assertFalse("no clear button on an empty query", clear.isVisible)
+
+            search.setText("read")
+            idle()
+            assertTrue("clear appears", clear.isVisible)
+            val tiles = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
+            assertEquals("Read text ranks first", "read_text", tiles.first().tool?.id)
+
+            clear.performClick()
+            idle()
+            assertEquals("clear empties the field", "", search.text.toString())
+            assertFalse(clear.isVisible)
+
+            search.setText("small")
+            idle()
+            activity.findViewById<View>(R.id.swNavLibrary).performClick()
+            idle()
+            activity.findViewById<View>(R.id.swNavTools).performClick()
+            idle()
+            assertEquals("re-entering the tab starts from all tools", "", search.text.toString())
+        }
+    }
+
+    @Test
+    fun `the library list keeps room above the nav bar`() {        DocFixtures.saved(repo, app, pages = 1, name = "Bottom padding")
         launch { activity ->
             val list = activity.findViewById<ViewGroup>(R.id.swDocList)
             val need = 90 * activity.resources.displayMetrics.density
