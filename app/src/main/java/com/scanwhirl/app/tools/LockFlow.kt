@@ -108,6 +108,9 @@ class LockFlow(
         }
     }
 
+    /** Mockup 05 for a document the host already knows (the reader's More → Protect PDF). */
+    fun protectDocument(doc: ScanDocument) = promptNewPasswordForScan(doc)
+
     /**
      * Mockup 05. [current] is the verified current password when changing it; null when protecting
      * for the first time. The sheet only calls back with a password that is long enough and typed
