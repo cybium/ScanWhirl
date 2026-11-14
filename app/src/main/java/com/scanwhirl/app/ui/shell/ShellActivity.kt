@@ -61,6 +61,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private lateinit var repo: ScanRepository
     private lateinit var contentHost: FrameLayout
+    private lateinit var navHost: View
     private lateinit var navItems: Map<Tab, LinearLayout>
 
     private var tab = Tab.LIBRARY
@@ -149,9 +150,22 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
         contentHost = FrameLayout(this).apply { id = R.id.swTabContent }
         root.addView(contentHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(buildNav(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 100f)))
+        navHost = buildNav()
+        root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 100f)))
         setContentView(root)
         root.applySystemBarsPadding()
+        // v2 UI: 01_home_A — with the keyboard up the nav bar and scan disc must
+        // not float over the chips: hide them and keep the content above the IME.
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout()
+            )
+            v.setPadding(v.paddingLeft, bars.top, v.paddingRight, bars.bottom)
+            navHost.isVisible =
+                insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom == 0
+            insets
+        }
 
         library = LibraryScreen(this, this, repo, libraryCallbacks)
         toolsHub = ToolsHubScreen(this, this)
@@ -327,7 +341,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 scroll(library)
             }
             Tab.TOOLS -> scroll(toolsHub)
-            Tab.VAULT -> scroll(vaultScreen)
+            Tab.VAULT -> {
+                vaultScreen.refreshStatus()
+                scroll(vaultScreen)
+            }
             Tab.ME -> scroll(meScreen)
         }
         setContent(view)
@@ -448,11 +465,70 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         override fun onAllTools() = showTab(Tab.TOOLS)
         override fun onOpenDoc(doc: ScanDocument) = openDocument(doc.id)
         override fun onShareDoc(doc: ScanDocument) = ShareUtils.share(this@ShellActivity, doc)
+        override fun onShareDocs(docs: List<ScanDocument>) = shareDocuments(docs)
+        override fun onProRequired() = showPro()
         override fun onMoreDoc(doc: ScanDocument) = showDocActions(doc)
+    }
+
+    /** v2 UI: 03_tools_hub — share every selected document's PDF at once. */
+    private fun shareDocuments(docs: List<ScanDocument>) {
+        if (docs.size == 1) {
+            ShareUtils.share(this, docs.single())
+            return
+        }
+        val uris = ArrayList<android.net.Uri>()
+        for (doc in docs) {
+            runCatching {
+                uris += androidx.core.content.FileProvider.getUriForFile(
+                    this, "$packageName.fileprovider", doc.pdfFile
+                )
+            }
+        }
+        if (uris.isEmpty()) {
+            Toast.makeText(this, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE)
+            .setType("application/pdf")
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(intent, getString(R.string.share_pdf)))
     }
 
     private fun openDocument(id: String) {
         startActivity(DocumentViewerActivity.intent(this, id))
+    }
+
+    /** v2 UI: 03_tools_hub — Searchable PDF is a real tool, never a jump to Settings. */
+    private fun searchableSheet(doc: ScanDocument) {
+        val already = doc.isSearchable
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.make_searchable_title)
+            .setMessage(
+                if (already) getString(R.string.make_searchable_already, doc.name)
+                else getString(R.string.make_searchable_note, doc.name)
+            )
+            .build()
+        if (already) {
+            sheet.setPrimary(R.string.sheet_got_it)
+        } else {
+            sheet.setPrimary(R.string.make_searchable_action) {
+                lifecycleScope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        runCatching { repo.makeSearchable(doc.id) }.getOrDefault(false)
+                    }
+                    Toast.makeText(
+                        this@ShellActivity,
+                        if (ok) getString(R.string.make_searchable_done, doc.name)
+                        else getString(R.string.make_searchable_unavailable, doc.name),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    library.reload()
+                }
+            }
+            sheet.setSecondary(R.string.sheet_cancel)
+        }
+        sheet.show()
     }
 
     private fun showDocActions(doc: ScanDocument) {
@@ -541,7 +617,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             "compress" -> compressFlow.start()
             "resize" -> pickResizeImage.launch("image/*")
             "vault" -> showTab(Tab.VAULT)
-            "searchable_pdf" -> startActivity(SettingsActivity.intent(this))
+            "folders" -> {
+                showTab(Tab.LIBRARY)
+                library.focusFolders()
+            }
+            "batch_rename" -> {
+                showTab(Tab.LIBRARY)
+                library.startBatchRename()
+            }
+            "searchable_pdf" -> showDocPicker { doc -> searchableSheet(doc) }
             "enhance", "bw", "to_text", "read_text" -> showDocPicker { doc ->
                 if (tool.id == "to_text" || tool.id == "read_text") openText(doc) else openDocument(doc.id)
             }
@@ -585,31 +669,97 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             .setTitle(getString(R.string.tool_pick_document))
             .setSecondary(R.string.sheet_cancel)
             .build()
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        for (doc in docs.take(10)) {
-            list.addView(
-                SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
-                    text = doc.name
-                    minimumHeight = SwStyle.dp(this@ShellActivity, 48f)
-                    gravity = Gravity.CENTER_VERTICAL
-                    isClickable = true
-                    setPadding(
-                        SwStyle.dp(this@ShellActivity, 4f), 0,
-                        SwStyle.dp(this@ShellActivity, 4f), 0
-                    )
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val rows = LinearLayout(this).apply {
+            id = R.id.swDocPickerList
+            orientation = LinearLayout.VERTICAL
+        }
+        var filt = ""
+        fun render() {
+            rows.removeAllViews()
+            val q = filt.trim().lowercase()
+            for (doc in docs.filter { q.isEmpty() || it.name.lowercase().contains(q) }.take(50)) {
+                val pages = resources.getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
+                val meta = "$pages · ${sizeLabel(doc)} · ${dayLabel(doc)}"
+                val card = com.scanwhirl.app.ui.kit.DocCard(this).apply {
+                    asCompact()
+                    bind(doc, meta, onShare = {}, onMore = {})
                     setOnClickListener {
                         sheet.dismiss()
                         onPick(doc)
                     }
-                },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ShellActivity, 48f)
+                }
+                rows.addView(
+                    card,
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = SwStyle.dp(this@ShellActivity, 6f) }
                 )
+            }
+        }
+        if (docs.size > 8) {
+            val search = android.widget.EditText(this).apply {
+                id = R.id.swDocPickerSearch
+                hint = getString(R.string.home_search_hint)
+                setHintTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_dim))
+                setTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_hi))
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
+                background = SwStyle.rounded(
+                    this@ShellActivity,
+                    SwStyle.color(this@ShellActivity, R.color.glass_surface_raised),
+                    radiusDp = 14f,
+                    stroke = SwStyle.color(this@ShellActivity, R.color.sw_cyan_hair)
+                )
+                setPadding(
+                    SwStyle.dp(this@ShellActivity, 12f), SwStyle.dp(this@ShellActivity, 10f),
+                    SwStyle.dp(this@ShellActivity, 12f), SwStyle.dp(this@ShellActivity, 10f)
+                )
+                addTextChangedListener(object : android.text.TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                    override fun afterTextChanged(s: android.text.Editable?) {
+                        filt = s?.toString().orEmpty()
+                        render()
+                    }
+                })
+            }
+            body.addView(
+                search,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = SwStyle.dp(this@ShellActivity, 8f) }
             )
         }
-        sheet.setContent(list)
+        val scroll = androidx.core.widget.NestedScrollView(this).apply {
+            isFillViewport = false
+            addView(rows)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ShellActivity, 360f)
+            )
+        }
+        body.addView(scroll)
+        render()
+        sheet.setContent(body)
         sheet.show()
     }
+
+    private fun sizeLabel(doc: ScanDocument): String {
+        val bytes = runCatching {
+            if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
+        }.getOrDefault(0L)
+        return when {
+            bytes >= 1024 * 1024 -> String.format(java.util.Locale.getDefault(), "%.1f MB", bytes / 1048576f)
+            bytes >= 1024 -> "${bytes / 1024} KB"
+            bytes > 0 -> "$bytes B"
+            else -> "0 B"
+        }
+    }
+
+    private fun dayLabel(doc: ScanDocument): String =
+        java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault())
+            .format(java.util.Date(doc.createdAt))
 
     // ---- HomeHost ---------------------------------------------------------
 

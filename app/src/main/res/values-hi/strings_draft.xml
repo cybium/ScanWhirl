@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L5 wave 2 Hindi draft — review before release. -->
+<resources>
+    <!-- Engine -->
+    <string name="draft_open_refused"><!-- review -->पहले बिना सहेजे पेज बदलावों को सहेजें या हटाएँ।</string>
+    <string name="draft_stale"><!-- review -->ये बदलाव शुरू होने के बाद दस्तावेज़ बदल गया। इन्हें केवल हटाया जा सकता है।</string>
+    <string name="draft_damaged"><!-- review -->ये बिना सहेजे बदलाव खराब हो गए हैं और केवल हटाए जा सकते हैं।</string>
+    <string name="draft_edited_name"><!-- review -->%1$s (बदला गया)</string>
+
+    <!-- Organize screen -->
+    <string name="draft_header"><!-- review -->ड्राफ़्ट · %1$d पेज · %2$d बदलाव</string>
+    <string name="draft_save_new"><!-- review -->नई कॉपी के रूप में सहेजें</string>
+    <string name="draft_replace"><!-- review -->मूल को बदलें</string>
+    <string name="draft_discard"><!-- review -->हटाएँ</string>
+    <string name="draft_keep_editing"><!-- review -->बदलाव जारी रखें</string>
+    <string name="draft_back_title"><!-- review -->बिना सहेजे पेज बदलाव</string>
+    <string name="draft_back_msg"><!-- review -->आपका सहेजा दस्तावेज़ नहीं बदला है। इन बदलावों को नई कॉपी के रूप में सहेजें या हटाएँ।</string>
+    <string name="draft_replace_title"><!-- review -->“%1$s” को बदलें?</string>
+    <string name="draft_replace_msg"><!-- review -->मौजूदा संस्करण ट्रैश में “%1$s (पिछला संस्करण)” के रूप में चला जाएगा। आप उसे वहाँ से वापस ला सकते हैं।</string>
+    <string name="draft_discard_msg"><!-- review -->%1$d पेज बदलाव हटाएँ? सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
+    <string name="draft_saved_new"><!-- review -->“%1$s” के रूप में सहेजा गया</string>
+    <string name="draft_replaced"><!-- review -->बदल दिया गया। पिछला संस्करण ट्रैश में है।</string>
+    <string name="trash_previous_version"><!-- review -->%1$s (पिछला संस्करण)</string>
+
+    <!-- Selection mode (owner revision) -->
+    <string name="draft_select_all"><!-- review -->सभी चुनें</string>
+    <string name="draft_delete_msg"><!-- review -->पेज ड्राफ़्ट से हट जाएँगे। सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
+    <string name="draft_rotate_left"><!-- review -->बाएँ घुमाएँ</string>
+    <string name="draft_move_to"><!-- review -->यहाँ ले जाएँ…</string>
+    <string name="draft_move_to_hint"><!-- review -->पेज संख्या</string>
+    <string name="draft_move_invalid"><!-- review -->वह पेज मौजूद नहीं है।</string>
+    <plurals name="draft_delete_title">
+        <item quantity="one"><!-- review -->%1$d पेज हटाएँ?</item>
+        <item quantity="other"><!-- review -->%1$d पेज हटाएँ?</item>
+    </plurals>
+</resources>

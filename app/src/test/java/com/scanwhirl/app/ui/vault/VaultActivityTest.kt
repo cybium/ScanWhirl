@@ -6,6 +6,7 @@ import android.app.Dialog
 import android.content.Intent
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
 import androidx.biometric.BiometricManager
@@ -156,7 +157,7 @@ class VaultActivityTest {
 
         assertTrue(store.isUnlocked())
         assertEquals(
-            "0 files protected",
+            "0 documents protected",
             activity.need<TextView>(R.id.vaultStatsTitle).text.toString()
         )
         assertTrue(activity.need<View>(R.id.vaultBanner).isVisible)
@@ -164,7 +165,7 @@ class VaultActivityTest {
     }
 
     @Test
-    fun `wrong passcode shows an error and the right one unlocks`() {
+    fun `wrong passcode shows the tries left and keeps the sheet open`() {
         store.setup("246810")
         val activity = launch()
 
@@ -172,20 +173,24 @@ class VaultActivityTest {
         idle()
         val unlockSheet = sheet()
         assertEquals("Unlock Vault", unlockSheet.need<TextView>(R.id.swSheetTitle).text)
+        assertEquals("Enter your passcode.", unlockSheet.need<TextView>(R.id.swSheetMessage).text.toString())
 
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("000000")
         primary(unlockSheet).performClick()
         idle()
         val error = unlockSheet.need<TextView>(R.id.vaultUnlockError)
         assertTrue(error.isVisible)
-        assertEquals("Wrong passcode", error.text.toString())
+        assertEquals("Wrong passcode. 4 tries left.", error.text.toString())
+        assertTrue("the sheet stays open", unlockSheet.isShowing)
         assertFalse(store.isUnlocked())
+        assertTrue("the screen also says it is still locked", activity.need<View>(R.id.vaultStatus).isVisible)
 
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
         primary(unlockSheet).performClick()
         idle()
         assertTrue(store.isUnlocked())
         assertTrue(activity.need<View>(R.id.vaultBanner).isVisible)
+        assertFalse(activity.need<View>(R.id.vaultStatus).isVisible)
     }
 
     @Test
@@ -211,8 +216,9 @@ class VaultActivityTest {
     }
 
     @Test
-    fun `fingerprint unlock offers the prompt and opens the vault through the keystore key`() {
+    fun `fingerprint unlock starts the prompt once and opens the vault`() {
         store.setup("246810")
+        store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
         val challenges = ArrayList<VaultKeyChallenge>()
@@ -222,14 +228,7 @@ class VaultActivityTest {
         }
         val activity = launch()
 
-        val unlockSheet = sheet()
-        val useFingerprint = unlockSheet.need<View>(R.id.swSheetSecondary)
-        assertTrue(useFingerprint.isVisible)
-        assertEquals("Use fingerprint", (useFingerprint as TextView).text.toString())
-        useFingerprint.performClick()
-        idle()
-
-        assertEquals(1, challenges.size)
+        assertEquals("the prompt starts once when the sheet opens", 1, challenges.size)
         assertNotNull("the CryptoObject cipher is offered to the prompt", challenges[0].cipher)
         assertTrue(store.isUnlocked())
         assertEquals(
@@ -239,11 +238,48 @@ class VaultActivityTest {
     }
 
     @Test
-    fun `a failed fingerprint falls back to the passcode sheet and stays locked`() {
+    fun `the fingerprint button is offered with its icon and retries after a cancel`() {
         store.setup("246810")
+        store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
-        VaultActivity.fingerprintStarter = { false }
+        var answered = false
+        VaultActivity.fingerprintStarter = { responded ->
+            if (!answered) {
+                answered = true
+                false // the automatic prompt was cancelled: no error sheet, just the passcode
+            } else {
+                true
+            }
+        }
+        val activity = launch()
+
+        val unlockSheet = sheet()
+        assertEquals(
+            "Use your fingerprint, or enter your passcode.",
+            unlockSheet.need<TextView>(R.id.swSheetMessage).text.toString()
+        )
+        val useFingerprint = unlockSheet.need<View>(R.id.swSheetSecondary)
+        assertTrue("the fingerprint control is there", useFingerprint.isVisible)
+        assertEquals("Use fingerprint", (useFingerprint as TextView).text.toString())
+        assertFalse("a cancelled automatic prompt saves nothing", store.isUnlocked())
+
+        useFingerprint.performClick()
+        idle()
+        assertTrue(store.isUnlocked())
+    }
+
+    @Test
+    fun `a failed manual fingerprint falls back to the passcode sheet and stays locked`() {
+        store.setup("246810")
+        store.completeKeystoreWrap(store.beginKeystoreWrap())
+        store.lock()
+        VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
+        var attempts = 0
+        VaultActivity.fingerprintStarter = {
+            attempts++
+            false
+        }
         val activity = launch()
 
         sheet().need<View>(R.id.swSheetSecondary).performClick()
@@ -265,6 +301,7 @@ class VaultActivityTest {
     @Test
     fun `no fingerprint option when biometrics are not enrolled`() {
         store.setup("246810")
+        store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         for (status in listOf(
             BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED,
@@ -280,32 +317,42 @@ class VaultActivityTest {
                 unlockSheet.findViewById<View>(R.id.swSheetSecondary)?.isVisible == true
             )
             assertEquals("Unlock Vault", unlockSheet.need<TextView>(R.id.swSheetTitle).text)
+            assertEquals(
+                "the copy must not promise a fingerprint",
+                "Enter your passcode.",
+                unlockSheet.need<TextView>(R.id.swSheetMessage).text.toString()
+            )
             controller!!.close()
             controller = null
         }
     }
 
     @Test
-    fun `an invalidated keystore key asks for the passcode and re-wraps afterwards`() {
+    fun `an invalidated keystore key asks for the passcode then offers a new fingerprint`() {
         store.setup("246810")
+        store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         keys.invalidate()
         VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
         var started = false
-        VaultActivity.fingerprintStarter = { started = true; false }
+        VaultActivity.fingerprintStarter = { started = true; true }
         val activity = launch()
 
-        // No usable Keystore key -> the prompt is not even offered.
+        // No usable Keystore key -> the prompt is not offered, only the passcode.
         assertFalse(activity.need<View>(R.id.vaultBanner).isVisible)
         val unlockSheet = sheet()
-        assertTrue("the fingerprint option disappears", unlockSheet.findViewById<View>(R.id.swSheetSecondary)?.isVisible != true)
+        assertTrue(
+            "the fingerprint option disappears",
+            unlockSheet.findViewById<View>(R.id.swSheetSecondary)?.isVisible != true
+        )
+        assertFalse("no prompt was started before the passcode", started)
 
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
         primary(unlockSheet).performClick()
         idle()
         assertTrue(store.isUnlocked())
-        assertFalse("no prompt was started", started)
-        assertTrue("the Keystore wrap was rebuilt", store.canUseBiometric())
+        assertTrue("the passcode unlock offered a new fingerprint wrap", started)
+        assertTrue("the Keystore wrap was rebuilt through the prompt", store.canUseBiometric())
     }
 
     @Test
@@ -329,7 +376,60 @@ class VaultActivityTest {
         val list = activity.need<android.view.ViewGroup>(R.id.vaultList)
         assertEquals("Aadhaar card", list.need<TextView>(R.id.vaultEntryName).text.toString())
         val stats = activity.need<TextView>(R.id.vaultStatsTitle).text.toString()
-        assertTrue("files are counted: $stats", stats.endsWith("files protected") && !stats.startsWith("0 "))
+        assertEquals("documents, not files, are counted", "1 document protected", stats)
+        val meta = list.need<TextView>(R.id.vaultEntryMeta).text.toString()
+        assertTrue("pages are pluralised: $meta", meta.startsWith("2 pages"))
+    }
+
+    @Test
+    fun `one page reads as one page, not one pages`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Receipt")
+        store.setup("246810")
+        val activity = launch()
+
+        activity.need<View>(R.id.vaultAddFiles).performClick()
+        idle()
+        sheet().need<View>(R.id.vaultAddRow).performClick()
+        idle()
+        await { repo.getDocument(id) == null && activity.need<ViewGroup>(R.id.vaultList).childCount == 1 }
+
+        val meta = activity.need<android.view.ViewGroup>(R.id.vaultList)
+            .need<TextView>(R.id.vaultEntryMeta).text.toString()
+        assertTrue("one page, not one pages: $meta", meta.startsWith("1 page "))
+    }
+
+    @Test
+    fun `the locked screen says what is behind Private files`() {
+        store.setup("246810")
+        store.lock()
+        val activity = launch()
+        assertTrue(
+            "a locked Vault shows a placeholder, not empty space",
+            activity.need<View>(R.id.vaultLockedPlaceholder).isVisible
+        )
+
+        val unlockSheet = sheet()
+        unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
+        primary(unlockSheet).performClick()
+        idle()
+        assertTrue(store.isUnlocked())
+        assertFalse(activity.need<View>(R.id.vaultLockedPlaceholder).isVisible)
+    }
+
+    @Test
+    fun `another screen can say why it sent the user to unlock`() {
+        store.setup("246810")
+        store.lock()
+        controller = Robolectric.buildActivity(
+            VaultActivity::class.java,
+            VaultActivity.intent(app, "Unlock the Vault to save this password.")
+        ).setup()
+        idle()
+
+        assertEquals(
+            "Unlock the Vault to save this password.",
+            sheet().need<TextView>(R.id.swSheetMessage).text.toString()
+        )
     }
 
     @Test

@@ -17,17 +17,18 @@ class VaultKeyInvalidatedException(message: String, cause: Throwable? = null) :
     VaultAuthException(message, cause)
 
 /**
- * One biometric unlock waiting for the user: [cipher] is the Keystore decrypt operation the
- * `BiometricPrompt` authorizes (as its CryptoObject), and [complete] runs it afterwards.
+ * One Keystore operation waiting for the user: [cipher] is what `BiometricPrompt` authorizes
+ * (as its CryptoObject), and [complete] runs it afterwards.
  *
- * The cipher stays unusable until the prompt's hardware-backed authentication succeeds, so the
- * vault key cannot be unwrapped without the fingerprint/face.
+ * Used for both directions, because a per-use auth-bound key needs a fresh authentication for
+ * encrypt *and* decrypt: [VaultStore.beginBiometricUnlock] unwraps the vault key, and
+ * [VaultStore.beginKeystoreWrap] creates the wrap that makes fingerprint unlock possible.
  */
 class VaultKeyChallenge internal constructor(
     val cipher: Cipher?,
     private val finish: () -> ByteArray
 ) {
-    /** Decrypts the vault key once the prompt has authorized [cipher]. */
+    /** Runs the authorized operation and returns its bytes. */
     fun complete(): ByteArray = try {
         finish()
     } catch (e: AEADBadTagException) {
@@ -46,8 +47,12 @@ interface VaultKeys {
     /** An auth-bound key for [ALIAS] exists (so the fingerprint prompt can be offered). */
     fun hasKey(): Boolean
 
-    /** Wraps the vault key with the auth-bound Keystore key (setup, or after a reset). */
-    fun wrap(vaultKey: ByteArray): ByteArray
+    /**
+     * Prepares the CryptoObject encrypt that writes the vault-key wrap. Only a prompt-authorized
+     * cipher can encrypt with a per-use auth-bound key, so setup/repair must go through here.
+     * Throws [VaultKeyInvalidatedException] when the key was invalidated.
+     */
+    fun wrapChallenge(vaultKey: ByteArray): VaultKeyChallenge
 
     /**
      * Prepares the CryptoObject decrypt of [blob]. Throws [VaultKeyInvalidatedException] when the
@@ -100,11 +105,21 @@ class AndroidVaultKeys(
         false
     }
 
-    override fun wrap(vaultKey: ByteArray): ByteArray {
+    override fun wrapChallenge(vaultKey: ByteArray): VaultKeyChallenge {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        val encrypted = cipher.doFinal(vaultKey)
-        return cipher.iv + encrypted
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE, key())
+        } catch (e: KeyPermanentlyInvalidatedException) {
+            delete()
+            throw VaultKeyInvalidatedException("The fingerprint key was reset on this phone", e)
+        } catch (e: UnrecoverableKeyException) {
+            delete()
+            throw VaultKeyInvalidatedException("The fingerprint key is no longer usable", e)
+        }
+        return VaultKeyChallenge(cipher) {
+            val encrypted = cipher.doFinal(vaultKey)
+            cipher.iv + encrypted
+        }
     }
 
     override fun challenge(blob: ByteArray): VaultKeyChallenge {

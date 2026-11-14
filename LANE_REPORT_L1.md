@@ -1,88 +1,114 @@
 # L1 — Shell & look: lane report
 
 Branch `lane/L1-shell`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L1`.
-`integration` merged at the start of this session (L2 Vault, L4 tools UI, L5 Edit & sign, lead's phone-review fixes).
+`integration` merged at the start of both sessions (L2/L3/L4/L5, including L5's draft engine and Organize grid).
+
+## Done this session (after the folders/tags pass)
+
+### Merge
+- `git merge integration` clean; L5's `DraftStore`, Organize grid and page-grid draft code kept intact.
+
+### Items 11-15
+11. The kit document chooser now uses compact `DocCard` rows (`asCompact()`: 40×52 thumbnail, one-line name and
+    "N pages · size · date", lock badge, no category/buttons) inside a scrollable sheet, with a search field when
+    there are more than 8 documents. Every document tool uses it.
+12. Tools hub tags: the PRO/Soon tag sits in the tile's top-right corner; tiles reserve a 16dp top strip and grew to
+    96dp so the tag never intersects the icon and two-line labels stay fully visible. New test walks all 44 tiles and
+    asserts `Rect.intersects(tag, icon) == false`.
+13. Vault tab: the pill is the same "Offline · No ads" as every other tab; a live status line (`VaultSession` +
+    `VaultStore`: "Not set up yet" / "Locked" / "N documents · unlocked") sits under the emblem, plus an AES-256 /
+    locks-itself facts card, so the tab is no longer half empty. Refreshed on every open of the tab.
+14. Library list has its own 96dp bottom padding (`swDocList`) on top of the shell ScrollView's 112dp, so the last
+    card clears the nav bar and scan disc when scrolled to the end (test asserts the padding).
+15. Moving a document to Trash now confirms first, from the library (`confirmTrash`) and from the document screen:
+    "Move “name” to Trash?" / "You can restore it for 30 days. Nothing is uploaded." (test updated to confirm the
+    sheet). Trash's "Empty Trash" already requires the SwSheet confirm ("Delete N documents for good?") and is
+    enabled only when the Trash has items.
+
+## Earlier in this lane (still in place)
+- Folders & tags (Pro): folder/tag meta lines, folder chips with rename/delete, tag sheets, selection mode, tag
+  search, Free → Pro gating.
+- Batch rename (Pro): `{name} {n} {date}`, live preview, apply + Undo snackbar.
+- Phone QA 1-10: search (name/OCR/tag + empty text), persisted sort, IME hides nav, Searchable PDF tool, one kit
+  chooser, saved snackbar above the dock, opaque sheets, Text screen chips/Tidy/undo/To Word, category rail padding,
+  More-sheet icons + "Protect PDF".
+
+## Tests
+- `ShellQaFixesTest` now also covers: compact chooser + search past 8 docs, tag/icon bounds for every tile, Vault
+  live status + shared pill, list bottom padding. `DeleteExportsTest` confirms the new Trash sheet.
+- Full gate: `GATE PASS L1 tests=1135 failures=0 skipped=0 lint=[lint skipped (lead runs it at merge)]`.
+
+## Commits
+- `b475148` phone-review pass (icons, brand, quick/tools layout, Pro gating, Text chips)
+- `2fd4fbd` folders & tags, batch rename, phone-QA fixes 1-10
+- (this session) QA 11-15: compact chooser, tag bounds, Vault status, list padding, Trash confirms
+
 
 ## Done this session
 
-### Merge
-- `git merge integration` clean (no conflicts). Read `LANE_REPORT.md` rename: this file is the L1 report now.
+### Folders & tags (Pro, now READY)
+- Metadata: `ScanDocument.folder: String?` + `tags: List<String>`, stored as two extra `meta.txt` lines
+  (`folder=<name>`, `tags=<tag>\u001F…`) by `store/LibraryMeta`. Old documents (three fixed lines) read as no
+  folder/no tags; `exports=` and unknown lines survive every write. Tags are trimmed, case-insensitively de-duped,
+  comma-safe, ≤24 chars, ≤30 per document.
+- Repository: `listFolders` (explicit empty folders survive), `createFolder`, `renameFolder` (renames the folder and
+  every document in it), `deleteFolder` (documents move to All, never deleted), `setFolder`, `setTags`, `addTag`,
+  `removeTag`, `listTags`.
+- Library: a folder chip row above the list (All · folders with counts · + New folder); long-press a folder to
+  rename or delete it; selecting a folder filters the list. Search now also matches tag names. Cards show up to two
+  tags as `#tag` in the meta line.
+- Selection mode: long-press a card → checks appear *only* then (selection badge, per-card Share/⋯ hide), action bar
+  with count + Done + Move / Tags / Share / Rename / Delete. Move uses the kit options sheet; Tags is a multi-choice
+  sheet with a New tag input; Delete confirms and moves to Trash; Share sends every selected PDF
+  (`ACTION_SEND_MULTIPLE`).
+- Free gating: New folder and Tags open the 06_pro screen (the shell's one `proGate`/`onProRequired` path).
+- `ToolRegistry`: `folders` and `batch_rename` are READY now; the shell's `open()` sends them to the library (folder
+  row / selection mode), never to a "Coming soon" sheet.
 
-### Tool catalogue icons (task 2)
-- Added the official Material Symbols Rounded set (83 vectors, white-filled, 960 viewport) plus `docs/licenses/material-symbols-APACHE-2.0.txt`.
-- Fixes: **Draw** -> `ic_sym_draw` (pen), **Highlight** -> `ic_sym_ink_highlighter`, **Page numbers** ->
-  `format_list_numbered`, **Read text** -> `notes_lines`, **Hindi text** -> `language`, **Remove metadata** ->
-  `visibility_off` (was the Vault shield), **Folders & tags** -> `folder_open`, **Insert pages** -> `note_add`.
-  Every other registry icon was checked against its tool's meaning; no other mismatch.
+### Batch rename (Pro, now READY)
+- `util/BatchRename`: `{name}`, `{n}` (1-based), `{date}` (yyyy-MM-dd), default `{name} ({n})`, one-line sanitising,
+  blank result keeps the old name.
+- Selection mode → Rename (2+): SwSheet with a pattern field and a live preview of the first 3 names; Apply renames
+  all; a snackbar says "N documents renamed" with **Undo** that restores every old name.
 
-### Vault tab (task 3)
-- `VaultScreen` is the 04_vault entry state: shield emblem on the glass card, one line "Encrypted on this phone",
-  **Open Vault** button that keeps L2's single `VaultActivity.intent(...)` launch. The "being built / Coming soon"
-  copy is gone (`vault_tab_note` / `vault_tab_coming` removed, `vault_tab_encrypted` + new `vault_tab_open` added).
+### Phone-QA fixes
+1. Search: matches names, OCR text and tags; an empty result shows "No matches for “x”" (and the empty-state
+   children are restored for the first-run state).
+2. "Newest ▾" is a real sort sheet: Newest / Oldest / Name A-Z / Name Z-A / Size, persisted in Prefs
+   (`librarySort`) and reflected in the header label.
+3. The shell's root inset listener hides the nav bar + scan disc while the IME is visible (content resizes, no
+   mid-screen nav).
+4. Searchable PDF is a real tool: kit document chooser → "Make searchable" sheet → `repo.makeSearchable(id)`
+   rebuilds that PDF with its stored OCR text layer (or says the text has not been recognised yet). Never Settings.
+5. Every document tool now uses the same kit chooser sheet (`showDocPicker` is an `SwSheet` options list).
+6. Saved-result snackbar: 3-line message (no ellipsis) and anchored above the dock (`readerDockRoot`/dock parent).
+7. SwSheet surface is now fully opaque ink (`#161D21`), no dock showing through.
+8. Text screen: Copy all → snackbar "Copied"; Save .txt → snackbar with the full Documents path + Open; To Word
+   runs L4's real tool (`ToolLaunch.start(context, "to_word")`), not an info sheet; the tidy actions stay on the
+   current tab.
+9. ScanReview category rail has 16dp end padding (last chip reachable); the caption has no long dash.
+10. Document More sheet rows have 24dp icons (edit / folder / content_copy / compress / encrypted / shield_lock /
+    delete in red) and the row is renamed "Protect PDF".
 
-### Pro gating in the shell (task 4)
-- One dispatch point: `ToolHost.launchTool(tool)` in `ui/kit/ToolRegistry.kt` — a Pro tool in a Free build calls
-  `ToolHost.proGate` (default false; the shell's override opens the 06_pro screen). `ToolTile` (Tools hub + Home
-  quick row) and the Library ID card all go through it. Test build default is Pro, so existing tests are unchanged.
-- New `ShellProGateTest`: forced Free -> all 18 Pro tiles open Pro, the two Pro quick tools open Pro, a Free tool
-  still runs; forced Pro -> `To Word` starts `ToolSetupActivity` and a Soon Pro tool keeps its Coming soon sheet.
+## Not done / next session
+- QA11: the "Pick a document" chooser is still a text list (now a consistent kit sheet); compact DocCard rows +
+  search for >8 documents is not built yet.
+- QA13: the Vault tab now uses the same "Offline · No ads" pill; showing L2's live locked/unlocked + file count on
+  the tab is still to do.
+- QA14: the shell ScrollView has 112dp bottom padding; confirm on device that the last Library card clears the disc.
+- QA15: single-document "Move to Trash" from the card ⋯ already asks first (`confirmTrash`); the Trash "Empty Trash"
+  menu item was not re-checked in this pass.
+- QA2 sort applies to the shell Library only (the legacy MainActivity list keeps its own sort).
 
-### Text screen (08_text_ocr) phone pass (H1-H7)
-- **H1** Action row is four kit **chips** (`SwChip`: 38dp, 12dp radius, glass + cyan hairline, 18dp cyan glyph,
-  13sp bold): Copy all / Share text / Save .txt / To Word with a gold PRO pill, in one horizontally scrolling row.
-- **H2** One **Tidy text** chip (`ic_sym_auto_fix_high`) opens an SwSheet with Join lines / Fix spaces / Remove
-  gaps (icon + one short line each, ids `ocrTidyJoin/Spaces/Gaps`); the old three wide buttons are gone, spacing is
-  12dp between blocks.
-- **H3** Undo/Redo use the official `ic_sym_undo` / `ic_sym_redo`, sit on the word-count line at the left (Undo
-  first), disabled at 38% alpha, and loading a page no longer pollutes the undo history.
-- **H4** Language chip ("English", `ic_sym_language`) beside the Page/Text switch (a label: the recogniser is Latin
-  only; there is no language setting to open yet).
-- **H5** Footer is one line: "Read on this phone. Searchable." (`maxLines=1`).
-- **H6** `OcrLineOverlay` draws the recognised line boxes (22% cyan fill, 1.5dp outline) from `repo.ocrGeometry`
-  (`OcrStore.readGeo`), inside the fitCenter image rect; a tap highlights the box and jumps the Text tab to that
-  line's text; missing geometry draws the image only.
-- **H7** The Page tab now decodes with EXIF orientation (`ImageTools.decodeOriented`): a sideways landscape photo
-  shows upright, fit to width; pages the user rotated are already re-encoded and unaffected.
-
-### Phone review A-G
-- **A** Copied all 83 official vectors over `ic_sym_*`; Me rows now Pro=`star_filled`, Settings=`settings`,
-  Trash=`delete`, About=`info`, arrow `chevron_right`; nav is `folder_open/folder_filled`, `apps/apps_filled`,
-  `shield_lock/shield_lock_filled`, `person/person_filled` (filled for the open tab, outline otherwise);
-  search fields `search`; Protect `encrypted`; Draw/Highlight as above.
-- **B** Home quick row: six equal columns that fit 360dp (8dp side padding, 52dp circle, zero tile side padding),
-  labels 11sp one line with short copy (Merge, Compress, Sign, Protect, To Word, Read text), PRO pill moved to the
-  circle's top-right edge with no translation.
-- **C** Tools hub: tiles are 84dp tall so two-line labels are fully visible; no ellipsis. One tag at most (Soon wins
-  over PRO); the tag keeps full opacity while only the icon+label dim on a Soon tile; tags sit inside the tile's
-  top-right corner.
-- **D** Every shell tab's ScrollView has 112dp bottom padding (`clipToPadding=false`) = nav bar + scan-disc overhang.
-- **E** New `ShellLookTest` (360dp): quick row fits with one-line labels; every tool label (43) has <=2 lines, no
-  ellipsis and its full height; a Pro+Soon tile shows only Soon, tile not dimmed; Me row drawables; filled/outline
-  nav glyphs; scroll padding clears the nav.
-- **F** Header uses `ic_brand_mark` (32dp, id `swBrandMark`), Pro hero `ic_brand_mark_gold` (72dp); `ic_whirl` /
-  `ic_whirl_gold` deleted (no references).
-- **G** Copy: no long dash in any user-visible string in `strings_l1.xml`, `strings.xml` or the Hindi twins. Long
-  descriptions shortened to <=90 chars (import failures, resume, save-conflict, OCR status, trash, reader Find,
-  password charset, empty Home, etc.). Text asserted by tests was updated where the wording changed.
-  `R.string.protect_note` is still referenced by `DocumentViewerActivity.promptProtectPdf()` (L3), so it was left
-  in place as instructed.
-
-## Tests added / updated
-- Added: `ShellProGateTest` (4), `ShellLookTest` (6), `OcrTextScreenTest` +4 (chips/icons, Tidy sheet, undo order
-  and state, footer/chip), plus `OcrStatusTest`, `ImportSheetTest`, `DirectScanSaveTest`, `OcrEditorTest`
-  mechanism/copy updates.
-- Full gate last line: `GATE PASS L1 tests=1042 failures=0 skipped=0 lint=[lint skipped (lead runs it at merge)]`.
-
-## Not done / notes
-- The language chip is a label (no OCR language setting exists yet).
-- Line boxes only appear for documents whose OCR geometry was stored; older OCR text has none (image only).
-- `R.string.protect_note` left for L3's removal.
-- Device re-check list for the lead: Home quick row at 360dp and 200% text; Tools hub labels; nav filled glyphs;
-  Me rows; Vault entry; page/tab bottom edges; a Pro tile in forced Free; the Text screen chips/Tidy sheet/undo
-  icons; a landscape imported image's Page tab.
+## Tests added
+- `LibraryOrganisationTest` (8): old meta round-trip, tag/folder encoding, folder rename/delete keeps documents,
+  move-to-new-folder/All, checks only in selection mode after a long-press, tag search, Free → Pro for New folder
+  and Tags, batch rename preview/apply/undo.
+- `ShellQaFixesTest` (5): search by name/OCR/tag + empty state text, sort sheet + persistence, nav hides for IME,
+  Searchable PDF builds the text layer through the chooser, sheet surface is opaque.
+- Updated `OcrTextScreenTest` (To Word starts `ToolSetupActivity`).
+- Full gate: `GATE PASS L1 tests=1102 failures=0 skipped=0 lint=[lint skipped (lead runs it at merge)]`.
 
 ## Commits
-- `e8cadd8` Manrope fonts, reader dock, Text screen
-- `8fe6399` SwSheet sweep
-- `0eb2cb8` kit sheet-API tests + report
-- (this session) phone-review pass: icons, brand, quick/tools layout, Pro gating, Text screen chips
+- `b475148` phone-review pass (icons, brand, quick/tools layout, Pro gating, Text chips)
+- (this session) folders & tags + batch rename + phone-QA fixes

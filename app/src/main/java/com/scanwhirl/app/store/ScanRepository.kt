@@ -69,6 +69,9 @@ class ScanRepository(private val context: Context) {
         /** Serialises metadata read-modify-write cycles (no lost updates between instances). */
         private val META_LOCK = Any()
 
+        /** PM-2.2b: serialises every draft read/write and prune across repository instances. */
+        private val DRAFT_LOCK = Any()
+
         /** A hidden save directory untouched for this long is considered abandoned. */
         const val ABANDONED_SAVE_AGE_MS = 24L * 60 * 60 * 1000
 
@@ -155,6 +158,7 @@ class ScanRepository(private val context: Context) {
         val createdAt = lines.getOrNull(1)?.toLongOrNull() ?: dir.lastModified()
         val category = lines.getOrNull(2)?.takeIf { CategoryRules.isValid(it) }
             ?: CategoryRules.OTHER
+        val organised = LibraryMeta.read(lines)
         val pdf = File(dir, "scan.pdf")
         val pages = dir.listFiles { f -> f.extension.equals("jpg", true) || f.extension.equals("jpeg", true) }
             ?.filter { it.length() > 0 }
@@ -184,6 +188,8 @@ class ScanRepository(private val context: Context) {
             isLocked = isLocked,
             isVaulted = isVaulted,
             category = category,
+            folder = organised.folder,
+            tags = organised.tags,
             revision = revision,
             isSearchable = isSearchable
         )
@@ -388,6 +394,130 @@ class ScanRepository(private val context: Context) {
      */
     fun setCategory(ids: List<String>, category: String) {
         ids.forEach { id -> setCategory(id, category) }
+    }
+
+    // ------------------------------------------------------------------
+    // Library organisation: folders and tags (v2 UI: 03_tools_hub)
+    // ------------------------------------------------------------------
+
+    private val foldersFile: File get() = File(context.filesDir, "library_folders.txt")
+
+    /** Folder names created explicitly (empty folders survive a restart), sorted. */
+    fun listFolders(): List<String> = synchronized(META_LOCK) {
+        if (!foldersFile.exists()) return emptyList()
+        runCatching { foldersFile.readLines() }.getOrDefault(emptyList())
+            .mapNotNull { LibraryMeta.normalizeFolder(it) }
+            .distinctBy { it.lowercase(Locale.getDefault()) }
+            .sortedBy { it.lowercase(Locale.getDefault()) }
+    }
+
+    private fun writeFolders(names: List<String>) {
+        Durable.atomicWriteText(
+            foldersFile,
+            names.joinToString("\n") + if (names.isEmpty()) "" else "\n"
+        )
+    }
+
+    /** Creates an explicit (possibly empty) folder. False when blank or already there. */
+    fun createFolder(name: String): Boolean {
+        val clean = LibraryMeta.normalizeFolder(name) ?: return false
+        synchronized(META_LOCK) {
+            val all = listFolders()
+            if (all.any { it.equals(clean, true) }) return false
+            writeFolders(all + clean)
+            return true
+        }
+    }
+
+    /** Renames a folder and every document in it. Documents are never lost. */
+    fun renameFolder(oldName: String, newName: String): Boolean {
+        val clean = LibraryMeta.normalizeFolder(newName) ?: return false
+        synchronized(META_LOCK) {
+            val all = listFolders()
+            val at = all.indexOfFirst { it.equals(oldName, true) }
+            if (at < 0) return false
+            if (all.any { it.equals(clean, true) && !it.equals(oldName, true) }) return false
+            writeFolders(all.toMutableList().also { it[at] = clean })
+            forEachDocumentDir { dir ->
+                updateMeta(dir) { lines ->
+                    val meta = LibraryMeta.read(lines)
+                    if (meta.folder != null && meta.folder.equals(oldName, true)) {
+                        LibraryMeta.write(lines, clean, meta.tags)
+                    }
+                }
+            }
+            return true
+        }
+    }
+
+    /** Deletes a folder; its documents move to "All" and stay in the library. */
+    fun deleteFolder(name: String) {
+        synchronized(META_LOCK) {
+            writeFolders(listFolders().filterNot { it.equals(name, true) })
+            forEachDocumentDir { dir ->
+                updateMeta(dir) { lines ->
+                    val meta = LibraryMeta.read(lines)
+                    if (meta.folder != null && meta.folder.equals(name, true)) {
+                        LibraryMeta.write(lines, null, meta.tags)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Moves documents to [folder] (null = "All"). A missing folder is created. */
+    fun setFolder(ids: List<String>, folder: String?) {
+        val clean = LibraryMeta.normalizeFolder(folder)
+        if (clean != null) createFolder(clean)
+        for (id in ids.distinct()) {
+            updateMeta(File(docsDir, id)) { lines ->
+                val meta = LibraryMeta.read(lines)
+                LibraryMeta.write(lines, clean, meta.tags)
+            }
+        }
+    }
+
+    fun setTags(id: String, tags: List<String>) {
+        updateMeta(File(docsDir, id)) { lines ->
+            val meta = LibraryMeta.read(lines)
+            LibraryMeta.write(lines, meta.folder, LibraryMeta.normalizeTags(tags))
+        }
+    }
+
+    fun addTag(ids: List<String>, tag: String) {
+        val clean = LibraryMeta.normalizeTags(listOf(tag)).firstOrNull() ?: return
+        for (id in ids.distinct()) {
+            updateMeta(File(docsDir, id)) { lines ->
+                val meta = LibraryMeta.read(lines)
+                LibraryMeta.write(lines, meta.folder, meta.tags + clean)
+            }
+        }
+    }
+
+    fun removeTag(id: String, tag: String) {
+        updateMeta(File(docsDir, id)) { lines ->
+            val meta = LibraryMeta.read(lines)
+            LibraryMeta.write(lines, meta.folder, meta.tags.filterNot { it.equals(tag, true) })
+        }
+    }
+
+    /** Every tag used in the library, for the tag sheet's quick picks. */
+    fun listTags(): List<String> = synchronized(META_LOCK) {
+        val seen = LinkedHashSet<String>()
+        forEachDocumentDir { dir ->
+            metaLines(dir)?.let { lines ->
+                LibraryMeta.read(lines).tags.forEach { tag ->
+                    if (seen.none { it.equals(tag, true) }) seen += tag
+                }
+            }
+        }
+        seen.sortedBy { it.lowercase(Locale.getDefault()) }
+    }
+
+    private inline fun forEachDocumentDir(action: (File) -> Unit) {
+        docsDir.listFiles { f -> f.isDirectory }?.forEach { dir ->
+            if (!SaveFormat.isIncomplete(dir)) action(dir)
+        }
     }
 
     /**
@@ -833,12 +963,18 @@ class ScanRepository(private val context: Context) {
     internal val trashDir: File
         get() = File(context.filesDir, "trash").apply { mkdirs() }
 
-    /** A document in Trash. [key] is its Trash entry; [originalId] the library id it had. */
+    /** PM-2.2b: the page drafts, one manifest folder per document id. */
+    internal val drafts: DraftStore
+        get() = DraftStore(context.filesDir)
+
+    /** A document in Trash. [key] is its Trash entry; [originalId] the library id it had.
+     *  [previousToken] names the publish staging folder that Replace moved here (PM-2.2b). */
     data class TrashedDocument(
         val key: String,
         val originalId: String,
         val trashedAt: Long,
-        val document: ScanDocument
+        val document: ScanDocument,
+        val previousToken: String? = null
     )
 
     /** Thrown when a legacy Vault item is asked to go to Trash; it never does. */
@@ -860,27 +996,40 @@ class ScanRepository(private val context: Context) {
                     val src = File(docsDir, id)
                     val doc = loadDocument(src) ?: return@synchronized null
                     if (doc.isVaulted) throw VaultItemNotTrashable()
-                    trashFault(TrashStage.BEFORE_MOVE)
-                    val key = freeTrashKey(id)
-                    val dest = File(trashDir, key)
-                    if (!src.renameTo(dest)) throw IOException("Could not move \"${doc.name}\" to Trash")
-                    trashFault(TrashStage.MOVED)
-                    // Written after the move, best effort: an entry without it is still a
-                    // complete trashed document (id from its name, time from the folder).
-                    try {
-                        Durable.atomicWriteText(
-                            File(dest, TRASH_MARKER),
-                            "v1\n$id\n${System.currentTimeMillis()}\n"
-                        )
-                    } catch (_: Exception) {
-                    }
-                    Durable.syncDir(docsDir)
-                    Durable.syncDir(trashDir)
-                    key
+                    trashUnderLocks(src, id, null)
                 }
             }
         }
         if (key != null) dropDerivedCaches(id)
+        return key
+    }
+
+    /**
+     * The move itself, with every lock already held (PM-2.2b extracted it for Replace). The marker
+     * gains a fourth line `previous=<token>` only when a draft Replace moved this entry, so startup
+     * recovery can tell "the user deleted it" from "a Replace died after the move".
+     */
+    private fun trashUnderLocks(src: File, id: String, previousToken: String?): String {
+        val name = loadDocument(src)?.name ?: id
+        trashFault(TrashStage.BEFORE_MOVE)
+        val key = freeTrashKey(id)
+        val dest = File(trashDir, key)
+        if (!src.renameTo(dest)) throw IOException("Could not move \"$name\" to Trash")
+        trashFault(TrashStage.MOVED)
+        // Written after the move, best effort: an entry without it is still a
+        // complete trashed document (id from its name, time from the folder).
+        try {
+            val marker = buildString {
+                append("v1\n")
+                append(id).append('\n')
+                append(System.currentTimeMillis()).append('\n')
+                if (previousToken != null) append("previous=").append(previousToken).append('\n')
+            }
+            Durable.atomicWriteText(File(dest, TRASH_MARKER), marker)
+        } catch (_: Exception) {
+        }
+        Durable.syncDir(docsDir)
+        Durable.syncDir(trashDir)
         return key
     }
 
@@ -903,7 +1052,9 @@ class ScanRepository(private val context: Context) {
         }
         val originalId = marker?.getOrNull(1)?.takeIf { isSafeId(it) } ?: dir.name.substringBefore(TRASH_KEY_SEP)
         val trashedAt = marker?.getOrNull(2)?.toLongOrNull() ?: dir.lastModified()
-        return TrashedDocument(dir.name, originalId, trashedAt, doc)
+        val previousToken = marker?.firstOrNull { it.startsWith("previous=") }
+            ?.removePrefix("previous=")?.takeIf { it.isNotBlank() }
+        return TrashedDocument(dir.name, originalId, trashedAt, doc, previousToken)
     }
 
     /**
@@ -1072,6 +1223,13 @@ class ScanRepository(private val context: Context) {
                 chosen.forEachIndexed { i, f -> stagePageCopy(f, staging, i) }
             }
         }
+
+    /** "Doc (page 3)" or "Doc (pages 1–4)" — the one name formula for extract (PM-2.2c). */
+    internal fun extractedName(name: String, indices: List<Int>): String {
+        val first = indices.first() + 1
+        val last = indices.last() + 1
+        return if (first == last) "$name (page $first)" else "$name (pages $first–$last)"
+    }
 
     suspend fun mergeDocuments(
         sourceIds: List<String>,
@@ -1290,6 +1448,17 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after filter")
         }
 
+    /** PM-2.2b: what a draft publish promises (see [buildAndPublish]). */
+    private class SealSpec(
+        val draftId: String,
+        val draftCreated: Long,
+        val replaces: String?,
+        val basePages: String?
+    )
+
+    /** The base is safely in Trash and the new version is sealed: startup recovery rolls forward. */
+    internal class PublishPending(message: String) : IOException(message)
+
     /**
      * PM-2.1b: the one publish protocol for every tool output. [build] writes page files (and, with
      * [copyPdf], a verified `scan.pdf`) into a private staging folder; only a fully verified folder is
@@ -1301,6 +1470,7 @@ class ScanRepository(private val context: Context) {
         category: String?,
         expectedBytes: Long,
         copyPdf: Boolean = false,
+        seal: SealSpec? = null,
         build: suspend (File) -> Unit
     ): ScanDocument {
         if (expectedBytes > 0 && usableSpace(docsDir) < expectedBytes * 2 + (16L shl 20)) {
@@ -1349,8 +1519,12 @@ class ScanRepository(private val context: Context) {
                 OpFaults.at("op:pdf")
             }
 
-            writeMeta(staging, name, category)
-            OpFaults.at("op:meta")
+            // Replace copies the base meta.txt byte for byte; writing it again would change the
+            // category and the created timestamp the user did not edit (PM-2.2b §5.3).
+            if (seal?.replaces == null) {
+                writeMeta(staging, name, category)
+                OpFaults.at("op:meta")
+            }
 
             // I10: the new document is either fully indexed or carries ocr_pending. The flag is
             // written directly because OcrStore.markPending refuses non-library folders.
@@ -1367,16 +1541,72 @@ class ScanRepository(private val context: Context) {
             OpFaults.at("op:verified")
             Durable.syncDir(staging)
 
-            id = synchronized(TRASH_LOCK) {
-                val newId = freeLibraryId()
-                OpFaults.at("op:before_rename")
-                if (!staging.renameTo(File(docsDir, newId))) {
-                    throw IOException(context.getString(R.string.op_publish_failed))
-                }
-                newId
+            if (seal != null) {
+                OpStaging.writeSeal(
+                    staging,
+                    OpStaging.Seal(
+                        token = staging.name,
+                        draft = seal.draftId,
+                        draftCreated = seal.draftCreated,
+                        replaces = seal.replaces,
+                        pages = pages.map { it.name },
+                        pagesSha256 = SaveFormat.pagesDigest(pages),
+                        pdfSha256 = Sha256.of(File(staging, "scan.pdf"))
+                    )
+                )
+                OpFaults.at("op:sealed")
             }
-            OpStaging.forget(staging)
-            OpFaults.at("op:after_rename")
+
+            if (seal?.replaces != null) {
+                // Replace: two renames under PDF → OCR → Trash (F6). Recovery rolls forward a death
+                // between them; a user-deleted base is never resurrected (no `previous` marker).
+                id = synchronized(PDF_LOCK) {
+                    OcrStore.locked {
+                        synchronized(TRASH_LOCK) {
+                            val base = File(docsDir, seal.replaces)
+                            val baseDoc = loadDocument(base)
+                                ?: throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
+                            if (baseDoc.isLocked) {
+                                throw PdfProtection.DocumentLocked(
+                                    context.getString(R.string.locked_edit_refused)
+                                )
+                            }
+                            if (SaveFormat.pagesDigest(baseDoc.pageFiles) != seal.basePages) {
+                                throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
+                            }
+                            val key = trashUnderLocks(base, seal.replaces, staging.name)
+                            OpFaults.at("replace:base_trashed")
+                            if (!staging.renameTo(base)) {
+                                if (File(trashDir, key).renameTo(base)) {
+                                    File(base, TRASH_MARKER).delete()
+                                    throw IOException(context.getString(R.string.op_publish_failed))
+                                }
+                                // The old version is safe in Trash and the new one is sealed:
+                                // leave staging for startup recovery to roll forward.
+                                OpStaging.forget(staging)
+                                throw PublishPending(context.getString(R.string.op_publish_failed))
+                            }
+                            seal.replaces
+                        }
+                    }
+                }
+                OpStaging.forget(staging)
+                OpFaults.at("op:after_rename")
+            } else {
+                id = synchronized(TRASH_LOCK) {
+                    val newId = freeLibraryId()
+                    OpFaults.at("op:before_rename")
+                    if (!staging.renameTo(File(docsDir, newId))) {
+                        throw IOException(context.getString(R.string.op_publish_failed))
+                    }
+                    newId
+                }
+                OpStaging.forget(staging)
+                OpFaults.at("op:after_rename")
+            }
+        } catch (e: PublishPending) {
+            // Recovery must find the sealed staging folder: do not release it.
+            throw e
         } catch (e: Exception) {
             OpStaging.release(staging)
             throw e
@@ -1591,6 +1821,9 @@ class ScanRepository(private val context: Context) {
             }
             val dir = File(docsDir, id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            if (drafts.exists(id)) {
+                throw DraftStore.DraftOpen(context.getString(R.string.draft_open_refused))
+            }
             if (doc.isLocked) throw IllegalStateException("Already protected; use Change password")
             encryptInto(dir, doc, password, "protect")
             recordLockIndex(File(dir, PdfProtection.PDF_FILE), id)
@@ -1764,8 +1997,70 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rebuild")
         }
 
-    /** Startup recovery for [OpStaging]: removes working folders left by a dead process. Returns the count. */
-    fun recoverOperations(): Int = OpStaging.sweep(context.filesDir)
+    /**
+     * PM-2.2b startup recovery, in order:
+     *  1. roll forward a sealed Replace whose base is absent and whose Trash entry carries
+     *     `previous=<token>` (and whose pages/PDF still match the seal);
+     *  2. finish every published `.publish`: discard its draft (only the matching creation) and
+     *     delete the seal;
+     *  3. drop interrupted discards and drafts whose base is gone from BOTH documents and Trash;
+     *  4. sweep every staging folder that is not live in this process.
+     * Returns how many Replace operations were rolled forward.
+     */
+    fun recoverOperations(): Int {
+        val filesDir = context.filesDir
+        var rolledForward = 0
+
+        // 1. Roll forward.
+        val stagingRoot = OpStaging.root(filesDir)
+        for (dir in stagingRoot.listFiles { f -> f.isDirectory }.orEmpty()) {
+            val seal = OpStaging.readSeal(dir) ?: continue
+            val replaces = seal.replaces ?: continue
+            val base = File(docsDir, replaces)
+            if (base.exists()) continue
+            val trash = listTrash().firstOrNull {
+                it.originalId == replaces && it.previousToken == seal.token
+            } ?: continue
+            val pages = pageFilesIn(dir)
+            if (pages.map { it.name } != seal.pages) continue
+            if (SaveFormat.pagesDigest(pages) != seal.pagesSha256) continue
+            if (Sha256.of(File(dir, "scan.pdf")) != seal.pdfSha256) continue
+            synchronized(TRASH_LOCK) {
+                if (dir.renameTo(base)) {
+                    OpStaging.forget(dir)
+                    rolledForward++
+                }
+            }
+        }
+
+        // 2. Finish published draft seals (create-only Save as new, or a completed Replace).
+        docsDir.listFiles { f -> f.isDirectory }.orEmpty().forEach { dir ->
+            val seal = OpStaging.readSeal(dir) ?: return@forEach
+            synchronized(DRAFT_LOCK) {
+                runCatching { drafts.load(seal.draft) }.getOrNull()?.let { draft ->
+                    if (draft.created == seal.draftCreated) drafts.discard(seal.draft)
+                }
+            }
+            File(dir, OpStaging.SEAL).delete()
+        }
+
+        // 3. Drafts: interrupted discards, and drafts whose base is gone from library and Trash.
+        // Only a manifest we can read is judged: an unknown/damaged folder is never deleted here.
+        synchronized(DRAFT_LOCK) {
+            drafts.removeDiscardLeftovers()
+            val trashIds = listTrash().map { it.originalId }.toSet()
+            drafts.ids().forEach { id ->
+                val draft = runCatching { drafts.load(id) }.getOrNull() ?: return@forEach
+                if (!File(docsDir, draft.baseId).exists() && draft.baseId !in trashIds) {
+                    drafts.discard(id)
+                }
+            }
+        }
+
+        // 4. Everything else not live in this process (including a seal that failed a check).
+        val swept = OpStaging.sweep(filesDir)
+        return rolledForward + swept
+    }
 
     /** Checks a user-entered password against the stored lock hash. */
     fun verifyPdfPassword(id: String, password: String): Boolean {
@@ -1887,12 +2182,30 @@ class ScanRepository(private val context: Context) {
     }
 
     /** Writes the document's PDF through [writePdf], then maintains `text_layer.flag`. */
-    private fun regeneratePdf(dir: File) = synchronized(PDF_LOCK) {
+    private fun regeneratePdf(dir: File, forceLayers: Boolean = false) = synchronized(PDF_LOCK) {
         requireUnlocked(dir) // A3 backstop: a locked document's PDF is never rebuilt in plaintext
         val pdfFile = File(dir, "scan.pdf")
         val pages = pageFilesIn(dir)
-        val layered = if (pages.isNotEmpty()) writePdf(dir, pdfFile) else false
+        val layered = if (pages.isNotEmpty()) {
+            if (forceLayers) writePdfInto(dir, pdfFile, ocrStore.readGeo(dir.name))
+            else writePdf(dir, pdfFile)
+        } else false
         updateTextLayerFlag(dir, layered)
+    }
+
+    /**
+     * v2 UI: 03_tools_hub — "Make searchable": rebuild this document's PDF with
+     * the invisible OCR text layer already stored for it. False when the PDF is
+     * locked, has no pages, or its text has not been recognised yet (the Tools
+     * sheet then says so instead of pretending).
+     */
+    fun makeSearchable(id: String): Boolean {
+        val dir = File(docsDir, id)
+        if (!dir.isDirectory || File(dir, LOCK_FILE).exists()) return false
+        if (pageFilesIn(dir).isEmpty()) return false
+        if (ocrStore.readGeo(id).isEmpty()) return false
+        regeneratePdf(dir, forceLayers = true)
+        return File(dir, "text_layer.flag").exists()
     }
 
     /** `text_layer.flag` exists exactly when every page of [dir] received an invisible text layer. */
@@ -1922,7 +2235,13 @@ class ScanRepository(private val context: Context) {
      * on purpose, so PM-2.2b can add the draft-lease check here only (a PDF refresh after OCR does not
      * change pages and must stay allowed while a draft is open).
      */
-    private fun requireEditable(dir: File) = requireUnlocked(dir)
+    private fun requireEditable(dir: File) {
+        requireUnlocked(dir)
+        // PM-2.2b lease (I7): while a draft exists the base pages must stay byte-identical.
+        if (drafts.exists(dir.name)) {
+            throw DraftStore.DraftOpen(context.getString(R.string.draft_open_refused))
+        }
+    }
 
     /** F13: tools cannot use a locked source yet (their output would be an unprotected copy). */
     private fun refuseLockedSources(sources: List<ScanDocument>) {
@@ -2318,6 +2637,391 @@ class ScanRepository(private val context: Context) {
                 // the existing trash sweep, and it is never offered as a finished document.
             }
             throw t
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // PM-2.2b/2.3b: page drafts (manifest over the immutable base)
+    // ------------------------------------------------------------------
+
+    /** Result of [replaceWithDraft]: the same document id and the Trash key of its old version. */
+    internal data class ReplaceResult(val document: ScanDocument, val trashKey: String)
+
+    /**
+     * The draft of [id], or null. Never writes: opening a draft is O(1) (G14). A damaged manifest
+     * throws [DraftStore.DraftDamaged] rather than returning a partial draft.
+     */
+    internal suspend fun draftOf(id: String): DraftStore.Draft? = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) { drafts.load(id) }
+    }
+
+    /** Pages as the draft sees them (replacement files where an edit wrote one), or the base pages. */
+    internal suspend fun draftPages(id: String): List<File> = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) {
+            val draft = drafts.load(id)
+                ?: return@withContext getDocument(id)?.pageFiles.orEmpty()
+            draft.entries.map { entry ->
+                entry.replacement?.let { drafts.fileOf(id, it) }
+                    ?: File(File(docsDir, id), entry.source)
+            }
+        }
+    }
+
+    /** Rotates one draft page into a fresh `r_<n>` (and its kept original), then commits the manifest. */
+    internal suspend fun draftRotate(
+        id: String,
+        index: Int,
+        clockwise: Boolean = true
+    ): DraftStore.Draft = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) {
+            val doc = draftEditDoc(id)
+            val draft = draftFor(doc)
+            require(index in draft.entries.indices) { "No such page" }
+            val entry = draft.entries[index]
+            val n = draft.next
+            val dir = drafts.folderOf(id).apply { mkdirs() }
+            val jpg = File(dir, "r_$n.jpg")
+            Durable.copyFile(entryFile(id, entry), jpg)
+            PageReplace.commit(ImageTools.stageRotate90(jpg, clockwise))
+            var origName: String? = null
+            entryOrig(id, entry)?.let { orig ->
+                val outOrig = File(dir, "r_$n.orig")
+                Durable.copyFile(orig, outOrig)
+                PageReplace.commit(ImageTools.stageRotate90(outOrig, clockwise))
+                origName = "r_$n.orig"
+            }
+            OpFaults.at("draft:replacement_written")
+            storeDraft(
+                draft.copy(
+                    updated = System.currentTimeMillis(),
+                    changes = draft.changes + 1,
+                    next = n + 1,
+                    entries = draft.entries.toMutableList().also {
+                        it[index] = entry.copy(
+                            replacement = "r_$n.jpg",
+                            replacementOrig = origName
+                        )
+                    }
+                )
+            )
+        }
+    }
+
+    /** Hides one draft page. The last page can never be deleted. */
+    internal suspend fun draftDelete(id: String, index: Int): DraftStore.Draft = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) {
+            val doc = draftEditDoc(id)
+            val draft = draftFor(doc)
+            require(index in draft.entries.indices) { "No such page" }
+            require(draft.entries.size > 1) { "Can't delete the last page" }
+            storeDraft(
+                draft.copy(
+                    updated = System.currentTimeMillis(),
+                    changes = draft.changes + 1,
+                    entries = draft.entries.toMutableList().also { it.removeAt(index) }
+                )
+            )
+        }
+    }
+
+    /** Moves a draft page; `from == to` writes nothing. */
+    internal suspend fun draftMove(id: String, from: Int, to: Int): DraftStore.Draft = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) {
+            val doc = draftEditDoc(id)
+            val draft = draftFor(doc)
+            require(from in draft.entries.indices && to in draft.entries.indices) { "No such page" }
+            if (from == to) return@withContext draft
+            storeDraft(
+                draft.copy(
+                    updated = System.currentTimeMillis(),
+                    changes = draft.changes + 1,
+                    entries = draft.entries.toMutableList().also { it.add(to, it.removeAt(from)) }
+                )
+            )
+        }
+    }
+
+    /** Crops one draft page (and its kept original) into fresh `r_<n>` files. */
+    internal suspend fun draftCrop(
+        id: String,
+        index: Int,
+        rect: android.graphics.RectF
+    ): DraftStore.Draft = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) {
+            val doc = draftEditDoc(id)
+            val draft = draftFor(doc)
+            require(index in draft.entries.indices) { "No such page" }
+            val entry = draft.entries[index]
+            val n = draft.next
+            val dir = drafts.folderOf(id).apply { mkdirs() }
+            val jpg = File(dir, "r_$n.jpg")
+            Durable.copyFile(entryFile(id, entry), jpg)
+            PageReplace.commit(ImageTools.stageCrop(jpg, rect))
+            var origName: String? = null
+            entryOrig(id, entry)?.let { orig ->
+                val outOrig = File(dir, "r_$n.orig")
+                Durable.copyFile(orig, outOrig)
+                PageReplace.commit(ImageTools.stageCrop(outOrig, rect))
+                origName = "r_$n.orig"
+            }
+            OpFaults.at("draft:replacement_written")
+            storeDraft(
+                draft.copy(
+                    updated = System.currentTimeMillis(),
+                    changes = draft.changes + 1,
+                    next = n + 1,
+                    entries = draft.entries.toMutableList().also {
+                        it[index] = entry.copy(
+                            replacement = "r_$n.jpg",
+                            replacementOrig = origName
+                        )
+                    }
+                )
+            )
+        }
+    }
+
+    /**
+     * Applies [filter] to one draft page, always from the unfiltered version (never stacked).
+     * `ORIGINAL` removes the replacement; when the kept original is the base page itself the entry
+     * becomes a pure base reference, so OCR carry-over works again (PM-2.3b §5.3).
+     */
+    internal suspend fun draftFilter(
+        id: String,
+        index: Int,
+        filter: ScanFilter
+    ): DraftStore.Draft = withContext(Dispatchers.IO) {
+        synchronized(DRAFT_LOCK) {
+            val doc = draftEditDoc(id)
+            val draft = draftFor(doc)
+            require(index in draft.entries.indices) { "No such page" }
+            val entry = draft.entries[index]
+            val unfiltered = entry.replacementOrig?.let { drafts.fileOf(id, it) }
+                ?: if (entry.replacement == null) baseOrig(id, entry) else null
+            val dir = drafts.folderOf(id).apply { mkdirs() }
+
+            if (filter == ScanFilter.ORIGINAL) {
+                if (unfiltered == null) return@withContext draft
+                val pureReference = entry.replacementOrig != null &&
+                    Sha256.of(unfiltered) == entry.sourceSha
+                val newEntry: DraftStore.Entry
+                val newNext: Int
+                if (pureReference) {
+                    newEntry = entry.copy(replacement = null, replacementOrig = null)
+                    newNext = draft.next
+                } else {
+                    val n = draft.next
+                    Durable.copyFile(unfiltered, File(dir, "r_$n.jpg"))
+                    OpFaults.at("draft:replacement_written")
+                    newEntry = entry.copy(replacement = "r_$n.jpg", replacementOrig = null)
+                    newNext = n + 1
+                }
+                return@withContext storeDraft(
+                    draft.copy(
+                        updated = System.currentTimeMillis(),
+                        changes = draft.changes + 1,
+                        next = newNext,
+                        entries = draft.entries.toMutableList().also { it[index] = newEntry }
+                    )
+                )
+            } else {
+                val source = unfiltered
+                    ?: entry.replacement?.let { drafts.fileOf(id, it) }
+                    ?: File(File(docsDir, id), entry.source)
+                val n = draft.next
+                val newOrig = entry.replacementOrig ?: run {
+                    val outOrig = File(dir, "r_$n.orig")
+                    Durable.copyFile(source, outOrig)
+                    "r_$n.orig"
+                }
+                val bmp = BitmapFactory.decodeFile(source.path)
+                    ?: throw IllegalStateException(
+                        "This page's kept original can't be read, so nothing was changed."
+                    )
+                val out = filter.applyTo(bmp)
+                try {
+                    PageReplace.commit(PageReplace.stageJpeg(File(dir, "r_$n.jpg"), out, 92))
+                } finally {
+                    if (out !== bmp) out.recycle()
+                    bmp.recycle()
+                }
+                OpFaults.at("draft:replacement_written")
+                storeDraft(
+                    draft.copy(
+                        updated = System.currentTimeMillis(),
+                        changes = draft.changes + 1,
+                        next = n + 1,
+                        entries = draft.entries.toMutableList().also {
+                            it[index] = entry.copy(
+                                replacement = "r_$n.jpg",
+                                replacementOrig = newOrig
+                            )
+                        }
+                    )
+                )
+            }
+        }
+    }
+
+    /** Deletes one draft (never the base). */
+    internal suspend fun discardDraft(id: String) {
+        withContext(Dispatchers.IO) {
+            synchronized(DRAFT_LOCK) { drafts.discard(id) }
+        }
+    }
+
+    /**
+     * Builds a **new copy** from the draft (name defaults to `draft_edited_name`), or extracts
+     * [indices] of its pages. A changed base page fails as [DraftStore.DraftStale] and keeps the
+     * draft. The draft is discarded only for the full-copy case, after the copy is published.
+     */
+    internal suspend fun saveDraftAsNew(
+        id: String,
+        name: String?,
+        indices: List<Int>? = null
+    ): ScanDocument = withContext(Dispatchers.IO) {
+        val doc = draftEditDoc(id)
+        val draft = synchronized(DRAFT_LOCK) { drafts.load(id) }
+            ?: throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
+        val selected = indices?.distinct()?.sorted() ?: draft.entries.indices.toList()
+        require(selected.isNotEmpty()) { "No pages selected" }
+        require(selected.all { it in draft.entries.indices }) { "No such page" }
+        val outName = name?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
+            ?: if (indices == null) {
+                context.getString(R.string.draft_edited_name, doc.name)
+            } else {
+                extractedName(doc.name, selected)
+            }
+        val seal = if (indices == null) SealSpec(id, draft.created, null, null) else null
+        val copy = buildAndPublish(outName, doc.category, 0, seal = seal) { staging ->
+            stageDraftPages(doc, draft, selected, staging)
+        }
+        if (indices == null) {
+            synchronized(DRAFT_LOCK) { drafts.discard(id) }
+            File(File(docsDir, copy.id), OpStaging.SEAL).delete()
+        }
+        copy
+    }
+
+    /**
+     * Replaces the original with the draft under the SAME id (A1 Replace): the base is moved to Trash
+     * with `previous=<token>` and the sealed staging takes its place in one rename. A death between
+     * the two renames is rolled forward by [recoverOperations]; the previous version stays in Trash.
+     */
+    internal suspend fun replaceWithDraft(id: String): ReplaceResult = withContext(Dispatchers.IO) {
+        val doc = draftEditDoc(id)
+        val draft = synchronized(DRAFT_LOCK) { drafts.load(id) }
+            ?: throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
+        require(draft.changes > 0) { "No unsaved page edits" }
+        if (SaveFormat.pagesDigest(doc.pageFiles) != draft.basePages) {
+            throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
+        }
+        val published = buildAndPublish(
+            doc.name,
+            doc.category,
+            0,
+            seal = SealSpec(id, draft.created, id, draft.basePages)
+        ) { staging ->
+            stageDraftPages(doc, draft, draft.entries.indices.toList(), staging)
+            // meta.txt (name/category/created), the Vault flag and a legacy transaction record are
+            // adopted byte for byte: Replace must not lose what the user did outside the draft.
+            listOf("meta.txt", "vault.flag", "txn.txt").forEach { name ->
+                val file = File(File(docsDir, id), name)
+                if (file.isFile) Durable.copyFile(file, File(staging, name))
+            }
+        }
+        synchronized(DRAFT_LOCK) { drafts.discard(id) }
+        File(File(docsDir, published.id), OpStaging.SEAL).delete()
+        dropDerivedCaches(id)
+        val trashKey = listTrash()
+            .firstOrNull { it.originalId == id && it.previousToken != null }?.key.orEmpty()
+        ReplaceResult(published, trashKey)
+    }
+
+    // ------------------------------------------------------------------ draft internals
+
+    /** The base, refusing a locked document before any draft folder is created. */
+    private fun draftEditDoc(id: String): ScanDocument {
+        val doc = loadDocument(File(docsDir, id))
+            ?: throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
+        if (doc.isLocked) {
+            throw PdfProtection.DocumentLocked(context.getString(R.string.locked_edit_refused))
+        }
+        return doc
+    }
+
+    /** The existing draft, or a fresh manifest over the current base pages (no page copies). */
+    private fun draftFor(doc: ScanDocument): DraftStore.Draft =
+        drafts.load(doc.id) ?: freshDraft(doc)
+
+    private fun freshDraft(doc: ScanDocument): DraftStore.Draft {
+        require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
+        val now = System.currentTimeMillis()
+        return DraftStore.Draft(
+            baseId = doc.id,
+            basePages = SaveFormat.pagesDigest(doc.pageFiles),
+            created = now,
+            updated = now,
+            changes = 0,
+            next = 0,
+            entries = doc.pageFiles.map { DraftStore.Entry(it.name, Sha256.of(it)) }
+        )
+    }
+
+    /** Manifest replace is the commit point; the folder entry is synced before the fault point. */
+    private fun storeDraft(draft: DraftStore.Draft): DraftStore.Draft {
+        drafts.save(draft)
+        Durable.syncDir(drafts.folderOf(draft.baseId))
+        OpFaults.at("draft:saved")
+        return draft
+    }
+
+    private fun entryFile(id: String, entry: DraftStore.Entry): File =
+        entry.replacement?.let { drafts.fileOf(id, it) }
+            ?: File(File(docsDir, id), entry.source)
+
+    private fun entryOrig(id: String, entry: DraftStore.Entry): File? =
+        entry.replacementOrig?.let { drafts.fileOf(id, it) }
+            ?: if (entry.replacement == null) baseOrig(id, entry) else null
+
+    private fun baseOrig(id: String, entry: DraftStore.Entry): File? =
+        origOf(File(File(docsDir, id), entry.source)).takeIf { it.exists() }
+
+    /** Copies the chosen draft pages into [staging] and carries base OCR for untouched pages. */
+    private suspend fun stageDraftPages(
+        doc: ScanDocument,
+        draft: DraftStore.Draft,
+        selected: List<Int>,
+        staging: File
+    ) {
+        val baseText = ocrStore.readText(doc.id)
+        val baseGeo = ocrStore.readGeo(doc.id)
+        val texts = LinkedHashMap<String, String>()
+        val geo = LinkedHashMap<String, OcrPage>()
+        selected.forEachIndexed { i, index ->
+            currentCoroutineContext().ensureActive()
+            val entry = draft.entries[index]
+            val out = File(staging, String.format(Locale.ROOT, PAGE_FORMAT, i))
+            if (entry.replacement != null) {
+                Durable.copyFile(drafts.fileOf(doc.id, entry.replacement), out)
+                entry.replacementOrig?.let {
+                    Durable.copyFile(drafts.fileOf(doc.id, it), origOf(out))
+                }
+            } else {
+                val src = File(File(docsDir, doc.id), entry.source)
+                if (!src.isFile) throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
+                Durable.copyFile(src, out)
+                if (Sha256.of(out) != entry.sourceSha) {
+                    throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
+                }
+                origOf(src).takeIf { it.exists() }?.let { Durable.copyFile(it, origOf(out)) }
+                baseText[entry.source]?.let { texts[out.name] = it }
+                baseGeo[entry.source]?.let { geo[out.name] = it }
+            }
+            OpFaults.at("op:page:$i")
+        }
+        if (texts.isNotEmpty() || geo.isNotEmpty()) {
+            OcrStore(OpStaging.root(context.filesDir)).putAll(staging.name, texts, geo)
         }
     }
 }

@@ -58,6 +58,23 @@
     <item name="ocrTidyJoin" type="id" />
     <item name="ocrTidySpaces" type="id" />
     <item name="ocrTidyGaps" type="id" />
+    <item name="swFolderScroll" type="id" />
+    <item name="swFolderRow" type="id" />
+    <item name="swSelectionBar" type="id" />
+    <item name="swSelCount" type="id" />
+    <item name="swSelDone" type="id" />
+    <item name="swSelMove" type="id" />
+    <item name="swSelTags" type="id" />
+    <item name="swSelShare" type="id" />
+    <item name="swSelRename" type="id" />
+    <item name="swSelDelete" type="id" />
+    <item name="swDocSelected" type="id" />
+    <item name="swBatchInput" type="id" />
+    <item name="swBatchPreview" type="id" />
+    <item name="swSort" type="id" />
+    <item name="swVaultStatus" type="id" />
+    <item name="swDocPickerList" type="id" />
+    <item name="swDocPickerSearch" type="id" />
     <item name="swNavMe" type="id" />
     <item name="swShellTab" type="id" />
     <item name="swHomeSearch" type="id" />

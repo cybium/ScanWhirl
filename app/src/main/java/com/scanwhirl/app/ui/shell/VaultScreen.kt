@@ -18,6 +18,31 @@ class VaultScreen(
     private val context: Context
 ) : LinearLayout(context) {
 
+    private val store by lazy {
+        com.scanwhirl.app.store.vault.VaultStore(
+            context, com.scanwhirl.app.store.ScanRepository(context)
+        )
+    }
+    private lateinit var statusView: android.widget.TextView
+
+    /** v2 UI: 04_vault — L2's live state: set up, locked/unlocked and how many files. */
+    fun refreshStatus() {
+        if (!::statusView.isInitialized) return
+        val text = runCatching {
+            when {
+                !store.isSetUp() -> context.getString(R.string.vault_tab_not_setup)
+                com.scanwhirl.app.store.vault.VaultSession.isUnlocked() -> {
+                    val count = runCatching { store.listEntries().size }.getOrDefault(0)
+                    context.resources.getQuantityString(
+                        R.plurals.vault_tab_unlocked, count, count
+                    )
+                }
+                else -> context.getString(R.string.vault_tab_locked)
+            }
+        }.getOrDefault(context.getString(R.string.vault_tab_locked))
+        statusView.text = text
+    }
+
     init {
         orientation = VERTICAL
         setPadding(SwStyle.dp(context, 18f), 0, SwStyle.dp(context, 18f), 0)
@@ -34,7 +59,7 @@ class VaultScreen(
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
-        bar.addView(TrustPill.noAds(context))
+        bar.addView(TrustPill.offlineNoAds(context))
         addView(bar)
 
         // Emblem: the shield on the kit's glass tile, centred like the mockup.
@@ -64,8 +89,57 @@ class VaultScreen(
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 16f) }
         )
+        statusView = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_dim), bold = true).apply {
+            id = R.id.swVaultStatus
+            gravity = Gravity.CENTER
+            text = context.getString(R.string.vault_tab_status_loading)
+        }
+        emblem.addView(
+            statusView,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 6f) }
+        )
         addView(
             emblem,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 12f) }
+        )
+
+        // v2 UI: 04_vault — the honest facts, so the tab is never half empty.
+        val facts = LinearLayout(context).apply {
+            orientation = VERTICAL
+            background = SwStyle.card(context, 18f)
+            val pad = SwStyle.dp(context, 16f)
+            setPadding(pad, pad, pad, pad)
+        }
+        for (line in listOf(R.string.vault_tab_aes, R.string.vault_tab_relock)) {
+            val row = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = SwStyle.dp(context, 34f)
+            }
+            row.addView(
+                ImageView(context).apply {
+                    setImageResource(
+                        if (line == R.string.vault_tab_aes) R.drawable.ic_sym_encrypted
+                        else R.drawable.ic_sym_lock
+                    )
+                    imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_primary))
+                    importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f))
+                    .apply { marginEnd = SwStyle.dp(context, 10f) }
+            )
+            row.addView(
+                SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
+                    setText(line)
+                },
+                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            )
+            facts.addView(row)
+        }
+        addView(
+            facts,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 12f) }
         )
