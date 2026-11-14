@@ -17,12 +17,14 @@ import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PageStamp
 import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.PdfDecryptor
+import com.scanwhirl.app.util.PdfImportBudget
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
@@ -33,6 +35,8 @@ import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
+import com.scanwhirl.app.util.TableDetect
+import com.scanwhirl.app.util.XlsxWriter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -1736,6 +1740,29 @@ class ScanRepository(private val context: Context) {
      *    can explain (password, damaged, too large, no space, no access…).
      *  - The new document is marked for text recognition; the caller queues it.
      */
+    /** How a planned PDF import continues after the pre-check sheet. */
+    sealed interface ImportDecision {
+        data object All : ImportDecision
+        data class Pages(val indices: List<Int>) : ImportDecision
+        data object Cancel : ImportDecision
+    }
+
+    /**
+     * Imports a device PDF after a pre-check. [onPlan] is called with the page count, the size
+     * estimate and free space when the PDF is big (>50 pages or >25% of free space); it runs
+     * while the seekable copy is open. Pages are rendered one at a time and the document is
+     * published only when every chosen page is written. A cancel returns null and leaves nothing.
+     */
+    suspend fun importPdfAsScanPlanned(
+        uri: Uri,
+        name: String?,
+        dpi: Float = 150f,
+        maxDim: Int = 2048,
+        quality: Int = 85,
+        onPlan: suspend (PdfImportBudget.Plan) -> ImportDecision,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): ScanDocument? = importPdfInternal(uri, name, dpi, maxDim, quality, vaulted = false, onPlan, onPage)
+
     private suspend fun importPdf(
         uri: Uri,
         name: String?,
@@ -1743,15 +1770,65 @@ class ScanRepository(private val context: Context) {
         maxDim: Int,
         quality: Int,
         vaulted: Boolean
-    ): ScanDocument = withContext(Dispatchers.IO) {
+    ): ScanDocument = importPdfInternal(uri, name, dpi, maxDim, quality, vaulted, null, null)
+        ?: throw IllegalStateException("Import cancelled")
+
+    private suspend fun importPdfInternal(
+        uri: Uri,
+        name: String?,
+        dpi: Float,
+        maxDim: Int,
+        quality: Int,
+        vaulted: Boolean,
+        onPlan: (suspend (PdfImportBudget.Plan) -> ImportDecision)?,
+        onPage: ((Int, Int) -> Unit)?
+    ): ScanDocument? = withContext(Dispatchers.IO) {
         val staging = File(importStagingDir, UUID.randomUUID().toString().take(12))
         if (!staging.mkdirs()) throw PdfImport.ImportException(PdfImport.Reason.SAVE_FAILED, "Could not prepare the import")
         try {
-            PdfImport.withSeekableCopy(context, uri) { fd, sourceBytes ->
+            val rendered = PdfImport.withSeekableCopy(context, uri) { fd, sourceBytes ->
                 importFault(ImportStage.COPIED)
-                PdfImport.renderAll(fd, sourceBytes, staging, usableSpace(docsDir), dpi, maxDim, quality) {
-                    importFault(ImportStage.PAGE_RENDERED)
+                val pageCount = PdfImport.pageCount(fd)
+                val plan = PdfImportBudget.plan(
+                    pageCount, usableSpace(docsDir), PdfImportBudget.pageBytes(maxDim)
+                )
+                if (plan.tooLittleSpace) {
+                    throw PdfImport.ImportException(
+                        PdfImport.Reason.NO_SPACE,
+                        context.getString(
+                            R.string.tools_import_no_space,
+                            plan.estimateBytes / (1024 * 1024),
+                            plan.freeBytes / (1024 * 1024)
+                        ),
+                        pages = pageCount
+                    )
                 }
+                val decision = if (plan.needsDecision && onPlan != null) {
+                    onPlan(plan)
+                } else {
+                    ImportDecision.All
+                }
+                val indices = when (decision) {
+                    ImportDecision.All -> (0 until pageCount).toList()
+                    is ImportDecision.Pages -> decision.indices.distinct().sorted()
+                    ImportDecision.Cancel -> emptyList()
+                }
+                if (indices.isEmpty()) {
+                    false
+                } else {
+                    val source = PdfImport.PdfRendererSource(fd, dpi, maxDim, quality)
+                    source.use {
+                        PdfImport.renderPages(it, staging, indices, usableSpace(docsDir)) { done, total ->
+                            importFault(ImportStage.PAGE_RENDERED)
+                            onPage?.invoke(done, total)
+                        }
+                    }
+                    true
+                }
+            }
+            if (!rendered) {
+                staging.deleteRecursively()
+                return@withContext null
             }
             currentCoroutineContext().ensureActive()
             val pdfFile = File(staging, "scan.pdf")
@@ -2553,6 +2630,45 @@ class ScanRepository(private val context: Context) {
             },
             pageNotes = { index -> text[doc.pageFiles[index].name] }
         )
+        outFile
+    }
+
+    /**
+     * Writes a `.xlsx` workbook: one sheet per page ("Page 1", ...). A page whose stored OCR
+     * geometry forms a table becomes a cell grid; other pages export one line per cell.
+     * [tablesOnly] drops the plain text (a page without a table gets one clear note line).
+     * Pages with no stored OCR are recognised now with the app's existing on-device engine.
+     */
+    suspend fun exportExcel(
+        id: String,
+        outFile: File,
+        tablesOnly: Boolean = false,
+        noTableNote: String = "No table found on this page."
+    ): File = withContext(Dispatchers.IO) {
+        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        refuseLockedSources(listOf(doc))
+        require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
+        val stored = ocrStore.readGeo(id)
+        val pages = ArrayList<OcrPage>(doc.pageFiles.size)
+        for (page in doc.pageFiles) {
+            currentCoroutineContext().ensureActive()
+            val ocr = stored[page.name] ?: runCatching { OcrEngine.recognizeFile(page).page }
+                .getOrElse { OcrPage(0, 0, emptyList()) }
+            pages += ocr
+        }
+        val sheets = pages.mapIndexed { index, ocr ->
+            val table = TableDetect.detect(ocr)
+            val rows: List<List<String>> = when {
+                table != null -> table.rows
+                tablesOnly -> listOf(listOf(noTableNote))
+                else -> ocr.lines.filter { it.text.isNotBlank() }.map { listOf(it.text) }
+            }
+            XlsxWriter.Sheet(
+                "Page ${index + 1}",
+                rows.ifEmpty { listOf(listOf(noTableNote)) }
+            )
+        }
+        XlsxWriter.write(outFile, sheets)
         outFile
     }
 
