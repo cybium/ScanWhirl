@@ -22,6 +22,7 @@ import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolStatus
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -49,7 +50,7 @@ class ToolsUiTest {
 
     private val l4Tools = listOf(
         "id_card", "business_card", "passport", "merge", "split", "extract", "duplicate",
-        "compress", "pdf_to_images", "long_image", "to_word", "to_powerpoint", "zip",
+        "compress", "pdf_to_images", "long_image", "to_word", "to_powerpoint", "to_excel", "zip",
         "remove_metadata"
     )
 
@@ -207,6 +208,47 @@ class ToolsUiTest {
                 val after = activity.findViewById<View>(R.id.toolSetupWordPictures)
                 assertNotNull("the option must survive the re-render", after)
                 assertTrue("the option is a real toggle", after.hasOnClickListeners())
+            }
+        }
+    }
+
+    @Test
+    fun `compress level chips show one selected choice and an estimate`() {
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue("Medium is the default", activity.findViewById<View>(R.id.toolSetupLevelMedium).isSelected)
+                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelLight).isSelected)
+                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelStrong).isSelected)
+
+                activity.findViewById<View>(R.id.toolSetupLevelLight).performClick()
+                idle()
+                assertTrue(
+                    "Light is now the single choice",
+                    activity.findViewById<View>(R.id.toolSetupLevelLight).isSelected
+                )
+                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelMedium).isSelected)
+                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelStrong).isSelected)
+
+                assertTrue("the estimate appears", waitUntil {
+                    activity.findViewById<TextView>(R.id.toolSetupEstimate)
+                        ?.text?.toString()?.startsWith("Estimated size:") == true
+                })
+            }
+        }
+    }
+
+    @Test
+    fun `to excel setup offers tables only and all text`() {
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "to_excel")).use { scenario ->
+            scenario.onActivity { activity ->
+                val tables = activity.findViewById<View>(R.id.toolSetupExcelTables)
+                val all = activity.findViewById<View>(R.id.toolSetupExcelAll)
+                assertNotNull("Tables only option", tables)
+                assertNotNull("All text option", all)
+                assertTrue(tables.hasOnClickListeners())
+                all.performClick()
+                idle()
+                assertNotNull(activity.findViewById<View>(R.id.toolSetupRun))
             }
         }
     }

@@ -41,6 +41,7 @@
     <string name="tools_setup_level_light">Light</string>
     <string name="tools_setup_level_medium">Medium</string>
     <string name="tools_setup_level_strong">Strong</string>
+    <string name="tools_setup_estimate">Estimated size: %1$s</string>
     <string name="tools_setup_compress_note">A target size fits every page. Without one, quality is used.</string>
     <string name="tools_setup_name_hint">Name (optional)</string>
     <string name="tools_setup_long_calculating">Measuring the pages…</string>
@@ -53,6 +54,10 @@
     <string name="tools_setup_word_pictures">Include page pictures</string>
     <string name="tools_setup_word_pictures_note">Each page image sits above the text of that page.</string>
     <string name="tools_setup_pptx_note">One slide per page. The OCR text goes in the speaker notes.</string>
+    <string name="tools_setup_excel_tables_only">Tables only</string>
+    <string name="tools_setup_excel_all_text">All text</string>
+    <string name="tools_setup_excel_note">Finds tables in the stored text. Other pages go in as plain text.</string>
+    <string name="tools_excel_no_table">No table found on this page.</string>
     <string name="tools_setup_no_text">No recognised text yet. Open the document and read it first.</string>
     <string name="tools_setup_metadata_note">A clean copy without EXIF or thumbnails. The original is kept.</string>
     <string name="tools_setup_id_note">Front on top, back below, on one A4 page.</string>

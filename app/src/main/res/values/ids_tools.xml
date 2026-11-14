@@ -21,6 +21,12 @@
     <item name="toolSetupProgress" type="id" />
     <item name="toolSetupInfo" type="id" />
     <item name="toolSetupLevel" type="id" />
+    <item name="toolSetupLevelLight" type="id" />
+    <item name="toolSetupLevelMedium" type="id" />
+    <item name="toolSetupLevelStrong" type="id" />
+    <item name="toolSetupEstimate" type="id" />
+    <item name="toolSetupExcelTables" type="id" />
+    <item name="toolSetupExcelAll" type="id" />
     <item name="toolResultSummary" type="id" />
     <item name="toolResultOpen" type="id" />
     <item name="toolResultShare" type="id" />

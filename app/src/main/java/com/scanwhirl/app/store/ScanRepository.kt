@@ -17,6 +17,7 @@ import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
@@ -32,6 +33,8 @@ import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
+import com.scanwhirl.app.util.TableDetect
+import com.scanwhirl.app.util.XlsxWriter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -2523,6 +2526,45 @@ class ScanRepository(private val context: Context) {
             },
             pageNotes = { index -> text[doc.pageFiles[index].name] }
         )
+        outFile
+    }
+
+    /**
+     * Writes a `.xlsx` workbook: one sheet per page ("Page 1", ...). A page whose stored OCR
+     * geometry forms a table becomes a cell grid; other pages export one line per cell.
+     * [tablesOnly] drops the plain text (a page without a table gets one clear note line).
+     * Pages with no stored OCR are recognised now with the app's existing on-device engine.
+     */
+    suspend fun exportExcel(
+        id: String,
+        outFile: File,
+        tablesOnly: Boolean = false,
+        noTableNote: String = "No table found on this page."
+    ): File = withContext(Dispatchers.IO) {
+        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        refuseLockedSources(listOf(doc))
+        require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
+        val stored = ocrStore.readGeo(id)
+        val pages = ArrayList<OcrPage>(doc.pageFiles.size)
+        for (page in doc.pageFiles) {
+            currentCoroutineContext().ensureActive()
+            val ocr = stored[page.name] ?: runCatching { OcrEngine.recognizeFile(page).page }
+                .getOrElse { OcrPage(0, 0, emptyList()) }
+            pages += ocr
+        }
+        val sheets = pages.mapIndexed { index, ocr ->
+            val table = TableDetect.detect(ocr)
+            val rows: List<List<String>> = when {
+                table != null -> table.rows
+                tablesOnly -> listOf(listOf(noTableNote))
+                else -> ocr.lines.filter { it.text.isNotBlank() }.map { listOf(it.text) }
+            }
+            XlsxWriter.Sheet(
+                "Page ${index + 1}",
+                rows.ifEmpty { listOf(listOf(noTableNote)) }
+            )
+        }
+        XlsxWriter.write(outFile, sheets)
         outFile
     }
 

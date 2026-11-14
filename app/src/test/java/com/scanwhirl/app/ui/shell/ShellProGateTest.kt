@@ -164,7 +164,7 @@ class ShellProGateTest {
 
             // A Soon Pro tool keeps its honest Coming soon sheet in Pro.
             val toExcel = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
-                .first { it.tool?.id == "to_excel" }
+                .first { it.tool?.id == "pdfa" }
             toExcel.performClick()
             idle()
             val dialog = ShadowDialog.getLatestDialog()

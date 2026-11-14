@@ -40,6 +40,7 @@
     <string name="tools_setup_level_light"><!-- review -->हल्का</string>
     <string name="tools_setup_level_medium"><!-- review -->मध्यम</string>
     <string name="tools_setup_level_strong"><!-- review -->ज़्यादा</string>
+    <string name="tools_setup_estimate"><!-- review -->अनुमानित आकार: %1$s</string>
     <string name="tools_setup_compress_note"><!-- review -->लक्ष्य आकार हर पृष्ठ फिट करता है। बिना लक्ष्य गुणवत्ता।</string>
     <string name="tools_setup_name_hint"><!-- review -->नाम (वैकल्पिक)</string>
     <string name="tools_setup_long_calculating"><!-- review -->पृष्ठ मापे जा रहे हैं…</string>
@@ -52,6 +53,10 @@
     <string name="tools_setup_word_pictures"><!-- review -->पृष्ठ की तस्वीरें जोड़ें</string>
     <string name="tools_setup_word_pictures_note"><!-- review -->हर तस्वीर उस पृष्ठ के पाठ के ऊपर रहती है।</string>
     <string name="tools_setup_pptx_note"><!-- review -->हर पृष्ठ एक स्लाइड। OCR पाठ वक्ता नोट्स में जाता है।</string>
+    <string name="tools_setup_excel_tables_only"><!-- review -->सिर्फ़ तालिकाएँ</string>
+    <string name="tools_setup_excel_all_text"><!-- review -->सारा पाठ</string>
+    <string name="tools_setup_excel_note"><!-- review -->संग्रहीत पाठ में तालिकाएँ खोजता है। बाकी पृष्ठ सादे पाठ में जाते हैं।</string>
+    <string name="tools_excel_no_table"><!-- review -->इस पृष्ठ पर कोई तालिका नहीं मिली।</string>
     <string name="tools_setup_no_text"><!-- review -->अभी पाठ नहीं पहचाना। पहले दस्तावेज़ खोलकर पढ़ें।</string>
     <string name="tools_setup_metadata_note"><!-- review -->EXIF और थंबनेल बिना साफ़ प्रति। मूल सुरक्षित।</string>
     <string name="tools_setup_id_note"><!-- review -->आगे ऊपर, पीछे नीचे, एक A4 पृष्ठ पर।</string>

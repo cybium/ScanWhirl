@@ -210,7 +210,7 @@ class KitComponentsTest {
     @Test
     fun `ToolTile shows Soon tag for tool not yet built`() {
         val tile = ToolTile(app)
-        tile.bind(ToolRegistry.byId("to_excel")!!)
+        tile.bind(ToolRegistry.byId("pdfa")!!)
         assertTrue(tile.soonTag.isVisible)
     }
 

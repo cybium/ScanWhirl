@@ -35,12 +35,15 @@ class HostSampleExportTest {
         val dir = File(app.cacheDir, "hostcheck").apply { mkdirs() }
         val pptx = File(dir, "sample.pptx")
         val docx = File(dir, "sample.docx")
+        val xlsx = File(dir, "sample.xlsx")
 
         runBlocking { repo.exportPowerPoint(id, pptx) }
         runBlocking { repo.exportWord(id, docx, includePictures = true) }
+        runBlocking { repo.exportExcel(id, xlsx, tablesOnly = false, noTableNote = "No table") }
 
         assertTrue("sample pptx is missing", pptx.isFile && pptx.length() > 0)
         assertTrue("sample docx is missing", docx.isFile && docx.length() > 0)
+        assertTrue("sample xlsx is missing", xlsx.isFile && xlsx.length() > 0)
         ZipFile(pptx).use { zip ->
             assertTrue(zip.getEntry("ppt/presentation.xml") != null)
             assertTrue(zip.getEntry("ppt/slides/slide1.xml") != null)
@@ -52,12 +55,17 @@ class HostSampleExportTest {
                 zip.entries().toList().any { it.name.startsWith("word/media/") && it.name.endsWith(".jpg") }
             )
         }
+        ZipFile(xlsx).use { zip ->
+            assertTrue(zip.getEntry("xl/workbook.xml") != null)
+            assertTrue(zip.getEntry("xl/worksheets/sheet1.xml") != null)
+        }
 
-        // Lead: no copies outside the test sandbox. For a manual python-pptx/python-docx check, set
-        // SW_HOSTCHECK_DIR to a folder and run this test alone.
+        // Lead: no copies outside the test sandbox. For a manual python-pptx/python-docx/openpyxl
+        // check, set SW_HOSTCHECK_DIR to a folder and run this test alone.
         System.getenv("SW_HOSTCHECK_DIR")?.let { File(it) }?.takeIf { it.isDirectory || it.mkdirs() }?.let { host ->
             pptx.copyTo(File(host, "sample.pptx"), overwrite = true)
             docx.copyTo(File(host, "sample.docx"), overwrite = true)
+            xlsx.copyTo(File(host, "sample.xlsx"), overwrite = true)
         }
     }
 }

@@ -7,6 +7,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import androidx.exifinterface.media.ExifInterface
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.model.OcrLine
+import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.util.DocxWriter
 import com.scanwhirl.app.util.IdCard
 import com.scanwhirl.app.util.ImportFixtures
@@ -450,6 +452,85 @@ class ToolsEngineTest {
         val id = DocFixtures.locked(repo, app, pages = 1)
         val out = work("locked.pptx")
         val r = runCatching { runBlocking { repo.exportPowerPoint(id, out) } }
+        assertTrue("a locked source must not be exported", r.isFailure)
+        assertTrue("nothing may be written", !out.exists())
+    }
+
+    // ---------------------------------------------------------------- Excel
+
+    private fun ocrLine(text: String, left: Int, top: Int, width: Int = 120, height: Int = 40) =
+        OcrLine(text, left, top, left + width, top + height)
+
+    @Test
+    fun `exportExcel writes one sheet per page with the detected table and numbers`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        repo.ocrStore.putPage(
+            id, "page_000.jpg", "invoice",
+            OcrPage(
+                1200, 1600, listOf(
+                    ocrLine("Item", 50, 100), ocrLine("Qty", 400, 100),
+                    ocrLine("Rate", 650, 100), ocrLine("Amount", 900, 100),
+                    ocrLine("Pen", 50, 170), ocrLine("2", 400, 170),
+                    ocrLine("₹10", 650, 170), ocrLine("₹20", 900, 170),
+                    ocrLine("Book", 50, 240), ocrLine("1", 400, 240),
+                    ocrLine("₹250", 650, 240), ocrLine("₹250", 900, 240)
+                )
+            )
+        )
+        repo.ocrStore.putPage(
+            id, "page_001.jpg", "letter",
+            OcrPage(
+                1200, 1600, listOf(
+                    ocrLine("Dear sir", 50, 100, 400),
+                    ocrLine("Thank you for your order.", 50, 170, 500),
+                    ocrLine("Regards", 50, 240, 200)
+                )
+            )
+        )
+        val out = work("report.xlsx")
+        runBlocking { repo.exportExcel(id, out, tablesOnly = false) }
+
+        ZipFile(out).use { zip ->
+            val workbook = zip.getInputStream(zip.getEntry("xl/workbook.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertEquals("two sheets", 2, Regex("<sheet ").findAll(workbook).count())
+            assertTrue(workbook.contains("name=\"Page 1\""))
+            assertTrue(workbook.contains("name=\"Page 2\""))
+            val first = zip.getInputStream(zip.getEntry("xl/worksheets/sheet1.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertTrue("invoice header", first.contains("Amount"))
+            assertTrue("invoice row", first.contains("Pen"))
+            assertTrue("a rupee cell is numeric", first.contains("<v>20</v>"))
+            assertTrue("no table note on a table page", !first.contains("No table"))
+            val second = zip.getInputStream(zip.getEntry("xl/worksheets/sheet2.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertTrue("plain text page", second.contains("Dear sir"))
+        }
+
+        val tablesOnly = work("tables.xlsx")
+        runBlocking {
+            repo.exportExcel(id, tablesOnly, tablesOnly = true, noTableNote = "No table here")
+        }
+        ZipFile(tablesOnly).use { zip ->
+            val second = zip.getInputStream(zip.getEntry("xl/worksheets/sheet2.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertTrue("tables-only page 2 explains itself", second.contains("No table here"))
+            val first = zip.getInputStream(zip.getEntry("xl/worksheets/sheet1.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
+            assertTrue(first.contains("Pen"))
+        }
+    }
+
+    @Test
+    fun `exportExcel refuses a locked source and writes nothing`() {
+        val id = DocFixtures.locked(repo, app, pages = 1)
+        val out = work("locked.xlsx")
+        val r = runCatching { runBlocking { repo.exportExcel(id, out) } }
         assertTrue("a locked source must not be exported", r.isFailure)
         assertTrue("nothing may be written", !out.exists())
     }
