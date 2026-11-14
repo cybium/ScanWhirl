@@ -1,155 +1,80 @@
-# LANE_REPORT — L3 Protect PDF
+# LANE_REPORT — L3 Protect PDF (+ Book pages)
 
-Session: 2026-11-14. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
+Session 2: 2026-11-14. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
 
-## Done
+## Session 2 — done
 
-### Phase A — engine (ISO 32000-2 Standard Security Handler V5 / R6, AESV3)
-
-- **`util/PdfAes.kt` (new)** — AES-256 password protection for new PDFs.
-  - Algorithm **2.A** (user and owner file-key retrieval), **2.B** (hash: ≥ 64 rounds, then until
-    `E_last <= round - 32`), **8** (`/U`, `/UE`), **9** (`/O`, `/OE`, with the 48-byte `/U` as the
-    owner hash's user data), **10** (`/Perms`, AES-256-ECB).
-  - Passwords: Unicode **NFKC → UTF-8, cut at 127 bytes**, so Devanagari/emoji/CJK work.
-  - Streams: `16-byte random IV + AES-256-CBC/PKCS#7`; the file key is used directly (V5 has no
-    per-object keys).
-  - `/Encrypt` dictionary (`/V 5 /R 6 /Length 256 /CFM /AESV3`) and a matching `/ID`.
-- **`util/PdfGenerator.kt`** — optional `encryption: PdfAes.Encryption?` parameter: each stream body
-  is encrypted while writing, `/Length` is the real (larger) byte count, and the trailer gains
-  `/Encrypt` + `/ID`. Existing callers are unchanged (default `null`).
-- **`util/PdfVerifier.kt`** — optional `decryption` parameter: content `/Im<i> Do`, image SOI and the
-  byte-for-byte page comparison run on decrypted data. The trailer parser now accepts a nested
-  `/Encrypt << … >>` dictionary.
-- **`util/PdfEncryptor.kt`** — RC4 **write removed**; AES-256 now rewrites an existing generator PDF:
-  every object is copied, each stream re-encrypted with a new `/Length`, a fresh xref table and a
-  trailer with `/Encrypt` + `/ID`; the result is fsynced, verified with the key and published by
-  rename. No plaintext temporary.
-- **`util/PdfProtection.kt`** — `isEncodable` now accepts any well-formed Unicode (valid surrogate
-  pairs) instead of printable Latin-1. The lock hash and the PDF password still agree.
-- RC4 **read** is untouched: old RC4 files keep opening in any viewer and the old unlock code path is
-  unchanged (ScanWhirl rebuilds unlocked copies from page images).
-
-### Phase B — UI (mockups 05_protect_pdf, 09_unlock_sheet)
-
-The L1 kit is not in `integration` yet (checked: `integration` is still at `7e039c7`), so the two
-sheets are self-contained in `ui/protect` and match the mockups' measurements from `sw.css`
-(28 dp sheet, 42×5 grab, 56 dp fields, 54 dp primary button, 4-segment meter).
-
-- **`ui/protect/ProtectSheet.kt`** — title + close, note, document chip, password field with
-  show/hide, 4-segment strength meter with the check icon, "type it again" with a match check,
-  AES-256 info row, Remember-in-Vault row, **Protect & share** and **Save protected copy**.
-  Protect stays disabled until the password is ≥ 6 characters and both fields match.
-- **`ui/protect/UnlockSheet.kt`** — gold lock badge, `<name> is protected`, password field, the
-  tries-left error line, Open, "or", "Use password saved in Vault" (hidden — L2 API not merged),
-  Cancel, and "Remove protection…" behind a second confirmation sheet.
-- **`ui/protect/ProtectPolicy.kt`** — pure policy: `ProtectPassword` (min 6, Weak < 10, 4 segments,
-  code-point length) and `TryCooldown` (5 wrong tries → 30 s pause, doubling, reset on success).
-- **`tools/LockFlow.kt`** — both flows now use the sheets: saved-scan Protect / Unlock / Change
-  password, device-PDF lock (imports then protects; the sheet does not invent page count or size)
-  and device-PDF unlock. "Protect & share" shares the protected PDF, "Save protected copy" opens the
-  existing save screen. Cooldowns are per document for the process.
-- Strings only in `values/strings_protect.xml` and `values-hi/strings_protect.xml` (Hindi starts with
-  `<!-- review -->`); new colours/ids in `values/colors_protect.xml`, `values/ids_protect.xml`;
-  layouts `sheet_protect.xml`, `sheet_unlock.xml`; drawables `bg_protect_*`, `ic_protect_visibility_off`.
-
-### Tests added / updated
-
-- **`PdfAesTest` (new)** — right/wrong user and owner passwords; an **independent** implementation of
-  Algorithms 2.B/8/9/10 in the test (salts, `/U`, `/UE`, `/O`, `/OE`, `/Perms`) recomputes everything;
-  Unicode password (NFKC ligature, decomposed accent, 127-byte cap); generator-time encryption
-  decrypts independently and the verifier accepts it; post-hoc encryption keeps the page JPEG
-  byte-identical; the `/Encrypt` value is a real `<< … >>` dictionary.
-- **`PdfEncryptorTest`** — rewritten from RC4 to AES-256 (as the lane allows): independent 2.B +
-  AES-CBC stream decryption, exact content streams and images, text layer, right/wrong password.
-- **`ProtectPolicyTest` (new)** — meter thresholds, 12-char mockup case, code-point counting,
-  confirmation match, five-try 30 s pause, doubling, reset.
-- **`ProtectSheetTest` (new, v2 UI: 05_protect_pdf)** — fields, disabled state, 3/4 segments at 12
-  characters, confirm check, both exits' callbacks, Vault row hidden unless wired.
-- **`UnlockSheetTest` (new, v2 UI: 09_unlock_sheet)** — title, tries-left line, right password closes
-  and hands over, fifth wrong try pauses Open, Remove protection needs the second confirmation.
-- **`LockUiTest`** — rewritten to the v2 sheet (was an AlertDialog) — same data-safety assertions.
-- **`LockGuardTest`** — Unicode password now protects/verifies/unlocks; a malformed surrogate is
-  refused before anything is written. Every PM-3.1b guard unchanged and green.
-- **`ProtectionStateTest`** — `isEncodable` v2 rules; repair with a Unicode password works, malformed
-  text is refused without touching bytes.
-- **`UiSmokeTest`** — the password-dictionary test now pins `/V 5 /R 6 /Length 256 /CFM /AESV3`.
+1. **Reader's Protect now opens the v2 Protect sheet** (`ui/DocumentViewerActivity.kt`).
+   - More → Protect PDF (Pro) calls `LockFlow.protectDocument(doc)`; the old one-field
+     `promptProtectPdf()` and its `R.string.protect_note` (RC4-128) usage are deleted.
+   - Only that function/caller changed in the file. `strings.xml` untouched; `protect_note` is now
+     unreferenced and can be removed by the lead/L1.
+   - Test: `ui/ViewerProtectSheetTest` (More → Protect opens `protectTitle` + `protectPassword` +
+     `protectConfirm`, nothing locked until submit).
+2. **`git merge integration`** — clean (picked up the latest kit/TrustPill and the worker brief).
+3. **Change password uses the kit, not a dialog** (`tools/LockFlow.kt`).
+   - `LockFlow.promptCurrentPassword` is now an `SwSheet` with the kit `PasswordField` (strength
+     meter off, show/hide toggle). `promptChangePassword` passes `repo.verifyPdfPassword` and the
+     document's `TryCooldown`, so a wrong current password stays in the sheet with the tries-left
+     line and the 5-try 30 s pause/doubling — the same pacing as the Unlock sheet.
+   - The viewer/repair callers keep the old behaviour (text handed over unchecked) via the default
+     `verify = null`; the viewer's own `repo.unlockPdf` still reports wrong passwords.
+   - Test: `ui/ChangePasswordSheetTest` (kit field + tries-left, right password opens the
+     "Change password" Protect sheet, 5 wrong tries disable Continue with the pause message).
+     `FreeLegacyVaultEntryPointTest`'s unlock test was rewritten to the new sheet
+     (`// v2 UI: 09_unlock_sheet`), same data-safety assertion.
+4. **New tool "Book pages" (Pro, Create)** — `70_APP_DESIGN.md` §3.
+   - `util/BookSplit.kt`: gutter scan over the middle 30% of the width. Each sampled column's
+     luminance mean/σ on a bounded grid; score = darkness − σ, winner must beat the band average by
+     a margin and be uniform, otherwise the exact middle (0.5) is used. Crops two bitmaps whose
+     widths add up to the source. `decode()` picks `inSampleSize` so the long side is **at most
+     3000 px** (never full-resolution); `splitToJpeg()` decodes once, crops, encodes and recycles.
+     Source bytes are never written.
+   - `ui/book/BookPagesActivity.kt`: gallery picker uses the same `GetMultipleContents` image
+     contract as Photos to PDF; one preview card per picked image, each with a draggable gutter
+     line (`BookSpreadView`, fits the bitmap, line can be moved by touch). "Create document" builds
+     2 JPEGs per input and calls the existing `ScanRepository.createDocument`, then opens the new
+     document in the reader. `ui/book/BookSpreadView.kt` is the preview.
+   - `ui/kit/ToolRegistry.kt`: only the `book_pages` entry changed (SOON → READY, `pro = true`,
+     launch starts `BookPagesActivity` via the host, which is the shell Activity/Context).
+   - `AndroidManifest.xml`: one `<activity>` line for `.ui.book.BookPagesActivity` (required).
+   - Strings only in `values/strings_book.xml` + `values-hi/strings_book.xml` (Hindi starts with
+     `<!-- review -->`); no ids XML was added (the screen exposes its views for tests).
+   - Tests: `util/BookSplitTest` (dark middle band found, uniform → exact middle, two outputs with
+     widths adding up, two JPEGs per spread with the source file byte-identical, sampled decode
+     capped at 3000), `ui/book/BookPagesActivityTest` (2 spreads → one document with 4 pages and a
+     PDF; the registry entry is READY/Pro and launches the screen).
 
 ## Not done / carried
 
-- **"Remember in Vault"** is built but hidden until L2's Vault API merges (`rememberAvailable`), and
-  the Unlock sheet's Vault button likewise. No plaintext password is stored anywhere.
-- **Change password** still asks the current password with the existing `SwDialog.input` card before
-  opening the Protect sheet. L1's "replace every SwDialog with SwSheet" sweep owns that dialog.
-- `ui/DocumentViewerActivity.kt` (not in any lane's file list) still shows the old protect dialog and
-  the old `protect_note` string in `strings.xml`, which says RC4-128. Both are now false for new
-  files. **Needs L1/lead:** point that dialog at `ProtectSheet` and remove/replace `protect_note`.
-- `tools/pdfcheck.py` crashes on any locked PDF (`doc.metadata` is `None` before authentication) —
-  see the host check. One-line fix for the lead: `(doc.metadata or {}).get("encryption")`.
-- Pre-existing: `AndroidManifest.xml` declares `INTERNET` and `ACCESS_NETWORK_STATE` (not added by
-  this lane; the design says no INTERNET permission). Not touched — outside L3's file ownership.
-- No phone run requested; no screenshots taken (Robolectric UI tests cover the sheets).
+- **Book pages is not Pro-gated inside the screen**: the catalogue entry is `pro = true`, but the
+  L1 shell currently does not gate any Pro tile before launch. Gating belongs to the shell/Pro
+  flow; tell me if the lead wants an in-screen Pro sheet.
+- The Book pages screen is code-built (no layout XML) with kit colours/type; no mockup exists for
+  it.
+- "Remember in Vault" and the Unlock sheet's Vault button remain hidden until L2's API merges.
+- `ui/DocumentViewerActivity` still shows the legacy `protect_note` string **in strings.xml**
+  (unused now); the lead removes it as agreed.
+- `tools/pdfcheck.py` still needs the `(doc.metadata or {})` guard (L3 host check note from
+  session 1; the tool crashes on locked PDFs, the files themselves are correct).
 
-## Gate result (last full run)
+## Gate result (last full run, session 2)
 
 ```
-tests: total=853 failures=0 skipped=0
-GATE PASS L3 tests=853 lint=[0 errors, 329 warnings]
+tests: total=888 failures=0 skipped=0
+GATE PASS L3 tests=888 lint=[lint skipped (lead runs it at merge)]
 ```
 
-## Host check (independent parser: PyMuPDF 1.27.1, not ScanWhirl code)
+## Commits (session 2)
 
-Files produced by the committed classes (`L3HostCheck` runs `PdfGenerator.imagesToPdf(..., enc)` and
-`PdfEncryptor.encrypt`, no Gradle):
+- `9e28617` L3: reader More → Protect opens the v2 Protect sheet (password twice), old RC4 dialog removed
+- `a86a2ea` merge `integration` into `lane/L3-protect`
+- `094024e` L3: Change password asks the current password in the kit SwSheet + PasswordField with tries-left/cooldown
+- `f4a6633` L3: Book pages tool — BookSplit gutter engine, draggable preview, create document (Pro, Create)
 
-```
-$ python3 pdfcheck_l3.py /tmp/l3gen.pdf pw1234      # encrypted while generating
-needs_password: True
-wrong_password_opens: False
-right_password_opens: True
-permissions: 6
-encryption: Standard V5 R6 256-bit AES
-pages: 1
-page1_renders: True
+## Session 1 (unchanged summary)
 
-$ python3 pdfcheck_l3.py /tmp/l3post.pdf pw1234     # PdfEncryptor rewrite of a plain PDF
-needs_password: True
-wrong_password_opens: False
-right_password_opens: True
-permissions: 6
-encryption: Standard V5 R6 256-bit AES
-pages: 1
-page1_renders: True
-
-$ python3 pdfcheck_l3.py /tmp/l3unicode.pdf 'पासवर्ड1'
-needs_password: True
-wrong_password_opens: False
-right_password_opens: True
-encryption: Standard V5 R6 256-bit AES
-pages: 1
-page1_renders: True
-```
-
-`pdfcheck_l3.py` is the lane's copy of `tools/pdfcheck.py` with the `None`-metadata line guarded.
-
-The **exact** repo tool was also run:
-
-```
-$ wsl -d Ubuntu --cd /tmp -- python3 /mnt/c/Users/Cybium/Desktop/ScanWhirl/tools/pdfcheck.py /tmp/l3post.pdf pw1234
-needs_password: True
-Traceback (most recent call last):
-  ...
-  File ".../tools/pdfcheck.py", line 13, in <module>
-    print("encryption:", doc.metadata.get("encryption"))
-AttributeError: 'NoneType' object has no attribute 'get'
-```
-
-i.e. the three required facts hold; the tool's own `doc.metadata` line is what fails, not the file.
-
-The three implemented algorithms were cross-checked against MuPDF's source
-(`source/pdf/pdf-crypt.c`, fetched) and against files MuPDF itself generated (`/U` and `/UE`
-reproduced round-for-round, 93 and 66 rounds in the two distinguishing samples).
-
-## Commits
-
-- `7eaef61` L3: AES-256 Protect PDF (V5/R6 AESV3), Unicode passwords, Protect/Unlock sheets
-- (this report) L3: report
+AES-256 PDF protection (V5/R6 AESV3, Unicode passwords), Protect/Unlock sheets, ProtectPolicy
+(tries/cooldown), `PdfAes`/`PdfEncryptor`/`PdfVerifier` work and the host check with PyMuPDF are
+described in the previous report revision; the last session-1 gate was
+`GATE PASS L3 tests=853`. That work is merged by the lead.

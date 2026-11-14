@@ -358,7 +358,7 @@ class BookPagesActivity : BaseActivity() {
 
     companion object {
         /** Previews are decodes for the screen only; the create path decodes at 3000 px. */
-        private const val PREVIEW_MAX_DIM = 1200
+        private const val PREVIEW_MAX_DIM = 900
 
         fun intent(context: Context): Intent = Intent(context, BookPagesActivity::class.java)
     }
