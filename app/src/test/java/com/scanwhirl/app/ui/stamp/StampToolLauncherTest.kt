@@ -40,7 +40,8 @@ class StampToolLauncherTest {
     private val repo get() = ScanRepository(context)
 
     private fun clickItem(index: Int) {
-        (ShadowDialog.getLatestDialog() as AlertDialog).listView.performItemClick(null, index, 0)
+        // v2 UI: 03_tools_hub — the shared chooser is now a kit SwSheet (rows in swSheetItems).
+        ShadowDialog.getLatestDialog().findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
         shadowOf(Looper.getMainLooper()).idle()
     }
 
@@ -65,9 +66,9 @@ class StampToolLauncherTest {
         StampToolLauncher.open(host, "redact")
 
         val chooser = requireNotNull(ShadowDialog.getLatestDialog()) { "a document chooser opens" }
-        assertTrue("Merge/Compress' chooser is reused", chooser is AlertDialog)
-        val list = (chooser as AlertDialog).listView
-        assertEquals("the saved document is listed", 1, list.adapter.count)
+        // v2 UI: 03_tools_hub — Merge/Compress' chooser is reused; it is a kit SwSheet now.
+        val rows = chooser.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+        assertEquals("the saved document is listed", 1, rows.childCount)
         clickItem(0)
 
         val started = requireNotNull(shadowOf(host).nextStartedActivity) { "the editor starts" }
