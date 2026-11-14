@@ -23,6 +23,7 @@ import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PageStamp
 import com.scanwhirl.app.util.PdfImport
+import com.scanwhirl.app.util.PdfImportBudget
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
@@ -1712,6 +1713,29 @@ class ScanRepository(private val context: Context) {
      *    can explain (password, damaged, too large, no space, no access…).
      *  - The new document is marked for text recognition; the caller queues it.
      */
+    /** How a planned PDF import continues after the pre-check sheet. */
+    sealed interface ImportDecision {
+        data object All : ImportDecision
+        data class Pages(val indices: List<Int>) : ImportDecision
+        data object Cancel : ImportDecision
+    }
+
+    /**
+     * Imports a device PDF after a pre-check. [onPlan] is called with the page count, the size
+     * estimate and free space when the PDF is big (>50 pages or >25% of free space); it runs
+     * while the seekable copy is open. Pages are rendered one at a time and the document is
+     * published only when every chosen page is written. A cancel returns null and leaves nothing.
+     */
+    suspend fun importPdfAsScanPlanned(
+        uri: Uri,
+        name: String?,
+        dpi: Float = 150f,
+        maxDim: Int = 2048,
+        quality: Int = 85,
+        onPlan: suspend (PdfImportBudget.Plan) -> ImportDecision,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): ScanDocument? = importPdfInternal(uri, name, dpi, maxDim, quality, vaulted = false, onPlan, onPage)
+
     private suspend fun importPdf(
         uri: Uri,
         name: String?,
@@ -1719,15 +1743,65 @@ class ScanRepository(private val context: Context) {
         maxDim: Int,
         quality: Int,
         vaulted: Boolean
-    ): ScanDocument = withContext(Dispatchers.IO) {
+    ): ScanDocument = importPdfInternal(uri, name, dpi, maxDim, quality, vaulted, null, null)
+        ?: throw IllegalStateException("Import cancelled")
+
+    private suspend fun importPdfInternal(
+        uri: Uri,
+        name: String?,
+        dpi: Float,
+        maxDim: Int,
+        quality: Int,
+        vaulted: Boolean,
+        onPlan: (suspend (PdfImportBudget.Plan) -> ImportDecision)?,
+        onPage: ((Int, Int) -> Unit)?
+    ): ScanDocument? = withContext(Dispatchers.IO) {
         val staging = File(importStagingDir, UUID.randomUUID().toString().take(12))
         if (!staging.mkdirs()) throw PdfImport.ImportException(PdfImport.Reason.SAVE_FAILED, "Could not prepare the import")
         try {
-            PdfImport.withSeekableCopy(context, uri) { fd, sourceBytes ->
+            val rendered = PdfImport.withSeekableCopy(context, uri) { fd, sourceBytes ->
                 importFault(ImportStage.COPIED)
-                PdfImport.renderAll(fd, sourceBytes, staging, usableSpace(docsDir), dpi, maxDim, quality) {
-                    importFault(ImportStage.PAGE_RENDERED)
+                val pageCount = PdfImport.pageCount(fd)
+                val plan = PdfImportBudget.plan(
+                    pageCount, usableSpace(docsDir), PdfImportBudget.pageBytes(maxDim)
+                )
+                if (plan.tooLittleSpace) {
+                    throw PdfImport.ImportException(
+                        PdfImport.Reason.NO_SPACE,
+                        context.getString(
+                            R.string.tools_import_no_space,
+                            plan.estimateBytes / (1024 * 1024),
+                            plan.freeBytes / (1024 * 1024)
+                        ),
+                        pages = pageCount
+                    )
                 }
+                val decision = if (plan.needsDecision && onPlan != null) {
+                    onPlan(plan)
+                } else {
+                    ImportDecision.All
+                }
+                val indices = when (decision) {
+                    ImportDecision.All -> (0 until pageCount).toList()
+                    is ImportDecision.Pages -> decision.indices.distinct().sorted()
+                    ImportDecision.Cancel -> emptyList()
+                }
+                if (indices.isEmpty()) {
+                    false
+                } else {
+                    val source = PdfImport.PdfRendererSource(fd, dpi, maxDim, quality)
+                    source.use {
+                        PdfImport.renderPages(it, staging, indices, usableSpace(docsDir)) { done, total ->
+                            importFault(ImportStage.PAGE_RENDERED)
+                            onPage?.invoke(done, total)
+                        }
+                    }
+                    true
+                }
+            }
+            if (!rendered) {
+                staging.deleteRecursively()
+                return@withContext null
             }
             currentCoroutineContext().ensureActive()
             val pdfFile = File(staging, "scan.pdf")

@@ -58,6 +58,21 @@
     <string name="tools_setup_excel_all_text">All text</string>
     <string name="tools_setup_excel_note">Finds tables in the stored text. Other pages go in as plain text.</string>
     <string name="tools_excel_no_table">No table found on this page.</string>
+
+    <!-- v2 UI: 03_tools_hub - big PDF import -->
+    <string name="tools_import_plan_title">This PDF has %1$d pages</string>
+    <string name="tools_import_plan_msg">About %1$s needed; %2$s free. Import all, or choose pages.</string>
+    <string name="tools_import_all">Import all</string>
+    <string name="tools_import_choose_pages">Choose pages</string>
+    <string name="tools_import_range_title">Choose pages</string>
+    <string name="tools_import_range_msg">Pages to import, for example 1-20, 45.</string>
+    <string name="tools_import_range_error">Type pages like 1-20, 45.</string>
+    <string name="tools_import_pages">Import pages</string>
+    <string name="tools_import_progress_title">Importing…</string>
+    <string name="tools_import_progress_msg">Page %1$d of %2$d</string>
+    <string name="tools_import_starting">Preparing the PDF…</string>
+    <string name="tools_import_cancel_note">Cancel stops the import. Nothing is added.</string>
+    <string name="tools_import_no_space">This PDF needs %1$d MB and would leave %2$d MB free. Free space first.</string>
     <string name="tools_setup_no_text">No recognised text yet. Open the document and read it first.</string>
     <string name="tools_setup_metadata_note">A clean copy without EXIF or thumbnails. The original is kept.</string>
     <string name="tools_setup_id_note">Front on top, back below, on one A4 page.</string>

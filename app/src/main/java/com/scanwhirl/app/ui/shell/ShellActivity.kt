@@ -42,10 +42,14 @@ import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.launchTool
+import com.scanwhirl.app.ui.tools.PdfImportSheets
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 /**
  * v2 UI: 01_home_A / 03_tools_hub / 06_pro — the v2 shell.
@@ -569,17 +573,42 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     // ---- Import -----------------------------------------------------------
 
     private fun importPdf(uri: android.net.Uri) {
-        var job: kotlinx.coroutines.Job? = null
-        val progress = SwDialog.progress(this, titleRes = R.string.import_pdf_progress) { job?.cancel() }
+        var job: Job? = null
+        var progress: SwSheet? = null
         job = lifecycleScope.launch {
             try {
                 val name = withContext(Dispatchers.IO) {
                     runCatching { repo.displayNameOf(uri) }.getOrNull()
                 }?.removeSuffix(".pdf")?.removeSuffix(".PDF")
                     ?.takeIf { it.isNotBlank() } ?: "Imported PDF"
-                val doc = repo.importPdfAsScan(uri, name)
+                val doc = repo.importPdfAsScanPlanned(
+                    uri = uri,
+                    name = name,
+                    onPlan = { plan ->
+                        val decision = withContext(Dispatchers.Main) {
+                            suspendCancellableCoroutine<ScanRepository.ImportDecision> { cont ->
+                                PdfImportSheets.ask(this@ShellActivity, plan) { cont.resume(it) }.show()
+                            }
+                        }
+                        if (decision != ScanRepository.ImportDecision.Cancel) {
+                            progress = withContext(Dispatchers.Main) {
+                                PdfImportSheets.progress(this@ShellActivity) { job?.cancel() }
+                                    .also { it.show() }
+                            }
+                        }
+                        decision
+                    },
+                    onPage = { done, total ->
+                        runOnUiThread {
+                            progress?.setMessage(
+                                PdfImportSheets.progressText(this@ShellActivity, done, total)
+                            )
+                        }
+                    }
+                )
+                progress?.dismiss()
+                if (doc == null) return@launch
                 ScanWhirlApp.from(this@ShellActivity).indexer.enqueue(doc.id)
-                progress.dismiss()
                 library.reload()
                 Toast.makeText(
                     this@ShellActivity,
@@ -588,10 +617,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 ).show()
                 openDocument(doc.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
-                progress.dismiss()
+                progress?.dismiss()
                 throw e
             } catch (e: Exception) {
-                progress.dismiss()
+                progress?.dismiss()
                 SwSheet.builder(this@ShellActivity)
                     .setTitle(getString(R.string.import_title))
                     .setMessage(e.message ?: getString(R.string.import_failed_save))
