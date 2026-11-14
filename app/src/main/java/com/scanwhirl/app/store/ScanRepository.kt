@@ -1004,40 +1004,38 @@ class ScanRepository(private val context: Context) {
     suspend fun duplicateDocument(id: String, suggestedName: String?): ScanDocument =
         withContext(Dispatchers.IO) {
             val src = File(docsDir, id)
-            if (!src.exists()) throw IllegalStateException("Scan not found")
-            val newId = UUID.randomUUID().toString().take(8)
-            val dest = File(docsDir, newId).apply { mkdirs() }
-            src.listFiles()?.forEach { f ->
-                if (f.isFile) f.copyTo(File(dest, f.name), overwrite = true)
-            }
+            if (loadDocument(src) == null) throw IllegalStateException("Scan not found")
             val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
                 ?: nextDocumentName()
             // A copy keeps its original category when it has one.
-            val inherited = src.listFiles { f -> f.name == "meta.txt" }
-                ?.firstOrNull()?.readLines()?.getOrNull(2)
+            val inherited = File(src, "meta.txt").readLines().getOrNull(2)
                 ?.takeIf { CategoryRules.isValid(it) }
-            // T4.8: exported copies belong to the original — a duplicate
-            // starts with none of its own.
-            val destMeta = File(dest, "meta.txt")
-            if (destMeta.exists()) {
-                destMeta.writeText(
-                    destMeta.readLines()
-                        .filterNot {
+            val files = src.listFiles { f -> f.isFile && !f.name.startsWith(".") }.orEmpty()
+            buildAndPublish(name, inherited, files.sumOf { it.length() }, copyPdf = true) { s ->
+                files.forEachIndexed { i, f ->
+                    currentCoroutineContext().ensureActive()
+                    if (f.name == "meta.txt") {
+                        // T4.8: exported copies belong to the original — a duplicate starts with none.
+                        val kept = f.readLines().filterNot {
                             it.startsWith(EXPORTS_KEY) || it.startsWith(EXPORT_SIGS_KEY) ||
                                 it.startsWith(EXPORT_MADE_KEY)
                         }
-                        .joinToString("\n")
-                )
+                        Durable.writeFile(
+                            File(s, "meta.txt"),
+                            (kept.joinToString("\n") + "\n").toByteArray(Charsets.UTF_8)
+                        )
+                    } else {
+                        Durable.copyFile(f, File(s, f.name))
+                    }
+                    OpFaults.at("op:page:$i")
+                }
             }
-            writeMeta(dest, name, inherited)
-            loadDocument(dest) ?: throw IllegalStateException("Copy could not be opened")
         }
 
     /**
-     * test26 T5.2 (§4.5): Extract — saves the given pages as a brand-new
-     * document (new dir, pages renumbered, PDF regenerated from the subset).
-     * The original is untouched and keeps its exported copies; the category is
-     * inherited, like [duplicateDocument].
+     * test26 T5.2 (§4.5): Extract — saves the given pages as a brand-new document (new dir, pages
+     * renumbered, PDF generated from the subset). The original is untouched and keeps its exported
+     * copies; the category is inherited, like [duplicateDocument].
      */
     suspend fun extractPages(id: String, pageIndices: List<Int>): ScanDocument =
         withContext(Dispatchers.IO) {
@@ -1048,18 +1046,14 @@ class ScanRepository(private val context: Context) {
             require(indices.isNotEmpty()) { "No pages selected" }
             require(indices.all { it in doc.pageFiles.indices }) { "No such page" }
 
-            val (newId, dir) = newDocDir()
-            indices.forEachIndexed { i, srcIdx ->
-                doc.pageFiles[srcIdx].copyTo(
-                    File(dir, String.format(Locale.ROOT, PAGE_FORMAT, i)),
-                    overwrite = true
-                )
-            }
             val first = indices.first() + 1
             val last = indices.last() + 1
             val name = if (first == last) "${doc.name} (page $first)"
             else "${doc.name} (pages $first–$last)"
-            finalizeDoc(newId, dir, name, doc.category)
+            val chosen = indices.map { doc.pageFiles[it] }
+            buildAndPublish(name, doc.category, chosen.sumOf { it.length() }) { staging ->
+                chosen.forEachIndexed { i, f -> stagePageCopy(f, staging, i) }
+            }
         }
 
     suspend fun mergeDocuments(
@@ -1085,26 +1079,22 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Merges device PDFs (content Uris) in the given order. Pages are rendered
-     * and written to disk one at a time — no page-byte list is ever held in
+     * and written to staging one at a time — no page-byte list is ever held in
      * memory, so merging many or large PDFs cannot OOM.
      */
     suspend fun mergePdfUris(uris: List<Uri>, suggestedName: String?): ScanDocument =
         withContext(Dispatchers.IO) {
             require(uris.size >= 2) { "Pick at least 2 PDFs" }
-            val (id, dir) = newDocDir()
-            try {
+            val name = suggestedName ?: defaultMergedName("Merged PDF")
+            buildAndPublish(name, null, 0L) { staging ->
                 var pageNum = 0
                 for (uri in uris) {
                     // SAF PDFs are often pipes; the renderer needs a seekable fd.
                     pageNum += PdfPageRenderer.withSeekablePdf(context, uri) { fd ->
-                        appendPdfPages(fd, dir, pageNum, dpi = 150f, maxDim = 2048, quality = 85)
+                        appendPdfPages(fd, staging, pageNum, dpi = 150f, maxDim = 2048, quality = 85)
                     }
                 }
                 if (pageNum == 0) throw IllegalStateException("No pages to merge")
-                finalizeDoc(id, dir, suggestedName ?: defaultMergedName("Merged PDF"))
-            } catch (e: Exception) {
-                dir.deleteRecursively()
-                throw e
             }
         }
 
@@ -1124,7 +1114,8 @@ class ScanRepository(private val context: Context) {
         require(count > 0) { "PDF has no pages" }
         for (i in 0 until count) {
             val jpeg = PdfPageRenderer.renderPageJpeg(fd, i, dpi, maxDim, quality)
-            File(dir, String.format(Locale.ROOT, PAGE_FORMAT, start + i)).writeBytes(jpeg)
+            Durable.writeFile(File(dir, String.format(Locale.ROOT, PAGE_FORMAT, start + i)), jpeg)
+            OpFaults.at("op:page:${start + i}")
         }
         return count
     }
@@ -1397,31 +1388,6 @@ class ScanRepository(private val context: Context) {
         return out
     }
 
-    /** Fresh document directory (never finalised: no meta yet). */
-    private fun newDocDir(): Pair<String, File> {
-        val id = UUID.randomUUID().toString().take(8)
-        return id to File(docsDir, id).apply { mkdirs() }
-    }
-
-    /** Writes the name/meta, generates the PDF, and returns the listed document. */
-    private fun finalizeDoc(
-        id: String,
-        dir: File,
-        suggestedName: String?,
-        category: String? = null
-    ): ScanDocument {
-        val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
-            ?: nextDocumentName()
-        writeMeta(dir, name, category)
-        val pdfFile = File(dir, "scan.pdf")
-        try {
-            writePdf(dir, pdfFile) // PDF is always written; layers may be empty
-        } catch (_: Exception) {
-            pdfFile.delete()
-        }
-        return loadDocument(dir) ?: throw IllegalStateException("Scan could not be saved").also { ocrStore.markPending(id) }
-    }
-
     /** "Merged PDF <timestamp>" when no name is given. */
     private fun defaultMergedName(prefix: String): String =
         "$prefix ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())}"
@@ -1435,15 +1401,13 @@ class ScanRepository(private val context: Context) {
         pageBytes: List<ByteArray>
     ): ScanDocument = withContext(Dispatchers.IO) {
         require(pageBytes.isNotEmpty()) { "No pages" }
-
-        val (id, dir) = newDocDir()
-
         pageBytes.forEachIndexed { index, bytes ->
             require(bytes.isNotEmpty()) { "Page ${index + 1} is empty" }
-            File(dir, String.format(Locale.ROOT, PAGE_FORMAT, index)).writeBytes(bytes)
         }
-
-        finalizeDoc(id, dir, name)
+        val docName = name?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() } ?: nextDocumentName()
+        buildAndPublish(docName, null, pageBytes.sumOf { it.size.toLong() }) { staging ->
+            pageBytes.forEachIndexed { i, bytes -> stagePageBytes(bytes, staging, i) }
+        }
     }
 
     /** Copies a scan with pages re-encoded at [quality] (optionally downscaled to [maxDim]). */
@@ -1454,10 +1418,12 @@ class ScanRepository(private val context: Context) {
     ): ScanDocument = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
-        val compressed = doc.pageFiles.map { file ->
-            ImageTools.recompressJpeg(file.readBytes(), quality, maxDim)
+        buildAndPublish("${doc.name} (compressed)", null, doc.pageFiles.sumOf { it.length() }) { staging ->
+            // One page's bytes are alive at a time; the source list is never materialised.
+            doc.pageFiles.forEachIndexed { i, file ->
+                stagePageBytes(ImageTools.recompressJpeg(file.readBytes(), quality, maxDim), staging, i)
+            }
         }
-        createDocument("${doc.name} (compressed)", compressed)
     }
 
     /**
