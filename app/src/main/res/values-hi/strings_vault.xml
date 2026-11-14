@@ -2,9 +2,17 @@
 <resources>
     <!-- L2 v2 Vault (04_vault). Hindi values await native review. -->
     <string name="vault_screen_title"><!-- review -->वॉल्ट</string>
-    <plurals name="vault_files_protected">
-        <item quantity="one"><!-- review -->%d फ़ाइल सुरक्षित</item>
-        <item quantity="other"><!-- review -->%d फ़ाइलें सुरक्षित</item>
+    <plurals name="vault_documents_protected">
+        <item quantity="one"><!-- review -->%d दस्तावेज़ सुरक्षित</item>
+        <item quantity="other"><!-- review -->%d दस्तावेज़ सुरक्षित</item>
+    </plurals>
+    <plurals name="vault_pages">
+        <item quantity="one"><!-- review -->%d पेज</item>
+        <item quantity="other"><!-- review -->%d पेज</item>
+    </plurals>
+    <plurals name="vault_file_count">
+        <item quantity="one"><!-- review -->%d फ़ाइल</item>
+        <item quantity="other"><!-- review -->%d फ़ाइलें</item>
     </plurals>
     <string name="vault_stats_body"><!-- review -->AES-256 · कुंजी इस फ़ोन के सुरक्षित चिप में बंद है\nऐप छोड़ते ही वॉल्ट बंद हो जाता है</string>
     <string name="vault_locked_title"><!-- review -->वॉल्ट बंद है</string>
@@ -16,6 +24,8 @@
     <string name="vault_banner_recovery"><!-- review -->रिकवरी कोड से खुला · 2 मिनट में फिर बंद</string>
     <string name="vault_banner_locked"><!-- review -->बंद · फ़िंगरप्रिंट या पासकोड</string>
     <string name="vault_private_files"><!-- review -->निजी फ़ाइलें</string>
+    <string name="vault_locked_placeholder"><!-- review -->अपनी फ़ाइलें देखने के लिए वॉल्ट खोलें।</string>
+    <string name="vault_still_locked"><!-- review -->अभी भी बंद है। वॉल्ट खोलें दबाकर फिर कोशिश करें।</string>
     <string name="vault_add_files"><!-- review -->+ फ़ाइलें जोड़ें</string>
     <string name="vault_recovery_button"><!-- review -->रिकवरी कोड</string>
     <string name="vault_backup_button"><!-- review -->बैकअप फ़ाइल</string>
@@ -25,8 +35,8 @@
     <string name="vault_empty_body"><!-- review -->लाइब्रेरी से दस्तावेज़ जोड़ें। सादी कॉपी हटाने से पहले फ़ाइलें एन्क्रिप्ट हो जाती हैं।</string>
     <string name="vault_locked_desc"><!-- review -->वॉल्ट बंद करें</string>
     <string name="vault_more_desc"><!-- review -->वॉल्ट विकल्प</string>
-    <string name="vault_entry_meta"><!-- review -->%1$d पेज · %2$s · %3$s</string>
-    <string name="vault_entry_meta_files"><!-- review -->%1$d पेज · %2$d फ़ाइलें · %3$s</string>
+    <string name="vault_entry_meta"><!-- review -->%1$s · %2$s · %3$s</string>
+    <string name="vault_entry_meta_files"><!-- review -->%1$s · %2$s</string>
 
     <string name="vault_setup_sheet_title"><!-- review -->अपना वॉल्ट सेट करें</string>
     <string name="vault_setup_note"><!-- review -->6 या ज़्यादा अंकों का पासकोड चुनें। यही इस फ़ोन पर वॉल्ट खोलता है।</string>
@@ -51,13 +61,20 @@
     <string name="vault_finish"><!-- review -->सेटअप पूरा करें</string>
 
     <string name="vault_unlock_sheet_title"><!-- review -->वॉल्ट खोलें</string>
-    <string name="vault_unlock_note"><!-- review -->अपना फ़िंगरप्रिंट इस्तेमाल करें, या पासकोड डालें।</string>
+    <string name="vault_unlock_note_fingerprint"><!-- review -->अपना फ़िंगरप्रिंट इस्तेमाल करें, या पासकोड डालें।</string>
+    <string name="vault_unlock_note_passcode"><!-- review -->अपना पासकोड डालें।</string>
     <string name="vault_passcode_hint_generic"><!-- review -->पासकोड</string>
     <string name="vault_unlock_primary"><!-- review -->खोलें</string>
-    <string name="vault_unlock_wrong"><!-- review -->ग़लत पासकोड</string>
+    <plurals name="vault_unlock_wrong_left">
+        <item quantity="one"><!-- review -->ग़लत पासकोड। %d कोशिश बाकी।</item>
+        <item quantity="other"><!-- review -->ग़लत पासकोड। %d कोशिशें बाकी।</item>
+    </plurals>
     <string name="vault_unlock_pause"><!-- review -->बहुत बार ग़लत। %1$d सेकंड बाद फिर कोशिश करें।</string>
     <string name="vault_use_fingerprint"><!-- review -->फ़िंगरप्रिंट इस्तेमाल करें</string>
     <string name="vault_use_passcode"><!-- review -->पासकोड इस्तेमाल करें</string>
+    <string name="vault_not_now"><!-- review -->अभी नहीं</string>
+    <string name="vault_fingerprint_setup_title"><!-- review -->वॉल्ट के लिए फ़िंगरप्रिंट इस्तेमाल करें?</string>
+    <string name="vault_fingerprint_setup_note"><!-- review -->फ़िंगरप्रिंट पुष्ट करें, अगली बार वॉल्ट बिना पासकोड खुलेगा।</string>
     <string name="vault_fingerprint_failed"><!-- review -->फ़िंगरप्रिंट से वॉल्ट नहीं खुला। पासकोड इस्तेमाल करें।</string>
     <string name="vault_fingerprint_unavailable"><!-- review -->इस वॉल्ट के लिए फ़िंगरप्रिंट उपलब्ध नहीं है। पासकोड इस्तेमाल करें।</string>
     <string name="vault_fingerprint_reset"><!-- review -->फ़िंगरप्रिंट बदल गए। एक बार पासकोड से खोलें, फिर फ़िंगरप्रिंट चालू हो जाएगा।</string>

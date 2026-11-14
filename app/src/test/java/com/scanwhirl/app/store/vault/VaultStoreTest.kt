@@ -116,8 +116,11 @@ class VaultStoreTest {
     fun `the biometric challenge opens the vault only when the cipher completes`() {
         val store = store()
         store.setup("246810")
+        assertFalse("a fresh setup has no fingerprint wrap yet", store.canUseBiometric())
+
+        assertTrue(store.completeKeystoreWrap(store.beginKeystoreWrap()))
+        assertTrue("the wrap makes the fingerprint available", store.canUseBiometric())
         store.lock()
-        assertTrue("a valid Keystore key exists", store.canUseBiometric())
 
         val challenge = store.beginBiometricUnlock()
         assertNotNull("the prompt gets a CryptoObject cipher", challenge.cipher)
@@ -128,10 +131,38 @@ class VaultStoreTest {
     }
 
     @Test
-    fun `an invalidated keystore key falls back to the passcode and is re-wrapped`() {
+    fun `a vault from the previous build still unlocks with the passcode`() {
+        // The previous build wrote keystore.bin with a Keystore key that no longer exists after
+        // the upgrade (old alias), and no password list. Everything else is the same format.
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Old private document")
+        val previous = store()
+        val setup = previous.setup("135790")
+        previous.addDocument(id)
+        previous.lock()
+
+        val upgraded = VaultStore(
+            context = app,
+            repo = repo,
+            keys = FakeVaultKeys(), // same phone, but the old Keystore key is gone
+            gate = VaultPasscodeGate(),
+            iterations = fastIterations
+        )
+        assertTrue("the vault is still set up", upgraded.isSetUp())
+        assertFalse("no usable fingerprint key, so the passcode is the offer", upgraded.canUseBiometric())
+
+        val result = upgraded.unlockWithPasscode("135790")
+        assertTrue("the passcode from the previous build still opens the vault", result.ok)
+        assertTrue(upgraded.isUnlocked())
+        assertEquals(listOf(id), upgraded.listEntries().map { it.id })
+        assertEquals(24, VaultCrypto.normalizeRecoveryCode(setup.recoveryCode).length)
+    }
+
+    @Test
+    fun `an invalidated keystore key falls back to the passcode and a new wrap is created`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Passport")
         val store = store()
         store.setup("246810")
+        assertTrue(store.completeKeystoreWrap(store.beginKeystoreWrap()))
         store.addDocument(id)
         store.lock()
 
@@ -139,10 +170,13 @@ class VaultStoreTest {
         assertFalse("the dead key is not offered", store.canUseBiometric())
         assertThrows(VaultKeyInvalidatedException::class.java) { store.beginBiometricUnlock() }
 
-        // The user unlocks with the passcode and the store rebuilds the fingerprint wrap.
+        // The user unlocks with the passcode; the screen then asks the prompt for a new wrap.
         assertTrue(store.unlockWithPasscode("246810").ok)
-        assertTrue(store.canUseBiometric())
+        assertFalse("the wrap is not silently recreated without authentication", store.canUseBiometric())
         assertEquals(listOf(id), store.listEntries().map { it.id })
+
+        assertTrue(store.completeKeystoreWrap(store.beginKeystoreWrap()))
+        assertTrue(store.canUseBiometric())
 
         // The fresh key can unwrap the same vault key again.
         store.lock()
