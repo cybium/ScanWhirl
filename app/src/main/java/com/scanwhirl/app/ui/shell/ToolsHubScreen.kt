@@ -9,6 +9,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -32,6 +33,7 @@ class ToolsHubScreen(
 ) : LinearLayout(context) {
 
     val searchInput: EditText
+    private lateinit var clearButton: ImageButton
     val body: LinearLayout
 
     init {
@@ -86,10 +88,29 @@ class ToolsHubScreen(
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(s: Editable?) = render(s?.toString().orEmpty())
+                override fun afterTextChanged(s: Editable?) {
+                    render(s?.toString().orEmpty())
+                    if (::clearButton.isInitialized) {
+                        clearButton.isVisible = !s.isNullOrBlank()
+                    }
+                }
             })
         }
         box.addView(searchInput, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        clearButton = SwStyle.iconButton(
+            context, R.drawable.ic_sym_close, SwStyle.color(context, R.color.text_hologram_dim)
+        ).apply {
+            id = R.id.swToolsClear
+            contentDescription = context.getString(R.string.tools_clear_search)
+            layoutParams = LayoutParams(SwStyle.dp(context, 36f), SwStyle.dp(context, 36f))
+            isVisible = false
+            setOnClickListener {
+                searchInput.setText("")
+                render("")
+                isVisible = false
+            }
+        }
+        box.addView(clearButton)
         addView(
             box,
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)).apply {
@@ -109,6 +130,7 @@ class ToolsHubScreen(
 
     /** Rebuilds the body for [query]; blank shows every group. */
     fun render(query: String) {
+        if (::clearButton.isInitialized) clearButton.isVisible = query.isNotBlank()
         body.removeAllViews()
         if (query.isBlank()) {
             for ((group, tools) in ToolRegistry.grouped()) {
@@ -116,7 +138,7 @@ class ToolsHubScreen(
             }
             return
         }
-        val hits = ToolRegistry.search(query)
+        val hits = ToolRegistry.search(context, query)
         if (hits.isEmpty()) {
             body.addView(
                 SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_dim)).apply {
@@ -130,6 +152,13 @@ class ToolsHubScreen(
             return
         }
         body.addView(section(null, hits))
+    }
+
+    /** v2 UI: 03_tools_hub — entering the tab from the nav starts from the full catalogue. */
+    fun clearSearch() {
+        searchInput.setText("")
+        render("")
+        if (::clearButton.isInitialized) clearButton.isVisible = false
     }
 
     private fun section(group: ToolGroup?, tools: List<SwTool>): View {

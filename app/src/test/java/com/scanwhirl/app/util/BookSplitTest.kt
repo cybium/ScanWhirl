@@ -110,6 +110,43 @@ class BookSplitTest {
         }
     }
 
+    /** A close-up of one page on a dark table: one text block, no fold. */
+    private fun singlePage(): Bitmap {
+        val bitmap = Bitmap.createBitmap(800, 600, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.rgb(45, 42, 40))
+        val canvas = Canvas(bitmap)
+        canvas.drawRect(
+            60f, 40f, 760f, 560f,
+            Paint().apply { color = Color.rgb(242, 238, 228) }
+        )
+        val ink = Paint().apply { color = Color.rgb(40, 38, 36); strokeWidth = 2f }
+        var y = 90f
+        while (y < 540f) {
+            canvas.drawLine(120f, y, 700f, y, ink)
+            y += 12f
+        }
+        return bitmap
+    }
+
+    @Test
+    fun `a one-page close-up has no fold and is offered as one page`() {
+        val bitmap = singlePage()
+        val gutter = BookSplit.scanGutter(bitmap)
+        assertFalse("there is no two-page fold to find", gutter.found)
+        assertEquals("the line sits in the middle for review", 0.5f, gutter.ratio, 0.001f)
+        assertTrue("one text block + no valley is a single page", gutter.singlePage)
+        bitmap.recycle()
+    }
+
+    @Test
+    fun `a uniform bitmap is not offered as one page`() {
+        val bitmap = spread(darkBand = null)
+        val gutter = BookSplit.scanGutter(bitmap)
+        assertFalse(gutter.found)
+        assertFalse("no text and no page shape", gutter.singlePage)
+        bitmap.recycle()
+    }
+
     @Test
     fun `decode samples a large spread to at most 3000 px on the long side`() {
         val big = Bitmap.createBitmap(3200, 1600, Bitmap.Config.ARGB_8888)

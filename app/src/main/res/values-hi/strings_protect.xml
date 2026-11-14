@@ -5,7 +5,10 @@
     <string name="protect_change_title"><!-- review -->पासवर्ड बदलें</string>
     <string name="protect_close"><!-- review -->बंद करें</string>
     <string name="protect_sheet_note"><!-- review -->इस PDF को खोलने वाले को पासवर्ड डालना होगा, किसी भी PDF ऐप में, किसी भी डिवाइस पर।</string>
-    <string name="protect_doc_meta"><!-- review -->%1$d पेज · %2$s</string>
+    <plurals name="protect_doc_meta">
+        <item quantity="one"><!-- review -->%1$d पेज · %2$s</item>
+        <item quantity="other"><!-- review -->%1$d पेज · %2$s</item>
+    </plurals>
     <string name="protect_label_password"><!-- review -->पासवर्ड</string>
     <string name="protect_label_confirm"><!-- review -->फिर से लिखें</string>
     <string name="protect_password_hint"><!-- review -->पासवर्ड</string>
@@ -41,7 +44,10 @@
 
     <!-- L3 + L2: remembered PDF passwords in the Vault. -->
     <string name="vault_password_not_saved"><!-- review -->पासवर्ड Vault में सहेजा नहीं गया।</string>
+    <string name="import_unlock_note"><!-- review -->इसके पृष्ठ आयात करने के लिए पासवर्ड डालें। मूल फ़ाइल नहीं बदलेगी।</string>
+    <string name="import_unlock_unsupported"><!-- review -->यह PDF ऐसा पासवर्ड प्रारूप उपयोग करता है जिसे ScanWhirl नहीं खोल सकता। इसे बनाने वाले ऐप में हटाएँ।</string>
+    <string name="import_unlock_failed"><!-- review -->यह PDF आयात नहीं हो सका: %1$s</string>
+    <string name="vault_reason_use_password"><!-- review -->सहेजा पासवर्ड उपयोग करने के लिए Vault खोलें।</string>
     <string name="vault_password_missing"><!-- review -->कोई सहेजा पासवर्ड नहीं। उसे टाइप करें।</string>
     <string name="vault_password_stale"><!-- review -->सहेजा पासवर्ड काम नहीं आया। उसे टाइप करें।</string>
-    <string name="vault_unlock_to_save"><!-- review -->यह पासवर्ड सहेजने के लिए Vault खोलें।</string>
 </resources>

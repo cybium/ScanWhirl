@@ -222,6 +222,8 @@ internal object OcrScriptRecognizers {
         OcrScript.LATIN ->
             TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         OcrScript.DEVANAGARI ->
-            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) // TEMP-LOCAL-CHECK
+            TextRecognition.getClient(
+                com.google.mlkit.vision.text.devanagari.TextRecognizerOptions.DEFAULT_OPTIONS
+            )
     }
 }

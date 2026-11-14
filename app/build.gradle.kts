@@ -123,6 +123,8 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     // QR code reader tool (lead-approved): Google code scanner UI, same delivery model as the document scanner; no camera permission.
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // Hindi OCR (lead-approved, PM-6.3): bundled Devanagari model, works fully offline.
+    implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

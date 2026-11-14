@@ -36,6 +36,32 @@ class LockGuardTest {
     private fun dirOf(id: String) = File(docsDir, id)
     private fun pdfOf(id: String) = File(dirOf(id), "scan.pdf")
 
+    /**
+     * The viewer's locked-document thumbnails come from `page_*.jpg`, which PM-3.1b keeps by
+     * design: protect builds the plaintext PDF in OpStaging from them, and unlock/edit rebuild
+     * from them. I3 covers `scan.pdf` (it is encrypted and `locked.meta` exists); no plaintext
+     * PDF exists. This pins the answer to "thumbnails after Protect".
+     */
+    @Test fun `a locked document keeps its page sources but no plaintext PDF`() {
+        val id = DocFixtures.locked(repo, app, password = "1234", pages = 2)
+        val doc = repo.getDocument(id)!!
+        assertEquals(true, PdfProtection.isEncrypted(doc.pdfFile))
+        assertTrue("the lock record exists", File(dirOf(id), PdfProtection.LOCK_FILE).isFile)
+        val pdfs = dirOf(id).listFiles { f -> f.extension.equals("pdf", true) }
+            .orEmpty().map { it.name }
+        assertEquals("only the encrypted scan.pdf exists", listOf("scan.pdf"), pdfs)
+        assertEquals("page sources remain for thumbnails/edit/unlock", 2, doc.pageFiles.size)
+        doc.pageFiles.forEach { page ->
+            val bytes = page.readBytes()
+            assertEquals("${page.name} is a JPEG", 0xFF, bytes[0].toInt() and 0xFF)
+            assertEquals(0xD8, bytes[1].toInt() and 0xFF)
+        }
+        assertTrue(
+            "no plaintext temporary in the document folder",
+            dirOf(id).listFiles().orEmpty().none { it.name.startsWith("plain") }
+        )
+    }
+
     // Pins ScanRepository.requireEditable at the top of the five page mutators.
     @Test fun `page edits on a locked document are refused and leave every byte unchanged`() {
         val ops: List<Pair<String, suspend (String) -> Unit>> = listOf(

@@ -240,13 +240,12 @@ class VaultPasswordsWiringTest {
     }
 
     @Test
-    fun `a locked Vault never blocks protection and stores the password after unlock`() {
+    fun `a locked Vault never blocks protection and the save action still completes`() {
         setUpVault()
         VaultSession.close()
         var unlockRequests = 0
-        VaultPasswordsFlow.unlockLauncher = { _, onReturn ->
+        VaultPasswordsFlow.unlockLauncher = { _, _, onReturn ->
             unlockRequests++
-            assertTrue(vaultStore.unlockWithPasscode(passcode).ok)
             onReturn()
         }
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
@@ -261,34 +260,22 @@ class VaultPasswordsWiringTest {
 
             assertTrue("protection is not blocked by the locked Vault",
                 pollUntil { repo.getDocument(id)!!.isLocked })
-            assertTrue("after unlocking, the password is stored",
-                pollUntil { VaultPasswords.of(app).get(id) == password })
-            assertEquals("the Vault unlock screen opens once", 1, unlockRequests)
-        }
-    }
-
-    @Test
-    fun `cancelling the Vault unlock keeps the protection and says the password was not saved`() {
-        setUpVault()
-        VaultSession.close()
-        VaultPasswordsFlow.unlockLauncher = { _, onReturn -> onReturn() } // user backs out
-        val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
-        val password = "cancel-vault-pw-7"
-
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            waitForHome(scenario, 1)
-            scenario.onActivity { openProtect(it, id) }
-            val sheet = latestSheetWith(R.id.protectPassword)
-            assertNotNull("Protect sheet opens", sheet)
-            scenario.onActivity { submitProtect(sheet!!, password) }
-
-            assertTrue("the PDF is protected anyway", pollUntil { repo.getDocument(id)!!.isLocked })
-            assertTrue("the note is shown",
+            assertTrue("the not-saved note is shown, not a hijacked screen",
                 pollUntil {
                     ShadowToast.getTextOfLatestToast() ==
                         app.getString(R.string.vault_password_not_saved)
                 })
+            assertEquals("the Vault screen never replaces the save action", 0, unlockRequests)
             assertFalse("nothing was saved", VaultPasswordsFlow.has(app, id))
+            var started: String? = null
+            scenario.onActivity {
+                started = shadowOf(it).peekNextStartedActivity()?.component?.className
+            }
+            assertEquals(
+                "the save screen still opens",
+                com.scanwhirl.app.ui.ExportResultActivity::class.java.name,
+                started
+            )
         }
     }
 
@@ -339,7 +326,12 @@ class VaultPasswordsWiringTest {
 
             // The 2-minute grace expires while the sheet is open: tapping must unlock and retry.
             VaultSession.close()
-            VaultPasswordsFlow.unlockLauncher = { _, onReturn ->
+            VaultPasswordsFlow.unlockLauncher = { _, reason, onReturn ->
+                assertEquals(
+                    "the unlock sheet says why the Vault opened",
+                    app.getString(R.string.vault_reason_use_password),
+                    reason
+                )
                 assertTrue(vaultStore.unlockWithPasscode(passcode).ok)
                 onReturn()
             }

@@ -2,11 +2,16 @@ package com.scanwhirl.app.ui.protect
 
 import android.app.Dialog
 import android.view.View
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.NestedScrollView
 import com.google.android.material.button.MaterialButton
 import com.scanwhirl.app.R
 import org.junit.After
@@ -60,6 +65,46 @@ class ProtectSheetTest {
         doc = ProtectSheet.Doc("Rent agreement", 6, 1_200_000L),
         rememberAvailable = rememberAvailable
     ) { password, remember, share -> result.add(Triple(password, remember, share)) }
+
+    @Test
+    fun `the sheet scrolls and caps above the keyboard so the primary button stays reachable`() {
+        val activity = host()
+        val dialog = sheet(activity, rememberAvailable = true)
+        val root = dialog.view<View>(R.id.protectSheet)
+        assertTrue(
+            "the form lives in a scroll container",
+            root is NestedScrollView
+        )
+        assertTrue(
+            "the primary button is inside that container",
+            root.findViewById<View>(R.id.protectShare) != null
+        )
+        assertEquals(
+            "the dialog window resizes for the keyboard",
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+            dialog.window!!.attributes.softInputMode and
+                WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST
+        )
+
+        val screen = activity.resources.displayMetrics.heightPixels
+        root.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(screen, View.MeasureSpec.AT_MOST)
+        )
+        root.layout(0, 0, 1080, root.measuredHeight)
+        val ime = screen / 3
+        ViewCompat.dispatchApplyWindowInsets(
+            root,
+            WindowInsetsCompat.Builder()
+                .setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, ime))
+                .build()
+        )
+        val height = root.layoutParams?.height ?: root.height
+        assertTrue(
+            "the sheet is capped above the IME ($height vs screen $screen, ime $ime)",
+            height <= screen - ime
+        )
+    }
 
     @Test
     fun `the sheet draws the mockup fields and disables protect until the password is safe`() {

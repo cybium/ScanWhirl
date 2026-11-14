@@ -5,6 +5,8 @@ import android.text.InputType
 import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ImageButton
@@ -13,9 +15,14 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.scanwhirl.app.R
+import kotlin.math.min
 
 /**
  * v2 Protect PDF sheet — mockup `05_protect_pdf`, design `70` §4.2.
@@ -52,6 +59,41 @@ object ProtectSheet {
         val root = LayoutInflater.from(activity).inflate(R.layout.sheet_protect, null)
         dialog.setContentView(root)
         dialog.window?.setDimAmount(0.85f)
+        // The form is taller than a phone with the keyboard open: let the window shrink and the
+        // NestedScrollView scroll, so the focused field and the primary button stay reachable.
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        dialog.setOnShowListener {
+            dialog.behavior.isFitToContents = false
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+            val content = (root as? ViewGroup)?.getChildAt(0)
+            val screenHeight = activity.resources.displayMetrics.heightPixels
+            val margin = (24 * activity.resources.displayMetrics.density).toInt()
+            ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+                val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+                val hidden = maxOf(ime, bars)
+                val available = (screenHeight - hidden - margin).coerceAtLeast(margin * 4)
+                val desired = maxOf(content?.height ?: 0, view.height, margin * 4)
+                view.layoutParams = view.layoutParams?.apply {
+                    height = min(desired, available)
+                } ?: ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    min(desired, available)
+                )
+                view.requestLayout()
+                insets
+            }
+            // A real IME dispatch arrives on its own; this also caps a tall sheet without one
+            // (posted so the content has been measured first).
+            root.post {
+                ViewCompat.dispatchApplyWindowInsets(
+                    root,
+                    WindowInsetsCompat.Builder()
+                        .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.NONE)
+                        .build()
+                )
+            }
+        }
 
         root.findViewById<TextView>(R.id.protectTitle).setText(titleRes)
         val chip = root.findViewById<View>(R.id.protectDocChip)
@@ -64,7 +106,9 @@ object ProtectSheet {
         } else if (doc.pages > 0) {
             pagesView.text = doc.pages.toString()
             val size = Formatter.formatShortFileSize(activity, doc.sizeBytes)
-            metaView.text = activity.getString(R.string.protect_doc_meta, doc.pages, size)
+            metaView.text = activity.resources.getQuantityString(
+                R.plurals.protect_doc_meta, doc.pages, doc.pages, size
+            )
         } else {
             pagesView.visibility = View.GONE
             metaView.visibility = View.GONE
