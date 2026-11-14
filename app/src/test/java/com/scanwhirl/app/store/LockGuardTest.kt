@@ -157,14 +157,34 @@ class LockGuardTest {
         assertTrue("protect left plaintext temporaries in the document folder: $leaked", leaked.isEmpty())
     }
 
-    // Pins PdfProtection.isEncodable (F15): the hash and the PDF password must agree.
-    @Test fun `protect refuses a password the PDF cannot encode`() {
+    // v2 security (70 §4.2): R6 takes UTF-8 passwords, so a Unicode password is now valid. It must
+    // protect, verify and unlock with the very same text — the lock hash and the PDF agree.
+    @Test fun `protect accepts a Unicode password and the same text unlocks it`() {
+        val id = DocFixtures.saved(repo, app)
+        val password = "पासवर्ड1"
+        assertTrue("well-formed Unicode is a valid PDF password", PdfProtection.isEncodable(password))
+        runBlocking { repo.protectPdf(id, password) }
+        assertTrue("locked with a Unicode password", repo.getDocument(id)!!.isLocked)
+        assertTrue("the same text verifies", repo.verifyPdfPassword(id, password))
+        assertTrue("a different text does not", !repo.verifyPdfPassword(id, "$password-x"))
+        assertEquals(true, PdfInvariants.trailerEncrypted(pdfOf(id)))
+
+        val unlocked = runBlocking { repo.unlockPdf(id, password) }
+        assertTrue(!unlocked.isLocked)
+        PdfInvariants.assertI3(repo, id)
+        PdfInvariants.assertNoOrphans(app, repo)
+    }
+
+    // A malformed surrogate pair cannot become UTF-8, so protect must refuse it before writing.
+    @Test fun `protect refuses a password that is not well-formed text`() {
         val id = DocFixtures.saved(repo, app)
         val digest = PdfInvariants.dirDigest(dirOf(id))
-        val result = runCatching { runBlocking { repo.protectPdf(id, "पासवर्ड1") } }
-        assertTrue("protect must refuse a password outside Latin-1", result.isFailure)
+        val result = runCatching { runBlocking { repo.protectPdf(id, "abc\uD800def") } }
+        assertTrue("protect must refuse a lone surrogate", result.isFailure)
         assertTrue(!File(dirOf(id), "locked.meta").exists())
         assertEquals(digest, PdfInvariants.dirDigest(dirOf(id)))
+        assertTrue(!PdfProtection.isEncodable("abc\uD800def"))
+        assertTrue(!PdfProtection.isEncodable(""))
     }
 
     // A3 point 5: a review aid, not a sandbox. Only ScanRepository and PdfProtection may name scan.pdf.

@@ -23,8 +23,9 @@
 
         <!-- test26 T3.9: Home is the launcher now; the globe activity stays
              in the tree (unreachable) until T7 removes it. -->
+        <!-- v2 shell: Library · Tools · Scan · Vault · Me (01_home_A). -->
         <activity
-            android:name=".ui.MainActivity"
+            android:name=".ui.shell.ShellActivity"
             android:exported="true"
             android:windowSoftInputMode="stateHidden|adjustResize">
             <intent-filter>
@@ -32,6 +33,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The legacy home is kept until every flow has moved to the shell. -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="false"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
 
         <activity
             android:name=".ui.DocumentViewerActivity"

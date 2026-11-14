@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L3 v2 Protect PDF (mockup 05_protect_pdf) — ids the sheets and their tests use. -->
+    <item name="protectSheet" type="id" />
+    <item name="protectClose" type="id" />
+    <item name="protectDocName" type="id" />
+    <item name="protectDocChip" type="id" />
+    <item name="protectDocMeta" type="id" />
+    <item name="protectDocPages" type="id" />
+    <item name="protectPassword" type="id" />
+    <item name="protectPasswordRow" type="id" />
+    <item name="protectPasswordShow" type="id" />
+    <item name="protectMeter1" type="id" />
+    <item name="protectMeter2" type="id" />
+    <item name="protectMeter3" type="id" />
+    <item name="protectMeter4" type="id" />
+    <item name="protectStrength" type="id" />
+    <item name="protectConfirm" type="id" />
+    <item name="protectConfirmCheck" type="id" />
+    <item name="protectRemember" type="id" />
+    <item name="protectRememberRow" type="id" />
+    <item name="protectShare" type="id" />
+    <item name="protectSave" type="id" />
+
+    <!-- L3 v2 Unlock sheet (mockup 09_unlock_sheet). -->
+    <item name="unlockSheet" type="id" />
+    <item name="unlockPassword" type="id" />
+    <item name="unlockPasswordRow" type="id" />
+    <item name="unlockPasswordShow" type="id" />
+    <item name="unlockError" type="id" />
+    <item name="unlockOpen" type="id" />
+    <item name="unlockVault" type="id" />
+    <item name="unlockCancel" type="id" />
+    <item name="unlockRemove" type="id" />
+</resources>
