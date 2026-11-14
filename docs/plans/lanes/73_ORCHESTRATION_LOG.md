@@ -22,9 +22,11 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 | L2 vault | ses_e2673f395ffesg3lAiuldphAaI | finish Phase B vault UI; biometric/passcode; backup/restore; migration; VaultPasswords API for L3 | running |
 | L3 protect | ses_e2673ceb8ffe1MYGfhQWbVUcue | viewer Protect -> ProtectSheet; Change password sheet; new tool Book pages | running |
 | L4 tools | ses_e2673ad8bffe8h4gyE8XU1TUWK | finish Phase A step 3; merge integration; Phase B ToolSetup + Result; wire 12 tools | running |
-| L5 edit & sign | ses_e2673902dffe4adGDrfK9NBXAw | finish kit restyle; wire 8 Edit & sign tools; redaction warning | running |
+| L5 edit & sign | ses_e2673902dffe4adGDrfK9NBXAw | wave 1 MERGED (16:3x, 929 tests, lint 0). Now wave 2: PM-2.2b -> 2.2c -> 2.3b Organize draft | running |
 
 ## Lead to-do
+- Tell L1 (on its report): ToolRegistry icons swapped - Draw uses ic_sym_highlight, Highlight uses format_list_numbered; fix (draw = ic_sym_draw/gesture, highlight = ic_sym_highlight). Also kit-style the FlowUtil.pickScan chooser in the sweep.
+- Device test batch (one APK build through the queue) once L1 + L4 land: L5 phone checks = drag/resize/rotate, signature draw, redaction, Save-as-new-copy keeps original, Free/Pro.
 - After L3 lands: remove unused `protect_note` from strings.xml / values-hi (L1-owned file; lead does it on integration).
 - After L2 lands: give L3 the "Remember in Vault" / "Use password saved in Vault" wiring (uses VaultPasswords).
 - Release test29 from integration once L1+L4 Phase B are merged and device-checked.
