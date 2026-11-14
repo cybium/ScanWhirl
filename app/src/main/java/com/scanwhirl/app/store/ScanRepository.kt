@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import androidx.core.net.toUri
+import com.scanwhirl.app.R
 import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.OcrStore
@@ -19,6 +20,7 @@ import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
+import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.PdfVerifier
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ScanFilter
@@ -1041,6 +1043,7 @@ class ScanRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             val doc = loadDocument(File(docsDir, id))
                 ?: throw IllegalStateException("Scan not found")
+            refuseLockedSources(listOf(doc))
             val indices = pageIndices.distinct().sorted()
             require(indices.isNotEmpty()) { "No pages selected" }
             require(indices.all { it in doc.pageFiles.indices }) { "No such page" }
@@ -1069,6 +1072,7 @@ class ScanRepository(private val context: Context) {
             val dir = File(docsDir, id)
             loadDocument(dir) ?: throw IllegalStateException("Scan not found: $id")
         }
+        refuseLockedSources(sources)
 
         val id = UUID.randomUUID().toString().take(8)
         val dir = File(docsDir, id).apply { mkdirs() }
@@ -1151,6 +1155,7 @@ class ScanRepository(private val context: Context) {
     suspend fun deletePage(id: String, pageIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
+            requireEditable(dir)
             OcrStore.locked {
                 val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
                 require(pageIndex in doc.pageFiles.indices) { "No such page" }
@@ -1169,6 +1174,7 @@ class ScanRepository(private val context: Context) {
     suspend fun rotatePage(id: String, pageIndex: Int, clockwise: Boolean = true): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
+            requireEditable(dir)
             OcrStore.locked {
                 val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
                 require(pageIndex in doc.pageFiles.indices) { "No such page" }
@@ -1191,6 +1197,7 @@ class ScanRepository(private val context: Context) {
     suspend fun cropPage(id: String, pageIndex: Int, rect: android.graphics.RectF): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
+            requireEditable(dir)
             OcrStore.locked {
                 val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
                 require(pageIndex in doc.pageFiles.indices) { "No such page" }
@@ -1224,6 +1231,7 @@ class ScanRepository(private val context: Context) {
     suspend fun movePage(id: String, fromIndex: Int, toIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
+            requireEditable(dir)
             OcrStore.locked {
                 val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
                 require(fromIndex in doc.pageFiles.indices) { "No such page" }
@@ -1268,6 +1276,7 @@ class ScanRepository(private val context: Context) {
     suspend fun setPageFilter(id: String, pageIndex: Int, filter: ScanFilter): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
+            requireEditable(dir)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             require(pageIndex in doc.pageFiles.indices) { "No such page" }
             val file = doc.pageFiles[pageIndex]
@@ -1352,6 +1361,7 @@ class ScanRepository(private val context: Context) {
         maxDim: Int?
     ): ScanDocument = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        refuseLockedSources(listOf(doc))
         val compressed = doc.pageFiles.map { file ->
             ImageTools.recompressJpeg(file.readBytes(), quality, maxDim)
         }
@@ -1471,7 +1481,7 @@ class ScanRepository(private val context: Context) {
         quality: Int = 85
     ): ScanDocument = importPdf(uri, name, dpi, maxDim, quality, vaulted = true)
 
-    private val LOCK_FILE = "locked.meta"
+    private val LOCK_FILE = PdfProtection.LOCK_FILE
     private val VAULT_FILE = "vault.flag"
 
     /** T4.8: prefix of the optional meta.txt line listing exported copies. */
@@ -1495,41 +1505,126 @@ class ScanRepository(private val context: Context) {
     suspend fun protectPdf(id: String, password: String): ScanDocument =
         withContext(Dispatchers.IO) {
             require(password.isNotBlank()) { "Password must not be empty" }
+            if (!PdfProtection.isEncodable(password)) {
+                throw IllegalArgumentException(context.getString(R.string.password_charset))
+            }
             val dir = File(docsDir, id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            val src = File(dir, "plain.pdf")
-            if (doc.pageFiles.isNotEmpty()) {
-                writePdf(dir, src) // plain PDF is always written for encryption
-            } else {
-                require(doc.pdfFile.exists() && doc.pdfFile.length() > 0L) { "PDF missing" }
-                doc.pdfFile.copyTo(src, overwrite = true)
-            }
-            val protected = File(dir, "protected.pdf")
-            try {
-                PdfEncryptor.encrypt(src, protected, password)
-                protected.copyTo(doc.pdfFile, overwrite = true)
-                File(dir, LOCK_FILE).writeText(Prefs.sha256("pdf_lock:$password"))
-                recordLockIndex(doc.pdfFile, id)
-            } finally {
-                src.delete()
-                protected.delete()
-            }
-            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after protection")
+            if (doc.isLocked) throw IllegalStateException("Already protected; use Change password")
+            encryptInto(dir, doc, password, "protect")
+            recordLockIndex(File(dir, PdfProtection.PDF_FILE), id)
+            loadDocument(dir)!!
         }
 
     /**
-     * Removes password protection from a document by regenerating its clean
-     * PDF from the stored page JPEGs and clearing the lock marker.
+     * Builds the encrypted PDF in a private [OpStaging] folder and swaps it in by rename (never a copy
+     * onto `scan.pdf`; no plaintext temporary ever sits in the document folder). Order is the contract:
+     *
+     *  1. plain PDF and encrypted PDF are built and verified in staging;
+     *  2. `locked.meta` is written (fsynced, atomic);
+     *  3. the encrypted PDF is renamed over `scan.pdf`.
+     *
+     * A crash between 2 and 3 leaves `locked.meta` beside the previous PDF: detectable and honest
+     * (PM-3.1c). The opposite order would leave an encrypted PDF the app does not know is locked.
+     * [op] names the fault points (`<op>:encrypted`, `<op>:lock_written`). Cleanup catches
+     * [Exception] only, so a simulated (or real) process death skips it and [recoverOperations] sweeps.
      */
-    suspend fun unlockPdf(id: String): ScanDocument =
+    private fun encryptInto(dir: File, doc: ScanDocument, password: String, op: String) =
+        synchronized(PDF_LOCK) {
+            val work = OpStaging.create(context.filesDir)
+            try {
+                val plain = File(work, "plain.pdf")
+                if (doc.pageFiles.isNotEmpty()) {
+                    writePdf(dir, plain)
+                } else {
+                    require(doc.pdfFile.exists() && doc.pdfFile.length() > 0L) { "PDF missing" }
+                    Durable.copyFile(doc.pdfFile, plain)
+                }
+                val enc = File(work, "enc.pdf")
+                PdfEncryptor.encrypt(plain, enc, password)
+                Durable.syncFile(enc)
+                if (PdfProtection.isEncrypted(enc) != true) throw IOException("Protection could not be verified")
+                OpFaults.at("$op:encrypted")
+                val lock = File(dir, LOCK_FILE)
+                val previousLock = if (lock.exists()) lock.readText() else null
+                Durable.atomicWriteText(lock, Prefs.sha256("pdf_lock:$password"))
+                OpFaults.at("$op:lock_written")
+                if (!enc.renameTo(File(dir, PdfProtection.PDF_FILE))) {
+                    // Put the previous lock record back (protect: none, so the file is removed).
+                    if (previousLock == null) lock.delete() else Durable.atomicWriteText(lock, previousLock)
+                    throw IOException("Could not protect the PDF")
+                }
+                Durable.syncDir(dir)
+                OpStaging.release(work)
+            } catch (e: Exception) {
+                OpStaging.release(work)
+                throw e
+            }
+        }
+
+    /**
+     * Removes password protection after checking the current [password]. The clean PDF is rebuilt from
+     * the stored page JPEGs in [OpStaging] and swapped in by rename, then the lock record is deleted.
+     */
+    suspend fun unlockPdf(id: String, password: String): ScanDocument =
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
-            loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            File(dir, LOCK_FILE).delete()
-            regeneratePdf(dir)
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            if (!doc.isLocked) return@withContext doc
+            if (!verifyPdfPassword(id, password)) {
+                throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
+            }
+            if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
+            synchronized(PDF_LOCK) {
+                val work = OpStaging.create(context.filesDir)
+                try {
+                    val plain = File(work, "plain.pdf")
+                    val layered = writePdf(dir, plain)
+                    OpFaults.at("unlock:built")
+                    if (!plain.renameTo(File(dir, PdfProtection.PDF_FILE))) {
+                        throw IOException("Could not unlock the PDF")
+                    }
+                    OpFaults.at("unlock:swapped")
+                    File(dir, LOCK_FILE).delete()
+                    updateTextLayerFlag(dir, layered)
+                    Durable.syncDir(dir)
+                    OpStaging.release(work)
+                } catch (e: Exception) {
+                    OpStaging.release(work)
+                    throw e
+                }
+            }
             pruneLockIndex()
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after unlock")
         }
+
+    /**
+     * Changes the password of a locked document after checking [current]. Same build-and-swap as
+     * [protectPdf] (fault points `chpw:encrypted`, `chpw:lock_written`); `locked.meta` is overwritten
+     * with the new hash.
+     *
+     * Known limitation: a crash between the lock write and the swap leaves the NEW hash beside the
+     * old-password PDF. I3 still holds (both say locked), but only the old password opens the PDF.
+     */
+    suspend fun changePdfPassword(id: String, current: String, new: String): ScanDocument =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            if (!verifyPdfPassword(id, current)) {
+                throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
+            }
+            require(new.isNotBlank()) { "Password must not be empty" }
+            if (!PdfProtection.isEncodable(new)) {
+                throw IllegalArgumentException(context.getString(R.string.password_charset))
+            }
+            if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
+            encryptInto(dir, doc, new, "chpw")
+            recordLockIndex(File(dir, PdfProtection.PDF_FILE), id)
+            loadDocument(dir)!!
+        }
+
+    /** Startup recovery for [OpStaging]: removes working folders left by a dead process. Returns the count. */
+    fun recoverOperations(): Int = OpStaging.sweep(context.filesDir)
 
     /** Checks a user-entered password against the stored lock hash. */
     fun verifyPdfPassword(id: String, password: String): Boolean {
@@ -1649,10 +1744,17 @@ class ScanRepository(private val context: Context) {
 
     /** Writes the document's PDF through [writePdf], then maintains `text_layer.flag`. */
     private fun regeneratePdf(dir: File) = synchronized(PDF_LOCK) {
+        requireUnlocked(dir) // A3 backstop: a locked document's PDF is never rebuilt in plaintext
         val pdfFile = File(dir, "scan.pdf")
-        val id = dir.name
         val pages = pageFilesIn(dir)
         val layered = if (pages.isNotEmpty()) writePdf(dir, pdfFile) else false
+        updateTextLayerFlag(dir, layered)
+    }
+
+    /** `text_layer.flag` exists exactly when every page of [dir] received an invisible text layer. */
+    private fun updateTextLayerFlag(dir: File, layered: Boolean) {
+        val id = dir.name
+        val pages = pageFilesIn(dir)
         val searchable = layered && pages.all {
             ocrStore.readGeo(id).containsKey("page_%03d.jpg".format(pages.indexOf(it)))
         }
@@ -1661,6 +1763,27 @@ class ScanRepository(private val context: Context) {
             flag.writeText("")
         } else {
             flag.delete()
+        }
+    }
+
+    /** A3: refuses any rebuild of a locked document's PDF. */
+    private fun requireUnlocked(dir: File) {
+        if (File(dir, LOCK_FILE).exists()) {
+            throw PdfProtection.DocumentLocked(context.getString(R.string.locked_edit_refused))
+        }
+    }
+
+    /**
+     * A3: refuses page edits on a locked document. Today the same check as [requireUnlocked]; two names
+     * on purpose, so PM-2.2b can add the draft-lease check here only (a PDF refresh after OCR does not
+     * change pages and must stay allowed while a draft is open).
+     */
+    private fun requireEditable(dir: File) = requireUnlocked(dir)
+
+    /** F13: tools cannot use a locked source yet (their output would be an unprotected copy). */
+    private fun refuseLockedSources(sources: List<ScanDocument>) {
+        sources.firstOrNull { it.isLocked }?.let { src ->
+            throw PdfProtection.DocumentLocked(context.getString(R.string.locked_source_refused, src.name))
         }
     }
 

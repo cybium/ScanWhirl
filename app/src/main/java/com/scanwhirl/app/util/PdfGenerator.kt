@@ -72,6 +72,13 @@ object PdfGenerator {
     ): Set<Int> {
         require(images.isNotEmpty()) { "No images to convert" }
 
+        // A3: the only plaintext PDF writer never writes scan.pdf beside a lock (I3).
+        if (outFile.name == PdfProtection.PDF_FILE &&
+            File(outFile.absoluteFile.parentFile, PdfProtection.LOCK_FILE).exists()
+        ) {
+            throw PdfProtection.PlainWriteRefused(outFile)
+        }
+
         // Validate every JPEG up front, before touching outFile or the tmp file.
         images.forEach { file ->
             require(file.exists() && file.length() > 0L) { "Missing page image: ${file.name}" }

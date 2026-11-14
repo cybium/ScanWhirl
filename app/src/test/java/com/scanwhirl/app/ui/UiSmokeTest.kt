@@ -1595,7 +1595,7 @@ class UiSmokeTest {
             assertTrue("locked scan must show the lock badge on the home card", shown)
         }
 
-        val unlocked = repo.unlockPdf(id)
+        val unlocked = repo.unlockPdf(id, "4321") // PM-3.1b: ScanRepository.unlockPdf now takes the password set at :1579
         assertFalse("doc should be unlocked after unlockPdf", unlocked.isLocked)
         assertFalse(
             "unlocked PDF must not contain /Encrypt",
@@ -1819,7 +1819,7 @@ class UiSmokeTest {
         val found = repo.findLockedDocumentByHash(hash)
         assertEquals(id, found?.id)
         assertTrue("found doc must be locked", found!!.isLocked)
-        repo.unlockPdf(id)
+        repo.unlockPdf(id, "open-sesame") // PM-3.1b: ScanRepository.unlockPdf now takes the password set at :1817
         assertNull("index entry pruned after unlock", repo.findLockedDocumentByHash(hash))
         Unit
     }

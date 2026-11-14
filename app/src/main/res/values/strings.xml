@@ -306,6 +306,11 @@
     <string name="unlock_pdf_open">Open</string>
     <string name="unlock_pdf_done">Password removed — PDF is unlocked</string>
     <string name="unlock_pdf_wrong">Incorrect password</string>
+    <string name="locked_edit_refused">Unlock this document to edit its pages.</string>
+    <string name="locked_source_refused">Unlock “%1$s” first. Tools can’t use a password-protected document yet.</string>
+    <string name="locked_no_pages">This document has no page images, so its password can’t be changed or removed.</string>
+    <string name="unlock_current_pw_title">Current password</string>
+    <string name="password_charset">Use letters, numbers and common symbols. Emoji and non-Latin letters can’t be used in a PDF password.</string>
     <string name="ocr_title">Extracted Text (OCR)</string>
     <string name="ocr_running">Extracting text from pages…</string>
     <string name="ocr_empty">No printed text detected on these pages.</string>

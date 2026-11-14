@@ -87,6 +87,20 @@ object Durable {
 
     fun atomicWriteText(target: File, text: String) = atomicWrite(target, text.toByteArray(Charsets.UTF_8))
 
+    /**
+     * Copies [src] to [dst] (a file the caller owns, never a published one) and `fsync`s the copy.
+     * Fails when the lengths differ afterwards.
+     */
+    fun copyFile(src: File, dst: File) {
+        FileInputStream(src).use { i ->
+            FileOutputStream(dst).use { o ->
+                i.copyTo(o, 64 * 1024)
+                syncStream(o, dst)
+            }
+        }
+        if (src.length() != dst.length()) throw IOException("Copy of ${src.name} is incomplete")
+    }
+
     /** Best-effort directory fsync. Returns whether it succeeded; never throws. */
     fun syncDir(dir: File): Boolean = try {
         dirSyncer(dir)

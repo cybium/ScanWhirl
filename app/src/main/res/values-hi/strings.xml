@@ -394,6 +394,11 @@
     <string name="unlock_pdf_remove"><!-- review -->Unलॉक permanently</string>
     <string name="unlock_pdf_title"><!-- review -->Password-Protected PDF</string>
     <string name="unlock_pdf_wrong"><!-- review -->Incorrect पासवर्ड</string>
+    <string name="locked_edit_refused"><!-- review -->इसके पेज बदलने के लिए पहले यह दस्तावेज़ अनलॉक करें।</string>
+    <string name="locked_source_refused"><!-- review -->पहले “%1$s” अनलॉक करें। टूल अभी पासवर्ड वाले दस्तावेज़ का उपयोग नहीं कर सकते।</string>
+    <string name="locked_no_pages"><!-- review -->इस दस्तावेज़ में पेज की तस्वीरें नहीं हैं, इसलिए इसका पासवर्ड बदला या हटाया नहीं जा सकता।</string>
+    <string name="unlock_current_pw_title"><!-- review -->मौजूदा पासवर्ड</string>
+    <string name="password_charset"><!-- review -->अंग्रेज़ी अक्षर, अंक और सामान्य चिह्न इस्तेमाल करें। PDF पासवर्ड में इमोजी और हिंदी अक्षर नहीं चलते।</string>
     <string name="vault_add_pdf"><!-- review -->Import a उपकरण PDF</string>
     <string name="vault_add_scan"><!-- review -->Move a सहेजा गया स्कैन here</string>
     <string name="vault_add_title"><!-- review -->Add को Hidden Vault</string>

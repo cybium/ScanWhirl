@@ -25,8 +25,10 @@ import com.scanwhirl.app.databinding.ActivityDocumentViewerBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.HomeHost
+import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SavedSnackbar
@@ -658,24 +660,34 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** Removes password protection from this scan and restores the clean PDF. */
     private fun unlockCurrentPdf() {
         val doc = document ?: return
-        lifecycleScope.launch {
-            val progress = showProgress()
-            try {
-                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id) }
-                progress.dismiss()
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    R.string.unlock_pdf_done,
-                    Toast.LENGTH_LONG
-                ).show()
-                reloadDocument()
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
+        // PM-3.1b: Unlock needs the current password (F9).
+        LockFlow.promptCurrentPassword(this, doc.name) { pw ->
+            lifecycleScope.launch {
+                val progress = showProgress()
+                try {
+                    withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, pw) }
+                    progress.dismiss()
+                    Toast.makeText(
+                        this@DocumentViewerActivity,
+                        R.string.unlock_pdf_done,
+                        Toast.LENGTH_LONG
+                    ).show()
+                    reloadDocument()
+                } catch (e: PdfProtection.WrongPassword) {
+                    progress.dismiss()
+                    Toast.makeText(
+                        this@DocumentViewerActivity,
+                        R.string.unlock_pdf_wrong,
+                        Toast.LENGTH_LONG
+                    ).show()
+                } catch (e: Exception) {
+                    progress.dismiss()
+                    Toast.makeText(
+                        this@DocumentViewerActivity,
+                        getString(R.string.page_op_failed, e.message),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }

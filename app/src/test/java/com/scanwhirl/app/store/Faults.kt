@@ -16,10 +16,11 @@ object Faults {
         @Volatile var fired = false
     }
 
-    /** Restores every seam. PM-3.1b adds `OpStaging.resetForTests()` here. */
+    /** Restores every seam (and forgets live staging folders, as a new process would). */
     fun resetAll() {
         SaveFaults.reset()
         OpFaults.reset()
+        OpStaging.resetForTests()
         ScanRepository.resetTestSeams()
         Durable.resetForTests()
     }

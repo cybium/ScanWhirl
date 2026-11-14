@@ -11,6 +11,7 @@ import com.scanwhirl.app.ui.ExportResultActivity
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Sha256
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -44,20 +45,32 @@ class LockFlow(
                     )
                 ) { _, which ->
                     if (which == 0) {
-                        activity.lifecycleScope.launch {
-                            val progress = host.showProgress()
-                            try {
-                                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id) }
-                                progress.dismiss()
-                                Toast.makeText(activity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
-                                host.refreshList()
-                            } catch (e: Exception) {
-                                progress.dismiss()
-                                Toast.makeText(activity, activity.getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
+                        // PM-3.1b: Unlock needs the current password (F9).
+                        promptCurrentPassword(activity, doc.name) { pw ->
+                            activity.lifecycleScope.launch {
+                                val progress = host.showProgress()
+                                try {
+                                    withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, pw) }
+                                    progress.dismiss()
+                                    Toast.makeText(activity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
+                                    host.refreshList()
+                                } catch (e: PdfProtection.WrongPassword) {
+                                    progress.dismiss()
+                                    Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    progress.dismiss()
+                                    Toast.makeText(activity, activity.getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                     } else {
-                        promptNewPasswordForScan(doc)
+                        promptCurrentPassword(activity, doc.name) { cur ->
+                            if (!repo.verifyPdfPassword(doc.id, cur)) {
+                                Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
+                            } else {
+                                promptNewPasswordForScan(doc, cur)
+                            }
+                        }
                     }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
@@ -67,7 +80,8 @@ class LockFlow(
         }
     }
 
-    private fun promptNewPasswordForScan(doc: ScanDocument) {
+    /** [current] is the verified current password when changing it; null when protecting for the first time. */
+    private fun promptNewPasswordForScan(doc: ScanDocument, current: String? = null) {
         val (builder, input) = SwDialog.input(
             activity,
             hint = activity.getString(R.string.protect_hint),
@@ -81,11 +95,16 @@ class LockFlow(
                 val pw = input.text?.toString().orEmpty()
                 if (pw.isBlank()) {
                     Toast.makeText(activity, R.string.protect_hint, Toast.LENGTH_SHORT).show()
+                } else if (!PdfProtection.isEncodable(pw)) {
+                    Toast.makeText(activity, R.string.password_charset, Toast.LENGTH_LONG).show()
                 } else {
                     activity.lifecycleScope.launch {
                         val progress = host.showProgress()
                         try {
-                            withContext(Dispatchers.IO) { repo.protectPdf(doc.id, pw) }
+                            withContext(Dispatchers.IO) {
+                                if (current != null) repo.changePdfPassword(doc.id, current, pw)
+                                else repo.protectPdf(doc.id, pw)
+                            }
                             progress.dismiss()
                             Toast.makeText(activity, R.string.protect_done, Toast.LENGTH_LONG).show()
                             host.refreshList()
@@ -98,6 +117,26 @@ class LockFlow(
             }
             .setNegativeButton(android.R.string.cancel, null)
             .showSw(isSheet = false)
+    }
+
+    companion object {
+        /** Asks for the document's current password; [onEntered] receives it unchecked. */
+        fun promptCurrentPassword(activity: AppCompatActivity, docName: String, onEntered: (String) -> Unit) {
+            val (builder, input) = SwDialog.input(
+                activity,
+                hint = activity.getString(R.string.protect_hint),
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            )
+            builder
+                .setTitle(R.string.unlock_current_pw_title)
+                .setMessage(docName)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    onEntered(input.text?.toString().orEmpty())
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .showSw(isSheet = false)
+        }
     }
 
     fun chooseLockSource() {

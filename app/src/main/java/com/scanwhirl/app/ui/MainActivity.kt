@@ -408,6 +408,8 @@ class MainActivity : BaseActivity(), HomeHost {
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching { repo.recoverTrash() }
             runCatching { repo.recoverImports() }
+            // PM-3.1b: working folders of protect/unlock/change-password that died with the old process.
+            runCatching { repo.recoverOperations() }
         }
 
         updateSelectionHeader()
@@ -1783,7 +1785,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 val pw = input.text?.toString().orEmpty()
                 if (repo.verifyPdfPassword(doc.id, pw)) {
                     lifecycleScope.launch {
-                        withContext(Dispatchers.IO) { repo.unlockPdf(doc.id) }
+                        withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, pw) } // pw verified above
                         Toast.makeText(this@MainActivity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
                         refreshList()
                         onUnlocked()

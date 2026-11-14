@@ -333,6 +333,12 @@ class FreeLegacyVaultEntryPointTest {
                 sheet.findViewById<View>(R.id.pillLock).isVisible)
             sheet.findViewById<View>(R.id.rowMoreLock).performClick()
             assertFalse("no Pro-panel redirect for Unlock", proPanelShown())
+            // PM-3.1b: DocumentViewerActivity.unlockCurrentPdf now asks for the current password
+            // (LockFlow.promptCurrentPassword) before repo.unlockPdf(id, pw). It used to unlock at once (F9, F21).
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            val passwordDialog = pinDialog()
+            assertNotNull("Unlock asks for the current password", passwordDialog)
+            submitPin(passwordDialog!!, "1234")
             assertTrue("unlock completes", pollUntil { !repo.getDocument(id)!!.isLocked })
         }
         assertTrue("PDF still present after unlock", repo.getDocument(id)!!.pdfFile.length() > 0)
