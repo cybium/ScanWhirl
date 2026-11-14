@@ -43,6 +43,12 @@
             android:parentActivityName=".ui.shell.ShellActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- L2 v2 QR code reader: scan result, actions and the local history. -->
+        <activity
+            android:name=".ui.qr.QrActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity" />
+
         <!-- The legacy home is kept until every flow has moved to the shell. -->
         <activity
             android:name=".ui.MainActivity"

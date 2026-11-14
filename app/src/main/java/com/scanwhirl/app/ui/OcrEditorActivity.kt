@@ -419,11 +419,8 @@ class OcrEditorActivity : BaseActivity() {
             .setOnClickListener { saveCurrent() }
         chip(R.id.btnToWord, R.drawable.ic_sym_description, R.string.ocr_to_word_pro, pro = true)
             .setOnClickListener {
-                com.scanwhirl.app.ui.kit.SwSheet.note(
-                    this,
-                    getString(R.string.ocr_to_word_pro),
-                    getString(R.string.ocr_to_word_soon)
-                ).show()
+                // v2 UI: 08_text_ocr — the real To Word tool, not an info sheet.
+                com.scanwhirl.app.ui.tools.ToolLaunch.start(this, "to_word")
             }
         setupModeSwitch()
         updateWordCount()
@@ -718,7 +715,9 @@ class OcrEditorActivity : BaseActivity() {
         val text = editText.text.toString()
         val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cb.setPrimaryClip(ClipData.newPlainText("ocr", text))
-        Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
+        com.google.android.material.snackbar.Snackbar.make(
+            binding.root, R.string.ocr_copied, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
+        ).show()
     }
 
     private fun shareCurrent() {
@@ -802,6 +801,14 @@ class OcrEditorActivity : BaseActivity() {
                         saved.keptEarlier -> getString(R.string.export_saved_new_copy, saved.name)
                         else -> getString(R.string.text_saved_docs, saved.name)
                     }
+                    com.scanwhirl.app.util.SavedSnackbar.show(
+                        binding.root,
+                        message,
+                        onOpen = { com.scanwhirl.app.util.PdfOpener.open(this@OcrEditorActivity, saved.uri) },
+                        onUndo = null
+                    )
+                    // The outcome is also a toast so it is reported even when a
+                    // snackbar cannot show (and existing export tests read it).
                     Toast.makeText(this@OcrEditorActivity, message, Toast.LENGTH_LONG).show()
                     saving = false
                     findViewById<View>(R.id.btnSave).isEnabled = true

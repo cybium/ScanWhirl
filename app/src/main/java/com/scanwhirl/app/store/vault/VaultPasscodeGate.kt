@@ -17,6 +17,9 @@ class VaultPasscodeGate(
 
     fun pauseMillis(now: Long = clock()): Long = (pausedUntil - now).coerceAtLeast(0)
 
+    /** How many tries are left before the pause; 0 while paused or after five failures. */
+    fun triesLeft(): Int = (maxTries - failures).coerceAtLeast(0)
+
     /** Records a wrong attempt; returns the pause the user must now wait (0 when not paused). */
     fun onWrong(): Long {
         failures++

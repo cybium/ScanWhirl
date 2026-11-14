@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v2 UI: QR code reader - ids owned by lane L2. -->
+    <item name="qrClose" type="id" />
+    <item name="qrStatus" type="id" />
+    <item name="qrEmpty" type="id" />
+    <item name="qrScan" type="id" />
+    <item name="qrKind" type="id" />
+    <item name="qrTitle" type="id" />
+    <item name="qrFieldLabel" type="id" />
+    <item name="qrFieldValue" type="id" />
+    <item name="qrActions" type="id" />
+    <item name="qrPrimaryAction" type="id" />
+    <item name="qrScanAgain" type="id" />
+    <item name="qrRecent" type="id" />
+    <item name="qrHistoryList" type="id" />
+    <item name="qrHistoryRow" type="id" />
+    <item name="qrHistoryClear" type="id" />
+</resources>

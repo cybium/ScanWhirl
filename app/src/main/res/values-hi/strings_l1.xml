@@ -178,4 +178,68 @@
     <string name="ocr_remove_gaps_desc"><!-- review -->खाली पंक्तियाँ हटाएँ।</string>
     <string name="ocr_lang_english"><!-- review -->अंग्रेज़ी</string>
     <string name="ocr_page_sub"><!-- review -->%1$s · पेज %2$d / %3$d</string>
+
+    <string name="folder_all"><!-- review -->सभी</string>
+    <string name="folder_new"><!-- review -->+ नया फ़ोल्डर</string>
+    <string name="folder_hint"><!-- review -->फ़ोल्डर का नाम बदलने या हटाने के लिए उसे दबाकर रखें</string>
+    <string name="folder_name_hint"><!-- review -->फ़ोल्डर का नाम</string>
+    <string name="folder_create"><!-- review -->बनाएँ</string>
+    <string name="folder_exists"><!-- review -->यह फ़ोल्डर पहले से मौजूद है</string>
+    <string name="folder_options_note"><!-- review -->नाम बदलें, या हटाएँ और सभी दस्तावेज़ रखें।</string>
+    <string name="folder_rename"><!-- review -->फ़ोल्डर का नाम बदलें</string>
+    <string name="folder_delete"><!-- review -->फ़ोल्डर हटाएँ</string>
+    <string name="folder_delete_title"><!-- review -->यह फ़ोल्डर हटाएँ?</string>
+    <string name="folder_delete_msg"><!-- review -->“%1$s” हट जाएगा। इसके दस्तावेज़ सभी में रहेंगे।</string>
+    <string name="folder_deleted"><!-- review -->फ़ोल्डर हट गया। दस्तावेज़ सुरक्षित हैं।</string>
+    <string name="folder_move_title"><!-- review -->फ़ोल्डर में ले जाएँ</string>
+    <string name="folder_all_documents"><!-- review -->सभी दस्तावेज़ (कोई फ़ोल्डर नहीं)</string>
+    <string name="sel_done"><!-- review -->हो गया</string>
+    <string name="sel_move"><!-- review -->ले जाएँ</string>
+    <string name="sel_tags"><!-- review -->टैग</string>
+    <string name="sel_share"><!-- review -->शेयर</string>
+    <string name="sel_rename"><!-- review -->नाम बदलें</string>
+    <string name="sel_delete"><!-- review -->हटाएँ</string>
+    <string name="sel_delete_title"><!-- review -->%1$d दस्तावेज़ कूड़ेदान में डालें?</string>
+    <string name="tags_title"><!-- review -->टैग</string>
+    <string name="tags_new"><!-- review -->नया टैग</string>
+    <string name="tags_add"><!-- review -->टैग जोड़ें</string>
+    <string name="tags_done"><!-- review -->हो गया</string>
+    <string name="tags_empty"><!-- review -->अभी कोई टैग नहीं</string>
+    <string name="tags_hint"><!-- review -->टैग का नाम</string>
+    <string name="batch_rename_title"><!-- review -->एक साथ नाम बदलें</string>
+    <string name="batch_rename_note"><!-- review -->{name}, {n} (1, 2, 3…) और {date} इस्तेमाल करें।</string>
+    <string name="batch_pattern_hint"><!-- review -->{name} ({n})</string>
+    <string name="batch_preview_title"><!-- review -->पूर्वावलोकन:</string>
+    <string name="batch_apply"><!-- review -->सभी का नाम बदलें</string>
+    <string name="batch_done"><!-- review -->%1$d दस्तावेज़ों का नाम बदला</string>
+    <string name="batch_select_hint"><!-- review -->नाम बदलने के लिए दो या अधिक दस्तावेज़ चुनें</string>
+    <string name="undo_action"><!-- review -->वापस</string>
+    <string name="sort_title"><!-- review -->क्रम</string>
+    <string name="sort_newest"><!-- review -->नवीनतम</string>
+    <string name="sort_oldest"><!-- review -->सबसे पुराना</string>
+    <string name="sort_name_az"><!-- review -->नाम A-Z</string>
+    <string name="sort_name_za"><!-- review -->नाम Z-A</string>
+    <string name="sort_size"><!-- review -->आकार</string>
+    <string name="home_no_match_for"><!-- review -->“%1$s” के लिए कुछ नहीं मिला</string>
+    <string name="make_searchable_title"><!-- review -->खोजने योग्य बनाएँ</string>
+    <string name="make_searchable_note"><!-- review -->%1$s एक अदृश्य टेक्स्ट परत वाली PDF बन जाएगी, जिससे कोई भी PDF ऐप शब्द ढूँढ सकेगा।</string>
+    <string name="make_searchable_already"><!-- review -->%1$s में पहले से खोजने योग्य टेक्स्ट परत है।</string>
+    <string name="make_searchable_action"><!-- review -->बनाएँ</string>
+    <string name="make_searchable_done"><!-- review -->%1$s अब खोजने योग्य है</string>
+    <string name="make_searchable_unavailable"><!-- review -->%1$s का टेक्स्ट अभी पहचाना नहीं गया। पहले उसकी टेक्स्ट स्क्रीन खोलें।</string>
+    <string name="vault_tab_status_loading"><!-- review -->देख रहे हैं…</string>
+    <string name="vault_tab_not_setup"><!-- review -->अभी सेट नहीं है</string>
+    <string name="vault_tab_locked"><!-- review -->लॉक है</string>
+    <string name="vault_tab_aes"><!-- review -->इस फ़ोन पर AES-256</string>
+    <string name="vault_tab_relock"><!-- review -->ऐप छोड़ने पर अपने आप लॉक</string>
+
+    <plurals name="vault_tab_unlocked">
+        <item quantity="one"><!-- review -->%1$d दस्तावेज़ · खुला है</item>
+        <item quantity="other"><!-- review -->%1$d दस्तावेज़ · खुले हैं</item>
+    </plurals>
+
+    <plurals name="sel_count">
+        <item quantity="one"><!-- review -->%1$d चुना गया</item>
+        <item quantity="other"><!-- review -->%1$d चुने गए</item>
+    </plurals>
 </resources>

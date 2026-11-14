@@ -45,7 +45,8 @@ class SwSheet private constructor(
             setPadding(padH, (10 * density).toInt(), padH, (22 * density).toInt())
             background = SwStyle.rounded(
                 context,
-                SwStyle.color(context, R.color.glass_surface),
+                // Opaque ink: the reader dock must never show through a sheet.
+                0xFF161D21.toInt(),
                 radiusDp = 28f,
                 stroke = SwStyle.color(context, R.color.sw_cyan_hair_strong)
             )

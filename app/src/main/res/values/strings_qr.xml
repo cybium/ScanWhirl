@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v2 UI: 03_tools_hub - QR code reader (lane L2). -->
+    <string name="qr_title">QR code</string>
+    <string name="qr_close">Close</string>
+    <string name="qr_scan_title">Scan a QR code</string>
+    <string name="qr_scan_body">Reads a link, Wi-Fi network, contact, phone number, email or text. Stays on this phone.</string>
+    <string name="qr_result_title">Last scan</string>
+    <string name="qr_scan_button">Scan code</string>
+    <string name="qr_scan_again">Scan again</string>
+    <string name="qr_empty_code">That code had no readable value.</string>
+    <string name="qr_scanner_error">Could not start the scanner: %1$s</string>
+
+    <string name="qr_open_link">Open link</string>
+    <string name="qr_add_contact">Add to contacts</string>
+    <string name="qr_call">Call</string>
+    <string name="qr_compose_email">Compose email</string>
+    <string name="qr_open_map">Open map</string>
+    <string name="qr_copy">Copy</string>
+    <string name="qr_share">Share</string>
+    <string name="qr_copied">Copied</string>
+    <string name="qr_no_app">No app on this phone can open that.</string>
+    <string name="qr_no_contacts">No contacts app. The code was copied instead.</string>
+
+    <string name="qr_kind_url">Link</string>
+    <string name="qr_kind_wifi">Wi-Fi network</string>
+    <string name="qr_kind_contact">Contact</string>
+    <string name="qr_kind_phone">Phone number</string>
+    <string name="qr_kind_email">Email address</string>
+    <string name="qr_kind_sms">Text message</string>
+    <string name="qr_kind_geo">Location</string>
+    <string name="qr_kind_text">Text</string>
+
+    <string name="qr_field_network">Network</string>
+    <string name="qr_field_password">Password</string>
+    <string name="qr_field_security">Security</string>
+    <string name="qr_field_name">Name</string>
+    <string name="qr_field_phone">Phone</string>
+    <string name="qr_field_email">Email</string>
+    <string name="qr_field_org">Organisation</string>
+    <string name="qr_field_role">Role</string>
+    <string name="qr_field_address">Address</string>
+    <string name="qr_field_message">Message</string>
+
+    <string name="qr_recent">Recent scans</string>
+    <string name="qr_clear">Clear</string>
+    <string name="qr_cleared">History cleared</string>
+    <string name="qr_history_meta">%1$s, %2$s</string>
+
+    <string name="qr_pro_message">The QR code reader is part of Pro, together with the other Pro tools.</string>
+</resources>

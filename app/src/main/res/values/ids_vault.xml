@@ -14,6 +14,8 @@
     <item name="vaultFilesHeader" type="id" />
     <item name="vaultList" type="id" />
     <item name="vaultEmpty" type="id" />
+    <item name="vaultStatus" type="id" />
+    <item name="vaultLockedPlaceholder" type="id" />
     <item name="vaultEntryName" type="id" />
     <item name="vaultEntryMeta" type="id" />
     <item name="vaultEntryMore" type="id" />

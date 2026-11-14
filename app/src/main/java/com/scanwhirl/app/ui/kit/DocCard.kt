@@ -35,6 +35,13 @@ class DocCard(context: Context) : LinearLayout(context) {
     val shareButton: ImageButton
     val moreButton: ImageButton
 
+    /** The selection check; visible only while the library is selecting this card. */
+    val selectionBadge: ImageView
+
+    private val thumbFrame: FrameLayout
+    private val categoryRow: LinearLayout
+    private val actions: LinearLayout
+
     var doc: ScanDocument? = null
         private set
 
@@ -47,7 +54,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         isClickable = true
         isFocusable = true
 
-        val thumbFrame = FrameLayout(context).apply {
+        thumbFrame = FrameLayout(context).apply {
             background = SwStyle.rounded(context, SwStyle.color(context, R.color.sw_paper_thumb), radiusDp = 9f)
             clipToOutline = true
         }
@@ -82,6 +89,22 @@ class DocCard(context: Context) : LinearLayout(context) {
                 gravity = Gravity.BOTTOM or Gravity.START
                 leftMargin = (4 * d).toInt()
                 bottomMargin = (4 * d).toInt()
+            }
+        )
+        selectionBadge = ImageView(context).apply {
+            id = R.id.swDocSelected
+            setImageResource(R.drawable.ic_sym_check_circle_filled)
+            imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_primary))
+            background = SwStyle.rounded(context, 0xCC0E1316.toInt(), radiusDp = 999f)
+            setPadding((2 * d).toInt(), (2 * d).toInt(), (2 * d).toInt(), (2 * d).toInt())
+            isVisible = false
+        }
+        thumbFrame.addView(
+            selectionBadge,
+            FrameLayout.LayoutParams((22 * d).toInt(), (22 * d).toInt()).apply {
+                gravity = Gravity.TOP or Gravity.END
+                rightMargin = (3 * d).toInt()
+                topMargin = (3 * d).toInt()
             }
         )
         addView(
@@ -130,7 +153,7 @@ class DocCard(context: Context) : LinearLayout(context) {
                 .apply { topMargin = (4 * d).toInt() }
         )
 
-        val categoryRow = LinearLayout(context).apply {
+        categoryRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -153,7 +176,7 @@ class DocCard(context: Context) : LinearLayout(context) {
 
         addView(info, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        val actions = LinearLayout(context).apply {
+        actions = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -196,6 +219,9 @@ class DocCard(context: Context) : LinearLayout(context) {
         )
         shareButton.setOnClickListener { onShare() }
         moreButton.setOnClickListener { onMore() }
+        shareButton.isVisible = true
+        moreButton.isVisible = true
+        selectionBadge.isVisible = false
 
         val firstPage = document.pageFiles.firstOrNull()
         if (firstPage != null && firstPage.exists() && !document.isLocked) {
@@ -210,6 +236,42 @@ class DocCard(context: Context) : LinearLayout(context) {
             thumbView.setBackgroundColor(
                 SwStyle.color(context, if (document.isLocked) R.color.sw_thumb_locked else R.color.sw_paper_thumb)
             )
+        }
+    }
+
+    /**
+     * v2 UI: 03_tools_hub — compact row for the kit document chooser: 40×52
+     * thumbnail, one-line name and meta, lock badge, no category or buttons.
+     */
+    fun asCompact(): DocCard = apply {
+        val d = resources.displayMetrics.density
+        setPadding((8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt())
+        thumbFrame.layoutParams = LayoutParams((40 * d).toInt(), (52 * d).toInt())
+            .apply { marginEnd = (12 * d).toInt() }
+        categoryRow.visibility = View.GONE
+        actions.visibility = View.GONE
+        selectionBadge.visibility = View.GONE
+        nameView.maxLines = 1
+        metaView.maxLines = 1
+    }
+
+    /**
+     * v2 UI: 01_home_A — selection mode: the check badge appears only while the
+     * library is selecting, and the per-card Share/⋯ give way to the action bar.
+     */
+    fun setSelection(active: Boolean, checked: Boolean) {
+        selectionBadge.isVisible = active && checked
+        shareButton.isVisible = !active
+        moreButton.isVisible = !active
+        background = if (checked) {
+            SwStyle.card(context, 18f).apply {
+                setStroke(
+                    SwStyle.dp(context, 1f).coerceAtLeast(1),
+                    SwStyle.color(context, R.color.cyan_primary)
+                )
+            }
+        } else {
+            SwStyle.card(context, 18f)
         }
     }
 }
