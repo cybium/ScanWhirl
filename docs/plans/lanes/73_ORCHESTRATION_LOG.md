@@ -7,6 +7,7 @@ The owner does not relay messages. If the lead is out of usage, finished reports
 Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mirror build, FIFO queue, lint only with -Lint).
 
 ## Lesson
+- OWNER RULE (2026-11-14): never review only what the owner points at. Every screen, sheet and tool in docs/audit/2026-11-14/SCREEN_MAP.md (regenerate with tools/screen_map.ps1) needs a screenshot the lead has personally looked at and a written verdict before any release. Review screenshots in contact sheets if needed, but look at every one.
 - Before assigning a card, check its prerequisites are in integration (L5 was blocked on PM-2.1b living only on L4). Merge a lane's committed, gated work early when another lane needs it.
 
 ## Lead loop (on every worker report)
