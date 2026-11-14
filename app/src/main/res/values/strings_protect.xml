@@ -5,7 +5,10 @@
     <string name="protect_change_title">Change password</string>
     <string name="protect_close">Close</string>
     <string name="protect_sheet_note">Anyone who opens this PDF will need the password, in any PDF app, on any device.</string>
-    <string name="protect_doc_meta">%1$d pages · %2$s</string>
+    <plurals name="protect_doc_meta">
+        <item quantity="one">%1$d page · %2$s</item>
+        <item quantity="other">%1$d pages · %2$s</item>
+    </plurals>
     <string name="protect_label_password">PASSWORD</string>
     <string name="protect_label_confirm">TYPE IT AGAIN</string>
     <string name="protect_password_hint">Password</string>
@@ -41,7 +44,9 @@
 
     <!-- L3 + L2: remembered PDF passwords in the Vault. Short, plain lines. -->
     <string name="vault_password_not_saved">Password not saved in Vault.</string>
+    <string name="import_unlock_note">Enter its password to import its pages. The original file is not changed.</string>
+    <string name="import_unlock_unsupported">This PDF uses a password format ScanWhirl cannot open. Remove it in the app that made it.</string>
+    <string name="import_unlock_failed">Could not import this PDF: %1$s</string>
     <string name="vault_password_missing">No saved password. Type it instead.</string>
     <string name="vault_password_stale">The saved password did not work. Type it instead.</string>
-    <string name="vault_unlock_to_save">Unlock the Vault to save this password.</string>
 </resources>

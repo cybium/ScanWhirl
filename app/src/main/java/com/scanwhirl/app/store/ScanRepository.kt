@@ -21,6 +21,7 @@ import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PageStamp
 import com.scanwhirl.app.util.PdfImport
+import com.scanwhirl.app.util.PdfDecryptor
 import com.scanwhirl.app.util.PdfEncryptor
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfPageRenderer
@@ -1435,6 +1436,32 @@ class ScanRepository(private val context: Context) {
             doc.pageFiles.forEachIndexed { i, file ->
                 stagePageBytes(ImageTools.recompressJpeg(file.readBytes(), quality, maxDim), staging, i)
             }
+        }
+    }
+
+    /**
+     * Imports a password-protected PDF by decrypting a temporary copy first: the source file is
+     * only read, the plaintext copy lives in `cacheDir` and is deleted before returning. Pages are
+     * then rendered through the normal [importPdfAsScan] path, so the new document is a regular
+     * ScanWhirl scan (and the original PDF is untouched).
+     *
+     * Throws [PdfDecryptor.WrongPassword] for a wrong password and [PdfDecryptor.Unsupported]
+     * for formats this offline decoder cannot open.
+     */
+    suspend fun importProtectedPdfAsScan(
+        uri: Uri,
+        name: String?,
+        password: String
+    ): ScanDocument = withContext(Dispatchers.IO) {
+        val clean = File(context.cacheDir, "decrypted-${UUID.randomUUID()}.pdf")
+        try {
+            PdfImport.withSeekableCopy(context, uri) { fd, _ ->
+                val raw = ParcelFileDescriptor.AutoCloseInputStream(fd.dup()).use { it.readBytes() }
+                Durable.writeFile(clean, PdfDecryptor.decrypt(raw, password))
+            }
+            importPdfAsScan(Uri.fromFile(clean), name)
+        } finally {
+            clean.delete()
         }
     }
 

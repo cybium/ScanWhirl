@@ -4,9 +4,7 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.scanwhirl.app.R
 import com.scanwhirl.app.store.vault.VaultLockedException
 import com.scanwhirl.app.store.vault.VaultPasswords
 import com.scanwhirl.app.ui.vault.VaultActivity
@@ -44,32 +42,13 @@ internal object VaultPasswordsFlow {
         runCatching { VaultPasswords.of(context).has(documentId) }.getOrDefault(false)
 
     /**
-     * Saves (or replaces) the password for [documentId]; when the Vault is locked it opens the
-     * Unlock screen and retries on return. [onResult] is false when the user cancelled the
-     * unlock or the entry could not be written — the PDF is already protected either way.
+     * Saves the password only when the Vault is unlocked. The Protect/save action always
+     * completes first; a locked Vault must never delay it or replace its screen with the Vault,
+     * so this returns false ("not saved") instead of opening anything. The owner can unlock the
+     * Vault later; a fresh Protect will then remember the password.
      */
-    fun remember(
-        activity: AppCompatActivity,
-        documentId: String,
-        password: String,
-        onResult: (Boolean) -> Unit = {}
-    ) {
-        val store = VaultPasswords.of(activity)
-        try {
-            store.save(documentId, password)
-            onResult(true)
-            return
-        } catch (e: VaultLockedException) {
-            Toast.makeText(activity, R.string.vault_unlock_to_save, Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {
-            onResult(false)
-            return
-        }
-        unlockLauncher(activity) {
-            val saved = runCatching { store.save(documentId, password) }.isSuccess
-            onResult(saved)
-        }
-    }
+    fun saveIfUnlocked(context: Context, documentId: String, password: String): Boolean =
+        runCatching { VaultPasswords.of(context).save(documentId, password) }.isSuccess
 
     /** Forgets the saved password (protection removed or "Remember in Vault" turned off). */
     fun forget(context: Context, documentId: String) {
