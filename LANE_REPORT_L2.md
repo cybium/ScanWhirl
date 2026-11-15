@@ -85,15 +85,19 @@ folder only (never committed).
 ## Gate
 
 ```
-tests: total=1272 failures=0 skipped=0
-GATE PASS L2 tests=1272 lint=[lint skipped (lead runs it at merge)]
+tests: total=1324 failures=0 skipped=0
+GATE PASS L2 tests=1324 lint=[lint skipped (lead runs it at merge)]
 ```
+
+(`1272` before merging the latest `integration`; same code plus the merged lanes' tests.)
 
 ## Commits
 
 - `2ad6e49` OCR quality + Hindi · `80db83f` merge `integration`
-- (this pass) PDF/A-2b: PdfA engine, pdfa mode in PdfGenerator, verifier layout flag, PdfAFlow +
+- `28200c7` PDF/A-2b: PdfA engine, pdfa mode in PdfGenerator, verifier layout flag, PdfAFlow +
   export, sRGB ICC profile with its licence, tests, veraPDF proof
+- `3d86470` merge `integration` · `7794a40` L1's Soon-tile tests follow the new registry (no
+  catalogue tool is Soon any more; the PDF/A tile now opens its picker)
 - (this report) L2: report
 
 ## Earlier passes (still current)
