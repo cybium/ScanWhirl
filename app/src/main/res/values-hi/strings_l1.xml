@@ -114,8 +114,8 @@
     <string name="pro_feat_word"><!-- review -->Word और Excel</string>
     <string name="pro_feat_split"><!-- review -->रेंज से विभाजन</string>
     <string name="pro_feat_watermark"><!-- review -->वॉटरमार्क</string>
-    <string name="pro_feat_redact"><!-- review -->सच्चा नामेटन</string>
-    <string name="pro_feat_scan"><!-- review -->किताब और QR स्कैन</string>
+    <string name="pro_feat_redact"><!-- review -->निजी जानकारी छिपाएँ</string>
+    <string name="pro_feat_scan"><!-- review -->QR कोड स्कैन</string>
     <string name="pro_feat_batch"><!-- review -->बैच टूल्स</string>
     <string name="pro_feat_folders"><!-- review -->फ़ोल्डर और टैग</string>
 
@@ -274,5 +274,5 @@
     <string name="settings_test_free_summary"><!-- review -->केवल टेस्ट बिल्ड में। Pro गेट दिखाता है।</string>
     <string name="settings_privacy_section"><!-- review -->गोपनीयता और सुरक्षा</string>
     <string name="pro_sub_compact"><!-- review -->हर Pro टूल, एक भुगतान, हमेशा आपका।</string>
-    <string name="pro_more_tools"><!-- review -->+ %1$d और Pro टूल</string>
+    <string name="pro_more_tools"><!-- review -->सभी %1$d प्रो टूल देखें</string>
 </resources>

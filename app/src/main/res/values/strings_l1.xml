@@ -114,8 +114,8 @@
     <string name="pro_feat_word">Word &amp; Excel</string>
     <string name="pro_feat_split">Split by range</string>
     <string name="pro_feat_watermark">Watermark</string>
-    <string name="pro_feat_redact">True redaction</string>
-    <string name="pro_feat_scan">Book &amp; QR scan</string>
+    <string name="pro_feat_redact">Hide private info</string>
+    <string name="pro_feat_scan">QR code scan</string>
     <string name="pro_feat_batch">Batch tools</string>
     <string name="pro_feat_folders">Folders &amp; tags</string>
 
@@ -273,7 +273,7 @@
     <string name="me_pro_active_summary">Thank you — every Pro tool is unlocked.</string>
     <string name="pro_active_sub">Every Pro tool is unlocked. Thank you!</string>
     <string name="pro_sub_compact">Every Pro tool, one payment, yours forever.</string>
-    <string name="pro_more_tools">+ %1$d more Pro tools</string>
+    <string name="pro_more_tools">See all %1$d Pro tools</string>
     <string name="settings_test_free">Testing: act as a Free user</string>
     <string name="settings_test_free_summary">Test builds only. Shows the Pro gate.</string>
     <string name="settings_privacy_section">Privacy &amp; security</string>
