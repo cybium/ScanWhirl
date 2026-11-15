@@ -106,11 +106,11 @@ object SwStyle {
         LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val label = text(context, 12f, color(context, R.color.cyan_dim), bold = true, letterSpacing = 0.08f)
+            val label = text(context, 12f, color(context, R.color.text_hologram_mid), bold = true, letterSpacing = 0.08f)
             label.text = title.uppercase(java.util.Locale.getDefault())
             addView(label, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             addView(
-                text(context, 12f, color(context, R.color.cyan_dim), bold = true).apply {
+                text(context, 12f, color(context, R.color.text_hologram_mid), bold = true).apply {
                     text = count.toString()
                 }
             )

@@ -550,11 +550,12 @@ class LibraryScreen(
                 this.id = id
                 bind(icon, context.getString(label))
                 setOnClickListener { onClick() }
-                minimumHeight = SwStyle.dp(context, 34f)
+                minimumHeight = SwStyle.dp(context, 48f)
+                minimumWidth = SwStyle.dp(context, 48f)
             }
             actions.addView(
                 chip,
-                LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 34f))
+                LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                     .apply { marginEnd = SwStyle.dp(context, 8f) }
             )
         }
@@ -1060,9 +1061,10 @@ class LibraryScreen(
             id = R.id.swQuickAll
             text = context.getString(R.string.home_all_tools)
             gravity = Gravity.CENTER
-            minimumHeight = SwStyle.dp(context, 34f)
+            minimumHeight = SwStyle.dp(context, 48f)
+            minimumWidth = SwStyle.dp(context, 48f)
             isClickable = true
-            setPadding(SwStyle.dp(context, 6f), 0, SwStyle.dp(context, 6f), 0)
+            setPadding(SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 10f), 0)
             setOnClickListener { callbacks.onAllTools() }
         }
         row.addView(quickAll)
