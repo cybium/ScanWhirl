@@ -62,8 +62,16 @@ class ScanRepository(private val context: Context) {
         get() = OcrStore(docsDir)
 
     companion object {
-        /** Process-wide lock for PDF regeneration — several ScanRepository instances exist at once. */
+        /** Process-wide lock for PDF regeneration - several ScanRepository instances exist at once. */
         val PDF_LOCK = Any()
+
+        /**
+         * Test seam (performance audit L1-1): called with the reading thread's name
+         * at the start of every library listing, so a test can prove no disk read
+         * happens on the main thread. Production leaves it null.
+         */
+        @Volatile
+        internal var readProbe: ((thread: String) -> Unit)? = null
 
         /**
          * Serialises new-scan save transactions and the abandoned-save reaper, so a
@@ -136,6 +144,7 @@ class ScanRepository(private val context: Context) {
     }
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
+        readProbe?.invoke(Thread.currentThread().name)
         return docsDir.listFiles { f -> f.isDirectory }
             ?.sortedByDescending { it.lastModified() }
             ?.mapNotNull { dir -> loadDocument(dir) }
@@ -172,9 +181,12 @@ class ScanRepository(private val context: Context) {
             ?: CategoryRules.OTHER
         val organised = LibraryMeta.read(lines)
         val pdf = File(dir, "scan.pdf")
+        var totalSize = 0L
         val pages = dir.listFiles { f -> f.extension.equals("jpg", true) || f.extension.equals("jpeg", true) }
-            ?.filter { it.length() > 0 }
-            ?.sortedBy { it.nameWithoutExtension }
+            ?.mapNotNull { f -> f.length().takeIf { it > 0 }?.let { f to it } }
+            ?.sortedBy { it.first.nameWithoutExtension }
+            ?.onEach { totalSize += it.second }
+            ?.map { it.first }
             ?: emptyList()
         if (!pdf.exists() && pages.isEmpty()) return null
         val isLocked = File(dir, LOCK_FILE).exists()
@@ -203,7 +215,9 @@ class ScanRepository(private val context: Context) {
             folder = organised.folder,
             tags = organised.tags,
             revision = revision,
-            isSearchable = isSearchable
+            isSearchable = isSearchable,
+            cachedSize = if (pdf.exists()) pdf.length() else totalSize,
+            cachedModified = revision
         )
     }
 

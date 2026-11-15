@@ -20,7 +20,13 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
@@ -32,6 +38,7 @@ import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
 import com.scanwhirl.app.util.BatchRename
@@ -83,6 +90,15 @@ class LibraryScreen(
 
     // v2 UI: 03_tools_hub — folders, tags and selection mode.
     private lateinit var folderRow: LinearLayout
+    private var quickIds: MutableList<String> =
+        com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
+    private var quickEditing = false
+    private lateinit var quickRow2: LinearLayout
+    private lateinit var quickAddGrid: LinearLayout
+    private lateinit var quickEdit: ImageButton
+    private lateinit var quickDone: TextView
+    private lateinit var quickCancel: TextView
+    private lateinit var quickAll: TextView
     private lateinit var selectionBar: LinearLayout
     private lateinit var selectionCount: TextView
     private var folderNames: List<String> = emptyList()
@@ -104,7 +120,15 @@ class LibraryScreen(
     private var category: String? = null
     private var revealId: String? = null
 
-    private val quickIds = listOf("merge", "compress", "sign", "protect", "to_word", "read_text")
+    // L1 performance: never read the library on the main thread.
+    private var loadJob: Job? = null
+    private var renderJob: Job? = null
+    private var renderedDocs: List<ScanDocument> = emptyList()
+    private var renderedSignatures: List<String> = emptyList()
+
+    /** Tests wait on this after [reload] when they force a threaded IO dispatcher. */
+    internal var loaded = false
+        private set
 
     /** Short labels that fit one line in a sixth of a 360dp phone. */
     private val quickLabels = mapOf(
@@ -141,9 +165,7 @@ class LibraryScreen(
         folderScroll = folderSection()
         addView(folderScroll)
         addView(createBlock())
-        quickHeader = sectionHeader(context.getString(R.string.home_quick_tools), null) {
-            callbacks.onAllTools()
-        }
+        quickHeader = quickToolsHeader()
         addView(quickHeader)
         quickRow = LinearLayout(context).apply {
             id = R.id.swQuickRow
@@ -153,6 +175,23 @@ class LibraryScreen(
             setPadding(pad, 0, pad, 0)
         }
         addView(quickRow)
+        quickRow2 = LinearLayout(context).apply {
+            id = R.id.swQuickRow2
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER
+            val pad = SwStyle.dp(context, 8f)
+            setPadding(pad, 0, pad, 0)
+            isVisible = false
+        }
+        addView(quickRow2)
+        quickAddGrid = LinearLayout(context).apply {
+            id = R.id.swQuickAddGrid
+            orientation = VERTICAL
+            val pad = SwStyle.dp(context, 12f)
+            setPadding(pad, SwStyle.dp(context, 4f), pad, 0)
+            isVisible = false
+        }
+        addView(quickAddGrid)
         recentHeader = sectionHeader(context.getString(R.string.home_recent), context.getString(R.string.home_newest)) {
             showSortSheet()
         }
@@ -253,10 +292,30 @@ class LibraryScreen(
     // ---- public -----------------------------------------------------------
 
     fun reload() {
-        docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
-        renderFolders()
-        renderChips()
-        renderDocs()
+        val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
+        if (owner == null) {
+            // No lifecycle (unit-only host): keep the old synchronous behaviour.
+            docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            loaded = true
+            renderFolders()
+            renderChips()
+            renderDocs()
+            return
+        }
+        loadJob?.cancel()
+        loadJob = owner.launch {
+            // L1-1: the whole library load (including the per-page stats inside
+            // listDocuments) happens off the main thread; the old list stays up.
+            val fresh = withContext(ioDispatcher) {
+                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            }
+            if (!isActive) return@launch
+            docs = fresh
+            loaded = true
+            renderFolders()
+            renderChips()
+            renderDocs()
+        }
     }
 
     /**
@@ -491,11 +550,12 @@ class LibraryScreen(
                 this.id = id
                 bind(icon, context.getString(label))
                 setOnClickListener { onClick() }
-                minimumHeight = SwStyle.dp(context, 34f)
+                minimumHeight = SwStyle.dp(context, 48f)
+                minimumWidth = SwStyle.dp(context, 48f)
             }
             actions.addView(
                 chip,
-                LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 34f))
+                LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                     .apply { marginEnd = SwStyle.dp(context, 8f) }
             )
         }
@@ -506,6 +566,16 @@ class LibraryScreen(
         action(R.id.swSelShare, R.drawable.ic_sym_share, R.string.sel_share) {
             val chosen = docs.filter { it.id in selected }
             if (chosen.isNotEmpty()) callbacks.onShareDocs(chosen)
+        }
+        // v2 UI: 03_tools_hub — L4's Batch screen opens with these ids preselected.
+        action(R.id.swSelBatch, R.drawable.ic_sym_view_module, R.string.sel_batch) {
+            val ids = docs.filter { it.id in selected }.map { it.id }
+            if (ids.isEmpty()) return@action
+            requirePro {
+                (context as? android.app.Activity)?.let {
+                    com.scanwhirl.app.ui.tools.BatchLauncher.start(it, ids)
+                }
+            }
         }
         action(R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename) {
             if (selected.size >= 2) requirePro { showBatchRename() }
@@ -729,7 +799,10 @@ class LibraryScreen(
         }
         val mark = ImageView(context).apply {
             id = R.id.swBrandMark
-            setImageResource(R.drawable.ic_brand_mark)
+            setImageResource(
+                if (com.scanwhirl.app.ui.kit.SwTheme.isGold(context)) R.drawable.ic_brand_mark_gold
+                else R.drawable.ic_brand_mark
+            )
         }
         row.addView(
             mark,
@@ -970,16 +1043,256 @@ class LibraryScreen(
             .show()
     }
 
+    /** Header with the pencil edit affordance (48dp target, 20dp glyph). */
+    private fun quickToolsHeader(): View {
+        val row = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val pad = SwStyle.dp(context, 18f)
+            setPadding(pad, SwStyle.dp(context, 20f), pad, SwStyle.dp(context, 6f))
+        }
+        row.addView(
+            SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+                text = context.getString(R.string.home_quick_tools)
+            },
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        )
+        quickAll = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+            id = R.id.swQuickAll
+            text = context.getString(R.string.home_all_tools)
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 48f)
+            minimumWidth = SwStyle.dp(context, 48f)
+            isClickable = true
+            setPadding(SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 10f), 0)
+            setOnClickListener { callbacks.onAllTools() }
+        }
+        row.addView(quickAll)
+        quickEdit = SwStyle.iconButton(
+            context, R.drawable.ic_sym_edit, SwStyle.color(context, R.color.text_hologram_mid)
+        ).apply {
+            id = R.id.swQuickEdit
+            contentDescription = context.getString(R.string.quick_edit)
+            val size = SwStyle.dp(context, 48f)
+            layoutParams = LayoutParams(size, size)
+            setPadding(SwStyle.dp(context, 14f), SwStyle.dp(context, 14f), SwStyle.dp(context, 14f), SwStyle.dp(context, 14f))
+            setOnClickListener { enterQuickEditing() }
+        }
+        row.addView(quickEdit)
+        quickCancel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
+            id = R.id.swQuickCancel
+            text = context.getString(android.R.string.cancel)
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 36f)
+            isClickable = true
+            setPadding(SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f), 0)
+            isVisible = false
+            setOnClickListener { exitQuickEditing(save = false) }
+        }
+        row.addView(quickCancel)
+        quickDone = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+            id = R.id.swQuickDone
+            text = context.getString(R.string.sel_done)
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 36f)
+            isClickable = true
+            setPadding(SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f), 0)
+            isVisible = false
+            setOnClickListener { exitQuickEditing(save = true) }
+        }
+        row.addView(quickDone)
+        return row
+    }
+
+    private fun enterQuickEditing() {
+        quickEditing = true
+        applyQuickEditingChrome()
+        buildQuickRow()
+    }
+
+    private fun exitQuickEditing(save: Boolean) {
+        quickEditing = false
+        if (save) {
+            com.scanwhirl.app.util.Prefs.setQuickTools(context, quickIds)
+        } else {
+            quickIds = com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
+        }
+        applyQuickEditingChrome()
+        buildQuickRow()
+        updateChrome()
+    }
+
+    private fun applyQuickEditingChrome() {
+        if (!::quickEdit.isInitialized) return
+        quickEdit.isVisible = !quickEditing
+        quickAll.isVisible = !quickEditing
+        quickDone.isVisible = quickEditing
+        quickCancel.isVisible = quickEditing
+        quickAddGrid.isVisible = quickEditing
+    }
+
+    /** Long-press drag reorder (also the tested persistence path). */
+    internal fun moveQuickTool(id: String, toIndex: Int) {
+        val from = quickIds.indexOf(id)
+        if (from < 0) return
+        quickIds.removeAt(from)
+        quickIds.add(toIndex.coerceIn(0, quickIds.size), id)
+        buildQuickRow()
+    }
+
     private fun buildQuickRow() {
-        for (id in quickIds) {
-            val tool = ToolRegistry.byId(id) ?: continue
-            val tile = ToolTile(context)
-            tile.host = host
-            tile.asQuick()
-            tile.bind(tool)
-            quickLabels[id]?.let { tile.setLabel(context.getString(it)) }
-            tile.layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-            quickRow.addView(tile)
+        quickRow.removeAllViews()
+        quickRow2.removeAllViews()
+        quickAddGrid.removeAllViews()
+        val tools = quickIds.mapNotNull { ToolRegistry.byId(it) }
+            .take(com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS)
+        quickIds = tools.map { it.id }.toMutableList()
+        listOf(quickRow, quickRow2).forEach { row ->
+            row.setOnDragListener { _, event ->
+                if (event.action == android.view.DragEvent.ACTION_DROP) {
+                    val dragged = event.clipData?.getItemAt(0)?.text?.toString()
+                    if (dragged != null && quickIds.contains(dragged)) {
+                        moveQuickTool(dragged, quickIds.lastIndex)
+                    }
+                }
+                true
+            }
+        }
+        tools.chunked(6).forEachIndexed { index, rowTools ->
+            val row = if (index == 0) quickRow else quickRow2
+            row.isVisible = true
+            for (tool in rowTools) {
+                row.addView(
+                    quickToolTile(tool),
+                    LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                )
+            }
+        }
+        quickRow2.isVisible = tools.size > 6
+        if (quickEditing) buildQuickAddGrid()
+        updateChrome()
+    }
+
+    private fun quickToolTile(tool: SwTool): ToolTile {
+        val tile = ToolTile(context)
+        tile.host = host
+        tile.asQuick()
+        tile.bind(tool)
+        quickLabels[tool.id]?.let { tile.setLabel(context.getString(it)) }
+        if (quickEditing) {
+            // Edit mode: tapping the minus badge (or the tile) removes it; a
+            // long-press starts a drag reorder.
+            tile.setOnClickListener { removeQuickTool(tool.id) }
+            tile.setOnLongClickListener { view ->
+                view.startDragAndDrop(
+                    android.content.ClipData.newPlainText("tool", tool.id),
+                    android.view.View.DragShadowBuilder(view),
+                    null,
+                    0
+                )
+                true
+            }
+            tile.setOnDragListener { _, event ->
+                if (event.action == android.view.DragEvent.ACTION_DROP) {
+                    val dragged = event.clipData?.getItemAt(0)?.text?.toString()
+                    if (dragged != null && dragged != tool.id) {
+                        val target = quickIds.indexOf(tool.id)
+                        if (target >= 0) moveQuickTool(dragged, target)
+                    }
+                }
+                true
+            }
+            val badge = ImageView(context).apply {
+                setImageResource(R.drawable.ic_sym_close)
+                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.sw_on_gold))
+                background = SwStyle.rounded(
+                    context, SwStyle.color(context, R.color.gold_pro_primary), radiusDp = 999f
+                )
+                contentDescription = context.getString(R.string.quick_remove, context.getString(tool.title))
+                setPadding(SwStyle.dp(context, 3f), SwStyle.dp(context, 3f), SwStyle.dp(context, 3f), SwStyle.dp(context, 3f))
+                setOnClickListener { removeQuickTool(tool.id) }
+            }
+            tile.addView(
+                badge,
+                FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
+                    gravity = Gravity.TOP or Gravity.END
+                    topMargin = SwStyle.dp(context, 2f)
+                    marginEnd = SwStyle.dp(context, 2f)
+                }
+            )
+        }
+        return tile
+    }
+
+    private fun removeQuickTool(id: String) {
+        if (quickIds.size <= 1) return
+        quickIds.remove(id)
+        buildQuickRow()
+    }
+
+    private fun addQuickTool(id: String) {
+        if (quickIds.size >= com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS) return
+        if (quickIds.contains(id)) return
+        quickIds.add(id)
+        buildQuickRow()
+    }
+
+    private fun buildQuickAddGrid() {
+        val available = ToolRegistry.all.filter { it.status == ToolStatus.READY && it.id !in quickIds }
+        quickAddGrid.addView(
+            SwStyle.text(context, 12f, SwStyle.color(context, R.color.cyan_dim), bold = true).apply {
+                id = R.id.swQuickAddTitle
+                text = context.getString(R.string.quick_add_tools).uppercase(Locale.getDefault())
+                letterSpacing = 0.08f
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        )
+        if (available.isEmpty()) return
+        val atLimit = quickIds.size >= com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS
+        for (chunk in available.chunked(6)) {
+            val row = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            for (tool in chunk) {
+                val tile = ToolTile(context).apply {
+                    host = this@LibraryScreen.host
+                    asQuick()
+                    bind(tool)
+                    alpha = if (atLimit) 0.38f else 1f
+                    isEnabled = !atLimit
+                    contentDescription = if (atLimit) {
+                        context.getString(R.string.quick_max_reached)
+                    } else {
+                        context.getString(R.string.quick_add, context.getString(tool.title))
+                    }
+                    setOnClickListener {
+                        if (!atLimit) addQuickTool(tool.id)
+                    }
+                    val plus = ImageView(context).apply {
+                        setImageResource(R.drawable.ic_sym_add)
+                        imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.sw_on_gold))
+                        background = SwStyle.rounded(
+                            context, SwStyle.color(context, R.color.gold_pro_primary), radiusDp = 999f
+                        )
+                        setPadding(SwStyle.dp(context, 3f), SwStyle.dp(context, 3f), SwStyle.dp(context, 3f), SwStyle.dp(context, 3f))
+                    }
+                    addView(
+                        plus,
+                        FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
+                            gravity = Gravity.TOP or Gravity.END
+                            topMargin = SwStyle.dp(context, 2f)
+                            marginEnd = SwStyle.dp(context, 2f)
+                        }
+                    )
+                }
+                row.addView(tile, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            }
+            quickAddGrid.addView(
+                row,
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = SwStyle.dp(context, 6f) }
+            )
         }
     }
 
@@ -1025,16 +1338,21 @@ class LibraryScreen(
         }
     }
 
-    private fun visibleDocs(): List<ScanDocument> {
-        val q = query.lowercase(Locale.getDefault())
+    private fun computeVisible(
+        q: String,
+        folderFilter: String?,
+        categoryFilter: String?,
+        sortMode: String
+    ): List<ScanDocument> {
+        val needle = q.lowercase(Locale.getDefault())
         val filtered = docs.filter { doc ->
-            (folder == null || doc.folder.equals(folder, true)) &&
-                (category == null || doc.category == category) &&
-                (q.isEmpty() || doc.name.lowercase(Locale.getDefault()).contains(q) ||
-                    doc.tags.any { it.lowercase(Locale.getDefault()).contains(q) } ||
-                    runCatching { textCache.normalized(doc.id).contains(q) }.getOrDefault(false))
+            (folderFilter == null || doc.folder.equals(folderFilter, true)) &&
+                (categoryFilter == null || doc.category == categoryFilter) &&
+                (needle.isEmpty() || doc.name.lowercase(Locale.getDefault()).contains(needle) ||
+                    doc.tags.any { it.lowercase(Locale.getDefault()).contains(needle) } ||
+                    runCatching { textCache.normalized(doc.id).contains(needle) }.getOrDefault(false))
         }
-        return when (sort) {
+        return when (sortMode) {
             com.scanwhirl.app.util.Prefs.LIB_OLDEST -> filtered.sortedBy { it.createdAt }
             com.scanwhirl.app.util.Prefs.LIB_NAME_ASC ->
                 filtered.sortedBy { it.name.lowercase(Locale.getDefault()) }
@@ -1045,60 +1363,124 @@ class LibraryScreen(
         }
     }
 
-    private fun docSize(doc: ScanDocument): Long = runCatching {
-        if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
-    }.getOrDefault(0L)
+    /** L1-4: the size is cached by [ScanRepository.loadDocument]; no page stat pass. */
+    private fun docSize(doc: ScanDocument): Long =
+        if (doc.cachedSize > 0L) doc.cachedSize
+        else runCatching {
+            if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
+        }.getOrDefault(0L)
 
+    /**
+     * L1-2: a keystroke cancels the previous search, waits 200 ms, runs the
+     * name/tag/OCR match off the main thread and only then rebinds the list.
+     * Under Robolectric the wait is 0 and the dispatcher is immediate, so tests
+     * still settle on one `idle()`.
+     */
     private fun renderDocs() {
-        val shown = visibleDocs()
-        docList.removeAllViews()
+        val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
+        if (owner == null) {
+            applyDocs(computeVisible(query, folder, category, sort))
+            return
+        }
+        renderJob?.cancel()
+        val q = query
+        val f = folder
+        val c = category
+        val s = sort
+        renderJob = owner.launch {
+            if (q.isNotBlank() && searchDebounceMs > 0L) delay(searchDebounceMs)
+            val shown = withContext(ioDispatcher) { computeVisible(q, f, c, s) }
+            if (isActive) applyDocs(shown)
+        }
+    }
+
+    /** What a card shows; a change here means that one row must rebind. */
+    private fun signature(doc: ScanDocument): String = buildString {
+        append(doc.id).append('\u0000')
+        append(doc.name).append('\u0000')
+        append(doc.category).append('\u0000')
+        append(doc.folder).append('\u0000')
+        append(doc.tags.joinToString("\u0001")).append('\u0000')
+        append(doc.pageCount).append('\u0000')
+        append(doc.revision).append('\u0000')
+        append(doc.isLocked).append('\u0000')
+        append(doc.isVaulted).append('\u0000')
+        append(selectionMode && doc.id in selected).append('\u0000')
+        append(doc.id == revealId)
+    }
+
+    private fun bindCard(card: DocCard, doc: ScanDocument) {
+        card.bind(
+            doc,
+            metaFor(doc),
+            onShare = { callbacks.onShareDoc(doc) },
+            onMore = { callbacks.onMoreDoc(doc) }
+        )
+        card.setSelection(selectionMode, doc.id in selected)
+        card.setOnClickListener {
+            if (selectionMode) toggleSelection(doc.id) else callbacks.onOpenDoc(doc)
+        }
+        card.setOnLongClickListener {
+            com.scanwhirl.app.ui.kit.SwHaptics.tick(it)
+            if (!selectionMode) enterSelection(doc.id) else toggleSelection(doc.id)
+            true
+        }
+        if (doc.id == revealId) {
+            card.isSelected = true
+            card.background = SwStyle.gradient(
+                context,
+                SwStyle.color(context, R.color.glass_surface_raised),
+                SwStyle.color(context, R.color.glass_surface),
+                18f,
+                SwStyle.color(context, R.color.cyan_primary)
+            )
+            card.requestFocus()
+            card.post {
+                card.requestRectangleOnScreen(
+                    android.graphics.Rect(0, 0, card.width, card.height), true
+                )
+            }
+        }
+    }
+
+    private fun newCard(doc: ScanDocument): DocCard = DocCard(context).also { bindCard(it, doc) }
+
+    /**
+     * L1-2: only changed rows are rebuilt. Same ids in the same order (the
+     * common rename/selection/sort-in-place case) rebinds just the rows whose
+     * content signature changed; an insert/remove/filter reorders the list.
+     */
+    private fun applyDocs(shown: List<ScanDocument>) {
+        val limit = shown.take(maxDocCards)
+        val signatures = limit.map { signature(it) }
+        val sameIds = limit.map { it.id } == renderedDocs.map { it.id }
+        if (sameIds && docList.childCount == limit.size) {
+            limit.forEachIndexed { index, doc ->
+                if (renderedSignatures.getOrNull(index) != signatures[index]) {
+                    val card = docList.getChildAt(index) as? DocCard ?: return@forEachIndexed
+                    bindCard(card, doc)
+                }
+            }
+        } else {
+            docList.removeAllViews()
+            for (doc in limit) {
+                docList.addView(
+                    newCard(doc),
+                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                        val m = SwStyle.dp(context, 18f)
+                        setMargins(m, 0, m, SwStyle.dp(context, 10f))
+                    }
+                )
+            }
+        }
+        renderedDocs = limit
+        renderedSignatures = signatures
+
         renderSelectionBar()
         listHeader.isVisible = shown.isNotEmpty()
         countLabel.text = resources.getQuantityString(
             com.scanwhirl.app.R.plurals.list_count, shown.size, shown.size
         )
-        for (doc in shown.take(maxDocCards)) {
-            val card = DocCard(context).apply {
-                bind(
-                    doc,
-                    metaFor(doc),
-                    onShare = { callbacks.onShareDoc(doc) },
-                    onMore = { callbacks.onMoreDoc(doc) }
-                )
-                setSelection(selectionMode, doc.id in selected)
-                setOnClickListener {
-                    if (selectionMode) toggleSelection(doc.id) else callbacks.onOpenDoc(doc)
-                }
-                setOnLongClickListener {
-                    com.scanwhirl.app.ui.kit.SwHaptics.tick(it)
-                    if (!selectionMode) enterSelection(doc.id) else toggleSelection(doc.id)
-                    true
-                }
-            }
-            docList.addView(
-                card,
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                    val m = SwStyle.dp(context, 18f)
-                    setMargins(m, 0, m, SwStyle.dp(context, 10f))
-                }
-            )
-            if (doc.id == revealId) {
-                card.isSelected = true
-                card.background = SwStyle.gradient(
-                    context,
-                    SwStyle.color(context, R.color.glass_surface_raised),
-                    SwStyle.color(context, R.color.glass_surface),
-                    18f,
-                    SwStyle.color(context, R.color.cyan_primary)
-                )
-                card.requestFocus()
-                card.post {
-                    card.requestRectangleOnScreen(
-                        android.graphics.Rect(0, 0, card.width, card.height), true
-                    )
-                }
-            }
-        }
         val filtering = query.isNotBlank() || folder != null || category != null
         noMatchView.isVisible = shown.isEmpty() && filtering
         if (noMatchView.isVisible) {
@@ -1137,6 +1519,8 @@ class LibraryScreen(
         createRow.isVisible = !searching
         quickHeader?.isVisible = !searching && !firstRun
         quickRow.isVisible = !searching && !firstRun
+        quickRow2.isVisible = !searching && !firstRun && quickRow2.childCount > 0
+        quickAddGrid.isVisible = quickEditing && !searching
         recentHeader?.isVisible = !searching && !firstRun
         chipRow.isVisible = !searching && !firstRun && docs.isNotEmpty()
         listHeader.isVisible = !searching && !firstRun
@@ -1172,5 +1556,25 @@ class LibraryScreen(
             docDay.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
         if (yesterday) return context.getString(R.string.shell_yesterday)
         return fmt.format(Date(doc.createdAt))
+    }
+
+    internal companion object {
+        private val isRobolectric =
+            android.os.Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
+
+        /**
+         * Every library read (list + search) runs here. Production uses the IO
+         * pool; the Robolectric suite uses an immediate dispatcher so its
+         * single `idle()` still sees the loaded list. The perf test overrides
+         * this with a real threaded dispatcher to prove no disk I/O on main.
+         */
+        @Volatile
+        var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher =
+            if (isRobolectric) kotlinx.coroutines.Dispatchers.Unconfined
+            else kotlinx.coroutines.Dispatchers.IO
+
+        /** 200 ms between keystroke and search; 0 under Robolectric. */
+        @Volatile
+        var searchDebounceMs: Long = if (isRobolectric) 0L else 200L
     }
 }

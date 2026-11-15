@@ -24,6 +24,7 @@ class ToolRegistryTest {
         assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
         assertEquals(ToolStatus.READY, ToolRegistry.byId("insert_pages")?.status)
         assertNull("Mask Aadhaar folded into Redact's Find", ToolRegistry.byId("mask_aadhaar"))
+        assertNull("Hindi is a language choice, not a tile", ToolRegistry.byId("hindi_text"))
         assertEquals(ToolStatus.READY, ToolRegistry.byId("redact")?.status)
     }
 

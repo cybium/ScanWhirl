@@ -112,4 +112,10 @@ class SwChip(context: Context) : LinearLayout(context) {
                 .apply { marginStart = SwStyle.dp(context, 6f) }
         )
     }
+
+    /** Unavailable chips are visibly greyed (38%), matching the tiles. */
+    override fun setEnabled(enabled: Boolean) {
+        super.setEnabled(enabled)
+        alpha = if (enabled) 1f else 0.38f
+    }
 }
