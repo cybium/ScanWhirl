@@ -66,4 +66,32 @@
         <item quantity="one">Added %1$d page</item>
         <item quantity="other">Added %1$d pages</item>
     </plurals>
+
+    <!-- Accessibility: page tiles and canvas marks announce position and state, and expose
+         move/resize/rotate as custom actions (TalkBack local context menu). -->
+    <string name="a11y_page_of">Page %1$d of %2$d</string>
+    <string name="a11y_page_of_selected">Page %1$d of %2$d, selected</string>
+    <string name="a11y_select_page_of">Select page %1$d of %2$d</string>
+    <string name="a11y_moved_to">Moved to page %1$d of %2$d</string>
+    <string name="a11y_page_image">Page %1$d of %2$d</string>
+    <string name="a11y_no_mark_selected">Page %1$d of %2$d. No mark selected.</string>
+    <string name="a11y_mark_selected">%1$s, selected on page %2$d of %3$d</string>
+    <string name="a11y_mark_text">Text</string>
+    <string name="a11y_mark_signature">Signature</string>
+    <string name="a11y_mark_picture">Picture</string>
+    <string name="a11y_mark_highlight">Highlight</string>
+    <string name="a11y_mark_badge">Badge</string>
+    <string name="a11y_mark_redact">Redaction</string>
+    <string name="a11y_mark_ink">Ink</string>
+    <string name="a11y_mark_watermark">Watermark</string>
+    <string name="a11y_mark_page_number">Page number</string>
+    <string name="a11y_move_left">Move left</string>
+    <string name="a11y_move_right">Move right</string>
+    <string name="a11y_move_up">Move up</string>
+    <string name="a11y_move_down">Move down</string>
+    <string name="a11y_grow">Make bigger</string>
+    <string name="a11y_shrink">Make smaller</string>
+    <string name="a11y_rotate_cw">Rotate clockwise</string>
+    <string name="a11y_rotate_ccw">Rotate anticlockwise</string>
+    <string name="a11y_delete_mark">Delete mark</string>
 </resources>

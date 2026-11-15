@@ -23,8 +23,10 @@ merges your work, and reads your final reply. There is no human to answer questi
 **Since 2026-11-15 the FULL gate runs in the cloud** (GitHub Actions, 16 GB runner, ~5-6 min, no local queue).
 Same command; it snapshots your worktree (incl. untracked files) WITHOUT touching your branch or index, pushes the
 snapshot to `ci/<LANE>`, waits for the cloud run and prints the verdict (failing tests + lint errors). Lint runs in
-the cloud on integration merges. `-Tests "..."` still runs locally (fast red/green, queued). `-Local` forces the old
-local full run (avoid: this PC has little memory).
+the cloud on integration merges. `-Tests "..."` runs locally when the PC's build slot is free (~1 min) and goes to
+the CLOUD automatically when anyone is building or queued (~4 min, no waiting; branch `ci/<LANE>-t`). Evals on the
+owner's private files (names containing Eval/PerfHarness/RealWorld, or while your `<LANE>_EVAL_ON` flag exists) always
+run locally. `-Local` forces a local run (avoid for the full suite: this PC has little memory).
 
 ### Local details (red/green with -Tests)
 - Red/green loop on one test class:
@@ -44,6 +46,8 @@ local full run (avoid: this PC has little memory).
 - Evals run LOCALLY with `-Tests`; in the cloud they must return early and pass. Never commit the private files.
 
 ## Rules
+- Commit every green piece (at least every ~45 min of work). The model provider can drop a session; the lead
+  restarts it, but uncommitted hours are a risk.
 - File ownership is strict: if a fix needs another lane's file, report it to the lead instead of editing it
   (exception: one-line hooks the lead explicitly allowed).
 - Commit after each GATE PASS: `git add -A ; git commit -m "<LANE>: <what>"`. Small, frequent commits.

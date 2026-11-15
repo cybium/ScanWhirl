@@ -90,7 +90,7 @@ class ShellScreenTest {
 
             activity.findViewById<View>(R.id.swNavMe).performClick()
             idle()
-            assertEquals(4, (activity.findViewById<View>(R.id.swMeList) as android.view.ViewGroup).childCount)
+            assertEquals(5, (activity.findViewById<View>(R.id.swMeList) as android.view.ViewGroup).childCount)
 
             activity.findViewById<View>(R.id.swNavVault).performClick()
             idle()
@@ -102,17 +102,16 @@ class ShellScreenTest {
         }
     }
 
-    // v2 UI: 03_tools_hub (43 tools after the owner asked for hindi_text and
-    // mask_aadhaar to be removed from the catalogue).
+    // v2 UI: 03_tools_hub (44 tools: Mask Aadhaar folded into Redact's Find; the Hindi tile folds into Read text).
     @Test
-    fun `the tools hub holds all 43 tiles and every tile is wired`() {
+    fun `the tools hub holds all 44 tiles and every tile is wired`() {
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val tiles = ToolsHubScreen.tiles(body)
-            assertEquals(43, tiles.size)
-            assertEquals(43, tiles.mapNotNull { it.tool?.id }.toSet().size)
+            assertEquals(44, tiles.size)
+            assertEquals(44, tiles.mapNotNull { it.tool?.id }.toSet().size)
             for (tile in tiles) {
                 assertTrue("${tile.tool?.id} has no tap action", tile.hasOnClickListeners())
             }

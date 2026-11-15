@@ -39,11 +39,21 @@ class OcrStore(private val docsDir: File) {
     companion object {
         private val lock = ReentrantLock()
 
+        /** Atomic writes performed since [resetWriteCountForTests]; a test seam for write counts. */
+        private val writeCount = java.util.concurrent.atomic.AtomicInteger()
+
+        internal fun writeCountForTests(): Int = writeCount.get()
+        internal fun resetWriteCountForTests() { writeCount.set(0) }
+
         // Never acquire the repository PDF lock while holding this lock.
         internal fun <T> locked(action: () -> T): T = lock.withLock(action)
     }
 
     private fun docDir(id: String): File = File(docsDir, id)
+
+    /** One small file listing documents that carry an `ocr_pending` marker (see [pendingQueue]). */
+    private val queueFile: File
+        get() = File(docsDir.parentFile ?: docsDir, "ocr_pending_queue.txt")
 
     private fun pageKeyFor(index: Int): String = "page_%03d.jpg".format(index)
 
@@ -55,6 +65,7 @@ class OcrStore(private val docsDir: File) {
     private fun atomicWrite(target: File, content: String) {
         Durable.atomicWriteText(target, content)
         target.parentFile?.let { Durable.syncDir(it) }
+        writeCount.incrementAndGet()
     }
 
     private fun digest(text: String): String = java.security.MessageDigest.getInstance("SHA-256")
@@ -255,12 +266,65 @@ class OcrStore(private val docsDir: File) {
     /** Recognition runs outside all file locks. Recheck under the shared lock:
      * an editor, delete, rotation or reorder may have superseded this result.
      */
-    internal fun putRecognizedPage(id: String, key: String, sourceHash: String, text: String, page: OcrPage?): Boolean = lock.withLock {
-        val source = File(docDir(id), key)
-        if (!source.isFile || Sha256.of(source) != sourceHash) return@withLock false
-        if (key in readTextStrict(id)) return@withLock true
-        putPage(id, key, text, page)
-        true
+    internal fun putRecognizedPage(id: String, key: String, sourceHash: String, text: String, page: OcrPage?): Boolean {
+        val result = putRecognizedPages(id, listOf(Recognized(key, sourceHash, text, page)))
+        return result.stored + result.already > 0
+    }
+
+    /** A recognized page waiting for a batch commit. */
+    data class Recognized(val key: String, val sourceHash: String, val text: String, val page: OcrPage?)
+
+    /** How a batch commit ended: pages written, pages already stored, pages whose source changed. */
+    data class BatchResult(val stored: Int, val already: Int, val stale: Int)
+
+    /**
+     * Commits several recognized pages with ONE geometry write and ONE text write. Order is the
+     * same as [putPage]: geometry first, then the text rename as the commit point, so a crash
+     * between the two leaves readable text that no longer claims the new coordinates. Pages that
+     * were already stored are left alone (resume-safe, never overwrites corrected text), and a
+     * page whose file changed while recognition ran is dropped exactly like [putRecognizedPage].
+     *
+     * This is what makes indexing linear: N pages cost N/16 commits instead of N whole-file
+     * rewrites. A crash loses at most the caller's unflushed batch, which the next pass reads again.
+     */
+    internal fun putRecognizedPages(id: String, pages: List<Recognized>): BatchResult = lock.withLock {
+        if (pages.isEmpty()) return@withLock BatchResult(0, 0, 0)
+        val dir = docDir(id)
+        // Read before creating anything: a page whose directory was deleted (or a hash that no
+        // longer matches) must never resurrect the document.
+        val before = readTextStrict(id).toMutableMap()
+        val geo = readGeoStrict(id, before).toMutableMap()
+        val previous = mutableMapOf<String, Pair<String, OcrPage>>()
+        var stored = 0
+        var already = 0
+        var stale = 0
+
+        for (p in pages) {
+            val source = File(dir, p.key)
+            if (!source.isFile || Sha256.of(source) != p.sourceHash) {
+                stale++
+                continue
+            }
+            if (p.key in before) {
+                already++
+                continue
+            }
+            // Keep the old geometry candidate until the text commit, as putPage does.
+            val oldGeo = geo[p.key]
+            if (oldGeo != null && before[p.key] != p.text) {
+                previous[p.key] = before[p.key].orEmpty() to oldGeo
+            }
+            if (p.page == null) geo.remove(p.key) else geo[p.key] = p.page
+            before[p.key] = p.text
+            stored++
+        }
+
+        if (stored > 0) {
+            dir.mkdirs()
+            writeGeometry(id, geo, before, previous)
+            writeTexts(id, before)
+        }
+        BatchResult(stored, already, stale)
     }
 
     // ------------------------------------------------------------------
@@ -397,6 +461,9 @@ class OcrStore(private val docsDir: File) {
         lock.withLock {
             val dir = docDir(id)
             if (!dir.isDirectory || SaveFormat.isIncomplete(dir)) return
+            // Queue first: a crash before the marker still leaves the id in the queue, and the
+            // next pass marks it again. The marker alone is the older, slower fallback.
+            enqueuePending(id)
             File(dir, PENDING_FILE).writeText("")
         }
     }
@@ -404,8 +471,64 @@ class OcrStore(private val docsDir: File) {
     fun clearPending(id: String) {
         lock.withLock {
             File(docDir(id), PENDING_FILE).delete()
+            dequeuePending(id)
         }
     }
+
+    /**
+     * The documents waiting for indexing, newest first. Reads one small queue file instead of
+     * listing every document directory on launch; entries whose marker disappeared (indexed,
+     * deleted, or a save that never published) are dropped and the file is rewritten.
+     *
+     * A missing queue file (first launch after an upgrade) is rebuilt once from the markers.
+     */
+    internal fun pendingQueue(): List<String> = lock.withLock {
+        val rebuilt = !queueFile.isFile
+        val listed = if (!rebuilt) readQueue() else scanPendingMarkers()
+        val alive = listed.filter { id ->
+            val dir = docDir(id)
+            dir.isDirectory && !SaveFormat.isIncomplete(dir) && File(dir, PENDING_FILE).isFile
+        }.sortedByDescending { docDir(it).lastModified() }
+        if (rebuilt || alive != listed) writeQueue(alive)
+        alive
+    }
+
+    private fun enqueuePending(id: String) {
+        val current = if (queueFile.isFile) readQueue() else scanPendingMarkers()
+        if (id in current) return
+        writeQueue(current + id)
+    }
+
+    private fun dequeuePending(id: String) {
+        if (!queueFile.isFile) return
+        val current = readQueue()
+        if (id !in current) return
+        writeQueue(current - id)
+    }
+
+    private fun readQueue(): List<String> = try {
+        queueFile.takeIf { it.isFile }?.readLines()
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?: emptyList()
+    } catch (_: IOException) {
+        emptyList()
+    }
+
+    private fun writeQueue(ids: List<String>) {
+        try {
+            Durable.atomicWriteText(queueFile, ids.joinToString("\n"))
+            queueFile.parentFile?.let { Durable.syncDir(it) }
+        } catch (_: IOException) {
+            // The marker files stay authoritative; pendingQueue() rebuilds from them next time.
+        }
+    }
+
+    private fun scanPendingMarkers(): List<String> =
+        docsDir.listFiles { f ->
+            f.isDirectory && !SaveFormat.isIncomplete(f) && File(f, PENDING_FILE).isFile
+        }?.sortedByDescending { it.lastModified() }?.mapNotNull { it.name } ?: emptyList()
 
     /**
      * Drops every page's text and geometry (a re-recognition in another language) and marks the

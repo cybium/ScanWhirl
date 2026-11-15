@@ -75,6 +75,14 @@
             android:parentActivityName=".ui.shell.ShellActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Full Backup 2.0: one encrypted file with the library, the Vault and settings. -->
+        <activity
+            android:name=".ui.backup.BackupActivity"
+            android:exported="false"
+            android:label="@string/backup_title"
+            android:parentActivityName=".ui.shell.ShellActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- L2 v2 QR code reader: scan result, actions and the local history. -->
         <activity
             android:name=".ui.qr.QrActivity"
@@ -155,6 +163,12 @@
         <!-- L3: Book pages — split a photographed two-page spread (Create group). -->
         <activity
             android:name=".ui.book.BookPagesActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity" />
+
+        <!-- L3: Tools/Home Protect PDF and Unlock PDF — document chooser, then the sheet. -->
+        <activity
+            android:name=".ui.protect.LockToolsActivity"
             android:exported="false"
             android:parentActivityName=".ui.shell.ShellActivity" />
 

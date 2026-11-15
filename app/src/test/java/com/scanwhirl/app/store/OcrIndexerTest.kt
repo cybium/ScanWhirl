@@ -205,4 +205,126 @@ class OcrIndexerTest {
         assertEquals(0, failed)
         assertEquals(listOf(id), indexed)
     }
+
+    /** A document built directly on disk (real JPEGs are not needed with a fake recognizer). */
+    private fun syntheticDoc(id: String, pages: Int): String {
+        val dir = File(docsDir, id).apply { mkdirs() }
+        File(dir, "meta.txt").writeText("Bulk $id\n${System.currentTimeMillis()}\nOther\n")
+        File(dir, "scan.pdf").writeBytes(byteArrayOf(1))
+        repeat(pages) { p ->
+            File(dir, "page_%03d.jpg".format(p)).writeBytes(byteArrayOf(p.toByte(), 2, 3))
+        }
+        File(dir, "ocr_pending").writeText("")
+        return id
+    }
+
+    @Test
+    fun `a long index writes a bounded number of files, not one per page`() = runBlocking {
+        val repo = ScanRepository(context)
+        val pages = 120
+        val id = syntheticDoc("bulk_batch", pages)
+        val fake = FakeRecognizer()
+        val indexer = OcrIndexer(
+            repo, CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            recognize = fake::recognize, autoRun = false, batchPages = 8
+        )
+
+        OcrStore.resetWriteCountForTests()
+        val report = indexer.index(id)
+        val writes = OcrStore.writeCountForTests()
+
+        assertEquals(pages, report.pagesWithText)
+        assertEquals(0, report.failedPages)
+        assertEquals(pages, fake.callCount.get())
+        // Two writes per batch (geometry, then text) plus at most one partial batch. A per-page
+        // implementation would write 2 * pages times.
+        val batches = (pages + 8 - 1) / 8
+        assertTrue("writes=$writes for $pages pages (batches=$batches)", writes <= batches * 2 + 2)
+        assertTrue("writes=$writes looks per-page", writes < pages)
+        assertEquals(pages, repo.ocrStore.readText(id).size)
+        assertEquals(pages, repo.ocrStore.readGeo(id).size)
+    }
+
+    @Test
+    fun `the report counts only this document's pages`() = runBlocking {
+        val repo = ScanRepository(context)
+        val id = syntheticDoc("bulk_report", 6)
+        val fake = FakeRecognizer()
+        val indexer = OcrIndexer(repo, CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            recognize = fake::recognize, autoRun = false)
+        indexer.indexNow(id)
+        // A leftover key from a page that no longer exists must not inflate the report.
+        repo.ocrStore.putPage(id, "page_999.jpg", "stale", null)
+
+        val report = indexer.index(id)
+        assertEquals(6, report.totalPages)
+        assertEquals(6, report.pagesWithText)
+    }
+
+    @Test
+    fun `a pass that dies mid-batch leaves a consistent store and resumes`() = runBlocking {
+        val repo = ScanRepository(context)
+        val pages = 10
+        val id = syntheticDoc("bulk_crash", pages)
+        val fake = FakeRecognizer()
+        // Die (like a process kill) on the sixth page, after the first batch of four was committed.
+        val dying = object {
+            suspend fun recognize(file: File): OcrEngine.OcrResult {
+                if (file.name == "page_005.jpg") throw kotlinx.coroutines.CancellationException("process died")
+                return fake.recognize(file)
+            }
+        }
+        val indexer = OcrIndexer(
+            repo, CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            recognize = dying::recognize, autoRun = false, batchPages = 4
+        )
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val outcome = runCatching { runBlocking { kotlinx.coroutines.withTimeout(5_000) { indexer.indexNow(id) } } }
+
+        assertTrue("the pass was interrupted", outcome.isFailure)
+        val store = repo.ocrStore
+        val text = store.readText(id)
+        val geo = store.readGeo(id)
+        assertEquals("the committed batches survive, the in-flight page too", 5, text.size)
+        assertEquals("text and geometry agree after an interrupted batch", text.keys, geo.keys)
+        assertTrue("the document stays pending for the next launch", store.isPending(id))
+
+        val resumeFake = FakeRecognizer()
+        val resumed = OcrIndexer(repo, scope, recognize = { file -> resumeFake.recognize(file) },
+            autoRun = false, batchPages = 4)
+        assertEquals(0, resumed.indexNow(id))
+        assertEquals(pages, store.readText(id).size)
+        assertFalse(store.isPending(id))
+    }
+
+    @Test
+    fun `the pending queue replaces the directory scan and drops dead entries`() = runBlocking {
+        val repo = ScanRepository(context)
+        val a = saveDoc(repo, "Queued A", pageCount = 1)
+        val b = saveDoc(repo, "Queued B", pageCount = 1)
+        val store = repo.ocrStore
+        store.markPending(a)
+        store.markPending(b)
+
+        assertEquals(setOf(a, b), store.pendingQueue().toSet())
+        assertTrue("one small queue file", File(context.filesDir, "ocr_pending_queue.txt").isFile)
+
+        store.clearPending(a)
+        assertEquals(listOf(b), store.pendingQueue())
+    }
+
+    @Test
+    fun `a missing queue file is rebuilt from the markers`() = runBlocking {
+        val repo = ScanRepository(context)
+        val a = saveDoc(repo, "Upgrade A", pageCount = 1)
+        val b = saveDoc(repo, "Upgrade B", pageCount = 1)
+        val store = repo.ocrStore
+        store.markPending(a)
+        store.markPending(b)
+        // An install upgraded from a build without the queue file: only markers exist.
+        File(context.filesDir, "ocr_pending_queue.txt").delete()
+
+        assertEquals(setOf(a, b), store.pendingQueue().toSet())
+        assertTrue("the queue is rebuilt", File(context.filesDir, "ocr_pending_queue.txt").isFile)
+    }
 }

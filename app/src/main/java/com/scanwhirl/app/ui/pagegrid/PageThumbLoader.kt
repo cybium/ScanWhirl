@@ -37,8 +37,28 @@ object PageThumbLoader {
     }
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    fun keyFor(file: File, targetPx: Int, filter: ScanFilter): String =
+    /** Test seam: counts key computations that had to stat the file. Null in production. */
+    internal var keyStatProbe: (() -> Unit)? = null
+
+    /**
+     * The cache key for a page thumb.
+     *
+     * A caller that knows the page set cannot change in place (the Organize grid: every edit
+     * writes a new `r_<n>` file) passes a [revision] and pays **no** `stat` per bind. Callers
+     * with mutable paths keep the mtime+length key.
+     */
+    fun keyFor(
+        file: File,
+        targetPx: Int,
+        filter: ScanFilter,
+        revision: String? = null
+    ): String = if (revision != null) {
+        "${file.path}|$revision|$targetPx|${filter.id}"
+    } else {
+        keyStatProbe?.invoke()
+        keyStatProbe?.invoke()
         "${file.path}|${file.lastModified()}|${file.length()}|$targetPx|${filter.id}"
+    }
 
     /**
      * Unreadable files, remembered by request key (path + mtime + length, so an
@@ -71,9 +91,10 @@ object PageThumbLoader {
         placeholder: Int = com.scanwhirl.app.R.drawable.ic_document,
         onLoaded: ((Bitmap, fromCache: Boolean) -> Unit)? = null,
         onFailed: (() -> Unit)? = null,
-        skipStale: Boolean = false
+        skipStale: Boolean = false,
+        revision: String? = null
     ) {
-        val key = keyFor(file, targetPx, filter) + if (fitExactly) "|fit" else ""
+        val key = keyFor(file, targetPx, filter, revision) + if (fitExactly) "|fit" else ""
         into.tag = key
 
         val cached = cache.get(key)
@@ -136,8 +157,12 @@ object PageThumbLoader {
     }
 
     /** The cached thumb for this exact request, or null (never decodes). */
-    fun cached(file: File, targetPx: Int, filter: ScanFilter): Bitmap? =
-        cache.get(keyFor(file, targetPx, filter))?.takeIf { !it.isRecycled }
+    fun cached(
+        file: File,
+        targetPx: Int,
+        filter: ScanFilter,
+        revision: String? = null
+    ): Bitmap? = cache.get(keyFor(file, targetPx, filter, revision))?.takeIf { !it.isRecycled }
 
     /**
      * Decodes a thumb off the main thread and hands it back on the main

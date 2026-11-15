@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.kit
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,17 +23,14 @@ class ToolRegistryTest {
     fun `organize pages and insert pages are ready`() {
         assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
         assertEquals(ToolStatus.READY, ToolRegistry.byId("insert_pages")?.status)
+        assertNull("Mask Aadhaar folded into Redact's Find", ToolRegistry.byId("mask_aadhaar"))
+        assertNull("Hindi is a language choice, not a tile", ToolRegistry.byId("hindi_text"))
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("redact")?.status)
     }
 
     @Test
-    fun `removed tiles are gone from the catalogue`() {
-        assertEquals(null, ToolRegistry.byId("mask_aadhaar"))
-        assertEquals(null, ToolRegistry.byId("hindi_text"))
-    }
-
-    @Test
-    fun `catalogue holds all 43 tools, each id once`() {
-        assertEquals(43, ToolRegistry.all.size)
+    fun `catalogue holds all 44 tools, each id once`() {
+        assertEquals(44, ToolRegistry.all.size)
         assertEquals(
             "duplicate tool ids",
             ToolRegistry.all.size,

@@ -273,11 +273,9 @@ class BookPagesActivity : BaseActivity() {
                             val bytes = readBytes(uri)
                             val bitmap = BookSplit.decode(bytes, PREVIEW_MAX_DIM)
                             var analysis = BookSplit.analyse(bitmap)
-                            if (analysis.textVertical) {
-                                val confirmed = TextRotation.chooseRotation(bitmap)
-                                if (confirmed != null && confirmed != analysis.rotation) {
-                                    analysis = BookSplit.analyseUpright(bitmap, confirmed)
-                                }
+                            val confirmed = TextRotation.chooseRotation(bitmap, analysis.textVertical)
+                            if (confirmed != null && confirmed != analysis.rotation) {
+                                analysis = BookSplit.analyseUpright(bitmap, confirmed)
                             }
                             val preview = BookSplit.rotate(bitmap, analysis.rotation)
                             if (preview !== bitmap) bitmap.recycle()
@@ -363,7 +361,7 @@ class BookPagesActivity : BaseActivity() {
             }
         )
 
-        if (analysis.textVertical) {
+        run {
             val rotate = SwStyle.text(
                 this, 13f, SwStyle.color(this, R.color.cyan_primary), bold = true
             ).apply {
@@ -375,8 +373,9 @@ class BookPagesActivity : BaseActivity() {
                     val flipped = BookSplit.rotate(current, 180)
                     val nextRatio = 1f - spread.ratio
                     val nextGutter = item.analysis.gutter.copy(ratio = nextRatio)
-                    item.analysis = BookSplit.Analysis(
-                        (item.analysis.rotation + 180) % 360, nextGutter, true
+                    item.analysis = item.analysis.copy(
+                        rotation = (item.analysis.rotation + 180) % 360,
+                        gutter = nextGutter
                     )
                     spread.setSpread(flipped, nextGutter)
                     if (flipped !== current) current.recycle()

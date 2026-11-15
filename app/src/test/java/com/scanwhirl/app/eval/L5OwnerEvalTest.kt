@@ -10,6 +10,8 @@ import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.util.AadhaarMask
 import com.scanwhirl.app.util.InkExtract
 import com.scanwhirl.app.util.OcrEngine
+import com.scanwhirl.app.util.PageStamp
+import com.scanwhirl.app.util.SensitiveScan
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,10 +22,11 @@ import java.io.File
 import kotlin.math.min
 
 /**
- * Owner evaluation (not part of normal gates): runs only when
- * `C:\Users\Cybium\Desktop\.sw-qa\owner\EVAL_ON` exists. It never copies or commits the owner's
- * private samples; it reads them in place and writes previews to
- * `…\.sw-qa\owner\out\L5\`.
+ * Owner evaluation (not part of normal gates): runs only when the **lane's own** flag
+ * `C:\Users\Cybium\Desktop\.sw-qa\owner\L5_EVAL_ON` exists (never the shared EVAL_ON, which other
+ * lanes delete mid-run). It never copies or commits the owner's private samples; it reads them in
+ * place and writes previews to `…\.sw-qa\owner\out\L5\`. A skip is printed, so a silent early
+ * return cannot look like a pass.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -35,11 +38,15 @@ class L5OwnerEvalTest {
         File("C:/Users/Cybium/Desktop/.sw-qa/owner")
     )
 
-    private fun root(): File? = ownerRoots.firstOrNull { File(it, "EVAL_ON").isFile }
+    private fun root(): File? = ownerRoots.firstOrNull { File(it, "L5_EVAL_ON").isFile }
 
     @Test
     fun `owner signature stamp and Aadhaar previews`() {
-        val root = root() ?: return
+        val root = root()
+        if (root == null) {
+            println("EVAL SKIPPED: L5_EVAL_ON missing (no owner samples read)")
+            return
+        }
         val downloads = File(root, "downloads")
         val out = File(root, "out/L5").apply { mkdirs() }
         val notes = StringBuilder()
@@ -118,8 +125,25 @@ class L5OwnerEvalTest {
             )
             notes.append("aadhaar ").append(name)
                 .append(if (ocr == null) " OCR=FAKE" else " OCR=MLKit")
-                .append(" boxes=").append(AadhaarMask.find(page).size).append('\n')
-            writeAadhaarPreview(source, page, File(out, "aadhaar_${safe(name)}.png"))
+                .append(" boxes=").append(AadhaarMask.find(page).size)
+            val found = SensitiveScan.find(page)
+            notes.append(" find=")
+                .append(
+                    found.groupBy { it.kind }.entries.joinToString(", ") {
+                        "${it.key.name}:${it.value.size}"
+                    }
+                )
+                .append('\n')
+            writeAadhaarPreview(
+                source, AadhaarMask.find(page),
+                File(out, "aadhaar_${safe(name)}.png")
+            )
+            if (found.isNotEmpty()) {
+                writeAadhaarPreview(
+                    source, found.map { it.box },
+                    File(out, "find_${safe(name)}.png")
+                )
+            }
             source.recycle()
         }
 
@@ -130,6 +154,7 @@ class L5OwnerEvalTest {
                 "reviewed; the real device uses ML Kit word/line boxes.\n"
         )
         assertTrue("previews must be written", out.listFiles().orEmpty().isNotEmpty())
+        println("EVAL RAN: ${out.listFiles().orEmpty().count { it.isFile }} files -> ${out.absolutePath}")
     }
 
     private fun writePreview(ink: Bitmap, out: File) {
@@ -146,7 +171,11 @@ class L5OwnerEvalTest {
         bmp.recycle()
     }
 
-    private fun writeAadhaarPreview(source: Bitmap, page: OcrPage, out: File) {
+    private fun writeAadhaarPreview(
+        source: Bitmap,
+        boxes: List<PageStamp.Box>,
+        out: File
+    ) {
         val w = 700
         val scale = w.toFloat() / source.width
         val h = (source.height * scale).toInt()
@@ -159,7 +188,7 @@ class L5OwnerEvalTest {
             strokeWidth = 3f
             color = Color.RED
         }
-        for (box in AadhaarMask.find(page)) {
+        for (box in boxes) {
             val r = RectF(box.left * w, box.top * h, box.right * w, box.bottom * h)
             canvas.drawRect(r, paint)
             canvas.drawRect(r, edge)

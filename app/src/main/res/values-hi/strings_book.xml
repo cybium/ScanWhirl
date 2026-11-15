@@ -15,7 +15,7 @@
     <string name="book_gutter_moved"><!-- review -->रेखा हाथ से सेट की गई।</string>
     <string name="book_one_page_note"><!-- review -->एक पृष्ठ लगता है।</string>
     <string name="book_keep_one_page"><!-- review -->एक पृष्ठ रखें</string>
-    <string name="book_rotate"><!-- review -->पृष्ठ घुमाएँ</string>
+    <string name="book_rotate"><!-- review -->पृष्ठ पलटें</string>
     <string name="book_add_spread"><!-- review -->फैलाव जोड़ें</string>
     <string name="book_add_spread_note"><!-- review -->स्कैनर किताब के किनारे काटता है; वहाँ कोने ठीक कर सकते हैं।</string>
     <string name="book_scan_camera"><!-- review -->कैमरे से स्कैन करें</string>

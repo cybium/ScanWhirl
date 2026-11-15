@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full Backup 2.0 screen (Me -> Backup & restore). -->
+<resources>
+    <item name="backupLastLine" type="id" />
+    <item name="backupNow" type="id" />
+    <item name="backupRestore" type="id" />
+    <item name="backupReminder" type="id" />
+    <item name="backupPassword" type="id" />
+    <item name="swMeBackup" type="id" />
+</resources>
