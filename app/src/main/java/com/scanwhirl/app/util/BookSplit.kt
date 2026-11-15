@@ -502,11 +502,28 @@ object BookSplit {
     )
 
     private fun findValley(upright: Bitmap): Valley {
+        val (candidates, blocks) = valleyScan(upright)
+        val chosen = candidates.maxByOrNull { it.score }
+        return if (chosen == null) {
+            Valley(0.5f, false, 0f, blocks)
+        } else {
+            Valley(
+                (chosen.ratio + 0.01f).coerceIn(0.05f, 0.95f),
+                true,
+                clamp01(0.55f * chosen.score + 0.45f * clamp01((chosen.depth - 10f) / 20f)),
+                blocks
+            )
+        }
+    }
+
+    private data class Candidate(val ratio: Float, val score: Float, val depth: Float)
+
+    private fun valleyScan(upright: Bitmap): Pair<List<Candidate>, Int> {
         val y0 = (upright.height * 0.15f).toInt()
         val y1 = (upright.height * 0.85f).toInt()
         val band = BandStats.of(upright, y0, y1)
         val blocks = band.textBlocks()
-        var best: Candidate? = null
+        val out = ArrayList<Candidate>()
         val lo = (band.cols * (0.5f - MIDDLE / 2f)).toInt().coerceAtLeast(3)
         val hi = (band.cols * (0.5f + MIDDLE / 2f)).toInt().coerceAtMost(band.cols - 3)
         var x = lo
@@ -521,34 +538,23 @@ object BookSplit {
             val contrast = max(inkL, inkR) - inkAt
             val bright = min(left, right) >= MIN_PLATEAU
             val balance = if (max(left, right) > 0f) min(left, right) / max(left, right) else 0f
-            if (bright && balance >= 0.80f && (depth >= 10f || contrast >= 0.05f)) {
+            // A cut through a text line has ink at the cut and similar ink on BOTH sides of it.
+            // That is never the spine. A real gutter is a dark shadow (deep on both sides) or a
+            // clean gap where the text does not continue across the cut.
+            val deepShadow = min(left, right) - valley >= 25f
+            val textCrossing = abs(inkL - inkR) < 0.06f && inkAt > 0.08f &&
+                inkAt >= min(inkL, inkR) - 0.03f
+            val gap = deepShadow || !textCrossing
+            val accepted = bright && balance >= 0.80f && gap &&
+                (depth >= 10f || contrast >= 0.05f)
+            if (accepted) {
                 val score = 0.60f * clamp01(depth / 30f) + 0.40f * clamp01(contrast / 0.15f)
-                if (best == null || score > best!!.score) {
-                    best = Candidate(x, x.toFloat() / band.cols, score, depth, contrast)
-                }
+                out += Candidate(x.toFloat() / band.cols, score, depth)
             }
             x++
         }
-        val chosen = best
-        return if (chosen == null) {
-            Valley(0.5f, false, 0f, blocks)
-        } else {
-            Valley(
-                (chosen.ratio + 0.01f).coerceIn(0.05f, 0.95f),
-                true,
-                clamp01(0.55f * chosen.score + 0.45f * clamp01((chosen.depth - 10f) / 20f)),
-                blocks
-            )
-        }
+        return out to blocks
     }
-
-    private data class Candidate(
-        val x: Int,
-        val ratio: Float,
-        val score: Float,
-        val depth: Float,
-        val contrast: Float
-    )
 
     // ------------------------------------------------------------------
 
