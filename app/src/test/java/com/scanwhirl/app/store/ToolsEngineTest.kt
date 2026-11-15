@@ -456,6 +456,18 @@ class ToolsEngineTest {
         assertTrue("nothing may be written", !out.exists())
     }
 
+    @Test
+    fun `merge names the output after the first source and stays unique`() {
+        val first = DocFixtures.saved(repo, app, pages = 1, name = "isz14")
+        val second = DocFixtures.saved(repo, app, pages = 1, name = "isz12")
+
+        val merged = runBlocking { repo.mergeDocuments(listOf(first, second), null) }
+        assertEquals("isz14 - Merged", merged.name)
+
+        val again = runBlocking { repo.mergeDocuments(listOf(first, second), null) }
+        assertEquals("isz14 - Merged (2)", again.name)
+    }
+
     // ---------------------------------------------------------------- Excel
 
     private fun ocrLine(text: String, left: Int, top: Int, width: Int = 120, height: Int = 40) =

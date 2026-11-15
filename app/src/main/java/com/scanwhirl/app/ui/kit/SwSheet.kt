@@ -260,6 +260,7 @@ class SwSheet private constructor(
                     })
                 }
                 row.setOnClickListener {
+                    SwHaptics.tick(row)
                     if (multi) {
                         selected[index] = !selected[index]
                         render()
@@ -269,16 +270,17 @@ class SwSheet private constructor(
                         dialog.dismiss()
                     }
                 }
+                SwMotion.press(row)
                 list.addView(row)
             }
         }
         render()
-        val scroll = androidx.core.widget.NestedScrollView(context).apply {
-            isFillViewport = false
+        val scroll = androidx.core.widget.NestedScrollView(context).apply {            isFillViewport = false
             addView(list)
         }
         val tall = labels.size > 8
         setContent(scroll)
+        SwMotion.stagger(list)
         if (tall) {
             scroll.layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,

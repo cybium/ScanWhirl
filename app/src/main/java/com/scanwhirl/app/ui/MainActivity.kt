@@ -1490,7 +1490,11 @@ class MainActivity : BaseActivity(), HomeHost {
     /** Edit tool: import a device PDF as editable pages and open the editor. */
     private fun startEditPdf(uri: Uri) {
         var job: kotlinx.coroutines.Job? = null
-        val progress = SwDialog.progress(this, titleRes = R.string.import_pdf_progress) { job?.cancel() }
+        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+            this,
+            getString(R.string.import_pdf_progress),
+            onCancel = { job?.cancel() }
+        )
         job = lifecycleScope.launch {
             try {
                 val name = withContext(Dispatchers.IO) {
@@ -1688,8 +1692,8 @@ class MainActivity : BaseActivity(), HomeHost {
     // Shared helpers
     // ------------------------------------------------------------------
 
-    override fun showProgress(titleRes: Int): AlertDialog {
-        return SwDialog.progress(this, titleRes = titleRes)
+    override fun showProgress(titleRes: Int): com.scanwhirl.app.ui.kit.SwProgress {
+        return com.scanwhirl.app.ui.kit.SwProgress.show(this, getString(titleRes))
     }
 
     override fun toast(res: Int, duration: Int) {

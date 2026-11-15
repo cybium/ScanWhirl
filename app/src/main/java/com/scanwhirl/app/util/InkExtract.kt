@@ -55,8 +55,7 @@ object InkExtract {
      */
     fun extract(
         source: Bitmap,
-        recolor: Recolor = Recolor.ORIGINAL,
-        marginFraction: Float = 0.03f
+        recolor: Recolor = Recolor.ORIGINAL
     ): Extracted? {
         if (source.isRecycled || source.width < 8 || source.height < 8) return null
         val w = source.width
@@ -127,16 +126,17 @@ object InkExtract {
 
         // 2. Smooth alpha and the dominant ink colour.
         val out = IntArray(pixels.size)
+        val colInk = IntArray(w)
+        val rowInk = IntArray(h)
         var sumR = 0.0
         var sumG = 0.0
         var sumB = 0.0
         var strongCount = 0
-        var minX = w
-        var minY = h
-        var maxX = -1
-        var maxY = -1
         val low = 14f     // luminance difference where ink starts (paper noise)
         val high = 58f    // fully opaque ink
+        // A photo frame or a scanned page border is not ink: ignore a thin edge band when
+        // measuring the ink bounds (the crop still keeps a real stroke that reaches an edge).
+        val edgeInset = max(2, (min(w, h) * 0.015f).roundToInt())
         for (y in 0 until h) {
             val fy = (y + 0.5f) / block - 0.5f
             val y0 = fy.toInt().coerceIn(0, gh - 1)
@@ -164,15 +164,18 @@ object InkExtract {
                     sumG += g
                     sumB += b
                     strongCount++
-                    if (x < minX) minX = x
-                    if (y < minY) minY = y
-                    if (x > maxX) maxX = x
-                    if (y > maxY) maxY = y
+                }
+                if (alpha > 0.10f &&
+                    x >= edgeInset && x < w - edgeInset &&
+                    y >= edgeInset && y < h - edgeInset
+                ) {
+                    colInk[x]++
+                    rowInk[y]++
                 }
                 out[y * w + x] = Color.argb((alpha * 255f).roundToInt(), r, g, b)
             }
         }
-        if (strongCount == 0 || maxX < minX) return null
+        if (strongCount == 0) return null
 
         val avgR = (sumR / strongCount).toFloat()
         val avgG = (sumG / strongCount).toFloat()
@@ -190,17 +193,40 @@ object InkExtract {
             }
         }
 
-        // 3. Trim to the ink bounds plus a margin.
-        val margin = max(2, (min(w, h) * marginFraction).roundToInt())
-        val left = (minX - margin).coerceAtLeast(0)
-        val top = (minY - margin).coerceAtLeast(0)
-        val right = (maxX + margin).coerceAtMost(w - 1)
-        val bottom = (maxY + margin).coerceAtMost(h - 1)
-        val cw = right - left + 1
-        val ch = bottom - top + 1
+        // 3. Trim to the ink's bounding box, ignoring isolated specks: a column/row must carry a
+        // few ink pixels to count (a lone JPEG speck does not). Then add a 4% margin.
+        val support = max(4, (min(w, h) * 0.003f).toInt())
+        var left = w
+        var right = -1
+        var top = h
+        var bottom = -1
+        for (x in 0 until w) {
+            if (colInk[x] >= support) {
+                if (x < left) left = x
+                right = x
+            }
+        }
+        for (y in 0 until h) {
+            if (rowInk[y] >= support) {
+                if (y < top) top = y
+                bottom = y
+            }
+        }
+        if (right < left || bottom < top) {
+            // Only specks: no usable ink.
+            return null
+        }
+        val marginX = max(2, ((right - left + 1) * 0.04f).roundToInt())
+        val marginY = max(2, ((bottom - top + 1) * 0.04f).roundToInt())
+        val cropLeft = (left - marginX).coerceAtLeast(0)
+        val cropTop = (top - marginY).coerceAtLeast(0)
+        val cropRight = (right + marginX).coerceAtMost(w - 1)
+        val cropBottom = (bottom + marginY).coerceAtMost(h - 1)
+        val cw = cropRight - cropLeft + 1
+        val ch = cropBottom - cropTop + 1
         val full = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         full.setPixels(out, 0, w, 0, 0, w, h)
-        val trimmed = Bitmap.createBitmap(full, left, top, cw, ch)
+        val trimmed = Bitmap.createBitmap(full, cropLeft, cropTop, cw, ch)
         if (trimmed !== full) full.recycle()
         return Extracted(trimmed, hue)
     }

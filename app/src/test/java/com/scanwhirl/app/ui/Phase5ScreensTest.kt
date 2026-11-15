@@ -630,14 +630,14 @@ class Phase5ScreensTest {
                 assertEquals(View.GONE, actions.visibility)
                 assertFalse("cell checks hidden", cellCheckboxShown(grid))
 
-                // Long-press page 1: selection mode with that page selected.
+                // Long-press drag start: selection mode with that page selected (no movement).
                 grid.measure(
                     android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
                     android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
                 )
                 grid.layout(0, 0, 1080, 1920)
-                val cell = grid.findViewHolderForAdapterPosition(0)!!.itemView
-                assertTrue(cell.performLongClick())
+                assertTrue(grid.startDragAt(0))
+                grid.moveItem(0, 0)
                 assertTrue("long-press turns the checks on", grid.checkboxesVisible)
                 assertEquals(View.VISIBLE, top.visibility)
                 assertEquals(View.VISIBLE, actions.visibility)

@@ -222,6 +222,15 @@ class StampEditorActivityTest {
     }
 
     @Test
+    fun `the stamp tool row scrolls clear of the last tile`() {
+        val id = DocFixtures.saved(repo, context, pages = 1)
+        val screen = activity(id)
+        val scroll = screen.findViewById<android.widget.HorizontalScrollView>(R.id.toolScroll)
+        assertFalse("end padding must be drawn outside the clip", scroll.clipToPadding)
+        assertTrue("the last tool tile needs end padding", scroll.paddingEnd > 0)
+    }
+
+    @Test
     fun `a locked document is refused`() {
         val id = DocFixtures.locked(repo, context)
         val screen = activity(id)

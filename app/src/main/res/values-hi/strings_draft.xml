@@ -8,8 +8,24 @@
     <string name="draft_edited_name"><!-- review -->%1$s (बदला गया)</string>
 
     <!-- Organize screen -->
-    <string name="draft_header"><!-- review -->ड्राफ़्ट · %1$d पेज · %2$d बदलाव</string>
+    <string name="draft_header"><!-- review -->ड्राफ़्ट · %1$s · %2$s</string>
+    <!-- review -->
+    <plurals name="draft_pages">
+        <item quantity="one"><!-- review -->%d पेज</item>
+        <item quantity="other"><!-- review -->%d पेज</item>
+    </plurals>
+    <!-- review -->
+    <plurals name="draft_changes">
+        <item quantity="one"><!-- review -->%d बदलाव</item>
+        <item quantity="other"><!-- review -->%d बदलाव</item>
+    </plurals>
     <string name="draft_save_new"><!-- review -->नई कॉपी के रूप में सहेजें</string>
+    <!-- review -->
+    <string name="draft_bar_discard"><!-- review -->हटाएँ</string>
+    <!-- review -->
+    <string name="draft_bar_replace"><!-- review -->बदलें</string>
+    <!-- review -->
+    <string name="draft_bar_save"><!-- review -->कॉपी सहेजें</string>
     <string name="draft_replace"><!-- review -->मूल को बदलें</string>
     <string name="draft_discard"><!-- review -->हटाएँ</string>
     <string name="draft_keep_editing"><!-- review -->बदलाव जारी रखें</string>
@@ -26,6 +42,14 @@
     <string name="draft_select_all"><!-- review -->सभी चुनें</string>
     <string name="draft_delete_msg"><!-- review -->पेज ड्राफ़्ट से हट जाएँगे। सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
     <string name="draft_rotate_left"><!-- review -->बाएँ घुमाएँ</string>
+    <!-- review -->
+    <string name="draft_rotate_right"><!-- review -->दाएँ घुमाएँ</string>
+    <!-- review -->
+    <string name="draft_duplicate"><!-- review -->पेज की प्रति</string>
+    <!-- review -->
+    <string name="draft_insert_here"><!-- review -->यहाँ पेज जोड़ें</string>
+    <!-- review -->
+    <string name="draft_extract_new"><!-- review -->नए दस्तावेज़ में निकालें</string>
     <string name="draft_move_to"><!-- review -->यहाँ ले जाएँ…</string>
     <string name="draft_move_to_hint"><!-- review -->पेज संख्या</string>
     <string name="draft_move_invalid"><!-- review -->वह पेज मौजूद नहीं है।</string>

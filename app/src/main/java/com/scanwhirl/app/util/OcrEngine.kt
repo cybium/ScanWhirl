@@ -65,6 +65,17 @@ object OcrEngine {
     /** A full OCR result: assembled plain text plus per-line geometry. */
     data class OcrResult(val text: String, val page: OcrPage)
 
+    /** One word/element box from ML Kit (Mask Aadhaar needs element geometry). */
+    data class WordBox(
+        val text: String,
+        val left: Int,
+        val top: Int,
+        val right: Int,
+        val bottom: Int
+    )
+
+    data class WordsResult(val page: OcrPage, val words: List<WordBox>)
+
     // ------------------------------------------------------------------
     // Test seams (never set in production)
     // ------------------------------------------------------------------
@@ -108,6 +119,59 @@ object OcrEngine {
             }
         }
         toResult(OcrMerge.merge(rawPages))
+    }
+
+    /**
+     * Mask Aadhaar: ML Kit **element** (word) boxes for the page. Uses the Latin recognizer only
+     * (Aadhaar digits are Latin); the mask needs elements so the first two 4-digit groups are
+     * covered exactly. Fails like [recognizeFile] when the model is unavailable.
+     */
+    suspend fun recognizeWords(page: File): WordsResult = withContext(Dispatchers.IO) {
+        require(page.exists() && page.length() > 0L) { "Page is empty" }
+        val bitmap = BitmapFactory.decodeFile(page.path)
+            ?: throw IllegalStateException("Unreadable page")
+        val rotation = exifRotation(page)
+        try {
+            val recognizer = OcrScriptRecognizers.create(OcrScript.LATIN)
+            val text = try {
+                suspendCancellableCoroutine<Text> { cont ->
+                    recognizer.process(InputImage.fromBitmap(bitmap, rotation))
+                        .addOnSuccessListener { result -> if (cont.isActive) cont.resume(result) }
+                        .addOnFailureListener { e -> if (cont.isActive) cont.resumeWithException(e) }
+                }
+            } finally {
+                recognizer.close()
+            }
+            val lines = text.textBlocks.flatMap { block ->
+                block.lines.filter { it.text.isNotBlank() }.map { line ->
+                    val box = line.boundingBox ?: block.boundingBox
+                    OcrLine(
+                        text = line.text,
+                        left = box?.left ?: 0,
+                        top = box?.top ?: 0,
+                        right = box?.right ?: 0,
+                        bottom = box?.bottom ?: 0
+                    )
+                }
+            }
+            val words = text.textBlocks
+                .flatMap { it.lines }
+                .flatMap { it.elements }
+                .mapNotNull { element ->
+                    val box = element.boundingBox ?: return@mapNotNull null
+                    if (element.text.isBlank()) null
+                    else WordBox(
+                        element.text,
+                        box.left,
+                        box.top,
+                        box.right,
+                        box.bottom
+                    )
+                }
+            WordsResult(OcrPage(bitmap.width, bitmap.height, lines), words)
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
     }
 
     /** OCR directly from encoded image bytes (device PDFs and gallery images). */

@@ -8,8 +8,19 @@
     <string name="draft_edited_name">%1$s (edited)</string>
 
     <!-- Organize screen -->
-    <string name="draft_header">Draft · %1$d pages · %2$d changes</string>
+    <string name="draft_header">Draft · %1$s · %2$s</string>
+    <plurals name="draft_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <plurals name="draft_changes">
+        <item quantity="one">%d change</item>
+        <item quantity="other">%d changes</item>
+    </plurals>
     <string name="draft_save_new">Save as new copy</string>
+    <string name="draft_bar_discard">Discard</string>
+    <string name="draft_bar_replace">Replace</string>
+    <string name="draft_bar_save">Save copy</string>
     <string name="draft_replace">Replace original</string>
     <string name="draft_discard">Discard</string>
     <string name="draft_keep_editing">Keep editing</string>
@@ -26,6 +37,10 @@
     <string name="draft_select_all">Select all</string>
     <string name="draft_delete_msg">The pages leave the draft. The saved document stays as it is.</string>
     <string name="draft_rotate_left">Rotate left</string>
+    <string name="draft_rotate_right">Rotate right</string>
+    <string name="draft_duplicate">Duplicate</string>
+    <string name="draft_insert_here">Insert pages here</string>
+    <string name="draft_extract_new">Extract to new document</string>
     <string name="draft_move_to">Move to…</string>
     <string name="draft_move_to_hint">Page number</string>
     <string name="draft_move_invalid">That page does not exist.</string>

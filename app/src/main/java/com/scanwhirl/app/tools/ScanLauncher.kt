@@ -108,25 +108,12 @@ class ScanLauncher(
 
     /**
      * Opens the Google scanner, mode dependent on auto-enhance setting.
-     * Gallery import inside the scanner is disabled on purpose: it runs
-     * perspective crop and tilted photos came back tilted. Photos are
-     * imported directly from the scan chooser instead (EXIF only).
+     * Gallery import inside the scanner is disabled for the camera entry: it runs
+     * perspective crop and tilted photos came back tilted. Gallery auto-crop is a
+     * separate, opt-in entry ([launchGalleryCrop]) where the crop is the point.
      */
     fun launchScanner() {
-        val options = GmsDocumentScannerOptions.Builder()
-            .setGalleryImportAllowed(false)
-            .setScannerMode(
-                if (Prefs.autoEnhanceScan(activity)) {
-                    GmsDocumentScannerOptions.SCANNER_MODE_FULL
-                } else {
-                    GmsDocumentScannerOptions.SCANNER_MODE_BASE
-                }
-            )
-            // M08: JPEG pages only. ScanWhirl builds its own verified, searchable PDF from them;
-            // asking Google for a PDF too made it encode one at Done that nothing read.
-            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
-            .setPageLimit(30)
-            .build()
+        val options = cameraOptions()
         try {
             GmsDocumentScanning.getClient(options)
                 .getStartScanIntent(activity)
@@ -145,6 +132,31 @@ class ScanLauncher(
             Toast.makeText(activity, activity.getString(R.string.scanner_failed, e.message), Toast.LENGTH_LONG).show()
         }
     }
+
+    /** The camera scan's options, shared with the gallery auto-crop entry. */
+    internal fun cameraOptions(): GmsDocumentScannerOptions {
+        val cfg = cameraConfig()
+        return GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(cfg.galleryImport)
+            .setScannerMode(
+                if (cfg.fullMode) GmsDocumentScannerOptions.SCANNER_MODE_FULL
+                else GmsDocumentScannerOptions.SCANNER_MODE_BASE
+            )
+            // M08: JPEG pages only. ScanWhirl builds its own verified, searchable PDF from them;
+            // asking Google for a PDF too made it encode one at Done that nothing read.
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            .setPageLimit(cfg.pageLimit)
+            .build()
+    }
+
+    /** What the camera scan asks for (testable without the ML Kit builder). */
+    internal fun cameraConfig(): ScanConfig =
+        ScanConfig(
+            galleryImport = false,
+            pageLimit = 30,
+            fullMode = Prefs.autoEnhanceScan(activity),
+            jpeg = true
+        )
 
     /**
      * M08: Google's scanner already offered crop, rotate, filters, retake and add page, so
@@ -222,8 +234,7 @@ class ScanLauncher(
     internal class PartialStaging(val dir: File, cause: Throwable) : IOException(cause.message, cause)
 
     /** Copies the scanned page URIs into a staging folder, then opens the review screen. */
-    fun stageAndReview(uris: List<Uri>) {
-        val progress = host.showProgress()
+    fun stageAndReview(uris: List<Uri>) {        val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
                 val dir = withContext(Dispatchers.IO) {
@@ -235,7 +246,8 @@ class ScanLauncher(
                                     ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
                                 File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
                                     // Real JPEG, white alpha and EXIF orientation; no perspective crop.
-                                    .writeBytes(ImageTools.normalizePage(bytes))
+                                    // HEIC/HEIF photos from a phone gallery are re-encoded here.
+                                    .writeBytes(ImageTools.normalizeGalleryPhoto(bytes))
                             } catch (e: Exception) {
                                 throw IllegalArgumentException("Page ${index + 1}: ${e.message}", e)
                             }
@@ -266,4 +278,162 @@ class ScanLauncher(
             }
         }
     }
+}
+
+/** One scan entry's options, in a form a test can read without ML Kit. */
+internal data class ScanConfig(
+    val galleryImport: Boolean,
+    val pageLimit: Int,
+    val fullMode: Boolean,
+    val jpeg: Boolean
+)
+
+/**
+ * v2 UI: 01_home_A — gallery auto-crop, shared by Home → Photos, Book pages (L3) and
+ * ID card (L4).
+ *
+ * Real gallery photos are not scans: tables, hands, perspective and backgrounds
+ * surround the page. This opens the ML Kit document scanner with gallery import
+ * enabled, so the picked photos get the same corner detection, perspective crop,
+ * rotation and filters as a camera scan; the scanner returns one cropped JPEG per
+ * page in page order.
+ *
+ * Fallback (scanner module missing or not usable): the same call opens the system
+ * photo picker and hands the unchanged photos to `onFallback` (or `onResult` when
+ * no fallback was given) so the caller can run its manual CropView path. Nothing
+ * is lost and nothing is auto-cropped wrongly.
+ *
+ * The activity must be a [com.scanwhirl.app.ui.BaseActivity] (it registers the
+ * result bridge once) and must still be alive when the scanner returns.
+ *
+ * @param activity host screen.
+ * @param maxPages page limit for this import, clamped to 1..100.
+ * @param onResult cropped page URIs, in page order.
+ * @param onFallback raw picked URIs when the scanner is unavailable; when null the
+ *   raw URIs go to [onResult] instead.
+ */
+fun launchGalleryCrop(
+    activity: AppCompatActivity,
+    maxPages: Int = 30,
+    onResult: (List<Uri>) -> Unit,
+    onFallback: ((List<Uri>) -> Unit)? = null
+) {
+    GalleryCrop.launch(activity, maxPages, onResult, onFallback ?: onResult)
+}
+
+/** The result bridge behind [launchGalleryCrop] (registered by BaseActivity). */
+object GalleryCrop {
+
+    /** How a host screen starts the scanner and the manual fallback picker. */
+    internal class Host(
+        val startScanner: (IntentSender) -> Unit,
+        val pickPhotos: () -> Unit
+    )
+
+    private class Pending(
+        val onCropped: (List<Uri>) -> Unit,
+        val onFallback: (List<Uri>) -> Unit
+    )
+
+    private val hosts = java.util.WeakHashMap<AppCompatActivity, Host>()
+    private val pending = java.util.WeakHashMap<AppCompatActivity, Pending>()
+
+    /** Tests: fake the scanner (true = started, false = unavailable); null uses ML Kit. */
+    @Volatile
+    internal var startOverride: ((AppCompatActivity) -> Boolean)? = null
+
+    /** Tests: fake the fallback picker result. */
+    @Volatile
+    internal var pickOverride: ((AppCompatActivity) -> Unit)? = null
+
+    internal fun register(activity: AppCompatActivity, host: Host) {
+        hosts[activity] = host
+    }
+
+    /** The scanner returned cropped pages. */
+    internal fun deliver(activity: AppCompatActivity, uris: List<Uri>) {
+        pending.remove(activity)?.onCropped?.invoke(uris)
+    }
+
+    /** The scanner was cancelled or returned nothing: keep the caller quiet. */
+    internal fun cancel(activity: AppCompatActivity) {
+        pending.remove(activity)
+    }
+
+    /** The fallback picker returned photos for the caller's manual crop. */
+    internal fun deliverFallback(activity: AppCompatActivity, uris: List<Uri>) {
+        val waiting = pending.remove(activity) ?: return
+        if (uris.isEmpty()) return
+        waiting.onFallback(uris)
+    }
+
+    internal fun launch(
+        activity: AppCompatActivity,
+        maxPages: Int,
+        onCropped: (List<Uri>) -> Unit,
+        onFallback: (List<Uri>) -> Unit
+    ) {
+        pending[activity] = Pending(onCropped, onFallback)
+        val started = startOverride?.invoke(activity) ?: startReal(activity, maxPages)
+        if (!started) startFallback(activity)
+    }
+
+    /** The scanner IntentSender could not be produced: pick photos for a manual crop. */
+    private fun startFallback(activity: AppCompatActivity) {
+        val custom = pickOverride
+        if (custom != null) {
+            custom(activity)
+            return
+        }
+        val host = hosts[activity]
+        if (host == null) {
+            pending.remove(activity)
+            return
+        }
+        host.pickPhotos()
+    }
+
+    private fun startReal(activity: AppCompatActivity, maxPages: Int): Boolean {
+        val host = hosts[activity] ?: return false
+        val options = galleryOptions(activity, maxPages)
+        return try {
+            GmsDocumentScanning.getClient(options)
+                .getStartScanIntent(activity)
+                .addOnSuccessListener { sender -> host.startScanner(sender) }
+                .addOnFailureListener {
+                    // The module is there but refused (no Play services, disabled):
+                    // fall back to the picker + manual crop instead of a dead tap.
+                    startFallback(activity)
+                }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Gallery auto-crop scanner options: gallery import on, cropped JPEGs, page cap. */
+    internal fun galleryOptions(
+        activity: AppCompatActivity,
+        maxPages: Int
+    ): GmsDocumentScannerOptions {
+        val cfg = galleryConfig(activity, maxPages)
+        return GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(cfg.galleryImport)
+            .setScannerMode(
+                if (cfg.fullMode) GmsDocumentScannerOptions.SCANNER_MODE_FULL
+                else GmsDocumentScannerOptions.SCANNER_MODE_BASE
+            )
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            .setPageLimit(cfg.pageLimit)
+            .build()
+    }
+
+    /** What gallery auto-crop asks for (testable without the ML Kit builder). */
+    internal fun galleryConfig(activity: AppCompatActivity, maxPages: Int): ScanConfig =
+        ScanConfig(
+            galleryImport = true,
+            pageLimit = maxPages.coerceIn(1, 100),
+            fullMode = Prefs.autoEnhanceScan(activity),
+            jpeg = true
+        )
 }

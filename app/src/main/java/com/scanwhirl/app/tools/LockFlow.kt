@@ -345,7 +345,17 @@ class LockFlow(
                         ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
                 }
                 val name = FlowUtil.devicePdfName(repo, uri)
-                val doc = withContext(Dispatchers.IO) { repo.importPdfAsScan(uri, name) }
+                val doc = repo.importPdfAsScanPlanned(
+                    uri = uri,
+                    name = name,
+                    onPlan = { plan ->
+                        com.scanwhirl.app.ui.tools.DevicePdfGate.decide(activity, plan)
+                    }
+                )
+                if (doc == null) {
+                    progress.dismiss()
+                    return@launch
+                }
                 val locked = try {
                     withContext(Dispatchers.IO) { repo.protectPdf(doc.id, password) }
                 } catch (e: Exception) {

@@ -18,6 +18,7 @@ import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -51,7 +52,11 @@ class CompressFlow(
         Level(R.string.compress_level_ultra, 38, 1200, 110f)
     )
 
+    /** The pages chosen in the device-PDF gate (null until a device PDF is picked). */
+    private var devicePages: List<Int>? = null
+
     fun start() {
+        devicePages = null
         // No saved scans yet: the source is necessarily an external file.
         if (docs().isEmpty()) {
             pickPdf()
@@ -82,7 +87,10 @@ class CompressFlow(
      * the scan (the document screen's More row) — no source chooser, no SAF
      * picker needed.
      */
-    fun startWith(doc: ScanDocument) = estimateForScan(doc)
+    fun startWith(doc: ScanDocument) {
+        devicePages = null
+        estimateForScan(doc)
+    }
 
     /** Compress sample pages at each level, then show the choice with sizes. */
     private fun estimateForScan(doc: ScanDocument) {
@@ -126,9 +134,11 @@ class CompressFlow(
                         val count = PdfPageRenderer.pageCount(fd)
                         levels.map { level ->
                             val first = PdfPageRenderer.renderPageJpeg(
-                                fd, 0, level.dpi, level.maxDim ?: 4096, level.quality
+                                fd, devicePages?.firstOrNull() ?: 0,
+                                level.dpi, level.maxDim ?: 4096, level.quality
                             )
-                            (first.size.toDouble() * count * 1.02 + 1024).toLong()
+                            val pages = devicePages?.size ?: count
+                            (first.size.toDouble() * pages * 1.02 + 1024).toLong()
                         }
                     }
                 }
@@ -258,66 +268,121 @@ class CompressFlow(
     }
 
     fun startFromFile(uri: Uri) {
-        estimateForPdfFile(uri)
+        activity.lifecycleScope.launch {
+            try {
+                val plan = withContext(Dispatchers.IO) { repo.inspectDevicePdf(uri, 2048) }
+                val decision = com.scanwhirl.app.ui.tools.DevicePdfGate.decide(activity, plan)
+                if (decision == ScanRepository.ImportDecision.Cancel) return@launch
+                devicePages = when (decision) {
+                    ScanRepository.ImportDecision.All -> (0 until plan.pageCount).toList()
+                    is ScanRepository.ImportDecision.Pages -> decision.indices
+                    ScanRepository.ImportDecision.Cancel -> return@launch
+                }
+                estimateForPdfFile(uri)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.makeText(
+                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun runCompressFile(uri: Uri, level: Level) {
-        val progress = host.showProgress()
-        activity.lifecycleScope.launch {
+        var job: kotlinx.coroutines.Job? = null
+        var sheet: com.scanwhirl.app.ui.kit.SwSheet? = null
+        job = activity.lifecycleScope.launch {
             try {
                 val before = withContext(Dispatchers.IO) {
                     activity.contentResolver.openFileDescriptor(uri, "r")
                         ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
                 }
                 val name = FlowUtil.devicePdfName(repo, uri)
-                val out = repo.importPdfAsScan(uri, name, level.dpi, level.maxDim ?: 4096, level.quality)
+                sheet = withContext(Dispatchers.Main) {
+                    com.scanwhirl.app.ui.tools.DevicePdfGate.progress(activity) { job?.cancel() }
+                        .also { it.show() }
+                }
+                val indices = devicePages.orEmpty()
+                val out = repo.importPdfAsScanSelected(
+                    uri, name, level.dpi, level.maxDim ?: 4096, level.quality,
+                    indices = indices,
+                    onPage = { done, total ->
+                        activity.runOnUiThread {
+                            sheet?.setMessage(
+                                com.scanwhirl.app.ui.tools.DevicePdfGate
+                                    .progressText(activity, done, total)
+                            )
+                        }
+                    }
+                ) ?: return@launch
+                sheet?.dismiss()
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
                 showCompressResult(out, before, after)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                sheet?.dismiss()
+                throw e
             } catch (e: Exception) {
+                sheet?.dismiss()
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
                 ).show()
-            } finally {
-                progress.dismiss()
             }
         }
     }
 
     /** Renders an external PDF and re-fits its pages so the new scan hits the exact target. */
     private fun runCompressFileToTarget(uri: Uri, target: Long) {
-        val progress = host.showProgress()
-        activity.lifecycleScope.launch {
+        var job: kotlinx.coroutines.Job? = null
+        var sheet: com.scanwhirl.app.ui.kit.SwSheet? = null
+        job = activity.lifecycleScope.launch {
             try {
                 val before = withContext(Dispatchers.IO) {
                     activity.contentResolver.openFileDescriptor(uri, "r")
                         ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
                 }
                 val baseName = FlowUtil.devicePdfName(repo, uri)
-                val pages = withContext(Dispatchers.IO) {
-                    val rendered = PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
+                sheet = withContext(Dispatchers.Main) {
+                    com.scanwhirl.app.ui.tools.DevicePdfGate.progress(activity) { job?.cancel() }
+                        .also { it.show() }
+                }
+                val indices = devicePages.orEmpty()
+                val rendered = withContext(Dispatchers.IO) {
+                    PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
                         // One page at a time: never hold a whole PDF's JPEGs in memory.
                         val out = mutableListOf<ByteArray>()
-                        val count = PdfPageRenderer.pageCount(fd)
-                        for (i in 0 until count) {
-                            PdfPageRenderer.renderPageJpeg(fd, i, 150f, 2048, 85).let { out.add(it) }
+                        indices.forEachIndexed { position, pageIndex ->
+                            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                            PdfPageRenderer.renderPageJpeg(
+                                fd, pageIndex, 150f, 2048, 85
+                            ).let { out.add(it) }
+                            activity.runOnUiThread {
+                                sheet?.setMessage(
+                                    com.scanwhirl.app.ui.tools.DevicePdfGate
+                                        .progressText(activity, position + 1, indices.size)
+                                )
+                            }
                         }
                         out
                     }
-                    fitJpegsToTotal(rendered, target)
                 }
+                val pages = fitJpegsToTotal(rendered, target)
                 val out = repo.createDocument("$baseName (compressed)", pages)
+                sheet?.dismiss()
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(),
                     if (out.pdfFile.length() > target) {
                         activity.getString(R.string.compress_target_missed, StatusLine.formatBytes(target))
                     } else null)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                sheet?.dismiss()
+                throw e
             } catch (e: Exception) {
+                sheet?.dismiss()
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
                 ).show()
-            } finally {
-                progress.dismiss()
             }
         }
     }

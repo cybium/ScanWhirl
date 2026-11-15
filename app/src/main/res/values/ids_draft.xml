@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L5 wave 2: ids for views the Organize screen builds in code. -->
+<resources>
+    <item name="draftMoreRows" type="id" />
+</resources>

@@ -445,34 +445,37 @@ class OcrEditorActivity : BaseActivity() {
         btnUndo.setOnClickListener { doUndo() }
         btnRedo.setOnClickListener { doRedo() }
 
-        // v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word as chips.
+        // v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word as chips,
+        // on two rows so To Word is always visible (never hidden in a scroller).
         val actions = binding.ocrActions
-        fun chip(id: Int, icon: Int, label: Int, pro: Boolean = false): com.scanwhirl.app.ui.kit.SwChip {
+        fun chip(row: LinearLayout, id: Int, icon: Int, label: Int, pro: Boolean = false): com.scanwhirl.app.ui.kit.SwChip {
             val chip = com.scanwhirl.app.ui.kit.SwChip(this).apply {
                 this.id = id
                 bind(icon, getString(label))
                 if (pro) withProTag()
             }
-            actions.addView(
+            row.addView(
                 chip,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
-                ).apply { marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f) }
+                LinearLayout.LayoutParams(0, com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f), 1f)
+                    .apply { marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f) }
             )
             return chip
         }
-        chip(R.id.btnCopy, R.drawable.ic_sym_content_copy, R.string.ocr_copy_btn)
+        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        chip(row1, R.id.btnCopy, R.drawable.ic_sym_content_copy, R.string.ocr_copy_btn)
             .setOnClickListener { copyCurrent() }
-        chip(R.id.btnShare, R.drawable.ic_sym_share, R.string.ocr_share_btn)
+        chip(row1, R.id.btnShare, R.drawable.ic_sym_share, R.string.ocr_share_btn)
             .setOnClickListener { shareCurrent() }
-        chip(R.id.btnSave, R.drawable.ic_sym_notes, R.string.ocr_save_btn)
+        chip(row2, R.id.btnSave, R.drawable.ic_sym_notes, R.string.ocr_save_btn)
             .setOnClickListener { saveCurrent() }
-        chip(R.id.btnToWord, R.drawable.ic_sym_description, R.string.ocr_to_word_pro, pro = true)
+        chip(row2, R.id.btnToWord, R.drawable.ic_sym_description, R.string.ocr_to_word_pro, pro = true)
             .setOnClickListener {
                 // v2 UI: 08_text_ocr — the real To Word tool, not an info sheet.
                 com.scanwhirl.app.ui.tools.ToolLaunch.start(this, "to_word")
             }
+        actions.addView(row1)
+        actions.addView(row2)
         setupModeSwitch()
         updateWordCount()
         updateUndoRedoState()
@@ -818,7 +821,16 @@ class OcrEditorActivity : BaseActivity() {
                         findViewById<View>(R.id.btnSave).isEnabled = true
                     }
                 }
-            } else if (finishAfterSave) finish()
+            } else if (finishAfterSave) {
+                finish()
+            } else {
+                // v2 UI: 08_text_ocr — the Save .txt chip always answers, even with no edits.
+                com.google.android.material.snackbar.Snackbar.make(
+                    binding.root,
+                    R.string.ocr_nothing_to_save,
+                    com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
+                ).show()
+            }
         } else {
             // Temp mode: save as .txt via DownloadSaver (M06 transaction).
             val title = docTitle ?: "Document"

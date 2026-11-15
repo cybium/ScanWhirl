@@ -214,6 +214,14 @@
     <string name="batch_select_hint">Select two or more documents to rename</string>
     <string name="undo_action">Undo</string>
     <string name="tools_clear_search">Clear search</string>
+    <string name="progress_page_of">Page %1$d of %2$d</string>
+    <string name="home_search_clear">Clear search</string>
+    <string name="empty_filtered">No documents here</string>
+    <string name="ocr_nothing_to_save">No changes to save</string>
+    <string name="photo_import_none">No photos were added</string>
+    <string name="photos_add_title">Add photos</string>
+    <string name="photos_auto_crop">Auto-crop pages (recommended)</string>
+    <string name="photos_keep">Keep photos as they are</string>
     <string name="sort_title">Sort by</string>
     <string name="sort_newest">Newest</string>
     <string name="sort_oldest">Oldest</string>

@@ -28,6 +28,7 @@
     <item name="toolSetupExcelTables" type="id" />
     <item name="toolSetupExcelAll" type="id" />
     <item name="toolResultSummary" type="id" />
+    <item name="toolResultName" type="id" />
     <item name="toolResultOpen" type="id" />
     <item name="toolResultShare" type="id" />
     <item name="toolResultSave" type="id" />

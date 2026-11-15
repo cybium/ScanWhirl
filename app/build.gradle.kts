@@ -74,6 +74,12 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // Robolectric sandboxes accumulate memory over 1300+ tests; the WSL gate box has ~3.5 GB.
+            // A fresh test JVM every 120 classes with a fixed 1 GB heap keeps the full suite alive.
+            all {
+                it.maxHeapSize = "1g"
+                it.forkEvery = 120L
+            }
         }
     }
 

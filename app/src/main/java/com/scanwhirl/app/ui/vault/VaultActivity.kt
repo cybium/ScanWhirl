@@ -236,6 +236,7 @@ class VaultActivity : BaseActivity() {
             setOnClickListener {
                 if (store.isUnlocked()) {
                     store.lock()
+                    com.scanwhirl.app.ui.kit.SwHaptics.tick(findViewById(android.R.id.content))
                     promptShown = false
                     render()
                     maybePromptOnOpen()
@@ -911,6 +912,7 @@ class VaultActivity : BaseActivity() {
         val result = store.unlockWithPasscode(pass.text())
         if (result.ok) {
             pass.setError(null)
+            com.scanwhirl.app.ui.kit.SwHaptics.confirm(pass)
             unlockMethod = UnlockMethod.PASSCODE
             sheet.dismiss()
             unlockSheet = null
