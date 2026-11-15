@@ -265,13 +265,18 @@ class ScanReviewActivity : BaseActivity() {
 
         setupFocus()
         setupArrange()
+        fitLargeTextTools()
         binding.modeToggle.addOnButtonCheckedListener { _, id, checked ->
             if (checked && !applyingMode) setMode(arrange = id == R.id.btnModeArrange)
         }
         applyMode(animate = false)
         binding.toolbar.setNavigationOnClickListener { if (!saving) confirmDiscard() }
+        A11yTargets.fixTitleField(binding.titleInput)
+        binding.titleInput.hint = getString(R.string.review_name_hint)
+        binding.titleInput.contentDescription = getString(R.string.name_hint)
 
         binding.toolbar.inflateMenu(R.menu.menu_review)
+        A11yTargets.widenOverflow(binding.toolbar)
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_rotate_left -> {
@@ -717,6 +722,30 @@ class ScanReviewActivity : BaseActivity() {
     // ------------------------------------------------------------------
 
     @android.annotation.SuppressLint("ClickableViewAccessibility") // taps re-dispatch performClick()
+    /**
+     * At 200% text the stacked icon+label tool buttons need ~74dp, which squeezes the page stage
+     * and can clip the rail. Put the glyph beside the label instead: the rail scrolls
+     * horizontally, every target stays >=48dp, and the labels stay on one line.
+     */
+    private fun fitLargeTextTools() {
+        if (resources.configuration.fontScale < 1.8f) return
+        val density = resources.displayMetrics.density
+        val ids = listOf(
+            R.id.btnToolCrop, R.id.btnToolRotate, R.id.btnToolFilter,
+            R.id.btnToolAdd, R.id.btnToolDelete,
+            R.id.btnArrEarlier, R.id.btnArrLater, R.id.btnArrMove,
+            R.id.btnArrEdit, R.id.btnArrDelete
+        )
+        ids.forEach { id ->
+            val button = findViewById<com.google.android.material.button.MaterialButton>(id)
+                ?: return@forEach
+            button.iconGravity =
+                com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+            button.iconPadding = (6 * density).toInt()
+            button.minHeight = (48 * density).toInt()
+        }
+    }
+
     private fun setupFocus() {
         binding.filmstrip.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
