@@ -7,7 +7,7 @@ import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -45,25 +45,24 @@ class SwThemeTest {
     }
 
     @Test
-    fun `Gold recolours the kit accent tokens for Pro`() {
+    fun `Gold is disabled until the owner verifies it on a phone`() {
         SwTheme.applyLauncherIcon(app, gold = false)
         val cyan = SwStyle.color(app, R.color.cyan_primary)
         assertEquals(app.getColor(R.color.cyan_primary), cyan)
 
+        // A stale saved preference cannot turn the unverified theme on.
         Prefs.setAccent(app, Prefs.ACCENT_GOLD)
-        assertTrue("Pro + Gold is active", SwTheme.isGold(app))
-        val gold = SwStyle.color(app, R.color.cyan_primary)
-        assertEquals("cyan primary becomes gold", app.getColor(R.color.gold_pro_primary), gold)
-        assertNotEquals("the accent really changed", cyan, gold)
+        assertFalse("Gold stays off", SwTheme.isGold(app))
         assertEquals(
-            "gold tokens stay gold",
-            app.getColor(R.color.gold_pro_primary),
-            SwStyle.color(app, R.color.gold_pro_primary)
+            "the kit stays Cyan",
+            app.getColor(R.color.cyan_primary),
+            SwStyle.color(app, R.color.cyan_primary)
         )
+        SwTheme.applyLauncherIcon(app, gold = false)
         assertEquals(
-            "the cyan hairline becomes the gold hairline",
-            app.getColor(R.color.sw_gold_hair),
-            SwStyle.color(app, R.color.sw_cyan_hair)
+            "the launcher alias stays Cyan",
+            "com.scanwhirl.app.ui.shell.ShellActivityCyan",
+            SwTheme.enabledLauncherAlias(app)
         )
     }
 

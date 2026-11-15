@@ -2,11 +2,12 @@ package com.scanwhirl.app.ui.shell
 
 import android.app.Activity
 import android.os.Looper
-import android.widget.FrameLayout
+import android.view.View
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.ui.kit.SwMotion
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,9 +19,9 @@ import org.robolectric.annotation.GraphicsMode
 import java.time.Duration
 
 /**
- * v2 UI: 74_motion — the Pro entrance runs when motion is allowed, is skipped
- * (final state at once) when animations are off, and leaves no shine view or
- * animator behind when the screen is detached.
+ * v2 UI: 74_motion — the Pro entrance is logo turn + card cascade only, starts
+ * after the first layout, and leaves the final state at once when motion is off.
+ * Also proves the 8 Pro tool buttons fit a 1080x2460 phone without scrolling.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -41,6 +42,17 @@ class ProAnimationTest {
         override fun onSeeAllProTools() = Unit
     })
 
+    private fun measure(activity: Activity, screen: ProScreen, heightDp: Int = 820) {
+        val density = activity.resources.displayMetrics.density
+        val width = (360 * density).toInt()
+        val height = (heightDp * density).toInt()
+        screen.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+        )
+        screen.layout(0, 0, width, height)
+    }
+
     @Test
     fun `the entrance plays when motion is on and settles`() {
         SwMotion.animatorOverride = true
@@ -49,18 +61,51 @@ class ProAnimationTest {
         val screen = pro(activity)
         activity.setContentView(screen)
         controller.visible()
+        measure(activity, screen)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
 
         assertTrue("the entrance started", screen.entrancePlayedForTest())
         assertEquals("the title ends fully opaque", 1f, screen.titleForTest().alpha, 0.01f)
+        assertEquals("the title ends in place", 0f, screen.titleForTest().translationY, 0.01f)
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun `the entrance is logo then title then cards, and nothing else`() {
+        SwMotion.animatorOverride = true
+        val controller = controller()
+        val activity = controller.get()
+        val screen = pro(activity)
+        activity.setContentView(screen)
+        controller.visible()
+        measure(activity, screen)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
+
         assertEquals(
-            "the title ends in place",
-            0f,
-            screen.titleForTest().translationY,
-            0.01f
+            listOf("rings", "title", "cascade"),
+            screen.entranceSteps
         )
-        assertEquals("the shine is gone from the price card", 0, screen.priceWrapForTest().childCount - 1)
-        assertEquals("the shine is gone from the button", 0, screen.buyWrapForTest().childCount - 1)
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun `the eight Pro tool buttons fit a 1080x2460 phone without scrolling`() {
+        SwMotion.animatorOverride = false
+        val controller = controller()
+        val activity = controller.get()
+        val screen = pro(activity)
+        activity.setContentView(screen)
+        controller.visible()
+        measure(activity, screen, heightDp = 820)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        val cells = screen.featureCellsForTest()
+        assertEquals("8 Pro tools in 4 rows", 8, cells.size)
+        val limit = (820 * activity.resources.displayMetrics.density).toInt()
+        assertTrue(
+            "the last tool row is on the first screen (bottom ${cells.last().bottom} of $limit)",
+            cells.last().bottom in 1..limit
+        )
         controller.pause().stop().destroy()
     }
 
@@ -72,112 +117,17 @@ class ProAnimationTest {
         val screen = pro(activity)
         activity.setContentView(screen)
         controller.visible()
+        measure(activity, screen)
         shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals("nothing moved", 1f, screen.titleForTest().alpha, 0.01f)
-        assertEquals("no shine view is added", 0, screen.priceWrapForTest().childCount - 1)
-        assertEquals("no shine view is added", 0, screen.buyWrapForTest().childCount - 1)
+        assertEquals("the entrance never started", emptyList<String>(), screen.entranceSteps)
         assertTrue(screen.buyButton.scaleX == 1f)
         controller.pause().stop().destroy()
     }
 
     @Test
-    fun `the price and Unlock bar is pinned and visible without scrolling`() {
-        SwMotion.animatorOverride = false
-        val controller = controller()
-        val activity = controller.get()
-        val screen = pro(activity)
-        activity.setContentView(screen)
-        controller.visible()
-        val width = (360 * activity.resources.displayMetrics.density).toInt()
-        val height = (640 * activity.resources.displayMetrics.density).toInt()
-        screen.measure(
-            android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY),
-            android.view.View.MeasureSpec.makeMeasureSpec(height, android.view.View.MeasureSpec.EXACTLY)
-        )
-        screen.layout(0, 0, width, height)
-
-        assertTrue("the Unlock button is on screen", screen.buyButton.isShown)
-        assertTrue("the Unlock button has a real size", screen.buyButton.height > 0)
-        assertTrue(
-            "the bar never falls below the 640dp viewport",
-            screen.buyButton.bottom <= height
-        )
-        assertEquals(
-            "the price is on the same pinned bar",
-            screen.buyWrapForTest().parent,
-            screen.priceWrapForTest().parent
-        )
-        controller.pause().stop().destroy()
-    }
-
-    @Test
-    fun `the entrance follows the owner order and the shine is clipped to the button`() {
-        SwMotion.animatorOverride = true
-        val controller = controller()
-        val activity = controller.get()
-        val screen = pro(activity)
-        activity.setContentView(screen)
-        controller.visible()
-        val width = (360 * activity.resources.displayMetrics.density).toInt()
-        val height = (640 * activity.resources.displayMetrics.density).toInt()
-        screen.measure(
-            android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY),
-            android.view.View.MeasureSpec.makeMeasureSpec(height, android.view.View.MeasureSpec.EXACTLY)
-        )
-        screen.layout(0, 0, width, height)
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
-
-        assertEquals(
-            "rings -> title -> cascade -> shine -> pulse",
-            listOf("rings", "title", "cascade", "shine", "pulse"),
-            screen.entranceSteps
-        )
-        assertTrue("the shine never leaves the button bounds", screen.buyWrapForTest().clipChildren)
-        assertTrue("rounded clipping", screen.buyWrapForTest().clipToOutline)
-        assertEquals(
-            "the shine view is gone after one sweep",
-            1,
-            screen.buyWrapForTest().childCount
-        )
-        controller.pause().stop().destroy()
-    }
-
-    @Test
-    fun `the pinned bar does not move between the first and last frame`() {
-        SwMotion.animatorOverride = true
-        val controller = controller()
-        val activity = controller.get()
-        val screen = pro(activity)
-        activity.setContentView(screen)
-        controller.visible()
-        val width = (360 * activity.resources.displayMetrics.density).toInt()
-        val height = (640 * activity.resources.displayMetrics.density).toInt()
-        screen.measure(
-            android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY),
-            android.view.View.MeasureSpec.makeMeasureSpec(height, android.view.View.MeasureSpec.EXACTLY)
-        )
-        screen.layout(0, 0, width, height)
-        fun absoluteTop(view: android.view.View): Int {
-            var y = 0
-            var node: android.view.View? = view
-            while (node != null) {
-                y += node.top
-                node = node.parent as? android.view.View
-            }
-            return y
-        }
-        val firstTop = absoluteTop(screen.buyWrapForTest())
-        val firstLeft = screen.buyWrapForTest().left
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
-        assertEquals("bar top is stable", firstTop, absoluteTop(screen.buyWrapForTest()))
-        assertEquals("bar left is stable", firstLeft, screen.buyWrapForTest().left)
-        assertTrue("the bar is at the bottom", firstTop > height / 2)
-        controller.pause().stop().destroy()
-    }
-
-    @Test
-    fun `an active Pro build has no buy bar`() {
+    fun `an active Pro build has no price or buy controls`() {
         SwMotion.animatorOverride = false
         val controller = controller()
         val activity = controller.get()
@@ -190,8 +140,8 @@ class ProAnimationTest {
         activity.setContentView(screen)
         controller.visible()
         shadowOf(Looper.getMainLooper()).idle()
-        assertEquals("no price card", null, screen.priceWrapForTest().parent)
-        assertEquals("no buy button", null, screen.buyWrapForTest().parent)
+        assertNull("no price card", screen.priceWrapForTest().parent)
+        assertNull("no buy button", screen.buyWrapForTest().parent)
         controller.pause().stop().destroy()
     }
 }

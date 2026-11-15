@@ -123,6 +123,25 @@ class QuickToolsTest {
     }
 
     @Test
+    fun `a SOON tool is dropped from a saved quick set and cannot be added`() {
+        val soon = ToolRegistry.all.first { it.status == ToolStatus.SOON }
+        Prefs.setQuickTools(app, Prefs.DEFAULT_QUICK_TOOLS + soon.id)
+        assertFalse(
+            "a Coming soon tool is filtered out of the saved set",
+            Prefs.quickTools(app).contains(soon.id)
+        )
+        launch { activity, _ ->
+            activity.findViewById<View>(R.id.swQuickEdit).performClick()
+            idle()
+            val add = activity.findViewById<ViewGroup>(R.id.swQuickAddGrid)
+            assertTrue(
+                "Coming soon tools are not offered in Add tools",
+                allTiles(add).none { it.tool?.id == soon.id }
+            )
+        }
+    }
+
+    @Test
     fun `the quick row never grows past twelve across two rows`() {
         val twelve = ToolRegistry.all.filter { it.status == ToolStatus.READY }
             .map { it.id }.take(12)
