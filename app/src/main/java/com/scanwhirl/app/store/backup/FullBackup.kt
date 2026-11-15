@@ -105,6 +105,10 @@ class FullBackup(
                 "That is not a Vault recovery code"
             }
         }
+        withActiveJob { writeWhileActive(target, secret, wrap) }
+    }
+
+    private fun writeWhileActive(target: File, secret: String, wrap: Wrap) {
         val plain = File(context.cacheDir, "fullbackup-${UUID.randomUUID().toString().take(8)}.tmp")
         try {
             val vaultKey = vaultKeyFor(secret, wrap)
@@ -238,6 +242,10 @@ class FullBackup(
                 else "This backup needs the Vault recovery code"
             )
         }
+        return withActiveJob { restoreWhileActive(source, secret, header) }
+    }
+
+    private fun restoreWhileActive(source: File, secret: String, header: Header): Report {
         val key = secretKey(secret, header.wrap, header.salt, header.iterations)
         val plain = File(context.cacheDir, "restore-${UUID.randomUUID().toString().take(8)}.tmp")
         val staging = File(context.cacheDir, "restore-${UUID.randomUUID().toString().take(8)}")
@@ -588,6 +596,25 @@ class FullBackup(
         private const val ENTRY = 1
         internal const val VAULT_KEY_ENTRY = "vault-key.bin"
         private const val VAULT_FLAG = "vault.flag"
+
+        /**
+         * How many backup writes/restores this process is running. The cold-start privacy sweep
+         * never deletes the cache files of a running job (`fullbackup-<id>.tmp`,
+         * `restore-<id>.tmp`, `restore-<id>/`), so a sweep fired while one is active cannot
+         * break it.
+         */
+        private val activeJobs = java.util.concurrent.atomic.AtomicInteger(0)
+
+        internal val isRunning: Boolean get() = activeJobs.get() > 0
+
+        private fun <T> withActiveJob(block: () -> T): T {
+            activeJobs.incrementAndGet()
+            try {
+                return block()
+            } finally {
+                activeJobs.decrementAndGet()
+            }
+        }
         private const val END = 0
         private const val BUFFER = 64 * 1024
         private const val MAX_ENTRIES = 200_000
