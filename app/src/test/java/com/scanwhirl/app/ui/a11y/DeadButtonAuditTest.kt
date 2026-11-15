@@ -72,6 +72,11 @@ class DeadButtonAuditTest {
         val name: String,
         val expectedShown: List<Int> = emptyList(),
         val freshEachClick: Boolean = false,
+        /**
+         * A Pro-only screen. In Free it closes itself and opens the Pro offer instead of drawing
+         * (see `PdfViewerProGateTest`), so there is no Free layout to audit.
+         */
+        val proOnly: Boolean = false,
         val open: () -> Pair<Activity, View>
     )
 
@@ -126,7 +131,7 @@ class DeadButtonAuditTest {
             Screen("Document") { document(pages) },
             Screen("Organize selection") { organizeSelection(pages) },
             Screen("Page editor") { pageEditor(pages) },
-            Screen("Stamp editor") { stampEditor(stamp) },
+            Screen("Stamp editor", proOnly = true) { stampEditor(stamp) },
             Screen("Text screen") { textScreen() }
         )
         assertNoProblems()
@@ -170,7 +175,10 @@ class DeadButtonAuditTest {
     private fun auditBothProStates(vararg screens: Screen) {
         for (pro in booleanArrayOf(false, true)) {
             ProGate.setTestOverride(app, pro)
-            for (screen in screens) audit(screen)
+            for (screen in screens) {
+                if (screen.proOnly && !pro) continue
+                audit(screen)
+            }
         }
         ProGate.setTestOverride(app, null)
     }
