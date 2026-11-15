@@ -11,12 +11,4 @@
 
 Shell vault|clip|Library|L1 shell: Vault tab clipping - dispatched
 Shell vault|contrast|swVaultStatus|L1 shell: Vault tab clipping - dispatched
-Tool result|clip|toolResultLibrary|L4 tools: result screen touch/image/clip - dispatched
-Tool result|image|toolResultPreview|L4 tools: result screen touch/image/clip - dispatched
-Tool result|touch|ImageButton|L4 tools: result screen touch/image/clip - dispatched
-Tool setup|clip|Audit library|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|clip|toolSetupRanges|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|contrast|OPTIONS|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|contrast|SOURCE|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|touch|ImageButton|L4 tools: setup touch/contrast/clip - dispatched
 Tools|contrast|1|L1 shell: TEXT section count uses cyan_dim (4.06:1) - dispatched

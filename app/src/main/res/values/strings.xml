@@ -34,9 +34,11 @@
     <string name="pdf_missing">This scan has no PDF file yet</string>
     <string name="scan_saved">Scan saved</string>
     <string name="filter_original">Original (as scanned)</string>
-    <string name="filter_enhance">Enhance</string>
+    <string name="filter_enhance">Auto</string>
+    <string name="filter_colour">Colour boost</string>
+    <string name="filter_grey">Grey</string>
     <string name="filter_clean">Clean</string>
-    <string name="filter_bw">B/W</string>
+    <string name="filter_bw">Black &amp; white</string>
     <string name="zoom_page">Page preview, pinch to zoom</string>
 
     <string name="stage_failed">Could not prepare the scan: %1$s</string>
