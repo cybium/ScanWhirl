@@ -582,6 +582,71 @@ class VaultStore(
             .orEmpty()
             .sortedByDescending { it.lastModified() }
 
+    /** What happened to one backup entry during [restoreEntryFromBackup]. */
+    data class RestoredEntry(val id: String?, val name: String?, val skipped: Boolean)
+
+    /**
+     * Re-encrypts one Vault entry from a full backup into this phone's Vault.
+     *
+     * The entry in the backup is encrypted under the backup device's Vault key ([oldKey]).
+     * Every file is decrypted with that key and encrypted again with the current key (fresh
+     * random IVs per 64 KiB chunk), the manifest is rewritten under the current key, and the
+     * result is verified against the recorded sizes and SHA-256 digests with the same check
+     * [addDocument] uses before it is renamed into place. Plaintext only exists in
+     * `cacheDir/vault_verify`, which [lock] and the cold-start sweep delete.
+     *
+     * A missing current key throws [VaultLockedException] (the caller unlocks first). An entry
+     * whose id already exists is skipped; an entry whose name already exists gets
+     * " (restored)".
+     */
+    fun restoreEntryFromBackup(source: File, oldKey: ByteArray): RestoredEntry = synchronized(LOCK) {
+        val key = requireKey()
+        val sourceManifest = readManifest(source, oldKey)
+        val target = File(vaultDir, sourceManifest.id)
+        if (!isSafeEntryId(sourceManifest.id) || target.exists()) {
+            return RestoredEntry(null, null, true)
+        }
+        val taken = entryDirs().mapNotNull { dir ->
+            runCatching { readManifest(dir, key).name }.getOrNull()
+        }
+        val name = if (sourceManifest.name in taken) "${sourceManifest.name} (restored)" else sourceManifest.name
+        val manifest = sourceManifest.copy(name = name)
+
+        val work = File(File(context.cacheDir, "vault_verify"), UUID.randomUUID().toString())
+        val staging = File(vaultDir, "$STAGING_PREFIX${manifest.id}-${UUID.randomUUID().toString().take(8)}")
+        if (!work.mkdirs() || !staging.mkdirs()) {
+            work.deleteRecursively()
+            staging.deleteRecursively()
+            throw IOException("Could not restore this Vault entry")
+        }
+        var published = false
+        try {
+            val plain = File(work, "plain.bin")
+            manifest.files.forEach { record ->
+                val from = File(source, record.stored)
+                if (!from.isFile) throw VaultAuthException("The backup's Vault entry is incomplete")
+                plain.delete()
+                VaultCrypto.decryptFile(from, plain, oldKey)
+                if (plain.length() != record.size || Sha256.of(plain) != record.sha) {
+                    throw VaultAuthException("The backup's Vault entry does not match its manifest")
+                }
+                VaultCrypto.encryptFile(plain, File(staging, record.stored), key)
+                plain.delete()
+            }
+            Durable.atomicWrite(File(staging, MANIFEST_FILE), VaultCrypto.encryptBytes(manifest.encode(), key))
+            verifyEntry(staging, manifest, key)
+            if (!staging.renameTo(target)) throw IOException("Could not restore this Vault entry")
+            published = true
+            RestoredEntry(manifest.id, manifest.name, false)
+        } finally {
+            if (!published) staging.deleteRecursively()
+            work.deleteRecursively()
+        }
+    }
+
+    private fun isSafeEntryId(id: String): Boolean =
+        id.isNotEmpty() && id.length <= 64 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+
     private fun entryDir(id: String): File = File(vaultDir, id)
 
     private fun verifyEntry(entryDir: File, manifest: Manifest, key: ByteArray) {

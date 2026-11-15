@@ -2,8 +2,12 @@ package com.scanwhirl.app.store.backup
 
 import android.content.Context
 import com.scanwhirl.app.BuildConfig
+import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.vault.VaultAuthException
 import com.scanwhirl.app.store.vault.VaultCrypto
+import com.scanwhirl.app.store.vault.VaultKeyWrap
+import com.scanwhirl.app.store.vault.VaultSession
+import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.util.Durable
 import org.json.JSONArray
 import org.json.JSONObject
@@ -44,17 +48,36 @@ import java.util.UUID
  * The secret is either a backup password (>= [MIN_PASSWORD] characters) or the Vault recovery
  * code; the header records which, so restore asks for the right one without guessing.
  */
-class FullBackup(private val context: Context) {
+class FullBackup(
+    private val context: Context,
+    /** Injected by tests; the app uses the real one so entries land in this phone's Vault. */
+    vaultOverride: VaultStore? = null
+) {
+
+    private val vault: VaultStore by lazy {
+        vaultOverride ?: run {
+            val app = context.applicationContext as? ScanWhirlApp
+            VaultStore(context, app?.repository ?: com.scanwhirl.app.store.ScanRepository(context))
+        }
+    }
 
     enum class Wrap { PASSWORD, RECOVERY_CODE }
 
-    data class Header(val wrap: Wrap, val iterations: Int, val salt: ByteArray)
+    data class Header(
+        val wrap: Wrap,
+        val iterations: Int,
+        val salt: ByteArray,
+        /** True when the archive carries the backup Vault's key, so entries can be re-encrypted. */
+        val hasVaultKey: Boolean
+    )
 
     data class Report(
         val documents: Int,
         val skipped: Int,
         val vaultEntries: Int,
+        val vaultReencrypted: Int,
         val extras: Int,
+        val vaultLocked: Boolean,
         val warnings: List<String>
     )
 
@@ -84,45 +107,70 @@ class FullBackup(private val context: Context) {
         }
         val plain = File(context.cacheDir, "fullbackup-${UUID.randomUUID().toString().take(8)}.tmp")
         try {
-            DataOutputStream(BufferedOutputStream(FileOutputStream(plain), BUFFER)).use { out ->
-                writeEntry(out, "manifest.json", manifest().toByteArray(Charsets.UTF_8))
-                copyTree(out, docsDir, "documents")
-                copyTree(out, sigDir, "signatures")
-                copyTree(out, stampDir, "stamps")
-                copyTree(out, draftDir, "drafts")
-                copyVault(out)
-                writeEntry(out, "settings.json", settings().toByteArray(Charsets.UTF_8))
-                out.writeByte(END)
-            }
-            val salt = VaultCrypto.newSalt()
-            val key = VaultCrypto.deriveKey(secret, salt, VaultCrypto.PBKDF2_ITERATIONS)
-            target.parentFile?.mkdirs()
-            val part = File(target.parentFile, target.name + ".part")
+            val vaultKey = vaultKeyFor(secret, wrap)
             try {
-                BufferedOutputStream(FileOutputStream(part), BUFFER).use { raw ->
-                    val out = DataOutputStream(raw)
-                    out.write(MAGIC)
-                    out.writeByte(VERSION)
-                    out.writeByte(wrap.ordinal + 1)
-                    out.writeInt(VaultCrypto.PBKDF2_ITERATIONS)
-                    out.writeByte(salt.size)
-                    out.write(salt)
-                    out.flush()
-                    FileInputStream(plain).use { input ->
-                        VaultCrypto.encryptStream(input, plain.length(), raw, key)
-                    }
+                DataOutputStream(BufferedOutputStream(FileOutputStream(plain), BUFFER)).use { out ->
+                    writeEntry(out, "manifest.json", manifest().toByteArray(Charsets.UTF_8))
+                    copyTree(out, docsDir, "documents")
+                    copyTree(out, sigDir, "signatures")
+                    copyTree(out, stampDir, "stamps")
+                    copyTree(out, draftDir, "drafts")
+                    copyVault(out)
+                    if (vaultKey != null) writeEntry(out, VAULT_KEY_ENTRY, vaultKey)
+                    writeEntry(out, "settings.json", settings().toByteArray(Charsets.UTF_8))
+                    out.writeByte(END)
                 }
-                Durable.syncFile(part)
-                if (!part.renameTo(target)) throw IOException("Could not write the backup file")
-                Durable.syncDir(target.parentFile)
-            } catch (e: Exception) {
-                part.delete()
-                target.delete()
-                throw e
+                val salt = VaultCrypto.newSalt()
+                val key = VaultCrypto.deriveKey(secret, salt, VaultCrypto.PBKDF2_ITERATIONS)
+                target.parentFile?.mkdirs()
+                val part = File(target.parentFile, target.name + ".part")
+                try {
+                    BufferedOutputStream(FileOutputStream(part), BUFFER).use { raw ->
+                        val out = DataOutputStream(raw)
+                        out.write(MAGIC)
+                        out.writeByte(VERSION)
+                        out.writeByte(wrap.ordinal + 1)
+                        out.writeInt(VaultCrypto.PBKDF2_ITERATIONS)
+                        out.writeByte(salt.size)
+                        out.write(salt)
+                        // Version 2: says whether VAULT_KEY_ENTRY is inside, so restore knows
+                        // it can merge the Vault without decrypting the whole file first.
+                        out.writeByte(if (vaultKey != null) 1 else 0)
+                        out.flush()
+                        FileInputStream(plain).use { input ->
+                            VaultCrypto.encryptStream(input, plain.length(), raw, key)
+                        }
+                    }
+                    Durable.syncFile(part)
+                    if (!part.renameTo(target)) throw IOException("Could not write the backup file")
+                    Durable.syncDir(target.parentFile)
+                } catch (e: Exception) {
+                    part.delete()
+                    target.delete()
+                    throw e
+                }
+            } finally {
+                vaultKey?.fill(0)
             }
         } finally {
             plain.delete()
         }
+    }
+
+    /**
+     * The backup device's Vault key, so a restore can re-encrypt its entries under this phone's
+     * key. Available when the Vault is unlocked, or when the backup is protected by the recovery
+     * code (which unwraps the same `recovery.bin` the Vault itself uses). A password backup of a
+     * locked Vault carries no key: its entries can only go into an empty Vault.
+     */
+    private fun vaultKeyFor(secret: String, wrap: Wrap): ByteArray? {
+        if (!File(vaultDir, "recovery.bin").isFile) return null
+        VaultSession.keyOrNull()?.let { return it.copyOf() }
+        if (wrap != Wrap.RECOVERY_CODE) return null
+        val code = VaultCrypto.normalizeRecoveryCode(secret)
+        return runCatching {
+            VaultKeyWrap.open(File(vaultDir, "recovery.bin").readBytes(), code)
+        }.getOrNull()
     }
 
     /** Reads just the plaintext header, to know which secret the file asks for. */
@@ -142,7 +190,8 @@ class FullBackup(private val context: Context) {
             val saltLength = input.readUnsignedByte()
             if (saltLength !in 8..64) throw VaultAuthException("Damaged backup header")
             val salt = ByteArray(saltLength).also { input.readFully(it) }
-            return Header(wrap, iterations, salt)
+            val hasVaultKey = if (version >= 2) input.readUnsignedByte() == 1 else false
+            return Header(wrap, iterations, salt, hasVaultKey)
         }
     }
 
@@ -180,7 +229,7 @@ class FullBackup(private val context: Context) {
                 DataInputStream(file).use { input ->
                     val magic = ByteArray(MAGIC.size).also { input.readFully(it) }
                     if (!magic.contentEquals(MAGIC)) throw VaultAuthException("Not a ScanWhirl backup file")
-                    input.readUnsignedByte()
+                    val version = input.readUnsignedByte()
                     input.readUnsignedByte()
                     input.readInt()
                     val saltLength = input.readUnsignedByte()
@@ -190,22 +239,32 @@ class FullBackup(private val context: Context) {
                         if (skipped <= 0) throw VaultAuthException("Damaged backup header")
                         skip -= skipped
                     }
+                    if (version >= 2) input.readUnsignedByte()
                     BufferedOutputStream(FileOutputStream(plain), BUFFER).use { out ->
                         VaultCrypto.decryptStream(file, out, key)
                     }
                 }
             }
             replay(plain, staging)
-            return applyStaging(staging)
+            val oldVaultKey = staging.resolve(VAULT_KEY_ENTRY).takeIf { it.isFile }?.readBytes()
+            staging.resolve(VAULT_KEY_ENTRY).delete()
+            try {
+                return applyStaging(staging, oldVaultKey)
+            } finally {
+                oldVaultKey?.fill(0)
+            }
         } finally {
             plain.delete()
             staging.deleteRecursively()
         }
     }
 
+    /** True when this backup can merge Vault entries but this phone's Vault is locked. */
+    fun needsVaultUnlock(file: File): Boolean =
+        header(file).hasVaultKey && vault.isSetUp() && !vault.isUnlocked()
+
     /** Number of days since the last backup, or null when none was ever made. */
-    fun daysSinceLastBackup(now: Long = System.currentTimeMillis()): Long? {
-        val last = prefs.getLong(PREF_LAST_BACKUP, 0L)
+    fun daysSinceLastBackup(now: Long = System.currentTimeMillis()): Long? {        val last = prefs.getLong(PREF_LAST_BACKUP, 0L)
         if (last <= 0L) return null
         return ((now - last) / 86_400_000L).coerceAtLeast(0L)
     }
@@ -337,11 +396,13 @@ class FullBackup(private val context: Context) {
         }
     }
 
-    private fun applyStaging(staging: File): Report {
+    private fun applyStaging(staging: File, oldVaultKey: ByteArray?): Report {
         var documents = 0
         var skipped = 0
         var vaultEntries = 0
+        var vaultReencrypted = 0
         var extras = 0
+        var vaultLocked = false
         val warnings = mutableListOf<String>()
 
         // 1. Documents.
@@ -374,13 +435,12 @@ class FullBackup(private val context: Context) {
             }
         }
 
-        // 2. Vault: only into an empty Vault (a different Vault key cannot be merged).
+        // 2. Vault: adopt the backup's identity into an empty Vault, or re-encrypt entry by entry
+        //    into this phone's Vault with its own key.
         val restoredVault = staging.resolve("vault2")
         if (restoredVault.isDirectory) {
             val targetSetUp = File(vaultDir, "recovery.bin").let { it.isFile && it.length() > 0 }
-            if (targetSetUp) {
-                warnings.add("The Vault on this phone was kept; its backup entries were not merged.")
-            } else {
+            if (!targetSetUp) {
                 vaultDir.mkdirs()
                 restoredVault.listFiles()?.sortedBy { it.name }?.forEach { from ->
                     val to = File(vaultDir, from.name)
@@ -392,6 +452,22 @@ class FullBackup(private val context: Context) {
                         if (wasDirectory) vaultEntries++ else extras++
                     }
                 }
+            } else if (oldVaultKey == null) {
+                warnings.add("This backup does not carry the Vault key; its Vault files were not restored.")
+            } else if (!vault.isUnlocked()) {
+                vaultLocked = true
+            } else {
+                restoredVault.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }
+                    ?.sortedBy { it.name }
+                    ?.forEach { dir ->
+                        runCatching { vault.restoreEntryFromBackup(dir, oldVaultKey) }
+                            .onSuccess { result ->
+                                if (result.skipped) skipped++ else vaultReencrypted++
+                            }
+                            .onFailure { error ->
+                                warnings.add("A Vault file could not be restored: ${error.message ?: "damaged"}.")
+                            }
+                    }
             }
         }
 
@@ -433,7 +509,7 @@ class FullBackup(private val context: Context) {
             }.onFailure { warnings.add("Settings could not be restored.") }
         }
 
-        return Report(documents, skipped, vaultEntries, extras, warnings)
+        return Report(documents, skipped, vaultEntries, vaultReencrypted, extras, vaultLocked, warnings)
     }
 
     private fun nameOf(meta: File): String = try {
@@ -460,9 +536,10 @@ class FullBackup(private val context: Context) {
         const val MIME = "application/octet-stream"
 
         private val MAGIC = "SWFULLB1".toByteArray(Charsets.UTF_8)
-        private const val VERSION = 1
+        private const val VERSION = 2
         private const val MIN_VERSION = 1
         private const val ENTRY = 1
+        internal const val VAULT_KEY_ENTRY = "vault-key.bin"
         private const val END = 0
         private const val BUFFER = 64 * 1024
         private const val MAX_ENTRIES = 200_000

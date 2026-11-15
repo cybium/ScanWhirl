@@ -48,6 +48,9 @@
     <string name="backup_restored_docs">%1$d दस्तावेज़ वापस आए</string>
     <string name="backup_restored_skipped">%1$d पहले से थे, छोड़े गए</string>
     <string name="backup_restored_vault">%1$d वॉल्ट फ़ाइलें वापस आईं</string>
+    <string name="backup_restored_vault_reencrypted">%1$d वॉल्ट दस्तावेज़ इस वॉल्ट में फिर से एन्क्रिप्ट हुए</string>
+    <string name="backup_vault_locked">वॉल्ट फ़ाइलें वापस नहीं आईं। वॉल्ट खोलें और फिर से वापस लाएँ।</string>
+    <string name="backup_vault_reason">वॉल्ट खोलें ताकि बैकअप के वॉल्ट दस्तावेज़ इसमें वापस आ सकें।</string>
     <string name="backup_wrong_secret">गलत पासवर्ड या रिकवरी कोड। कुछ नहीं बदला।</string>
     <string name="backup_not_a_backup">यह ScanWhirl बैकअप नहीं है, या फ़ाइल खराब है।</string>
     <string name="backup_failed_title">वापस नहीं ला सके</string>
