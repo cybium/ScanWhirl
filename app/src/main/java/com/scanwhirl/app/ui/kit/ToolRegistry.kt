@@ -136,7 +136,14 @@ object ToolRegistry {
         ready("merge", ToolGroup.ORGANIZE, R.string.tool_merge, R.drawable.ic_sym_call_merge, "merge join combine together", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("split", ToolGroup.ORGANIZE, R.string.tool_split, R.drawable.ic_sym_call_split, "split range separate", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("extract", ToolGroup.ORGANIZE, R.string.tool_extract, R.drawable.ic_sym_content_cut, "extract pages pick remove", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        build("organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages, R.drawable.ic_sym_view_module, "organize reorder pages move"),
+        ready("organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages, R.drawable.ic_sym_view_module, "organize reorder pages move", launch = { host, tool ->
+            val activity = host as? android.app.Activity
+            if (activity == null) {
+                host.comingSoon(tool)
+            } else {
+                com.scanwhirl.app.ui.DocumentViewerActivity.openOrganizePicker(activity)
+            }
+        }),
         ready("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_note_add, "insert add pages into pdf", launch = { host, tool ->
             val activity = host as? android.app.Activity
             if (activity == null) {
@@ -165,7 +172,21 @@ object ToolRegistry {
         ready("to_text", ToolGroup.CONVERT, R.string.tool_to_text, R.drawable.ic_sym_notes, "text txt export ocr"),
         ready("zip", ToolGroup.CONVERT, R.string.tool_zip, R.drawable.ic_sym_archive, "zip archive export batch", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "searchable text layer ocr pdf"),
-        soon("pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_approval, "pdf a archive long term", pro = true, note = R.string.soon_pdfa),
+        SwTool(
+            "pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_approval,
+            true, ToolStatus.READY, "pdf a archive long term pdfa 2b",
+            launch = { host, tool ->
+                val activity = host as? androidx.appcompat.app.AppCompatActivity
+                if (activity != null) {
+                    com.scanwhirl.app.tools.PdfAFlow.start(
+                        activity,
+                        com.scanwhirl.app.ScanWhirlApp.from(activity).repository
+                    )
+                } else {
+                    host.open(tool)
+                }
+            }
+        ),
 
         // Edit & sign (8) — L5: built in ui/stamp; a document is picked, then the editor opens armed.
         ready("sign", ToolGroup.EDIT, R.string.tool_sign, R.drawable.ic_sym_signature, "sign signature ink", pro = true).copy(

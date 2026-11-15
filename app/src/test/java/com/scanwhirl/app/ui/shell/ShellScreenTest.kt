@@ -104,7 +104,7 @@ class ShellScreenTest {
 
     // v2 UI: 03_tools_hub (44 tools: Mask Aadhaar joins Edit & sign).
     @Test
-    fun `the tools hub holds all 44 tiles and every tile is wired`() {
+    fun `the tools hub holds all 45 tiles and every tile is wired`() {
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
@@ -118,8 +118,10 @@ class ShellScreenTest {
         }
     }
 
+    // v2 UI: 03_tools_hub - Save as PDF/A ships now, so the tile opens its real picker instead
+    // of a Coming soon sheet (the Coming soon sheet itself is covered by KitComponentsTest).
     @Test
-    fun `a Soon tile opens the Coming soon sheet`() {
+    fun `a tool tile opens its own flow, never a dead end`() {
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
@@ -130,7 +132,7 @@ class ShellScreenTest {
             val dialog = ShadowDialog.getLatestDialog()
             assertNotNull("a tile must never be a dead end", dialog)
             val title = dialog.findViewById<TextView>(R.id.swSheetTitle)
-            assertEquals(activity.getString(R.string.tool_coming_soon_title), title.text.toString())
+            assertEquals(activity.getString(R.string.pdfa_pick), title.text.toString())
             dialog.dismiss()
         }
     }

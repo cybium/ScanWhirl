@@ -76,6 +76,17 @@
     <item name="swDocPickerList" type="id" />
     <item name="swDocPickerSearch" type="id" />
     <item name="swToolsClear" type="id" />
+    <item name="swProgressRoot" type="id" />
+    <item name="swProgressWhirl" type="id" />
+    <item name="swProgressLabel" type="id" />
+    <item name="swProgressBar" type="id" />
+    <item name="swProgressCancel" type="id" />
+    <item name="swEmptyState" type="id" />
+    <item name="swEmptyTitle" type="id" />
+    <item name="swEmptyBody" type="id" />
+    <item name="swEmptyAction" type="id" />
+    <item name="swHomeClear" type="id" />
+    <item name="swNoMatches" type="id" />
     <item name="swNavMe" type="id" />
     <item name="swShellTab" type="id" />
     <item name="swHomeSearch" type="id" />

@@ -17,6 +17,15 @@ import kotlin.math.min
  */
 object AadhaarMask {
 
+    /** A word/element box from ML Kit, in the decoded bitmap's pixels. */
+    data class Word(
+        val text: String,
+        val left: Int,
+        val top: Int,
+        val right: Int,
+        val bottom: Int
+    )
+
     /** A number found in one line, with the box covering its first 8 digits. */
     data class Hit(val digits: Int, val box: PageStamp.Box)
 
@@ -84,6 +93,159 @@ object AadhaarMask {
         page.lines.sortedWith(compareBy({ it.top }, { it.left }))
             .flatMap { hits(it, page) }
             .map { it.box }
+
+    /**
+     * The device path (ML Kit elements): groups words into lines, finds the 12/16-digit run and
+     * masks exactly its first two 4-digit groups. Three separate words "9233" "6926" "4947" yield
+     * two whole word boxes; one merged "9233 6926 4947" element is split proportionally by
+     * character count. The last 4 digits are never covered.
+     */
+    fun findWords(words: List<Word>, pageWidth: Int, pageHeight: Int): List<PageStamp.Box> {
+        if (pageWidth <= 0 || pageHeight <= 0) return emptyList()
+        val valid = words.filter { it.right > it.left && it.bottom > it.top && it.text.isNotBlank() }
+            .sortedWith(compareBy({ it.top }, { it.left }))
+        val lines = ArrayList<MutableList<Word>>()
+        for (word in valid) {
+            val line = lines.lastOrNull()
+            if (line != null) {
+                val ref = line.last()
+                val overlap = min(ref.bottom, word.bottom) - max(ref.top, word.top)
+                val minH = min(ref.bottom - ref.top, word.bottom - word.top)
+                if (overlap > minH * 0.5f) {
+                    line.add(word)
+                    continue
+                }
+            }
+            lines.add(mutableListOf(word))
+        }
+        val out = ArrayList<PageStamp.Box>()
+        for (line in lines) {
+            line.sortBy { it.left }
+            val builder = StringBuilder()
+            val starts = ArrayList<Int>(line.size)
+            line.forEachIndexed { index, word ->
+                if (index > 0) builder.append(' ')
+                starts.add(builder.length)
+                builder.append(word.text)
+            }
+            val text = normalize(builder.toString())
+            for (match in TOKEN.findAll(text)) {
+                val digitCount = match.value.count { it.isDigit() }
+                if (digitCount != 12 && digitCount != 16) continue
+                var seen = 0
+                var eighthEnd = -1
+                for (i in match.value.indices) {
+                    if (match.value[i].isDigit()) {
+                        seen++
+                        if (seen == 8) {
+                            eighthEnd = match.range.first + i + 1
+                            break
+                        }
+                    }
+                }
+                if (eighthEnd < 0) continue
+                val start = match.range.first
+                line.forEachIndexed { index, word ->
+                    val wordStart = starts[index]
+                    val wordEnd = wordStart + word.text.length
+                    val overlapStart = max(start, wordStart)
+                    val overlapEnd = min(eighthEnd, wordEnd)
+                    if (overlapEnd <= overlapStart) return@forEachIndexed
+                    val width = (word.right - word.left).toFloat().coerceAtLeast(1f)
+                    val height = (word.bottom - word.top).toFloat().coerceAtLeast(1f)
+                    val padY = height * 0.06f
+                    val fracStart = (overlapStart - wordStart).toFloat() / word.text.length
+                    val fracEnd = (overlapEnd - wordStart).toFloat() / word.text.length
+                    out += PageStamp.Box(
+                        left = ((word.left + fracStart * width) / pageWidth).coerceIn(0f, 1f),
+                        top = ((word.top - padY) / pageHeight).coerceIn(0f, 1f),
+                        right = ((word.left + fracEnd * width) / pageWidth).coerceIn(0f, 1f),
+                        bottom = ((word.bottom + padY) / pageHeight).coerceIn(0f, 1f)
+                    )
+                }
+            }
+        }
+        return out
+    }
+
+    /**
+     * Optional QR mask. No barcode-bounds API is available without a new library, so this is a
+     * density heuristic: the largest square window with dense dark/light transitions in both
+     * axes. The user can adjust the box afterwards.
+     */
+    fun findQr(source: android.graphics.Bitmap): PageStamp.Box? {
+        if (source.isRecycled || source.width < 32 || source.height < 32) return null
+        val w = source.width
+        val h = source.height
+        val step = max(1, min(w, h) / 90)
+        val sw = w / step
+        val sh = h / step
+        if (sw < 24 || sh < 24) return null
+        val dark = BooleanArray(sw * sh)
+        for (y in 0 until sh) {
+            for (x in 0 until sw) {
+                val p = source.getPixel(x * step, y * step)
+                val l = 0.299f * android.graphics.Color.red(p) +
+                    0.587f * android.graphics.Color.green(p) +
+                    0.114f * android.graphics.Color.blue(p)
+                dark[y * sw + x] = l < 128f
+            }
+        }
+        fun score(x0: Int, y0: Int, size: Int): Float {
+            if (x0 < 0 || y0 < 0 || x0 + size > sw || y0 + size > sh) return 0f
+            var ink = 0
+            var hTrans = 0
+            var vTrans = 0
+            for (y in y0 until y0 + size) {
+                for (x in x0 until x0 + size) {
+                    if (dark[y * sw + x]) ink++
+                    if (x > x0 && dark[y * sw + x] != dark[y * sw + x - 1]) hTrans++
+                    if (y > y0 && dark[y * sw + x] != dark[(y - 1) * sw + x]) vTrans++
+                }
+            }
+            val n = size.toFloat() * size
+            val inkFrac = ink / n
+            if (inkFrac < 0.18f || inkFrac > 0.75f) return 0f
+            val pairs = size.toFloat() * (size - 1)
+            val density = min(hTrans / pairs, vTrans / pairs)
+            if (density < 0.10f) return 0f
+            // Square-ish QR blocks score highest; text lines have almost no vertical transitions.
+            return density * (1f - kotlin.math.abs(inkFrac - 0.45f))
+        }
+        var best = 0f
+        var bestX = -1
+        var bestY = -1
+        var bestSize = 0
+        val minSize = max(8, min(sw, sh) / 8)
+        val maxSize = max(minSize, min(sw, sh) * 2 / 3)
+        var size = maxSize
+        while (size >= minSize) {
+            val stride = max(2, size / 4)
+            var y = 0
+            while (y + size <= sh) {
+                var x = 0
+                while (x + size <= sw) {
+                    val s = score(x, y, size)
+                    if (s > best) {
+                        best = s
+                        bestX = x
+                        bestY = y
+                        bestSize = size
+                    }
+                    x += stride
+                }
+                y += stride
+            }
+            size = (size * 3) / 4
+        }
+        if (bestX < 0 || best < 0.02f) return null
+        val pad = (bestSize * 0.04f).toInt()
+        val left = ((bestX - pad).coerceAtLeast(0) * step).toFloat() / w
+        val top = ((bestY - pad).coerceAtLeast(0) * step).toFloat() / h
+        val right = ((bestX + bestSize + pad).coerceAtMost(sw) * step).toFloat() / w
+        val bottom = ((bestY + bestSize + pad).coerceAtMost(sh) * step).toFloat() / h
+        return PageStamp.Box(left, top, right, bottom)
+    }
 
     /** The first 8 digits' character span inside a token (for tests and the preview). */
     internal fun firstEightSpan(token: String): IntRange? {

@@ -189,7 +189,11 @@ class PageEditorDraftTest {
             })
             scenario.onActivity {
                 assertEquals(
-                    app.getString(R.string.draft_header, 2, 1),
+                    app.getString(
+                        R.string.draft_header,
+                        it.resources.getQuantityString(R.plurals.draft_pages, 2, 2),
+                        it.resources.getQuantityString(R.plurals.draft_changes, 1, 1)
+                    ),
                     it.findViewById<android.widget.TextView>(R.id.draftHeader).text.toString()
                 )
             }

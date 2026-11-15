@@ -138,8 +138,11 @@ class KitComponentsTest {
 
     @Test
     fun `coming soon sheet names the tool and explains it in one line`() {
-        // v2 UI: 03_tools_hub - the QR code reader is a real tool now, so any Soon tool will do.
-        val tool = ToolRegistry.all.first { it.status == ToolStatus.SOON && it.soonNote != null }
+        // v2 UI: 03_tools_hub - every catalogue tool ships now, so the sheet is tested directly.
+        val tool = SwTool(
+            "test_soon", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_approval,
+            true, ToolStatus.SOON, "test soon", soonNote = R.string.soon_generic
+        )
         val sheet = SwSheet.comingSoon(app, tool)
         sheet.show()
         assertEquals(
@@ -210,7 +213,13 @@ class KitComponentsTest {
     @Test
     fun `ToolTile shows Soon tag for tool not yet built`() {
         val tile = ToolTile(app)
-        tile.bind(ToolRegistry.byId("pdfa")!!)
+        // v2 UI: 03_tools_hub - no catalogue tool is Soon any more; bind one directly.
+        tile.bind(
+            SwTool(
+                "test_soon", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_approval,
+                true, ToolStatus.SOON, "test soon", soonNote = R.string.soon_generic
+            )
+        )
         assertTrue(tile.soonTag.isVisible)
     }
 

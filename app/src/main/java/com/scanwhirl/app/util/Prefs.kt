@@ -143,4 +143,10 @@ object Prefs {
 
     fun librarySort(c: Context): String = sp(c).getString(KEY_LIB_SORT, LIB_NEWEST) ?: LIB_NEWEST
     fun setLibrarySort(c: Context, v: String) = sp(c).edit().putString(KEY_LIB_SORT, v).apply()
+
+    // ---- gallery import: auto-crop or keep as-is (01_home_A) ----------------
+
+    private const val KEY_GALLERY_CROP = "gallery_auto_crop"
+    fun galleryAutoCrop(c: Context): Boolean = sp(c).getBoolean(KEY_GALLERY_CROP, true)
+    fun setGalleryAutoCrop(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_GALLERY_CROP, v).apply()
 }

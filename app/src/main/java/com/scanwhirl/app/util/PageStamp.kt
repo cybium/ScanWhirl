@@ -570,13 +570,14 @@ object PageStamp {
     // ------------------------------------------------------------------
 
     /** `Doc (redacted)`, `Doc (watermarked)`, `Doc (signed)` or `Doc (edited)`. */
-    fun outputName(sourceName: String, marks: List<Mark>): String {
-        val suffix = when {
-            marks.any { it is Mark.Redact } -> "redacted"
-            marks.any { it is Mark.Watermark } -> "watermarked"
-            marks.any { it is Mark.Signature || it is Mark.Picture } -> "signed"
-            else -> "edited"
-        }
-        return "$sourceName ($suffix)"
+    fun outputName(sourceName: String, marks: List<Mark>): String =
+        "$sourceName (${outputLabel(marks).lowercase(Locale.ROOT)})"
+
+    /** The short tool label for [OutputNames.forTool] ("Signed", "Redacted", ...). */
+    fun outputLabel(marks: List<Mark>): String = when {
+        marks.any { it is Mark.Redact } -> "Redacted"
+        marks.any { it is Mark.Watermark } -> "Watermarked"
+        marks.any { it is Mark.Signature || it is Mark.Picture } -> "Signed"
+        else -> "Edited"
     }
 }

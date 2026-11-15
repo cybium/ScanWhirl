@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L2 Save as PDF/A. Hindi values await native review. -->
+    <string name="pdfa_pick"><!-- review -->PDF/A के रूप में सहेजें</string>
+    <string name="pdfa_note"><!-- review -->संग्रह के लिए PDF/A-2b। रूप वही रहता है, पासवर्ड नहीं।</string>
+    <string name="pdfa_create"><!-- review -->PDF/A कॉपी बनाएँ</string>
+    <string name="pdfa_locked"><!-- review -->यह दस्तावेज़ पासवर्ड से सुरक्षित है। PDF/A के लिए बिना सुरक्षा वाला दस्तावेज़ चाहिए।</string>
+    <string name="pdfa_failed"><!-- review -->PDF/A कॉपी नहीं बन सकी: %1$s</string>
+    <string name="pdfa_pro_message"><!-- review -->PDF/A के रूप में सहेजना Pro का हिस्सा है, बाकी Pro टूल्स की तरह।</string>
+</resources>

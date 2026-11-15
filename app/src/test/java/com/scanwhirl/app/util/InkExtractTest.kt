@@ -85,6 +85,49 @@ class InkExtractTest {
     }
 
     @Test
+    fun `a small mark in a large page trims tight`() {
+        val source = Bitmap.createBitmap(400, 300, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(source)
+        canvas.drawColor(Color.WHITE)
+        val pen = Paint().apply { color = Color.BLACK }
+        canvas.drawRect(180f, 140f, 220f, 180f, pen) // 40x40 in the middle
+
+        val extracted = requireNotNull(InkExtract.extract(source))
+        try {
+            val w = extracted.bitmap.width
+            val h = extracted.bitmap.height
+            assertTrue("trim must be tight, got ${w}x$h", w in 40..60 && h in 40..60)
+        } finally {
+            extracted.bitmap.recycle()
+            source.recycle()
+        }
+    }
+
+    @Test
+    fun `a thin photo frame does not defeat the trim`() {
+        val source = Bitmap.createBitmap(300, 400, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(source)
+        canvas.drawColor(Color.WHITE)
+        val border = Paint().apply {
+            color = Color.BLACK
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+        }
+        canvas.drawRect(1f, 1f, 299f, 399f, border)
+        canvas.drawRect(150f, 200f, 180f, 230f, Paint().apply { color = Color.BLACK })
+
+        val extracted = requireNotNull(InkExtract.extract(source))
+        try {
+            val w = extracted.bitmap.width
+            val h = extracted.bitmap.height
+            assertTrue("frame must be ignored, got ${w}x$h", w < 60 && h < 60)
+        } finally {
+            extracted.bitmap.recycle()
+            source.recycle()
+        }
+    }
+
+    @Test
     fun `a blank page has no ink`() {
         val blank = Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888)
         Canvas(blank).drawColor(Color.rgb(220, 220, 220))

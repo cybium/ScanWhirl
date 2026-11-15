@@ -74,9 +74,13 @@ object PdfGenerator {
         images: List<File>,
         outFile: File,
         textLayers: Map<Int, OcrPage> = emptyMap(),
-        encryption: PdfAes.Encryption? = null
+        encryption: PdfAes.Encryption? = null,
+        pdfa: PdfA.Mode? = null
     ): Set<Int> {
         require(images.isNotEmpty()) { "No images to convert" }
+        require(pdfa == null || encryption == null) {
+            "A PDF/A copy is never password-protected"
+        }
 
         // A3: the only plaintext PDF writer never writes scan.pdf beside a lock (I3).
         if (outFile.name == PdfProtection.PDF_FILE &&
@@ -108,27 +112,53 @@ object PdfGenerator {
                 }
                 fun w(s: String) = w(s.toByteArray(Charsets.ISO_8859_1))
 
-                w("%PDF-1.4\n")
+                // PDF/A-2b needs PDF 1.7 and the standard binary comment line.
+                w(if (pdfa == null) "%PDF-1.4\n" else "%PDF-1.7\n")
                 w(byteArrayOf(0x25, 0xE2.toByte(), 0xE3.toByte(), 0xCF.toByte(), 0xD3.toByte(), '\n'.code.toByte()))
 
-                val kids = (0 until images.size).joinToString(" ") { "${3 + it * 3} 0 R" }
+                // Object layout: 1 catalog, 2 page tree, then three objects per page. PDF/A adds
+                // 3 ICC profile, 4 output intent, 5 XMP metadata, 6 Info before the pages, so the
+                // default (non-archive) output is byte-for-byte what earlier versions wrote.
+                val pageBase = if (pdfa == null) 3 else 7
+                val kids = (0 until images.size).joinToString(" ") { "${pageBase + it * 3} 0 R" }
 
-                val offsets = LongArray(images.size * 3 + 3) // 1-based object numbers (index 0 unused)
+                val offsets = LongArray(pageBase + images.size * 3) // 1-based object numbers (index 0 unused)
 
                 offsets[1] = position
-                w("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+                val catalogExtra = if (pdfa == null) "" else " /Metadata 5 0 R /OutputIntents [4 0 R]"
+                w("1 0 obj\n<< /Type /Catalog /Pages 2 0 R$catalogExtra >>\nendobj\n")
 
                 offsets[2] = position
                 w("2 0 obj\n<< /Type /Pages /Kids [$kids] /Count ${images.size} >>\nendobj\n")
+
+                if (pdfa != null) {
+                    val icc = pdfa.iccProfile
+                    offsets[3] = position
+                    w("3 0 obj\n<< /N 3 /Length ${icc.size} >>\nstream\n")
+                    w(icc)
+                    w("\nendstream\nendobj\n")
+
+                    offsets[4] = position
+                    w("4 0 obj\n<< ${PdfA.outputIntentDict(3)} >>\nendobj\n")
+
+                    offsets[5] = position
+                    val xmp = PdfA.xmp(pdfa).toByteArray(Charsets.UTF_8)
+                    w("5 0 obj\n<< /Type /Metadata /Subtype /XML /Length ${xmp.size} >>\nstream\n")
+                    w(xmp)
+                    w("\nendstream\nendobj\n")
+
+                    offsets[6] = position
+                    w("6 0 obj\n<< ${PdfA.infoDict(pdfa)} >>\nendobj\n")
+                }
 
                 images.forEachIndexed { i, imageFile ->
                     val bytes = imageFile.readBytes()
                     val info = readJpegInfo(bytes)
                     val pageW = (info.width * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
                     val pageH = (info.height * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
-                    val pageObj = 3 + i * 3
-                    val contentObj = 4 + i * 3
-                    val imageObj = 5 + i * 3
+                    val pageObj = pageBase + i * 3
+                    val contentObj = pageBase + 1 + i * 3
+                    val imageObj = pageBase + 2 + i * 3
 
                     offsets[pageObj] = position
 
@@ -157,7 +187,9 @@ object PdfGenerator {
                     // /Length is the encoded byte count, never the character count.
                     w("$contentObj 0 obj\n<< /Length ${contentBody.size} >>\nstream\n")
                     w(contentBody)
-                    w("endstream\nendobj\n")
+                    // PDF/A needs the EOL marker before endstream to be outside the /Length
+                    // (ISO 19005-2 6.1.7.1). The plain writer keeps its historical bytes.
+                    w(if (pdfa == null) "endstream\nendobj\n" else "\nendstream\nendobj\n")
 
                     val colorSpace = if (info.components == 1) "/DeviceGray" else "/DeviceRGB"
                     val imageBody = encryption?.encryptStream(bytes) ?: bytes
@@ -169,7 +201,7 @@ object PdfGenerator {
                 }
 
                 val xrefOffset = position
-                val total = images.size * 3 + 2
+                val total = pageBase + images.size * 3 - 1
                 val xref = StringBuilder()
                 xref.append("xref\n0 ${total + 1}\n")
                 xref.append("0000000000 65535 f \n")
@@ -177,17 +209,22 @@ object PdfGenerator {
                     xref.append(String.format(Locale.ROOT, "%010d 00000 n \n", offsets[num]))
                 }
                 w(xref.toString())
-                val encryptPart = if (encryption == null) {
-                    ""
-                } else {
-                    " /Encrypt ${encryption.encryptDict()} " +
+                val trailerExtra = when {
+                    pdfa != null -> " /Info 6 0 R /ID [<${pdfa.documentId}> <${pdfa.documentId}>]"
+                    encryption != null -> " /Encrypt ${encryption.encryptDict()} " +
                         "/ID [<${PdfAes.hex(encryption.fileId)}> <${PdfAes.hex(encryption.fileId)}>]"
+                    else -> ""
                 }
-                w("trailer\n<< /Size ${total + 1} /Root 1 0 R$encryptPart >>\nstartxref\n$xrefOffset\n%%EOF\n")
+                w("trailer\n<< /Size ${total + 1} /Root 1 0 R$trailerExtra >>\nstartxref\n$xrefOffset\n%%EOF\n")
                 Durable.syncStream(out, tmp)
             }
 
-            PdfVerifier.verify(tmp, expectedImages = images, decryption = encryption)
+            PdfVerifier.verify(
+                tmp,
+                expectedImages = images,
+                decryption = encryption,
+                eolBeforeContentEndstream = pdfa != null
+            )
 
             // Atomic publish: file rename replaces outFile atomically. No fallback copy.
             if (!tmp.renameTo(outFile)) {

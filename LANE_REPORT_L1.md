@@ -1,7 +1,57 @@
 # L1 — Shell & look: lane report
 
 Branch `lane/L1-shell`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L1`.
-`integration` merged at the start of both sessions (L2/L3/L4/L5, including L5's draft engine and Organize grid).
+
+## Latest session (gallery auto-crop, motion kit, QA run3/3b)
+
+### Gallery auto-crop (shared API for L3/L4)
+- `launchGalleryCrop(activity: AppCompatActivity, maxPages: Int = 30, onResult: (List<Uri>) -> Unit,
+  onFallback: ((List<Uri>) -> Unit)? = null)` in `tools\ScanLauncher.kt`.
+  Opens the ML Kit scanner with gallery import enabled (corner detection + perspective crop + rotate), returns the
+  cropped page URIs in order. When the scanner module is unavailable it opens the photo picker and returns the raw
+  photos to `onFallback` (or `onResult`) for the caller's manual CropView path. BaseActivity carries the result bridge
+  so every v2 screen can use the 3-argument form: `launchGalleryCrop(activity, maxPages, onResult)`.
+- Home/Tools "Photos" now offers "Auto-crop pages (recommended)" / "Keep photos as they are", remembered in Prefs.
+- Photo import now goes through one shell entry (`importPhotos`): 1..N picked photos always open Review with those
+  pages (tests with 1 and 3 URIs), an empty pick says "No photos were added". HEIC/HEIF gallery photos are decoded
+  and re-encoded by `ImageTools.normalizeGalleryPhoto`, so modern phone photos no longer fail import.
+
+### Motion kit (74_motion)
+- `SwMotion` (SHORT/MEDIUM/LONG, animator-scale aware, 0 = no animation, press, tab fade-through, list stagger,
+  drill-in transitions, success overlay with rings + check, brand breathe/rotate, placeholder pulse).
+- `SwHaptics` (tick/confirm/reject through the view path, no permission).
+- `SwProgress` kit progress sheet (whirl mark, determinate "Page k of N", cancel) replaces every `SwDialog.progress`.
+- `SwEmptyState` (brand art at 30%, one line, optional action).
+- Wired: tab fade + drill-in (BaseActivity), Home brand turn + scan-disc breathe, DocCard/SwChip/ToolTile/SwSheet row
+  press + ripples, long-press selection tick, sheet option stagger, list stagger, ToolResult success moment, Vault
+  unlock confirm / lock tick, photo copy feedback.
+- Tests: `SwMotionTest` (scale 0 -> 0 durations, press animator, immediate tab swap, progress sheet, empty state,
+  and a source scan proving no `SwDialog.progress` remains).
+
+### QA run3 / run3b
+- Search: a dedicated `swNoMatches` line ("No matches for “x”") now shows whenever a filter/search has no results
+  (also when the library is empty); the old empty-state child juggling is gone.
+- Search mode collapses the create row, quick tools, folders, chips and headers while the field has focus/text; the
+  clear (X) button restores them. Home search no longer restores its text on a cold start.
+- Empty library: chrome collapses and the empty art/copy fit above the nav/disc.
+- Document chooser wraps its content for 1-4 documents and caps at 80% screen height otherwise; Cancel sits below.
+- Text screen: the four chips are on two rows so To Word (+PRO) is always visible; Save .txt always answers (also
+  when there is nothing to save); To Word starts the real tool.
+- Photos to PDF / Home Photos: one import path, Review always opens (see above).
+- Page tab: `ImageTools.decodeOriented` applies EXIF before drawing (landscape photos upright, boxes aligned);
+  tested with a 90°-rotated JPEG.
+
+## Gate
+- Targeted runs all green: `util.*` 402, `store.*` 289, `ui.shell.*` 37, `ui.tools.*` 32, `ui.qr.*` 35, `ui.vault.*` 19,
+  `UiSmokeTest` 77, `PhotoImportTest` 3, `ShellQaFixesTest` 13, `SwMotionTest` 6, `GalleryCropTest` 5.
+- **Full unfiltered suite currently fails with `tests: total=0`** (no test XML, no failure lines) while every subset
+  above passes on the same commit; this started after the last merge added more tests and looks like the Gradle test
+  worker dying (default worker heap) rather than a test failure. Suggest on integration:
+  `testOptions.unitTests.all { it.maxHeapSize = "2g" }` (lead owns build.gradle.kts).
+
+## Earlier work (in the same branch)
+- v2 kit + shell (Library/Tools/Pro/Me/Vault), SwSheet sweep, Manrope, reader dock, Text screen, Material Symbols,
+  brand mark, Pro gating, folders & tags, batch rename, prior QA rounds 1-2.
 
 ## Done this session (after the folders/tags pass)
 

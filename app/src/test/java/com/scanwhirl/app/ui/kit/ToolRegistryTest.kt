@@ -19,6 +19,13 @@ import org.robolectric.annotation.GraphicsMode
 class ToolRegistryTest {
 
     @Test
+    fun `organize pages and insert pages are ready`() {
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("insert_pages")?.status)
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("mask_aadhaar")?.status)
+    }
+
+    @Test
     fun `catalogue holds all 45 tools, each id once`() {
         assertEquals(45, ToolRegistry.all.size)
         assertEquals(
@@ -67,7 +74,8 @@ class ToolRegistryTest {
     fun `Soon tools open the Coming soon sheet`() {
         val host = RecordingHost()
         val soon = ToolRegistry.all.filter { it.status == ToolStatus.SOON }
-        assertTrue(soon.isNotEmpty())
+        // v2 UI: 03_tools_hub - every catalogue tool ships now; the loop still guards any future
+        // Soon entry so it can never become a dead tap.
         for (tool in soon) {
             host.events.clear()
             tool.launch(host, tool)

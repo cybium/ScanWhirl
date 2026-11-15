@@ -123,8 +123,18 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private val pickGalleryImages = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        if (uris.isNotEmpty()) scanLauncher.stageAndReview(uris)
+    ) { uris -> importPhotos(uris) }
+
+    /**
+     * v2 UI: 01_home_A — every photo import (Home and Tools) lands in Review with
+     * the picked pages. Never a silent return: an empty pick says so.
+     */
+    internal fun importPhotos(uris: List<android.net.Uri>) {
+        if (uris.isEmpty()) {
+            Toast.makeText(this, R.string.photo_import_none, Toast.LENGTH_SHORT).show()
+            return
+        }
+        scanLauncher.stageAndReview(uris)
     }
 
     private val pickImportPdf = registerForActivityResult(
@@ -321,6 +331,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 )
             }
             setOnClickListener { scanLauncher.launchScanner() }
+            com.scanwhirl.app.ui.kit.SwMotion.press(this)
+            com.scanwhirl.app.ui.kit.SwMotion.breathe(this)
         }
         disc.addView(
             ImageView(this).apply {
@@ -335,7 +347,6 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         )
         return disc
     }
-
     fun showTab(next: Tab) {
         proOpen = false
         tab = next
@@ -351,7 +362,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
             Tab.ME -> scroll(meScreen)
         }
-        setContent(view)
+        val target = view
+        // v2 UI: 74_motion — tabs fade through instead of snapping.
+        com.scanwhirl.app.ui.kit.SwMotion.fadeSwitch(contentHost) { setContent(target) }
         paintNav()
     }
 
@@ -455,7 +468,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private val libraryCallbacks = object : LibraryScreen.Callbacks {
         override fun onScan() = scanLauncher.launchScanner()
-        override fun onCreatePhotos() = pickGalleryImages.launch("image/*")
+        override fun onCreatePhotos() = showPhotoImportSheet()
         override fun onCreateImport() {
             ImportSheet.show(
                 this@ShellActivity,
@@ -501,6 +514,39 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private fun openDocument(id: String) {
         startActivity(DocumentViewerActivity.intent(this, id))
+    }
+
+    /**
+     * v2 UI: 01_home_A — Photos: auto-cropped pages (the ML Kit gallery import:
+     * corner detection, perspective crop, rotate) or the photos exactly as they are.
+     * The last choice is remembered and pre-selected.
+     */
+    private fun showPhotoImportSheet() {
+        val auto = com.scanwhirl.app.util.Prefs.galleryAutoCrop(this)
+        SwSheet.builder(this)
+            .setTitle(R.string.photos_add_title)
+            .setOptions(
+                listOf(
+                    getString(R.string.photos_auto_crop),
+                    getString(R.string.photos_keep)
+                ),
+                checked = if (auto) 0 else 1
+            ) { which, _ ->
+                com.scanwhirl.app.util.Prefs.setGalleryAutoCrop(this, which == 0)
+                if (which == 0) {
+                    com.scanwhirl.app.tools.launchGalleryCrop(
+                        this,
+                        maxPages = 30,
+                        onResult = { uris -> if (uris.isNotEmpty()) scanLauncher.saveScanned(uris) },
+                        onFallback = { uris -> if (uris.isNotEmpty()) scanLauncher.stageAndReview(uris) }
+                    )
+                } else {
+                    pickGalleryImages.launch("image/*")
+                }
+            }
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+            .show()
     }
 
     /** v2 UI: 03_tools_hub — Searchable PDF is a real tool, never a jump to Settings. */
@@ -576,6 +622,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // Lead merge: L4's planned import (page count, range, progress sheet) + L3's protected-PDF path.
         var job: kotlinx.coroutines.Job? = null
         var name: String? = null
+        // L4's gate shows its own kit progress sheet after the page decision (no legacy spinner).
         var progress: SwSheet? = null
         job = lifecycleScope.launch {
             try {
@@ -640,7 +687,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     override fun open(tool: SwTool) {
         when (tool.id) {
             "scan" -> scanLauncher.launchScanner()
-            "photos_pdf" -> pickGalleryImages.launch("image/*")
+            "photos_pdf" -> showPhotoImportSheet()
             "import_pdf" -> ImportSheet.show(
                 this,
                 onPhotos = { pickGalleryImages.launch("image/*") },
@@ -707,6 +754,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             id = R.id.swDocPickerList
             orientation = LinearLayout.VERTICAL
         }
+        var scroll: androidx.core.widget.NestedScrollView? = null
         var filt = ""
         fun render() {
             rows.removeAllViews()
@@ -728,6 +776,19 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT
                     ).apply { bottomMargin = SwStyle.dp(this@ShellActivity, 6f) }
+                )
+            }
+            // v2 UI: 03_tools_hub — a 1-3 document chooser wraps its content;
+            // a long one caps at 80% of the screen and scrolls.
+            scroll?.layoutParams = if (rows.childCount <= 4) {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            } else {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    (resources.displayMetrics.heightPixels * 0.8f).toInt()
                 )
             }
         }
@@ -765,12 +826,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 ).apply { bottomMargin = SwStyle.dp(this@ShellActivity, 8f) }
             )
         }
-        val scroll = androidx.core.widget.NestedScrollView(this).apply {
+        scroll = androidx.core.widget.NestedScrollView(this).apply {
             isFillViewport = false
             addView(rows)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ShellActivity, 360f)
-            )
         }
         body.addView(scroll)
         render()
@@ -800,8 +858,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         if (::library.isInitialized) library.reload()
     }
 
-    override fun showProgress(titleRes: Int): androidx.appcompat.app.AlertDialog =
-        SwDialog.progress(this, titleRes = titleRes)
+    override fun showProgress(titleRes: Int): com.scanwhirl.app.ui.kit.SwProgress =
+        com.scanwhirl.app.ui.kit.SwProgress.show(this, getString(titleRes))
 
     override fun toast(res: Int, duration: Int) {
         Toast.makeText(this, res, duration).show()

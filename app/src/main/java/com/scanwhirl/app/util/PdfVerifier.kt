@@ -46,20 +46,25 @@ object PdfVerifier {
      * @param expectedPages required page count; when null it is taken from [expectedImages].
      * @param decryption when the file is AES-encrypted (v2 Protect PDF), the key that opens its
      *   streams; the content and image checks then run on the decrypted bytes.
+     * @param eolBeforeContentEndstream true for the PDF/A writer, which puts an EOL between a
+     *   content stream's data and `endstream` (ISO 19005-2 6.1.7.1). The plain writer has none.
      * @throws InvalidPdfException when the file is not a structurally sound PDF of that shape.
      */
     fun verify(
         file: File,
         expectedPages: Int? = null,
         expectedImages: List<File>? = null,
-        decryption: PdfAes.Decryption? = null
+        decryption: PdfAes.Decryption? = null,
+        eolBeforeContentEndstream: Boolean = false
     ) {
         val expected = expectedImages?.size ?: expectedPages
         if (expectedPages != null && expectedImages != null && expectedPages != expectedImages.size) {
             throw InvalidPdfException("Expected page count disagrees with the page files")
         }
         if (!file.isFile) throw InvalidPdfException("PDF is missing")
-        RandomAccessFile(file, "r").use { Checker(it, expected, expectedImages, decryption).run() }
+        RandomAccessFile(file, "r").use {
+            Checker(it, expected, expectedImages, decryption, eolBeforeContentEndstream).run()
+        }
     }
 
     private fun fail(message: String): Nothing = throw InvalidPdfException(message)
@@ -68,7 +73,8 @@ object PdfVerifier {
         private val raf: RandomAccessFile,
         private val expectedPages: Int?,
         private val expectedImages: List<File>?,
-        private val decryption: PdfAes.Decryption?
+        private val decryption: PdfAes.Decryption?,
+        private val eolBeforeContentEndstream: Boolean
     ) {
         private val size = raf.length()
         private lateinit var offsets: LongArray // index = object number; 0 unused
@@ -276,9 +282,9 @@ object PdfVerifier {
                 trail.startsWith("\n") || trail.startsWith("\r") -> 1
                 else -> 0
             }
-            // This writer puts an EOL between image data and `endstream` (not part of /Length) and none
-            // after a content stream (which ends in its own newline). Holding both to the writer's exact
-            // layout means /Length that is one too long OR one too short is rejected.
+            // The writer's exact layout is pinned: the plain writer puts an EOL between image data
+            // and `endstream` (not part of /Length) and none after a content stream; the PDF/A
+            // writer puts one after both. /Length that is one too long OR one too short is rejected.
             if (eolBeforeEndstream != (skip > 0)) fail("Stream $num /Length is off by the EOL before 'endstream'")
             if (!trail.startsWith("endstream", skip)) fail("Stream $num /Length does not end on 'endstream'")
             val afterStream = skip + "endstream".length
@@ -308,7 +314,7 @@ object PdfVerifier {
             checkObject(imageNum)
             if (!used.add(contentNum) || !used.add(imageNum)) fail("Page $pageNum shares objects with another page")
 
-            val content = stream(contentNum, eolBeforeEndstream = false)
+            val content = stream(contentNum, eolBeforeEndstream = eolBeforeContentEndstream)
             if (content.length > MAX_CONTENT_STREAM + 64) fail("Content stream of page $pageNum is too large")
             val drawingBytes = streamBytes(content)
             if (drawingBytes.size > MAX_CONTENT_STREAM) fail("Content stream of page $pageNum is too large")

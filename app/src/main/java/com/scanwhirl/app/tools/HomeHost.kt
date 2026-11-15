@@ -14,8 +14,8 @@ interface HomeHost {
     /** Reload the document list (a flow changed something on disk). */
     fun refreshList()
 
-    /** Indeterminate progress dialog; the caller dismisses it. */
-    fun showProgress(titleRes: Int = R.string.progress_title): AlertDialog
+    /** Indeterminate kit progress sheet; the caller dismisses it. */
+    fun showProgress(titleRes: Int = R.string.progress_title): com.scanwhirl.app.ui.kit.SwProgress
 
     fun toast(res: Int, duration: Int = Toast.LENGTH_SHORT)
 

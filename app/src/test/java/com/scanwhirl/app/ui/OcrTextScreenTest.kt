@@ -100,6 +100,22 @@ class OcrTextScreenTest {
     }
 
     @Test
+    fun `all four action chips are on screen, To Word included`() {
+        launch { activity ->
+            for (id in listOf(R.id.btnCopy, R.id.btnShare, R.id.btnSave, R.id.btnToWord)) {
+                val chip = activity.findViewById<View>(id)
+                assertNotNull("chip $id exists", chip)
+                assertEquals("chip $id is visible", View.VISIBLE, chip.visibility)
+            }
+            assertEquals(
+                "To Word is not hidden in a scroller",
+                activity.findViewById<View>(R.id.ocrActions),
+                activity.findViewById<View>(R.id.btnToWord).parent.parent
+            )
+        }
+    }
+
+    @Test
     fun `the four action chips carry their icons and labels`() {
         launch { activity ->
             val expected = mapOf(

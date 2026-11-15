@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.HorizontalScrollView
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -88,6 +89,12 @@ class LibraryScreen(
     private var selectionMode = false
     private val selected = linkedSetOf<String>()
     private var lastBatchUndo: List<Pair<String, String>>? = null
+    private var listStaggered = false
+    private var quickHeader: View? = null
+    private var recentHeader: View? = null
+    private var folderScroll: View? = null
+    private lateinit var noMatchView: TextView
+    private lateinit var homeClear: ImageButton
 
     private var docs: List<ScanDocument> = emptyList()
     private var query = ""
@@ -116,11 +123,25 @@ class LibraryScreen(
 
         addView(appBar())
         addView(searchBox())
-        addView(folderSection())
+        noMatchView = SwStyle.text(
+            context, 14f, SwStyle.color(context, R.color.text_hologram_mid), bold = true
+        ).apply {
+            id = R.id.swNoMatches
+            gravity = Gravity.CENTER
+            setPadding(
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 26f),
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 10f)
+            )
+            isVisible = false
+        }
+        addView(noMatchView)
+        folderScroll = folderSection()
+        addView(folderScroll)
         addView(createBlock())
-        addView(sectionHeader(context.getString(R.string.home_quick_tools), null) {
+        quickHeader = sectionHeader(context.getString(R.string.home_quick_tools), null) {
             callbacks.onAllTools()
-        })
+        }
+        addView(quickHeader)
         quickRow = LinearLayout(context).apply {
             id = R.id.swQuickRow
             orientation = HORIZONTAL
@@ -129,9 +150,10 @@ class LibraryScreen(
             setPadding(pad, 0, pad, 0)
         }
         addView(quickRow)
-        addView(sectionHeader(context.getString(R.string.home_recent), context.getString(R.string.home_newest)) {
+        recentHeader = sectionHeader(context.getString(R.string.home_recent), context.getString(R.string.home_newest)) {
             showSortSheet()
-        })
+        }
+        addView(recentHeader)
         chipRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             val pad = SwStyle.dp(context, 18f)
@@ -166,9 +188,10 @@ class LibraryScreen(
             gravity = Gravity.CENTER
             isVisible = false
             setPadding(
-                SwStyle.dp(context, 24f), SwStyle.dp(context, 30f),
-                SwStyle.dp(context, 24f), SwStyle.dp(context, 30f)
+                SwStyle.dp(context, 24f), SwStyle.dp(context, 14f),
+                SwStyle.dp(context, 24f), SwStyle.dp(context, 10f)
             )
+            val d = SwStyle.dp(context, 44f)
             addView(
                 ImageView(context).apply {
                     setImageResource(R.drawable.ic_sym_document_scanner)
@@ -176,7 +199,7 @@ class LibraryScreen(
                         SwStyle.color(context, R.color.text_hologram_dim)
                     )
                 },
-                LayoutParams(SwStyle.dp(context, 56f), SwStyle.dp(context, 56f))
+                LayoutParams(d, d)
             )
             addView(
                 SwStyle.text(context, 18f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
@@ -658,14 +681,16 @@ class LibraryScreen(
             val padH = SwStyle.dp(context, 18f)
             setPadding(padH, SwStyle.dp(context, 10f), padH, SwStyle.dp(context, 6f))
         }
+        val mark = ImageView(context).apply {
+            id = R.id.swBrandMark
+            setImageResource(R.drawable.ic_brand_mark)
+        }
         row.addView(
-            ImageView(context).apply {
-                id = R.id.swBrandMark
-                setImageResource(R.drawable.ic_brand_mark)
-            },
+            mark,
             LayoutParams(SwStyle.dp(context, 32f), SwStyle.dp(context, 32f))
                 .apply { marginEnd = SwStyle.dp(context, 10f) }
         )
+        mark.post { com.scanwhirl.app.ui.kit.SwMotion.rotateBrandOnce(mark) }
         row.addView(
             SwStyle.text(context, 22f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(R.string.app_name)
@@ -708,6 +733,8 @@ class LibraryScreen(
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             background = null
             isSingleLine = true
+            // v2 UI: 01_home_A — a new session starts with an empty query.
+            isSaveEnabled = false
             inputType = android.text.InputType.TYPE_CLASS_TEXT
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
             setPadding(0, 0, 0, 0)
@@ -716,11 +743,31 @@ class LibraryScreen(
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
                 override fun afterTextChanged(s: Editable?) {
                     query = s?.toString()?.trim().orEmpty()
+                    if (::homeClear.isInitialized) homeClear.isVisible = !s.isNullOrEmpty()
+                    updateChrome()
                     renderDocs()
                 }
             })
+            setOnFocusChangeListener { _, _ ->
+                updateChrome()
+            }
         }
         box.addView(searchInput, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        homeClear = SwStyle.iconButton(
+            context, R.drawable.ic_sym_close, SwStyle.color(context, R.color.text_hologram_dim)
+        ).apply {
+            id = R.id.swHomeClear
+            contentDescription = context.getString(R.string.home_search_clear)
+            layoutParams = LayoutParams(SwStyle.dp(context, 34f), SwStyle.dp(context, 34f))
+            isVisible = false
+            setOnClickListener {
+                searchInput.setText("")
+                searchInput.clearFocus()
+                updateChrome()
+                renderDocs()
+            }
+        }
+        box.addView(homeClear)
         return box.apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)).apply {
                 val m = SwStyle.dp(context, 18f)
@@ -977,6 +1024,7 @@ class LibraryScreen(
                     if (selectionMode) toggleSelection(doc.id) else callbacks.onOpenDoc(doc)
                 }
                 setOnLongClickListener {
+                    com.scanwhirl.app.ui.kit.SwHaptics.tick(it)
                     if (!selectionMode) enterSelection(doc.id) else toggleSelection(doc.id)
                     true
                 }
@@ -1005,24 +1053,47 @@ class LibraryScreen(
                 }
             }
         }
-        emptyView.isVisible = docs.isEmpty()
-        if (docs.isEmpty()) {
-            emptyView.findViewById<View>(R.id.swHomeEmpty)?.let { }
-        }
-        // A filter with no hits speaks with one quiet line instead of the first-run state.
-        if (docs.isNotEmpty() && shown.isEmpty()) {
-            emptyView.isVisible = true
+        val filtering = query.isNotBlank() || folder != null || category != null
+        noMatchView.isVisible = shown.isEmpty() && filtering
+        if (noMatchView.isVisible) {
+            noMatchView.text = if (query.isNotBlank()) {
+                context.getString(R.string.home_no_match_for, query)
+            } else {
+                context.getString(R.string.empty_filtered)
+            }
             (emptyView.getChildAt(0) as? ImageView)?.setImageResource(R.drawable.ic_sym_search)
-            (emptyView.getChildAt(1) as? TextView)?.text =
-                context.getString(R.string.home_no_match_for, query.ifBlank { "…" })
-            (emptyView.getChildAt(2) as? TextView)?.isVisible = false
-            (emptyView.getChildAt(3) as? TextView)?.isVisible = false
-        } else if (docs.isEmpty()) {
+        }
+        emptyView.isVisible = docs.isEmpty() && !filtering
+        if (emptyView.isVisible) {
             (emptyView.getChildAt(0) as? ImageView)?.setImageResource(R.drawable.ic_sym_document_scanner)
             (emptyView.getChildAt(1) as? TextView)?.text = context.getString(R.string.home_empty_title)
+            (emptyView.getChildAt(2) as? TextView)?.text = context.getString(R.string.home_empty_body)
             (emptyView.getChildAt(2) as? TextView)?.isVisible = true
-            (emptyView.getChildAt(3) as? TextView)?.isVisible = true
         }
+        updateChrome()
+        if (!listStaggered && shown.isNotEmpty()) {
+            listStaggered = true
+            com.scanwhirl.app.ui.kit.SwMotion.stagger(docList)
+        }
+    }
+
+    /**
+     * v2 UI: 01_home_A — search mode collapses everything above the results (the
+     * create row, quick tools, folders and chips) so the list starts right under
+     * the field; an empty library also collapses them so the empty state fits
+     * above the nav/disc.
+     */
+    private fun updateChrome() {
+        val searching = query.isNotBlank() ||
+            (::searchInput.isInitialized && searchInput.hasFocus())
+        val firstRun = docs.isEmpty() && !searching && folder == null && category == null
+        folderScroll?.isVisible = !searching
+        createRow.isVisible = !searching
+        quickHeader?.isVisible = !searching && !firstRun
+        quickRow.isVisible = !searching && !firstRun
+        recentHeader?.isVisible = !searching && !firstRun
+        chipRow.isVisible = !searching && !firstRun && docs.isNotEmpty()
+        listHeader.isVisible = !searching && !firstRun
     }
 
     private fun metaFor(doc: ScanDocument): String {

@@ -102,10 +102,11 @@ class ShellQaFixesTest {
 
             search(activity, "zzz-no-hit")
             assertTrue("no cards", cards(activity).isEmpty())
-            val empty = activity.findViewById<View>(R.id.swHomeEmpty)
-            assertTrue("the empty state is shown", empty.isVisible)
-            val title = (empty as ViewGroup).getChildAt(1) as TextView
-            assertTrue("it names the query: ${title.text}", title.text.toString().contains("zzz-no-hit"))
+            val none = activity.findViewById<TextView>(R.id.swNoMatches)
+            assertTrue("the no-match line is shown", none.isVisible)
+            assertTrue("it names the query: ${none.text}", none.text.toString().contains("zzz-no-hit"))
+            assertFalse("the first-run empty state stays hidden",
+                activity.findViewById<View>(R.id.swHomeEmpty).isVisible)
         }
     }
 
@@ -332,6 +333,33 @@ class ShellQaFixesTest {
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             assertEquals("re-entering the tab starts from all tools", "", search.text.toString())
+        }
+    }
+
+    @Test
+    fun `search mode collapses the create row and quick tools until cleared`() {
+        DocFixtures.saved(repo, app, pages = 1, name = "Searchable doc")
+        launch { activity ->
+            search(activity, "searchable")
+            assertFalse("create row is out of the way", activity.findViewById<View>(R.id.swCreateRow).isVisible)
+            assertFalse("quick tools are out of the way", activity.findViewById<View>(R.id.swQuickRow).isVisible)
+            assertEquals(1, cards(activity).size)
+
+            activity.findViewById<View>(R.id.swHomeClear).performClick()
+            idle()
+            assertTrue("create row returns", activity.findViewById<View>(R.id.swCreateRow).isVisible)
+            assertTrue("quick tools return", activity.findViewById<View>(R.id.swQuickRow).isVisible)
+        }
+    }
+
+    @Test
+    fun `an empty library collapses the chrome so the empty state fits`() {
+        launch { activity ->
+            assertTrue("the empty state is shown", activity.findViewById<View>(R.id.swHomeEmpty).isVisible)
+            assertFalse("quick tools are hidden on a first run",
+                activity.findViewById<View>(R.id.swQuickRow).isVisible)
+            assertEquals("no stray button under the empty state", 3,
+                activity.findViewById<ViewGroup>(R.id.swHomeEmpty).childCount)
         }
     }
 
