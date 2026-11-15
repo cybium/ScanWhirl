@@ -21,7 +21,21 @@ $wslRoot = "/mnt/c" + (($root.Substring(2)) -replace '\\', '/')
 # ---- cloud gate (default for the FULL suite; -Tests and -Apk stay local) ----
 # Snapshots the worktree (incl. untracked, respecting .gitignore) WITHOUT touching the lane branch or index,
 # pushes it to ci/<lane>, waits for the GitHub Actions "gate" run on that exact commit, prints its verdict.
-if (-not $Tests -and -not $Apk -and -not $Local) {
+# -Tests runs: local when the PC's build slot is free (fastest, ~1 min); CLOUD when anyone is building or queued
+# (no waiting in line). Evals on the owner's private files always stay local (the cloud cannot see them).
+$lockDirPeek = "C:\Users\Cybium\Desktop\.sw-locks"
+$slotBusy = $false
+if (Test-Path "$lockDirPeek\build.lock") {
+    try { $p = [IO.File]::Open("$lockDirPeek\build.lock", 'Open', 'Read', 'ReadWrite'); $p.Close() } catch { $slotBusy = $true }
+}
+if (@(Get-ChildItem "$lockDirPeek\queue" -Filter *.t -ErrorAction SilentlyContinue).Count -gt 0) { $slotBusy = $true }
+$evalish = ($Tests -match 'Eval|PerfHarness|RealWorld|HostSample') -or
+    (Test-Path "C:\Users\Cybium\Desktop\.sw-qa\owner\${Lane}_EVAL_ON") -or
+    (Test-Path "C:\Users\Cybium\Desktop\.sw-qa\realworld\${Lane}_EVAL_ON") -or
+    (Test-Path "C:\Users\Cybium\Desktop\.sw-qa\owner\EVAL_ON")
+$cloudTests = $Tests -and $slotBusy -and -not $evalish -and -not $Local -and -not $Apk
+if ($Tests -and -not $cloudTests -and -not $Apk) { Write-Output ("tests: running locally (" + $(if ($evalish) { "eval on private files" } elseif ($Local) { "-Local" } else { "build slot free" }) + ")") }
+if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
     $gh = "C:\Program Files\GitHub CLI\gh.exe"
     $tmpIndex = Join-Path $env:TEMP ("sw-ci-index-" + $Lane + "-" + $PID)
     $env:GIT_INDEX_FILE = $tmpIndex
@@ -31,17 +45,25 @@ if (-not $Tests -and -not $Apk -and -not $Local) {
     $wf = "C:\Users\Cybium\Desktop\ScanWhirl\.github\workflows\gate.yml"
     $blob = git -C $root hash-object -w $wf
     git -C $root update-index --add --cacheinfo "100644,$blob,.github/workflows/gate.yml"
+    $ciBranch = "ci/$Lane"
+    if ($cloudTests) {
+        # Single-test cloud run: the filter travels in the snapshot; a separate branch so it never cancels a full run.
+        $fblob = $Tests | git -C $root hash-object -w --stdin
+        git -C $root update-index --add --cacheinfo "100644,$fblob,.ci/test-filter.txt"
+        $ciBranch = "ci/$Lane-t"
+        Write-Output "tests: build slot busy -> running '$Tests' in the CLOUD instead of waiting in line"
+    }
     $tree = git -C $root write-tree
     Remove-Item Env:GIT_INDEX_FILE; Remove-Item $tmpIndex -ErrorAction SilentlyContinue
     $parent = git -C $root rev-parse HEAD
     $commit = git -C $root commit-tree $tree -p $parent -m "ci snapshot $Lane $(Get-Date -Format o)"
     if (-not $commit) { Write-Output "GATE FAIL $Lane cloud: could not snapshot the worktree"; exit 2 }
-    git -C $root push -q -f origin "${commit}:refs/heads/ci/$Lane" 2>&1 | Where-Object { $_ -notmatch '^remote:\s*$|^remote: (Create|To create|\s+https)' }
+    git -C $root push -q -f origin "${commit}:refs/heads/$ciBranch" 2>&1 | Where-Object { $_ -notmatch '^remote:\s*$|^remote: (Create|To create|\s+https)' }
     $env:GH_TOKEN = (("protocol=https`nhost=github.com`n`n" | git credential fill 2>$null) | Where-Object { $_ -like 'password=*' }) -replace '^password=', ''
-    Write-Output "cloud: snapshot $($commit.Substring(0,8)) pushed to ci/$Lane; waiting for the GitHub run (about 8-12 min, no local queue)"
+    Write-Output "cloud: snapshot $($commit.Substring(0,8)) pushed to $ciBranch; waiting for the GitHub run (about 8-12 min, no local queue)"
     $started = Get-Date; $run = $null
     while (((Get-Date) - $started).TotalMinutes -lt 25) {
-        $runs = & $gh run list -R cybium/ScanWhirl --workflow gate.yml --branch "ci/$Lane" -L 10 --json databaseId,headSha,status,conclusion 2>$null | ConvertFrom-Json
+        $runs = & $gh run list -R cybium/ScanWhirl --workflow gate.yml --branch "$ciBranch" -L 10 --json databaseId,headSha,status,conclusion 2>$null | ConvertFrom-Json
         $run = $runs | Where-Object { $_.headSha -eq $commit } | Select-Object -First 1
         if ($run -and $run.status -eq "completed") { break }
         if (-not $run -and ((Get-Date) - $started).TotalMinutes -gt 5) { Write-Output "GATE FAIL $Lane cloud: no GitHub run started for $commit"; exit 2 }

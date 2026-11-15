@@ -41,7 +41,15 @@ jobs:
       - name: Unit tests
         id: tests
         continue-on-error: true
-        run: ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q
+        # gate.ps1 -Tests "<pattern>" (when the PC's build slot is busy) injects .ci/test-filter.txt.
+        run: |
+          FILTER=""
+          if [ -f .ci/test-filter.txt ]; then FILTER=$(head -n1 .ci/test-filter.txt | tr -d '\r'); echo "test filter: $FILTER"; fi
+          if [ -n "$FILTER" ]; then
+            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q --tests "$FILTER"
+          else
+            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q
+          fi
 
       - name: Lint
         id: lint
@@ -102,6 +110,8 @@ jobs:
     # runner never has the owner's keystore, so -PciUnsignedRelease swaps in the
     # debug signing config: the APK installs for a device smoke test and must
     # never be distributed. Fails on R8 errors or unresolved (missing) classes.
+    # Only where it matters: integration merges, manual runs, and lanes that ask for it (ci/<lane>-rel*).
+    if: github.ref == 'refs/heads/integration' || github.event_name == 'workflow_dispatch' || contains(github.ref, '-rel')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
