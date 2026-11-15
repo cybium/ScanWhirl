@@ -12,9 +12,14 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.SwitchCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.common.api.ApiException
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.ui.BaseActivity
@@ -71,6 +76,58 @@ class BookPagesActivity : BaseActivity() {
         ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         if (uris.isNotEmpty()) loadImages(uris)
+    }
+
+    /** The Google scanner crops the book (camera and gallery import) before the split. */
+    private val scanSpread = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
+        val scanning = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
+        val uris = scanning?.pages.orEmpty().mapNotNull { it.imageUri }
+        if (uris.isEmpty()) {
+            Toast.makeText(this, R.string.book_read_failed, Toast.LENGTH_SHORT).show()
+        } else {
+            loadImages(uris)
+        }
+    }
+
+    private fun launchBookScanner() {
+        val options = GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(true)
+            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            .setPageLimit(30)
+            .build()
+        try {
+            GmsDocumentScanning.getClient(options)
+                .getStartScanIntent(this)
+                .addOnSuccessListener { sender ->
+                    scanSpread.launch(IntentSenderRequest.Builder(sender).build())
+                }
+                .addOnFailureListener { e ->
+                    val message = if (e is ApiException) {
+                        getString(R.string.book_scanner_fallback)
+                    } else {
+                        getString(R.string.book_scanner_fallback)
+                    }
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                    pickImages.launch("image/*")
+                }
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.book_scanner_fallback, Toast.LENGTH_LONG).show()
+            pickImages.launch("image/*")
+        }
+    }
+
+    private fun showAddSpread() {
+        SwSheet.builder(this)
+            .setTitle(R.string.book_add_spread)
+            .setMessage(R.string.book_add_spread_note)
+            .setPrimary(R.string.book_scan_camera) { launchBookScanner() }
+            .setSecondary(R.string.book_from_photos) { launchBookScanner() }
+            .build()
+            .show()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -156,7 +213,7 @@ class BookPagesActivity : BaseActivity() {
             gravity = Gravity.CENTER
             text = getString(R.string.book_add)
             visibility = View.GONE
-            setOnClickListener { pickImages.launch("image/*") }
+            setOnClickListener { showAddSpread() }
             minHeight = SwStyle.dp(this@BookPagesActivity, 44f)
         }
         root.addView(
@@ -170,7 +227,7 @@ class BookPagesActivity : BaseActivity() {
             background = SwStyle.rounded(this@BookPagesActivity, SwStyle.color(this@BookPagesActivity, R.color.cyan_primary), 16f)
             minHeight = SwStyle.dp(this@BookPagesActivity, 54f)
             setOnClickListener {
-                if (items.isEmpty()) pickImages.launch("image/*") else createDocument()
+                if (items.isEmpty()) showAddSpread() else createDocument()
             }
         }
         root.addView(
@@ -207,7 +264,12 @@ class BookPagesActivity : BaseActivity() {
                             val bytes = readBytes(uri)
                             val bitmap = BookSplit.decode(bytes, PREVIEW_MAX_DIM)
                             val gutter = BookSplit.scanGutter(bitmap)
-                            Triple(uri, bitmap, gutter)
+                            val rotateTop = if (gutter.horizontal) {
+                                TextRotation.choose(bitmap, gutter)
+                            } else {
+                                true
+                            }
+                            Loaded(uri, bitmap, gutter, rotateTop)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -215,12 +277,12 @@ class BookPagesActivity : BaseActivity() {
                         }
                     }
                 }
-                for ((uri, bitmap, gutter) in loaded) {
+                for (loadedPage in loaded) {
                     if (isFinishing || isDestroyed) {
-                        bitmap.recycle()
+                        loadedPage.bitmap.recycle()
                         continue
                     }
-                    addPreview(uri, bitmap, gutter)
+                    addPreview(loadedPage)
                 }
                 val skipped = uris.size - loaded.size
                 if (skipped > 0) {
@@ -237,7 +299,10 @@ class BookPagesActivity : BaseActivity() {
         }
     }
 
-    private fun addPreview(uri: Uri, bitmap: android.graphics.Bitmap, gutter: BookSplit.Gutter) {
+    private fun addPreview(loaded: Loaded) {
+        val uri = loaded.uri
+        val bitmap = loaded.bitmap
+        val gutter = loaded.gutter
         if (items.isEmpty()) container.removeAllViews()
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -250,11 +315,14 @@ class BookPagesActivity : BaseActivity() {
             text = getString(R.string.book_spread, items.size + 1)
         }
         val note = SwStyle.text(this, 11.5f, SwStyle.color(this, R.color.cyan_dim)).apply {
+            maxLines = 2
+            gravity = Gravity.END
             text = getString(
                 when {
                     gutter.singlePage -> R.string.book_one_page_note
-                    gutter.found -> R.string.book_gutter_found
-                    else -> R.string.book_gutter_middle
+                    gutter.lowConfidence -> R.string.book_gutter_middle
+                    gutter.horizontal -> R.string.book_gutter_horizontal
+                    else -> R.string.book_gutter_found
                 }
             )
         }
@@ -268,12 +336,14 @@ class BookPagesActivity : BaseActivity() {
 
         val spread = BookSpreadView(this).apply {
             contentDescription = getString(R.string.book_preview_desc)
-            setSpread(bitmap, gutter.ratio, gutter.found)
+            setSpread(bitmap, gutter)
             onGutterMoved = {
                 note.text = getString(R.string.book_gutter_moved)
                 note.setTextColor(SwStyle.color(this@BookPagesActivity, R.color.gold_pro_primary))
             }
         }
+        val item = Item(uri, spread, gutter.singlePage, loaded.rotateTop)
+        if (gutter.lowConfidence && !gutter.singlePage) spread.pulseLine()
         card.addView(
             spread,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -281,7 +351,19 @@ class BookPagesActivity : BaseActivity() {
             }
         )
 
-        val item = Item(uri, spread, gutter.singlePage)
+        if (gutter.horizontal && !gutter.singlePage) {
+            val rotate = SwStyle.text(
+                this, 13f, SwStyle.color(this, R.color.cyan_primary), bold = true
+            ).apply {
+                text = getString(R.string.book_rotate)
+                gravity = Gravity.CENTER
+                minHeight = SwStyle.dp(this@BookPagesActivity, 40f)
+                setOnClickListener {
+                    item.rotateTop = !item.rotateTop
+                }
+            }
+            card.addView(rotate)
+        }
         if (gutter.singlePage) {
             val onePage = SwitchCompat(this).apply {
                 text = getString(R.string.book_keep_one_page)
@@ -333,18 +415,20 @@ class BookPagesActivity : BaseActivity() {
         busy = true
         statusView.text = getString(R.string.book_splitting)
         updateControls()
-        val sources = items.map { Triple(it.view.gutter(), it.uri, it.keepAsOnePage) }
+        val sources = items.map { ItemSource(it.view.gutter(), it.uri, it.keepAsOnePage, it.rotateTop) }
         lifecycleScope.launch {
             try {
                 val pages = withContext(Dispatchers.IO) {
                     val out = ArrayList<ByteArray>(sources.size * 2)
-                    for ((gutter, uri, keepAsOne) in sources) {
+                    for (source in sources) {
                         // Sampled to 3000 px inside BookSplit; the provider's image is only read.
-                        val bytes = readBytes(uri)
-                        if (keepAsOne) {
+                        val bytes = readBytes(source.uri)
+                        if (source.keepAsOnePage) {
                             out += BookSplit.singlePageJpeg(bytes)
                         } else {
-                            val (left, right) = BookSplit.splitToJpeg(bytes, gutter)
+                            val (left, right) = BookSplit.splitToJpeg(
+                                bytes, source.gutter, source.rotateTop
+                            )
                             out += left
                             out += right
                         }
@@ -402,10 +486,25 @@ class BookPagesActivity : BaseActivity() {
     private class Item(
         val uri: Uri,
         val view: BookSpreadView,
-        var keepAsOnePage: Boolean
+        var keepAsOnePage: Boolean,
+        var rotateTop: Boolean
     ) {
         var onePageSwitch: SwitchCompat? = null
     }
+
+    private class ItemSource(
+        val gutter: BookSplit.Gutter,
+        val uri: Uri,
+        val keepAsOnePage: Boolean,
+        val rotateTop: Boolean
+    )
+
+    private class Loaded(
+        val uri: Uri,
+        val bitmap: android.graphics.Bitmap,
+        val gutter: BookSplit.Gutter,
+        val rotateTop: Boolean
+    )
 
     companion object {
         /** Previews are decodes for the screen only; the create path decodes at 3000 px. */

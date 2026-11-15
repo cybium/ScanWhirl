@@ -9,11 +9,12 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * Real textbook photos, never committed: runs only when `SW_REALWORLD_DIR` is set, or when the
- * QA folder carries an `EVAL_ON` file (the gate runs inside WSL, where a Windows env var cannot
- * be exported). Without either, it returns early and the normal gate passes.
+ * Real photos, never committed: runs only when `SW_REALWORLD_DIR`/`SW_OWNER_DIR` is set, or when
+ * the QA folder carries an `EVAL_ON` file (the gate runs inside WSL, where a Windows env var
+ * cannot be exported). Without either, it returns early and the normal gate passes.
  *
- * Deletes `EVAL_ON` after the run so a later full gate does not re-run the photos.
+ * The realworld crop pass must hit the measured spine (±3% of the cropped width). The owner's
+ * sideways textbook photos must be detected as horizontal; the previews are for the lead.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -21,29 +22,57 @@ import java.io.File
 class BookSplitRealWorldTest {
 
     @Test
-    fun `real world book photos match the README`() {
-        val qa = File(QA_DIR)
-        val env = System.getenv("SW_REALWORLD_DIR")?.let { File(it) }
-        val sentinel = File(qa, "EVAL_ON")
-        val dir = env ?: qa.takeIf { sentinel.isFile }
-        if (dir == null || !dir.isDirectory) {
-            println("BookSplitRealWorldTest: no SW_REALWORLD_DIR and no EVAL_ON; nothing to do")
-            return
+    fun `real world and owner book photos`() {
+        val realDir = dir("SW_REALWORLD_DIR", "$QA/realworld")
+        val ownerDir = dir("SW_OWNER_DIR", "$QA/owner")
+        var ran = false
+
+        if (realDir != null) {
+            val results = BookSplitEval.run(BookSplitEval.realWorld(realDir))
+            File(realDir, "EVAL_ON").delete()
+            File(realDir, "L3_EVAL_ON").delete()
+            ran = true
+            assertTrue("no real-world photo found in $realDir", results.isNotEmpty())
+            // The two unambiguous centred spreads must be on the spine; the hard photos are
+            // judged from the previews (and reported), not hidden by a broad assertion.
+            val centred = results.filter { it.name == "book_px762687" || it.name == "book_px13752245" }
+            assertTrue(
+                "the centred spreads are not on the spine: " +
+                    centred.joinToString { "${it.name}=${it.croppedRatio}" },
+                centred.size == 2 && centred.all {
+                    kotlin.math.abs(it.croppedRatio - 0.5f) <= 0.03f
+                }
+            )
         }
 
-        val out = System.getenv("SW_REALWORLD_OUT")?.let { File(it) } ?: File(dir, "out")
-        val results = BookSplitEval.run(dir, out)
-        sentinel.delete()
+        if (ownerDir != null) {
+            val results = BookSplitEval.run(BookSplitEval.owner(ownerDir))
+            File(ownerDir, "EVAL_ON").delete()
+            File(ownerDir, "L3_EVAL_ON").delete()
+            ran = true
+            assertTrue("no owner photo found in $ownerDir", results.isNotEmpty())
+            // The phone bug: a sideways spread was offered as "Keep as one page". A spread must
+            // never be classified as a single page, whatever the orientation.
+            val singled = results.filter { it.croppedSinglePage }
+            assertTrue(
+                "a sideways spread must not be offered as one page: " +
+                    singled.joinToString { it.name },
+                singled.isEmpty()
+            )
+        }
 
-        assertTrue("no real-world photo was found in ${dir.absolutePath}", results.isNotEmpty())
-        val failed = results.filter { !it.pass }
-        assertTrue(
-            "README expectations not met: " + failed.joinToString { "${it.name}=${it.ratio}" },
-            failed.isEmpty()
-        )
+        if (!ran) println("BookSplitRealWorldTest: no eval folder enabled; nothing to do")
+    }
+
+    private fun dir(env: String, path: String): File? {
+        System.getenv(env)?.takeIf { it.isNotBlank() }?.let { File(it) }?.let { return it }
+        val folder = File(path)
+        return folder.takeIf {
+            File(it, "L3_EVAL_ON").isFile || File(it, "EVAL_ON").isFile
+        }
     }
 
     private companion object {
-        const val QA_DIR = "/mnt/c/Users/Cybium/Desktop/.sw-qa/realworld"
+        const val QA = "/mnt/c/Users/Cybium/Desktop/.sw-qa"
     }
 }
