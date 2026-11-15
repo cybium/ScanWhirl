@@ -341,6 +341,30 @@ class ShellQaFixesTest {
             assertTrue("some tiles carry a tag ($checked)", checked > 0)
         }
     }
+
+    @Test
+    fun `tagged and untagged tool tiles keep icons and labels on one line`() {
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
+        launch { activity ->
+            activity.findViewById<View>(R.id.swNavTools).performClick()
+            idle()
+            val body = activity.findViewById<View>(R.id.swToolsBody)
+            val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)
+            val dm = activity.resources.displayMetrics
+            val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+            val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+            repeat(2) { root.measure(w, h); root.layout(0, 0, dm.widthPixels, dm.heightPixels) }
+
+            val tiles = ToolsHubScreen.tiles(body)
+            val tagged = tiles.count { it.proTag.isVisible || it.soonTag.isVisible }
+            assertTrue("the hub mixes tagged and untagged tiles", tagged in 1 until tiles.size)
+            val iconTops = tiles.map { it.iconView.top }.toSet()
+            val labelTops = tiles.map { it.labelView.top }.toSet()
+            assertEquals("every tile's icon starts at the same height: $iconTops", 1, iconTops.size)
+            assertEquals("every tile's label starts at the same height: $labelTops", 1, labelTops.size)
+        }
+    }
+
     @Test
     fun `the empty library has no stray button under the state`() {
         launch { activity ->

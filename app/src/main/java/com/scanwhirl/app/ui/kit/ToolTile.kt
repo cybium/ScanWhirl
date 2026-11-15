@@ -125,11 +125,12 @@ class ToolTile(context: Context) : FrameLayout(context) {
         // Only the icon + label fade on a Soon tile; the tag stays readable.
         inner.alpha = if (soon) 0.55f else 1f
         alpha = 1f
-        // Hub tiles: reserve the top corner for the tag so it never sits on the glyph.
+        // Hub tiles: reserve the top corner for the tag so it never sits on the glyph. Every
+        // tile reserves it, tagged or not, so icons and labels line up across a row (a tagged
+        // PRO/Soon tile used to sit 16dp lower than its free neighbours).
         if (!quick) {
-            val shown = proTag.isVisible || soonTag.isVisible
             (iconView.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
-                lp.topMargin = if (shown) SwStyle.dp(context, 16f) else 0
+                lp.topMargin = SwStyle.dp(context, 16f)
                 iconView.layoutParams = lp
             }
         }

@@ -61,6 +61,7 @@
     <item name="ocrTidyGaps" type="id" />
     <item name="swFolderScroll" type="id" />
     <item name="swFolderRow" type="id" />
+    <item name="swNewFolder" type="id" />
     <item name="swSelectionBar" type="id" />
     <item name="swSelCount" type="id" />
     <item name="swSelDone" type="id" />

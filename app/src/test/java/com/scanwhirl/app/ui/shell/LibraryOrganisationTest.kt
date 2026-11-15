@@ -234,7 +234,8 @@ class LibraryOrganisationTest {
         DocFixtures.saved(repo, app, pages = 1, name = "Gated")
         launch { activity ->
             val folderRow = activity.findViewById<ViewGroup>(R.id.swFolderRow)
-            val newFolder = folderRow.getChildAt(folderRow.childCount - 1)
+            val newFolder = activity.findViewById<View>(R.id.swNewFolder)
+            assertEquals("New folder sits right after All, never scrolled away", 1, folderRow.indexOfChild(newFolder))
             newFolder.performClick()
             idle()
             assertTrue(

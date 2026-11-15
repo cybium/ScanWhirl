@@ -404,6 +404,14 @@ class LibraryScreen(
             renderFolders()
             renderDocs()
         }
+        // "+ New folder" sits right after "All" so it never scrolls off-screen as folders grow.
+        folderChip(
+            label = context.getString(R.string.folder_new),
+            active = false,
+            accent = true
+        ) {
+            requirePro { newFolderSheet() }
+        }.id = R.id.swNewFolder
         for (name in folderNames) {
             val count = docs.count { it.folder.equals(name, true) }
             folderChip(label = "$name ($count)", active = folder.equals(name, true)) {
@@ -414,13 +422,6 @@ class LibraryScreen(
                 showFolderOptions(name)
                 true
             }
-        }
-        folderChip(
-            label = context.getString(R.string.folder_new),
-            active = false,
-            accent = true
-        ) {
-            requirePro { newFolderSheet() }
         }
     }
 
