@@ -2,9 +2,13 @@ package com.scanwhirl.app.util
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.Path
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -48,9 +52,15 @@ object BookSplit {
         val singlePage: Boolean = false,
         /** Kept for source compatibility; the upright-spread model is always vertical. */
         val horizontal: Boolean = false,
-        val textBlocks: Int = 0
+        val textBlocks: Int = 0,
+        /** The spine at the top and bottom of the image, as fractions of the width. */
+        val topRatio: Float = ratio,
+        val bottomRatio: Float = ratio
     ) {
         val lowConfidence: Boolean get() = !found || confidence < LOW_CONFIDENCE
+
+        /** True when the gutter is a slanted line rather than a vertical one. */
+        val slanted: Boolean get() = found && abs(topRatio - bottomRatio) >= 0.004f
 
         companion object {
             val MIDDLE = Gutter(0.5f, false)
@@ -310,7 +320,8 @@ object BookSplit {
                     textBlocks = blocks)
             confidentValley -> Gutter(
                 valley.ratio, found = true, confidence = valley.confidence,
-                singlePage = false, textBlocks = blocks
+                singlePage = false, textBlocks = blocks,
+                topRatio = valley.topRatio, bottomRatio = valley.bottomRatio
             )
             else -> Gutter(0.5f, found = false, confidence = 0f, singlePage = false,
                 textBlocks = blocks)
@@ -328,12 +339,70 @@ object BookSplit {
         val width = bitmap.width
         val height = bitmap.height
         require(width > 1 && height > 1) { "The spread has no usable pixels" }
+        if (gutter.slanted) return splitLine(bitmap, gutter)
         val ratio = gutter.ratio.coerceIn(0.05f, 0.95f)
         val cut = (ratio * width).roundToInt().coerceIn(1, width - 1)
         val left = Bitmap.createBitmap(bitmap, 0, 0, cut, height)
         val right = Bitmap.createBitmap(bitmap, cut, 0, width - cut, height)
         return Split(
             gutter.copy(ratio = cut.toFloat() / width, horizontal = false),
+            left, right
+        )
+    }
+
+    /**
+     * Two pages cut along a slanted spine. Each page is its side of the line, the other side is
+     * filled white, and the result is cropped to that side's bounding box (a white wedge remains
+     * on the tilted edge). This keeps the first letters of the far page's top lines and the ends
+     * of the near page's bottom lines on the correct page.
+     */
+    private fun splitLine(bitmap: Bitmap, gutter: Gutter): Split {
+        val width = bitmap.width
+        val height = bitmap.height
+        val top = gutter.topRatio.coerceIn(0.03f, 0.97f) * width
+        val bottom = gutter.bottomRatio.coerceIn(0.03f, 0.97f) * width
+        val leftWidth = ceil(max(top, bottom)).toInt().coerceIn(1, width)
+        val rightStart = floor(min(top, bottom)).toInt().coerceIn(0, width - 1)
+
+        val left = Bitmap.createBitmap(leftWidth, height, Bitmap.Config.ARGB_8888)
+        left.eraseColor(Color.WHITE)
+        Canvas(left).apply {
+            val path = Path().apply {
+                moveTo(0f, 0f)
+                lineTo(top, 0f)
+                lineTo(bottom, height.toFloat())
+                lineTo(0f, height.toFloat())
+                close()
+            }
+            save()
+            clipPath(path)
+            drawBitmap(bitmap, 0f, 0f, null)
+            restore()
+        }
+
+        val right = Bitmap.createBitmap(width - rightStart, height, Bitmap.Config.ARGB_8888)
+        right.eraseColor(Color.WHITE)
+        Canvas(right).apply {
+            translate(-rightStart.toFloat(), 0f)
+            val path = Path().apply {
+                moveTo(top, 0f)
+                lineTo(width.toFloat(), 0f)
+                lineTo(width.toFloat(), height.toFloat())
+                lineTo(bottom, height.toFloat())
+                close()
+            }
+            save()
+            clipPath(path)
+            drawBitmap(bitmap, 0f, 0f, null)
+            restore()
+        }
+
+        return Split(
+            gutter.copy(
+                horizontal = false,
+                topRatio = (top / width).coerceIn(0.05f, 0.95f),
+                bottomRatio = (bottom / width).coerceIn(0.05f, 0.95f)
+            ),
             left, right
         )
     }
@@ -498,29 +567,77 @@ object BookSplit {
         val ratio: Float,
         val found: Boolean,
         val confidence: Float,
-        val blocks: Int
+        val blocks: Int,
+        val topRatio: Float = ratio,
+        val bottomRatio: Float = ratio
     )
 
     private fun findValley(upright: Bitmap): Valley {
-        val (candidates, blocks) = valleyScan(upright)
-        val chosen = candidates.maxByOrNull { it.score }
-        return if (chosen == null) {
-            Valley(0.5f, false, 0f, blocks)
-        } else {
-            Valley(
-                (chosen.ratio + 0.01f).coerceIn(0.05f, 0.95f),
-                true,
-                clamp01(0.55f * chosen.score + 0.45f * clamp01((chosen.depth - 10f) / 20f)),
-                blocks
-            )
+        val h = upright.height
+        val full = valleyInBand(
+            upright,
+            (h * 0.15f).toInt(),
+            (h * 0.85f).toInt()
+        ) ?: return Valley(0.5f, false, 0f, 0)
+        // The gutter is straight but the photo is usually tilted: estimate it separately in
+        // a top and a bottom band, then cut along the line through the two estimates.
+        val topY0 = (h * 0.15f).toInt()
+        val topY1 = (h * 0.42f).toInt()
+        val bottomY0 = (h * 0.58f).toInt()
+        val bottomY1 = (h * 0.85f).toInt()
+        val top = valleyInBand(upright, topY0, topY1)
+        val bottom = valleyInBand(upright, bottomY0, bottomY1)
+        if (top != null && bottom != null) {
+            val centerTop = (topY0 + topY1) / 2f
+            val centerBottom = (bottomY0 + bottomY1) / 2f
+            val dy = centerBottom - centerTop
+            if (dy > 0f) {
+                val slope = (bottom.ratio - top.ratio) / dy
+                val rawTop = top.ratio + slope * (0f - centerTop)
+                val rawBottom = top.ratio + slope * (h - 1f - centerTop)
+                // The two band centres are noisy; keep 60% of their lean towards the full-band
+                // estimate. A line that disagrees with the full estimate is a bad band pick.
+                val lean = 0.45f
+                val lineTop = (full.ratio + lean * (rawTop - full.ratio)).coerceIn(0.05f, 0.95f)
+                val lineBottom = (full.ratio + lean * (rawBottom - full.ratio)).coerceIn(0.05f, 0.95f)
+                val lineMid = (lineTop + lineBottom) / 2f
+                val angle = Math.toDegrees(
+                    kotlin.math.atan2(
+                        (abs(lineBottom - lineTop) * upright.width).toDouble(),
+                        (h - 1f).toDouble()
+                    )
+                ).toFloat()
+                if (angle <= 8f && abs(lineBottom - lineTop) >= 0.01f &&
+                    abs(lineMid - full.ratio) <= 0.012f
+                ) {
+                    return Valley(
+                        full.ratio,
+                        true,
+                        min(top.confidence, bottom.confidence),
+                        full.blocks,
+                        lineTop,
+                        lineBottom
+                    )
+                }
+            }
         }
+        return full
+    }
+
+    private fun valleyInBand(upright: Bitmap, y0: Int, y1: Int): Valley? {
+        val (candidates, blocks) = valleyScan(upright, y0, y1)
+        val chosen = candidates.maxByOrNull { it.score } ?: return null
+        return Valley(
+            (chosen.ratio + 0.01f).coerceIn(0.05f, 0.95f),
+            true,
+            clamp01(0.55f * chosen.score + 0.45f * clamp01((chosen.depth - 10f) / 20f)),
+            blocks
+        )
     }
 
     private data class Candidate(val ratio: Float, val score: Float, val depth: Float)
 
-    private fun valleyScan(upright: Bitmap): Pair<List<Candidate>, Int> {
-        val y0 = (upright.height * 0.15f).toInt()
-        val y1 = (upright.height * 0.85f).toInt()
+    private fun valleyScan(upright: Bitmap, y0: Int, y1: Int): Pair<List<Candidate>, Int> {
         val band = BandStats.of(upright, y0, y1)
         val blocks = band.textBlocks()
         val out = ArrayList<Candidate>()
