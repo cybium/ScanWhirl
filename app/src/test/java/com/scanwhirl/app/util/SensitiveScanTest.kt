@@ -30,25 +30,29 @@ class SensitiveScanTest {
         }
     }
 
-    private fun hits(vararg texts: String, wholeAadhaar: Boolean = false) =
-        SensitiveScan.find(words(*texts), page, page, wholeAadhaar)
+    private fun hits(
+        vararg texts: String,
+        kinds: Set<SensitiveScan.Kind> = SensitiveScan.Kind.values().toSet(),
+        keepLast4: Boolean = false
+    ) = SensitiveScan.find(words(*texts), page, page, kinds, keepLast4)
 
     @Test
-    fun `aadhaar masks the first eight digits and stops in the gap`() {
+    fun `ID numbers hide the whole number by default`() {
         val hit = hits("9233", "6926", "4947").single()
         assertEquals(SensitiveScan.Kind.AADHAAR, hit.kind)
         // First glyph starts at x=100, pad 15% of 40px = 6px.
         assertEquals(0.094f, hit.box.left, 0.002f)
-        // The 9th digit starts at 280; the box stops halfway through the gap (275).
-        assertEquals(0.275f, hit.box.right, 0.002f)
-        assertTrue("never covers the last group: ${hit.box.right}", hit.box.right < 0.28f)
+        assertTrue("covers the last group too: ${hit.box.right}", hit.box.right > 0.36f)
     }
 
     @Test
-    fun `whole-number option covers all twelve digits`() {
-        val hit = hits("9233", "6926", "4947", wholeAadhaar = true).single()
+    fun `keep last 4 digits masks the first eight and stops in the gap`() {
+        val hit = hits("9233", "6926", "4947", keepLast4 = true).single()
         assertEquals(SensitiveScan.Kind.AADHAAR, hit.kind)
-        assertTrue("covers the last group: ${hit.box.right}", hit.box.right > 0.36f)
+        assertEquals(0.094f, hit.box.left, 0.002f)
+        // The 9th digit starts at 280; the box stops halfway through the gap (275).
+        assertEquals(0.275f, hit.box.right, 0.002f)
+        assertTrue("never covers the last group: ${hit.box.right}", hit.box.right < 0.28f)
     }
 
     @Test
@@ -67,10 +71,37 @@ class SensitiveScanTest {
     }
 
     @Test
-    fun `a sixteen digit non luhn number is a VID and keeps four digits`() {
+    fun `a sixteen digit non luhn number is a VID and hides whole by default`() {
         val hit = hits("1234 5678 9012 3456").single()
         assertEquals(SensitiveScan.Kind.VID, hit.kind)
+        assertTrue("covers the last group: ${hit.box.right}", hit.box.right > 0.36f)
+    }
+
+    @Test
+    fun `VID with keep last 4 stops before the last group`() {
+        val hit = hits("1234 5678 9012 3456", keepLast4 = true).single()
+        assertEquals(SensitiveScan.Kind.VID, hit.kind)
         assertTrue(hit.box.right < 0.100f + (15f / 19f) * 0.380f + 0.01f)
+    }
+
+    @Test
+    fun `driving licence and passport patterns are detected`() {
+        val dl = SensitiveScan.find(
+            words("MH12 20110012345"), page, page
+        ).single()
+        assertEquals(SensitiveScan.Kind.DRIVING_LICENCE, dl.kind)
+        val passport = SensitiveScan.find(words("A1234567"), page, page).single()
+        assertEquals(SensitiveScan.Kind.PASSPORT, passport.kind)
+    }
+
+    @Test
+    fun `only the chosen kinds are returned`() {
+        val all = words("a.b@example.com", "+91 98765 43210")
+        val emailOnly = SensitiveScan.find(
+            all, page, page, setOf(SensitiveScan.Kind.EMAIL)
+        )
+        assertEquals(1, emailOnly.size)
+        assertEquals(SensitiveScan.Kind.EMAIL, emailOnly.single().kind)
     }
 
     @Test
@@ -111,8 +142,9 @@ class SensitiveScanTest {
     fun `a box is clipped so it cannot bleed into the line below`() {
         val top = words("9233", "6926", "4947", y = 100)
         val below = words("1234", "5678", "9012", "3456", y = 150)
-        val hit = SensitiveScan.find(top + below, page, page, wholeAadhaar = true)
-            .first { it.kind == SensitiveScan.Kind.AADHAAR }
+        val hit = SensitiveScan.find(top + below, page, page).first {
+            it.kind == SensitiveScan.Kind.AADHAAR
+        }
         assertTrue(
             "must stop above the next line: ${hit.box.bottom}",
             hit.box.bottom <= 150f / page

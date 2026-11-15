@@ -185,7 +185,7 @@ object ToolRegistry {
         ready("stamp", ToolGroup.EDIT, R.string.tool_stamp, R.drawable.ic_sym_approval, "stamp paid approved date badge", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "stamp") } ?: host.comingSoon(tool) }
         ),
-        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove find numbers aadhaar pan card phone email iban ssn account", pro = true).copy(
+        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "hide private info confidential masking redact aadhaar pan card phone email iban ssn account driving licence passport", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "redact") } ?: host.comingSoon(tool) }
         ),
 

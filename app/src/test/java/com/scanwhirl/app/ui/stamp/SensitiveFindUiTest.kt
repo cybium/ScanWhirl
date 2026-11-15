@@ -14,6 +14,7 @@ import com.scanwhirl.app.util.PageStamp
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SensitiveScan
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -74,7 +75,7 @@ class SensitiveFindUiTest {
         dialog.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
 
     @Test
-    fun `find lists groups and seeds adjustable redaction boxes`() {
+    fun `choices come first then groups become adjustable boxes`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Find doc")
         val screen = activity(id)
         screen.findScanner = {
@@ -86,9 +87,19 @@ class SensitiveFindUiTest {
         }
 
         val find = openFind(screen)
-        assertEquals("Find and hide numbers", title(find))
-        assertNotNull("the Aadhaar preset stays reachable", find.findViewById<View>(R.id.findPresetAadhaar))
-        assertNotNull("whole-number option", find.findViewById<View>(R.id.findWholeAadhaar))
+        assertEquals("Hide private info", title(find))
+        for (choice in listOf(
+            R.id.findChoicePhone, R.id.findChoiceEmail, R.id.findChoiceId,
+            R.id.findChoiceCards, R.id.findChoiceOther
+        )) {
+            val view = find.findViewById<android.widget.CheckBox>(choice)
+            assertNotNull("choice $choice", view)
+            assertTrue("choice $choice is on by default", view!!.isChecked)
+        }
+        assertFalse(
+            "keep-last-4 is off by default",
+            find.findViewById<android.widget.CheckBox>(R.id.findKeepLast4)!!.isChecked
+        )
 
         find.findViewById<View>(R.id.swSheetPrimary).performClick()
         idle()
@@ -96,13 +107,15 @@ class SensitiveFindUiTest {
         val results = requireNotNull(ShadowDialog.getLatestDialog())
         assertEquals("Found 3 items", title(results))
         val items = results.findViewById<ViewGroup>(R.id.swSheetItems)
-        assertEquals(3, items.childCount)
+        assertEquals(2, items.childCount)
         val labels = (0 until items.childCount).map {
             ((items.getChildAt(it) as ViewGroup).getChildAt(0) as TextView).text.toString()
         }
-        assertTrue("Aadhaar count: $labels", labels.any { it == "Aadhaar (1)" })
-        assertTrue("PAN count: $labels", labels.any { it == "PAN (1)" })
-        assertTrue("Card count: $labels", labels.any { it == "Card numbers (1)" })
+        assertTrue("ID group: $labels", labels.any { it == "ID numbers (Aadhaar, PAN, driving licence, passport, VID) (2)" })
+        assertTrue(
+            "Card & bank group: $labels",
+            labels.any { it == "Card & bank numbers (cards, IBAN, account numbers) (1)" }
+        )
 
         results.findViewById<View>(R.id.swSheetPrimary).performClick()
         idle()
@@ -117,17 +130,33 @@ class SensitiveFindUiTest {
     }
 
     @Test
-    fun `the mask aadhaar preset opens the old options`() {
-        val id = DocFixtures.saved(repo, app, pages = 1, name = "Preset doc")
+    fun `only the chosen kinds are scanned`() {
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Choice doc")
         val screen = activity(id)
+        screen.findScanner = {
+            listOf(
+                0 to hit(SensitiveScan.Kind.AADHAAR),
+                0 to hit(SensitiveScan.Kind.PAN),
+                1 to hit(SensitiveScan.Kind.CARD)
+            )
+        }
         val find = openFind(screen)
-
-        find.findViewById<View>(R.id.findPresetAadhaar).performClick()
+        // Turn off ID numbers: only the card on page 2 may be found.
+        find.findViewById<android.widget.CheckBox>(R.id.findChoiceId).isChecked = false
+        find.findViewById<View>(R.id.swSheetPrimary).performClick()
         idle()
 
-        val options = requireNotNull(ShadowDialog.getLatestDialog())
-        assertEquals("Mask Aadhaar", title(options))
-        assertNotNull("number/VID/QR groups", options.findViewById<View>(R.id.swSheetItems))
+        val results = requireNotNull(ShadowDialog.getLatestDialog())
+        assertEquals("Found 1 item", title(results))
+        val items = results.findViewById<ViewGroup>(R.id.swSheetItems)
+        assertEquals(1, items.childCount)
+        val label = ((items.getChildAt(0) as ViewGroup).getChildAt(0) as TextView).text.toString()
+        assertTrue("card only: $label", label.startsWith("Card & bank numbers"))
+
+        results.findViewById<View>(R.id.swSheetPrimary).performClick()
+        idle()
+        assertTrue("IDs on page 1 are untouched", screen.editor.marks(0).isEmpty())
+        assertEquals("the card is hidden", 1, screen.editor.marks(1).size)
     }
 
     @Test
@@ -152,8 +181,8 @@ class SensitiveFindUiTest {
         val redact = com.scanwhirl.app.ui.kit.ToolRegistry.byId("redact")
         assertNotNull(redact)
         assertTrue(
-            "Redact advertises find in search",
-            redact!!.keywords.contains("aadhaar")
+            "Redact advertises Hide private info in search",
+            redact!!.keywords.contains("private")
         )
     }
 }

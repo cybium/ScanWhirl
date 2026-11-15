@@ -7,7 +7,7 @@
     <string name="stamp_no_page">No such page.</string>
     <string name="stamp_copy_failed">The edited copy could not be opened.</string>
 
-    <!-- Stamp editor (70 §3 Edit & sign; product spec §3.7) -->
+    <!-- Stamp editor (70 Â§3 Edit & sign; product spec Â§3.7) -->
     <string name="stamp_title">Edit &amp; sign</string>
     <string name="stamp_tool_signature">Signature</string>
     <string name="stamp_tool_text">Text</string>
@@ -22,14 +22,14 @@
     <string name="stamp_redo">Redo</string>
     <string name="stamp_delete">Delete</string>
     <string name="stamp_save_copy">Save as new copy</string>
-    <string name="stamp_saving">Saving the copy…</string>
+    <string name="stamp_saving">Saving the copyâ€¦</string>
     <string name="stamp_saved">Saved as a new copy: %1$s</string>
     <string name="stamp_save_failed">Could not save: %1$s</string>
     <string name="stamp_page_indicator">%1$d / %2$d</string>
     <string name="stamp_prev_page">Previous page</string>
     <string name="stamp_next_page">Next page</string>
-    <string name="stamp_prev_symbol">‹</string>
-    <string name="stamp_next_symbol">›</string>
+    <string name="stamp_prev_symbol">â€¹</string>
+    <string name="stamp_next_symbol">â€º</string>
     <string name="stamp_text_title">Add text</string>
     <string name="stamp_text_hint">Text to add</string>
     <string name="stamp_watermark_title">Watermark</string>
@@ -65,22 +65,12 @@
     <string name="stamp_stamp_import">Import a stamp from a photo</string>
     <string name="stamp_stamp_name">My stamp %1$d</string>
     <string name="stamp_stamp_full">You can keep up to 10 stamps. Delete one to save another.</string>
-    <string name="tool_mask_aadhaar">Mask Aadhaar</string>
-    <string name="mask_aadhaar_hint">Check the boxes over the first 8 digits, then save</string>
-    <string name="mask_options_title">Mask Aadhaar</string>
-    <string name="mask_opt_number">Mask Aadhaar number</string>
-    <string name="mask_opt_vid">Also hide the VID</string>
-    <string name="mask_opt_qr">Also hide the QR code</string>
-    <string name="mask_continue">Continue</string>
-    <string name="mask_label">Masked</string>
-    <string name="mask_aadhaar_none">No Aadhaar number found here. Add redaction boxes if needed.</string>
-    <string name="mask_aadhaar_saved">Saved a masked copy: %1$s</string>
     <string name="stamp_hint_draw">Draw with one finger</string>
     <string name="stamp_hint_highlight">Drag over the text to highlight</string>
     <string name="stamp_hint_redact">Drag a box over what must be hidden</string>
     <string name="stamp_hint_select">Tap a mark to move it; drag a corner to resize</string>
     <string name="stamp_no_ocr">No recognised text on this page yet.</string>
-    <string name="stamp_no_suggestions">No Aadhaar, PAN, phone or account number found.</string>
+    <string name="stamp_no_suggestions">No private numbers found.</string>
     <string name="stamp_locked">This document is protected. Unlock it first.</string>
     <string name="stamp_missing">This document could not be opened.</string>
     <string name="stamp_no_selection">Tap a mark to edit it</string>
@@ -97,32 +87,28 @@
     <string name="stamp_redact_warn_save">Save redacted copy</string>
 
     <!-- Find and hide numbers: the Redact tool's detector sheet. -->
-    <string name="find_button">Find</string>
-    <string name="find_title">Find and hide numbers</string>
-    <string name="find_explanation">Scans every page for Aadhaar, VID, PAN, cards, phone numbers, emails, IBAN, US SSN and long account numbers.</string>
-    <string name="find_preset_aadhaar">Mask Aadhaar</string>
-    <string name="find_whole_aadhaar">Hide the whole Aadhaar number</string>
-    <string name="find_action">Find</string>
-    <string name="find_scanning">Looking for numbers…</string>
-    <string name="find_none">No sensitive numbers found. You can still draw a box.</string>
-    <string name="find_hide_selected">Hide selected</string>
-    <plurals name="find_results_title">
-        <item quantity="one">Found %1$d item</item>
-        <item quantity="other">Found %1$d items</item>
-    </plurals>
-    <plurals name="find_applied">
-        <item quantity="one">Hid %1$d item. Check the box, then save.</item>
-        <item quantity="other">Hid %1$d items. Check the boxes, then save.</item>
-    </plurals>
-    <string name="find_kind_aadhaar">Aadhaar</string>
-    <string name="find_kind_vid">Aadhaar VID</string>
-    <string name="find_kind_pan">PAN</string>
-    <string name="find_kind_card">Card numbers</string>
-    <string name="find_kind_phone">Phone numbers</string>
-    <string name="find_kind_email">Email addresses</string>
-    <string name="find_kind_iban">IBAN</string>
-    <string name="find_kind_ssn">US SSN</string>
-    <string name="find_kind_account">Account numbers</string>
-    <string name="redact_label">Redacted</string>
-    <string name="redacted_saved">Saved a redacted copy: %1$s</string>
+    <string name="find_button">Hide private info</string>
+<string name="find_title">Hide private info</string>
+<string name="find_explanation">Choose what to hide. Find scans every page and lists what it found.</string>
+<string name="find_choice_phone">Phone numbers</string>
+<string name="find_choice_email">Email addresses</string>
+<string name="find_choice_id">ID numbers (Aadhaar, PAN, driving licence, passport, VID)</string>
+<string name="find_choice_cards">Card &amp; bank numbers (cards, IBAN, account numbers)</string>
+<string name="find_choice_other">Other numbers (US SSN)</string>
+<string name="find_choice_keep4">Keep last 4 digits</string>
+<string name="find_action">Find</string>
+<string name="find_scanning">Looking for private info…</string>
+<string name="find_none">No private info found. You can still draw a box.</string>
+<string name="find_choose_one">Choose at least one kind.</string>
+<string name="find_hide_selected">Hide selected</string>
+<plurals name="find_results_title">
+    <item quantity="one">Found %1$d item</item>
+    <item quantity="other">Found %1$d items</item>
+</plurals>
+<plurals name="find_applied">
+    <item quantity="one">Hid %1$d item. Check the box, then save.</item>
+    <item quantity="other">Hid %1$d items. Check the boxes, then save.</item>
+</plurals>
+<string name="private_info_label">Private info hidden</string>
+<string name="private_info_saved">Saved a copy with private info hidden: %1$s</string>
 </resources>
