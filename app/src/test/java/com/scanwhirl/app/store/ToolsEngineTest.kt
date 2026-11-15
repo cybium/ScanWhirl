@@ -14,6 +14,7 @@ import com.scanwhirl.app.util.IdCard
 import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.PageRanges
+import com.scanwhirl.app.util.PaperSize
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -652,6 +653,35 @@ class ToolsEngineTest {
         } finally {
             bitmap.recycle()
         }
+    }
+
+    @Test
+    fun `id card letter page keeps ID-1 proportions and print-safe margins`() {
+        val front = solidJpeg(Color.RED)
+        val back = solidJpeg(Color.BLUE)
+        val bytes = IdCard.compose(front, back, com.scanwhirl.app.util.PaperSize.LETTER)
+        val (w, h) = jpegSize(bytes)
+        assertEquals(com.scanwhirl.app.util.PaperSize.LETTER.width, w)
+        assertEquals(com.scanwhirl.app.util.PaperSize.LETTER.height, h)
+        assertTrue("Letter is 8.5 x 11 in at 150 dpi", abs(h.toFloat() / w - 1.294f) < 0.01f)
+
+        val card = IdCard.frontRect(com.scanwhirl.app.util.PaperSize.LETTER)
+        assertEquals("ID-1 ratio", IdCard.ID1_RATIO, card.width() / card.height(), 0.01f)
+        assertTrue("left margin", card.left >= w * 0.05f)
+        assertTrue("right margin", w - card.right >= w * 0.05f)
+        assertTrue("cards stay on the page", IdCard.backRect(com.scanwhirl.app.util.PaperSize.LETTER).bottom < h)
+    }
+
+    @Test
+    fun `paper default follows the device country and converts to a compact id`() {
+        assertEquals(PaperSize.LETTER, PaperSize.defaultForCountry("US"))
+        assertEquals(PaperSize.LETTER, PaperSize.defaultForCountry("ca"))
+        assertEquals(PaperSize.LETTER, PaperSize.defaultForCountry("PH"))
+        assertEquals(PaperSize.A4, PaperSize.defaultForCountry("IN"))
+        assertEquals(PaperSize.A4, PaperSize.defaultForCountry("DE"))
+        assertEquals(PaperSize.A4, PaperSize.defaultForCountry(null))
+        assertEquals(PaperSize.LETTER, PaperSize.fromId("letter"))
+        assertEquals(PaperSize.A4, PaperSize.fromId("unknown"))
     }
 
     private fun assertColor(expected: Int, actual: Int, tolerance: Int = 45) {

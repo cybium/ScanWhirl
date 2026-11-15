@@ -460,8 +460,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             override fun onBuy() = showBillingSoon()
             override fun onRestore() = showBillingSoon()
             override fun onSeeAllProTools() = showTab(Tab.TOOLS)
-        })
-        setContent(scroll(proScreen))
+        }, active = com.scanwhirl.app.util.ProGate.isPro(this))
+        setContent(proScreen)
         paintNav()
         // The Pro gate slides up as a sheet would; off when animations are off.
         if (com.scanwhirl.app.ui.kit.SwMotion.enabled(this)) {

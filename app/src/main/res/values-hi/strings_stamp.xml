@@ -192,9 +192,15 @@
     <string name="find_action"><!-- review -->खोजें</string>
     <string name="find_scanning"><!-- review -->नंबर खोजे जा रहे हैं…</string>
     <string name="find_none"><!-- review -->कोई संवेदनशील नंबर नहीं मिला. आप फिर भी बॉक्स बना सकते हैं.</string>
-    <string name="find_results_title"><!-- review -->%1$d चीज़ें मिलीं</string>
+    <plurals name="find_results_title">
+        <item quantity="one"><!-- review -->%1$d चीज़ मिली</item>
+        <item quantity="other"><!-- review -->%1$d चीज़ें मिलीं</item>
+    </plurals>
     <string name="find_hide_selected"><!-- review -->चुनी हुई छिपाएँ</string>
-    <string name="find_applied"><!-- review -->%1$d चीज़ें छिपाई गईं. बॉक्स जाँचें, फिर सहेजें.</string>
+    <plurals name="find_applied">
+        <item quantity="one"><!-- review -->%1$d चीज़ छिपाई गई. बॉक्स जाँचें, फिर सहेजें.</item>
+        <item quantity="other"><!-- review -->%1$d चीज़ें छिपाई गईं. बॉक्स जाँचें, फिर सहेजें.</item>
+    </plurals>
     <string name="find_kind_aadhaar"><!-- review -->आधार</string>
     <string name="find_kind_vid"><!-- review -->आधार VID</string>
     <string name="find_kind_pan"><!-- review -->PAN</string>

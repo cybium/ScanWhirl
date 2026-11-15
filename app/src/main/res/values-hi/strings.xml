@@ -206,9 +206,11 @@
     <string name="edit_pdf_note_title"><!-- review -->Import PDF</string>
     <string name="export_zip"><!-- review -->Export ZIP</string>
     <string name="filter_action"><!-- review -->Filter</string>
-    <string name="filter_bw"><!-- review -->B/W</string>
+    <string name="filter_bw"><!-- review -->ब्लैक एंड व्हाइट</string>
     <string name="filter_clean"><!-- review -->Clean</string>
-    <string name="filter_enhance"><!-- review -->Enhance</string>
+    <string name="filter_colour"><!-- review -->रंग बढ़ाएँ</string>
+    <string name="filter_enhance"><!-- review -->ऑटो</string>
+    <string name="filter_grey"><!-- review -->ग्रे</string>
     <string name="filter_original"><!-- review -->Original (as स्कैनned)</string>
     <string name="filter_title"><!-- review -->Page फ़िल्टर</string>
     <string name="last_page_guard"><!-- review -->A दस्तावेज़ ज़रूरत है at least चालूe पृष्ठ. Delete the दस्तावेज़ instead.</string>
@@ -360,7 +362,7 @@
     <string name="settings_auto_enhance"><!-- review -->Auको बेहतर बनाएं स्कैन</string>
     <string name="settings_auto_enhance_summary"><!-- review -->Google प्रोcessing is चालू when this is चालू. Off gives a fast, मूल-looking स्कैन.</string>
     <string name="settings_searchable_pdf"><!-- review -->पीडीएफ सर्च करने योग्य बनाएं</string>
-    <string name="settings_searchable_pdf_summary"><!-- review -->किसी भी पीडीएफ ऐप से खोजने के लिए पीडीएफ में ओसीआर पाठ छिपाता है।</string>
+    <string name="settings_searchable_pdf_summary"><!-- review -->OCR ??????? ?????? ???? ??? ?? PDF ?? ??? ??? ????</string>
     <string name="settings_privacy"><!-- review -->Privacy policy</string>
     <string name="settings_privacy_summary"><!-- review -->Opens the policy in your browser</string>
     <string name="settings_pro"><!-- review -->ScanWhirl Pro</string>

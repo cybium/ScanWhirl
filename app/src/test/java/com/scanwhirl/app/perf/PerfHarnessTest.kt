@@ -45,7 +45,7 @@ import kotlin.system.measureNanoTime
  * v2 UI performance harness (owner imports 2000-page textbooks).
  *
  * Normal runs use modest sizes so the cloud gate stays fast; when the owner QA folder carries an
- * `EVAL_ON` sentinel the same harness builds a 300-document library with one 500-page document and
+ * `L4_EVAL_ON` sentinel the same harness builds a 300-document library with one 500-page document and
  * writes the measured table to `docs/audit/2026-11-15/PERF_RAW.txt`.
  *
  * It measures the paths that decide whether a big library feels usable:
@@ -64,17 +64,24 @@ class PerfHarnessTest {
     private val repo by lazy { ScanRepository(app) }
 
     /**
-     * Big-configuration switch. The owner folder is shared by every lane, so the flag must be
-     * per lane (L2_EVAL_ON for the OCR/PDF-A lane): a lane that deletes a shared EVAL_ON while
-     * another lane's eval runs turns that eval into a silent small run. Any `*_EVAL_ON` file
-     * enables the big sizes, and each eval prints `EVAL RAN: ...` so a skip is visible.
+     * Lane-specific big-configuration switch: only `L4_EVAL_ON` enables the big sizes here. The
+     * owner folder is shared by every lane, so never key off the shared `EVAL_ON`.
      */
     private val evalFlag: String? by lazy {
         ownerRoots().asSequence()
-            .flatMap { root -> root.listFiles().orEmpty().asSequence() }
-            .filter { it.isFile && (it.name == "EVAL_ON" || it.name.endsWith("_EVAL_ON")) }
-            .map { it.name }
-            .firstOrNull()
+            .map { File(it, "L4_EVAL_ON") }
+            .firstOrNull { it.isFile }
+            ?.name
+    }
+
+    init {
+        println(
+            if (evalFlag != null) {
+                "EVAL RAN: perf big sizes (300 docs / 500 pages) flag=$evalFlag"
+            } else {
+                "EVAL SKIPPED: no L4_EVAL_ON; perf harness runs modest sizes"
+            }
+        )
     }
 
     private val big: Boolean get() = evalFlag != null

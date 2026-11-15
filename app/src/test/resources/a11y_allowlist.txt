@@ -9,35 +9,6 @@
 # This file must stay narrow. Fixing a finding means deleting its line.
 # Findings for other lanes are listed in docs/audit/2026-11-15/ACCESSIBILITY.md.
 
-Scan review|clip|pageStatus|L1 review: touch, contrast, clipping - dispatched
-Scan review|clip|titleInput|L1 review: touch, contrast, clipping - dispatched
-Scan review|contrast|btnModeFocus|L1 review: touch, contrast, clipping - dispatched
-Scan review|touch|OverflowMenuButton|L1 review: touch, contrast, clipping - dispatched
-Scan review|touch|titleInput|L1 review: touch, contrast, clipping - dispatched
 Shell vault|clip|Library|L1 shell: Vault tab clipping - dispatched
 Shell vault|contrast|swVaultStatus|L1 shell: Vault tab clipping - dispatched
-Text screen|clip|Audit text page 1 of 1|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|clip|ocrFootNote|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|clip|ocrModePage|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|clip|ocrModeText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|clip|swChipLabel|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnCopy|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnRedo|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnSave|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnShare|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnTidyText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnToWord|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnUndo|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|ocrLangChip|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|ocrModePage|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|ocrModeText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|OverflowMenuButton|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Tool result|clip|toolResultLibrary|L4 tools: result screen touch/image/clip - dispatched
-Tool result|image|toolResultPreview|L4 tools: result screen touch/image/clip - dispatched
-Tool result|touch|ImageButton|L4 tools: result screen touch/image/clip - dispatched
-Tool setup|clip|Audit library|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|clip|toolSetupRanges|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|contrast|OPTIONS|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|contrast|SOURCE|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|touch|ImageButton|L4 tools: setup touch/contrast/clip - dispatched
 Tools|contrast|1|L1 shell: TEXT section count uses cyan_dim (4.06:1) - dispatched

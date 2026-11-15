@@ -796,10 +796,12 @@ class UiSmokeTest {
         ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 activity.findViewById<android.view.View>(R.id.btnFilter).performClick()
-                // v2 UI: 08_text_ocr — the filter list is a SwSheet list.
+                // v2 UI: 08_text_ocr - the filter list is a SwSheet list.
+                val bwIndex = com.scanwhirl.app.util.ScanFilter.uiFilters
+                    .indexOf(com.scanwhirl.app.util.ScanFilter.BLACKWHITE)
                 ShadowDialog.getLatestDialog()
                     .findViewById<android.view.ViewGroup>(R.id.swSheetItems)
-                    .getChildAt(3).performClick() // B/W
+                    .getChildAt(bwIndex).performClick() // B/W
             }
             val persisted = pollUntil {
                 java.io.File(staging, "filters.txt")

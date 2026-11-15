@@ -692,7 +692,7 @@ object ImageTools {
      * Dark ink and thick structures (text blocks, photos) are left alone, and so is
      * anything strongly colored (pen ink) via the chroma guard.
      */
-    private fun lightenRuledLines(pixels: IntArray, w: Int, h: Int) {
+    internal fun lightenRuledLines(pixels: IntArray, w: Int, h: Int) {
         if (w < 48 || h < 8) return
         val n = w * h
         val minRun = max(16, w / 5)

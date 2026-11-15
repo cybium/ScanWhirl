@@ -130,6 +130,23 @@ class DocCard(context: Context) : LinearLayout(context) {
             typeface = SwType.bold(context)
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
+            val density = resources.displayMetrics.density
+            val scaled = resources.displayMetrics.scaledDensity
+            setTextSize(
+                android.util.TypedValue.COMPLEX_UNIT_PX,
+                minOf(15.5f * scaled, 17f * density)
+            )
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                this,
+                (11f * density).toInt(),
+                (15.5f * density).toInt(),
+                1,
+                android.util.TypedValue.COMPLEX_UNIT_PX
+            )
         }
         nameRow.addView(nameView, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         lockBadge = SwStyle.text(context, 11f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
@@ -169,6 +186,8 @@ class DocCard(context: Context) : LinearLayout(context) {
         )
         categoryView = SwStyle.text(context, 11f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             id = R.id.swDocCategory
+            minimumHeight = (14 * d).toInt()
+            gravity = Gravity.CENTER_VERTICAL
         }
         categoryRow.addView(categoryView)
         info.addView(
