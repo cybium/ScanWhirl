@@ -45,10 +45,23 @@
     <string name="backup_restore_go">वापस लाएँ</string>
     <string name="backup_restoring">वापस लाया जा रहा है…</string>
     <string name="backup_restored">बैकअप वापस आ गया</string>
-    <string name="backup_restored_docs">%1$d दस्तावेज़ वापस आए</string>
-    <string name="backup_restored_skipped">%1$d पहले से थे, छोड़े गए</string>
-    <string name="backup_restored_vault">%1$d वॉल्ट फ़ाइलें वापस आईं</string>
-    <string name="backup_restored_vault_reencrypted">%1$d वॉल्ट दस्तावेज़ इस वॉल्ट में फिर से एन्क्रिप्ट हुए</string>
+    <plurals name="backup_restored_docs">
+        <item quantity="zero">कोई नया दस्तावेज़ नहीं।</item>
+        <item quantity="one">1 दस्तावेज़ वापस आया।</item>
+        <item quantity="other">%1$d दस्तावेज़ वापस आए।</item>
+    </plurals>
+    <plurals name="backup_restored_skipped">
+        <item quantity="one">1 पहले से था और छोड़ दिया गया।</item>
+        <item quantity="other">%1$d पहले से थे और छोड़ दिए गए।</item>
+    </plurals>
+    <plurals name="backup_restored_vault">
+        <item quantity="one">1 वॉल्ट फ़ाइल वापस आई।</item>
+        <item quantity="other">%1$d वॉल्ट फ़ाइलें वापस आईं।</item>
+    </plurals>
+    <plurals name="backup_restored_vault_reencrypted">
+        <item quantity="one">1 वॉल्ट दस्तावेज़ इस वॉल्ट में फिर से एन्क्रिप्ट हुआ।</item>
+        <item quantity="other">%1$d वॉल्ट दस्तावेज़ इस वॉल्ट में फिर से एन्क्रिप्ट हुए।</item>
+    </plurals>
     <string name="backup_vault_locked">वॉल्ट फ़ाइलें वापस नहीं आईं। वॉल्ट खोलें और फिर से वापस लाएँ।</string>
     <string name="backup_vault_reason">वॉल्ट खोलें ताकि बैकअप के वॉल्ट दस्तावेज़ इसमें वापस आ सकें।</string>
     <string name="backup_wrong_secret">गलत पासवर्ड या रिकवरी कोड। कुछ नहीं बदला।</string>
