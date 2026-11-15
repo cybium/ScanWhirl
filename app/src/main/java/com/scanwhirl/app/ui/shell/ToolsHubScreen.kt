@@ -70,6 +70,7 @@ class ToolsHubScreen(
             ImageView(context).apply {
                 setImageResource(R.drawable.ic_sym_search)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_dim))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LayoutParams(SwStyle.dp(context, 22f), SwStyle.dp(context, 22f))
                 .apply { marginEnd = SwStyle.dp(context, 12f) }
@@ -191,7 +192,8 @@ class ToolsHubScreen(
             tile.id = R.id.swToolsGrid
             tile.host = host
             tile.bind(tool)
-            tile.layoutParams = LayoutParams(0, SwStyle.dp(context, 96f), 1f)
+            tile.layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            tile.minimumHeight = SwStyle.dp(context, 96f)
             row!!.addView(tile)
         }
         // Fill the last row so four columns stay aligned.

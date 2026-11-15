@@ -66,8 +66,14 @@ class ToolTile(context: Context) : FrameLayout(context) {
         ).apply {
             id = R.id.swToolLabel
             gravity = Gravity.CENTER
-            maxLines = 2
+            maxLines = 3
             setLineSpacing(0f, 1.15f)
+            val density = resources.displayMetrics.density
+            val scaled = resources.displayMetrics.scaledDensity
+            setTextSize(
+                TypedValue.COMPLEX_UNIT_PX,
+                minOf(11.5f * scaled, 14f * density)
+            )
         }
         inner.addView(
             labelView,
@@ -154,8 +160,14 @@ class ToolTile(context: Context) : FrameLayout(context) {
             bottomMargin = 0
         }
         labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-        labelView.maxLines = 1
+        labelView.maxLines = 2
         labelView.setLineSpacing(0f, 1f)
+        val density = resources.displayMetrics.density
+        val scaled = resources.displayMetrics.scaledDensity
+        labelView.setTextSize(
+            TypedValue.COMPLEX_UNIT_PX,
+            minOf(11f * scaled, 14f * density)
+        )
         soonTag.visibility = View.GONE
         // PRO sits on the circle's top-right edge, inside the column.
         proTag.translationX = 0f
