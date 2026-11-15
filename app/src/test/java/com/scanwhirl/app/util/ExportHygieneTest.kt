@@ -58,6 +58,8 @@ class ExportHygieneTest {
 
     @After
     fun tearDown() {
+        // A test may opt into auto-copy; never let it leak into the next method/class.
+        Prefs.setAutoCopyToDocuments(app, false)
         media.close()
     }
 
@@ -134,6 +136,13 @@ class ExportHygieneTest {
                 again != null
             }
             assertTrue("second download should report 'Already saved'", settled)
+            // The provider rows are written by the save coroutine: wait until the second
+            // attempt has fully settled before counting (the assertions below still fail on a
+            // real duplicate).
+            assertTrue(
+                "the second save must settle without a write",
+                pollUntil { media.scanwhirlPdfs().size == 1 && media.totalWrites() == 1 }
+            )
             assertEquals(
                 "Undo must not be offered when nothing was created",
                 android.view.View.GONE,
@@ -163,6 +172,41 @@ class ExportHygieneTest {
         )
         assertEquals("Hygiene.pdf", rows[0].values.getAsString("_display_name"))
         assertEquals("the existing copy is never rewritten", 1, media.totalWrites())
+    }
+
+    @Test
+    fun `TEMP downloading twice ten times in one run`() {
+        repeat(10) { i ->
+            media.rows.keys.toList().forEach { media.rows.remove(it) }
+            val name = "Hygiene$i"
+            val id = seedDoc(name)
+            val intent = DocumentViewerActivity.intent(app, id)
+            ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
+                scenario.onActivity { activity ->
+                    shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                }
+                assertTrue(
+                    "run $i: first download creates one row",
+                    pollUntil { media.scanwhirlPdfs().size == 1 }
+                )
+                scenario.onActivity { activity ->
+                    shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                }
+                var again: android.view.View? = null
+                assertTrue(
+                    "run $i: second download says Already saved",
+                    pollUntil {
+                        scenario.onActivity { activity -> again = findSnack(activity, "Already saved") }
+                        again != null
+                    }
+                )
+                assertTrue(
+                    "run $i: second save settles with one row and one write",
+                    pollUntil { media.scanwhirlPdfs().size == 1 && media.totalWrites() == 1 }
+                )
+                assertEquals("$name.pdf", media.scanwhirlPdfs().single().values.getAsString("_display_name"))
+            }
+        }
     }
 
     /**
