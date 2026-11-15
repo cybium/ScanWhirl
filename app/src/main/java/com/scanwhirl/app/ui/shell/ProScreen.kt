@@ -166,7 +166,7 @@ class ProScreen(
             R.drawable.ic_sym_call_split to R.string.pro_feat_split,
             R.drawable.ic_sym_watermark to R.string.pro_feat_watermark,
             R.drawable.ic_sym_ink_eraser to R.string.pro_feat_redact,
-            R.drawable.ic_sym_menu_book to R.string.pro_feat_scan,
+            R.drawable.ic_sym_qr_code_scanner to R.string.pro_feat_scan,
             R.drawable.ic_sym_check_circle to R.string.pro_feat_batch,
             R.drawable.ic_sym_create_new_folder to R.string.pro_feat_folders
         )
