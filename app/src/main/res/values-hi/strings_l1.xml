@@ -253,6 +253,7 @@
         <item quantity="other"><!-- review -->%1$d चुने गए</item>
     </plurals>
 
+    <string name="a11y_back"><!-- review -->वापस</string>
     <string name="sel_batch"><!-- review -->एक साथ</string>
     <string name="settings_block_screenshots"><!-- review -->दस्तावेज़ों के स्क्रीनशॉट रोकें</string>
     <string name="settings_block_screenshots_note"><!-- review -->सुरक्षित दस्तावेज़ों के स्क्रीनशॉट हमेशा रुके रहते हैं। साधारण स्कैन के लिए भी रोकने हेतु इसे चालू करें।</string>
