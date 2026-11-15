@@ -13,6 +13,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -362,6 +363,33 @@ class FullBackupTest {
         com.scanwhirl.app.store.vault.VaultPasscodeGate(),
         iterations
     )
+
+    @Test
+    fun `the recovery code opens the file however it is typed`() {
+        doc("doc_code", "Code formatting")
+        val code = VaultCrypto.generateRecoveryCode()
+        val formatted = VaultCrypto.formatRecoveryCode(code)
+        // The UI writes with the formatted code (spaces) and restores with the normalised one.
+        backup.write(out, formatted, FullBackup.Wrap.RECOVERY_CODE)
+        File(docsDir, "doc_code").deleteRecursively()
+        assertEquals(1, backup.restore(out, VaultCrypto.normalizeRecoveryCode(formatted)).documents)
+
+        File(docsDir, "doc_code").deleteRecursively()
+        assertEquals("the formatted code still opens it", 1, backup.restore(out, formatted).documents)
+    }
+
+    @Test
+    fun `the archive the UI writes can be shared through the FileProvider`() {
+        doc("doc_share", "Shareable")
+        val file = backup.newArchiveFile()
+        backup.write(file, password, FullBackup.Wrap.PASSWORD)
+        assertTrue("the archive lives in cache/fullbackup", file.canonicalPath.contains("fullbackup"))
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            app, app.packageName + ".fileprovider", file
+        )
+        assertNotNull("the FileProvider exposes the archive", uri)
+        file.delete()
+    }
 
     @Test
     fun `the last backup timestamp drives the reminder`() {

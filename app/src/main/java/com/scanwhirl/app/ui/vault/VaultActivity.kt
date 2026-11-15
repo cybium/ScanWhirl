@@ -611,6 +611,9 @@ class VaultActivity : BaseActivity() {
     private fun render() {
         val setUp = store.isSetUp()
         val unlocked = store.isUnlocked()
+        // While an unlock/relock prompt is on screen the lock button has nothing to do; hiding it
+        // beats a visible no-op (dead-button audit).
+        lockButton.isVisible = !promptShown
         shownUnlocked = unlocked
         val entries = if (unlocked) runCatching { store.listEntries() }.getOrDefault(emptyList()) else emptyList()
 
@@ -680,6 +683,7 @@ class VaultActivity : BaseActivity() {
     private fun maybePromptOnOpen() {
         if (promptShown) return
         promptShown = true
+        render()
         when {
             !store.isSetUp() && store.hasLegacyPin() -> showLegacyPin()
             !store.isSetUp() -> showSetup(migrateLegacy = false)

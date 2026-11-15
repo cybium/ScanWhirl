@@ -28,9 +28,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Me -> Backup & restore: one encrypted file with every scan, the Vault, signatures and settings.
@@ -62,7 +59,9 @@ class BackupActivity : BaseActivity() {
     private val unlockVault = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val pending = pendingRestore ?: return@registerForActivityResult
         pendingRestore = null
-        runRestore(pending.first, pending.second)
+        // Do not ask again: if the user declined, restore everything else and say the Vault was
+        // skipped (the device QA caught a loop that reopened this prompt forever).
+        runRestore(pending.first, pending.second, allowPrompt = false)
     }
 
     private lateinit var lastLine: TextView
@@ -258,18 +257,18 @@ class BackupActivity : BaseActivity() {
             .setMessage(R.string.backup_code_note)
             .setInput(hint = getString(R.string.backup_code_hint))
             .build()
-        sheet.setPrimary(R.string.backup_continue) {
+        sheet.setPrimaryStayOpen(R.string.backup_continue) {
             val code = VaultCrypto.normalizeRecoveryCode(sheet.inputView?.text?.toString().orEmpty())
             if (!VaultCrypto.isRecoveryCode(code)) {
                 toast(R.string.backup_code_wrong)
-                return@setPrimary
+                return@setPrimaryStayOpen
             }
             // Proving the code now guarantees the file can be opened later: a typo would
             // otherwise produce an undecryptable backup.
             val known = runCatching { vault.unlockWithRecovery(code) }.getOrDefault(false)
             if (!known) {
                 toast(R.string.backup_code_wrong)
-                return@setPrimary
+                return@setPrimaryStayOpen
             }
             sheet.dismiss()
             create(VaultCrypto.formatRecoveryCode(code), FullBackup.Wrap.RECOVERY_CODE)
@@ -288,11 +287,11 @@ class BackupActivity : BaseActivity() {
             .setMessage(getString(R.string.backup_password_note, FullBackup.MIN_PASSWORD))
             .setContent(field)
             .build()
-        sheet.setPrimary(R.string.backup_continue) {
+        sheet.setPrimaryStayOpen(R.string.backup_continue) {
             val secret = field.text()
             if (secret.length < FullBackup.MIN_PASSWORD) {
                 field.setError(getString(R.string.backup_password_short, FullBackup.MIN_PASSWORD))
-                return@setPrimary
+                return@setPrimaryStayOpen
             }
             sheet.dismiss()
             create(secret, FullBackup.Wrap.PASSWORD)
@@ -302,8 +301,7 @@ class BackupActivity : BaseActivity() {
     }
 
     private fun create(secret: String, wrap: FullBackup.Wrap) {
-        val stamp = SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date())
-        val file = File(cacheDir, "ScanWhirl-$stamp.${FullBackup.EXTENSION}")
+        val file = backup.newArchiveFile()
         toast(R.string.backup_working)
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
@@ -384,10 +382,10 @@ class BackupActivity : BaseActivity() {
         }
     }
 
-    private fun runRestore(file: File, secret: String) {
+    private fun runRestore(file: File, secret: String, allowPrompt: Boolean = true) {
         // The backup carries Vault entries and this phone's Vault is set up: unlock it first, so
         // the entries can be re-encrypted under its key instead of being skipped.
-        if (runCatching { backup.needsVaultUnlock(file) }.getOrDefault(false)) {
+        if (allowPrompt && runCatching { backup.needsVaultUnlock(file) }.getOrDefault(false)) {
             pendingRestore = file to secret
             unlockVault.launch(
                 com.scanwhirl.app.ui.vault.VaultActivity.intent(this, getString(R.string.backup_vault_reason))
