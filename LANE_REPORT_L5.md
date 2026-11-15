@@ -204,6 +204,39 @@ uses it instead of `draftPages` + `draftOf`.
   positives, Luhn/IBAN, line bleed), `SensitiveFindUiTest` (4: groups→boxes, preset chip, no-hits
   message, registry), plus the existing `MaskAadhaarFlowTest` (2) unchanged.
 
+## Accessibility follow-up — Text screen and Scan review fixed
+
+Text (`OcrEditorActivity` + `activity_ocr_editor.xml`) and Scan review (`ScanReviewActivity` +
+`activity_scan_review.xml`) now pass the audit at 360dp / 1.3× / 2.0×, and their allow-list
+entries are **deleted**:
+
+- Text: Page/Text switch row 48dp; language, Tidy, Copy, Share, Save and To Word chips 48dp with
+  two-line labels; Undo/Redo 48dp; overflow button 48dp; footer wraps; subtitle uses the short
+  `name · 1 / 3` form so it no longer ellipsizes.
+- Scan review: title field 48dp with two-line room and the short visual hint “Name” (full
+  “Document name” is its content description); overflow button 48dp; mode buttons keep 48dp with
+  in-place insets; page status gets its own full-width row; at 200 % the tool buttons put the icon
+  beside the label so the rail cannot squeeze the page stage; Save stays on screen.
+- Shared helper `ui/A11yTargets.kt` (overflow target, toolbar text, title field, kit chip) is
+  new L5 code.
+
+Remaining allow-list: **43 entries** — L2: Protect sheet 10, Unlock sheet 7, Vault 7; L1:
+Settings 8, Shell vault 2, Tools count 1; L4: Tool setup 5, Tool result 3. No Text, Scan review,
+Library, Tools, Me or Pro entries remain (L1's own batch fixed those, or this batch did).
+
+Move-down behaviour: a reorder must not change selection. L1's selection model keys by page path,
+so the moved tile stays selected at its new slot — the **app was right**; the test had raced the
+host reload and expected the old cleared state. It now waits for selection, moves, and polls for
+“Page 2 of 3, selected”.
+
+Scan review delete: delete is refused while a Focus decode is running (`pageOpBusy`, with a Toast),
+so the delete test could click during the decode and never see a change. The test now waits for
+`!pageOpBusy` and then polls the real completion (“Page 2 of 2”) before asserting. No assertion was
+weakened.
+
+Find plurals: the sheet says **Found 1 item / N items** and the note **Hid 1 item / N items**
+(English + Hindi); no other count noun in the Find/stamp code was singular-wrong.
+
 ## Last gate (cloud, full suite)
 
 ```
@@ -220,8 +253,10 @@ TextFit's OcrEditor case is green again after L1's fix. Lint runs at merge.
 `…\.sw-qa\owner\L5_EVAL_ON` (never the shared `EVAL_ON`, which other lanes delete mid-run) and
 prints `EVAL RAN: <n> files -> <dir>` on success or `EVAL SKIPPED: L5_EVAL_ON missing` on a skip.
 Latest run: **EVAL RAN: 13 files**, Aadhaar cards `find=AADHAAR:1` (this host has no ML Kit model,
-so the preview geometry is the lead-approved fake line; the device path uses element boxes).
-Private samples were read in place and never committed; the flag was deleted afterwards.
+so the preview geometry is the lead-approved fake line). **These previews are not evidence of
+detector accuracy**: on the owner's phone with real ML Kit the Aadhaar case hid exactly the first
+8 digits with no slivers and the last 4 readable. Private samples were read in place and never
+committed; the flag was deleted afterwards.
 
 ## Files deleted / APK size
 
