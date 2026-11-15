@@ -5,12 +5,12 @@
     <!-- review -->
     <string name="stamp_no_marks"><!-- review -->पहले कोई चिह्न जोड़ें।</string>
     <!-- review -->
-    <string name="stamp_no_page"><!-- review -->ऐसा कोई पृष्ठ नहीं है।</string>
+    <string name="stamp_no_page"><!-- review -->ऐसा कोई पेज नहीं है।</string>
     <!-- review -->
-    <string name="stamp_copy_failed"><!-- review -->संपादित प्रति नहीं खोली जा सकी।</string>
+    <string name="stamp_copy_failed"><!-- review -->बदली हुई प्रति नहीं खोली जा सकी।</string>
 
     <!-- review -->
-    <string name="stamp_title"><!-- review -->संपादित करें और हस्ताक्षर करें</string>
+    <string name="stamp_title"><!-- review -->बदलें और हस्ताक्षर करें</string>
     <!-- review -->
     <string name="stamp_tool_signature"><!-- review -->हस्ताक्षर</string>
     <!-- review -->
@@ -22,7 +22,7 @@
     <!-- review -->
     <string name="stamp_tool_watermark"><!-- review -->वॉटरमार्क</string>
     <!-- review -->
-    <string name="stamp_tool_page_numbers"><!-- review -->पृष्ठ संख्या</string>
+    <string name="stamp_tool_page_numbers"><!-- review -->पेज संख्या</string>
     <!-- review -->
     <string name="stamp_tool_stamp"><!-- review -->मोहर</string>
     <!-- review -->
@@ -30,7 +30,7 @@
     <!-- review -->
     <string name="stamp_suggest"><!-- review -->सुझाव</string>
     <!-- review -->
-    <string name="stamp_undo"><!-- review -->पूर्ववत करें</string>
+    <string name="stamp_undo"><!-- review -->अनडू</string>
     <!-- review -->
     <string name="stamp_redo"><!-- review -->फिर से करें</string>
     <!-- review -->
@@ -46,9 +46,9 @@
     <!-- review -->
     <string name="stamp_page_indicator"><!-- review -->%1$d / %2$d</string>
     <!-- review -->
-    <string name="stamp_prev_page"><!-- review -->पिछला पृष्ठ</string>
+    <string name="stamp_prev_page"><!-- review -->पिछला पेज</string>
     <!-- review -->
-    <string name="stamp_next_page"><!-- review -->अगला पृष्ठ</string>
+    <string name="stamp_next_page"><!-- review -->अगला पेज</string>
     <!-- review -->
     <string name="stamp_prev_symbol"><!-- review -->‹</string>
     <!-- review -->
@@ -60,7 +60,7 @@
     <!-- review -->
     <string name="stamp_watermark_title"><!-- review -->वॉटरमार्क</string>
     <!-- review -->
-    <string name="stamp_watermark_hint"><!-- review -->हर पृष्ठ पर पाठ</string>
+    <string name="stamp_watermark_hint"><!-- review -->हर पेज पर पाठ</string>
     <!-- review -->
     <string name="stamp_watermark_default"><!-- review -->गोपनीय</string>
     <!-- review -->
@@ -133,15 +133,15 @@
     <!-- review -->
     <string name="stamp_hint_select"><!-- review -->चिह्न हिलाने के लिए उसे दबाएँ; आकार बदलने के लिए कोने के हैंडल उपयोग करें</string>
     <!-- review -->
-    <string name="stamp_no_ocr"><!-- review -->इस पृष्ठ पर अभी कोई पहचाना गया पाठ नहीं है।</string>
+    <string name="stamp_no_ocr"><!-- review -->इस पेज पर अभी कोई पहचाना गया पाठ नहीं है।</string>
     <!-- review -->
-    <string name="stamp_no_suggestions"><!-- review -->कोई निजी नंबर नहीं मिला.</string>
+    <string name="stamp_no_suggestions"><!-- review -->कोई निजी नंबर नहीं मिला।</string>
     <!-- review -->
     <string name="stamp_locked"><!-- review -->यह दस्तावेज़ सुरक्षित है। पहले इसे अनलॉक करें।</string>
     <!-- review -->
     <string name="stamp_missing"><!-- review -->यह दस्तावेज़ नहीं खोला जा सका।</string>
     <!-- review -->
-    <string name="stamp_no_selection"><!-- review -->संपादित करने के लिए किसी चिह्न को दबाएँ</string>
+    <string name="stamp_no_selection"><!-- review -->बदलने के लिए किसी चिह्न को दबाएँ</string>
     <!-- review -->
     <string name="stamp_discard_title"><!-- review -->बदलाव छोड़ें?</string>
     <!-- review -->
@@ -153,11 +153,11 @@
     <!-- review -->
     <string name="stamp_choose_document"><!-- review -->दस्तावेज़ चुनें</string>
     <!-- review -->
-    <string name="stamp_no_documents"><!-- review -->संपादित करने के लिए कोई अनलॉक दस्तावेज़ नहीं है। पहले स्कैन या आयात करें।</string>
+    <string name="stamp_no_documents"><!-- review -->बदलने के लिए कोई अनलॉक दस्तावेज़ नहीं है। पहले स्कैन या इम्पोर्ट करें।</string>
     <!-- review -->
     <string name="stamp_text_required"><!-- review -->पहले पाठ लिखें।</string>
     <!-- review -->
-    <string name="stamp_pro_message"><!-- review -->हस्ताक्षर, पाठ जोड़ें, चित्र बनाएँ, हाइलाइट, वॉटरमार्क, पृष्ठ संख्याएँ, स्टाम्प और रिडैक्ट Pro का हिस्सा हैं (एक बार खरीदें)। बिलिंग अभी चालू नहीं है, इसलिए टेस्ट बिल्ड में Pro टूल्स मुफ़्त रहते हैं।</string>
+    <string name="stamp_pro_message"><!-- review -->हस्ताक्षर, पाठ जोड़ें, चित्र बनाएँ, हाइलाइट, वॉटरमार्क, पेज संख्याएँ, स्टाम्प और रिडैक्ट Pro का हिस्सा हैं (एक बार खरीदें)। बिलिंग अभी चालू नहीं है, इसलिए टेस्ट बिल्ड में Pro टूल्स मुफ़्त रहते हैं।</string>
     <!-- review -->
     <string name="stamp_redact_warn_title"><!-- review -->रिडैक्शन स्थायी है</string>
     <!-- review -->
@@ -167,7 +167,7 @@
     <!-- review: Hide private info (Redact). -->
     <string name="find_button"><!-- review -->निजी जानकारी छिपाएँ</string>
     <string name="find_title"><!-- review -->निजी जानकारी छिपाएँ</string>
-    <string name="find_explanation"><!-- review -->चुनें कि क्या छिपाना है. खोजें हर पेज देखकर मिली चीज़ें दिखाता है.</string>
+    <string name="find_explanation"><!-- review -->चुनें कि क्या छिपाना है। खोजें हर पेज देखकर मिली चीज़ें दिखाता है।</string>
     <string name="find_choice_phone"><!-- review -->फ़ोन नंबर</string>
     <string name="find_choice_email"><!-- review -->ईमेल पते</string>
     <string name="find_choice_id"><!-- review -->आईडी नंबर (आधार, PAN, ड्राइविंग लाइसेंस, पासपोर्ट, VID)</string>
@@ -176,16 +176,16 @@
     <string name="find_choice_keep4"><!-- review -->आखिरी 4 अंक रखें</string>
     <string name="find_action"><!-- review -->खोजें</string>
     <string name="find_scanning"><!-- review -->निजी जानकारी खोजी जा रही है…</string>
-    <string name="find_none"><!-- review -->कोई निजी जानकारी नहीं मिली. आप फिर भी बॉक्स बना सकते हैं.</string>
-    <string name="find_choose_one"><!-- review -->कम से कम एक चीज़ चुनें.</string>
+    <string name="find_none"><!-- review -->कोई निजी जानकारी नहीं मिली। आप फिर भी बॉक्स बना सकते हैं।</string>
+    <string name="find_choose_one"><!-- review -->कम से कम एक चीज़ चुनें।</string>
     <string name="find_hide_selected"><!-- review -->चुनी हुई छिपाएँ</string>
     <plurals name="find_results_title">
         <item quantity="one"><!-- review -->%1$d चीज़ मिली</item>
         <item quantity="other"><!-- review -->%1$d चीज़ें मिलीं</item>
     </plurals>
     <plurals name="find_applied">
-        <item quantity="one"><!-- review -->%1$d चीज़ छिपाई गई. बॉक्स जाँचें, फिर सहेजें.</item>
-        <item quantity="other"><!-- review -->%1$d चीज़ें छिपाई गईं. बॉक्स जाँचें, फिर सहेजें.</item>
+        <item quantity="one">%1$d चीज़ छिपाई गई। बॉक्स जाँचें, फिर सहेजें।</item>
+        <item quantity="other">%1$d चीज़ें छिपाई गईं। बॉक्स जाँचें, फिर सहेजें।</item>
     </plurals>
     <string name="private_info_label"><!-- review -->निजी जानकारी छिपाई गई</string>
     <string name="private_info_saved"><!-- review -->निजी जानकारी छिपाकर कॉपी सहेजी: %1$s</string>

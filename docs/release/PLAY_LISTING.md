@@ -30,15 +30,15 @@ is needed — payments go through the Play Store app.
 
 ## 2. Store listing text
 
-**App name** (30): `ScanWhirl: PDF Scanner Offline`
+**App name** (30): `ScanWhirl: PDF Scanner & Tools`
 
 **Short description** (80):
-`Scan to PDF, edit, sign & protect — fully offline. No ads, no account.`
+`Scan to PDF, edit, sign & protect — on your phone. No ads, no account.`
 
 **Full description** (≤ 4000):
 
 ```
-ScanWhirl is a document scanner and PDF tool kit that works completely offline. Scan paper to clean PDFs, turn photos into PDFs, read text in English and Hindi, and edit, sign and protect your files — on your phone, with no ads, no account and no internet permission.
+ScanWhirl is a document scanner and PDF tool kit that runs on your phone. Scan paper to clean PDFs, turn photos into PDFs, read text in English and Hindi, and edit, sign and protect your files — with no ads and no account. The app has no internet permission, so nothing you scan is uploaded; Google Play may download the scanner and text-reading parts once.
 
 SCAN AND CREATE — FREE
 • Document scanner with automatic edge detection, crop and enhance
@@ -65,7 +65,8 @@ PRO — ONE-TIME PURCHASE, NO SUBSCRIPTION
 Pay once, keep it forever. No subscription. Works on every phone with your Google account.
 
 PRIVATE BY DESIGN
-• No internet permission: your documents never leave your phone
+• No internet permission: nothing you scan is uploaded
+• Scanner and text-reading parts come from Google Play services and may download once
 • No ads, no account, no ad tracking
 • Vault: lock sensitive documents behind your fingerprint or PIN
 • Encrypted backup: one file with all your scans, saved where you choose
@@ -78,7 +79,7 @@ WAYS PEOPLE USE SCANWHIRL
 
 QUICK ANSWERS
 Is ScanWhirl free? Yes. Scanning, PDF creation, merging, compressing, text reading and password protection are free. Pro tools are a one-time purchase.
-Does it need internet? No. Everything runs on your phone.
+Does it need internet? Your files never leave your phone. The app has no internet permission; Google Play may download the scanner and text-reading parts once.
 Where are my files? In ScanWhirl's library on your phone. Save or share any file to your Downloads, Drive or any app.
 ```
 

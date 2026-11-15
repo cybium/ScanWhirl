@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L1 shell and kit: Hindi. Each value carries a review marker for a native speaker. -->
-    <string name="trust_offline_no_ads"><!-- review -->ऑफ़लाइन · विज्ञापन नहीं</string>
+    <string name="trust_offline_no_ads"><!-- review -->फ़ोन पर ही · विज्ञापन नहीं</string>
     <string name="language_chip_desc"><!-- review -->भाषा बदलें</string>
-    <string name="trust_all_offline"><!-- review -->पूरी तरह ऑफ़लाइन</string>
+    <string name="trust_all_offline"><!-- review -->इंटरनेट की ज़रूरत नहीं</string>
     <string name="trust_no_ads"><!-- review -->कोई विज्ञापन नहीं</string>
     <string name="trust_no_account"><!-- review -->कोई खाता नहीं</string>
-    <string name="trust_offline"><!-- review -->ऑफ़लाइन</string>
+    <string name="trust_offline"><!-- review -->फ़ोन पर ही</string>
 
     <string name="shell_nav_library"><!-- review -->लाइब्रेरी</string>
     <string name="shell_nav_tools"><!-- review -->टूल्स</string>
@@ -38,7 +38,7 @@
     <string name="home_protected"><!-- review -->सुरक्षित</string>
 
     <string name="tools_title"><!-- review -->टूल्स</string>
-    <string name="tools_search_hint"><!-- review -->टूल खोजें, जैसे “sign”, “smaller”</string>
+    <string name="tools_search_hint"><!-- review -->टूल खोजें, जैसे “साइन”</string>
     <string name="tools_no_match"><!-- review -->“%1$s” से कोई टूल नहीं मिला।</string>
     <string name="tools_group_create"><!-- review -->बनाएँ</string>
     <string name="tools_group_organize"><!-- review -->व्यवस्थित करें</string>
@@ -70,7 +70,7 @@
     <string name="tool_to_word"><!-- review -->Word में</string>
     <string name="tool_to_excel"><!-- review -->Excel में</string>
     <string name="tool_to_text"><!-- review -->टेक्स्ट में</string>
-    <string name="tool_zip"><!-- review -->ZIP निर्यात</string>
+    <string name="tool_zip"><!-- review -->ZIP एक्सपोर्ट</string>
     <string name="tool_searchable_pdf"><!-- review -->खोजने योग्य PDF</string>
     <string name="tool_pdfa"><!-- review -->PDF/A</string>
     <string name="tool_sign"><!-- review -->हस्ताक्षर</string>
@@ -82,7 +82,7 @@
     <string name="tool_stamp"><!-- review -->मोहर</string>
     <string name="tool_redact"><!-- review -->नामेट करें</string>
     <string name="tool_protect"><!-- review -->PDF सुरक्षित करें</string>
-    <string name="tool_unlock"><!-- review -->PDF खोलें</string>
+    <string name="tool_unlock"><!-- review -->PDF अनलॉक करें</string>
     <string name="tool_vault"><!-- review -->वॉल्ट</string>
     <string name="tool_remove_metadata"><!-- review -->मेटाडेटा हटाएँ</string>
     <string name="tool_read_text"><!-- review -->टेक्स्ट पढ़ें</string>
@@ -91,7 +91,7 @@
     <string name="tool_coming_soon_title"><!-- review -->जल्द आ रहा है</string>
     <string name="tool_soon_tag"><!-- review -->जल्द</string>
     <string name="tool_coming_soon_note"><!-- review -->यह टूल बन रहा है। जल्द ही यहाँ होगा।</string>
-    <string name="soon_book_pages"><!-- review -->पूरी किताब स्कैन करें: एक साथ कई पन्ने, हर दो पन्नों को अलग-अलग पन्नों में बाँटकर। लॉन्च के बाद आएगा।</string>
+    <string name="soon_book_pages"><!-- review -->पूरी किताब स्कैन करें: एक साथ कई पेज, हर दो पेज को अलग-अलग पेजों में बाँटकर। लॉन्च के बाद आएगा।</string>
     <string name="soon_qr_code"><!-- review -->बिना इंटरनेट इस फ़ोन पर QR कोड पढ़ें।</string>
     <string name="soon_business_card"><!-- review -->कार्ड की फ़ोटो से नाम, फ़ोन और ईमेल निकालें।</string>
     <string name="soon_folders"><!-- review -->दस्तावेज़ों को फ़ोल्डर में रखें और टैग करें।</string>
@@ -108,7 +108,7 @@
     <string name="pro_one_time"><!-- review -->एक बार</string>
     <string name="pro_price_note"><!-- review -->कोई सदस्यता नहीं। आपके Google खाते वाले हर फ़ोन पर Pro।</string>
     <string name="pro_unlock"><!-- review -->Pro अनलॉक करें</string>
-    <string name="pro_restore"><!-- review -->खरीद वापस लाएँ</string>
+    <string name="pro_restore"><!-- review -->खरीदारी बहाल करें</string>
     <string name="pro_see_all"><!-- review -->सभी 18 Pro टूल्स देखें ›</string>
     <string name="pro_buy_coming"><!-- review -->भुगतान अभी चालू नहीं है। टेस्ट बिल्ड में Pro टूल्स मुफ़्त रहते हैं।</string>
     <string name="pro_feat_sign"><!-- review -->हस्ताक्षर और मोहर</string>
@@ -124,11 +124,11 @@
     <string name="me_pro"><!-- review -->ScanWhirl Pro</string>
     <string name="me_pro_summary"><!-- review -->पूरा सूट अनलॉक करें</string>
     <string name="me_settings"><!-- review -->सेटिंग्स</string>
-    <string name="me_settings_summary"><!-- review -->रूप, टेक्स्ट, गोपनीयता</string>
-    <string name="me_trash"><!-- review -->कूड़ेदान</string>
-    <string name="me_trash_summary"><!-- review -->हटाए दस्तावेज़, 30 दिन</string>
+    <string name="me_settings_summary"><!-- review -->रूप, टेक्स्ट, प्राइवेसी</string>
+    <string name="me_trash"><!-- review -->ट्रैश</string>
+    <string name="me_trash_summary"><!-- review -->हटाए गए दस्तावेज़, 30 दिन</string>
     <string name="me_about"><!-- review -->ScanWhirl के बारे में</string>
-    <string name="me_about_summary"><!-- review -->संस्करण, गोपनीयता, लाइसेंस</string>
+    <string name="me_about_summary"><!-- review -->संस्करण, प्राइवेसी, लाइसेंस</string>
 
     <string name="vault_tab_title"><!-- review -->वॉल्ट</string>
     <string name="vault_tab_encrypted"><!-- review -->इस फ़ोन पर एन्क्रिप्टेड</string>
@@ -152,12 +152,12 @@
     <string name="tool_pick_image"><!-- review -->छवि चुनें</string>
     <string name="shell_today"><!-- review -->आज</string>
     <string name="shell_yesterday"><!-- review -->कल</string>
-    <string name="shell_doc_actions_note"><!-- review -->इस दस्तावेज़ को खोलें, साझा करें, या कूड़ेदान में डालें।</string>
+    <string name="shell_doc_actions_note"><!-- review -->इस दस्तावेज़ को खोलें, शेयर करें, या ट्रैश में डालें।</string>
     <string name="shell_open"><!-- review -->खोलें</string>
-    <string name="shell_move_to_trash"><!-- review -->कूड़ेदान में डालें</string>
-    <string name="shell_trash_title"><!-- review -->“%1$s” को कूड़ेदान में डालें?</string>
-    <string name="shell_trash_note"><!-- review -->यह 30 दिन तक कूड़ेदान में रहेगा। कुछ भी अपलोड नहीं होता।</string>
-    <string name="shell_moved_to_trash"><!-- review -->कूड़ेदान में डाल दिया</string>
+    <string name="shell_move_to_trash"><!-- review -->ट्रैश में डालें</string>
+    <string name="shell_trash_title"><!-- review -->“%1$s” को ट्रैश में डालें?</string>
+    <string name="shell_trash_note"><!-- review -->यह 30 दिन तक ट्रैश में रहेगा। कुछ भी अपलोड नहीं होता।</string>
+    <string name="shell_moved_to_trash"><!-- review -->ट्रैश में डाल दिया</string>
     <string name="reader_dock_pages"><!-- review -->पेज</string>
     <string name="reader_dock_text"><!-- review -->टेक्स्ट</string>
     <string name="reader_dock_sign"><!-- review -->हस्ताक्षर</string>
@@ -169,7 +169,7 @@
     <string name="ocr_page_pane_note"><!-- review -->इस टेक्स्ट फ़ाइल के लिए पेज की छवि उपलब्ध नहीं है।</string>
     <string name="ocr_to_word_pro"><!-- review -->Word में · PRO</string>
     <string name="ocr_foot_note"><!-- review -->इसी फ़ोन पर पढ़ा गया। खोजने योग्य।</string>
-    <string name="ocr_to_word_soon"><!-- review -->Word निर्यात बन रहा है। यह इसी फ़ोन पर इस टेक्स्ट से .docx बनाएगा।</string>
+    <string name="ocr_to_word_soon"><!-- review -->Word एक्सपोर्ट बन रहा है। यह इसी फ़ोन पर इस टेक्स्ट से .docx बनाएगा।</string>
     <string name="ocr_screen_title"><!-- review -->टेक्स्ट</string>
     <string name="ocr_tidy_text"><!-- review -->टेक्स्ट सुधारें</string>
     <string name="ocr_join_lines_desc"><!-- review -->टूटी पंक्तियों को जोड़कर पैराग्राफ बनाएँ।</string>
@@ -198,7 +198,7 @@
     <string name="sel_share"><!-- review -->शेयर</string>
     <string name="sel_rename"><!-- review -->नाम बदलें</string>
     <string name="sel_delete"><!-- review -->हटाएँ</string>
-    <string name="sel_delete_title"><!-- review -->%1$d दस्तावेज़ कूड़ेदान में डालें?</string>
+    <string name="sel_delete_title"><!-- review -->%1$d दस्तावेज़ ट्रैश में डालें?</string>
     <string name="tags_title"><!-- review -->टैग</string>
     <string name="tags_new"><!-- review -->नया टैग</string>
     <string name="tags_add"><!-- review -->टैग जोड़ें</string>
@@ -218,7 +218,7 @@
     <string name="progress_page_of"><!-- review -->पेज %1$d / %2$d</string>
     <string name="home_search_clear"><!-- review -->खोज मिटाएँ</string>
     <string name="empty_filtered"><!-- review -->यहाँ कोई दस्तावेज़ नहीं</string>
-    <string name="ocr_nothing_to_save"><!-- review -->सेव करने के लिए कुछ बदला नहीं</string>
+    <string name="ocr_nothing_to_save"><!-- review -->सहेजने के लिए कुछ बदला नहीं</string>
     <string name="photo_import_none"><!-- review -->कोई फ़ोटो नहीं जोड़ी गई</string>
     <string name="photos_auto_crop"><!-- review -->पेज अपने आप क्रॉप करें (सुझाया)</string>
     <string name="photos_keep"><!-- review -->फ़ोटो जैसी हैं वैसी रखें</string>
@@ -258,8 +258,8 @@
     <string name="about_licences"><!-- review -->लाइसेंस</string>
     <string name="about_licences_body"><!-- review -->ScanWhirl इनके ओपन-सोर्स लाइसेंस (Apache 2.0) के तहत AndroidX, Material Components, Google ML Kit, PdfBox-Android और kotlinx.coroutines का उपयोग करता है।</string>
     <string name="settings_accent"><!-- review -->रंग</string>
-    <string name="accent_cyan"><!-- review -->सियान</string>
-    <string name="accent_coming_soon"><!-- review -->सियान · गोल्ड जल्द आ रहा है</string>
+    <string name="accent_cyan"><!-- review -->हल्का नीला</string>
+    <string name="accent_coming_soon"><!-- review -->हल्का नीला · गोल्ड जल्द आ रहा है</string>
     <string name="accent_gold"><!-- review -->गोल्ड</string>
     <string name="accent_gold_use"><!-- review -->गोल्ड लगाएँ</string>
     <string name="accent_gold_warning"><!-- review -->गोल्ड ऐप का रंग और ऐप आइकन बदल देता है। होम स्क्रीन पर नया आइकन दिखने में थोड़ा समय लग सकता है, और आपका रखा शॉर्टकट दोबारा जोड़ना पड़ सकता है।</string>
@@ -271,9 +271,9 @@
     <string name="me_pro_active"><!-- review -->ScanWhirl Pro — सक्रिय</string>
     <string name="me_pro_active_summary"><!-- review -->धन्यवाद — सभी Pro टूल्स अनलॉक हैं।</string>
     <string name="pro_active_sub"><!-- review -->सभी Pro टूल्स अनलॉक हैं। धन्यवाद!</string>
-    <string name="settings_test_free"><!-- review -->परीक्षण: मुफ़्त उपयोगकर्ता के रूप में</string>
-    <string name="settings_test_free_summary"><!-- review -->केवल टेस्ट बिल्ड में। Pro गेट दिखाता है।</string>
-    <string name="settings_privacy_section"><!-- review -->गोपनीयता और सुरक्षा</string>
+    <string name="settings_test_free"><!-- review -->परीक्षण: मुफ़्त उपयोगकर्ता की तरह</string>
+    <string name="settings_test_free_summary"><!-- review -->सिर्फ़ टेस्ट बिल्ड में। Pro स्क्रीन दिखाता है।</string>
+    <string name="settings_privacy_section"><!-- review -->प्राइवेसी और सुरक्षा</string>
     <string name="pro_sub_compact"><!-- review -->हर Pro टूल, एक भुगतान, हमेशा आपका।</string>
     <string name="pro_more_tools"><!-- review -->सभी %1$d प्रो टूल देखें</string>
 </resources>

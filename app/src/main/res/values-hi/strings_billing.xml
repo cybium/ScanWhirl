@@ -6,6 +6,6 @@
     <string name="pro_pending">भुगतान पूरा होने पर Pro अनलॉक होगा।</string>
     <string name="pro_finishing">खरीद पूरी की जा रही है…</string>
     <string name="pro_purchase_title">खरीद</string>
-    <string name="pro_restore_title">खरीद वापस पाएँ</string>
+    <string name="pro_restore_title"><!-- review -->खरीदारी बहाल करें</string>
     <string name="pro_restore_none">इस Google खाते के लिए कोई Pro खरीद नहीं मिली।</string>
 </resources>
