@@ -85,6 +85,11 @@ try {
     }
     $failed | Select-Object -First 30 | ForEach-Object { Write-Output $_ }
     Write-Output "tests: total=$t failures=$f skipped=$s"
+    if ($t -eq 0) {
+        # No results at all: show the tail of the Gradle output so the cause is visible.
+        Write-Output "---- gradle output tail (no test results) ----"
+        $out | Select-Object -Last 40 | ForEach-Object { Write-Output "  | $_" }
+    }
     $ok = ($t -gt 0 -and $f -eq 0 -and $s -eq 0)
 
     $lintMsg = "lint skipped (lead runs it at merge)"
