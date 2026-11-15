@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.scanwhirl.app.R
+import com.scanwhirl.app.util.SecureView
 
 /**
  * v2 UI: 05_protect_pdf / 09_unlock_sheet — the one bottom sheet in the app.
@@ -81,6 +82,8 @@ class SwSheet private constructor(
         ).apply {
             id = R.id.swSheetClose
             contentDescription = context.getString(R.string.sheet_close)
+            layoutParams = LinearLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt())
+            setPadding((12 * density).toInt(), (12 * density).toInt(), (12 * density).toInt(), (12 * density).toInt())
             setOnClickListener { dialog.dismiss() }
         }
         header.addView(closeButton)
@@ -130,13 +133,13 @@ class SwSheet private constructor(
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
             typeface = SwType.bold(context)
             setTextColor(SwStyle.color(context, R.color.text_hologram_mid))
-            minHeight = (44 * density).toInt()
+            minHeight = (48 * density).toInt()
             isVisible = false
         }
         root.addView(
             secondaryButton,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT, (48 * density).toInt()
             ).apply { topMargin = (8 * density).toInt() }
         )
 
@@ -343,13 +346,25 @@ class SwSheet private constructor(
             dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
                 ?.setBackgroundColor(Color.TRANSPARENT)
             dialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+            // TalkBack starts on the sheet's title, not the first field.
+            dialog.window?.decorView?.let { decor ->
+                androidx.core.view.ViewCompat.setAccessibilityPaneTitle(
+                    decor, titleView.text
+                )
+            }
         }
         dialog.show()
     }
 
     fun dismiss() = dialog.dismiss()
 
+    /** Secret fields: hide this window from screenshots, recents and casting. */
+    fun secure(): SwSheet = apply { SecureView.apply(dialog.window) }
+
     val isShowing: Boolean get() = dialog.isShowing
+
+    /** The sheet's own window (used to set FLAG_SECURE while a password is on screen). */
+    val window: android.view.Window? get() = dialog.window
 
     class Builder internal constructor(private val context: Context) {
         private val sheet = SwSheet(context, BottomSheetDialog(context))

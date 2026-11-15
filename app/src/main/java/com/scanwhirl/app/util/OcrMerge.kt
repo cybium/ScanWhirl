@@ -107,13 +107,16 @@ object OcrMerge {
 
         val base = nonEmpty.first()
         val others = nonEmpty.drop(1)
+        // A page that carries Devanagari anywhere makes a short Latin reading of a box suspect:
+        // on an Aadhaar photo the Latin model turns "सरकार" into "fafI" and "आधार" into "gov/".
+        val hindiPage = pages.any { page -> page.lines.any { OcrText.hasDevanagari(it.text) } }
         val merged = ArrayList<OcrRawLine>(base.lines.size)
 
         for (line in base.lines) {
             var best = line
             for (page in others) {
                 val candidate = page.lines.firstOrNull { OcrLayout.sameLine(it.box, line.box) } ?: continue
-                best = pick(best, candidate)
+                best = pick(best, candidate, hindiPage)
             }
             merged += best
         }
@@ -128,15 +131,61 @@ object OcrMerge {
         return ordered(OcrRawPage(base.width, base.height, merged), rotationDegrees)
     }
 
-    /** The text with a usable script wins; otherwise the more confident line. */
-    fun pick(a: OcrRawLine, b: OcrRawLine): OcrRawLine {
+    /**
+     * The text with a usable script wins; otherwise the reading that looks like words wins over
+     * model noise; otherwise the more confident line. Two lines that are genuinely different stay
+     * separate (the caller only pairs boxes that [OcrLayout.sameLine] calls one line).
+     */
+    fun pick(a: OcrRawLine, b: OcrRawLine, hindiPage: Boolean = false): OcrRawLine {
         val aDevanagari = OcrText.hasDevanagari(a.text)
         val bDevanagari = OcrText.hasDevanagari(b.text)
-        return when {
-            aDevanagari && !bDevanagari -> a
-            bDevanagari && !aDevanagari -> b
-            else -> if (a.confidence >= b.confidence) a else b
+        if (aDevanagari != bDevanagari) return if (aDevanagari) a else b
+
+        val aNoise = looksLikeNoise(a, hindiPage)
+        val bNoise = looksLikeNoise(b, hindiPage)
+        if (aNoise != bNoise) return if (aNoise) b else a
+
+        // Neither reading is Devanagari and neither is obvious noise. On a Devanagari page the
+        // Devanagari model is the one that saw the script, so a short Latin token there is more
+        // likely its misreading than a real word ("faf" for सरकार, "gov" for आधार).
+        if (hindiPage && a.script != b.script) {
+            val dev = if (a.script == OcrScript.DEVANAGARI) a else b
+            val latin = if (dev === a) b else a
+            if (latin.text.trim().length <= 4) return dev
         }
+        return if (a.confidence >= b.confidence) a else b
+    }
+
+    /**
+     * True when a Latin-model reading looks like noise rather than words: no letters, unreadable
+     * confidence, punctuation-heavy, a letter/digit mix inside a word ("Invo1ce"), an uppercase
+     * letter inside a lowercase run ("fafI"), all tokens one character, or (on a Devanagari page)
+     * a single short token, which is how सरकार usually comes back.
+     */
+    fun looksLikeNoise(line: OcrRawLine, hindiPage: Boolean = false): Boolean {
+        val text = line.text.trim()
+        if (text.isEmpty()) return true
+        if (line.confidence < 0.4f) return true
+        val letters = text.count { it.isLetter() }
+        if (letters < 2) return true
+        val symbols = text.count { !it.isLetterOrDigit() && !it.isWhitespace() }
+        if (symbols > 0 && symbols * 4 >= text.length) return true
+        val tokens = text.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (tokens.isEmpty()) return true
+        if (tokens.all { token -> token.count { it.isLetterOrDigit() } <= 1 }) return true
+        if (tokens.any { token ->
+                val upperInside = token.indexOfFirst { it.isUpperCase() }
+                upperInside > 0 && token.any { it.isLowerCase() } && token.length <= 6
+            }
+        ) return true
+        if (tokens.any { token ->
+                val hasDigit = token.any { it.isDigit() }
+                val hasLetter = token.any { it.isLetter() }
+                token.length >= 3 && hasDigit && hasLetter
+            }
+        ) return true
+        if (hindiPage && tokens.size == 1 && text.length <= 4) return true
+        return false
     }
 
     /** Orders lines (columns, spread, rotation) and cleans every line. */

@@ -23,8 +23,10 @@ merges your work, and reads your final reply. There is no human to answer questi
 **Since 2026-11-15 the FULL gate runs in the cloud** (GitHub Actions, 16 GB runner, ~5-6 min, no local queue).
 Same command; it snapshots your worktree (incl. untracked files) WITHOUT touching your branch or index, pushes the
 snapshot to `ci/<LANE>`, waits for the cloud run and prints the verdict (failing tests + lint errors). Lint runs in
-the cloud on integration merges. `-Tests "..."` still runs locally (fast red/green, queued). `-Local` forces the old
-local full run (avoid: this PC has little memory).
+the cloud on integration merges. `-Tests "..."` runs locally when the PC's build slot is free (~1 min) and goes to
+the CLOUD automatically when anyone is building or queued (~4 min, no waiting; branch `ci/<LANE>-t`). Evals on the
+owner's private files (names containing Eval/PerfHarness/RealWorld, or while your `<LANE>_EVAL_ON` flag exists) always
+run locally (recognised by the test NAME). `-Local` is DISABLED for the full suite (it held the only build slot for 40+ min\nand blocked every lane) and is ignored for -Tests while the slot is busy. Delete your `<LANE>_EVAL_ON` flag as soon as your eval run ends.
 
 ### Local details (red/green with -Tests)
 - Red/green loop on one test class:
@@ -36,7 +38,18 @@ local full run (avoid: this PC has little memory).
   Your first build is ~3 min (cold), later ones ~1 min. The last line says GATE PASS or GATE FAIL.
 - Never run gradle yourself (no gradlew, no assemble): only through the gate.
 
+## Evals on private test data (C:\Users\Cybium\Desktop\.sw-qa\)
+- Gate evals with YOUR OWN flag file `C:\Users\Cybium\Desktop\.sw-qa\owner\<LANE>_EVAL_ON` — never a shared `EVAL_ON`
+  (another lane deleting it makes your eval skip silently and "pass").
+- Robolectric runs under WSL: write outputs to `/mnt/c/Users/Cybium/Desktop/.sw-qa/...` (Windows paths do not work).
+- Every eval prints `EVAL RAN: <n> -> <output dir>`; the lead checks file timestamps before accepting numbers.
+- Evals run LOCALLY with `-Tests`; in the cloud they must return early and pass. Never commit the private files.
+
 ## Rules
+- Commit every green piece (at least every ~45 min of work). The model provider can drop a session; the lead
+  restarts it, but uncommitted hours are a risk.
+- File ownership is strict: if a fix needs another lane's file, report it to the lead instead of editing it
+  (exception: one-line hooks the lead explicitly allowed).
 - Commit after each GATE PASS: `git add -A ; git commit -m "<LANE>: <what>"`. Small, frequent commits.
 - `git merge integration` is allowed (and asked for below) to pick up merged work. Resolve conflicts carefully: keep both
   sides' intent; for files you do not own, take the integration side. Never push, rebase, reset, stash, force, or merge

@@ -36,7 +36,11 @@ class OcrIndexer(
         OcrEngine.recognizeFile(it, OcrLanguageSettings.get(repo.appContext()))
     },
     private val autoRun: Boolean = true,
-    private val afterIndexed: suspend (String) -> Unit = {}
+    private val afterIndexed: suspend (String) -> Unit = {},
+    /** Pages committed per store write; a crash loses at most this many recognized pages. */
+    private val batchPages: Int = 16,
+    /** Longest a partial batch waits before it is committed (the page itself may take seconds). */
+    private val batchMillis: Long = 2_000L
 ) {
 
     private val store: OcrStore = repo.ocrStore
@@ -82,15 +86,12 @@ class OcrIndexer(
         }
     }
 
-    /** Re-enqueues every document directory that carries an `ocr_pending` marker, newest first. */
+    /**
+     * Re-enqueues every document that still carries an `ocr_pending` marker, newest first.
+     * Reads the store's small pending queue instead of listing every document directory.
+     */
     fun resumePending() {
-        val pending = docsDir.listFiles { f ->
-            f.isDirectory && !SaveFormat.isIncomplete(f) && File(f, "ocr_pending").exists()
-        }
-            ?.sortedByDescending { it.lastModified() }
-            ?.mapNotNull { it.name }
-            ?: emptyList()
-        for (id in pending) {
+        for (id in store.pendingQueue()) {
             enqueue(id)
         }
     }
@@ -143,31 +144,55 @@ class OcrIndexer(
         val total = doc.pageFiles.size
         var done = 0
 
-        for (page in doc.pageFiles) {
-            val key = page.name
-            if (key in existingText || key in existingGeo) continue
-            if (unavailable) {
-                failedPages++
-                continue
+        // Recognized pages wait here until a batch commit (16 pages or 2 s), so indexing costs
+        // N/16 whole-file writes instead of one per page.
+        val pending = ArrayList<OcrStore.Recognized>(batchPages)
+        var lastFlush = System.nanoTime()
+
+        fun flush() {
+            if (pending.isEmpty()) return
+            val result = store.putRecognizedPages(docId, pending)
+            pending.clear()
+            lastFlush = System.nanoTime()
+            if (result.stale > 0) {
+                superseded = true
+                failedPages += result.stale
             }
+        }
 
-            _state.value = IndexState(docId, done, total, failedPages)
-
-            try {
-                val sourceHash = OcrStore.locked { Sha256.of(page) }
-                val result = recognize(page)
-                if (!store.putRecognizedPage(docId, key, sourceHash, result.text, result.page)) {
-                    superseded = true
+        try {
+            for (page in doc.pageFiles) {
+                val key = page.name
+                if (key in existingText || key in existingGeo) continue
+                if (unavailable) {
                     failedPages++
+                    continue
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Page unreadable: key stays absent ("not read"), never stored as empty text.
-                failedPages++
-                if (OcrEngine.isUnavailable(e)) unavailable = true
+
+                _state.value = IndexState(docId, done, total, failedPages)
+
+                try {
+                    val sourceHash = OcrStore.locked { Sha256.of(page) }
+                    val result = recognize(page)
+                    pending += OcrStore.Recognized(key, sourceHash, result.text, result.page)
+                    if (pending.size >= batchPages ||
+                        (System.nanoTime() - lastFlush) / 1_000_000 >= batchMillis
+                    ) {
+                        flush()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Page unreadable: key stays absent ("not read"), never stored as empty text.
+                    failedPages++
+                    if (OcrEngine.isUnavailable(e)) unavailable = true
+                }
+                done++
             }
-            done++
+        } finally {
+            // Commit what was recognized even when the pass is cancelled: at most the current
+            // page is lost, which stays absent and is recognized again on resume.
+            runCatching { flush() }
         }
 
         // Do not erase an invalidation raised while this pass was recognizing. When
@@ -178,7 +203,10 @@ class OcrIndexer(
 
         afterIndexed(docId)
 
-        val stored = store.readText(docId).keys.count { k -> doc.pageFiles.any { it.name == k } }
+        // Stored page names are exactly the page keys: count this document's pages against
+        // them once (the old code scanned every page for every stored key).
+        val storedText = store.readText(docId)
+        val stored = doc.pageFiles.count { it.name in storedText }
         return@withLock IndexReport(total, stored, failedPages, unavailable)
     }
 

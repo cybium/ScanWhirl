@@ -5,6 +5,9 @@ import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -45,6 +48,12 @@ class PageGridView @JvmOverloads constructor(
 
     /** Which filter a cell's file should display (file-based so it stays correct mid-drag). */
     var filterFor: (File) -> ScanFilter = { ScanFilter.ORIGINAL }
+
+    /**
+     * Identity of the submitted page set. Pages are immutable: every edit writes a new
+     * `r_<n>` replacement, so the set itself is the revision and binding never stats a file.
+     */
+    private var pageRevision: String = "0"
 
     /** Whether the cell at [index] shows a ticked check (host state). */
     var checkedAt: (Int) -> Boolean = { false }
@@ -145,7 +154,14 @@ class PageGridView @JvmOverloads constructor(
     /** Replaces the displayed pages. The list is copied; callers may pass a temp. */
     fun submit(pages: List<File>) {
         gridAdapter.pages = pages.toMutableList()
+        pageRevision = revisionOf(pages)
         gridAdapter.notifyDataSetChanged()
+    }
+
+    private fun revisionOf(pages: List<File>): String {
+        var hash = 17
+        for (page in pages) hash = hash * 31 + page.path.hashCode()
+        return Integer.toHexString(hash)
     }
 
     /** Re-binds every cell (selection, filter or file content changed in place). */
@@ -163,6 +179,21 @@ class PageGridView @JvmOverloads constructor(
     /** Test/host helper: reorder without a gesture. */
     fun moveItem(from: Int, to: Int) {
         gridAdapter.move(from, to)
+    }
+
+    /**
+     * Accessibility reorder: the same adapter move a drag performs, followed by the host's
+     * one [onDropped] so the draft order is persisted, and an announcement of the new slot.
+     */
+    private fun moveBy(from: Int, to: Int) {
+        if (from !in 0 until gridAdapter.itemCount || to !in 0 until gridAdapter.itemCount) return
+        gridAdapter.move(from, to)
+        // Positions changed: re-bind so every tile announces its new "Page X of Y".
+        gridAdapter.notifyDataSetChanged()
+        onDropped?.invoke(from, to)
+        announceForAccessibility(
+            context.getString(R.string.a11y_moved_to, to + 1, gridAdapter.itemCount)
+        )
     }
 
     /** Index of the top-most visible cell (used by "save this page"). */
@@ -232,6 +263,8 @@ class PageGridView @JvmOverloads constructor(
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(file: File, index: Int) {
+            val total = gridAdapter.itemCount
+            val selected = checkedAt(index)
             binding.pageNum.text = String.format(java.util.Locale.ROOT, "%d", index + 1)
             val current = currentAt(index)
             binding.root.isActivated = current
@@ -242,21 +275,26 @@ class PageGridView @JvmOverloads constructor(
             binding.pageNum.setTextColor(
                 if (current) context.getColor(R.color.rv_on_commit) else 0xFFFFFFFF.toInt()
             )
-            binding.root.contentDescription =
-                context.getString(R.string.review_film_page, index + 1)
-            binding.checkSelect.contentDescription =
-                context.getString(R.string.review_select_page, index + 1)
+            binding.root.contentDescription = context.getString(
+                if (selected) R.string.a11y_page_of_selected else R.string.a11y_page_of,
+                index + 1,
+                total
+            )
+            binding.checkSelectTouch.contentDescription =
+                context.getString(R.string.a11y_select_page_of, index + 1, total)
             PageThumbLoader.load(
                 file,
                 thumbTargetPx(),
                 filterFor(file),
-                binding.pageThumb
+                binding.pageThumb,
+                revision = pageRevision
             )
 
             // The round check exists only in selection mode; it is not a drag handle.
+            binding.checkSelectTouch.isVisible = checkboxesVisible
             binding.checkSelect.isVisible = checkboxesVisible
-            binding.checkSelect.imageAlpha = if (checkedAt(index)) 255 else 0
-            binding.checkSelect.setOnClickListener {
+            binding.checkSelect.imageAlpha = if (selected) 255 else 0
+            binding.checkSelectTouch.setOnClickListener {
                 val pos = bindingAdapterPosition
                 if (pos != NO_POSITION) onCheckToggle?.invoke(pos)
             }
@@ -265,11 +303,52 @@ class PageGridView @JvmOverloads constructor(
                 val pos = bindingAdapterPosition
                 if (pos != NO_POSITION) onTap?.invoke(pos)
             }
+            // Drag reorder has an accessibility twin: Move up / Move down in the local
+            // context menu, so pages reorder without a long-press-and-drag gesture.
+            ViewCompat.setAccessibilityDelegate(binding.root, object : AccessibilityDelegateCompat() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    val pos = bindingAdapterPosition
+                    if (dragEnabled && pos != NO_POSITION) {
+                        if (pos > 0) {
+                            info.addAction(
+                                AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                                    R.id.a11y_move_up, context.getString(R.string.a11y_move_up)
+                                )
+                            )
+                        }
+                        if (pos < gridAdapter.itemCount - 1) {
+                            info.addAction(
+                                AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                                    R.id.a11y_move_down, context.getString(R.string.a11y_move_down)
+                                )
+                            )
+                        }
+                    }
+                }
+
+                override fun performAccessibilityAction(host: View, action: Int, args: android.os.Bundle?): Boolean {
+                    val pos = bindingAdapterPosition
+                    if (pos != NO_POSITION) {
+                        when (action) {
+                            R.id.a11y_move_up -> if (pos > 0) {
+                                moveBy(pos, pos - 1)
+                                return true
+                            }
+                            R.id.a11y_move_down -> if (pos < gridAdapter.itemCount - 1) {
+                                moveBy(pos, pos + 1)
+                                return true
+                            }
+                        }
+                    }
+                    return super.performAccessibilityAction(host, action, args)
+                }
+            })
             // No OnLongClickListener here: it would consume the gesture before ItemTouchHelper
             // can start its drag. Selection enters from onSelectedChanged (drag start), so a
             // long-press without movement still selects; movement drags.
             // Selected state paints the cyan stroke + tinted fill via the drawable.
-            binding.root.isSelected = checkedAt(index)
+            binding.root.isSelected = selected
         }
     }
 }

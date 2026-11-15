@@ -71,6 +71,8 @@ class ProtectSheetTest {
         val activity = host()
         val dialog = sheet(activity, rememberAvailable = true)
         val root = dialog.view<View>(R.id.protectSheet)
+        assertTrue("the password window is FLAG_SECURE",
+            com.scanwhirl.app.util.SecureView.isSecure(dialog.window))
         assertTrue("the form lives in a scroll container", root is NestedScrollView)
         val primary = root.findViewById<View>(R.id.protectShare)
         assertNotNull("the primary button is inside that container", primary)

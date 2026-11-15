@@ -89,9 +89,10 @@ object AadhaarMask {
     }
 
     /** Every Aadhaar/VID box on one page. */
-    fun find(page: OcrPage): List<PageStamp.Box> =
+    fun find(page: OcrPage, maskVid: Boolean = true): List<PageStamp.Box> =
         page.lines.sortedWith(compareBy({ it.top }, { it.left }))
             .flatMap { hits(it, page) }
+            .filter { maskVid || it.digits == 12 }
             .map { it.box }
 
     /**
@@ -100,7 +101,12 @@ object AadhaarMask {
      * two whole word boxes; one merged "9233 6926 4947" element is split proportionally by
      * character count. The last 4 digits are never covered.
      */
-    fun findWords(words: List<Word>, pageWidth: Int, pageHeight: Int): List<PageStamp.Box> {
+    fun findWords(
+        words: List<Word>,
+        pageWidth: Int,
+        pageHeight: Int,
+        maskVid: Boolean = true
+    ): List<PageStamp.Box> {
         if (pageWidth <= 0 || pageHeight <= 0) return emptyList()
         val valid = words.filter { it.right > it.left && it.bottom > it.top && it.text.isNotBlank() }
             .sortedWith(compareBy({ it.top }, { it.left }))
@@ -132,37 +138,94 @@ object AadhaarMask {
             for (match in TOKEN.findAll(text)) {
                 val digitCount = match.value.count { it.isDigit() }
                 if (digitCount != 12 && digitCount != 16) continue
+                if (digitCount == 16 && !maskVid) continue
+                // Aadhaar: hide the first 8 digits; VID: hide its first 12.
+                val maskDigits = if (digitCount == 16) 12 else 8
                 var seen = 0
-                var eighthEnd = -1
+                var maskEnd = -1
                 for (i in match.value.indices) {
                     if (match.value[i].isDigit()) {
                         seen++
-                        if (seen == 8) {
-                            eighthEnd = match.range.first + i + 1
+                        if (seen == maskDigits) {
+                            maskEnd = match.range.first + i + 1
                             break
                         }
                     }
                 }
-                if (eighthEnd < 0) continue
+                if (maskEnd < 0) continue
                 val start = match.range.first
+
+                // The x of the next digit (the first one NOT masked), to stop in the middle of
+                // the gap before it. Never inside it.
+                var nextDigitX = -1f
+                var nextDigitIndex = -1
+                for (idx in maskEnd until text.length) {
+                    if (text[idx].isDigit()) {
+                        nextDigitIndex = idx
+                        break
+                    }
+                }
+                if (nextDigitIndex >= 0) {
+                    for (index in line.indices) {
+                        val wordStart = starts[index]
+                        val wordEnd = wordStart + line[index].text.length
+                        if (nextDigitIndex in wordStart until wordEnd) {
+                            val width = (line[index].right - line[index].left).toFloat()
+                            val frac = (nextDigitIndex - wordStart).toFloat() /
+                                line[index].text.length
+                            nextDigitX = line[index].left + frac * width
+                            break
+                        }
+                    }
+                }
+
+                val boxes = ArrayList<PageStamp.Box>()
+                var firstWordIndex = -1
+                var lastMaskedWord = -1
+                line.forEachIndexed { index, word ->
+                    val wordStart = starts[index]
+                    val wordEnd = wordStart + word.text.length
+                    if (max(start, wordStart) < min(maskEnd, wordEnd)) lastMaskedWord = index
+                }
                 line.forEachIndexed { index, word ->
                     val wordStart = starts[index]
                     val wordEnd = wordStart + word.text.length
                     val overlapStart = max(start, wordStart)
-                    val overlapEnd = min(eighthEnd, wordEnd)
+                    val overlapEnd = min(maskEnd, wordEnd)
                     if (overlapEnd <= overlapStart) return@forEachIndexed
+                    if (firstWordIndex < 0) firstWordIndex = index
                     val width = (word.right - word.left).toFloat().coerceAtLeast(1f)
                     val height = (word.bottom - word.top).toFloat().coerceAtLeast(1f)
-                    val padY = height * 0.06f
+                    val padY = height * 0.10f
                     val fracStart = (overlapStart - wordStart).toFloat() / word.text.length
                     val fracEnd = (overlapEnd - wordStart).toFloat() / word.text.length
-                    out += PageStamp.Box(
-                        left = ((word.left + fracStart * width) / pageWidth).coerceIn(0f, 1f),
-                        top = ((word.top - padY) / pageHeight).coerceIn(0f, 1f),
-                        right = ((word.left + fracEnd * width) / pageWidth).coerceIn(0f, 1f),
-                        bottom = ((word.bottom + padY) / pageHeight).coerceIn(0f, 1f)
+                    var left = word.left + fracStart * width
+                    var right = word.left + fracEnd * width
+                    // Outer side: 15% of the glyph height, so the first digit cannot leak.
+                    if (index == firstWordIndex && overlapStart == start) left -= height * 0.15f
+                    // Inner edge: the middle of the gap before the next (unmasked) digit.
+                    if (index == lastMaskedWord && maskEnd == overlapEnd && nextDigitX > 0f) {
+                        right = ((right + nextDigitX) / 2f).coerceAtMost(nextDigitX)
+                    }
+                    var top = word.top - padY
+                    var bottom = word.bottom + padY
+                    // Vertical: never overlap another OCR line's box.
+                    for (other in valid) {
+                        if (other === word) continue
+                        if (line.any { it === other }) continue
+                        val horizontal = other.left < right && other.right > left
+                        if (!horizontal) continue
+                        if (other.bottom <= word.top) top = max(top, other.bottom.toFloat())
+                        if (other.top >= word.bottom) bottom = min(bottom, other.top.toFloat())
+                    }
+                    boxes += PageStamp.Box(
+                        (left / pageWidth).coerceIn(0f, 1f),
+                        (top / pageHeight).coerceIn(0f, 1f),
+                        (right / pageWidth).coerceIn(0f, 1f),
+                        (bottom / pageHeight).coerceIn(0f, 1f)
                     )
                 }
+                out += boxes
             }
         }
         return out

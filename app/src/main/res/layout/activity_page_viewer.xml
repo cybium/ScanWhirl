@@ -57,6 +57,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minHeight="64dp"
+            android:maxLines="2"
             android:paddingHorizontal="2dp"
             android:text="@string/action_rotate"
             app:icon="@drawable/ic_rotate" />
@@ -68,6 +69,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minHeight="64dp"
+            android:maxLines="2"
             android:paddingHorizontal="2dp"
             android:text="@string/crop_action"
             app:icon="@drawable/ic_crop" />
@@ -79,6 +81,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minHeight="64dp"
+            android:maxLines="2"
             android:paddingHorizontal="2dp"
             android:text="@string/filter_action"
             app:icon="@drawable/ic_filter" />
@@ -90,6 +93,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minHeight="64dp"
+            android:maxLines="2"
             android:paddingHorizontal="2dp"
             android:text="@string/delete"
             app:icon="@drawable/ic_delete" />

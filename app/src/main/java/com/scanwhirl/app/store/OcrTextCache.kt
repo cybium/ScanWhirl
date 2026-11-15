@@ -17,6 +17,12 @@ import java.io.File
  */
 class OcrTextCache(private val repo: ScanRepository) {
 
+    companion object {
+        /** Test seam (performance audit L1-2): the thread doing a cold OCR read. */
+        @Volatile
+        internal var readProbe: ((thread: String) -> Unit)? = null
+    }
+
     private val cache = object : LruCache<String, String>(4_000_000) {
         override fun sizeOf(key: String, value: String): Int = value.length
     }
@@ -34,6 +40,7 @@ class OcrTextCache(private val repo: ScanRepository) {
         val modified = ocrFile.lastModified()
         val key = "$docId|$modified"
         return cache.get(key) ?: run {
+            readProbe?.invoke(Thread.currentThread().name)
             val text = repo.ocrDoc(docId).values.joinToString("\n")
             val norm = SearchMatcher.normalize(text)
             cache.put(key, norm)

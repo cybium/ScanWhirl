@@ -73,6 +73,17 @@ class StampEditorState(val pageCount: Int) {
         return selected
     }
 
+    /** Adds marks to a specific page (Find-and-hide applies across pages in one pass). */
+    fun addAllAt(page: Int, marks: List<PageStamp.Mark>): Int? {
+        if (marks.isEmpty()) return null
+        val index = page.coerceIn(0, pageCount - 1)
+        record()
+        val list = pages[index]
+        list.addAll(marks)
+        if (index == currentPage) selected = list.lastIndex
+        return list.lastIndex
+    }
+
     /** Adds [mark] to every page as ONE undo step (watermark, page numbers). */
     fun addToAll(mark: PageStamp.Mark) {
         record()

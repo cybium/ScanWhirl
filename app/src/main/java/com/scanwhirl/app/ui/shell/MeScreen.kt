@@ -21,6 +21,7 @@ class MeScreen(
     interface Callbacks {
         fun onPro()
         fun onSettings()
+        fun onBackup()
         fun onTrash()
         fun onAbout()
     }
@@ -63,6 +64,8 @@ class MeScreen(
                 gold = true
             ) { callbacks.onPro() }
         )
+        // L2's single Backup & restore row (ui/backup/BackupActivity), directly
+        // after Pro. Do not add another.
         list.addView(
             row(
                 R.drawable.ic_sym_settings,
@@ -70,6 +73,14 @@ class MeScreen(
                 context.getString(R.string.me_settings_summary),
                 R.id.swMeSettings
             ) { callbacks.onSettings() }
+        )
+        list.addView(
+            row(
+                R.drawable.ic_sym_archive,
+                context.getString(R.string.me_backup),
+                context.getString(R.string.me_backup_summary),
+                R.id.swMeBackup
+            ) { callbacks.onBackup() }
         )
         list.addView(
             row(

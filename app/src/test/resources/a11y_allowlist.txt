@@ -1,0 +1,66 @@
+# Accessibility audit allow-list.
+#
+# One exception per line:  screen|rule|key|reason
+#   screen  the audit screen name, or * for every screen
+#   rule    label | touch | contrast | clip | image | focus
+#   key     the view id, or the text prefix when the view has no id
+#   reason  short justification; name the owning lane and the dispatched finding
+#
+# This file must stay narrow. Fixing a finding means deleting its line.
+# Findings for other lanes are listed in docs/audit/2026-11-15/ACCESSIBILITY.md.
+
+Protect sheet|clip|protectSave|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|clip|protectShare|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|clip|The modern standard. Str|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|contrast|PASSWORD|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|contrast|TYPE IT AGAIN|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|focus|DecorView|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|image|AppCompatImageView|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|touch|protectClose|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|touch|protectPasswordShow|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Protect sheet|touch|protectSave|L2 protect sheet: touch, contrast, images, pane title - dispatched
+Scan review|clip|pageStatus|L1 review: touch, contrast, clipping - dispatched
+Scan review|clip|titleInput|L1 review: touch, contrast, clipping - dispatched
+Scan review|contrast|btnModeFocus|L1 review: touch, contrast, clipping - dispatched
+Scan review|touch|OverflowMenuButton|L1 review: touch, contrast, clipping - dispatched
+Scan review|touch|titleInput|L1 review: touch, contrast, clipping - dispatched
+Shell vault|clip|Library|L1 shell: Vault tab clipping - dispatched
+Shell vault|contrast|swVaultStatus|L1 shell: Vault tab clipping - dispatched
+Text screen|clip|Audit text page 1 of 1|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|clip|ocrFootNote|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|clip|ocrModePage|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|clip|ocrModeText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|clip|swChipLabel|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|btnCopy|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|btnRedo|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|btnSave|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|btnShare|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|btnTidyText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|btnToWord|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|btnUndo|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|ocrLangChip|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|ocrModePage|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|ocrModeText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Text screen|touch|OverflowMenuButton|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
+Tool result|clip|toolResultLibrary|L4 tools: result screen touch/image/clip - dispatched
+Tool result|image|toolResultPreview|L4 tools: result screen touch/image/clip - dispatched
+Tool result|touch|ImageButton|L4 tools: result screen touch/image/clip - dispatched
+Tool setup|clip|Audit library|L4 tools: setup touch/contrast/clip - dispatched
+Tool setup|clip|toolSetupRanges|L4 tools: setup touch/contrast/clip - dispatched
+Tool setup|contrast|OPTIONS|L4 tools: setup touch/contrast/clip - dispatched
+Tool setup|contrast|SOURCE|L4 tools: setup touch/contrast/clip - dispatched
+Tool setup|touch|ImageButton|L4 tools: setup touch/contrast/clip - dispatched
+Unlock sheet|clip|unlockCancel|L2 unlock sheet: touch, contrast, images, pane title - dispatched
+Unlock sheet|clip|unlockOpen|L2 unlock sheet: touch, contrast, images, pane title - dispatched
+Unlock sheet|contrast|or|L2 unlock sheet: touch, contrast, images, pane title - dispatched
+Unlock sheet|focus|DecorView|L2 unlock sheet: touch, contrast, images, pane title - dispatched
+Unlock sheet|image|AppCompatImageView|L2 unlock sheet: touch, contrast, images, pane title - dispatched
+Unlock sheet|touch|unlockCancel|L2 unlock sheet: touch, contrast, images, pane title - dispatched
+Unlock sheet|touch|unlockPasswordShow|L2 unlock sheet: touch, contrast, images, pane title - dispatched
+Vault|clip|vaultBackupButton|L2 vault: touch targets and image description - dispatched
+Vault|clip|vaultRecoveryButton|L2 vault: touch targets and image description - dispatched
+Vault|image|ImageView|L2 vault: touch targets and image description - dispatched
+Vault|touch|vaultBackupButton|L2 vault: touch targets and image description - dispatched
+Vault|touch|vaultLock|L2 vault: touch targets and image description - dispatched
+Vault|touch|vaultMore|L2 vault: touch targets and image description - dispatched
+Vault|touch|vaultRecoveryButton|L2 vault: touch targets and image description - dispatched

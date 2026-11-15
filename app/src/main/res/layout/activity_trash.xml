@@ -64,11 +64,11 @@
 
                 <ImageView
                     android:id="@+id/trashEmptyIcon"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="72dp"
+                    android:layout_height="72dp"
+                    android:alpha="0.3"
                     android:contentDescription="@null"
-                    android:src="@drawable/ic_sw_delete"
-                    app:tint="@color/rv_ink_3" />
+                    android:src="@drawable/ic_brand_mark" />
 
                 <TextView
                     android:id="@+id/trashEmptyTitle"

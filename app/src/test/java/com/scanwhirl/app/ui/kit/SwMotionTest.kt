@@ -34,11 +34,17 @@ class SwMotionTest {
 
     @After
     fun tearDown() {
+        SwMotion.animatorOverride = null
         android.provider.Settings.Global.putFloat(
             app.contentResolver,
             android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
             1f
         )
+    }
+
+    /** Tests never rely on the platform scale: motion is explicit per test. */
+    private fun motion(on: Boolean) {
+        SwMotion.animatorOverride = on
     }
 
     private fun setScale(value: Float) {
@@ -51,26 +57,37 @@ class SwMotionTest {
 
     @Test
     fun `motion tokens are 0 when animations are off and scaled when on`() {
-        setScale(1f)
+        motion(true)
         assertTrue(SwMotion.enabled(app))
         assertEquals(SwMotion.MEDIUM, SwMotion.duration(app, SwMotion.MEDIUM))
 
-        setScale(0f)
+        motion(false)
         assertFalse("Remove animations turns motion off", SwMotion.enabled(app))
         assertEquals(0L, SwMotion.duration(app, SwMotion.LONG))
         assertEquals(0L, SwMotion.duration(app, SwMotion.SHORT))
     }
 
     @Test
+    fun `the real platform scale still wins when no test override is set`() {
+        SwMotion.animatorOverride = null
+        setScale(0f)
+        assertFalse(
+            "Robolectric defaults to motion off and a 0 scale always turns it off",
+            SwMotion.enabled(app)
+        )
+        assertEquals(0L, SwMotion.duration(app, SwMotion.LONG))
+    }
+
+    @Test
     fun `press applies the kit press animator only while animations are on`() {
         val view = View(app)
-        setScale(1f)
+        motion(true)
         SwMotion.press(view)
         assertTrue("tap target", view.isClickable)
         assertNotNull("the 0.97 press animator", view.stateListAnimator)
 
         val plain = View(app)
-        setScale(0f)
+        motion(false)
         SwMotion.press(plain)
         assertNotNull("still clickable without motion", plain)
         assertEquals("no scale animation when motion is off", null, plain.stateListAnimator)
@@ -81,7 +98,7 @@ class SwMotionTest {
         val host = FrameLayout(app)
         val old = TextView(app)
         host.addView(old)
-        setScale(0f)
+        motion(false)
         var swapped = false
         SwMotion.fadeSwitch(host) {
             swapped = true
@@ -93,9 +110,51 @@ class SwMotionTest {
     }
 
     @Test
+    fun `an endless breath starts only when attached and is cancelled on detach`() {
+        motion(true)
+        val controller = org.robolectric.Robolectric
+            .buildActivity(android.app.Activity::class.java)
+            .setup()
+        val activity = controller.get()
+        val host = FrameLayout(activity)
+        val disc = View(activity)
+        host.addView(disc)
+        activity.setContentView(host)
+        controller.visible()
+
+        SwMotion.breathe(disc)
+        val animator = SwMotion.ambientAnimator(disc)
+        assertNotNull("the breath starts on the attached disc", animator)
+        assertTrue("it is running", animator!!.isRunning)
+
+        host.removeView(disc)
+        assertFalse("detaching cancels the endless animator", animator.isRunning)
+        assertFalse("and stops it", animator.isStarted)
+        assertEquals(
+            "the view no longer references it",
+            null,
+            SwMotion.ambientAnimator(disc)
+        )
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun `no endless animation starts when animations are off`() {
+        motion(false)
+        val host = FrameLayout(app)
+        val disc = View(app)
+        host.addView(disc)
+        SwMotion.breathe(disc)
+        SwMotion.pulsePlaceholder(disc, true)
+        SwMotion.spin(disc)
+        assertEquals("nothing is tracked", null, SwMotion.ambientAnimator(disc))
+    }
+
+    @Test
     fun `the progress sheet shows pages and cancel`() {
         var cancelled = false
-        setScale(1f)
+        // Motion off: the whirl must not spin forever under the paused looper.
+        motion(false)
         val progress = SwProgress.show(app, "Saving", total = 5, onCancel = { cancelled = true })
         progress.setProgress(2, 5)
         val label = progress.view.findViewById<TextView>(R.id.swProgressLabel)
@@ -123,6 +182,41 @@ class SwMotionTest {
         assertNotNull(action)
         action!!.performClick()
         assertTrue(acted)
+    }
+
+    @Test
+    fun `kit motion entry points exist and the list animator follows the tokens`() {
+        motion(true)
+        assertNotNull(com.scanwhirl.app.ui.kit.SwItemAnimator(app))
+        val animator = com.scanwhirl.app.ui.kit.SwItemAnimator(app)
+        assertEquals(com.scanwhirl.app.ui.kit.SwMotion.MEDIUM, animator.addDuration)
+        assertEquals(com.scanwhirl.app.ui.kit.SwMotion.MEDIUM, animator.moveDuration)
+
+        motion(false)
+        val still = com.scanwhirl.app.ui.kit.SwItemAnimator(app)
+        assertEquals("no list motion when animations are off", 0L, still.addDuration)
+        assertEquals(0L, still.removeDuration)
+    }
+
+    @Test
+    fun `the copied chip morphs to a check and back`() {
+        motion(true)
+        val controller = org.robolectric.Robolectric
+            .buildActivity(android.app.Activity::class.java)
+            .setup()
+        val activity = controller.get()
+        val host = FrameLayout(activity)
+        val chip = com.scanwhirl.app.ui.kit.SwChip(activity)
+            .bind(com.scanwhirl.app.R.drawable.ic_sym_content_copy, "Copy all")
+        host.addView(chip)
+        activity.setContentView(host)
+        controller.visible()
+        chip.flashDone(com.scanwhirl.app.R.string.ocr_copied)
+        val label = chip.findViewById<TextView>(com.scanwhirl.app.R.id.swChipLabel)
+        assertEquals(app.getString(com.scanwhirl.app.R.string.ocr_copied), label.text.toString())
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+        assertEquals("Copy all", label.text.toString())
+        controller.pause().stop().destroy()
     }
 
     @Test

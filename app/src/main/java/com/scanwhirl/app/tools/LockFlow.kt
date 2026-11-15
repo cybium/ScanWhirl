@@ -132,6 +132,12 @@ class LockFlow(
     /** Mockup 05 for a document the host already knows (the reader's More → Protect PDF). */
     fun protectDocument(doc: ScanDocument) = promptNewPasswordForScan(doc)
 
+    /** Mockup 09 for a protected library document (the Tools/Home "Unlock PDF" entry). */
+    fun unlockDocument(doc: ScanDocument) = promptUnlockScan(doc)
+
+    /** Mockup 09 for a PDF from storage (the "From a PDF file" row of the Unlock chooser). */
+    fun unlockDevicePdfFile(uri: Uri) = unlockDevicePdf(uri)
+
     /**
      * The import dead-end fix: a password-protected PDF opens the Unlock sheet, then its
      * decrypted pages become a new document. The source file is only read.
@@ -631,6 +637,7 @@ class LockFlow(
             if (!cooldown.canTry()) tickPause()
 
             sheet.show()
+            sheet.secure()
             field.editText.requestFocus()
         }
     }

@@ -41,12 +41,58 @@ object SwMotion {
         )
     }.getOrDefault(1f)
 
-    fun enabled(context: Context): Boolean = animatorScale(context) > 0f
+    private val isRobolectric = Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
+
+    /**
+     * Tests: force motion on/off. Robolectric defaults to OFF (its paused looper
+     * would spin forever on an infinite animator and keep every activity alive);
+     * motion tests opt in explicitly.
+     */
+    @Volatile
+    internal var animatorOverride: Boolean? = null
+
+    /** True when motion may run: override, then the user's setting, then platform. */
+    fun enabled(context: Context): Boolean {
+        animatorOverride?.let { return it }
+        if (isRobolectric) return false
+        // areAnimatorsEnabled() exists from API 26; minSdk is 24 (it would crash on Android 7.x).
+        // Below 26 the animator duration scale alone tells us whether the user turned motion off.
+        val platformOn = android.os.Build.VERSION.SDK_INT < 26 ||
+            android.animation.ValueAnimator.areAnimatorsEnabled()
+        return animatorScale(context) > 0f && platformOn
+    }
 
     /** Token duration scaled by the system setting; 0 when animations are off. */
     fun duration(context: Context, baseMs: Long): Long {
         if (!enabled(context)) return 0L
         return (baseMs * animatorScale(context)).toLong().coerceAtLeast(1L)
+    }
+
+    // Live ambient animators, so detaching a view always cancels them.
+    private val ambient = java.util.WeakHashMap<View, android.animation.ValueAnimator>()
+
+    /** Test hook: the ambient animator currently attached to [view], if any. */
+    internal fun ambientAnimator(view: View): android.animation.ValueAnimator? = ambient[view]
+
+    private fun trackAmbient(view: View, animator: android.animation.ValueAnimator) {
+        ambient[view] = animator
+        if (view.getTag(R.id.swMotionTag) == null) {
+            view.setTag(R.id.swMotionTag, true)
+            view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    ambient[v]?.takeIf { !it.isStarted }?.start()
+                }
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    ambient.remove(v)?.cancel()
+                }
+            })
+        }
+        if (view.isAttachedToWindow) animator.start()
+    }
+
+    private fun stopAmbient(view: View) {
+        ambient.remove(view)?.cancel()
     }
 
     /** Every tappable kit view: the same 0.97 press (sw_press) + ripple state. */
@@ -166,8 +212,15 @@ object SwMotion {
         @Suppress("UNUSED_VARIABLE") val unusedDensity = d
     }
 
-    /** Home: the scan disc breathes softly (3 s loop); off when animations are off. */
+    /**
+     * Home: the scan disc breathes softly (3 s loop); off when animations are off.
+     *
+     * Endless animation: it only runs while [view] is attached and is cancelled
+     * the moment it leaves the window, so a closed screen can never keep the
+     * activity (or a test) alive.
+     */
     fun breathe(view: View) {
+        stopAmbient(view)
         if (!enabled(view.context)) return
         val pulse = ObjectAnimator.ofFloat(view, View.ALPHA, 1f, 0.86f).apply {
             duration = 3000L
@@ -175,8 +228,25 @@ object SwMotion {
             repeatCount = ObjectAnimator.INFINITE
             interpolator = AccelerateDecelerateInterpolator()
         }
-        view.tag = pulse
-        pulse.start()
+        trackAmbient(view, pulse)
+    }
+
+    /** A spinning mark (progress sheets): endless, attach-scoped and cancellable. */
+    fun spin(view: View, periodMs: Long = 1400L) {
+        stopAmbient(view)
+        if (!enabled(view.context)) return
+        val spin = ObjectAnimator.ofFloat(view, View.ROTATION, 0f, 360f).apply {
+            duration = periodMs
+            repeatCount = ObjectAnimator.INFINITE
+            interpolator = android.view.animation.LinearInterpolator()
+        }
+        trackAmbient(view, spin)
+    }
+
+    /** Cancel any endless animation started by [breathe]/[spin]/[pulsePlaceholder]. */
+    fun stop(view: View) {
+        stopAmbient(view)
+        view.alpha = 1f
     }
 
     /** Header mark: its rings turn once on cold start (600 ms). */
@@ -192,17 +262,15 @@ object SwMotion {
     fun pulsePlaceholder(view: View, start: Boolean) {
         if (start) {
             if (!enabled(view.context)) return
-            if (view.tag is ObjectAnimator) return
+            if (ambientAnimator(view) != null) return
             val pulse = ObjectAnimator.ofFloat(view, View.ALPHA, 0.35f, 0.6f).apply {
                 duration = 900L
                 repeatMode = ObjectAnimator.REVERSE
                 repeatCount = ObjectAnimator.INFINITE
             }
-            view.tag = pulse
-            pulse.start()
+            trackAmbient(view, pulse)
         } else {
-            (view.tag as? ObjectAnimator)?.cancel()
-            view.tag = null
+            stopAmbient(view)
             view.alpha = 1f
         }
     }
@@ -212,6 +280,112 @@ object SwMotion {
         setImageResource(R.drawable.ic_brand_mark)
         alpha = 0.3f
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    /**
+     * v2 UI: 74_motion — the scan disc's whirl: two rings expand out from the
+     * disc, then the scanner opens. Off when animations are off (then() runs at
+     * once).
+     */
+    fun expandFrom(anchor: View, then: () -> Unit) {
+        if (!enabled(anchor.context)) {
+            then()
+            return
+        }
+        val parent = anchor.parent as? ViewGroup ?: run { then(); return }
+        val context = anchor.context
+        val ring = View(context).apply {
+            background = SwStyle.rounded(
+                context, Color.TRANSPARENT, radiusDp = 999f,
+                stroke = SwStyle.color(context, R.color.cyan_primary), strokeDp = 2f
+            )
+            alpha = 0.9f
+        }
+        val params = if (parent is FrameLayout) {
+            FrameLayout.LayoutParams(anchor.width, anchor.height).apply {
+                leftMargin = anchor.left
+                topMargin = anchor.top
+            }
+        } else {
+            ViewGroup.LayoutParams(anchor.width, anchor.height)
+        }
+        parent.addView(ring, params)
+        ring.animate()
+            .scaleX(2.2f).scaleY(2.2f).alpha(0f)
+            .setDuration(duration(context, 320L))
+            .withEndAction {
+                (ring.parent as? ViewGroup)?.removeView(ring)
+                then()
+            }
+            .start()
+    }
+
+    /**
+     * v2 UI: 74_motion — Vault relock countdown: a thin ring around the lock icon
+     * drains over [seconds]. [seconds] 0 removes the ring (locked now).
+     */
+    fun relockRing(anchor: View, seconds: Int = 120) {
+        val existing = anchor.tag as? android.animation.ObjectAnimator
+        existing?.cancel()
+        if (seconds <= 0 || !enabled(anchor.context)) {
+            anchor.tag = null
+            anchor.background = SwStyle.rounded(anchor.context, Color.TRANSPARENT, radiusDp = 999f)
+            return
+        }
+        val ring = RelockRingDrawable(
+            SwStyle.color(anchor.context, R.color.cyan_primary),
+            SwStyle.dp(anchor.context, 2f).toFloat()
+        )
+        anchor.background = ring
+        val anim = ObjectAnimator.ofInt(ring, "level", 10000, 0).apply {
+            duration = seconds * 1000L
+            interpolator = android.view.animation.LinearInterpolator()
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    anchor.background = SwStyle.rounded(
+                        anchor.context, Color.TRANSPARENT, radiusDp = 999f
+                    )
+                }
+            })
+        }
+        anchor.tag = anim
+        anim.start()
+    }
+
+    /** A thin ring that drains with its level (Vault relock). */
+    class RelockRingDrawable(
+        private val colour: Int,
+        private val stroke: Float
+    ) : android.graphics.drawable.Drawable() {
+
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = stroke
+            this.color = colour
+        }
+
+        override fun draw(canvas: android.graphics.Canvas) {
+            val inset = stroke
+            val oval = android.graphics.RectF(
+                bounds.left + inset, bounds.top + inset,
+                bounds.right - inset, bounds.bottom - inset
+            )
+            paint.alpha = 60
+            canvas.drawArc(oval, 0f, 360f, false, paint)
+            paint.alpha = 255
+            canvas.drawArc(oval, -90f, 360f * (level / 10000f), false, paint)
+        }
+
+        override fun setAlpha(alpha: Int) {
+            paint.alpha = alpha
+        }
+
+        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {
+            paint.colorFilter = colorFilter
+        }
+
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
     }
 
     /** Android 12+ haptics are available through the view path only (no permission). */

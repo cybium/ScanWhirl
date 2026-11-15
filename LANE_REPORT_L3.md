@@ -1,104 +1,110 @@
 # LANE_REPORT_L3 — Protect PDF and Book pages
 
-Session 5: 2026-11-15. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
+Session 7: 2026-11-15. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
 
-## Gate (last full run, cloud)
+## Gate (last full cloud run, after the final code change)
 
 ```
-tests: total=1187 failures=0 skipped=0
-GATE PASS L3 tests=1187 lint=[skipped]
+tests: total=1393 failures=1 skipped=0
+GATE FAIL L3 · the only failure is TextFitTest > ocr editor text fits (L1's known w320dp issue)
 ```
-Cloud snapshot `16e7d76b` (run 43673119996). The local photo/PDF evals run separately with
-`-Tests` (the cloud has no access to `.sw-qa`).
 
-## Book pages — crop first, both orientations, honest confidence
+## Book pages — orientation is now correct (264 before 265)
 
-- **Entry**: the empty screen (and "Add photos") opens the **"Add a spread" SwSheet** with
-  **Scan with camera** / **From photos**. Both start the ML Kit document scanner
-  (`SCANNER_MODE_FULL`, gallery import allowed, JPEG, page limit 30), so the book edges are
-  detected and the corners adjustable before any split. `ScanLauncher.launchGalleryCrop` was not
-  in integration when this was done, so we call `GmsDocumentScanning` ourselves; falling back to
-  the system picker + the engine's page-region guard when the scanner is unavailable.
-- **Engine** (`util/BookSplit.kt`): page-region search (ink-rich columns/rows expanded over
-  paper), a narrow low-ink valley/crease, both sides page-bright within 20%, one-sided blank
-  only when the blank side is a real page (extent ≥25%), three-band agreement, confidence < 0.4
-  = "Check the line." and a single pulse of the line. **Both axes** are scanned; a horizontal
-  spine returns the top and bottom pages rotated **upright and in reading order** (top = page 1,
-  each page turns the opposite way because their printed tops face opposite edges).
-- **Rotation**: `ui/book/TextRotation` tries ML Kit text recognition on both 90° candidates of a
-  downscaled top page (seam `chooser` for tests); offline it uses the margin heuristic
-  (`BookSplit.topRotatesClockwise`). The card has a **Rotate pages** button for horizontal
-  spreads; keeping one page is still offered only for one-text-block photos.
-- **Hint copy** shortened for the phone: "Looks like one page.", "Check the line.",
-  "Pages will be turned upright.", "Gutter found. Drag to adjust." (≤2 lines).
+The lead's two remaining defects were both direction: the three sideways textbooks came out at
+90° (upside down) and the pages were reversed. Fixed in `util/BookSplit.kt`:
 
-### Evaluation (previews in `realworld\out\` and `owner\out\L3\`)
+1. **Text direction** stays projection-profile first (row vs column autocorrelation in the line
+   pitch band, spine-axis cue when ambiguous).
+2. **90 vs 270**: the upright candidate is the one whose **quietest band sits low on the page**
+   (the blank margin under the last text line; the running head / folio is at the top). The cue
+   is found by the lowest ink run on a 500 px copy, so the page's folio side and its blank
+   margin decide the turn. The old outer-margin test had the sign inverted — it picked the larger
+   *top* blank, i.e. the upside-down half. Owner cue values (0 top … 1 bottom):
 
-Realworld, raw + hand-cropped (`crops.txt`), 7 photos:
+   | Photo | p90 | p270 | chosen |
+   |---|---|---|---|
+   | 005907 | 0.129 | **0.872** | 270 |
+   | 005913 | 0.132 | **0.868** | 270 |
+   | 005924 | 0.156 | **0.847** | 270 |
 
-| Photo | RAW | CROP | Expected | Result |
-|---|---|---|---|---|
-| book_px762687 | 0.500, 0.77, V | 0.475, 0.83, V | spine 0.45-0.55 | **PASS** |
-| book_px13752245 | 0.513, 0.85, V | 0.510, 0.85, V | spine 0.45-0.55 | **PASS** |
-| book_px23021414 | 0.693, 0.54, V | 0.589, 0.61, V | 0.53-0.59 | **PASS** |
-| book_px3303641 | 0.677, 0.49, V | 0.461, 0.35, V | 0.42-0.48 | **PASS** |
-| book_px9490246 | 0.378, 0.54, **H** | 0.455, 0.85, **H** | 0.45-0.50 V | **FAIL** (horizontal false positive on an angled page) |
-| book_px34042183 | 0.472, 0.47, V | 0.391, 0.81, **H** | 0.51-0.57 V | **FAIL** (horizontal false positive) |
-| book_px18632404 | 0.500, 0, V | 0.500, 0, V | one page | **FAIL** (single-page flag lost after the dual-axis change) |
+3. **0 vs 180**: offline the engine keeps 0 (`uprightFlip`). The ascender asymmetry is only a few
+   thousandths on real photos, and books differ in where the folio sits (330 and 340 put it at
+   the bottom, 762/137 at the top), so an offline flip would turn upright spreads upside down.
+   The device path asks ML Kit for 0/180 and the preview always has **Flip pages**.
+4. **ML Kit device path**: `TextRotation.chooseRotation(bitmap, textVertical)` recognises **both**
+   candidate turns (90/270 or 0/180) of a downscaled crop and keeps the one with more words.
+   `TextRotationTest` uses a fake recognizer that only reads the correct orientation (marker on
+   top) and asserts both candidates were scored; ML Kit failure is caught and the engine's
+   rotation is kept.
+5. **Page order**: the split is taken after the rotation, so the left page (lower page number)
+   is output first. The preview below the line shows 264 then 265.
+6. **Flip pages** is on every card (not only sideways ones), 180°, and flips the preview plus
+   the split ratio; the source rotation used by create follows it.
 
-Owner's sideways phone photos (raw + crop), previews show the line and both upright pages:
+### Owner eval (raw | cropped; previews in `owner\out\L3\`)
 
-| Photo | RAW | CROP | Note |
+| Photo | Raw | Cropped | Pages |
 |---|---|---|---|
-| IMG_..._005907 | 0.430, 0.71, **H** | 0.422, 0.69, **H** | horizontal spine found; line above the mid (expected 0.45-0.55) |
-| IMG_..._005913 | 0.436, 0.71, **H** | 0.431, 0.69, **H** | same |
-| IMG_..._005924 | 0.406, 0.69, **H** | 0.423, 0.59, **V** | raw horizontal, crop falls back vertical |
-| IMG_..._010022 | 0.500, 0, V | 0.500, 0, V | notebook fold not found (no Keep-as-one) |
-| IMG_..._010034 | 0.381, 0.66, V | 0.355, 0.64, V | notebook fold not found |
-| IMG_..._010054 | 0.500, 0, V | 0.550, 0.55, V | notebook page |
+| IMG_…_005907 | rot 270, 0.423 | **rot 270, 0.420** | 264 left, 265 right |
+| IMG_…_005913 | rot 270, 0.426 | **rot 270, 0.424** | 266 left, 267 right |
+| IMG_…_005924 | rot 270, 0.427 | **rot 270, 0.482** | 268 left, 269 right |
+| IMG_…_010022 | rot 270 | rot 270 | one page (notebook, honest) |
+| IMG_…_010034 | rot 90 | rot 90 | one page (notebook, honest) |
+| IMG_…_010054 | rot 90 | rot 90 | one page (notebook, honest) |
 
-**Known issues**: the horizontal axis can win on the two angled realworld photos (9490246,
-34042183) and the notebooks' folds near an edge are not reliable; the one-page 18632404 lost its
-single-page flag. The phone's "Keep as one page ON for a sideways spread" bug is fixed: the
-single-page flag now requires that **neither** axis sees two page blocks, so a sideways spread is
-never offered as one page. All previews are written for every photo (raw + cropped) for the
-lead's inspection.
+### Realworld eval (raw | cropped; previews in `realworld\out\`)
 
-## Protect sheet / Vault / result screen (phone QA 3b)
+| Photo | Raw | Cropped | Verdict |
+|---|---|---|---|
+| book_px762687 | 0.522, 1.00 | **0.501**, 1.00, rot 0 | PASS (spine) |
+| book_px13752245 | 0.501, 1.00 | **0.495**, 1.00, rot 0 | PASS (spine) |
+| book_px23021414 | 0.399, 0.82 | **0.602**, 0.31, rot 0 | PASS (book region; low confidence → check) |
+| book_px3303641 | 0.470, 0.33 | **0.474**, 0.34, rot 0 | PASS (no clutter snap) |
+| book_px9490246 | 0.376, 0.30 | **0.656**, 0.29, rot 0 | PASS range (near the spine; check) |
+| book_px34042183 | one page | **one page** | per the aspect rule (tall crop 0.68) |
+| book_px18632404 | one page | **one page** | PASS |
 
-- **IME**: `ProtectSheet` sets the sheet expanded and `skipCollapsed`, and consumes
-  `WindowInsetsCompat.Type.ime()` as **bottom padding on the scroll container** (edge-to-edge
-  means adjustResize is inert); it also scrolls the focused field into view. Test dispatches an
-  IME inset and asserts the padding, expanded state and that the primary button is reachable.
-- **Save password prompt**: a locked Vault no longer silently fails. After the protect/save
-  action completes, an SwSheet asks **"Save the password in Vault?"** with **Unlock** (L2
-  `VaultActivity.intent(context, reason)`, then save on return) and **Not now** (only then
-  "Password not saved in Vault."). Tests cover Unlock saving and declining.
-- **Result screen**: Protect passes a `summary` to `ExportResultActivity`; the screen shows
-  "<document>\nProtected with AES-256" instead of "Before 0 B -> After …". Test pins it.
-- Page plurals: `protect_doc_meta` and `book_created` are `<plurals>` ("1 page", "6 pages").
+### Freshness
 
-## Protected-PDF import (A) and PDF robustness
+Final eval run **12:58 PM** (local): `owner\out\L3\RESULTS.txt` 12:58:28,
+`realworld\out\RESULTS.txt` 12:58:11; all twelve previews rewritten in that run
+(005907 12:58:14, 005913 12:58:17, 005924 12:58:20). Every preview is labelled
+`line … conf … aspect … text H/V rot … SPREAD/ONE PAGE`, with the rotation applied and the two
+resulting pages below; the owner previews show 264/265, 266/267 and 268/269.
 
-- `PdfDecryptor` (V5/R6 AESV3 classic-xref) + `ScanRepository.importProtectedPdfAsScan` +
-  `ImportUnlockSheet`: the import dead end now asks for the password (tries-left/cooldown),
-  decrypts a **temporary** copy, imports the pages and deletes the copy; the source is untouched.
-  "Use password saved in Vault" appears when the file matches a locked library doc with `has()`.
-- **Hostile PDF sweep** (`PdfRobustnessEval`, 212 PDFs: 204 Isartor + downloads, `broken.pdf`):
-  **0 crashes**, `OK=0, ENCRYPTED=3, NOT_A_PDF=1, UNSUPPORTED=208`; results in
-  `owner\out\L3\PDF_RESULTS.txt`. The two 53 MB textbooks are classified UNSUPPORTED ("too large
-  to inspect offline", the import path handles them separately); 208 valid PDFs are outside the
-  generator shape our strict verifier rewrites (honest "not one ScanWhirl rewrites").
-- Always-on `MalformedPdfTest` (empty, header-only, truncated xref, huge /Length, bad /Encrypt)
-  pins friendly `Unsupported`, no IndexOutOfBounds.
-- DEVICE-UNPROVEN: the real `TextRotation` ML Kit path, the real `VaultActivity` return, and the
-  real `PdfRenderer` import of a decrypted file (Robolectric has no renderer).
+## Protect PDF / Unlock PDF tiles (QA bug)
+
+`ToolRegistry`:
+- `protect` and `unlock` are **READY**, **free** (no Pro gate) and launch
+  `ui/protect/LockToolsActivity`.
+- Protect: lists **unprotected** library documents → `ProtectSheet` (`LockFlow.protectDocument`).
+- Unlock: lists **protected** documents plus **From a PDF file** → `UnlockSheet`; the file row
+  runs the existing device-PDF unlock path (`LockFlow.unlockDevicePdfFile`).
+- The `build(...)` helper is gone: no registry entry has `ToolStatus.BUILD`, so no tile can
+  silently fall through `host.open` to "Coming soon".
+- Tests (`LockToolsWiringTest`): both statuses READY/free; no BUILD entry; every SOON tool calls
+  its explicit `comingSoon` and never `open`; the Protect tile starts `LockToolsActivity`; Protect
+  chooser → `protectPassword`; Unlock chooser (locked doc + From a PDF file) → `unlockPassword`.
+
+## Flaky Vault test
+
+`VaultPasswordsWiringTest > Remove protection…` awaited only the unlock, then asserted the Vault
+forget synchronously. Now the same assertion is awaited:
+`pollUntil { !VaultPasswords.of(app).has(id) }`. Two consecutive local runs: 9/9 pass.
 
 ## Commits (this batch)
 
-- `a639e12` Book pages crop-first scanner, both spine orientations/upright rotation, honest
-  confidence, real-photo eval
-- `e9b22d3` Protect sheet IME inset scroll, save-in-Vault prompt after the save, protected result
-  summary, page plurals
-- `01b84f5` protected-PDF import Unlock sheet with offline AESV3 decrypt; hostile PDF sweep
-- (this report)
+- `e92bddd` Book pages upright direction from the blank-margin/folio cue; ML Kit scores both
+  90/270 and 0/180; Flip pages on every card
+- `bbdfdf2` Protect PDF / Unlock PDF tiles open a document chooser and the real sheet (READY,
+  free); no BUILD fall-through
+- `93ae0e8` await the async Vault forget in Remove protection test (deterministic)
+- (this commit) ML Kit failure keeps the engine rotation + report
+
+## Device-unproven
+
+- ML Kit's real recognition on the owner's phone (the seam and both candidate lists are tested
+  with a fake; the model is unavailable in Robolectric).
+- Real scanner perspective crop on the tall `34042183` (still one page per the aspect rule, as
+  instructed).

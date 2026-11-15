@@ -62,8 +62,16 @@ class ScanRepository(private val context: Context) {
         get() = OcrStore(docsDir)
 
     companion object {
-        /** Process-wide lock for PDF regeneration — several ScanRepository instances exist at once. */
+        /** Process-wide lock for PDF regeneration - several ScanRepository instances exist at once. */
         val PDF_LOCK = Any()
+
+        /**
+         * Test seam (performance audit L1-1): called with the reading thread's name
+         * at the start of every library listing, so a test can prove no disk read
+         * happens on the main thread. Production leaves it null.
+         */
+        @Volatile
+        internal var readProbe: ((thread: String) -> Unit)? = null
 
         /**
          * Serialises new-scan save transactions and the abandoned-save reaper, so a
@@ -110,6 +118,12 @@ class ScanRepository(private val context: Context) {
         /** Written into a Trash entry after its move: `v1 / original id / trashedAt`. */
         internal const val TRASH_MARKER = "trashed.txt"
 
+        /**
+         * How long a Trash entry stays restorable. The UI promises 30 days (`shell_trash_note`);
+         * [recoverTrash] deletes an older entry for good on the next start.
+         */
+        internal const val TRASH_RETENTION_MS = 30L * 24 * 60 * 60 * 1000
+
         /** Hidden entries being permanently deleted; finished by [recoverTrash]. */
         internal const val PURGE_PREFIX = ".purge-"
 
@@ -130,6 +144,7 @@ class ScanRepository(private val context: Context) {
     }
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
+        readProbe?.invoke(Thread.currentThread().name)
         return docsDir.listFiles { f -> f.isDirectory }
             ?.sortedByDescending { it.lastModified() }
             ?.mapNotNull { dir -> loadDocument(dir) }
@@ -166,9 +181,12 @@ class ScanRepository(private val context: Context) {
             ?: CategoryRules.OTHER
         val organised = LibraryMeta.read(lines)
         val pdf = File(dir, "scan.pdf")
+        var totalSize = 0L
         val pages = dir.listFiles { f -> f.extension.equals("jpg", true) || f.extension.equals("jpeg", true) }
-            ?.filter { it.length() > 0 }
-            ?.sortedBy { it.nameWithoutExtension }
+            ?.mapNotNull { f -> f.length().takeIf { it > 0 }?.let { f to it } }
+            ?.sortedBy { it.first.nameWithoutExtension }
+            ?.onEach { totalSize += it.second }
+            ?.map { it.first }
             ?: emptyList()
         if (!pdf.exists() && pages.isEmpty()) return null
         val isLocked = File(dir, LOCK_FILE).exists()
@@ -197,7 +215,9 @@ class ScanRepository(private val context: Context) {
             folder = organised.folder,
             tags = organised.tags,
             revision = revision,
-            isSearchable = isSearchable
+            isSearchable = isSearchable,
+            cachedSize = if (pdf.exists()) pdf.length() else totalSize,
+            cachedModified = revision
         )
     }
 
@@ -1117,14 +1137,25 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Startup recovery: finishes interrupted permanent deletes (hidden purge
-     * entries) and drops a Trash marker left in a restored document by a crash
-     * between the move and the marker cleanup. Never touches a visible entry.
+     * entries), expires Trash entries older than [TRASH_RETENTION_MS], and drops a
+     * Trash marker left in a restored document by a crash between the move and the
+     * marker cleanup. Entries a Replace moved here (`previous=`) are never expired:
+     * they belong to an interrupted Replace and [recoverOperations] puts them back.
      */
-    fun recoverTrash(): Int {
+    fun recoverTrash(now: Long = System.currentTimeMillis()): Int {
         var finished = 0
         synchronized(TRASH_LOCK) {
             trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }?.forEach { f ->
                 if (f.deleteRecursively()) finished++
+            }
+            trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.forEach { dir ->
+                val trashed = trashedIn(dir) ?: return@forEach
+                if (trashed.previousToken == null && now - trashed.trashedAt >= TRASH_RETENTION_MS) {
+                    if (dir.deleteRecursively()) {
+                        finished++
+                        dropDerivedCaches(trashed.originalId)
+                    }
+                }
             }
             docsDir.listFiles { f -> f.isDirectory }?.forEach { dir -> File(dir, TRASH_MARKER).delete() }
         }
@@ -2987,6 +3018,15 @@ class ScanRepository(private val context: Context) {
     /** Result of [replaceWithDraft]: the same document id and the Trash key of its old version. */
     internal data class ReplaceResult(val document: ScanDocument, val trashKey: String)
 
+    /** One manifest read for the viewer: the document, its visible pages and its draft. */
+    internal data class DraftState(
+        val document: ScanDocument?,
+        val pages: List<File>,
+        val draft: DraftStore.Draft?,
+        /** Set when the manifest is damaged; the viewer shows the base pages and Discard only. */
+        val damage: DraftStore.DraftDamaged? = null
+    )
+
     /**
      * The draft of [id], or null. Never writes: opening a draft is O(1) (G14). A damaged manifest
      * throws [DraftStore.DraftDamaged] rather than returning a partial draft.
@@ -2995,15 +3035,38 @@ class ScanRepository(private val context: Context) {
         synchronized(DRAFT_LOCK) { drafts.load(id) }
     }
 
+    /**
+     * Everything the viewer needs in **one** manifest parse and one document load. The old
+     * `draftPages(id) to draftOf(id)` pair read and parsed the same manifest twice (L5-2).
+     */
+    internal suspend fun draftState(id: String): DraftState = withContext(Dispatchers.IO) {
+        val document = getDocument(id)
+        try {
+            val draft = synchronized(DRAFT_LOCK) { drafts.load(id) }
+            DraftState(document, pagesOf(id, document, draft), draft)
+        } catch (damage: DraftStore.DraftDamaged) {
+            DraftState(document, document?.pageFiles.orEmpty(), null, damage)
+        }
+    }
+
     /** Pages as the draft sees them (replacement files where an edit wrote one), or the base pages. */
     internal suspend fun draftPages(id: String): List<File> = withContext(Dispatchers.IO) {
         synchronized(DRAFT_LOCK) {
             val draft = drafts.load(id)
-                ?: return@withContext getDocument(id)?.pageFiles.orEmpty()
-            draft.entries.map { entry ->
-                entry.replacement?.let { drafts.fileOf(id, it) }
-                    ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
-            }
+            if (draft == null) getDocument(id)?.pageFiles.orEmpty()
+            else pagesOf(id, null, draft)
+        }
+    }
+
+    private fun pagesOf(
+        id: String,
+        document: ScanDocument?,
+        draft: DraftStore.Draft?
+    ): List<File> {
+        if (draft == null) return document?.pageFiles.orEmpty()
+        return draft.entries.map { entry ->
+            entry.replacement?.let { drafts.fileOf(id, it) }
+                ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
         }
     }
 

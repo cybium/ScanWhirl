@@ -282,7 +282,7 @@ class Phase5ScreensTest {
                 assertSame("font and greeting rows share a section container",
                     rowFont.parent, rowGreeting.parent)
                 val appearance = rowFont.parent as ViewGroup
-                assertEquals("appearance card holds 4 rows + 3 dividers", 7, appearance.childCount)
+                assertEquals("appearance card holds 5 rows + 3 dividers", 8, appearance.childCount)
                 assertTrue("rows live inside a MaterialCardView",
                     appearance.parent is com.google.android.material.card.MaterialCardView)
 
@@ -302,7 +302,7 @@ class Phase5ScreensTest {
                 val rowPrivacy = activity.findViewById<View>(R.id.rowPrivacy)
                 assertSame("about and privacy share a section container",
                     rowAbout.parent, rowPrivacy.parent)
-                assertEquals("about card: 2 rows + 1 divider", 3, (rowAbout.parent as ViewGroup).childCount)
+                assertEquals("about card: 3 rows + 2 dividers", 5, (rowAbout.parent as ViewGroup).childCount)
 
                 // Language is a card with the app language row and the OCR text-language row.
                 val rowLanguage = activity.findViewById<View>(R.id.rowLanguage)

@@ -182,6 +182,37 @@ class LibraryOrganisationTest {
     }
 
     @Test
+    fun `the Batch action opens BatchActivity with the selected ids`() {
+        val one = DocFixtures.saved(repo, app, pages = 1, name = "One")
+        val two = DocFixtures.saved(repo, app, pages = 1, name = "Two")
+        launch { activity ->
+            val all = cards(activity)
+            all[0].performLongClick()
+            idle()
+            all[1].performClick()
+            idle()
+            // Drop anything the shell started while loading.
+            while (shadowOf(activity).nextStartedActivity != null) Unit
+
+            activity.findViewById<View>(R.id.swSelBatch).performClick()
+            idle()
+            val started = shadowOf(activity).nextStartedActivity
+            assertNotNull("Batch opens the Batch screen", started)
+            assertEquals(
+                com.scanwhirl.app.ui.tools.BatchActivity::class.java.name,
+                started!!.component?.className
+            )
+            assertEquals(
+                "both selected ids are passed, nothing else",
+                setOf(one, two),
+                started.getStringArrayListExtra(
+                    com.scanwhirl.app.ui.tools.BatchActivity.EXTRA_DOC_IDS
+                )?.toSet()
+            )
+        }
+    }
+
+    @Test
     fun `search also matches a tag`() {
         val tagged = DocFixtures.saved(repo, app, pages = 1, name = "Alpha")
         DocFixtures.saved(repo, app, pages = 1, name = "Beta")
@@ -248,6 +279,17 @@ class LibraryOrganisationTest {
                 activity.resources.getQuantityString(R.plurals.sel_count, 2, 2),
                 activity.findViewById<TextView>(R.id.swSelCount).text.toString()
             )
+            // v2 UI: 74_motion — the bar overlays the list, it does not shrink it.
+            assertEquals(
+                "the selection bar is an overlay",
+                R.id.swListHost,
+                (activity.findViewById<View>(R.id.swSelectionBar).parent as View).id
+            )
+            assertTrue(
+                "the list keeps its rows (inset, not shrunk)",
+                (activity.findViewById<View>(R.id.swDocList)).paddingTop >=
+                    90 * activity.resources.displayMetrics.density
+            )
             activity.findViewById<View>(R.id.swSelRename).performClick()
             idle()
 
@@ -270,6 +312,17 @@ class LibraryOrganisationTest {
             idle()
             assertEquals("undo restores the first name", "Invoice old 1", repo.getDocument(one)!!.name)
             assertEquals("undo restores the second name", "Invoice old 2", repo.getDocument(two)!!.name)
+
+            // v2 UI: 74_motion — the Undo action is anchored above the nav and
+            // carries its words for TalkBack.
+            val snack = library(activity).lastUndoSnackbar
+            assertNotNull("the Undo snackbar is shown", snack)
+            assertNotNull("it is anchored above the nav", snack!!.view.tag)
+            val action = snack.view.findViewById<TextView>(
+                com.google.android.material.R.id.snackbar_action
+            )
+            assertEquals("Undo", action.text.toString())
+            assertEquals("Undo", action.contentDescription.toString())
         }
     }
 }

@@ -187,6 +187,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         meScreen = MeScreen(this, object : MeScreen.Callbacks {
             override fun onPro() = showPro()
             override fun onSettings() = startActivity(SettingsActivity.intent(this@ShellActivity))
+            override fun onBackup() = startActivity(com.scanwhirl.app.ui.backup.BackupActivity.intent(this@ShellActivity))
             override fun onTrash() = startActivity(TrashActivity.intent(this@ShellActivity))
             override fun onAbout() = showAbout()
         })
@@ -206,6 +207,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         showTab(Tab.LIBRARY)
         revealFromIntent(intent)
+        if (intent?.getBooleanExtra(EXTRA_OPEN_PRO, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_PRO)
+            showPro()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -228,6 +233,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     override fun onResume() {
         super.onResume()
         if (::library.isInitialized) library.reload()
+        // The scan disc breathes only while this screen is in front.
+        findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.breathe(it) }
+    }
+
+    override fun onStop() {
+        // Endless motion must not follow the user onto another screen.
+        findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.stop(it) }
+        super.onStop()
     }
 
     // ---- navigation -------------------------------------------------------
@@ -252,10 +265,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 gravity = Gravity.CENTER
                 isClickable = true
                 isFocusable = true
+                contentDescription = getString(label)
                 setOnClickListener { showTab(tab) }
             }
             cell.addView(
-                ImageView(this@ShellActivity).apply { setImageResource(icon) },
+                ImageView(this@ShellActivity).apply {
+                    setImageResource(icon)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
                 LinearLayout.LayoutParams(SwStyle.dp(this@ShellActivity, 24f), SwStyle.dp(this@ShellActivity, 24f))
             )
             cell.addView(
@@ -263,6 +280,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     text = getString(label)
                     gravity = Gravity.CENTER
                     tag = "label"
+                    maxLines = 1
+                    // The cell is a quarter of the bar minus the scan-disc gap;
+                    // cap the label so a long tab name never clips at 2.0x.
+                    val density = resources.displayMetrics.density
+                    val scaled = resources.displayMetrics.scaledDensity
+                    setTextSize(
+                        android.util.TypedValue.COMPLEX_UNIT_PX,
+                        minOf(11f * scaled, 13f * density)
+                    )
                 },
                 LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -330,7 +356,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     SwStyle.color(this@ShellActivity, R.color.rv_bg)
                 )
             }
-            setOnClickListener { scanLauncher.launchScanner() }
+            setOnClickListener {
+                com.scanwhirl.app.ui.kit.SwMotion.expandFrom(this) { scanLauncher.launchScanner() }
+            }
             com.scanwhirl.app.ui.kit.SwMotion.press(this)
             com.scanwhirl.app.ui.kit.SwMotion.breathe(this)
         }
@@ -435,6 +463,21 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         })
         setContent(scroll(proScreen))
         paintNav()
+        // The Pro gate slides up as a sheet would; off when animations are off.
+        if (com.scanwhirl.app.ui.kit.SwMotion.enabled(this)) {
+            proScreen.alpha = 0f
+            proScreen.translationY =
+                com.scanwhirl.app.ui.kit.SwStyle.dp(this, 24f).toFloat()
+            proScreen.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(
+                    com.scanwhirl.app.ui.kit.SwMotion.duration(
+                        this, com.scanwhirl.app.ui.kit.SwMotion.MEDIUM
+                    )
+                )
+                .start()
+        }
     }
 
     private fun closePro() {
@@ -455,6 +498,34 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         SwSheet.builder(this)
             .setTitle(getString(R.string.about_title))
             .setMessage(getString(R.string.about_message, versionName()))
+            .setOptions(
+                listOf(getString(R.string.settings_privacy), getString(R.string.about_licences)),
+                -1
+            ) { which, _ ->
+                if (which == 0) openPrivacyPolicy() else showLicences()
+            }
+            .setPrimary(R.string.sheet_got_it)
+            .build()
+            .show()
+    }
+
+    private fun openPrivacyPolicy() {
+        try {
+            startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://cybium.github.io/scanwhirl-privacy/")
+                )
+            )
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.privacy_open_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun showLicences() {
+        SwSheet.builder(this)
+            .setTitle(R.string.about_licences)
+            .setMessage(R.string.about_licences_body)
             .setPrimary(R.string.sheet_got_it)
             .build()
             .show()
@@ -872,6 +943,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     companion object {
         /** A tool result asks the Library tab to highlight this document. */
         const val EXTRA_SHOW_DOC_ID = "show_doc_id"
+
+        /** Opens the Pro screen on launch (Settings' Gold option for Free users). */
+        const val EXTRA_OPEN_PRO = "open_pro"
 
         fun intent(context: android.content.Context, docId: String? = null): Intent =
             Intent(context, ShellActivity::class.java).apply {

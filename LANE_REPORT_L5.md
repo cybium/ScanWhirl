@@ -2,7 +2,88 @@
 
 Branch `lane/L5-stamp`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L5`, 2026-11-15.
 
-## Latest batch (phone QA 3b + earlier follow-ups)
+## Latest batch — phone QA run4a (commit `1f481b6`)
+
+- **Photo stamp/signature save+place**: `StampStore.load` required four manifest lines but the writer
+  emits three, so a saved photo stamp never came back; it now reads three. A photo signature/stamp
+  saves into its store **and** lands on the page as `Mark.Picture` (test seams
+  `placeImportedSignatureForTest` / `placeImportedStampForTest`).
+- **Cascade**: every new mark on a page is offset 6% down-right from the previous one (wraps after
+  five), so consecutive stamps no longer stack invisibly.
+- **Empty Save**: with no marks, `Save copy` is disabled (38% alpha) and says "Add a mark first."
+  (`stamp_no_marks`) instead of silently doing nothing.
+- **Insert pages position**: `insertFiles(files, position)` honours start / after N / end; the stale
+  `insertHere` (always the last selection) no longer forces an append.
+- **Aadhaar precision**: outer edge padded by 15% of glyph height (no first-digit leak), inner edge
+  stops in the middle of the gap before the 9th digit (never past it), vertical ±10% clipped against
+  other OCR lines. **VID**: a 16-digit VID masks its first 12 digits; `mask_opt_vid` toggle defaults
+  ON ("Also hide the VID"), `AadhaarMask.findWords(..., maskVid)` / `find(page, maskVid)`.
+- **Crop flake**: `PageEditorDraftTest` polls for the crop bitmap before Apply (30 s draft timeout)
+  instead of racing the async load.
+- **Ink trim**: alpha > 0.1, speck support, 1.5% edge band, 4% margin, and removal of the scanner
+  edge rail (±3px isolation, outer 12%).
+- **Migration**: 7 host-only classes moved to `ShellActivity` — `SaveTransactionTest` (40),
+  `ImportProtectedPdfTest` (1), `OcrGalleryImageFlowTest` (4), `LongImageTest` (4),
+  `DirectScanSaveTest` (5), `CategoryPickerSheetTest` (5), `ImageImportPipelineTest` (14):
+  **73 tests, ~305 assertion sites kept**; changed expectations carry `// v2 UI: <screen>`.
+- Gate: **1367 tests, 1 failure** — only the allowed `TextFitTest > ocr editor text fits`
+  (L1-owned; L1 files untouched).
+
+## Parked: MainActivity retirement (post-launch)
+
+Lead decision: park. `MainActivity` is unreachable from the shell and invisible to users; the
+remaining classes need shell seams that are not worth building before launch. **Nothing is deleted**
+and no legacy test is weakened. Keeping `MainActivity`, `activity_main.xml` and all 18 classes.
+
+Remaining classes still launching `MainActivity` (18 classes in 17 files):
+
+| # | Class | Depends on |
+|---|-------|------------|
+| 1 | `BrandIdentityTest` | home app bar, brand mark, name text |
+| 2 | `ChangePasswordSheetTest` | home overflow → settings/vault entry |
+| 3 | `FreeLegacyVaultEntryPointTest` | vault banner/pill entry from home |
+| 4 | `HomeCategoryActionsTest` | category chips + card overflow actions |
+| 5 | `HomeFontScaleNarrowTest` | full home layout at 320dp |
+| 6 | `HomeFontScalePhoneTest` | full home layout at 360dp |
+| 7 | `HomeKeyboardFocusTest` | search focus/IME behaviour |
+| 8 | `HomeM06Test` | status line + library rows |
+| 9 | `HomeScreenTest` | `scanList` adapter rows, category rail |
+| 10 | `HomeSlice2Test` | home sections/empty state |
+| 11 | `ImportSheetTest` | import sheet launched from home |
+| 12 | `LockUiTest` | lock badge/banner on home rows |
+| 13 | `QuickSortTest` | quick-sort sheet from Tools |
+| 14 | `RetrievalSlice5Test` | search results/highlight in `scanList` |
+| 15 | `SelectionBarTest` | selection mode + `btnSel*` action set |
+| 16 | `StatusLineScreenTest` | `statusLine` header counts |
+| 17 | `TextFitTest` | measures both screens (OcrEditor case is the allowed failure) |
+| 18 | `UiSmokeTest` | legacy activity graph walk |
+
+Missing shell seams (what a post-launch migration must add):
+
+1. **`R.id.scanList` RecyclerView + adapter** — v2 library renders plain cards into a `swDocList`
+   `LinearLayout`: no adapter, no `itemCount`, no `findViewHolderForAdapterPosition`; the legacy card
+   ids `scanName` / `scanMeta` / `scanSnippet` / `catChip` (`item_scan.xml`) have no v2 equivalent.
+2. **Home app bar + status header** — `homeAppBar`, `headerCount`, `statusLine`, `brandMark`,
+   `appNameText`, `homeRoot`, `homeContent` exist only in `activity_main.xml`.
+3. **Search seams** — v2 has `swHomeSearch` / `swHomeClear` but no `R.id.searchInput` alias and no
+   `searchDebounceMs` hook, so debounce and IME tests cannot drive it.
+4. **Selection mode** — shell has `swSelectionBar` (Done + Share) only; legacy `selectionBar`,
+   `selectionHeader`, `selCount`, `dockRoot`, `btnSelect` and the `btnSel*` set (Select all, Merge,
+   Move, Extract, Rotate, More) are absent.
+5. **Quick-sort / quick-actions sheet wiring** — `sheet_quick_sort.xml` (`qsChips`, `qsClose`,
+   `qsDone`, `qsProgress`) exists but only `MainActivity` opens it; the shell has no entry.
+6. **Public seams** — `library`, `toolsHub`, `setVaultMode(vault)`, `showDocActions(doc)` are
+   private/absent on `ShellActivity`, so tests cannot drive vault mode or document-level actions.
+7. **Home chrome ids** — `nudge`, `btnTools`, `chipRail`, `chipGroup`, `sortSelector`,
+   `emptyState` / `btnEmptyScan`, `scanButtonDisc` were not carried over (shell uses `swSort`,
+   `swHomeEmpty`, the FAB and `swQuickRow`).
+8. **Settings/vault entry points** — legacy home overflow rows (`rowTheme`, `rowPrivacy`, vault
+   pills) route through `MainActivity`; the shell routes them via the "Me" tab with different ids.
+
+A naive blanket swap of `MainActivity` → `ShellActivity` produced **140 failures** (adapter/row
+counts, id lookups, selection actions); building these seams is a post-launch project.
+
+## Previous batch (phone QA 3b + earlier follow-ups)
 
 - **Organize pages** is READY (Organize group): kit document chooser -> the Organize grid for that
   document (`DocumentViewerActivity.openOrganizePicker`). Insert pages stays READY too.
@@ -43,13 +124,18 @@ Branch `lane/L5-stamp`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L5`, 2026-11
 
 ## Tests
 
-- New/updated for this batch: `OrganizeDraftUiTest` (11: organize tool chooser, simulated drag,
-  selection ⋯ actions + duplicate, insert, discard/save/replace, process death),
-  `AadhaarMaskTest` (7: line/word/merged element/QR), `InkExtractTest` (5: gradient, blue, tight trim,
-  frame, blank), `MaskAadhaarFlowTest` (2: line and element masks, original untouched, OCR gone),
-  `StampEditorActivityTest` (first Back pair, tool-row padding), `PageStampPictureTest`,
+- New for run4a: `StampImportTest` (3: photo stamp save+place + cascade, photo signature saves and
+  places, empty Save disabled/dimmed with the message and nothing written), `AadhaarMaskTest`
+  (9: line/word/merged element/gap-precision/line-clip/VID toggle/QR), `OrganizeDraftUiTest`
+  (12, incl. insert at start / after page 2 / end), `InkExtractTest` (6: gradient, blue, tight trim,
+  frame, blank, edge rail), `SaveTransactionTest` etc. migrated to the shell.
+- Updated for this batch: `PageEditorDraftTest` (crop race ⇒ poll), `DirectScanSaveTest` (v2 library
+  refresh instead of a legacy row insert), `Deep*/Import*` host classes.
+- Earlier this wave: `MaskAadhaarFlowTest` (2: line and element masks, original untouched, OCR
+  gone), `StampEditorActivityTest` (first Back pair, tool-row padding), `PageStampPictureTest`,
   `SignatureStoreBitmapTest`, `SignatureDeleteTest`, `ScanReviewBackTest`, `CropPanelTest`.
-- Full suite: **1320 tests, 0 failures, 0 skipped** on the merged tree (final run below).
+- Full suite: **1367 tests, 1 failure, 0 skipped** — the only failure is the allowed
+  `TextFitTest > ocr editor text fits` (L1 owns it, L1 files untouched).
 
 ## Owner evaluation (private samples, never committed)
 
@@ -66,9 +152,78 @@ ML Kit model; the device path uses element boxes.
   the user adjusting boxes.
 - Hindi copy is marked `<!-- review -->`; no long dashes in user-visible strings.
 
-## Last gate
+## Accessibility audit (commits `2dcf0ec`, `3260726`)
+
+- **Always-on audit**: `ui/a11y/AccessibilityAuditTest` walks 21 v2 screens at 360dp and font
+  scale 1.3/2.0: shell tabs, document/Organize/selection/draft bar, page and stamp editors, Text
+  screen, Tools setup/result, Vault, Protect/Unlock, Scan review, insert/mask sheets, Settings.
+  Rules: label, 48dp touch, WCAG contrast on composited kit surfaces, clip/ellipsis/overlap, image
+  description, sheet pane title. 129 findings remain for other lanes, allow-listed with their lane
+  in `app/src/test/resources/a11y_allowlist.txt` and listed with file:line + fix in
+  `docs/audit/2026-11-15/ACCESSIBILITY.md` (S1 4, S2 65, S3 49, S4 11).
+- **Fixed here**: Organize tiles announce “Page 3 of 10[, selected]” and expose **Move up /
+  Move down** as actions that run the drag's reorder path; the tick gets a 48dp wrapper. The stamp
+  canvas announces its selected mark/page and exposes **Move, bigger/smaller, rotate, delete**.
+  Page-viewer images announce “Page 2 of 5”. 48dp targets and 2–3-line wrapping in the stamp tool
+  row, page nav, delete/save, document selection bar, draft bar and page-viewer dock.
+- `StampCanvasAccessibilityTest` and `PageGridAccessibilityTest` prove the actions and wording.
+
+## Performance — L5-1 / L5-2 (commit `ea7486f`)
+
+Measured with L4's `perf/PerfHarnessTest` in big mode (300 docs, one 500-page document, 6 cells):
+
+| row | before | after |
+|---|---:|---:|
+| Organize grid first screen | 986 ms | 864 ms |
+| open document + draftPages | 9 ms | 9 ms (tmpfs) |
+
+Deterministic (not runner noise): **2 → 0** file stats per grid bind (`PageThumbFastBindTest`), and
+**2 → 1** draft manifest parses per viewer open (`DraftStateLoadsTest`). `submit()` hashes the page
+paths once; every bind reuses that revision, which is safe because page edits write a new `r_<n>`
+file. `ScanRepository.draftState(id)` returns document + pages + draft from one `getDocument` and
+one manifest parse and reports a damaged manifest instead of throwing; `DocumentViewerActivity`
+uses it instead of `draftPages` + `draftOf`.
+
+## Find and hide numbers — Mask Aadhaar folded into Redact (owner decision)
+
+- Registry: `mask_aadhaar` entry removed (45 → 44 tools); its tests moved onto the Redact path.
+  Redact's keywords now include the sensitive kinds so search finds it.
+- **Redact editor** shows a **Find** button. Find scans every page, lists checkable groups with
+  counts, and turns the tapped groups into ordinary redaction boxes the user can still move/resize;
+  saving keeps the existing true-redaction copy (`stampDocument`, pixels + OCR burned, source
+  untouched). Output label “Redacted” (the Aadhaar preset keeps “Masked”).
+- **Detectors** (`util/SensitiveScan.kt`): Aadhaar (first 8; “whole number” option), Aadhaar VID
+  (first 12, keeps last 4), PAN, cards 13–19 digits passing Luhn (keeps last 4), phone numbers
+  (Indian and international), emails, IBAN (mod-97), US SSN (range-checked), long account numbers
+  9–18. Precision: element boxes, 15% horizontal padding, Aadhaar/card inner edge in the gap before
+  the next digit, vertical ±10% clipped against neighbouring lines. Dates, prices, slashes/commas
+  and short numbers are ignored.
+- **Quick path kept**: the Find sheet carries a **Mask Aadhaar** preset chip that opens the old
+  number/VID/QR options.
+- Tests: `SensitiveScanTest` (9: true positives with OCR noise, dates/prices/SSN-shape false
+  positives, Luhn/IBAN, line bleed), `SensitiveFindUiTest` (4: groups→boxes, preset chip, no-hits
+  message, registry), plus the existing `MaskAadhaarFlowTest` (2) unchanged.
+
+## Last gate (cloud, full suite)
 
 ```
-tests: total=1320 failures=0 skipped=0
-GATE PASS L5 tests=1320 lint=[lint skipped (lead runs it at merge)]
+cloud: run 43689007712 (5 min)
+tests: total=1456 failures=0 skipped=0
+GATE PASS L5 tests=1456 lint=[skipped]
 ```
+
+TextFit's OcrEditor case is green again after L1's fix. Lint runs at merge.
+
+## Owner evaluation
+
+`eval/L5OwnerEvalTest` now keys on the lane's own
+`…\.sw-qa\owner\L5_EVAL_ON` (never the shared `EVAL_ON`, which other lanes delete mid-run) and
+prints `EVAL RAN: <n> files -> <dir>` on success or `EVAL SKIPPED: L5_EVAL_ON missing` on a skip.
+Latest run: **EVAL RAN: 13 files**, Aadhaar cards `find=AADHAAR:1` (this host has no ML Kit model,
+so the preview geometry is the lead-approved fake line; the device path uses element boxes).
+Private samples were read in place and never committed; the flag was deleted afterwards.
+
+## Files deleted / APK size
+
+- Files deleted this batch: **none** (`MainActivity`, `activity_main.xml` and all legacy tests stay).
+- APK size: not available in this lane (no release build here; the lead measures at merge).

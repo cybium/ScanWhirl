@@ -64,22 +64,6 @@ object StampToolLauncher {
         if (context is Activity) open(context, toolId)
     }
 
-    /** "Mask Aadhaar" (Free, Edit & sign): pick the document, then open the editor seeded. */
-    fun openMaskAadhaar(activity: Activity) {
-        val docs = ScanRepository(activity).listDocuments()
-            .filter { !it.isLocked && !it.isVaulted }
-        if (docs.isEmpty()) {
-            Toast.makeText(activity, R.string.stamp_no_documents, Toast.LENGTH_LONG).show()
-            return
-        }
-        val host = activity as? AppCompatActivity ?: return
-        FlowUtil.pickScan(host, R.string.tool_mask_aadhaar, docs) { doc ->
-            activity.startActivity(
-                StampEditorActivity.intent(activity, doc.id, StampEditorActivity.TOOL_MASK_AADHAAR)
-            )
-        }
-    }
-
     /** Free build: name the group honestly; Billing is not switched on yet (design §3). */
     private fun showPro(activity: Activity) {
         SwSheet.builder(activity)

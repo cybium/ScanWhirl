@@ -279,30 +279,27 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** Re-reads the document from disk and refreshes all UI. Returns false if it vanished. */
     private suspend fun reloadDocument(): Boolean {
         val id = docId ?: return false
-        val doc = withContext(Dispatchers.IO) {
-            repo.getDocument(id)
-        }
+        // One pass: the document, its pages and its draft share one manifest read (L5-2).
+        val state = withContext(Dispatchers.IO) { repo.draftState(id) }
+        val doc = state.document
         if (doc == null) {
             Toast.makeText(this, R.string.doc_not_found, Toast.LENGTH_SHORT).show()
             finish()
             return false
         }
         document = doc
-        val state = withContext(Dispatchers.IO) {
-            runCatching { repo.draftPages(id) to repo.draftOf(id) }
-        }
-        val failure = state.exceptionOrNull()
-        if (failure is DraftStore.DraftDamaged) {
+        document = doc
+        // SECURITY_AUDIT 2026-11-15: protected/Vault documents never appear in a
+        // screenshot or the recents card; ordinary scans follow the user's setting.
+        com.scanwhirl.app.util.SecureView.applyForDocument(
+            this, window, doc.isVaulted || doc.isLocked
+        )
+        pages = state.pages
+        draft = state.draft
+        val damage = state.damage
+        if (damage != null) {
             // Never invent pages from a damaged manifest: show the base and offer Discard only.
-            pages = doc.pageFiles
-            draft = null
-            showDraftUnusable(failure.message ?: getString(R.string.draft_damaged))
-        } else if (failure != null) {
-            throw failure
-        } else {
-            val (draftPages, openDraft) = state.getOrThrow()
-            pages = draftPages
-            draft = openDraft
+            showDraftUnusable(damage.message ?: getString(R.string.draft_damaged))
         }
         binding.toolbar.title = doc.name
         binding.docLockBadge.isVisible = doc.isLocked
@@ -737,6 +734,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** Test seam and the one writer: copied pages enter the draft at [position]. */
     internal fun insertFiles(files: List<File>, position: Int) {
         val id = docId ?: return
+        insertHere = null
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) { repo.draftInsertPages(id, files, position) }

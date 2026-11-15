@@ -66,20 +66,6 @@ object ToolRegistry {
         launch = launch ?: { host, tool -> host.open(tool) }
     )
 
-    private fun build(
-        id: String,
-        group: ToolGroup,
-        title: Int,
-        icon: Int,
-        keywords: String,
-        pro: Boolean = false,
-        note: Int = R.string.soon_generic,
-        launch: ((ToolHost, SwTool) -> Unit)? = null
-    ) = SwTool(
-        id, group, title, icon, pro, ToolStatus.BUILD, keywords, note,
-        launch = launch ?: { host, tool -> host.open(tool) }
-    )
-
     private fun soon(
         id: String,
         group: ToolGroup,
@@ -210,21 +196,46 @@ object ToolRegistry {
         ready("stamp", ToolGroup.EDIT, R.string.tool_stamp, R.drawable.ic_sym_approval, "stamp paid approved date badge", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "stamp") } ?: host.comingSoon(tool) }
         ),
-        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove", pro = true).copy(
+        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove find numbers aadhaar pan card phone email iban ssn account", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "redact") } ?: host.comingSoon(tool) }
         ),
-        ready("mask_aadhaar", ToolGroup.EDIT, R.string.tool_mask_aadhaar, R.drawable.ic_sym_visibility_off, "aadhaar mask uidai hide aadhar vid", launch = { host, tool ->
-            val activity = host as? android.app.Activity
-            if (activity == null) {
-                host.comingSoon(tool)
-            } else {
-                com.scanwhirl.app.ui.stamp.StampToolLauncher.openMaskAadhaar(activity)
-            }
-        }),
 
         // Secure (4)
-        build("protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted, "protect password encrypt aes"),
-        build("unlock", ToolGroup.SECURE, R.string.tool_unlock, R.drawable.ic_sym_lock_open, "unlock password remove protection"),
+        // L3: both open a real document chooser, then the Protect/Unlock sheet. Free tools.
+        ready(
+            "protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted,
+            "protect password encrypt aes",
+            launch = { host, tool ->
+                val activity = host as? android.app.Activity
+                if (activity == null) {
+                    host.comingSoon(tool)
+                } else {
+                    activity.startActivity(
+                        com.scanwhirl.app.ui.protect.LockToolsActivity.intent(
+                            activity,
+                            com.scanwhirl.app.ui.protect.LockToolsActivity.MODE_PROTECT
+                        )
+                    )
+                }
+            }
+        ),
+        ready(
+            "unlock", ToolGroup.SECURE, R.string.tool_unlock, R.drawable.ic_sym_lock_open,
+            "unlock password remove protection",
+            launch = { host, tool ->
+                val activity = host as? android.app.Activity
+                if (activity == null) {
+                    host.comingSoon(tool)
+                } else {
+                    activity.startActivity(
+                        com.scanwhirl.app.ui.protect.LockToolsActivity.intent(
+                            activity,
+                            com.scanwhirl.app.ui.protect.LockToolsActivity.MODE_UNLOCK
+                        )
+                    )
+                }
+            }
+        ),
         SwTool(
             "vault", ToolGroup.SECURE, R.string.tool_vault, R.drawable.ic_sym_shield_lock,
             false, ToolStatus.READY, "vault private encrypted hidden",
@@ -241,23 +252,8 @@ object ToolRegistry {
         ),
         ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
-        // Text (2)
-        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy"),
-        SwTool(
-            "hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language,
-            false, ToolStatus.READY, "hindi devanagari text read ocr",
-            launch = { host, tool ->
-                val activity = host as? androidx.appcompat.app.AppCompatActivity
-                if (activity != null) {
-                    com.scanwhirl.app.tools.HindiTextLauncher.open(
-                        activity,
-                        com.scanwhirl.app.ScanWhirlApp.from(activity).repository
-                    )
-                } else {
-                    host.open(tool)
-                }
-            }
-        )
+        // Text (1): Hindi is a language choice in the Text screen and Settings, not a tool.
+        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy")
     )
 
     private val byId: Map<String, SwTool> = all.associateBy { it.id }

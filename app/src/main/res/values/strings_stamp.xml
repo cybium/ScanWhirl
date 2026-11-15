@@ -69,6 +69,7 @@
     <string name="mask_aadhaar_hint">Check the boxes over the first 8 digits, then save</string>
     <string name="mask_options_title">Mask Aadhaar</string>
     <string name="mask_opt_number">Mask Aadhaar number</string>
+    <string name="mask_opt_vid">Also hide the VID</string>
     <string name="mask_opt_qr">Also hide the QR code</string>
     <string name="mask_continue">Continue</string>
     <string name="mask_label">Masked</string>
@@ -94,4 +95,28 @@
     <string name="stamp_redact_warn_title">Redaction is permanent</string>
     <string name="stamp_redact_warn_message">Hidden text and pixels are removed for good in the new copy.</string>
     <string name="stamp_redact_warn_save">Save redacted copy</string>
+
+    <!-- Find and hide numbers: the Redact tool's detector sheet. -->
+    <string name="find_button">Find</string>
+    <string name="find_title">Find and hide numbers</string>
+    <string name="find_explanation">Scans every page for Aadhaar, VID, PAN, cards, phone numbers, emails, IBAN, US SSN and long account numbers.</string>
+    <string name="find_preset_aadhaar">Mask Aadhaar</string>
+    <string name="find_whole_aadhaar">Hide the whole Aadhaar number</string>
+    <string name="find_action">Find</string>
+    <string name="find_scanning">Looking for numbers…</string>
+    <string name="find_none">No sensitive numbers found. You can still draw a box.</string>
+    <string name="find_results_title">Found %1$d items</string>
+    <string name="find_hide_selected">Hide selected</string>
+    <string name="find_applied">Hid %1$d items. Check the boxes, then save.</string>
+    <string name="find_kind_aadhaar">Aadhaar</string>
+    <string name="find_kind_vid">Aadhaar VID</string>
+    <string name="find_kind_pan">PAN</string>
+    <string name="find_kind_card">Card numbers</string>
+    <string name="find_kind_phone">Phone numbers</string>
+    <string name="find_kind_email">Email addresses</string>
+    <string name="find_kind_iban">IBAN</string>
+    <string name="find_kind_ssn">US SSN</string>
+    <string name="find_kind_account">Account numbers</string>
+    <string name="redact_label">Redacted</string>
+    <string name="redacted_saved">Saved a redacted copy: %1$s</string>
 </resources>

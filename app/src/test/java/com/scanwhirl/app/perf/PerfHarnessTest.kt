@@ -6,7 +6,9 @@ import android.graphics.Bitmap
 import android.os.Looper
 import android.util.Base64
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.ScrollView
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.OcrLine
@@ -16,6 +18,8 @@ import com.scanwhirl.app.store.OcrTextCache
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.pagegrid.PageGridView
 import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
+import com.scanwhirl.app.ui.shell.LibraryScreen
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.PdfGenerator
@@ -59,16 +63,28 @@ class PerfHarnessTest {
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo by lazy { ScanRepository(app) }
 
-    private val big: Boolean by lazy {
-        ownerRoots().any { File(it, "L4_EVAL_ON").isFile }
+    /**
+     * Lane-specific big-configuration switch: only `L4_EVAL_ON` enables the big sizes here. The
+     * owner folder is shared by every lane, so never key off the shared `EVAL_ON`.
+     */
+    private val evalFlag: String? by lazy {
+        ownerRoots().asSequence()
+            .map { File(it, "L4_EVAL_ON") }
+            .firstOrNull { it.isFile }
+            ?.name
     }
 
     init {
         println(
-            if (big) "EVAL RAN: perf big sizes (300 docs / 500 pages)"
-            else "EVAL SKIPPED: no L4_EVAL_ON; perf harness runs modest sizes"
+            if (evalFlag != null) {
+                "EVAL RAN: perf big sizes (300 docs / 500 pages) flag=$evalFlag"
+            } else {
+                "EVAL SKIPPED: no L4_EVAL_ON; perf harness runs modest sizes"
+            }
         )
     }
+
+    private val big: Boolean get() = evalFlag != null
 
     private val docCount get() = if (big) 300 else 40
     private val heavyPages get() = if (big) 500 else 80
@@ -391,8 +407,10 @@ class PerfHarnessTest {
         val ms = time("ocr index $indexPages pages", warmups = 0, runs = 1) {
             runBlocking { indexer.indexNow(dir.name) }
         }
+        val stored = repo.ocrStore.readText(dir.name).size
+        println("EVAL RAN: ocr index rebuild pages=$indexPages flag=${evalFlag ?: "none"} big=$big -> ${ms}ms, stored=$stored")
         assertTrue("index too slow: ${ms}ms", ms < 240_000)
-        assertEquals(indexPages, repo.ocrStore.readText(dir.name).size)
+        assertEquals(indexPages, stored)
     }
 
     // ------------------------------------------------------------------
@@ -428,5 +446,57 @@ class PerfHarnessTest {
         val bytes = w.toLong() * h * 4
         assertTrue("decoded bitmap $w x $h is too large", bytes <= 1_500_000)
         assertEquals(1, calls.size)
+    }
+
+    // ------------------------------------------------------------------
+    // 9. Library load/search must not touch disk on the main thread (L1-1/L1-2)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `library load and search never read disk on the main thread`() {
+        buildLibrary()
+        val threads = java.util.Collections.synchronizedList(mutableListOf<String>())
+        ScanRepository.readProbe = { threads += it }
+        OcrTextCache.readProbe = { threads += it }
+        LibraryScreen.ioDispatcher = Dispatchers.IO
+        LibraryScreen.searchDebounceMs = 200L
+        val mainName = Thread.currentThread().name
+        val controller = Robolectric.buildActivity(ShellActivity::class.java).setup()
+        try {
+            val activity = controller.get()
+            shadowOf(Looper.getMainLooper()).idle()
+            val scroll = activity.findViewById<ViewGroup>(R.id.swTabContent).getChildAt(0) as ScrollView
+            val library = scroll.getChildAt(0) as LibraryScreen
+            val deadline = System.currentTimeMillis() + 15_000
+            while (!library.loaded && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10)
+                shadowOf(Looper.getMainLooper()).idle()
+            }
+            assertTrue("the library finished loading", library.loaded)
+            assertTrue("listDocuments was called", threads.isNotEmpty())
+
+            val beforeSearch = threads.size
+            library.searchInput.setText("invoice")
+            val searchDeadline = System.currentTimeMillis() + 15_000
+            while (threads.size == beforeSearch && System.currentTimeMillis() < searchDeadline) {
+                Thread.sleep(10)
+                // The 200 ms debounce is virtual time on the paused Robolectric looper.
+                shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
+            }
+            assertTrue("the search read OCR text off the main thread", threads.size > beforeSearch)
+
+            // Background reads may still be appending: iterate a copy taken under the list's lock
+            // (iterating a synchronizedList directly throws ConcurrentModificationException).
+            val seen = synchronized(threads) { threads.toList() }
+            val onMain = seen.filter { it == mainName }
+            record("library/search reads: ${seen.size}, on main: ${onMain.size}, thread=$mainName")
+            assertTrue("library and search reads on the main thread: $onMain", onMain.isEmpty())
+        } finally {
+            ScanRepository.readProbe = null
+            OcrTextCache.readProbe = null
+            LibraryScreen.ioDispatcher = Dispatchers.Unconfined
+            LibraryScreen.searchDebounceMs = 0L
+            controller.pause().stop().destroy()
+        }
     }
 }

@@ -21,7 +21,30 @@ $wslRoot = "/mnt/c" + (($root.Substring(2)) -replace '\\', '/')
 # ---- cloud gate (default for the FULL suite; -Tests and -Apk stay local) ----
 # Snapshots the worktree (incl. untracked, respecting .gitignore) WITHOUT touching the lane branch or index,
 # pushes it to ci/<lane>, waits for the GitHub Actions "gate" run on that exact commit, prints its verdict.
-if (-not $Tests -and -not $Apk -and -not $Local) {
+# -Tests runs: local when the PC's build slot is free (fastest, ~1 min); CLOUD when anyone is building or queued
+# (no waiting in line). Evals on the owner's private files always stay local (the cloud cannot see them).
+$lockDirPeek = "C:\Users\Cybium\Desktop\.sw-locks"
+$slotBusy = $false
+if (Test-Path "$lockDirPeek\build.lock") {
+    try { $p = [IO.File]::Open("$lockDirPeek\build.lock", 'Open', 'Read', 'ReadWrite'); $p.Close() } catch { $slotBusy = $true }
+}
+if (@(Get-ChildItem "$lockDirPeek\queue" -Filter *.t -ErrorAction SilentlyContinue).Count -gt 0) { $slotBusy = $true }
+# Evals are recognised by the TEST NAME only (a leftover <LANE>_EVAL_ON flag must not pin all of a lane's tests
+# to the local queue: that blocked every lane for 25 min on 11-15).
+$evalish = ($Tests -match 'Eval|PerfHarness|RealWorld|HostSample')
+# A full local suite holds the PC's only build slot for 40+ min and blocks every lane: disabled for lanes.
+if ($Local -and -not $Tests -and -not $Apk -and $env:SW_LEAD_LOCAL -ne '1') {
+    Write-Output "gate: full-suite -Local is disabled (it blocks every lane for 40+ min) -> running the full suite in the CLOUD"
+    $Local = [switch]$false
+}
+# -Local on a -Tests run is honoured only while the slot is free; when busy, non-eval tests go to the cloud.
+if ($Tests -and $Local -and $slotBusy -and -not $evalish -and -not $Apk) {
+    Write-Output "gate: -Local ignored because the build slot is busy -> CLOUD (no waiting in line)"
+    $Local = [switch]$false
+}
+$cloudTests = $Tests -and $slotBusy -and -not $evalish -and -not $Local -and -not $Apk
+if ($Tests -and -not $cloudTests -and -not $Apk) { Write-Output ("tests: running locally (" + $(if ($evalish) { "eval on private files" } elseif ($Local) { "-Local" } else { "build slot free" }) + ")") }
+if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
     $gh = "C:\Program Files\GitHub CLI\gh.exe"
     $tmpIndex = Join-Path $env:TEMP ("sw-ci-index-" + $Lane + "-" + $PID)
     $env:GIT_INDEX_FILE = $tmpIndex
@@ -31,17 +54,25 @@ if (-not $Tests -and -not $Apk -and -not $Local) {
     $wf = "C:\Users\Cybium\Desktop\ScanWhirl\.github\workflows\gate.yml"
     $blob = git -C $root hash-object -w $wf
     git -C $root update-index --add --cacheinfo "100644,$blob,.github/workflows/gate.yml"
+    $ciBranch = "ci/$Lane"
+    if ($cloudTests) {
+        # Single-test cloud run: the filter travels in the snapshot; a separate branch so it never cancels a full run.
+        $fblob = $Tests | git -C $root hash-object -w --stdin
+        git -C $root update-index --add --cacheinfo "100644,$fblob,.ci/test-filter.txt"
+        $ciBranch = "ci/$Lane-t"
+        Write-Output "tests: build slot busy -> running '$Tests' in the CLOUD instead of waiting in line"
+    }
     $tree = git -C $root write-tree
     Remove-Item Env:GIT_INDEX_FILE; Remove-Item $tmpIndex -ErrorAction SilentlyContinue
     $parent = git -C $root rev-parse HEAD
     $commit = git -C $root commit-tree $tree -p $parent -m "ci snapshot $Lane $(Get-Date -Format o)"
     if (-not $commit) { Write-Output "GATE FAIL $Lane cloud: could not snapshot the worktree"; exit 2 }
-    git -C $root push -q -f origin "${commit}:refs/heads/ci/$Lane" 2>&1 | Where-Object { $_ -notmatch '^remote:\s*$|^remote: (Create|To create|\s+https)' }
+    git -C $root push -q -f origin "${commit}:refs/heads/$ciBranch" 2>&1 | Where-Object { $_ -notmatch '^remote:\s*$|^remote: (Create|To create|\s+https)' }
     $env:GH_TOKEN = (("protocol=https`nhost=github.com`n`n" | git credential fill 2>$null) | Where-Object { $_ -like 'password=*' }) -replace '^password=', ''
-    Write-Output "cloud: snapshot $($commit.Substring(0,8)) pushed to ci/$Lane; waiting for the GitHub run (about 8-12 min, no local queue)"
+    Write-Output "cloud: snapshot $($commit.Substring(0,8)) pushed to $ciBranch; waiting for the GitHub run (about 8-12 min, no local queue)"
     $started = Get-Date; $run = $null
-    while (((Get-Date) - $started).TotalMinutes -lt 70) {
-        $runs = & $gh run list -R cybium/ScanWhirl --workflow gate.yml --branch "ci/$Lane" -L 10 --json databaseId,headSha,status,conclusion 2>$null | ConvertFrom-Json
+    while (((Get-Date) - $started).TotalMinutes -lt 25) {
+        $runs = & $gh run list -R cybium/ScanWhirl --workflow gate.yml --branch "$ciBranch" -L 10 --json databaseId,headSha,status,conclusion 2>$null | ConvertFrom-Json
         $run = $runs | Where-Object { $_.headSha -eq $commit } | Select-Object -First 1
         if ($run -and $run.status -eq "completed") { break }
         if (-not $run -and ((Get-Date) - $started).TotalMinutes -gt 5) { Write-Output "GATE FAIL $Lane cloud: no GitHub run started for $commit"; exit 2 }
@@ -103,7 +134,7 @@ try {
     # Build from a mirror on the Linux disk (~/swbuild/<lane>): reading/writing /mnt/c from WSL is several times slower.
     # The mirror keeps its own build folder, so builds stay incremental and never mix with Windows (lint) outputs.
     $mirror = "/home/cybium/swbuild/$Lane"
-    $filter = if ($Tests) { "--tests '$Tests'" } else { "" }
+    $filter = if ($Tests) { ($Tests.Split(',') | % { $_.Trim() } | ? { $_ } | % { "--tests '$_'" }) -join ' ' } else { "" }
     $sync = "mkdir -p $mirror && rsync -a --delete --exclude=/.git --exclude=/.gradle --exclude=/.kotlin --exclude=/build --exclude=/app/build --exclude=/builds --exclude=/keystore $wslRoot/ $mirror/ && rm -rf $mirror/app/build/test-results/testDebugUnitTest"
     if ($Apk) {
         $apkOut = "$root\app\build\outputs\apk\debug\app-debug.apk"

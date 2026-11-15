@@ -1,6 +1,8 @@
-# ScanWhirl cloud gate: the full Robolectric suite (+ lint on integration) on GitHub's 16 GB runners.
+# ScanWhirl cloud gate: the full Robolectric suite (+ lint on integration) on GitHub's 16 GB runners,
+# and the minified release build (R8 + resource shrinking) without the owner's keystore.
 # Triggered by tools/gate.ps1 -Cloud (pushes a working-tree snapshot to ci/<lane>) and by pushes to integration.
-# No secrets are used: release signing stays on the owner's PC; test builds (-PtestBuild) need no keystore.
+# No secrets are used: release signing stays on the owner's PC ([release] signs with the debug key),
+# test builds (-PtestBuild) need no keystore.
 name: gate
 
 on:
@@ -23,7 +25,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +41,19 @@ jobs:
       - name: Unit tests
         id: tests
         continue-on-error: true
-        run: ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q
+        # gate.ps1 -Tests "<pattern>" (when the PC's build slot is busy) injects .ci/test-filter.txt.
+        run: |
+          FILTER=""
+          if [ -f .ci/test-filter.txt ]; then FILTER=$(head -n1 .ci/test-filter.txt | tr -d '\r'); echo "test filter: $FILTER"; fi
+          if [ -n "$FILTER" ]; then
+            # "A,B" -> --tests A --tests B (Gradle takes one pattern per flag)
+            ARGS=()
+            IFS=',' read -ra PATS <<< "$FILTER"
+            for p in "${PATS[@]}"; do p="$(echo "$p" | xargs)"; [ -n "$p" ] && ARGS+=(--tests "$p"); done
+            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q "${ARGS[@]}"
+          else
+            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q
+          fi
 
       - name: Lint
         id: lint
@@ -93,3 +107,157 @@ jobs:
       - name: Verdict
         if: always()
         run: grep -q "^GATE PASS" gate-result.txt
+
+  release:
+    # Production build as shipped to Play apart from the signing key: R8
+    # minification and resource shrinking run exactly as in a store build. The
+    # runner never has the owner's keystore, so -PciUnsignedRelease swaps in the
+    # debug signing config: the APK installs for a device smoke test and must
+    # never be distributed. Fails on R8 errors or unresolved (missing) classes.
+    # Only where it matters: integration merges, manual runs, and lanes that ask for it (ci/<lane>-rel*).
+    if: github.ref == 'refs/heads/integration' || github.event_name == 'workflow_dispatch' || contains(github.ref, '-rel')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Assemble release (R8) and bundle (AAB)
+        id: assemble
+        continue-on-error: true
+        run: |
+          ./gradlew :app:assembleRelease :app:bundleRelease -PciUnsignedRelease --no-daemon --stacktrace > r8-build.log 2>&1
+          tail -n 60 r8-build.log
+
+      - name: R8 report
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, os, re
+          log = "r8-build.log"
+          lines = open(log, encoding="utf-8", errors="replace").read().splitlines() if os.path.exists(log) else []
+          warnings = [l for l in lines if re.search(r"(^|\s)Warning: ", l)]
+          errors = [l for l in lines if re.search(r"(^|\s)Error: ", l) or "Missing class" in l]
+          missing = []
+          mp = "app/build/outputs/mapping/release/missing_rules.txt"
+          if os.path.exists(mp):
+              missing = [l.strip() for l in open(mp, encoding="utf-8", errors="replace")
+                         if l.strip() and not l.lstrip().startswith("#")]
+          apks = sorted(glob.glob("app/build/outputs/apk/release/*.apk"))
+          aabs = sorted(glob.glob("app/build/outputs/bundle/release/*.aab"))
+          apk = apks[0] if apks else ""
+          aab = aabs[0] if aabs else ""
+          apk_size = os.path.getsize(apk) if apk else 0
+          aab_size = os.path.getsize(aab) if aab else 0
+          ok = bool(apk) and bool(aab) and not missing and not errors
+          report = [
+              f"warnings={len(warnings)} errors={len(errors)} missing_rules={len(missing)}",
+              f"apk={os.path.basename(apk) or '-'} size={apk_size / 1048576:.1f} MiB ({apk_size} bytes)",
+              f"aab={os.path.basename(aab) or '-'} size={aab_size / 1048576:.1f} MiB ({aab_size} bytes)",
+          ]
+          report += [f"R8 {w}" for w in warnings[:15]]
+          report += [f"MISSING {m}" for m in missing[:15]]
+          report += [f"ERROR {e}" for e in errors[:15]]
+          report.append(f"RELEASE {'PASS' if ok else 'FAIL'}")
+          text = "\n".join(report)
+          print(text)
+          open("release-result.txt", "w").write(text + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("```\n" + text + "\n```\n")
+          PY
+
+      - name: AAB per-device size (bundletool)
+        if: always()
+        # Diagnostic only: never fail the release job, and always leave aab-size.txt.
+        continue-on-error: true
+        run: |
+          set +e
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          if [ ! -f "$AAB" ]; then echo "no AAB (see the R8 report)" > aab-size.txt; exit 0; fi
+          # bundletool turns the AAB into the exact per-device APK set Play would serve.
+          BT_URL=$(curl -fsSL --max-time 60 https://api.github.com/repos/google/bundletool/releases/latest 2>/dev/null \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print([a["browser_download_url"] for a in d["assets"] if a["name"].startswith("bundletool-all")][0])' 2>/dev/null)
+          if [ -z "$BT_URL" ]; then
+            BT_URL=https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar
+          fi
+          curl -fsSL --max-time 180 -o bundletool.jar "$BT_URL" || rm -f bundletool.jar
+          # bundletool has to sign the generated APKs; a throwaway key is enough for
+          # measuring sizes (signing bytes are the same for any RSA key).
+          keytool -genkeypair -keystore ci-debug.jks -storepass android -keypass android \
+            -alias ci -dname "CN=CI" -keyalg RSA -keysize 2048 -validity 10000 > /dev/null 2>&1
+          # Fallback estimate: a device APK = shared dex/res/assets + its own ABI's libs.
+          cat > aab-estimate.py <<'PY'
+          import zipfile
+          z = zipfile.ZipFile("app/build/outputs/bundle/release/app-release.aab")
+          total = 0
+          libs = {}
+          for i in z.infolist():
+              total += i.compress_size
+              if i.filename.startswith("base/lib/"):
+                  abi = i.filename.split("/")[2]
+                  libs[abi] = libs.get(abi, 0) + i.compress_size
+          shared = total - sum(libs.values())
+          print(f"shared (dex+res+assets) {shared / 1048576:.1f} MiB")
+          for abi, size in sorted(libs.items()):
+              print(f"{abi}: {(shared + size) / 1048576:.1f} MiB")
+          PY
+          {
+            echo "aab=$(basename "$AAB") size=$(stat -c %s "$AAB") bytes"
+            if [ -s bundletool.jar ] && java -jar bundletool.jar version; then
+              java -jar bundletool.jar build-apks --bundle="$AAB" --output=app.apks --mode=default \
+                --ks=ci-debug.jks --ks-pass=pass:android \
+                --ks-key-alias=ci --key-pass=pass:android --overwrite > bundletool.log 2>&1
+              echo "--- get-size total (min/max across device configurations) ---"
+              java -jar bundletool.jar get-size total --apks=app.apks
+              echo "--- get-size total --dimensions=ABI ---"
+              java -jar bundletool.jar get-size total --apks=app.apks --dimensions=ABI
+            else
+              echo "bundletool unavailable; estimating from the AAB"
+              python3 aab-estimate.py
+            fi
+          } 2>&1 | tee aab-size.txt
+          {
+            echo "### AAB / per-device size"
+            echo '```'
+            cat aab-size.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/mapping/release/mapping.txt
+            app/build/outputs/mapping/release/missing_rules.txt
+            app/build/outputs/mapping/release/configuration.txt
+            app/build/outputs/mapping/release/seeds.txt
+            app/build/outputs/mapping/release/usage.txt
+            r8-build.log
+            release-result.txt
+            aab-size.txt
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-aab
+          path: |
+            app/build/outputs/bundle/release/*.aab
+            aab-size.txt
+            bundletool.log
+          retention-days: 7
+
+      - name: Verdict
+        if: always()
+        run: grep -q "^RELEASE PASS" release-result.txt

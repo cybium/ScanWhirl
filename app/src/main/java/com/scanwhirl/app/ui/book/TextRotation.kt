@@ -6,63 +6,75 @@ import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import com.scanwhirl.app.util.BookSplit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.max
-import kotlin.math.roundToInt
 
 /**
- * Which way to turn the top page of a **horizontal** spread so both pages come out upright.
+ * Which turn makes a crop's text upright: ML Kit text recognition on every candidate rotation
+ * (90/270 for vertical text, 0/180 for an upright spread) of a downscaled page; the most words
+ * wins. The engine's ascender-asymmetry cue is the offline fallback; the preview's "Flip pages"
+ * button flips the answer 180°.
  *
- * On a phone with Google Play services, ML Kit text recognition runs on both 90° candidate
- * rotations of a downscaled top page and picks the one with more recognised words. Without it
- * (Robolectric, no model), the offline margin heuristic in [BookSplit.topRotatesClockwise] is
- * used, and the preview's "Rotate" button lets the owner flip the result.
- *
- * [chooser] is the test seam; a fake returns a fixed direction.
+ * [chooser] is the UI test seam; [wordCounter] is the recognizer seam for scoring tests.
  */
 internal object TextRotation {
 
     @Volatile
-    internal var chooser: (suspend (Bitmap, BookSplit.Gutter) -> Boolean)? = null
+    internal var chooser: (suspend (Bitmap, List<Int>) -> Int?)? = null
 
-    suspend fun choose(bitmap: Bitmap, gutter: BookSplit.Gutter): Boolean {
-        chooser?.let { return it(bitmap, gutter) }
-        if (!gutter.horizontal) return true
+    /** Fake recognizer: returns the number of "words" it reads; null uses ML Kit. */
+    @Volatile
+    internal var wordCounter: ((Bitmap) -> Int)? = null
+
+    suspend fun chooseRotation(bitmap: Bitmap, textVertical: Boolean): Int? {
+        val candidates = if (textVertical) listOf(90, 270) else listOf(0, 180)
+        chooser?.let { return it(bitmap, candidates) }
+        // ML Kit is an optional confirmation: on a device without the model (or in a unit
+        // test) the engine's own rotation is still a complete answer.
         return withContext(Dispatchers.IO) {
-            recognise(bitmap, gutter) ?: BookSplit.topRotatesClockwise(bitmap, gutter)
+            runCatching { recognise(bitmap, candidates) }.getOrNull()
         }
     }
 
-    private fun recognise(bitmap: Bitmap, gutter: BookSplit.Gutter): Boolean? {
-        val cut = (gutter.ratio * bitmap.height).roundToInt().coerceIn(1, bitmap.height - 1)
-        val top = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, cut)
-        val scale = 700f / max(bitmap.width, cut)
+    private fun recognise(bitmap: Bitmap, candidates: List<Int>): Int? {
+        val scale = 700f / max(bitmap.width, bitmap.height)
         val small = if (scale < 1f) {
             Bitmap.createScaledBitmap(
-                top, max(1, (bitmap.width * scale).toInt()), max(1, (cut * scale).toInt()), true
+                bitmap,
+                max(1, (bitmap.width * scale).toInt()),
+                max(1, (bitmap.height * scale).toInt()),
+                true
             )
         } else {
-            top
+            bitmap
         }
-        if (small !== top) top.recycle()
-
-        val clockwise = rotate(small, 90f)
-        val counter = rotate(small, -90f)
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        return try {
-            val cw = words(recognizer, clockwise)
-            val ccw = words(recognizer, counter)
-            if (cw == ccw) null else cw > ccw
-        } catch (_: Exception) {
+        val recognizer = if (wordCounter == null) {
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        } else {
             null
-        } finally {
-            recognizer.close()
-            clockwise.recycle()
-            counter.recycle()
-            small.recycle()
         }
+        var best: Int? = null
+        var bestWords = -1
+        try {
+            for (rotation in candidates) {
+                val page = rotate(small, rotation.toFloat())
+                val words = try {
+                    wordCounter?.invoke(page) ?: words(recognizer!!, page)
+                } catch (_: Exception) {
+                    -1
+                }
+                if (words > bestWords) {
+                    bestWords = words
+                    best = rotation
+                }
+                page.recycle()
+            }
+        } finally {
+            recognizer?.close()
+            if (small !== bitmap) small.recycle()
+        }
+        return if (bestWords > 0) best else null
     }
 
     private fun words(
