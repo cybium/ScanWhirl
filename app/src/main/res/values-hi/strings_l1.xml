@@ -82,9 +82,6 @@
     <string name="tool_redact"><!-- review -->नामेट करें</string>
     <string name="tool_protect"><!-- review -->PDF सुरक्षित करें</string>
     <string name="tool_unlock"><!-- review -->PDF खोलें</string>
-    <string name="lock_from_pdf"><!-- review -->PDF फ़ाइल से</string>
-    <string name="lock_no_documents"><!-- review -->कोई असुरक्षित PDF नहीं है। पहले स्कैन या आयात करें।</string>
-    <string name="lock_choose_document"><!-- review -->दस्तावेज़ चुनें</string>
     <string name="tool_vault"><!-- review -->वॉल्ट</string>
     <string name="tool_remove_metadata"><!-- review -->मेटाडेटा हटाएँ</string>
     <string name="tool_read_text"><!-- review -->टेक्स्ट पढ़ें</string>
