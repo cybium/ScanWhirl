@@ -262,6 +262,33 @@ class TrashTest {
     }
 
     @Test
+    fun `a Trash entry expires after the 30-day restore window`() {
+        val id = richDoc("Old receipt")
+        val key = repo.moveToTrash(id)!!
+        val entry = File(repo.trashDir, key)
+        val inside = System.currentTimeMillis() + ScanRepository.TRASH_RETENTION_MS - 60_000
+
+        assertEquals("still restorable a minute before the window ends", 0, repo.recoverTrash(now = inside))
+        assertTrue(entry.exists())
+
+        assertEquals(1, repo.recoverTrash(now = inside + 120_000))
+        assertFalse("the entry is gone for good", entry.exists())
+        assertTrue(repo.listTrash().isEmpty())
+        assertFalse("its unlocked preview does not outlive it", File(app.cacheDir, "preview_$id.pdf").exists())
+    }
+
+    @Test
+    fun `an entry an interrupted Replace moved to Trash is never expired`() {
+        val id = richDoc("Replace target")
+        val key = repo.moveToTrash(id)!!
+        File(File(repo.trashDir, key), ScanRepository.TRASH_MARKER).appendText("previous=tok123\n")
+
+        val later = System.currentTimeMillis() + 2 * ScanRepository.TRASH_RETENTION_MS
+        assertEquals("a recovery entry is not the user's deletion", 0, repo.recoverTrash(now = later))
+        assertTrue(File(repo.trashDir, key).exists())
+    }
+
+    @Test
     fun `default names count Trash so a restore never duplicates one`() {
         val id = runBlocking { repo.saveScan(listOf(img()), null, null).id }
         assertEquals("Document 1", repo.getDocument(id)!!.name)

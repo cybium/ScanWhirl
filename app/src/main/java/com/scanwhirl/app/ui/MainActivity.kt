@@ -404,8 +404,8 @@ class MainActivity : BaseActivity(), HomeHost {
         // Abandoned, never-published save directories (hidden by their .incomplete marker and
         // older than a day) are reclaimed; published, legacy and unknown directories never are.
         lifecycleScope.launch { runCatching { repo.reapAbandonedSaves() } }
-        // M07: finish interrupted permanent deletes and drop dead import staging. Neither
-        // touches a visible document or a Trash entry.
+        // M07: finish interrupted permanent deletes, expire Trash entries older than the
+        // 30-day restore window, and drop dead import staging. No live document is touched.
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching { repo.recoverTrash() }
             runCatching { repo.recoverImports() }
