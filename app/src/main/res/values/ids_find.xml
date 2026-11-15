@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <item name="findPresetAadhaar" type="id" />
-    <item name="findWholeAadhaar" type="id" />
+    <item name="findChoicePhone" type="id" />
+    <item name="findChoiceEmail" type="id" />
+    <item name="findChoiceId" type="id" />
+    <item name="findChoiceCards" type="id" />
+    <item name="findChoiceOther" type="id" />
+    <item name="findKeepLast4" type="id" />
 </resources>

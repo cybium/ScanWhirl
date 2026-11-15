@@ -124,25 +124,6 @@
     <!-- review -->
     <string name="stamp_stamp_full"><!-- review -->आप 10 स्टाम्प तक रख सकते हैं। नया सहेजने के लिए एक हटाएँ।</string>
     <!-- review -->
-    <string name="tool_mask_aadhaar"><!-- review -->आधार छिपाएँ</string>
-    <!-- review -->
-    <string name="mask_aadhaar_hint"><!-- review -->पहले 8 अंकों पर बने बॉक्स जाँचें, फिर सहेजें</string>
-    <!-- review -->
-    <string name="mask_options_title"><!-- review -->आधार छिपाएँ</string>
-    <!-- review -->
-    <string name="mask_opt_number"><!-- review -->आधार संख्या छिपाएँ</string>
-    <!-- review -->
-    <string name="mask_opt_vid"><!-- review -->VID भी छिपाएँ</string>
-    <!-- review -->
-    <string name="mask_opt_qr"><!-- review -->QR कोड भी छिपाएँ</string>
-    <!-- review -->
-    <string name="mask_continue"><!-- review -->जारी रखें</string>
-    <!-- review -->
-    <string name="mask_label"><!-- review -->छिपाया गया</string>
-    <!-- review -->
-    <string name="mask_aadhaar_none"><!-- review -->यहाँ कोई आधार संख्या नहीं मिली। ज़रूरत हो तो बॉक्स जोड़ें।</string>
-    <!-- review -->
-    <string name="mask_aadhaar_saved"><!-- review -->छिपी हुई प्रति सहेजी गई: %1$s</string>
     <!-- review -->
     <string name="stamp_hint_draw"><!-- review -->एक उँगली से लिखें</string>
     <!-- review -->
@@ -154,7 +135,7 @@
     <!-- review -->
     <string name="stamp_no_ocr"><!-- review -->इस पृष्ठ पर अभी कोई पहचाना गया पाठ नहीं है।</string>
     <!-- review -->
-    <string name="stamp_no_suggestions"><!-- review -->कोई आधार, पैन, फ़ोन या खाता संख्या नहीं मिली।</string>
+    <string name="stamp_no_suggestions"><!-- review -->कोई निजी नंबर नहीं मिला.</string>
     <!-- review -->
     <string name="stamp_locked"><!-- review -->यह दस्तावेज़ सुरक्षित है। पहले इसे अनलॉक करें।</string>
     <!-- review -->
@@ -183,33 +164,29 @@
     <string name="stamp_redact_warn_message"><!-- review -->छिपाए गए पाठ और पिक्सेल नई प्रति से हमेशा के लिए हट जाते हैं। मूल दस्तावेज़ नहीं बदलता।</string>
     <!-- review -->
     <string name="stamp_redact_warn_save"><!-- review -->रिडैक्ट की गई प्रति सहेजें</string>
-    <!-- review: Find and hide numbers (Redact). -->
-    <string name="find_button"><!-- review -->खोजें</string>
-    <string name="find_title"><!-- review -->नंबर खोजें और छिपाएँ</string>
-    <string name="find_explanation"><!-- review -->हर पेज पर आधार, VID, PAN, कार्ड, फ़ोन नंबर, ईमेल, IBAN, US SSN और लंबे खाता नंबर खोजता है.</string>
-    <string name="find_preset_aadhaar"><!-- review -->आधार छिपाएँ</string>
-    <string name="find_whole_aadhaar"><!-- review -->पूरा आधार नंबर छिपाएँ</string>
+    <!-- review: Hide private info (Redact). -->
+    <string name="find_button"><!-- review -->निजी जानकारी छिपाएँ</string>
+    <string name="find_title"><!-- review -->निजी जानकारी छिपाएँ</string>
+    <string name="find_explanation"><!-- review -->चुनें कि क्या छिपाना है. खोजें हर पेज देखकर मिली चीज़ें दिखाता है.</string>
+    <string name="find_choice_phone"><!-- review -->फ़ोन नंबर</string>
+    <string name="find_choice_email"><!-- review -->ईमेल पते</string>
+    <string name="find_choice_id"><!-- review -->आईडी नंबर (आधार, PAN, ड्राइविंग लाइसेंस, पासपोर्ट, VID)</string>
+    <string name="find_choice_cards"><!-- review -->कार्ड और बैंक नंबर (कार्ड, IBAN, खाता नंबर)</string>
+    <string name="find_choice_other"><!-- review -->अन्य नंबर (US SSN)</string>
+    <string name="find_choice_keep4"><!-- review -->आखिरी 4 अंक रखें</string>
     <string name="find_action"><!-- review -->खोजें</string>
-    <string name="find_scanning"><!-- review -->नंबर खोजे जा रहे हैं…</string>
-    <string name="find_none"><!-- review -->कोई संवेदनशील नंबर नहीं मिला. आप फिर भी बॉक्स बना सकते हैं.</string>
+    <string name="find_scanning"><!-- review -->निजी जानकारी खोजी जा रही है…</string>
+    <string name="find_none"><!-- review -->कोई निजी जानकारी नहीं मिली. आप फिर भी बॉक्स बना सकते हैं.</string>
+    <string name="find_choose_one"><!-- review -->कम से कम एक चीज़ चुनें.</string>
+    <string name="find_hide_selected"><!-- review -->चुनी हुई छिपाएँ</string>
     <plurals name="find_results_title">
         <item quantity="one"><!-- review -->%1$d चीज़ मिली</item>
         <item quantity="other"><!-- review -->%1$d चीज़ें मिलीं</item>
     </plurals>
-    <string name="find_hide_selected"><!-- review -->चुनी हुई छिपाएँ</string>
     <plurals name="find_applied">
         <item quantity="one"><!-- review -->%1$d चीज़ छिपाई गई. बॉक्स जाँचें, फिर सहेजें.</item>
         <item quantity="other"><!-- review -->%1$d चीज़ें छिपाई गईं. बॉक्स जाँचें, फिर सहेजें.</item>
     </plurals>
-    <string name="find_kind_aadhaar"><!-- review -->आधार</string>
-    <string name="find_kind_vid"><!-- review -->आधार VID</string>
-    <string name="find_kind_pan"><!-- review -->PAN</string>
-    <string name="find_kind_card"><!-- review -->कार्ड नंबर</string>
-    <string name="find_kind_phone"><!-- review -->फ़ोन नंबर</string>
-    <string name="find_kind_email"><!-- review -->ईमेल पते</string>
-    <string name="find_kind_iban"><!-- review -->IBAN</string>
-    <string name="find_kind_ssn"><!-- review -->US SSN</string>
-    <string name="find_kind_account"><!-- review -->खाता नंबर</string>
-    <string name="redact_label"><!-- review -->काला किया गया</string>
-    <string name="redacted_saved"><!-- review -->काला किया गया कॉपी सहेजा: %1$s</string>
+    <string name="private_info_label"><!-- review -->निजी जानकारी छिपाई गई</string>
+    <string name="private_info_saved"><!-- review -->निजी जानकारी छिपाकर कॉपी सहेजी: %1$s</string>
 </resources>

@@ -38,6 +38,15 @@ class ScanWhirlApp : Application() {
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
         }
         repository = ScanRepository(this)
+        // The gold accent/icon is not phone-verified yet: the launcher always
+        // resolves to the cyan alias regardless of an older saved preference.
+        runCatching {
+            // Only touch the launcher when the gold alias is actually on (no work on normal starts).
+            val alias = com.scanwhirl.app.ui.kit.SwTheme.enabledLauncherAlias(this)
+            if (alias != null && alias.endsWith("Cyan").not()) {
+                com.scanwhirl.app.ui.kit.SwTheme.applyLauncherIcon(this, false)
+            }
+        }
         // Security audit: nothing decrypted or shared survives a cold start. Runs before any
         // screen can read the cache, and never touches the library, the Vault or user exports.
         runCatching { PrivacySweep.run(this) }

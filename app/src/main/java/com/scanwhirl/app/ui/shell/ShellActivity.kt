@@ -483,7 +483,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             override fun onRestore() = restoreBilling()
             override fun onSeeAllProTools() = showTab(Tab.TOOLS)
         }, active = com.scanwhirl.app.util.ProGate.isPro(this))
-        setContent(proScreen)
+        setContent(scroll(proScreen))
         paintNav()
     }
 
@@ -522,6 +522,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 .setMessage(getString(R.string.pro_pending))
                 .setPrimary(R.string.sheet_got_it)
                 .build().show()
+            com.scanwhirl.app.util.ProBilling.State.Finishing ->
+                Toast.makeText(this, R.string.pro_finishing, Toast.LENGTH_SHORT).show()
             com.scanwhirl.app.util.ProBilling.State.None -> Unit
             is com.scanwhirl.app.util.ProBilling.State.Failed -> SwSheet.builder(this)
                 .setTitle(getString(R.string.pro_purchase_title))

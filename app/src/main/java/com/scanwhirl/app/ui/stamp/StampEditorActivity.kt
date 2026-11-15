@@ -128,7 +128,7 @@ class StampEditorActivity : BaseActivity() {
     private var hideMode = false
 
     /** Output label for the current hide flow: "Masked" (Aadhaar preset) or "Redacted". */
-    private var hideLabelRes = R.string.mask_label
+    private var hideLabelRes = R.string.private_info_label
 
     private var findRunning = false
 
@@ -453,28 +453,56 @@ class StampEditorActivity : BaseActivity() {
     }
 
     /**
-     * Redact → **Find**: a "Find" button in the redact editor opens this sheet. It keeps the
-     * Aadhaar quick path as a preset chip and offers the whole-number option for Aadhaar.
+     * Redact → **Hide private info**: the sheet first asks WHAT to hide (all choices on), then
+     * Find scans only those kinds and lists the counts; the chosen groups become adjustable
+     * redaction boxes.
      */
     private fun openFindSheet() {
         if (findRunning) return
-        val whole = CheckBox(this).apply {
-            id = R.id.findWholeAadhaar
-            text = getString(R.string.find_whole_aadhaar)
-            setTextColor(SwStyle.color(this@StampEditorActivity, R.color.text_hologram_hi))
+        data class Choice(val kinds: Set<SensitiveScan.Kind>, val label: Int, val id: Int)
+        val choices = listOf(
+            Choice(setOf(SensitiveScan.Kind.PHONE), R.string.find_choice_phone, R.id.findChoicePhone),
+            Choice(setOf(SensitiveScan.Kind.EMAIL), R.string.find_choice_email, R.id.findChoiceEmail),
+            Choice(
+                setOf(
+                    SensitiveScan.Kind.AADHAAR, SensitiveScan.Kind.VID,
+                    SensitiveScan.Kind.PAN, SensitiveScan.Kind.DRIVING_LICENCE,
+                    SensitiveScan.Kind.PASSPORT
+                ),
+                R.string.find_choice_id,
+                R.id.findChoiceId
+            ),
+            Choice(
+                setOf(SensitiveScan.Kind.CARD, SensitiveScan.Kind.IBAN, SensitiveScan.Kind.ACCOUNT),
+                R.string.find_choice_cards,
+                R.id.findChoiceCards
+            ),
+            Choice(setOf(SensitiveScan.Kind.SSN), R.string.find_choice_other, R.id.findChoiceOther)
+        )
+        val boxes = choices.map { choice ->
+            CheckBox(this).apply {
+                id = choice.id
+                text = getString(choice.label)
+                isChecked = true
+                setTextColor(SwStyle.color(this@StampEditorActivity, R.color.text_hologram_hi))
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
+                minimumHeight = SwStyle.dp(this@StampEditorActivity, 48f)
+                maxLines = 3
+                isSingleLine = false
+                buttonTintList = android.content.res.ColorStateList.valueOf(
+                    SwStyle.color(this@StampEditorActivity, R.color.cyan_primary)
+                )
+            }
+        }
+        val keep4 = CheckBox(this).apply {
+            id = R.id.findKeepLast4
+            text = getString(R.string.find_choice_keep4)
+            isChecked = false
+            setTextColor(SwStyle.color(this@StampEditorActivity, R.color.text_hologram_mid))
             minimumHeight = SwStyle.dp(this@StampEditorActivity, 48f)
             buttonTintList = android.content.res.ColorStateList.valueOf(
                 SwStyle.color(this@StampEditorActivity, R.color.cyan_primary)
             )
-        }
-        val preset = com.scanwhirl.app.ui.kit.SwChip(this).apply {
-            id = R.id.findPresetAadhaar
-            bind(
-                R.drawable.ic_sym_visibility_off,
-                getString(R.string.find_preset_aadhaar)
-            )
-            minimumHeight = SwStyle.dp(this@StampEditorActivity, 48f)
-            setOnClickListener { askMaskOptions() }
         }
         val explanation = TextView(this).apply {
             text = getString(R.string.find_explanation)
@@ -485,49 +513,50 @@ class StampEditorActivity : BaseActivity() {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(explanation)
-            addView(
-                preset,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    topMargin = SwStyle.dp(this@StampEditorActivity, 12f)
-                    bottomMargin = SwStyle.dp(this@StampEditorActivity, 4f)
-                }
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            addView(whole)
+            boxes.forEach { addView(it, params) }
+            addView(keep4, params)
         }
         SwSheet.builder(this)
             .setTitle(R.string.find_title)
             .setContent(content)
-            .setPrimary(R.string.find_action) { runFind(whole.isChecked) }
+            .setPrimary(R.string.find_action) {
+                val selected = choices.filterIndexed { index, _ -> boxes[index].isChecked }
+                    .flatMap { it.kinds }
+                    .toSet()
+                if (selected.isEmpty()) {
+                    note(getString(R.string.find_choose_one))
+                } else {
+                    runFind(selected, keep4.isChecked)
+                }
+            }
             .setSecondary(android.R.string.cancel)
             .build()
             .show()
     }
 
-    private fun findKindLabel(kind: SensitiveScan.Kind): String = getString(
-        when (kind) {
-            SensitiveScan.Kind.AADHAAR -> R.string.find_kind_aadhaar
-            SensitiveScan.Kind.VID -> R.string.find_kind_vid
-            SensitiveScan.Kind.PAN -> R.string.find_kind_pan
-            SensitiveScan.Kind.CARD -> R.string.find_kind_card
-            SensitiveScan.Kind.PHONE -> R.string.find_kind_phone
-            SensitiveScan.Kind.EMAIL -> R.string.find_kind_email
-            SensitiveScan.Kind.IBAN -> R.string.find_kind_iban
-            SensitiveScan.Kind.SSN -> R.string.find_kind_ssn
-            SensitiveScan.Kind.ACCOUNT -> R.string.find_kind_account
-        }
-    )
+    private fun categoryLabel(kind: SensitiveScan.Kind): Int = when (kind) {
+        SensitiveScan.Kind.PHONE -> R.string.find_choice_phone
+        SensitiveScan.Kind.EMAIL -> R.string.find_choice_email
+        SensitiveScan.Kind.AADHAAR, SensitiveScan.Kind.VID, SensitiveScan.Kind.PAN,
+        SensitiveScan.Kind.DRIVING_LICENCE, SensitiveScan.Kind.PASSPORT ->
+            R.string.find_choice_id
+        SensitiveScan.Kind.CARD, SensitiveScan.Kind.IBAN, SensitiveScan.Kind.ACCOUNT ->
+            R.string.find_choice_cards
+        SensitiveScan.Kind.SSN -> R.string.find_choice_other
+    }
 
-    private fun runFind(wholeAadhaar: Boolean) {
+    private fun runFind(kinds: Set<SensitiveScan.Kind>, keepLast4: Boolean) {
         if (findRunning) return
         findRunning = true
         binding.hint.setText(R.string.find_scanning)
         binding.hint.visibility = View.VISIBLE
         lifecycleScope.launch {
-            val hits = try {
-                findScanner?.invoke(document.pageFiles) ?: scanSensitive(wholeAadhaar)
+            val found = try {
+                findScanner?.invoke(document.pageFiles) ?: scanSensitive(kinds, keepLast4)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -535,6 +564,7 @@ class StampEditorActivity : BaseActivity() {
             }
             findRunning = false
             binding.hint.visibility = View.GONE
+            val hits = found.filter { it.second.kind in kinds }
             if (hits.isEmpty()) {
                 note(getString(R.string.find_none))
                 return@launch
@@ -545,7 +575,8 @@ class StampEditorActivity : BaseActivity() {
 
     /** OCR (element boxes) on every page, then the detectors; saved geometry is the fallback. */
     private suspend fun scanSensitive(
-        wholeAadhaar: Boolean
+        kinds: Set<SensitiveScan.Kind>,
+        keepLast4: Boolean
     ): List<Pair<Int, SensitiveScan.Hit>> = withContext(Dispatchers.IO) {
         val out = ArrayList<Pair<Int, SensitiveScan.Hit>>()
         document.pageFiles.forEachIndexed { index, file ->
@@ -559,7 +590,8 @@ class StampEditorActivity : BaseActivity() {
                     },
                     words.page.width,
                     words.page.height,
-                    wholeAadhaar
+                    kinds,
+                    keepLast4
                 )
                 out += found.map { index to it }
             } else {
@@ -567,7 +599,7 @@ class StampEditorActivity : BaseActivity() {
                     com.scanwhirl.app.util.OcrEngine.recognizeFile(file).page
                 }.getOrNull()
                 if (page != null) {
-                    out += SensitiveScan.find(page, wholeAadhaar).map { index to it }
+                    out += SensitiveScan.find(page, kinds, keepLast4).map { index to it }
                 }
             }
         }
@@ -575,12 +607,16 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun showFindResults(hits: List<Pair<Int, SensitiveScan.Hit>>) {
-        val groups = hits.groupBy { it.second.kind }
-        val kinds = SensitiveScan.Kind.values().filter { groups.containsKey(it) }
-        val labels = kinds.map { kind ->
-            "${findKindLabel(kind)} (${groups.getValue(kind).size})"
+        val groups = hits.groupBy { categoryLabel(it.second.kind) }
+        val order = listOf(
+            R.string.find_choice_phone, R.string.find_choice_email, R.string.find_choice_id,
+            R.string.find_choice_cards, R.string.find_choice_other
+        )
+        val categories = order.filter { groups.containsKey(it) }
+        val labels = categories.map { label ->
+            "${getString(label)} (${groups.getValue(label).size})"
         }
-        val checked = BooleanArray(kinds.size) { true }
+        val checked = BooleanArray(categories.size) { true }
         SwSheet.builder(this)
             .setTitle(
                 resources.getQuantityString(R.plurals.find_results_title, hits.size, hits.size)
@@ -588,7 +624,7 @@ class StampEditorActivity : BaseActivity() {
             .setOptions(labels, multiChecked = checked) { index, isChecked ->
                 checked[index] = isChecked
             }
-            .setPrimary(R.string.find_hide_selected) { applyFind(hits, kinds, checked) }
+            .setPrimary(R.string.find_hide_selected) { applyFind(hits, categories, checked) }
             .setSecondary(android.R.string.cancel)
             .build()
             .show()
@@ -596,11 +632,11 @@ class StampEditorActivity : BaseActivity() {
 
     private fun applyFind(
         hits: List<Pair<Int, SensitiveScan.Hit>>,
-        kinds: List<SensitiveScan.Kind>,
+        categories: List<Int>,
         checked: BooleanArray
     ) {
-        val chosenKinds = kinds.filterIndexed { index, _ -> checked[index] }.toSet()
-        val chosen = hits.filter { it.second.kind in chosenKinds }
+        val chosenCategories = categories.filterIndexed { index, _ -> checked[index] }.toSet()
+        val chosen = hits.filter { categoryLabel(it.second.kind) in chosenCategories }
         if (chosen.isEmpty()) return
         editor.currentPage = chosen.minOf { it.first }
         var added = 0
@@ -609,7 +645,7 @@ class StampEditorActivity : BaseActivity() {
             added += boxes.size
         }
         hideMode = true
-        hideLabelRes = R.string.redact_label
+        hideLabelRes = R.string.private_info_label
         disarm()
         refresh()
         showPage()
@@ -617,101 +653,6 @@ class StampEditorActivity : BaseActivity() {
             resources.getQuantityString(R.plurals.find_applied, added, added)
         )
         binding.hint.visibility = View.VISIBLE
-    }
-
-    /**
-     * Mask Aadhaar: find 12-digit Aadhaar / 16-digit VID numbers on every page (ML Kit element
-     * boxes; stored OCR geometry when the model is unavailable), seed redaction boxes over the
-     * first 8 digits, optionally hide the QR code, and let the user adjust them. The save path
-     * uses the true redaction burn and names the copy with [OutputNames].
-     */
-    private fun askMaskOptions() {
-        val checked = booleanArrayOf(true, true, false)
-        SwSheet.builder(this)
-            .setTitle(R.string.mask_options_title)
-            .setOptions(
-                listOf(
-                    getString(R.string.mask_opt_number),
-                    getString(R.string.mask_opt_vid),
-                    getString(R.string.mask_opt_qr)
-                ),
-                multiChecked = checked
-            ) { index, isChecked ->
-                checked[index] = isChecked
-            }
-            .setPrimary(R.string.mask_continue) { maskAadhaar(checked[1], checked[2]) }
-            .setSecondary(android.R.string.cancel)
-            .build()
-            .show()
-    }
-
-    private fun maskAadhaar(hideVid: Boolean, hideQr: Boolean) {
-        val id = document.id
-        lifecycleScope.launch {
-            val found = withContext(Dispatchers.IO) {
-                val geometries = runCatching { repo.ocrStore.readGeo(id) }.getOrDefault(emptyMap())
-                val pages = ArrayList<Pair<Int, List<PageStamp.Box>>>()
-                var count = 0
-                document.pageFiles.forEachIndexed { index, page ->
-                    val boxes = ArrayList<PageStamp.Box>()
-                    // Device path: ML Kit element boxes (exact first two 4-digit groups).
-                    val words = runCatching {
-                        com.scanwhirl.app.util.OcrEngine.recognizeWords(page)
-                    }.getOrNull()
-                    if (words != null) {
-                        boxes += com.scanwhirl.app.util.AadhaarMask.findWords(
-                            words.words.map {
-                                com.scanwhirl.app.util.AadhaarMask.Word(
-                                    it.text, it.left, it.top, it.right, it.bottom
-                                )
-                            },
-                            words.page.width,
-                            words.page.height,
-                            maskVid = hideVid
-                        )
-                    } else {
-                        // Host/old-OCR fallback: the saved line geometry.
-                        val geo = geometries[page.name]
-                            ?: runCatching {
-                                com.scanwhirl.app.util.OcrEngine.recognizeFile(page).page
-                            }.getOrNull()
-                        if (geo != null) {
-                            boxes += com.scanwhirl.app.util.AadhaarMask.find(geo, maskVid = hideVid)
-                        }
-                    }
-                    if (hideQr) {
-                        val bitmap = com.scanwhirl.app.util.InkExtract.decodeSampled(page, 1400)
-                        if (bitmap != null) {
-                            com.scanwhirl.app.util.AadhaarMask.findQr(bitmap)?.let {
-                                boxes += it
-                            }
-                            bitmap.recycle()
-                        }
-                    }
-                    if (boxes.isNotEmpty()) {
-                        pages += index to boxes
-                        count += boxes.size
-                    }
-                }
-                pages to count
-            }
-            val (pages, count) = found
-            if (count == 0) {
-                note(getString(R.string.mask_aadhaar_none))
-                return@launch
-            }
-            val start = editor.currentPage
-            if (pages.isNotEmpty()) editor.currentPage = pages.first().first
-            pages.forEach { (index, boxes) ->
-                editor.addAllAt(index, boxes.map { PageStamp.Mark.Redact(it) })
-            }
-            if (pages.isEmpty()) editor.currentPage = start
-            hideMode = true
-            hideLabelRes = R.string.mask_label
-            showPage()
-            binding.hint.setText(R.string.mask_aadhaar_hint)
-            binding.hint.visibility = android.view.View.VISIBLE
-        }
     }
 
     // ------------------------------------------------------------------ page and chrome
@@ -810,12 +751,8 @@ class StampEditorActivity : BaseActivity() {
                 )
                 Toast.makeText(
                     this@StampEditorActivity,
-                    when {
-                        hideLabelRes == R.string.mask_label ->
-                            getString(R.string.mask_aadhaar_saved, copy.name)
-                        hideMode -> getString(R.string.redacted_saved, copy.name)
-                        else -> getString(R.string.stamp_saved, copy.name)
-                    },
+                    if (hideMode) getString(R.string.private_info_saved, copy.name)
+                    else getString(R.string.stamp_saved, copy.name),
                     Toast.LENGTH_LONG
                 ).show()
                 finish()

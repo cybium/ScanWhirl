@@ -4,6 +4,7 @@
     <string name="pro_unlocked">Pro unlocked</string>
     <string name="pro_pending_title">Payment pending</string>
     <string name="pro_pending">Pro unlocks when the payment completes.</string>
+    <string name="pro_finishing">Finishing purchase…</string>
     <string name="pro_purchase_title">Purchase</string>
     <string name="pro_restore_title">Restore purchase</string>
     <string name="pro_restore_none">No Pro purchase found for this Google account.</string>

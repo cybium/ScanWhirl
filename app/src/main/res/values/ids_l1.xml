@@ -104,6 +104,7 @@
     <item name="rowTestFree" type="id" />
     <item name="switchTestFree" type="id" />
     <item name="swProScroll" type="id" />
+    <item name="swProMore" type="id" />
     <item name="swNavMe" type="id" />
     <item name="swShellTab" type="id" />
     <item name="swHomeSearch" type="id" />

@@ -12,9 +12,15 @@ android {
     defaultConfig {
         // Test builds (-PtestBuild) install side-by-side as "ScanWhirl Test"
         // and never touch the Play package.
-        applicationId = if (project.hasProperty("testBuild")) "com.scanwhirl.app.test" else "com.scanwhirl.app"
+        // -PdemoBuild (with -PtestBuild): a clean third copy, "ScanWhirl", for store screenshots
+        // (com.scanwhirl.app.demo) so the QA library and the Play app are never touched.
+        applicationId = when {
+            project.hasProperty("demoBuild") -> "com.scanwhirl.app.demo"
+            project.hasProperty("testBuild") -> "com.scanwhirl.app.test"
+            else -> "com.scanwhirl.app"
+        }
         manifestPlaceholders["appLabel"] =
-            if (project.hasProperty("testBuild")) "ScanWhirl Test" else "ScanWhirl"
+            if (project.hasProperty("testBuild") && !project.hasProperty("demoBuild")) "ScanWhirl Test" else "ScanWhirl"
         minSdk = 24
         targetSdk = 36
         versionCode = 29

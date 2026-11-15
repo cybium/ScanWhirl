@@ -2,6 +2,8 @@ package com.scanwhirl.app.util
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.android.billingclient.api.AcknowledgePurchaseParams
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
@@ -15,22 +17,29 @@ import com.android.billingclient.api.QueryPurchasesParams
 
 /**
  * The one place Play Billing lives: one-time in-app product [PRODUCT_ID], the localized price,
- * the purchase flow and "Restore purchase".
+ * the purchase flow, "Restore purchase" and the start-up ownership check.
  *
- * Everything that talks to Play is behind [Gateway], so the decision logic (acknowledge, then
- * unlock; pending; cancel; restore; a refund or a missing purchase in a release build) is a plain
- * unit test with a fake. A phone without Play Store (Robolectric, some emulators) never crashes:
- * the client reports "unavailable" and the UI shows a short sheet.
+ * Everything that talks to Play is behind [Gateway], so the decisions (acknowledge asynchronously,
+ * pending versus paid, a failed query never locks Pro, a refund locks it only in a release build)
+ * are plain unit tests with a fake that answers **later**, like the real client.
  *
- * The product is INAPP (one time, non-consumable) and must be created in Play Console after the
- * first upload that contains this library.
+ * A phone without Play Store (Robolectric, some emulators) never crashes: the client reports
+ * unavailable and the UI shows a short sheet. The product is INAPP (one time, non-consumable) and
+ * must be created in Play Console after the first upload that contains this library.
  */
 object ProBilling {
 
     const val PRODUCT_ID = "scanwhirl_pro"
 
+    enum class PurchaseState { PURCHASED, PENDING, UNSPECIFIED }
+
     /** One purchase as the store reports it. */
-    data class Owned(val productId: String, val acknowledged: Boolean, val token: String)
+    data class Owned(
+        val productId: String,
+        val acknowledged: Boolean,
+        val token: String,
+        val state: PurchaseState = PurchaseState.PURCHASED
+    )
 
     sealed class Event {
         data class Purchased(val purchase: Owned) : Event()
@@ -41,6 +50,9 @@ object ProBilling {
 
     sealed class State {
         object Owned : State()
+
+        /** Asked the store to acknowledge; Pro follows when Play answers. */
+        object Finishing : State()
         object None : State()
         object Pending : State()
         data class Failed(val message: String) : State()
@@ -52,7 +64,8 @@ object ProBilling {
         fun connect(onReady: (Boolean) -> Unit)
         fun price(onPrice: (String?) -> Unit)
         fun launch(activity: Activity?)
-        fun queryPurchases(onResult: (List<Owned>) -> Unit)
+        /** `null` = the query failed; an empty list = a real answer with nothing owned. */
+        fun queryPurchases(onResult: (List<Owned>?) -> Unit)
         fun acknowledge(purchase: Owned, onDone: (Boolean) -> Unit)
         fun close()
     }
@@ -67,6 +80,8 @@ object ProBilling {
     /** Once per process is enough for the start-up ownership check. */
     @Volatile
     private var checkedOnStart = false
+
+    private val mainPost: (() -> Unit) -> Unit = { Handler(Looper.getMainLooper()).post(it) }
 
     private fun gateway(context: Context): Gateway =
         gateway ?: gatewayFactory(context.applicationContext).also { gateway = it }
@@ -95,7 +110,7 @@ object ProBilling {
         val context = activity.applicationContext
         runCatching {
             val client = gateway(context)
-            val controller = Controller(context, client, com.scanwhirl.app.BuildConfig.TEST_BUILD, onState)
+            val controller = Controller(context, client, com.scanwhirl.app.BuildConfig.TEST_BUILD, mainPost, onState)
             client.setListener { event -> controller.handle(event) }
             client.connect { ok ->
                 if (ok) {
@@ -107,7 +122,7 @@ object ProBilling {
         }.onFailure { onState(State.Failed("Google Play isn't available on this phone.")) }
     }
 
-    /** "Restore purchase": anything owned unlocks Pro. */
+    /** "Restore purchase": anything owned unlocks Pro (and is acknowledged). */
     fun restore(context: Context, onState: (State) -> Unit) {
         if (com.scanwhirl.app.BuildConfig.TEST_BUILD) {
             onState(if (ProGate.isPro(context)) State.Owned else State.None)
@@ -115,7 +130,7 @@ object ProBilling {
         }
         runCatching {
             val client = gateway(context)
-            val controller = Controller(context, client, com.scanwhirl.app.BuildConfig.TEST_BUILD, onState)
+            val controller = Controller(context, client, com.scanwhirl.app.BuildConfig.TEST_BUILD, mainPost, onState)
             client.connect { ok ->
                 if (!ok) {
                     onState(State.Failed("Google Play isn't available on this phone."))
@@ -128,8 +143,8 @@ object ProBilling {
 
     /**
      * Cheap start-up check (ShellActivity.onResume): a purchase on another phone, a reinstall or
-     * Family Library unlocks automatically; a refund or a missing purchase locks Pro again, but
-     * only in a release build ([Controller.ownedState]).
+     * Family Library unlocks automatically; a refund locks Pro again, but only in a release build
+     * and only when Play answers OK without the product.
      */
     fun refreshOwned(context: Context) {
         // Test builds are Pro by design; they never need to talk to Play on start-up.
@@ -138,7 +153,7 @@ object ProBilling {
         checkedOnStart = true
         runCatching {
             val client = gateway(context)
-            val controller = Controller(context, client, com.scanwhirl.app.BuildConfig.TEST_BUILD) { }
+            val controller = Controller(context, client, com.scanwhirl.app.BuildConfig.TEST_BUILD, mainPost) { }
             client.connect { ok ->
                 if (ok) client.queryPurchases { controller.applyOwned(it, silent = true) } else client.close()
             }
@@ -154,59 +169,95 @@ object ProBilling {
     }
 
     /**
-     * Purchase handling, independent of Play: acknowledge a fresh purchase before unlocking,
-     * ignore a cancel, surface a pending payment, and unlock/lock only in a release build.
+     * Purchase handling, independent of Play's threading. Acknowledge happens asynchronously:
+     * Play answers on its own thread, so [post] hands the decision back to the main thread and the
+     * UI sees [State.Finishing] until then.
      */
     internal class Controller(
         private val context: Context,
         private val gateway: Gateway,
         private val testBuild: Boolean,
+        private val post: (() -> Unit) -> Unit = { it() },
         private val onState: (State) -> Unit
     ) {
-        /** Returns the state after [event]; also reports it to [onState]. */
-        fun handle(event: Event): State {
-            val state = when (event) {
-                is Event.Purchased -> {
-                    val purchase = event.purchase
-                    if (purchase.acknowledged) {
-                        record(true)
-                        State.Owned
-                    } else {
-                        var acked = false
-                        gateway.acknowledge(purchase) { ok -> acked = ok }
-                        if (!acked) {
-                            // The store can acknowledge a moment later; an unacknowledged purchase
-                            // is refunded automatically after three days, so Pro waits for it.
-                            record(testBuild)
-                            State.Failed("Finishing the purchase failed. Try Restore purchase.")
-                        } else {
-                            record(true)
-                            State.Owned
-                        }
-                    }
-                }
-                Event.Pending -> State.Pending
-                Event.Cancelled -> State.None
-                is Event.Failed -> State.Failed(event.message)
+        /** Handles one purchase update. */
+        fun handle(event: Event) {
+            when (event) {
+                is Event.Purchased -> onPurchase(event.purchase)
+                Event.Pending -> onState(State.Pending)
+                Event.Cancelled -> onState(State.None)
+                is Event.Failed -> onState(State.Failed(event.message))
             }
-            onState(state)
-            return state
-        }
-
-        /** Applies [purchases] from a restore/start-up query. */
-        fun applyOwned(purchases: List<Owned>, silent: Boolean = false): State {
-            val owned = purchases.any { it.productId == PRODUCT_ID }
-            val state = if (owned) State.Owned else State.None
-            record(if (owned) true else ownedState())
-            if (!silent) onState(state)
-            return state
         }
 
         /**
-         * A release build follows the store: a refund or a purchase that no longer exists locks
-         * Pro again. A test build keeps its Pro-for-review behaviour.
+         * Applies a restore / start-up query. `null` is a failed query: change nothing (a paying
+         * user offline or with Play busy must keep Pro). Only an OK answer that does not contain
+         * the product locks Pro, and only in a release build.
          */
-        private fun ownedState(): Boolean = if (testBuild) true else false
+        fun applyOwned(purchases: List<Owned>?, silent: Boolean = false) {
+            if (purchases == null) return
+            val mine = purchases.filter { it.productId == PRODUCT_ID }
+            val bought = mine.filter { it.state == PurchaseState.PURCHASED }
+            if (bought.isEmpty()) {
+                val pending = mine.any { it.state == PurchaseState.PENDING }
+                if (pending) {
+                    if (!silent) onState(State.Pending)
+                    return
+                }
+                if (!testBuild) record(false)
+                if (!silent) onState(State.None)
+                return
+            }
+            acknowledgeThenUnlock(bought, silent)
+        }
+
+        private fun onPurchase(purchase: Owned) {
+            when (purchase.state) {
+                PurchaseState.PURCHASED -> {
+                    if (purchase.acknowledged) {
+                        unlock()
+                    } else {
+                        acknowledgeThenUnlock(listOf(purchase), silent = false)
+                    }
+                }
+                PurchaseState.PENDING -> onState(State.Pending)
+                PurchaseState.UNSPECIFIED -> onState(State.None)
+            }
+        }
+
+        private fun acknowledgeThenUnlock(purchases: List<Owned>, silent: Boolean) {
+            val unacknowledged = purchases.filterNot { it.acknowledged }
+            if (unacknowledged.isEmpty()) {
+                if (!silent) unlock()
+                else record(true)
+                return
+            }
+            if (!silent) onState(State.Finishing)
+            var remaining = unacknowledged.size
+            var anyOk = false
+            unacknowledged.forEach { purchase ->
+                gateway.acknowledge(purchase) { ok ->
+                    post {
+                        anyOk = anyOk || ok
+                        remaining--
+                        if (remaining == 0) {
+                            if (anyOk) {
+                                record(true)
+                                if (!silent) onState(State.Owned)
+                            } else if (!silent) {
+                                onState(State.Failed("Finishing the purchase failed. Try Restore purchase."))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private fun unlock() {
+            record(true)
+            onState(State.Owned)
+        }
 
         private fun record(pro: Boolean) {
             if (pro) {
@@ -242,18 +293,22 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
         .build()
         .also { client = it }
 
+    private fun stateOf(purchase: Purchase): ProBilling.PurchaseState = when (purchase.purchaseState) {
+        Purchase.PurchaseState.PURCHASED -> ProBilling.PurchaseState.PURCHASED
+        Purchase.PurchaseState.PENDING -> ProBilling.PurchaseState.PENDING
+        else -> ProBilling.PurchaseState.UNSPECIFIED
+    }
+
     private fun dispatch(purchase: Purchase) {
-        when (purchase.purchaseState) {
-            Purchase.PurchaseState.PURCHASED -> listener?.invoke(
-                ProBilling.Event.Purchased(
-                    ProBilling.Owned(
-                        productId = purchase.products.firstOrNull().orEmpty(),
-                        acknowledged = purchase.isAcknowledged,
-                        token = purchase.purchaseToken
-                    )
-                )
-            )
-            Purchase.PurchaseState.PENDING -> listener?.invoke(ProBilling.Event.Pending)
+        val owned = ProBilling.Owned(
+            productId = purchase.products.firstOrNull().orEmpty(),
+            acknowledged = purchase.isAcknowledged,
+            token = purchase.purchaseToken,
+            state = stateOf(purchase)
+        )
+        when (owned.state) {
+            ProBilling.PurchaseState.PURCHASED -> listener?.invoke(ProBilling.Event.Purchased(owned))
+            ProBilling.PurchaseState.PENDING -> listener?.invoke(ProBilling.Event.Pending)
             else -> listener?.invoke(ProBilling.Event.Cancelled)
         }
     }
@@ -315,13 +370,14 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
         )
     }
 
-    override fun queryPurchases(onResult: (List<ProBilling.Owned>) -> Unit) {
+    override fun queryPurchases(onResult: (List<ProBilling.Owned>?) -> Unit) {
         val params = QueryPurchasesParams.newBuilder()
             .setProductType(BillingClient.ProductType.INAPP)
             .build()
         client().queryPurchasesAsync(params) { result, purchases ->
             if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                onResult(emptyList())
+                // Not an answer: the caller must change nothing (never lock a paying user out).
+                onResult(null)
                 return@queryPurchasesAsync
             }
             onResult(
@@ -329,7 +385,8 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
                     ProBilling.Owned(
                         productId = purchase.products.firstOrNull().orEmpty(),
                         acknowledged = purchase.isAcknowledged,
-                        token = purchase.purchaseToken
+                        token = purchase.purchaseToken,
+                        state = stateOf(purchase)
                     )
                 }
             )

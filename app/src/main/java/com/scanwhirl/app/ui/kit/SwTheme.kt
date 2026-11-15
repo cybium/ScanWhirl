@@ -21,8 +21,15 @@ object SwTheme {
     const val CYAN = "cyan"
     const val GOLD = "gold"
 
+    /**
+     * Gold is built but not phone-verified for the Play release: the Settings
+     * row says "Coming soon" and every surface stays Cyan. Turn this on after
+     * the owner has verified the gold icon/theme on a real phone.
+     */
+    private const val GOLD_ENABLED = false
+
     fun isGold(context: Context): Boolean =
-        ProGate.isPro(context) && Prefs.accent(context) == Prefs.ACCENT_GOLD
+        GOLD_ENABLED && ProGate.isPro(context) && Prefs.accent(context) == Prefs.ACCENT_GOLD
 
     /** The active accent for a token, or the token itself when it is not cyan. */
     fun accent(context: Context, res: Int): Int = when (res) {
