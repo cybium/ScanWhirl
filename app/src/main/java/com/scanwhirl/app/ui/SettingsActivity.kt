@@ -91,6 +91,10 @@ class SettingsActivity : BaseActivity() {
         binding.rowPrivacy.setOnClickListener { openPrivacy() }
         binding.rowLanguage.setOnClickListener { chooseLanguage() }
         binding.rowViewer.setOnClickListener { chooseViewer() }
+        // Me-hub cleanup: About lives once, in the Me tab. Settings owns look,
+        // text, privacy and storage only — no nested About/storage duplicates.
+        hideSection(binding.rowAbout)
+        hideSection(binding.rowTrash)
         binding.rowAbout.setOnClickListener { showAbout() }
         binding.rowTrash.setOnClickListener { startActivity(TrashActivity.intent(this)) }
 
@@ -99,6 +103,9 @@ class SettingsActivity : BaseActivity() {
 
         // SECURITY_AUDIT 2026-11-15: screenshot policy for ordinary documents.
         addBlockScreenshotsRow()
+
+        // Pro accent theme: Cyan (default) or Gold.
+        addAccentRow()
 
         updateSummaries()
     }
@@ -233,6 +240,138 @@ class SettingsActivity : BaseActivity() {
             parent.addView(divider)
             parent.addView(row)
         }
+    }
+
+    private lateinit var subAccent: android.widget.TextView
+
+    /**
+     * Settings > Look: Cyan (default) or Gold (Pro). Free users see the Gold
+     * option with a PRO tag and land on the Pro screen; the choice is stored only
+     * when allowed, and the launcher alias follows it.
+     */
+    private fun addAccentRow() {
+        val parent = binding.rowFont.parent as? android.view.ViewGroup ?: return
+        val d = resources.displayMetrics.density
+        val row = android.widget.LinearLayout(this).apply {
+            id = R.id.rowAccent
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
+            setBackgroundResource(android.R.drawable.list_selector_background)
+            setPadding((16 * d).toInt(), (12 * d).toInt(), (12 * d).toInt(), (12 * d).toInt())
+            setOnClickListener { chooseAccent() }
+        }
+        val texts = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        texts.addView(
+            android.widget.TextView(this).apply {
+                setText(R.string.settings_accent)
+                textSize = 15f
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(
+                        this@SettingsActivity, R.color.text_hologram_hi
+                    )
+                )
+            }
+        )
+        subAccent = android.widget.TextView(this).apply {
+            id = R.id.subAccent
+            textSize = 12.5f
+            setPadding(0, (2 * d).toInt(), 0, 0)
+            setTextColor(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@SettingsActivity, R.color.text_hologram_mid
+                )
+            )
+        }
+        texts.addView(subAccent)
+        row.addView(
+            texts,
+            android.widget.LinearLayout.LayoutParams(
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            )
+        )
+        row.addView(
+            android.widget.ImageView(this).apply {
+                setImageResource(R.drawable.ic_sym_chevron_right)
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(
+                        this@SettingsActivity, R.color.text_hologram_dim
+                    )
+                )
+            },
+            android.widget.LinearLayout.LayoutParams((20 * d).toInt(), (20 * d).toInt())
+        )
+        val index = parent.indexOfChild(binding.rowFont)
+        parent.addView(row, if (index >= 0) index + 1 else parent.childCount)
+        updateAccentSummary()
+    }
+
+    private fun updateAccentSummary() {
+        if (!::subAccent.isInitialized) return
+        subAccent.text = getString(
+            if (com.scanwhirl.app.ui.kit.SwTheme.isGold(this)) R.string.accent_gold
+            else R.string.accent_cyan
+        )
+    }
+
+    private fun chooseAccent() {
+        val goldChosen = com.scanwhirl.app.ui.kit.SwTheme.isGold(this)
+        val labels = listOf(
+            getString(R.string.accent_cyan),
+            getString(R.string.accent_gold) + "  ·  PRO"
+        )
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.settings_accent)
+            .setOptions(labels, if (goldChosen) 1 else 0) { which, _ ->
+                if (which != 1) {
+                    applyAccent(gold = false)
+                } else if (!com.scanwhirl.app.util.ProGate.isPro(this)) {
+                    // Free: the gold option is visible with its PRO tag and routes
+                    // through the central Pro gate.
+                    startActivity(
+                        Intent(this, com.scanwhirl.app.ui.shell.ShellActivity::class.java)
+                            .putExtra(com.scanwhirl.app.ui.shell.ShellActivity.EXTRA_OPEN_PRO, true)
+                    )
+                } else {
+                    confirmGold()
+                }
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun confirmGold() {
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.accent_gold)
+            .setMessage(R.string.accent_gold_warning)
+            .setPrimary(R.string.accent_gold_use) { applyAccent(gold = true) }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun applyAccent(gold: Boolean) {
+        Prefs.setAccent(
+            this,
+            if (gold) Prefs.ACCENT_GOLD else Prefs.ACCENT_CYAN
+        )
+        com.scanwhirl.app.ui.kit.SwTheme.applyLauncherIcon(this, gold)
+        updateAccentSummary()
+        // Rebuild every kit surface in the new accent.
+        recreate()
+    }
+
+    /** Hides a settings row's card and the section label right above it. */
+    private fun hideSection(row: android.view.View) {
+        val card = row.parent?.parent as? android.view.View ?: return
+        val parent = card.parent as? android.view.ViewGroup ?: return
+        val index = parent.indexOfChild(card)
+        if (index > 0) parent.getChildAt(index - 1).visibility = android.view.View.GONE
+        card.visibility = android.view.View.GONE
     }
 
     private fun chooseOcrLanguage() {

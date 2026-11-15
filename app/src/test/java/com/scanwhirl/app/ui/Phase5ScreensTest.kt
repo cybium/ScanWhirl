@@ -282,7 +282,7 @@ class Phase5ScreensTest {
                 assertSame("font and greeting rows share a section container",
                     rowFont.parent, rowGreeting.parent)
                 val appearance = rowFont.parent as ViewGroup
-                assertEquals("appearance card holds 4 rows + 3 dividers", 7, appearance.childCount)
+                assertEquals("appearance card holds 5 rows + 3 dividers", 8, appearance.childCount)
                 assertTrue("rows live inside a MaterialCardView",
                     appearance.parent is com.google.android.material.card.MaterialCardView)
 

@@ -213,14 +213,6 @@ object ToolRegistry {
         ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "redact") } ?: host.comingSoon(tool) }
         ),
-        ready("mask_aadhaar", ToolGroup.EDIT, R.string.tool_mask_aadhaar, R.drawable.ic_sym_visibility_off, "aadhaar mask uidai hide aadhar vid", launch = { host, tool ->
-            val activity = host as? android.app.Activity
-            if (activity == null) {
-                host.comingSoon(tool)
-            } else {
-                com.scanwhirl.app.ui.stamp.StampToolLauncher.openMaskAadhaar(activity)
-            }
-        }),
 
         // Secure (4)
         build("protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted, "protect password encrypt aes"),
@@ -241,23 +233,8 @@ object ToolRegistry {
         ),
         ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
-        // Text (2)
-        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy"),
-        SwTool(
-            "hindi_text", ToolGroup.TEXT, R.string.tool_hindi_text, R.drawable.ic_sym_language,
-            false, ToolStatus.READY, "hindi devanagari text read ocr",
-            launch = { host, tool ->
-                val activity = host as? androidx.appcompat.app.AppCompatActivity
-                if (activity != null) {
-                    com.scanwhirl.app.tools.HindiTextLauncher.open(
-                        activity,
-                        com.scanwhirl.app.ScanWhirlApp.from(activity).repository
-                    )
-                } else {
-                    host.open(tool)
-                }
-            }
-        )
+        // Text (1)
+        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy")
     )
 
     private val byId: Map<String, SwTool> = all.associateBy { it.id }

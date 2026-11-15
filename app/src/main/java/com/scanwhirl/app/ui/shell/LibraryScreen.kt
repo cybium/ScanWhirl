@@ -38,6 +38,7 @@ import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
 import com.scanwhirl.app.util.BatchRename
@@ -89,6 +90,15 @@ class LibraryScreen(
 
     // v2 UI: 03_tools_hub — folders, tags and selection mode.
     private lateinit var folderRow: LinearLayout
+    private var quickIds: MutableList<String> =
+        com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
+    private var quickEditing = false
+    private lateinit var quickRow2: LinearLayout
+    private lateinit var quickAddGrid: LinearLayout
+    private lateinit var quickEdit: ImageButton
+    private lateinit var quickDone: TextView
+    private lateinit var quickCancel: TextView
+    private lateinit var quickAll: TextView
     private lateinit var selectionBar: LinearLayout
     private lateinit var selectionCount: TextView
     private var folderNames: List<String> = emptyList()
@@ -119,8 +129,6 @@ class LibraryScreen(
     /** Tests wait on this after [reload] when they force a threaded IO dispatcher. */
     internal var loaded = false
         private set
-
-    private val quickIds = listOf("merge", "compress", "sign", "protect", "to_word", "read_text")
 
     /** Short labels that fit one line in a sixth of a 360dp phone. */
     private val quickLabels = mapOf(
@@ -157,9 +165,7 @@ class LibraryScreen(
         folderScroll = folderSection()
         addView(folderScroll)
         addView(createBlock())
-        quickHeader = sectionHeader(context.getString(R.string.home_quick_tools), null) {
-            callbacks.onAllTools()
-        }
+        quickHeader = quickToolsHeader()
         addView(quickHeader)
         quickRow = LinearLayout(context).apply {
             id = R.id.swQuickRow
@@ -169,6 +175,23 @@ class LibraryScreen(
             setPadding(pad, 0, pad, 0)
         }
         addView(quickRow)
+        quickRow2 = LinearLayout(context).apply {
+            id = R.id.swQuickRow2
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER
+            val pad = SwStyle.dp(context, 8f)
+            setPadding(pad, 0, pad, 0)
+            isVisible = false
+        }
+        addView(quickRow2)
+        quickAddGrid = LinearLayout(context).apply {
+            id = R.id.swQuickAddGrid
+            orientation = VERTICAL
+            val pad = SwStyle.dp(context, 12f)
+            setPadding(pad, SwStyle.dp(context, 4f), pad, 0)
+            isVisible = false
+        }
+        addView(quickAddGrid)
         recentHeader = sectionHeader(context.getString(R.string.home_recent), context.getString(R.string.home_newest)) {
             showSortSheet()
         }
@@ -775,7 +798,10 @@ class LibraryScreen(
         }
         val mark = ImageView(context).apply {
             id = R.id.swBrandMark
-            setImageResource(R.drawable.ic_brand_mark)
+            setImageResource(
+                if (com.scanwhirl.app.ui.kit.SwTheme.isGold(context)) R.drawable.ic_brand_mark_gold
+                else R.drawable.ic_brand_mark
+            )
         }
         row.addView(
             mark,
@@ -1016,16 +1042,255 @@ class LibraryScreen(
             .show()
     }
 
+    /** Header with the pencil edit affordance (48dp target, 20dp glyph). */
+    private fun quickToolsHeader(): View {
+        val row = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val pad = SwStyle.dp(context, 18f)
+            setPadding(pad, SwStyle.dp(context, 20f), pad, SwStyle.dp(context, 6f))
+        }
+        row.addView(
+            SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+                text = context.getString(R.string.home_quick_tools)
+            },
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        )
+        quickAll = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+            id = R.id.swQuickAll
+            text = context.getString(R.string.home_all_tools)
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 34f)
+            isClickable = true
+            setPadding(SwStyle.dp(context, 6f), 0, SwStyle.dp(context, 6f), 0)
+            setOnClickListener { callbacks.onAllTools() }
+        }
+        row.addView(quickAll)
+        quickEdit = SwStyle.iconButton(
+            context, R.drawable.ic_sym_edit, SwStyle.color(context, R.color.text_hologram_mid)
+        ).apply {
+            id = R.id.swQuickEdit
+            contentDescription = context.getString(R.string.quick_edit)
+            val size = SwStyle.dp(context, 48f)
+            layoutParams = LayoutParams(size, size)
+            setPadding(SwStyle.dp(context, 14f), SwStyle.dp(context, 14f), SwStyle.dp(context, 14f), SwStyle.dp(context, 14f))
+            setOnClickListener { enterQuickEditing() }
+        }
+        row.addView(quickEdit)
+        quickCancel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
+            id = R.id.swQuickCancel
+            text = context.getString(android.R.string.cancel)
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 36f)
+            isClickable = true
+            setPadding(SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f), 0)
+            isVisible = false
+            setOnClickListener { exitQuickEditing(save = false) }
+        }
+        row.addView(quickCancel)
+        quickDone = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+            id = R.id.swQuickDone
+            text = context.getString(R.string.sel_done)
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 36f)
+            isClickable = true
+            setPadding(SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f), 0)
+            isVisible = false
+            setOnClickListener { exitQuickEditing(save = true) }
+        }
+        row.addView(quickDone)
+        return row
+    }
+
+    private fun enterQuickEditing() {
+        quickEditing = true
+        applyQuickEditingChrome()
+        buildQuickRow()
+    }
+
+    private fun exitQuickEditing(save: Boolean) {
+        quickEditing = false
+        if (save) {
+            com.scanwhirl.app.util.Prefs.setQuickTools(context, quickIds)
+        } else {
+            quickIds = com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
+        }
+        applyQuickEditingChrome()
+        buildQuickRow()
+        updateChrome()
+    }
+
+    private fun applyQuickEditingChrome() {
+        if (!::quickEdit.isInitialized) return
+        quickEdit.isVisible = !quickEditing
+        quickAll.isVisible = !quickEditing
+        quickDone.isVisible = quickEditing
+        quickCancel.isVisible = quickEditing
+        quickAddGrid.isVisible = quickEditing
+    }
+
+    /** Long-press drag reorder (also the tested persistence path). */
+    internal fun moveQuickTool(id: String, toIndex: Int) {
+        val from = quickIds.indexOf(id)
+        if (from < 0) return
+        quickIds.removeAt(from)
+        quickIds.add(toIndex.coerceIn(0, quickIds.size), id)
+        buildQuickRow()
+    }
+
     private fun buildQuickRow() {
-        for (id in quickIds) {
-            val tool = ToolRegistry.byId(id) ?: continue
-            val tile = ToolTile(context)
-            tile.host = host
-            tile.asQuick()
-            tile.bind(tool)
-            quickLabels[id]?.let { tile.setLabel(context.getString(it)) }
-            tile.layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-            quickRow.addView(tile)
+        quickRow.removeAllViews()
+        quickRow2.removeAllViews()
+        quickAddGrid.removeAllViews()
+        val tools = quickIds.mapNotNull { ToolRegistry.byId(it) }
+            .take(com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS)
+        quickIds = tools.map { it.id }.toMutableList()
+        listOf(quickRow, quickRow2).forEach { row ->
+            row.setOnDragListener { _, event ->
+                if (event.action == android.view.DragEvent.ACTION_DROP) {
+                    val dragged = event.clipData?.getItemAt(0)?.text?.toString()
+                    if (dragged != null && quickIds.contains(dragged)) {
+                        moveQuickTool(dragged, quickIds.lastIndex)
+                    }
+                }
+                true
+            }
+        }
+        tools.chunked(6).forEachIndexed { index, rowTools ->
+            val row = if (index == 0) quickRow else quickRow2
+            row.isVisible = true
+            for (tool in rowTools) {
+                row.addView(
+                    quickToolTile(tool),
+                    LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                )
+            }
+        }
+        quickRow2.isVisible = tools.size > 6
+        if (quickEditing) buildQuickAddGrid()
+        updateChrome()
+    }
+
+    private fun quickToolTile(tool: SwTool): ToolTile {
+        val tile = ToolTile(context)
+        tile.host = host
+        tile.asQuick()
+        tile.bind(tool)
+        quickLabels[tool.id]?.let { tile.setLabel(context.getString(it)) }
+        if (quickEditing) {
+            // Edit mode: tapping the minus badge (or the tile) removes it; a
+            // long-press starts a drag reorder.
+            tile.setOnClickListener { removeQuickTool(tool.id) }
+            tile.setOnLongClickListener { view ->
+                view.startDragAndDrop(
+                    android.content.ClipData.newPlainText("tool", tool.id),
+                    android.view.View.DragShadowBuilder(view),
+                    null,
+                    0
+                )
+                true
+            }
+            tile.setOnDragListener { _, event ->
+                if (event.action == android.view.DragEvent.ACTION_DROP) {
+                    val dragged = event.clipData?.getItemAt(0)?.text?.toString()
+                    if (dragged != null && dragged != tool.id) {
+                        val target = quickIds.indexOf(tool.id)
+                        if (target >= 0) moveQuickTool(dragged, target)
+                    }
+                }
+                true
+            }
+            val badge = ImageView(context).apply {
+                setImageResource(R.drawable.ic_sym_close)
+                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.sw_on_gold))
+                background = SwStyle.rounded(
+                    context, SwStyle.color(context, R.color.gold_pro_primary), radiusDp = 999f
+                )
+                contentDescription = context.getString(R.string.quick_remove, context.getString(tool.title))
+                setPadding(SwStyle.dp(context, 3f), SwStyle.dp(context, 3f), SwStyle.dp(context, 3f), SwStyle.dp(context, 3f))
+                setOnClickListener { removeQuickTool(tool.id) }
+            }
+            tile.addView(
+                badge,
+                FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
+                    gravity = Gravity.TOP or Gravity.END
+                    topMargin = SwStyle.dp(context, 2f)
+                    marginEnd = SwStyle.dp(context, 2f)
+                }
+            )
+        }
+        return tile
+    }
+
+    private fun removeQuickTool(id: String) {
+        if (quickIds.size <= 1) return
+        quickIds.remove(id)
+        buildQuickRow()
+    }
+
+    private fun addQuickTool(id: String) {
+        if (quickIds.size >= com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS) return
+        if (quickIds.contains(id)) return
+        quickIds.add(id)
+        buildQuickRow()
+    }
+
+    private fun buildQuickAddGrid() {
+        val available = ToolRegistry.all.filter { it.status == ToolStatus.READY && it.id !in quickIds }
+        quickAddGrid.addView(
+            SwStyle.text(context, 12f, SwStyle.color(context, R.color.cyan_dim), bold = true).apply {
+                id = R.id.swQuickAddTitle
+                text = context.getString(R.string.quick_add_tools).uppercase(Locale.getDefault())
+                letterSpacing = 0.08f
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        )
+        if (available.isEmpty()) return
+        val atLimit = quickIds.size >= com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS
+        for (chunk in available.chunked(6)) {
+            val row = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            for (tool in chunk) {
+                val tile = ToolTile(context).apply {
+                    host = this@LibraryScreen.host
+                    asQuick()
+                    bind(tool)
+                    alpha = if (atLimit) 0.38f else 1f
+                    isEnabled = !atLimit
+                    contentDescription = if (atLimit) {
+                        context.getString(R.string.quick_max_reached)
+                    } else {
+                        context.getString(R.string.quick_add, context.getString(tool.title))
+                    }
+                    setOnClickListener {
+                        if (!atLimit) addQuickTool(tool.id)
+                    }
+                    val plus = ImageView(context).apply {
+                        setImageResource(R.drawable.ic_sym_add)
+                        imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.sw_on_gold))
+                        background = SwStyle.rounded(
+                            context, SwStyle.color(context, R.color.gold_pro_primary), radiusDp = 999f
+                        )
+                        setPadding(SwStyle.dp(context, 3f), SwStyle.dp(context, 3f), SwStyle.dp(context, 3f), SwStyle.dp(context, 3f))
+                    }
+                    addView(
+                        plus,
+                        FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
+                            gravity = Gravity.TOP or Gravity.END
+                            topMargin = SwStyle.dp(context, 2f)
+                            marginEnd = SwStyle.dp(context, 2f)
+                        }
+                    )
+                }
+                row.addView(tile, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            }
+            quickAddGrid.addView(
+                row,
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = SwStyle.dp(context, 6f) }
+            )
         }
     }
 
@@ -1252,6 +1517,8 @@ class LibraryScreen(
         createRow.isVisible = !searching
         quickHeader?.isVisible = !searching && !firstRun
         quickRow.isVisible = !searching && !firstRun
+        quickRow2.isVisible = !searching && !firstRun && quickRow2.childCount > 0
+        quickAddGrid.isVisible = quickEditing && !searching
         recentHeader?.isVisible = !searching && !firstRun
         chipRow.isVisible = !searching && !firstRun && docs.isNotEmpty()
         listHeader.isVisible = !searching && !firstRun

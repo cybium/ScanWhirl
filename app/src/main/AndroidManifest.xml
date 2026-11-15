@@ -32,16 +32,41 @@
 
         <!-- test26 T3.9: Home is the launcher now; the globe activity stays
              in the tree (unreachable) until T7 removes it. -->
-        <!-- v2 shell: Library · Tools · Scan · Vault · Me (01_home_A). -->
+        <!-- v2 shell: Library · Tools · Scan · Vault · Me (01_home_A).
+             Its launcher entry is the activity-alias pair below (cyan default,
+             gold when the Pro accent is chosen). -->
         <activity
             android:name=".ui.shell.ShellActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateHidden|adjustResize">
+            android:windowSoftInputMode="stateHidden|adjustResize" />
+
+        <activity-alias
+            android:name=".ui.shell.ShellActivityCyan"
+            android:targetActivity=".ui.shell.ShellActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="${appLabel}"
+            android:roundIcon="@mipmap/ic_launcher_round">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ui.shell.ShellActivityGold"
+            android:targetActivity=".ui.shell.ShellActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_gold"
+            android:label="${appLabel}"
+            android:roundIcon="@mipmap/ic_launcher_round_gold">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- L2 v2 Vault (04_vault): setup, unlock, private files, backup/restore. -->
         <activity

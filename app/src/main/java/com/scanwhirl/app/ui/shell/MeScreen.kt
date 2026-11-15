@@ -63,6 +63,9 @@ class MeScreen(
                 gold = true
             ) { callbacks.onPro() }
         )
+        // BACKUP SLOT (orchestrator): L2's "Backup & restore" row goes HERE,
+        // directly after Pro. L2 owns ui/backup/BackupActivity; do not add a
+        // second row at merge.
         list.addView(
             row(
                 R.drawable.ic_sym_settings,

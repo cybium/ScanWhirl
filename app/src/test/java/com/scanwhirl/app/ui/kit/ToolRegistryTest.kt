@@ -22,12 +22,17 @@ class ToolRegistryTest {
     fun `organize pages and insert pages are ready`() {
         assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
         assertEquals(ToolStatus.READY, ToolRegistry.byId("insert_pages")?.status)
-        assertEquals(ToolStatus.READY, ToolRegistry.byId("mask_aadhaar")?.status)
     }
 
     @Test
-    fun `catalogue holds all 45 tools, each id once`() {
-        assertEquals(45, ToolRegistry.all.size)
+    fun `removed tiles are gone from the catalogue`() {
+        assertEquals(null, ToolRegistry.byId("mask_aadhaar"))
+        assertEquals(null, ToolRegistry.byId("hindi_text"))
+    }
+
+    @Test
+    fun `catalogue holds all 43 tools, each id once`() {
+        assertEquals(43, ToolRegistry.all.size)
         assertEquals(
             "duplicate tool ids",
             ToolRegistry.all.size,
