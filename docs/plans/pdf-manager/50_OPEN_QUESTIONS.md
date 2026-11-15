@@ -15,7 +15,7 @@ The owner answered on 2026-11-13. **Every question the owner did not answer take
 | OQ-5 | Protect / Unlock in place (P11) | Default: **accepted.** | — |
 | OQ-6 | Keep `original.pdf` on import | Default: **keep.** | — |
 | OQ-7 | Hindi (Devanagari) text recognition | Left to the architect. **Decision: yes, as a Free opt-in, only after an on-device accuracy spike.** | New card **PM-6.3** (below). |
-| OQ-8 | Family Library sharing | Default: **yes.** | PM-5.5 |
+| OQ-8 | Family Library sharing | **Closed: not possible.** Play does not share in-app purchases via Family Library, and Family Library is unavailable in India (verified 2026-11-16). Never promise it. | PM-5.5 |
 | OQ-9 | Keep "previous version" Trash entries indefinitely | Default: **yes.** | — |
 | OQ-10 | Generous Free tier | Default: **yes.** | — |
 | OQ-12 | Landing after a scan saves | Default: **the Reader.** | PM-0.1b classifies `DirectScanSaveTest`. PM-2.2 wires the landing to the Reader. |

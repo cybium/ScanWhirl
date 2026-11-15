@@ -1,12 +1,17 @@
-# Google Play Data safety form - ScanWhirl 1.1.1
+# Google Play Data safety form - ScanWhirl 1.2.x
 
 Answers derived from the code and the release artifact, not from intent. Evidence is file:line in
-this repo; the manifest claims were checked on the built AAB/APK with `aapt2 dump badging`
-(run 43679221596), not only in source.
+this repo; the manifest claims were checked on the built 1.2.0 AAB/APK with `aapt2 dump badging`.
 
-Verdict: **ScanWhirl collects nothing, shares nothing, and has no account, ads or analytics.**
-The Google Play services components that do the scanning and OCR run in Google's own process; see
-section 4 for exactly what Google says about them and the wording that stays honest.
+Verdict: **ScanWhirl's own code collects nothing and shares nothing, and has no account, ads or
+analytics. But Google's ML Kit libraries used by the app send diagnostics and a device identifier to
+Google, and Play counts that as collection "from your app", so the form answer is YES** (section 2).
+
+Correction (2026-11-16): an earlier version of this file answered "No" on the grounds that the APK has
+no INTERNET permission. That was wrong. Play's definition covers data "transmitted off device from your
+app by libraries and/or SDKs used in your app, irrespective of whether data is transmitted to you or a
+third-party server", and the thin ML Kit features hand their work to Google Play services over binder,
+which does have network access. The audit facts below are unchanged; only the conclusion changed.
 
 ## 1. What the app does, with evidence
 
@@ -36,17 +41,21 @@ to be disclosed as collected" ([Play Console Help, Data safety](https://support.
 
 | Form section | Answer |
 |---|---|
-| Does your app collect or share any of the required user data types? | **No** |
-| Is all of the user data your app collects encrypted in transit? | *not asked when the answer above is No* |
-| Do you provide a way for users to request that their data is deleted? | *not asked when the answer above is No*; the app deletes locally: per item, Trash (30 days), Empty Trash, and uninstall removes the private data |
-| Data types | none selected |
-| Security practices | **No** data collected or shared. Leave "Committed to follow the Families policy" off (the app is not child-directed) and "Independent security review" off unless a MASA review is bought. |
+| Does your app collect or share any of the required user data types? | **Yes** |
+| Is all of the user data collected by your app encrypted in transit? | **Yes** (ML Kit uses HTTPS, per Google) |
+| Which account creation methods does your app support? | **My app does not allow users to create an account** |
+| Do you provide a way for users to request that their data is deleted? | **No** (the app holds no server-side data; Google's diagnostics are under Google's policy). Locally: per item, Trash (30 days), Empty Trash, uninstall. |
+| Data types | **App info and performance > Diagnostics**; **Device or other IDs** |
+| For each of the two types | Collected: **Yes**. Shared: **No**. Processed ephemerally: **No**. Required or optional: **Required** (users can't turn it off). Purpose: **Analytics** only. |
+| NOT selected | Photos and videos, Files and docs, Contacts, Personal info, Financial info, Location, App activity: the document content is processed only on the phone (Play excludes on-device processing). Billing is handled by Google Play itself, outside the app. |
+| Security practices | Leave "Committed to follow the Families policy" off (not child-directed) and "Independent security review" off. |
 
-Why "No" is accurate for this app: collection is defined as transmitting data *off the device*,
-"from your app", including via libraries. ScanWhirl's APK has no network permission, so neither the
-app's code nor a library running in its process can transmit anything. The ML Kit components that
-touch photos and text execute inside the **Google Play services** process, which is a separate
-application with its own permissions and its own privacy policy (section 4).
+Why "Yes": collection is transmitting data off the device "from your app", **including by libraries
+and SDKs, whether to you or to a third party**. ScanWhirl's own process cannot transmit (no network
+permission), but the thin ML Kit features (document scanner, text recognition, code scanner) run in
+Google Play services, and Google's ML Kit disclosure lists for all features: device information, app
+information, a device identifier (thin features), performance metrics, event types and error codes,
+used for diagnostics and usage analytics, encrypted in transit, not shared with third parties.
 
 ## 3. Third-party code in the APK
 
@@ -57,6 +66,7 @@ application with its own permissions and its own privacy policy (section 4).
 | `com.google.mlkit:text-recognition-devanagari:16.0.1` | Hindi/Devanagari model | **Inside the app**, bundled, fully offline |
 | `play-services-code-scanner:16.1.0` | Google's QR/barcode scanner UI | Play services process |
 | `androidx.biometric:1.1.0` | Fingerprint/face prompt for the Vault | app process, local Keystore |
+| `billing-ktx:8.3.0` (since 1.2.0) | Google Play Billing for the one-time Pro purchase (`util/ProBilling.kt`, permission `com.android.vending.BILLING`) | Play Store app; payment details never reach ScanWhirl. Purchase records are Google Play's, so no extra data type is declared for it |
 
 Nothing in the dependency tree collects analytics or advertising identifiers. The `transport-runtime`
 and `okhttp` classes that arrive with the code scanner are unused, and their `INTERNET` permission is
@@ -88,9 +98,9 @@ The two policies that matter, quoted:
 
 How to word this honestly in the two places users look:
 
-- **Data safety form**: No collection. The app has no network permission (verifiable by anyone with
-  the APK); the ML Kit work runs in Google Play services, a separate app whose own data practices
-  are Google's, not ScanWhirl's.
+- **Data safety form**: Diagnostics + Device or other IDs, collected (by Google's ML Kit), not shared,
+  analytics, required, encrypted in transit (section 2). Your documents and their text are not
+  collected: they are processed on the phone.
 - **Privacy policy** (must say it, and does): scanning, OCR and QR reading are provided by Google
   Play services; the input stays on the phone; Google Play services may download or update models
   and may send Google diagnostic data under Google's privacy policy; the Hindi model is inside the
@@ -99,10 +109,7 @@ How to word this honestly in the two places users look:
   Play services provides the scanner and text recognition. Do not claim "no network at all on the
   device"; claim what is true of the app.
 
-### If Play review pushes back
-
-A reviewer who sees ML Kit may expect a declaration. The fallback, which is the conservative
-over-declaration, is still accurate and safe:
+### The declaration in one table (same as section 2)
 
 | Field | Value |
 |---|---|
@@ -113,8 +120,7 @@ over-declaration, is still accurate and safe:
 | Optional or required | Required (automatic, no user control) |
 | Deletion | No server-side data to delete; the app has no account and stores everything locally |
 
-Keep the privacy policy paragraph the same either way: it describes what Google Play services does
-whether or not the form itemises it.
+The privacy policy paragraph describes the same thing: what Google Play services / ML Kit sends.
 
 ## 5. What would change these answers
 

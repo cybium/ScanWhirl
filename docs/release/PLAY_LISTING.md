@@ -13,18 +13,20 @@ billing (the next release AAB does).
    - Description: **Unlock every Pro tool forever. One-time purchase, no subscription.**
    - Purchase option: **Buy** (one-time, non-consumable)
    - Price: **₹100** (India). Click "Set prices" > let Play convert for other countries, then round as you like.
-   - Tax category: **Digital app / software** (default).
-   - **Activate** the product.
-4. **Family sharing**: Monetize with Play > Monetization setup > **Google Play Family Library** > opt in
-   for in-app products (the Pro screen says "Family sharing included" — keep this ON or change that line).
+   - Tax category: **Digital app sales** (default).
+   - Age rating (per-product field, if shown): **Everyone** (it is a feature unlock).
+   - **Activate** the product AND make sure its **purchase option is Active**. If the purchase option is
+     inactive, the app shows "The Pro product is not available yet."
+4. **No family sharing**: Google Play does not share in-app purchases through Family Library (and Family
+   Library is no longer available in India). There is nothing to switch on; never promise family sharing.
 5. **License testers** (free test purchases, no real charge): Settings > **License testing** > add the Gmail
    accounts of you and your testers; set response to RESPOND_NORMALLY. Testers see "Test card, always approves".
 6. Testers must install from the **closed-testing opt-in link** (not a sideloaded APK) for purchases to work.
 
 What the app does: Unlock Pro opens Google's payment sheet; after payment the purchase is acknowledged and
-Pro turns on. "Restore purchase" and every app start re-check Play, so reinstalls, a second phone and Family
-Library members get Pro automatically. Refunded purchases turn Pro off. No internet permission is needed —
-payments go through the Play Store app.
+Pro turns on. "Restore purchase" and every app start re-check Play, so a reinstall or a second phone signed in
+with the same Google account gets Pro automatically. Refunded purchases turn Pro off. No internet permission
+is needed — payments go through the Play Store app.
 
 ## 2. Store listing text
 
@@ -60,11 +62,11 @@ PRO — ONE-TIME PURCHASE, NO SUBSCRIPTION
 • Convert to Word, Excel and PowerPoint
 • Split by page range, batch tools and batch rename for many files at once
 • Folders and tags, business card scan, QR code scan, archival PDF/A
-Pay once, keep it forever. Family sharing included.
+Pay once, keep it forever. No subscription. Works on every phone with your Google account.
 
 PRIVATE BY DESIGN
 • No internet permission: your documents never leave your phone
-• No ads, no account, no tracking
+• No ads, no account, no ad tracking
 • Vault: lock sensitive documents behind your fingerprint or PIN
 • Encrypted backup: one file with all your scans, saved where you choose
 
@@ -99,15 +101,17 @@ page or Google Sites) and paste the link — required.
    (section 2), upload icon, feature graphic and screenshots (section 3) > Save.
 3. **Pro product**: after step 1 is processed, Monetize with Play > Products > One-time products > Create
    (section 1) > Activate.
-4. **App content**: Policy > App content — Data safety (from DATA_SAFETY.md: no data collected, no data
-   shared, no network access), Privacy policy URL, Ads: "No ads", Target audience: 18+ (or 13+), Content
-   rating questionnaire (productivity tool, no user content shared).
+4. **App content**: Policy > App content — Data safety (exact answers in DATA_SAFETY.md section 2: Yes,
+   Google's ML Kit collects diagnostics + device IDs; nothing shared; your documents never leave the phone),
+   Privacy policy URL, Ads: "No ads", Target audience: **13+** (students use it; not aimed at children),
+   Content rating questionnaire (productivity tool, no user content shared).
 
 ## 5. The release
 - AAB: `builds\2026-11-15\release-1.2.0\ScanWhirl-1.2.0.aab` (signed with your upload key).
 - Track: **Closed testing** (personal accounts need 12+ testers opted in for 14 days before production).
 - Release notes: see `RELEASE_NOTES_PLAY.txt` next to the AAB.
-- Data safety form: answers in `docs/release/DATA_SAFETY.md` (no data collected, no data shared).
+- Data safety form: answers in `docs/release/DATA_SAFETY.md` section 2 (Diagnostics + Device IDs collected by
+  Google's ML Kit for analytics; nothing shared; encrypted in transit).
 
 ## 6. AI-generated asset declaration (Play Console, per image)
 - Screenshots: do NOT tick (real app screens captured on the phone; only a headline and background frame added).

@@ -17,7 +17,7 @@ CAPTIONS = {
     "01_home": ("Scan to PDF. Offline.", "No ads. No account. Your files stay on your phone."),
     "02_tools": ("40+ PDF tools", "Merge, compress, convert, sign, protect and more"),
     "04_text_ocr": ("Read text from any page", "English and Hindi, right on your phone"),
-    "05_pro": ("Pro: pay once, keep it forever", "No subscription. Family sharing included."),
+    "05_pro": ("Pro: pay once, keep it forever", "No subscription. Works on all your phones."),
     "06_private": ("Hide private info", "Cover phone numbers, emails and ID numbers before you share"),
     "06a_private_choices": ("Choose what to hide", "Phone numbers, emails, ID numbers and card numbers"),
     "08_vault": ("Vault for sensitive files", "Locked behind your fingerprint"),

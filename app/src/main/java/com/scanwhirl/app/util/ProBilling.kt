@@ -142,8 +142,9 @@ object ProBilling {
     }
 
     /**
-     * Cheap start-up check (ShellActivity.onResume): a purchase on another phone, a reinstall or
-     * Family Library unlocks automatically; a refund locks Pro again, but only in a release build
+     * Cheap start-up check (ShellActivity.onResume): a purchase on another phone with the same Google
+     * account or a reinstall unlocks automatically (in-app purchases are NOT shared through Family
+     * Library, so the UI must never promise family sharing); a refund locks Pro again, but only in a release build
      * and only when Play answers OK without the product.
      */
     fun refreshOwned(context: Context) {
@@ -346,7 +347,12 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
                 null
             }
             details = product
-            onPrice(product?.oneTimePurchaseOfferDetails?.formattedPrice)
+            // Billing 8 one-time products can carry several purchase options; take the first offer
+            // from the list and fall back to the single-offer getter.
+            onPrice(
+                product?.oneTimePurchaseOfferDetailsList?.firstOrNull()?.formattedPrice
+                    ?: product?.oneTimePurchaseOfferDetails?.formattedPrice
+            )
         }
     }
 

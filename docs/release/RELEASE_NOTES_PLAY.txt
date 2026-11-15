@@ -1,5 +1,5 @@
 <en-US>
-New in 1.2.0:
+New in 1.2.1:
 • Pick your own quick tools on Home (up to 12)
 • Hide private info: find and cover phone numbers, emails, ID and card numbers before you share
 • Encrypted backup of every scan, the Vault and your settings in one file
@@ -9,7 +9,7 @@ New in 1.2.0:
 • Bigger buttons, clearer text and many fixes
 </en-US>
 <hi-IN>
-1.2.0 में नया:
+1.2.1 में नया:
 • होम पर अपने क्विक टूल खुद चुनें (12 तक)
 • निजी जानकारी छिपाएँ: शेयर करने से पहले फ़ोन नंबर, ईमेल, आईडी और कार्ड नंबर ढकें
 • सभी स्कैन, वॉल्ट और सेटिंग्स का एक एन्क्रिप्टेड बैकअप

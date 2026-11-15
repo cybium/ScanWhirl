@@ -1,6 +1,6 @@
 # Privacy Policy for ScanWhirl
 
-Last updated: 15 November 2026
+Last updated: 16 November 2026
 
 ## The short version
 
@@ -46,13 +46,23 @@ Some scanning features are provided by Google Play services on your phone:
 
 Google Play services runs as a separate app. Google says it processes your images and text on your
 device and does not send them to Google servers. It may download or update recognition models, and
-it may send Google diagnostic data about how the feature performs. That is Google's processing
-under Google's privacy policy, not ScanWhirl's, and ScanWhirl never receives it.
+it sends Google diagnostic and usage data about how the feature performs: device and app
+information (such as phone model, Android version and ScanWhirl's version), a device identifier,
+performance numbers, event types and error codes. Google encrypts this in transit and does not share
+it with third parties. That is Google's processing under Google's privacy policy, and ScanWhirl
+never receives it. Because it happens through features ScanWhirl uses, ScanWhirl's Google Play
+Data safety section lists it as "Diagnostics" and "Device or other IDs", used for analytics.
 
 The Hindi (Devanagari) text model is included inside ScanWhirl and works fully offline.
 
 Google privacy policy: https://policies.google.com/privacy
 ML Kit terms: https://developers.google.com/ml-kit/terms
+
+## Buying Pro
+
+ScanWhirl Pro is a one-time purchase made through Google Play. Google Play handles the payment and
+your payment details; ScanWhirl never sees them. The app only asks Google Play whether your Google
+account owns Pro, so Pro can turn on after a reinstall or on another phone with the same account.
 
 ## Sharing and saving
 
@@ -73,7 +83,8 @@ ScanWhirl until you delete them.
 
 ## Children
 
-ScanWhirl is not directed at children under 13, and it does not collect information from anyone.
+ScanWhirl is not directed at children under 13. ScanWhirl itself collects no personal information
+from anyone; the Google Play services diagnostics described above apply to every user.
 
 ## Changes
 
@@ -85,3 +96,5 @@ Questions about this policy: t.mecybium@gmail.com
 
 Changelog: 2026-11-15, rewritten to match the shipped app: no internet permission, Vault and PDF
 encryption, blocked screenshots, clipboard clearing, Google Play services components, 30 day Trash.
+2026-11-16: lists the diagnostic data Google's ML Kit sends (matches the Data safety form); adds
+Buying Pro (Google Play Billing).

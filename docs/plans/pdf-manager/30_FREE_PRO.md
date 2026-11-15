@@ -65,7 +65,7 @@ The product name is **ScanWhirl Power Pack**. The UI never shows "PRO", "VIP", a
 - **Lifetime means:**
   - all Power Pack tools and every update to them, for as long as ScanWhirl is sold on Play;
   - restore on any device signed into the same Google account;
-  - Play Family Library sharing if the owner enables it (OQ-8).
+  - (No Family Library: Play does not share in-app purchases with family members; OQ-8 closed.)
 - **Excluded from lifetime (stated at purchase):**
   1. An optional future add-on that requires a separately licensed third-party engine (for example, Office-layout conversion or PDF/A). It would be sold separately, and buying it never takes anything away from the Power Pack.
   2. Server features. There are none and none are planned, so the exclusion exists only to be explicit.
