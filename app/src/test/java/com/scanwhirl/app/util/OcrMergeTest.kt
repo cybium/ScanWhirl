@@ -125,4 +125,63 @@ class OcrMergeTest {
         val strong = latin("Total 100", 40).copy(confidence = 0.9f)
         assertEquals(0.9f, OcrMerge.pick(weak, strong).confidence)
     }
+
+    @Test
+    fun `a noisy Latin reading on a Hindi page loses to the Devanagari one`() {
+        // Exactly the owner's photo of an Aadhaar: glare makes the Latin model return "fafI" and
+        // "gov/" where the card says सरकार and आधार.
+        val latinPage = OcrRawPage(
+            600, 800,
+            listOf(latin("fafI", 40), latin("gov/", 120), latin("Aadhaar 1234 5678", 200))
+        )
+        val devaPage = OcrRawPage(
+            600, 800,
+            listOf(deva("सरकार", 40), deva("आधार", 120), deva("आधार 1234 5678", 200))
+        )
+        val text = OcrMerge.assemble(OcrMerge.merge(listOf(latinPage, devaPage)))
+        assertTrue("सरकार survives: $text", text.contains("सरकार"))
+        assertTrue("आधार survives: $text", text.contains("आधार"))
+        assertFalse("the Latin noise is dropped: $text", text.contains("fafI") || text.contains("gov/"))
+    }
+
+    @Test
+    fun `a short Latin token on a Hindi page loses even when the other model saw letters`() {
+        // Neither reading has Devanagari for this box: the Devanagari model returned "srkr" and
+        // the Latin model "faf". The page is Devanagari, so the Devanagari model's reading wins.
+        val latinPage = OcrRawPage(600, 800, listOf(latin("faf", 40), latin("Total 1250", 120)))
+        val devaPage = OcrRawPage(600, 800, listOf(deva("srkr", 40), deva("कुल 1250", 120)))
+        val text = OcrMerge.assemble(OcrMerge.merge(listOf(latinPage, devaPage)))
+        assertFalse("the Latin noise is dropped: $text", text.contains("faf"))
+        assertTrue("the Devanagari reading of the box is kept: $text", text.contains("srkr"))
+    }
+
+    @Test
+    fun `a clean English line on a Hindi page is not replaced`() {
+        val latinPage = OcrRawPage(600, 800, listOf(latin("Invoice number 4711", 40), latin("Total 1250", 120)))
+        val devaPage = OcrRawPage(600, 800, listOf(deva("Invo1ce nurnber 4711", 40), deva("कुल 1250", 120)))
+        val text = OcrMerge.assemble(OcrMerge.merge(listOf(latinPage, devaPage)))
+        assertTrue("the readable English line wins: $text", text.contains("Invoice number 4711"))
+    }
+
+    @Test
+    fun `genuinely different lines are both kept`() {
+        val latinPage = OcrRawPage(600, 800, listOf(latin("Invoice number 4711", 40)))
+        val devaPage = OcrRawPage(600, 800, listOf(deva("कुल 1250", 200)))
+        val text = OcrMerge.assemble(OcrMerge.merge(listOf(latinPage, devaPage)))
+        assertTrue(text.contains("Invoice number 4711"))
+        assertTrue(text.contains("कुल 1250"))
+    }
+
+    @Test
+    fun `noise detection names the Latin-model artifacts`() {
+        assertTrue(OcrMerge.looksLikeNoise(latin("fafI", 40)))
+        assertTrue(OcrMerge.looksLikeNoise(latin("gov/", 40)))
+        assertTrue(OcrMerge.looksLikeNoise(latin("Invo1ce", 40)))
+        assertTrue(OcrMerge.looksLikeNoise(latin("x", 40)))
+        assertTrue(OcrMerge.looksLikeNoise(latin("Total 100", 40).copy(confidence = 0.2f)))
+        assertTrue(OcrMerge.looksLikeNoise(latin("faf", 40), hindiPage = true))
+        assertFalse(OcrMerge.looksLikeNoise(latin("Invoice number 4711", 40)))
+        assertFalse(OcrMerge.looksLikeNoise(latin("Total: 1250", 40)))
+        assertFalse(OcrMerge.looksLikeNoise(latin("GST 5%", 40)))
+    }
 }
