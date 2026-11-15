@@ -92,7 +92,7 @@ If this policy changes, the new version ships with the next app update and the d
 
 ## Contact
 
-Questions about this policy: t.mecybium@gmail.com
+Questions about this policy: cybiumsupport@gmail.com
 
 Changelog: 2026-11-15, rewritten to match the shipped app: no internet permission, Vault and PDF
 encryption, blocked screenshots, clipboard clearing, Google Play services components, 30 day Trash.
