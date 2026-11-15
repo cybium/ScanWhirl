@@ -97,6 +97,13 @@ class ExportResultActivity : BaseActivity() {
     }
 
     private fun showStats() {
+        // Protect PDF has no meaningful before/after size (the source had no PDF yet); it
+        // passes a summary instead of the comparison.
+        val summary = intent.getStringExtra(EXTRA_SUMMARY)
+        if (!summary.isNullOrBlank()) {
+            binding.resultStats.text = summary
+            return
+        }
         val text = getString(
             R.string.result_before_after,
             formatBytes(beforeBytes),
@@ -217,6 +224,7 @@ class ExportResultActivity : BaseActivity() {
         private const val EXTRA_NAME = "display_name"
         private const val EXTRA_BEFORE = "before_bytes"
         private const val EXTRA_AFTER = "after_bytes"
+        private const val EXTRA_SUMMARY = "result_summary"
         private const val EXTRA_WIDTH = "width"
         private const val EXTRA_HEIGHT = "height"
         private const val EXTRA_TITLE = "title"
@@ -237,7 +245,9 @@ class ExportResultActivity : BaseActivity() {
             height: Int,
             title: String?,
             warning: String?,
-            docId: String? = null
+            docId: String? = null,
+            /** When set, replaces the before/after comparison (e.g. Protect PDF). */
+            summary: String? = null
         ): Intent = Intent(context, ExportResultActivity::class.java)
             .putExtra(EXTRA_OUTPUT, outputPath)
             .putExtra(EXTRA_PREVIEW, previewPath)
@@ -250,5 +260,6 @@ class ExportResultActivity : BaseActivity() {
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_WARNING, warning)
             .putExtra(EXTRA_DOC_ID, docId)
+            .putExtra(EXTRA_SUMMARY, summary)
     }
 }

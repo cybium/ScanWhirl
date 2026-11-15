@@ -128,6 +128,26 @@ class InkExtractTest {
     }
 
     @Test
+    fun `a thin line at the edge is ignored`() {
+        val source = Bitmap.createBitmap(300, 400, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(source)
+        canvas.drawColor(Color.WHITE)
+        canvas.drawRect(150f, 200f, 180f, 230f, Paint().apply { color = Color.BLACK })
+        canvas.drawRect(292f, 10f, 294f, 390f, Paint().apply { color = Color.rgb(160, 160, 160) })
+
+        val extracted = requireNotNull(InkExtract.extract(source))
+        try {
+            assertTrue(
+                "the edge rail must be dropped, got ${extracted.bitmap.width}x${extracted.bitmap.height}",
+                extracted.bitmap.width < 60 && extracted.bitmap.height < 60
+            )
+        } finally {
+            extracted.bitmap.recycle()
+            source.recycle()
+        }
+    }
+
+    @Test
     fun `a blank page has no ink`() {
         val blank = Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888)
         Canvas(blank).drawColor(Color.rgb(220, 220, 220))

@@ -10,7 +10,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.ui.DocumentViewerActivity
-import com.scanwhirl.app.ui.MainActivity
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ImportFixtures
@@ -721,7 +721,7 @@ class SaveTransactionTest {
 
     @Test fun `launcher finds a legacy unfinished scan and offers resume`() {
         val staged = stage(2, parent = app.cacheDir)
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { activity ->
                 val found = ScanLauncher(activity, repo, activity) {}.findUnfinished()!!
                 assertEquals(staged.dir, found.dir)
@@ -739,7 +739,7 @@ class SaveTransactionTest {
         SaveFaults.reset()
         val committed = repo.listDocuments().single()
 
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             var activityShadow: org.robolectric.shadows.ShadowActivity? = null
             scenario.onActivity { activity ->
                 activityShadow = shadowOf(activity)

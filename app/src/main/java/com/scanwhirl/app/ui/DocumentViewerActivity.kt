@@ -737,6 +737,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** Test seam and the one writer: copied pages enter the draft at [position]. */
     internal fun insertFiles(files: List<File>, position: Int) {
         val id = docId ?: return
+        insertHere = null
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) { repo.draftInsertPages(id, files, position) }

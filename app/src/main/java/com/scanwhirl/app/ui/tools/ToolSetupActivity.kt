@@ -29,10 +29,10 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.tools.SizeFit
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.MergePdfActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
+import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
@@ -941,8 +941,7 @@ class ToolSetupActivity : BaseActivity() {
                 target = targetBytes
                 execute({
                     val out = if (targetBytes != null) {
-                        val pages = SizeFit.compressPages(doc.pageFiles, targetBytes)
-                        repo.createDocument(repo.outputName(doc.name, "Compressed"), pages).id
+                        repo.compressScanToTarget(doc.id, targetBytes).id
                     } else {
                         val (quality, maxDim) = compressLevel()
                         repo.compressScan(doc.id, quality, maxDim).id
@@ -994,13 +993,28 @@ class ToolSetupActivity : BaseActivity() {
                     ?: return fail(getString(R.string.tools_setup_pick_one))
                 execute({
                     val out = File(outputDir(), "${baseName(doc)}.xlsx")
-                    repo.exportExcel(
+                    val report = repo.exportExcel(
                         doc.id, out,
                         tablesOnly = excelTablesOnly,
                         noTableNote = getString(R.string.tools_excel_no_table)
                     )
-                    ResultFiles(listOf(out), XLSX_MIME)
-                }) { openFiles(it.files, it.mime) }
+                    ExcelRun(report, doc)
+                }) { run ->
+                    val file = run.report.file
+                    if (file == null) {
+                        showNoTables(run.doc)
+                    } else {
+                        openFiles(
+                            listOf(file), XLSX_MIME,
+                            note = if (excelTablesOnly) {
+                                getString(
+                                    R.string.tools_excel_tables_note,
+                                    run.report.tablePages, run.report.totalPages
+                                )
+                            } else null
+                        )
+                    }
+                }
             }
             "zip" -> {
                 val ids = selected.toList()
@@ -1053,9 +1067,32 @@ class ToolSetupActivity : BaseActivity() {
         startActivity(ToolResultActivity.intent(this, tool.id, docIds = ids))
     }
 
-    private fun openFiles(files: List<File>, mime: String) {
+    private fun openFiles(files: List<File>, mime: String, note: String? = null) {
         if (files.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        startActivity(ToolResultActivity.intent(this, tool.id, files = files, mime = mime))
+        startActivity(ToolResultActivity.intent(this, tool.id, files = files, mime = mime, note = note))
+    }
+
+    /** To Excel, Tables only: no page had a table, so nothing was written. Offer all text. */
+    private fun showNoTables(doc: ScanDocument) {
+        SwSheet.builder(this)
+            .setTitle(R.string.tools_excel_no_tables_title)
+            .setMessage(R.string.tools_excel_no_tables_msg)
+            .setPrimary(R.string.tools_excel_export_all) { exportAllText(doc) }
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+            .show()
+    }
+
+    private fun exportAllText(doc: ScanDocument) {
+        execute({
+            val out = File(outputDir(), "${baseName(doc)}.xlsx")
+            repo.exportExcel(
+                doc.id, out,
+                tablesOnly = false,
+                noTableNote = getString(R.string.tools_excel_no_table)
+            )
+            out
+        }) { file -> openFiles(listOf(file), XLSX_MIME) }
     }
 
     private fun fail(message: String) {
@@ -1094,6 +1131,8 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     private data class ResultFiles(val files: List<File>, val mime: String)
+
+    private data class ExcelRun(val report: ScanRepository.ExcelExport, val doc: ScanDocument)
 
     companion object {
         private const val EXTRA_TOOL_ID = "tool_id"

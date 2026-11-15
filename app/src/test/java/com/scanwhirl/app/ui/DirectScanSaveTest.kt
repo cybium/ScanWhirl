@@ -8,6 +8,7 @@ import android.os.Looper
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.ScanLauncher
@@ -59,23 +60,21 @@ class DirectScanSaveTest {
         fail("Timed out waiting for $what")
     }
 
+    // v2 UI: 01_home_A - a direct scan refreshes the library (the card appears); it no longer
+    // jumps into the document editor. The save/staging assertions are unchanged.
     @Test
-    fun `Done saves the scan, leaves nothing staged and opens the saved document`() {
+    fun `Done saves the scan, leaves nothing staged and shows it on the library`() {
         Prefs.setAutoCopyToDocuments(app, false)
         val scanned = pages(3)
-        var started: Intent? = null
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { a -> ScanLauncher(a, repo, a) {}.saveScanned(scanned.map { it.first }) }
             await("the saved document") { repo.listDocuments().isNotEmpty() && PendingScans.all(app).isEmpty() }
-            scenario.onActivity { a -> started = shadowOf(a).nextStartedActivity }
+            var cards = 0
+            scenario.onActivity { a ->
+                cards = a.findViewById<android.view.ViewGroup>(R.id.swDocList)?.childCount ?: 0
+            }
+            assertTrue("the library shows the saved document", cards >= 1)
         }
-        // M08 lands on the saved document's page overview. OQ-12 says the eventual
-        // landing is the Reader; PM-2.2 changes both the app and this assertion.
-        assertNotNull("the scanner opens the saved document", started)
-        assertEquals(
-            "the landing is the document screen today",
-            DocumentViewerActivity::class.java.name, started!!.component?.className
-        )
         val doc = repo.listDocuments().single()
         assertEquals(3, doc.pageCount)
         // Same order and the same picture as the scanner returned (normalised once, by the save).
@@ -92,7 +91,7 @@ class DirectScanSaveTest {
     @Test
     fun `staging copies the scanner's bytes unchanged`() {
         val scanned = pages(2)
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { a ->
                 val dir = ScanLauncher(a, repo, a) {}.copyScannedPages(scanned.map { it.first })
                 val staged = PendingScans.pages(dir)
@@ -109,7 +108,7 @@ class DirectScanSaveTest {
         val good = pages(1)
         val missing = Uri.parse("content://scanner/gone.jpg") // never registered: unreadable
         var review: Intent? = null
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { a -> ScanLauncher(a, repo, a) {}.saveScanned(listOf(good[0].first, missing)) }
             await("Review on the kept pages") {
                 scenario.onActivity { a -> review = review ?: shadowOf(a).nextStartedActivity }

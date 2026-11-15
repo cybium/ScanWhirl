@@ -132,6 +132,8 @@
     <!-- review -->
     <string name="mask_opt_number"><!-- review -->आधार संख्या छिपाएँ</string>
     <!-- review -->
+    <string name="mask_opt_vid"><!-- review -->VID भी छिपाएँ</string>
+    <!-- review -->
     <string name="mask_opt_qr"><!-- review -->QR कोड भी छिपाएँ</string>
     <!-- review -->
     <string name="mask_continue"><!-- review -->जारी रखें</string>

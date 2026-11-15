@@ -425,6 +425,40 @@ class OrganizeDraftUiTest {
     }
 
     @Test
+    fun `insert pages at the start middle and end in the organizer`() {
+        fun insertedWidths(position: Int): List<Int> {
+            val target = DocFixtures.saved(repo, app, pages = 3)
+            val source = runBlocking {
+                repo.createDocument(
+                    "Insert source",
+                    listOf(com.scanwhirl.app.util.ImportFixtures.image(width = 300, height = 400))
+                )
+            }
+            val src = repo.getDocument(source.id)!!.pageFiles
+            ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
+                var cells = 0
+                assertTrue(pollUntil {
+                    scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
+                    cells == 3
+                })
+                scenario.onActivity { it.insertFiles(src, position) }
+                assertTrue("insert lands", pollUntil { runBlocking { repo.draftPages(target) }.size == 4 })
+                val pages = runBlocking { repo.draftPages(target) }
+                return pages.map {
+                    requireNotNull(
+                        com.scanwhirl.app.util.ImageTools.imageSize(it.readBytes())
+                    ).first
+                }
+            }
+            return emptyList()
+        }
+
+        assertEquals("at the start", listOf(300, 200, 220, 240), insertedWidths(0))
+        assertEquals("after page 2", listOf(200, 220, 300, 240), insertedWidths(2))
+        assertEquals("at the end", listOf(200, 220, 240, 300), insertedWidths(3))
+    }
+
+    @Test
     fun `reopening after process death shows the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->

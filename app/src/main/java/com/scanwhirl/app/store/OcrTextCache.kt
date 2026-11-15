@@ -28,8 +28,10 @@ class OcrTextCache(private val repo: ScanRepository) {
 
     /** Normalised OCR text for [docId], cached by document and file modification time. */
     fun normalized(docId: String): String {
-        val ocrFile = File(repo.docsDir, docId).listFiles()?.firstOrNull { it.name == "ocr.txt" }
-        val modified = ocrFile?.lastModified() ?: 0L
+        // Direct path: listing the document directory to find ocr.txt walks every page file and
+        // turns each keystroke into O(pages) work for long textbooks.
+        val ocrFile = File(File(repo.docsDir, docId), "ocr.txt")
+        val modified = ocrFile.lastModified()
         val key = "$docId|$modified"
         return cache.get(key) ?: run {
             val text = repo.ocrDoc(docId).values.joinToString("\n")

@@ -52,7 +52,6 @@ class BusinessCardFlowTest {
 
     @Before
     fun setUp() {
-        BusinessCardActivity.suppressScannerForTest = true
         BusinessCardActivity.recognizeForTest = { cardText }
         // androidx FileProvider caches path roots per authority; Robolectric gives each test a
         // fresh cache dir, so clear the stale entry (same fix as ShareUtilsTest).
@@ -63,7 +62,6 @@ class BusinessCardFlowTest {
 
     @After
     fun tearDown() {
-        BusinessCardActivity.suppressScannerForTest = false
         BusinessCardActivity.recognizeForTest = null
     }
 
@@ -112,6 +110,29 @@ class BusinessCardFlowTest {
                 assertNotNull(dialog.findViewById<View>(R.id.swSheetPrimary))
                 assertNotNull(dialog.findViewById<View>(R.id.swSheetSecondary))
             }
+        }
+    }
+
+    @Test
+    fun `the gallery choice goes through the shared scanner crop`() {
+        var started = false
+        com.scanwhirl.app.tools.GalleryCrop.startOverride = { started = true; true }
+        try {
+            ActivityScenario.launch(BusinessCardActivity::class.java).use { scenario ->
+                scenario.onActivity {
+                    idle()
+                    val dialog = requireNotNull(ShadowDialog.getLatestDialog())
+                    assertEquals(
+                        it.getString(R.string.tools_id_pick_gallery),
+                        dialog.findViewById<android.widget.TextView>(R.id.swSheetSecondary).text.toString()
+                    )
+                    dialog.findViewById<View>(R.id.swSheetSecondary).performClick()
+                    idle()
+                }
+            }
+            assertTrue("gallery must open launchGalleryCrop", started)
+        } finally {
+            com.scanwhirl.app.tools.GalleryCrop.startOverride = null
         }
     }
 

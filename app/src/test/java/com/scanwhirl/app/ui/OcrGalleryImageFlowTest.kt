@@ -9,6 +9,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.OcrFlow
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.ImportFixtures
 import org.junit.After
 import org.junit.Assert.*
@@ -58,7 +59,7 @@ class OcrGalleryImageFlowTest {
 
     private fun runFlow(file: File, recognized: String = "OCR TEXT"): Run {
         val run = Run()
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { activity ->
                 val flow = OcrFlow(activity, repo, activity) { bitmap: Bitmap ->
                     synchronized(run.seen) { run.seen.add(bitmap.width to bitmap.height) }
