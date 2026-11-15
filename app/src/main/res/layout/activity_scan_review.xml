@@ -149,24 +149,20 @@
                 android:text="@string/review_mode_arrange"
                 app:icon="@drawable/ic_sw_arrange" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <TextView
-            android:id="@+id/pageStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:accessibilityLiveRegion="polite"
-            android:gravity="end"
-            android:maxLines="1"
-            android:textColor="@color/rv_ink_2"
-            android:textSize="14sp"
-            app:autoSizeMaxTextSize="14sp"
-            app:autoSizeMinTextSize="10sp"
-            app:autoSizeStepGranularity="1sp"
-            app:autoSizeTextType="uniform"
-            tools:text="Page 4 of 5" />
     </LinearLayout>
+
+    <!-- Page N of M on its own row: at font scale 2.0 the toggle leaves it too narrow. -->
+    <TextView
+        android:id="@+id/pageStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:accessibilityLiveRegion="polite"
+        android:gravity="end"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="2dp"
+        android:textColor="@color/rv_ink_2"
+        android:textSize="14sp"
+        tools:text="Page 4 of 5" />
 
     <FrameLayout
         android:layout_width="match_parent"
