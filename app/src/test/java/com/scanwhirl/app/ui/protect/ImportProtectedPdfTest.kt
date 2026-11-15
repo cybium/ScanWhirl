@@ -16,11 +16,14 @@ import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.PdfDecryptor
+import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.ProGate
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,6 +59,8 @@ class ImportProtectedPdfTest {
 
     @After
     fun tearDown() {
+        ScanRepository.resetTestSeams()
+        PdfDecryptor.resetForTests()
         Faults.resetAll()
         ProGate.setTestOverride(app, null)
     }
@@ -85,8 +90,7 @@ class ImportProtectedPdfTest {
     }
 
     @Test
-    fun `a protected PDF asks for its password and imports on the right one`() {
-        val page = ImportFixtures.image(width = 160, height = 220)
+    fun `a protected PDF asks for its password and imports on the right one`() {        val page = ImportFixtures.image(width = 160, height = 220)
         val uri = Uri.parse("content://scanwhirl-import/protected.pdf")
         shadowOf(app.contentResolver).registerInputStreamSupplier(uri) {
             ByteArrayInputStream("%PDF-1.7 protected".toByteArray())
@@ -140,5 +144,58 @@ class ImportProtectedPdfTest {
                 repo.listDocuments().first().pdfFile.length() > 0
             )
         }
+    }
+
+    /**
+     * B3: a 40-60 MB protected PDF on a 3 GB phone has to be refused before the whole file is
+     * read into memory, with a normal failure the screen can explain. The gate uses the app's
+     * heap, so the test shrinks the heap instead of building the file.
+     */
+    @Test
+    fun `a protected PDF larger than the heap can hold is refused before it is read`() = runBlocking {
+        PdfDecryptor.maxHeap = { 8L * 1024 * 1024 } // -> a 1 MiB ceiling (the floor)
+        val uri = Uri.parse("content://scanwhirl-import/too-big.pdf")
+        shadowOf(app.contentResolver).registerInputStream(
+            uri,
+            ByteArrayInputStream("%PDF-1.7\n".toByteArray() + ByteArray(2 * 1024 * 1024))
+        )
+
+        val failure = try {
+            repo.importProtectedPdfAsScan(uri, "Too big", "1234")
+            fail("a protected PDF bigger than the memory gate was accepted")
+            null
+        } catch (e: PdfImport.ImportException) {
+            e
+        }
+
+        assertEquals(PdfImport.Reason.LOW_MEMORY, failure!!.reason)
+        assertTrue("nothing was published", repo.listDocuments().isEmpty())
+        assertTrue(
+            "the decrypted copy is not left in the cache",
+            app.cacheDir.listFiles().orEmpty().none { it.name.startsWith("decrypted-") }
+        )
+    }
+
+    /**
+     * B3: an OutOfMemoryError is an `Error`, so `catch (e: Exception)` never sees it and the
+     * process dies with the progress dialog up. The import boundary turns it into the same
+     * normal, explainable failure.
+     */
+    @Test
+    fun `an OutOfMemoryError while decrypting becomes a normal import failure`() = runBlocking {
+        ScanRepository.decryptPdf = { _, _ -> throw OutOfMemoryError("simulated heap exhaustion") }
+        val uri = Uri.parse("content://scanwhirl-import/oom.pdf")
+        shadowOf(app.contentResolver).registerInputStream(uri, ByteArrayInputStream("%PDF-1.7 protected".toByteArray()))
+
+        val failure = try {
+            repo.importProtectedPdfAsScan(uri, "Cramped", "1234")
+            fail("an OutOfMemoryError escaped the import boundary")
+            null
+        } catch (e: PdfImport.ImportException) {
+            e
+        }
+
+        assertEquals(PdfImport.Reason.LOW_MEMORY, failure!!.reason)
+        assertTrue("nothing was published", repo.listDocuments().isEmpty())
     }
 }

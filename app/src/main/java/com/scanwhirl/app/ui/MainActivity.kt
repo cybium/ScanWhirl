@@ -1541,6 +1541,7 @@ class MainActivity : BaseActivity(), HomeHost {
             }
             ImportReason.EMPTY -> getString(R.string.import_failed_empty)
             ImportReason.TOO_LARGE -> getString(R.string.import_failed_too_large, (com.scanwhirl.app.util.PdfImport.MAX_BYTES / (1024 * 1024)).toInt())
+            ImportReason.LOW_MEMORY -> getString(R.string.import_failed_low_memory)
             ImportReason.TOO_MANY_PAGES -> getString(R.string.import_failed_too_many, failure.pages, com.scanwhirl.app.util.PdfImport.MAX_PAGES)
             ImportReason.NO_SPACE -> getString(R.string.import_failed_no_space)
             ImportReason.NO_ACCESS -> getString(R.string.import_failed_no_access)
