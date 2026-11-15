@@ -191,6 +191,30 @@ class FullBackupTest {
         )
     }
 
+    /**
+     * B1: the legacy 4-digit PIN hash never travels with a backup (it is device state), so a
+     * document that arrives with its `vault.flag` would be invisible to every screen and could
+     * never be opened again: `listDocuments` hides it and no PIN can make the Vault show it.
+     */
+    @Test
+    fun `a restored legacy vault document stays reachable`() {
+        val dir = doc("doc_legacy", "Old vault doc")
+        File(dir, "vault.flag").writeText("1")
+        backup.write(out, password, FullBackup.Wrap.PASSWORD)
+        File(docsDir, "doc_legacy").deleteRecursively()
+
+        val repo = ScanRepository(app)
+        val report = backup.restore(out, password)
+
+        assertEquals(1, report.documents)
+        assertTrue("the restored document exists", File(docsDir, "doc_legacy").isDirectory)
+        assertTrue(
+            "the restored document is listed",
+            repo.listDocuments().map { it.id }.contains("doc_legacy")
+        )
+        assertFalse("it is no longer flagged as a Vault document", repo.getDocument("doc_legacy")!!.isVaulted)
+    }
+
     @Test
     fun `a corrupted backup fails safely`() {
         doc("doc_e", "Fragile")

@@ -453,6 +453,23 @@ class FullBackup(
             }
         }
 
+        // 1b. Legacy Vault flags (B1). `vault_pin_sha256` is device state and deliberately never
+        //     travels with a backup, so a restored `vault.flag` would hide its document from every
+        //     screen with no PIN that could open it: unreachable, not restored. Follow the path the
+        //     app already has for legacy documents: migrate them into the current encrypted Vault
+        //     when this phone can, otherwise clear the flag so they come back as ordinary documents
+        //     (and say so). A phone that still has the old PIN keeps its flags: its legacy Vault
+        //     screen can open and migrate them.
+        if (!vault.hasLegacyPin() && legacyVaultFlagged().isNotEmpty()) {
+            if (vault.isSetUp() && vault.isUnlocked()) {
+                runCatching { vault.migrateLegacyVault() }
+            }
+            if (legacyVaultFlagged().isNotEmpty()) {
+                warnings.add(context.getString(com.scanwhirl.app.R.string.backup_warn_legacy_vault))
+                clearLegacyVaultFlags()
+            }
+        }
+
         // 2. Vault: adopt the backup's identity into an empty Vault, or re-encrypt entry by entry
         //    into this phone's Vault with its own key.
         val restoredVault = staging.resolve("vault2")
@@ -546,6 +563,18 @@ class FullBackup(
     private fun isSafeId(id: String): Boolean =
         id.isNotEmpty() && id.length <= 64 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
 
+    /** Documents still flagged as legacy Vault items in the library. */
+    private fun legacyVaultFlagged(): List<File> =
+        docsDir.listFiles { f -> f.isDirectory && File(f, VAULT_FLAG).isFile }.orEmpty().toList()
+
+    /**
+     * Drops the legacy flag from documents nothing can open any more. The content stays in the
+     * library; only the "hide me" marker goes, so the document is reachable again.
+     */
+    private fun clearLegacyVaultFlags() {
+        legacyVaultFlagged().forEach { File(it, VAULT_FLAG).delete() }
+    }
+
     companion object {
         const val MIN_PASSWORD = 10
         const val PREF_LAST_BACKUP = "full_backup_last_at"
@@ -558,6 +587,7 @@ class FullBackup(
         private const val MIN_VERSION = 1
         private const val ENTRY = 1
         internal const val VAULT_KEY_ENTRY = "vault-key.bin"
+        private const val VAULT_FLAG = "vault.flag"
         private const val END = 0
         private const val BUFFER = 64 * 1024
         private const val MAX_ENTRIES = 200_000

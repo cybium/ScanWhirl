@@ -63,6 +63,7 @@
         <item quantity="other">%1$d Vault documents were re-encrypted into this Vault.</item>
     </plurals>
     <string name="backup_vault_locked">Vault files were not restored. Unlock the Vault and restore again.</string>
+    <string name="backup_warn_legacy_vault">Some documents that were in the old PIN Vault were restored as ordinary documents, because the old PIN cannot travel with a backup.</string>
     <string name="backup_vault_reason">Unlock the Vault so the backup\'s Vault documents can be restored into it.</string>
     <string name="backup_wrong_secret">Wrong password or recovery code. Nothing was changed.</string>
     <string name="backup_not_a_backup">That file is not a ScanWhirl backup, or it is damaged.</string>
