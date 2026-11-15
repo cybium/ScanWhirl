@@ -42,14 +42,6 @@ Text screen|touch|ocrLangChip|L1 OcrEditor: 48dp touch, contrast, clipping - dis
 Text screen|touch|ocrModePage|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
 Text screen|touch|ocrModeText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
 Text screen|touch|OverflowMenuButton|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Tool result|clip|toolResultLibrary|L4 tools: result screen touch/image/clip - dispatched
-Tool result|image|toolResultPreview|L4 tools: result screen touch/image/clip - dispatched
-Tool result|touch|ImageButton|L4 tools: result screen touch/image/clip - dispatched
-Tool setup|clip|Audit library|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|clip|toolSetupRanges|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|contrast|OPTIONS|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|contrast|SOURCE|L4 tools: setup touch/contrast/clip - dispatched
-Tool setup|touch|ImageButton|L4 tools: setup touch/contrast/clip - dispatched
 Unlock sheet|clip|unlockCancel|L2 unlock sheet: touch, contrast, images, pane title - dispatched
 Unlock sheet|clip|unlockOpen|L2 unlock sheet: touch, contrast, images, pane title - dispatched
 Unlock sheet|contrast|or|L2 unlock sheet: touch, contrast, images, pane title - dispatched

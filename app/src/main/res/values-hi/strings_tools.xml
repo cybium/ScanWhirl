@@ -158,6 +158,7 @@
     <string name="tools_bc_document_name"><!-- review -->बिज़नेस कार्ड</string>
 
     <string name="tools_result_done"><!-- review -->तैयार</string>
+    <string name="tools_result_preview"><!-- review -->नतीजे की झलक</string>
     <string name="tools_result_name_more"><!-- review -->%1$s +%2$d और</string>
     <plurals name="tools_result_pages">
         <item quantity="one"><!-- review -->%1$d पृष्ठ</item>

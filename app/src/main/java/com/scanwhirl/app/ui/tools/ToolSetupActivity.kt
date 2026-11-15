@@ -214,6 +214,9 @@ class ToolSetupActivity : BaseActivity() {
             this, R.drawable.ic_sym_arrow_back, SwStyle.color(this, R.color.text_hologram_hi)
         ).apply {
             contentDescription = getString(R.string.tools_setup_back)
+            layoutParams = LinearLayout.LayoutParams(
+                SwStyle.dp(this@ToolSetupActivity, 48f), SwStyle.dp(this@ToolSetupActivity, 48f)
+            )
             setOnClickListener { finish() }
         })
         bar.addView(
@@ -243,7 +246,7 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     private fun sectionLabel(text: String): TextView =
-        SwStyle.text(this, 12f, SwStyle.color(this, R.color.cyan_dim), bold = true, letterSpacing = 0.08f).apply {
+        SwStyle.text(this, 12f, SwStyle.color(this, R.color.text_hologram_mid), bold = true, letterSpacing = 0.08f).apply {
             this.text = text.uppercase(java.util.Locale.getDefault())
             setPadding(0, SwStyle.dp(this@ToolSetupActivity, 16f), 0, SwStyle.dp(this@ToolSetupActivity, 8f))
         }
@@ -298,7 +301,7 @@ class ToolSetupActivity : BaseActivity() {
             row.addView(
                 SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
                     text = doc.name
-                    maxLines = 1
+                    maxLines = 2
                 },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             )
@@ -854,8 +857,9 @@ class ToolSetupActivity : BaseActivity() {
             }
         })
         layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 52f)
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
+        minimumHeight = SwStyle.dp(this@ToolSetupActivity, 52f)
     }
 
     private fun chip(text: String, id: Int): TextView =

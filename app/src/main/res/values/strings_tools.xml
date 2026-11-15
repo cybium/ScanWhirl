@@ -161,6 +161,7 @@
 
     <!-- v2 UI: 03_tools_hub - result screen -->
     <string name="tools_result_done">Done</string>
+    <string name="tools_result_preview">Result preview</string>
     <string name="tools_result_name_more">%1$s +%2$d more</string>
     <plurals name="tools_result_pages">
         <item quantity="one">%1$d page</item>

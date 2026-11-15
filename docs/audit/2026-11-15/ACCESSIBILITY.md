@@ -174,15 +174,18 @@ allow-listed until those lanes ship the fixes.
 | S3 | Recovery/backup labels clip at 2.0× | same rows | wrap |
 | S4 | A decorative image is announced | vault header | mark decorative |
 
-### L4 — Tools setup and result
+### L4 — Tools setup and result (fixed)
 
-| sev | finding | file:line | fix |
-|---|---|---|---|
-| S2 | Back `ImageButton` 40dp (setup and result) | `ToolSetupActivity.kt:215`, `ToolResultActivity` toolbar | 48dp |
-| S2 | `SOURCE`/`OPTIONS` headers are 4.40:1 | `res/layout/activity_tool_setup.xml` | brighten by one step |
-| S3 | `toolSetupRanges` field clips (109→129px needed vs 104px); source document name clips at 2.0× | `activity_tool_setup.xml` | wrap/minHeight |
-| S3 | `toolResultLibrary` clips at 2.0× | `ToolResultActivity.kt:171` | wrap |
-| S4 | `toolResultPreview` has no description | `ToolResultActivity.kt:122` | describe the preview or mark decorative |
+| sev | finding | fix |
+|---|---|---|
+| S2 | Back `ImageButton` 40dp (setup and result) | 48×48 dp touch target |
+| S2 | `SOURCE`/`OPTIONS` headers at 4.40:1 | label colour brightened to `text_hologram_mid` |
+| S3 | `toolSetupRanges` / source document name clipped at 2.0× | field wraps with a 52dp minimum; document name allows two lines |
+| S3 | `toolResultLibrary` clipped at 2.0× | result buttons wrap (2 lines, 50dp minimum) |
+| S4 | `toolResultPreview` had no description | announces “Result preview” (EN + HI) |
+
+The eight L4 allow-list lines were removed; `AccessibilityAuditTest` passes with no L4
+exceptions.
 
 ## Notes
 
