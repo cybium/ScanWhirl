@@ -50,6 +50,8 @@ class ManifestPrivacyTest {
             it == "android.permission.USE_BIOMETRIC" ||
                 it == "android.permission.USE_FINGERPRINT" ||
                 it == "android.permission.WRITE_EXTERNAL_STORAGE" ||
+                // Play Billing (Pro purchase): talks to the Play Store app on the phone, not the network.
+                it == "com.android.vending.BILLING" ||
                 it.startsWith(app.packageName + ".")
         }
         assertTrue("unexpected permissions: $unexpected", unexpected.isEmpty())
