@@ -165,6 +165,20 @@ object PdfImportSheets {
         return sheet
     }
 
+    /** "Not enough free space": the same refusal copy for every device-PDF path. */
+    fun refuse(activity: AppCompatActivity, plan: PdfImportBudget.Plan): SwSheet =
+        SwSheet.builder(activity)
+            .setTitle(R.string.tools_import_low_space_title)
+            .setMessage(
+                activity.getString(
+                    R.string.tools_import_no_space,
+                    plan.estimateBytes / (1024 * 1024),
+                    plan.freeBytes / (1024 * 1024)
+                )
+            )
+            .setPrimary(R.string.sheet_got_it)
+            .build()
+
     /** Progress line for [SwSheet.setMessage]. */
     fun progressText(activity: AppCompatActivity, done: Int, total: Int): String =
         activity.getString(R.string.tools_import_progress_msg, done, total)

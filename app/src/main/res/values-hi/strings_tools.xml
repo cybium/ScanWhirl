@@ -71,6 +71,7 @@
     <string name="tools_import_starting"><!-- review -->PDF तैयार हो रही है…</string>
     <string name="tools_import_cancel_note"><!-- review -->रद्द करने पर कुछ नहीं जुड़ेगा।</string>
     <string name="tools_import_no_space"><!-- review -->इस PDF को %1$d MB चाहिए और %2$d MB बचेगा। पहले जगह खाली करें।</string>
+    <string name="tools_import_low_space_title"><!-- review -->जगह कम है</string>
     <string name="tools_setup_no_text"><!-- review -->अभी पाठ नहीं पहचाना। पहले दस्तावेज़ खोलकर पढ़ें।</string>
     <string name="tools_setup_metadata_note"><!-- review -->EXIF और थंबनेल बिना साफ़ प्रति। मूल सुरक्षित।</string>
     <string name="tools_setup_id_note"><!-- review -->आगे ऊपर, पीछे नीचे, एक A4 पृष्ठ पर।</string>
@@ -121,6 +122,20 @@
     <string name="tools_bc_document_name"><!-- review -->बिज़नेस कार्ड</string>
 
     <string name="tools_result_done"><!-- review -->तैयार</string>
+    <string name="tools_result_name_more"><!-- review -->%1$s +%2$d और</string>
+    <plurals name="tools_result_pages">
+        <item quantity="one"><!-- review -->%1$d पृष्ठ</item>
+        <item quantity="other"><!-- review -->%1$d पृष्ठ</item>
+    </plurals>
+    <plurals name="tools_result_documents">
+        <item quantity="one"><!-- review -->%1$d दस्तावेज़</item>
+        <item quantity="other"><!-- review -->%1$d दस्तावेज़</item>
+    </plurals>
+    <plurals name="tools_result_files_count">
+        <item quantity="one"><!-- review -->%1$d फ़ाइल</item>
+        <item quantity="other"><!-- review -->%1$d फ़ाइलें</item>
+    </plurals>
+    <string name="tools_result_with_size"><!-- review -->%1$s · %2$s</string>
     <plurals name="tools_result_summary_docs">
         <item quantity="one"><!-- review -->%1$d दस्तावेज़ · %2$d पृष्ठ · %3$s</item>
         <item quantity="other"><!-- review -->%1$d दस्तावेज़ · %2$d पृष्ठ · %3$s</item>

@@ -114,16 +114,43 @@ class VaultFlow(
     }
 
     private fun importPdfToVault(uri: Uri) {
-        val progress = host.showProgress()
-        activity.lifecycleScope.launch {
+        var job: kotlinx.coroutines.Job? = null
+        var sheet: com.scanwhirl.app.ui.kit.SwSheet? = null
+        job = activity.lifecycleScope.launch {
             try {
                 val name = FlowUtil.devicePdfName(repo, uri)
-                withContext(Dispatchers.IO) { repo.importPdfIntoVault(uri, name) }
-                progress.dismiss()
+                val doc = repo.importPdfIntoVaultPlanned(
+                    uri = uri,
+                    name = name,
+                    onPlan = { plan ->
+                        val decision = com.scanwhirl.app.ui.tools.DevicePdfGate.decide(activity, plan)
+                        if (decision != ScanRepository.ImportDecision.Cancel) {
+                            sheet = withContext(Dispatchers.Main) {
+                                com.scanwhirl.app.ui.tools.DevicePdfGate
+                                    .progress(activity) { job?.cancel() }
+                                    .also { it.show() }
+                            }
+                        }
+                        decision
+                    },
+                    onPage = { done, total ->
+                        activity.runOnUiThread {
+                            sheet?.setMessage(
+                                com.scanwhirl.app.ui.tools.DevicePdfGate
+                                    .progressText(activity, done, total)
+                            )
+                        }
+                    }
+                )
+                sheet?.dismiss()
+                if (doc == null) return@launch
                 Toast.makeText(activity, R.string.vault_imported, Toast.LENGTH_SHORT).show()
                 host.refreshList()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                sheet?.dismiss()
+                throw e
             } catch (e: Exception) {
-                progress.dismiss()
+                sheet?.dismiss()
                 Toast.makeText(
                     activity,
                     activity.getString(R.string.page_op_failed, e.message),

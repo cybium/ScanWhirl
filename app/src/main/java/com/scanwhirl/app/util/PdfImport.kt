@@ -95,6 +95,7 @@ object PdfImport {
 
     internal fun resetForTests() {
         cacheSpace = ::probeSpace
+        pageCountSeam = null
     }
 
     /**
@@ -183,7 +184,13 @@ object PdfImport {
     }
 
     /** Page count without rendering; the caller owns [fd]. */
-    fun pageCount(fd: ParcelFileDescriptor): Int = openRenderer(fd).use { renderer ->
+    fun pageCount(fd: ParcelFileDescriptor): Int =
+        pageCountSeam?.invoke(fd) ?: realPageCount(fd)
+
+    /** Fault seam: lets a test make the pre-check see a protected/odd PDF. */
+    @Volatile internal var pageCountSeam: ((ParcelFileDescriptor) -> Int)? = null
+
+    private fun realPageCount(fd: ParcelFileDescriptor): Int = openRenderer(fd).use { renderer ->
         val count = renderer.pageCount
         if (count <= 0) throw ImportException(Reason.EMPTY, "This PDF has no pages")
         if (count > MAX_PAGES) {
