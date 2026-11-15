@@ -59,6 +59,13 @@ object BookSplit {
         val slanted: Boolean get() =
             topRatio != null && bottomRatio != null && abs(topRatio - bottomRatio) > 0.002f
 
+        /** The same line after the photo is turned 180 degrees ("Flip pages"). */
+        fun mirrored(): Gutter = copy(
+            ratio = 1f - ratio,
+            topRatio = bottomRatio?.let { 1f - it },
+            bottomRatio = topRatio?.let { 1f - it }
+        )
+
         companion object {
             val MIDDLE = Gutter(0.5f, false)
         }

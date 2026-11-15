@@ -34,6 +34,13 @@ class BookSpreadView(context: Context) : View(context) {
             invalidate()
         }
 
+    /**
+     * A tilted spine: bottom minus top x, as a fraction of the width (0 = vertical). Dragging
+     * moves the whole line and keeps its tilt; [ratio] is the line's middle.
+     */
+    var tilt: Float = 0f
+        private set
+
     /** True when the spine runs across the image (pages above/below). */
     var horizontal: Boolean = false
         private set
@@ -89,6 +96,7 @@ class BookSpreadView(context: Context) : View(context) {
         singlePage = gutter.singlePage
         autoGutter = gutter.found
         ratio = gutter.ratio
+        tilt = if (gutter.slanted && !gutter.horizontal) gutter.bottomRatio!! - gutter.topRatio!! else 0f
         requestLayout()
         invalidate()
     }
@@ -99,7 +107,9 @@ class BookSpreadView(context: Context) : View(context) {
         found = autoGutter,
         confidence = confidence,
         singlePage = singlePage,
-        horizontal = horizontal
+        horizontal = horizontal,
+        topRatio = if (tilt != 0f) (ratio - tilt / 2f).coerceIn(0.02f, 0.98f) else null,
+        bottomRatio = if (tilt != 0f) (ratio + tilt / 2f).coerceIn(0.02f, 0.98f) else null
     )
 
     fun release() {
@@ -158,7 +168,8 @@ class BookSpreadView(context: Context) : View(context) {
             drawKnob(canvas, knobX, y, horizontal = true)
         } else {
             val x = left + ratio * drawnWidth
-            canvas.drawLine(x, top, x, top + drawnHeight, linePaint)
+            val half = tilt / 2f * drawnWidth
+            canvas.drawLine(x - half, top, x + half, top + drawnHeight, linePaint)
             val knobY = top + drawnHeight / 2f
             drawKnob(canvas, x, knobY, horizontal = false)
         }
@@ -182,7 +193,9 @@ class BookSpreadView(context: Context) : View(context) {
         if (!lineVisible || bitmap == null || dst.width() <= 0f) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val linePos = if (horizontal) dst.top + ratio * dst.height() else dst.left + ratio * dst.width()
+                val yFrac = ((event.y - dst.top) / dst.height()).coerceIn(0f, 1f)
+                val linePos = if (horizontal) dst.top + ratio * dst.height()
+                else dst.left + (ratio + tilt * (yFrac - 0.5f)) * dst.width()
                 val touch = if (horizontal) event.y else event.x
                 val span = if (horizontal) dst.height() else dst.width()
                 if (abs(touch - linePos) > SwStyle.dp(context, 32f)) {
@@ -190,11 +203,11 @@ class BookSpreadView(context: Context) : View(context) {
                     if (frac < MIN_RATIO || frac > MAX_RATIO) return false
                 }
                 parent?.requestDisallowInterceptTouchEvent(true)
-                moveLine(if (horizontal) event.y else event.x)
+                moveLine(if (horizontal) event.y else event.x, event.y)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                moveLine(if (horizontal) event.y else event.x)
+                moveLine(if (horizontal) event.y else event.x, event.y)
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -208,11 +221,13 @@ class BookSpreadView(context: Context) : View(context) {
 
     override fun performClick(): Boolean = super.performClick()
 
-    private fun moveLine(coordinate: Float) {
+    private fun moveLine(coordinate: Float, touchY: Float) {
         val start = if (horizontal) dst.top else dst.left
         val span = if (horizontal) dst.height() else dst.width()
         if (span <= 0f) return
-        ratio = (coordinate - start) / span
+        // A tilted line passes under the finger at the touched height; [ratio] stays its middle.
+        val yFrac = if (dst.height() > 0f) ((touchY - dst.top) / dst.height()).coerceIn(0f, 1f) else 0.5f
+        ratio = (coordinate - start) / span - (if (horizontal) 0f else tilt * (yFrac - 0.5f))
         autoGutter = false
         onGutterMoved?.invoke()
     }
