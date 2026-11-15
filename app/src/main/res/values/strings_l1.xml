@@ -82,6 +82,9 @@
     <string name="tool_redact">Redact</string>
     <string name="tool_protect">Protect PDF</string>
     <string name="tool_unlock">Unlock PDF</string>
+    <string name="lock_from_pdf">From a PDF file</string>
+    <string name="lock_no_documents">No unprotected PDFs. Scan or import one first.</string>
+    <string name="lock_choose_document">Choose a document</string>
     <string name="tool_vault">Vault</string>
     <string name="tool_remove_metadata">Remove metadata</string>
     <string name="tool_read_text">Read text</string>

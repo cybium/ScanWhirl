@@ -72,6 +72,7 @@ object BookSplitEval {
         val photos = if (folder.photoSubdir.isBlank()) folder.dir else File(folder.dir, folder.photoSubdir)
         val lines = mutableListOf<String>()
         val results = mutableListOf<Result>()
+        val diagnostics = mutableListOf<String>()
 
         for ((name, expectation) in folder.expectations) {
             val file = File(photos, "$name.jpg")
@@ -88,6 +89,15 @@ object BookSplitEval {
                 val box = crops[name]
                 val croppedSource = if (box != null) crop(source, box) else source
                 val cropped = BookSplit.analyse(croppedSource)
+                val p90raw = BookSplit.blankMarginPosition(source, 90)
+                val p270raw = BookSplit.blankMarginPosition(source, 270)
+                val p90crop = BookSplit.blankMarginPosition(croppedSource, 90)
+                val p270crop = BookSplit.blankMarginPosition(croppedSource, 270)
+                diagnostics += String.format(
+                    java.util.Locale.ROOT,
+                    "%-24s cue raw p90=%s p270=%s | crop p90=%s p270=%s",
+                    name, p90raw, p270raw, p90crop, p270crop
+                )
                 val croppedPreview = File(out, "${name}_cropped_preview.jpg")
                 writePreview(croppedSource, cropped, croppedPreview)
                 if (croppedSource !== source) croppedSource.recycle()
@@ -102,10 +112,10 @@ object BookSplitEval {
                 }
                 val line = String.format(
                     java.util.Locale.ROOT,
-                    "%-24s RAW r=%.3f c=%.2f rot=%d | CROP r=%.3f c=%.2f rot=%d single=%s %s (%s)",
-                    name, raw.gutter.ratio, raw.gutter.confidence, raw.rotation,
-                    cropped.gutter.ratio, cropped.gutter.confidence, cropped.rotation,
-                    cropped.gutter.singlePage.toString(),
+                    "%-24s RAW r=%.3f c=%.2f a=%.2f rot=%d | CROP r=%.3f c=%.2f a=%.2f rot=%d single=%s %s (%s)",
+                    name, raw.gutter.ratio, raw.gutter.confidence, raw.aspect, raw.rotation,
+                    cropped.gutter.ratio, cropped.gutter.confidence, cropped.aspect,
+                    cropped.rotation, cropped.gutter.singlePage.toString(),
                     if (pass) "PASS" else "FAIL", expectation.note
                 )
                 lines += line
@@ -121,10 +131,12 @@ object BookSplitEval {
             }
         }
 
-        val report = lines.joinToString("\n")
-        println("--- Book pages eval: ${folder.label} ---")
+        val report = lines.joinToString("\n") + "\n\n" + diagnostics.joinToString("\n")
+        val resultsFile = File(out, "RESULTS.txt").absoluteFile
+        println("--- Book pages eval: ${folder.label} -> ${resultsFile.absolutePath} ---")
         println(report)
-        File(out, "RESULTS.txt").writeText(report + "\n")
+        resultsFile.writeText(report + "\n")
+        println("WROTE ${resultsFile.absolutePath} at ${resultsFile.lastModified()}")
         return results
     }
 
@@ -177,9 +189,11 @@ object BookSplitEval {
                 drawText(
                     String.format(
                         java.util.Locale.ROOT,
-                        "line %.3f  conf %.2f  rot %d%s",
-                        analysis.gutter.ratio, analysis.gutter.confidence, analysis.rotation,
-                        if (analysis.gutter.singlePage) "  ONE PAGE" else ""
+                        "line %.3f  conf %.2f  aspect %.2f  text %s  rot %d  %s",
+                        analysis.gutter.ratio, analysis.gutter.confidence, analysis.aspect,
+                        if (analysis.textVertical) "V" else "H",
+                        analysis.rotation,
+                        if (analysis.gutter.singlePage) "ONE PAGE" else "SPREAD"
                     ),
                     14f, 34f, label
                 )

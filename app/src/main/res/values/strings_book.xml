@@ -15,7 +15,7 @@
     <string name="book_gutter_moved">Gutter set by hand.</string>
     <string name="book_one_page_note">Looks like one page.</string>
     <string name="book_keep_one_page">Keep as one page</string>
-    <string name="book_rotate">Rotate pages</string>
+    <string name="book_rotate">Flip pages</string>
     <string name="book_add_spread">Add a spread</string>
     <string name="book_add_spread_note">The scanner crops the book edges; you can adjust the corners there.</string>
     <string name="book_scan_camera">Scan with camera</string>

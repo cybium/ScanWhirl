@@ -15,8 +15,10 @@ import kotlin.math.roundToInt
  * The scanner perspective-crops every page first. Then, on the cropped image:
  *  1. **Text direction** from projection profiles: horizontal text makes the ROW profile
  *     periodic at the line pitch, vertical text the COLUMN profile (autocorrelation in 8-60 px).
- *     Vertical text is rotated 90° (ML Kit on device; margin heuristic offline) so the spread is
- *     upright and the spine becomes vertical.
+ *     Vertical text is rotated 90/270 so the spread is upright and the spine becomes vertical:
+ *     the upright half is the one whose blank page margin (page number / running head at the
+ *     top, the wide margin below the text) is at the bottom. ML Kit confirms it on device and
+ *     the preview always offers "Flip pages" for the other half.
  *  2. **Shape** on the upright image: aspect width/height ≥ 1.15 is a two-page spread, ≤ 0.95 is
  *     one page ("Keep as one page" is the default), in between the gutter evidence decides.
  *     This is what stops a two-column single page from being split at its column gap.
@@ -59,7 +61,9 @@ object BookSplit {
     data class Analysis(
         val rotation: Int,
         val gutter: Gutter,
-        val textVertical: Boolean
+        val textVertical: Boolean,
+        /** Width/height after the text-direction rotation. */
+        val aspect: Float = 1f
     )
 
     data class Split(val gutter: Gutter, val left: Bitmap, val right: Bitmap) {
@@ -106,8 +110,141 @@ object BookSplit {
             colScore > rowScore * 1.20f && colScore > 0.12f -> true
             else -> false
         }
-        val rotation = if (verticalText) uprightRotation(bitmap) else 0
+        val rotation = if (verticalText) {
+            sidewaysRotation(bitmap)
+        } else {
+            uprightFlip(bitmap)
+        }
         return analyseUpright(bitmap, rotation).copy(textVertical = verticalText)
+    }
+
+    /**
+     * 90 vs 270 for a sideways page. A printed page has its running head / folio at the top
+     * and its widest blank margin below the last text line, so the upright candidate is the
+     * one whose blank band sits in the lower half of the page. The old outer-margin test had
+     * this sign inverted (it chose the larger *top* blank, i.e. the upside-down half).
+     *
+     * The cue is deliberately reported as weak unless one candidate wins by 10% of the page
+     * height: then the UI asks ML Kit and the preview always offers "Flip pages".
+     */
+    private fun sidewaysRotation(bitmap: Bitmap): Int {
+        val at90 = blankMarginPosition(bitmap, 90)
+        val at270 = blankMarginPosition(bitmap, 270)
+        return when {
+            at90 == null || at270 == null -> 90
+            at270 - at90 > 0.10f -> 270
+            at90 - at270 > 0.10f -> 90
+            else -> 90
+        }
+    }
+
+    /**
+     * 0 vs 180 for an upright spread: flip only when the ascender/descender asymmetry points
+     * clearly the other way. Otherwise keep 0; the device path asks ML Kit, and the preview
+     * has the one-tap "Flip pages" button.
+     */
+    private fun uprightFlip(bitmap: Bitmap): Int {
+        // Offline an upside-down spread is genuinely ambiguous: the ascender asymmetry that
+        // looks conclusive on synthetic text is a few thousandths on real photos, and books
+        // differ in where the folio sits (top corner, bottom corner). Do not flip on that;
+        // the device path asks ML Kit (0 vs 180) and every preview has "Flip pages".
+        return 0
+    }
+
+    /**
+     * Height (0 = top, 1 = bottom) of the quietest band in the [rotation] candidate.
+     *
+     * A printed page's widest blank margin sits below the last text line (the running head and
+     * page number are above it), so the upright candidate has its quiet band near the bottom
+     * and the 180° turn near the top. Text rows, the page stack and the dark cloth around the
+     * book all carry ink; only the blank margin is quiet, so the band is found from the
+     * lowest-ink rows of the whole image. The device confirms the winner with ML Kit and the
+     * preview always offers "Flip pages".
+     */
+    internal fun blankMarginPosition(bitmap: Bitmap, rotation: Int): Float? {
+        val turned = rotate(bitmap, rotation)
+        val targetWidth = 500
+        val small = if (turned.width <= targetWidth) turned else Bitmap.createScaledBitmap(
+            turned,
+            targetWidth,
+            max(1, turned.height * targetWidth / turned.width),
+            true
+        )
+        val w = small.width
+        val h = small.height
+        val grey = FloatArray(w * h) { i -> luminance(small.getPixel(i % w, i / w)).toFloat() }
+        if (small !== turned) small.recycle()
+        if (turned !== bitmap) turned.recycle()
+
+        val x0 = (w * 0.10f).toInt()
+        val x1 = (w * 0.90f).toInt()
+        val stride = max(1, (x1 - x0) / 200)
+        val pixels = ArrayList<Int>(h * 160)
+        for (y in 0 until h) {
+            var x = x0
+            while (x < x1) {
+                pixels.add(grey[y * w + x].toInt())
+                x += stride
+            }
+        }
+        if (pixels.size < 64) return null
+        pixels.sort()
+        val pageMedian = pixels[pixels.size / 2].toFloat()
+
+        val ink = FloatArray(h)
+        for (y in 0 until h) {
+            var dark = 0
+            var n = 0
+            var x = x0
+            while (x < x1) {
+                if (grey[y * w + x] < pageMedian - 35f) dark++
+                n++
+                x += stride
+            }
+            ink[y] = dark.toFloat() / n
+        }
+        smooth(ink, 1)
+
+        // The quiet band is the longest run at (or just above) the lowest ink. Start narrow so
+        // inter-line gaps cannot merge into the margin; widen only if no run is found.
+        val minInk = ink.min()
+        for (extra in floatArrayOf(0.02f, 0.03f, 0.04f, 0.06f)) {
+            val threshold = minInk + extra
+            var runStart = -1
+            var bestStart = -1
+            var bestEnd = -2
+            for (i in ink.indices) {
+                if (ink[i] <= threshold) {
+                    if (runStart < 0) runStart = i
+                    if (i - runStart > bestEnd - bestStart) {
+                        bestStart = runStart
+                        bestEnd = i
+                    }
+                } else {
+                    runStart = -1
+                }
+            }
+            if (bestEnd - bestStart >= 2) {
+                return ((bestStart + bestEnd + 1) / 2f) / h
+            }
+        }
+        return null
+    }
+
+    private fun smooth(values: FloatArray, radius: Int) {
+        if (radius < 1 || values.size < 3) return
+        val copy = values.copyOf()
+        for (i in values.indices) {
+            var sum = 0f
+            var count = 0
+            for (j in i - radius..i + radius) {
+                if (j in copy.indices) {
+                    sum += copy[j]
+                    count++
+                }
+            }
+            values[i] = sum / count
+        }
     }
 
     /** Strength of a dark spine in the middle 30% of the axis (row band or column band). */
@@ -179,7 +316,7 @@ object BookSplit {
                 textBlocks = blocks)
         }
         if (upright !== bitmap) upright.recycle()
-        return Analysis(rotation, gutter, textVertical = false)
+        return Analysis(rotation, gutter, textVertical = false, aspect = aspect)
     }
 
     /** The old entry point used by simple callers/tests: no text-rotation, no shape override. */
