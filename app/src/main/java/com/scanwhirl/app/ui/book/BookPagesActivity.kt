@@ -263,13 +263,16 @@ class BookPagesActivity : BaseActivity() {
                         try {
                             val bytes = readBytes(uri)
                             val bitmap = BookSplit.decode(bytes, PREVIEW_MAX_DIM)
-                            val gutter = BookSplit.scanGutter(bitmap)
-                            val rotateTop = if (gutter.horizontal) {
-                                TextRotation.choose(bitmap, gutter)
-                            } else {
-                                true
+                            var analysis = BookSplit.analyse(bitmap)
+                            if (analysis.textVertical) {
+                                val confirmed = TextRotation.chooseRotation(bitmap)
+                                if (confirmed != null && confirmed != analysis.rotation) {
+                                    analysis = BookSplit.analyseUpright(bitmap, confirmed)
+                                }
                             }
-                            Loaded(uri, bitmap, gutter, rotateTop)
+                            val preview = BookSplit.rotate(bitmap, analysis.rotation)
+                            if (preview !== bitmap) bitmap.recycle()
+                            Loaded(uri, preview, analysis)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -279,7 +282,7 @@ class BookPagesActivity : BaseActivity() {
                 }
                 for (loadedPage in loaded) {
                     if (isFinishing || isDestroyed) {
-                        loadedPage.bitmap.recycle()
+                        loadedPage.preview.recycle()
                         continue
                     }
                     addPreview(loadedPage)
@@ -301,8 +304,9 @@ class BookPagesActivity : BaseActivity() {
 
     private fun addPreview(loaded: Loaded) {
         val uri = loaded.uri
-        val bitmap = loaded.bitmap
-        val gutter = loaded.gutter
+        val bitmap = loaded.preview
+        val analysis = loaded.analysis
+        val gutter = analysis.gutter
         if (items.isEmpty()) container.removeAllViews()
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -321,7 +325,6 @@ class BookPagesActivity : BaseActivity() {
                 when {
                     gutter.singlePage -> R.string.book_one_page_note
                     gutter.lowConfidence -> R.string.book_gutter_middle
-                    gutter.horizontal -> R.string.book_gutter_horizontal
                     else -> R.string.book_gutter_found
                 }
             )
@@ -342,7 +345,7 @@ class BookPagesActivity : BaseActivity() {
                 note.setTextColor(SwStyle.color(this@BookPagesActivity, R.color.gold_pro_primary))
             }
         }
-        val item = Item(uri, spread, gutter.singlePage, loaded.rotateTop)
+        val item = Item(uri, spread, gutter.singlePage, analysis)
         if (gutter.lowConfidence && !gutter.singlePage) spread.pulseLine()
         card.addView(
             spread,
@@ -351,7 +354,7 @@ class BookPagesActivity : BaseActivity() {
             }
         )
 
-        if (gutter.horizontal && !gutter.singlePage) {
+        if (analysis.textVertical) {
             val rotate = SwStyle.text(
                 this, 13f, SwStyle.color(this, R.color.cyan_primary), bold = true
             ).apply {
@@ -359,7 +362,15 @@ class BookPagesActivity : BaseActivity() {
                 gravity = Gravity.CENTER
                 minHeight = SwStyle.dp(this@BookPagesActivity, 40f)
                 setOnClickListener {
-                    item.rotateTop = !item.rotateTop
+                    val current = spread.bitmap ?: return@setOnClickListener
+                    val flipped = BookSplit.rotate(current, 180)
+                    val nextRatio = 1f - spread.ratio
+                    val nextGutter = item.analysis.gutter.copy(ratio = nextRatio)
+                    item.analysis = BookSplit.Analysis(
+                        (item.analysis.rotation + 180) % 360, nextGutter, true
+                    )
+                    spread.setSpread(flipped, nextGutter)
+                    if (flipped !== current) current.recycle()
                 }
             }
             card.addView(rotate)
@@ -415,7 +426,9 @@ class BookPagesActivity : BaseActivity() {
         busy = true
         statusView.text = getString(R.string.book_splitting)
         updateControls()
-        val sources = items.map { ItemSource(it.view.gutter(), it.uri, it.keepAsOnePage, it.rotateTop) }
+        val sources = items.map {
+            ItemSource(it.analysis.copy(gutter = it.view.gutter()), it.uri, it.keepAsOnePage)
+        }
         lifecycleScope.launch {
             try {
                 val pages = withContext(Dispatchers.IO) {
@@ -424,11 +437,9 @@ class BookPagesActivity : BaseActivity() {
                         // Sampled to 3000 px inside BookSplit; the provider's image is only read.
                         val bytes = readBytes(source.uri)
                         if (source.keepAsOnePage) {
-                            out += BookSplit.singlePageJpeg(bytes)
+                            out += BookSplit.singlePageJpeg(bytes, source.analysis.rotation)
                         } else {
-                            val (left, right) = BookSplit.splitToJpeg(
-                                bytes, source.gutter, source.rotateTop
-                            )
+                            val (left, right) = BookSplit.splitToJpeg(bytes, source.analysis)
                             out += left
                             out += right
                         }
@@ -487,23 +498,21 @@ class BookPagesActivity : BaseActivity() {
         val uri: Uri,
         val view: BookSpreadView,
         var keepAsOnePage: Boolean,
-        var rotateTop: Boolean
+        var analysis: BookSplit.Analysis
     ) {
         var onePageSwitch: SwitchCompat? = null
     }
 
     private class ItemSource(
-        val gutter: BookSplit.Gutter,
+        val analysis: BookSplit.Analysis,
         val uri: Uri,
-        val keepAsOnePage: Boolean,
-        val rotateTop: Boolean
+        val keepAsOnePage: Boolean
     )
 
     private class Loaded(
         val uri: Uri,
-        val bitmap: android.graphics.Bitmap,
-        val gutter: BookSplit.Gutter,
-        val rotateTop: Boolean
+        val preview: android.graphics.Bitmap,
+        val analysis: BookSplit.Analysis
     )
 
     companion object {

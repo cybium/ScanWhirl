@@ -128,14 +128,15 @@ class BookPagesActivityTest {
 
     /** A close-up of one page on a dark table: one text block, no fold. */
     private fun jpegSinglePage(): ByteArray {
-        val bitmap = Bitmap.createBitmap(800, 600, Bitmap.Config.ARGB_8888)
+        // Portrait close-up: the aspect/shape rule makes it one page.
+        val bitmap = Bitmap.createBitmap(600, 800, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.rgb(45, 42, 40))
         val canvas = Canvas(bitmap)
-        canvas.drawRect(60f, 40f, 760f, 560f, Paint().apply { color = Color.rgb(242, 238, 228) })
+        canvas.drawRect(40f, 60f, 560f, 740f, Paint().apply { color = Color.rgb(242, 238, 228) })
         val ink = Paint().apply { color = Color.rgb(40, 38, 36); strokeWidth = 2f }
-        var y = 90f
-        while (y < 540f) {
-            canvas.drawLine(120f, y, 700f, y, ink)
+        var y = 110f
+        while (y < 720f) {
+            canvas.drawLine(100f, y, 500f, y, ink)
             y += 12f
         }
         val out = ByteArrayOutputStream()
