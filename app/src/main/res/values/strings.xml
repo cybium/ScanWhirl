@@ -350,9 +350,9 @@
     <string name="ocr_note">Text search works best on printed pages.</string>
     <string name="signal_reading_text">Reading text on your scans</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
-    <string name="settings_auto_enhance_summary">Google processing is on when this is on. Off gives a fast, original-looking scan.</string>
+    <string name="settings_auto_enhance_summary">Google processing is on. Off gives a fast, original-looking scan.</string>
     <string name="settings_searchable_pdf">Make PDFs searchable</string>
-    <string name="settings_searchable_pdf_summary">Hides OCR text in the PDF so any PDF app can search it.</string>
+    <string name="settings_searchable_pdf_summary">Hides OCR text so PDF apps can search it.</string>
     <string name="settings_auto_copy_to_documents">Also save a copy to Documents</string>
     <string name="settings_auto_copy_to_documents_summary">Copies saved to Documents/ScanWhirl.</string>
     <string name="settings_pro_message">ScanWhirl Pro is not available yet.</string>

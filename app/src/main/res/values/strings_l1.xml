@@ -268,4 +268,9 @@
     <string name="quick_add_tools">Add tools</string>
     <string name="quick_max_reached">Twelve quick tools is the maximum</string>
     <string name="a11y_back">Back</string>
+    <string name="me_pro_active">ScanWhirl Pro — active</string>
+    <string name="me_pro_active_summary">Thank you — every Pro tool is unlocked.</string>
+    <string name="pro_active_sub">Every Pro tool is unlocked. Thank you!</string>
+    <string name="settings_test_free">Testing: act as a Free user</string>
+    <string name="settings_test_free_summary">Test builds only. Shows the Pro gate.</string>
 </resources>

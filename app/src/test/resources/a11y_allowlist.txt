@@ -20,6 +20,3 @@ Tool setup|contrast|OPTIONS|L4 tools: setup touch/contrast/clip - dispatched
 Tool setup|contrast|SOURCE|L4 tools: setup touch/contrast/clip - dispatched
 Tool setup|touch|ImageButton|L4 tools: setup touch/contrast/clip - dispatched
 Tools|contrast|1|L1 shell: TEXT section count uses cyan_dim (4.06:1) - dispatched
-Settings|clip|Google processing is on|L1 settings: description 3px too wide at 1.3x (exposed once the blank-page bug was fixed) - dispatched
-Settings|clip|Hides OCR text in the PD|L1 settings: description 3px too wide at 1.3x (exposed once the blank-page bug was fixed) - dispatched
-Settings|clip|Also save a copy to Docu|L1 settings: title 5px too wide at 2.0x (exposed once the blank-page bug was fixed) - dispatched

@@ -2,8 +2,11 @@ package com.scanwhirl.app.ui.shell
 
 import android.app.Application
 import android.os.Looper
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.ScrollView
 import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
@@ -142,6 +145,50 @@ class QuickToolsTest {
                 assertFalse("no add is live at the cap", anyAdd.isEnabled)
                 assertEquals(0.38f, anyAdd.alpha, 0.01f)
             }
+        }
+    }
+
+    @Test
+    fun `a short second row keeps the six-column grid and stays left aligned`() {
+        val seven = ToolRegistry.all.filter { it.status == ToolStatus.READY }
+            .map { it.id }.take(7)
+        Prefs.setQuickTools(app, seven)
+        launch { activity, _ ->
+            val row2 = activity.findViewById<ViewGroup>(R.id.swQuickRow2)
+            assertEquals("the grid always has six columns", 6, row2.childCount)
+            assertTrue("the first cell is the tool", row2.getChildAt(0) is ToolTile)
+            for (i in 1 until 6) {
+                assertFalse(
+                    "the rest are spacers, not a stretched tile",
+                    row2.getChildAt(i) is ToolTile
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `edit badges sit at the top start and the rows align to the top`() {
+        launch { activity, _ ->
+            activity.findViewById<View>(R.id.swQuickEdit).performClick()
+            idle()
+            val row = activity.findViewById<android.widget.LinearLayout>(R.id.swQuickRow)
+            val tile = row.getChildAt(0) as ToolTile
+            assertEquals(
+                "circles share one top line",
+                Gravity.TOP,
+                (row.gravity and Gravity.TOP)
+            )
+            assertEquals("labels reserve two lines", 2, tile.labelView.minLines)
+            val badge = (0 until tile.childCount)
+                .map { tile.getChildAt(it) }
+                .filterIsInstance<ImageView>()
+                .first { it.contentDescription?.startsWith("Remove") == true }
+            val lp = badge.layoutParams as FrameLayout.LayoutParams
+            assertEquals(
+                "the badge is on the top-start corner, clear of the PRO tag",
+                Gravity.TOP or Gravity.START,
+                lp.gravity
+            )
         }
     }
 

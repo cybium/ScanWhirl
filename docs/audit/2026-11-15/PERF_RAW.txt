@@ -1,0 +1,21 @@
+open document (page list): 67ms
+open document + draftPages: 175ms
+organize grid first screen: 490ms
+organize grid visible cells: 6
+compress 500 pages: 9463ms
+library/search reads: 3, on main: 0, thread=SDK 35 Main Thread
+text-layer flag old (geo re-read per page): 3578ms
+text-layer flag new (one geo read): 0ms
+text-layer flag reads: old=500 new=1
+ocr index 500 pages: 112461ms
+target compress old (all pages in memory): 5920ms
+target compress streaming (1 page at a time): 6933ms
+target compress peak pages in memory: old=500 new=1
+thumbnail sample: target=220px sample=8 decoded=200x275
+merge 3x200 pages: 6945ms
+pdf 500 pages: 1677ms
+library load: 454ms
+search name cold: 323ms
+search name warm: 54ms
+search OCR cold: 873ms
+search OCR warm: 817ms

@@ -22,7 +22,8 @@ import com.scanwhirl.app.ui.kit.TrustPill
  */
 class ProScreen(
     private val context: Context,
-    private val callbacks: Callbacks
+    private val callbacks: Callbacks,
+    private val active: Boolean = false
 ) : LinearLayout(context) {
 
     interface Callbacks {
@@ -69,9 +70,10 @@ class ProScreen(
         addView(top, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         val hero = FrameLayout(context).apply {
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 170f))
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 260f))
+            clipChildren = false
         }
-        for (size in listOf(250, 180, 120)) {
+        for (size in listOf(260, 190, 130)) {
             val ring = SwStyle.dp(context, size.toFloat())
             val ringView = View(context).apply {
                 background = SwStyle.rounded(
@@ -110,12 +112,14 @@ class ProScreen(
             SwStyle.text(context, 28f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
                 text = context.getString(R.string.pro_title_pro)
                 typeface = SwType.extraBold(context)
+                layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                    .apply { marginStart = SwStyle.dp(context, 7f) }
             }
         )
         addView(title, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         titleRow = title
         subtitle = SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-            text = context.getString(R.string.pro_sub)
+            text = context.getString(if (active) R.string.pro_active_sub else R.string.pro_sub)
             gravity = Gravity.CENTER
         }
         addView(
@@ -302,6 +306,34 @@ class ProScreen(
         )
         addView(SwStyle.spacer(context, 20f))
 
+        // The price + Unlock bar is pinned above the shell nav; only the rest of
+        // the screen scrolls, so the shine/pulse always play where the eye is.
+        val body = LinearLayout(context).apply {
+            orientation = VERTICAL
+            clipChildren = false
+        }
+        while (childCount > 0) {
+            val child = getChildAt(0)
+            removeViewAt(0)
+            if (child === priceWrap || child === buyWrap) continue
+            body.addView(child, child.layoutParams)
+        }
+        val scroll = android.widget.ScrollView(context).apply {
+            id = R.id.swProScroll
+            isFillViewport = true
+            clipToPadding = false
+            clipChildren = false
+            addView(
+                body,
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            )
+        }
+        addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        if (!active) {
+            addView(stickyBar(), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        }
+        clipChildren = false
+
         // v2 UI: 74_motion — the Pro entrance. Every animator is finite and
         // attach-scoped: leaving the screen cancels them, and "Remove animations"
         // leaves the final state in place with no movement.
@@ -406,6 +438,35 @@ class ProScreen(
     internal fun titleForTest(): View = titleRow
     internal fun priceWrapForTest(): FrameLayout = priceWrap
     internal fun buyWrapForTest(): FrameLayout = buyWrap
+
+    /** Pinned price + Unlock row (never scrolls out of view). */
+    private fun stickyBar(): View {
+        val bar = LinearLayout(context).apply {
+            orientation = VERTICAL
+            setBackgroundColor(0xFF0E1316.toInt())
+        }
+        bar.addView(
+            View(context).apply {
+                setBackgroundColor(SwStyle.color(context, R.color.sw_cyan_hair))
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, 1)
+        )
+        val row = LinearLayout(context).apply {
+            orientation = VERTICAL
+            setPadding(
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 8f),
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 8f)
+            )
+        }
+        row.addView(priceWrap, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        row.addView(
+            buyWrap,
+            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 54f))
+                .apply { topMargin = SwStyle.dp(context, 8f) }
+        )
+        bar.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        return bar
+    }
 
     private fun feature(icon: Int, label: Int): View {
         val cell = LinearLayout(context).apply {

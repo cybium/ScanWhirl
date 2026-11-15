@@ -114,6 +114,9 @@ class SettingsActivity : BaseActivity() {
         // Pro accent theme: Cyan (default) or Gold.
         addAccentRow()
 
+        // Test builds only: let QA see the Free/Pro gate.
+        if (com.scanwhirl.app.BuildConfig.TEST_BUILD) addTestFreeRow()
+
         updateSummaries()
     }
 
@@ -374,6 +377,66 @@ class SettingsActivity : BaseActivity() {
         updateAccentSummary()
         // Rebuild every kit surface in the new accent.
         recreate()
+    }
+
+    /** Test build only: flip QA into Free so every Pro gate is visible. */
+    private fun addTestFreeRow() {
+        val parent = binding.rowPrivacy.parent as? android.view.ViewGroup ?: return
+        val d = resources.displayMetrics.density
+        val row = android.widget.LinearLayout(this).apply {
+            id = R.id.rowTestFree
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((16 * d).toInt(), (12 * d).toInt(), (12 * d).toInt(), (12 * d).toInt())
+        }
+        val texts = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        texts.addView(
+            android.widget.TextView(this).apply {
+                setText(R.string.settings_test_free)
+                textSize = 15f
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(
+                        this@SettingsActivity, R.color.text_hologram_hi
+                    )
+                )
+            }
+        )
+        texts.addView(
+            android.widget.TextView(this).apply {
+                setText(R.string.settings_test_free_summary)
+                textSize = 12.5f
+                setPadding(0, (2 * d).toInt(), 0, 0)
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(
+                        this@SettingsActivity, R.color.text_hologram_mid
+                    )
+                )
+            }
+        )
+        row.addView(
+            texts,
+            android.widget.LinearLayout.LayoutParams(
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { marginEnd = (12 * d).toInt() }
+        )
+        val toggle = androidx.appcompat.widget.SwitchCompat(this).apply {
+            id = R.id.switchTestFree
+            contentDescription = getString(R.string.settings_test_free)
+            isChecked = com.scanwhirl.app.util.ProGate.testOverride(this@SettingsActivity) == false
+            setOnCheckedChangeListener { _, checked ->
+                com.scanwhirl.app.util.ProGate.setTestOverride(
+                    this@SettingsActivity, if (checked) false else null
+                )
+                recreate()
+            }
+        }
+        row.addView(toggle)
+        val privacyRow = findViewById<android.view.View>(R.id.rowBlockScreenshots)
+        val index = if (privacyRow != null) parent.indexOfChild(privacyRow) + 1
+        else parent.indexOfChild(binding.rowPrivacy) + 1
+        parent.addView(row, index.coerceAtMost(parent.childCount))
     }
 
     /**

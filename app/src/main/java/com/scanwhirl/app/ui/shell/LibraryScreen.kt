@@ -170,7 +170,7 @@ class LibraryScreen(
         quickRow = LinearLayout(context).apply {
             id = R.id.swQuickRow
             orientation = HORIZONTAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.TOP
             val pad = SwStyle.dp(context, 8f)
             setPadding(pad, 0, pad, 0)
         }
@@ -178,7 +178,7 @@ class LibraryScreen(
         quickRow2 = LinearLayout(context).apply {
             id = R.id.swQuickRow2
             orientation = HORIZONTAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.TOP
             val pad = SwStyle.dp(context, 8f)
             setPadding(pad, 0, pad, 0)
             isVisible = false
@@ -1179,6 +1179,11 @@ class LibraryScreen(
                     LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
                 )
             }
+            // Keep the six-column grid: a short second row stays left-aligned
+            // instead of stretching its lone tile across the screen.
+            repeat(6 - rowTools.size) {
+                row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            }
         }
         quickRow2.isVisible = tools.size > 6
         if (quickEditing) buildQuickAddGrid()
@@ -1227,9 +1232,9 @@ class LibraryScreen(
             tile.addView(
                 badge,
                 FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
-                    gravity = Gravity.TOP or Gravity.END
+                    gravity = Gravity.TOP or Gravity.START
                     topMargin = SwStyle.dp(context, 2f)
-                    marginEnd = SwStyle.dp(context, 2f)
+                    marginStart = SwStyle.dp(context, 2f)
                 }
             )
         }
@@ -1292,13 +1297,16 @@ class LibraryScreen(
                     addView(
                         plus,
                         FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
-                            gravity = Gravity.TOP or Gravity.END
+                            gravity = Gravity.TOP or Gravity.START
                             topMargin = SwStyle.dp(context, 2f)
-                            marginEnd = SwStyle.dp(context, 2f)
+                            marginStart = SwStyle.dp(context, 2f)
                         }
                     )
                 }
                 row.addView(tile, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            }
+            repeat(6 - chunk.size) {
+                row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             }
             quickAddGrid.addView(
                 row,

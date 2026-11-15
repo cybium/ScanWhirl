@@ -360,7 +360,7 @@
     <string name="settings_auto_enhance"><!-- review -->Auको बेहतर बनाएं स्कैन</string>
     <string name="settings_auto_enhance_summary"><!-- review -->Google प्रोcessing is चालू when this is चालू. Off gives a fast, मूल-looking स्कैन.</string>
     <string name="settings_searchable_pdf"><!-- review -->पीडीएफ सर्च करने योग्य बनाएं</string>
-    <string name="settings_searchable_pdf_summary"><!-- review -->किसी भी पीडीएफ ऐप से खोजने के लिए पीडीएफ में ओसीआर पाठ छिपाता है।</string>
+    <string name="settings_searchable_pdf_summary"><!-- review -->OCR ??????? ?????? ???? ??? ?? PDF ?? ??? ??? ????</string>
     <string name="settings_privacy"><!-- review -->Privacy policy</string>
     <string name="settings_privacy_summary"><!-- review -->Opens the policy in your browser</string>
     <string name="settings_pro"><!-- review -->ScanWhirl Pro</string>
