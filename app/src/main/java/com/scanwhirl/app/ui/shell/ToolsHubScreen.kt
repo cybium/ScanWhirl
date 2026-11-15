@@ -130,8 +130,12 @@ class ToolsHubScreen(
     }
 
     /** Rebuilds the body for [query]; blank shows every group. */
-    fun render(query: String) {
-        if (::clearButton.isInitialized) clearButton.isVisible = query.isNotBlank()
+    /** Re-binds every tile after a Free/Pro change; keeps the current search. */
+    fun refreshProState() {
+        render(searchInput.text?.toString().orEmpty())
+    }
+
+    fun render(query: String) {        if (::clearButton.isInitialized) clearButton.isVisible = query.isNotBlank()
         body.removeAllViews()
         if (query.isBlank()) {
             for ((group, tools) in ToolRegistry.grouped()) {

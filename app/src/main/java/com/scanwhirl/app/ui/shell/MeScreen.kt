@@ -54,7 +54,16 @@ class MeScreen(
             setPadding(SwStyle.dp(context, 14f), SwStyle.dp(context, 8f), SwStyle.dp(context, 14f), 0)
         }
         addView(list)
+        buildRows()
+    }
 
+    /** Rebuilds the rows: the Pro row's wording follows a purchase or a test flip. */
+    fun refreshProState() {
+        buildRows()
+    }
+
+    private fun buildRows() {
+        list.removeAllViews()
         list.addView(
             row(
                 R.drawable.ic_sym_star_filled,

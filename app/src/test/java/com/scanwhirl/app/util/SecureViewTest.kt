@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.SettingsActivity
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -92,6 +93,16 @@ class SecureViewTest {
         val toggle = activity.findViewById<SwitchCompat>(R.id.switchBlockScreenshots)
         assertNotNull("the setting is in Settings", toggle)
         assertFalse("off by default for ordinary documents", toggle!!.isChecked)
+        val row = activity.findViewById<android.view.ViewGroup>(R.id.rowBlockScreenshots)
+        assertTrue(
+            "Privacy & security rows start with a leading icon like the XML rows",
+            row.getChildAt(0) is android.widget.ImageView
+        )
+        assertEquals(
+            "24dp leading icon",
+            (24 * activity.resources.displayMetrics.density).toInt(),
+            row.getChildAt(0).layoutParams.width
+        )
 
         toggle.isChecked = true
         assertTrue("turning it on is saved", Prefs.blockDocScreenshots(app))

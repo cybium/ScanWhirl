@@ -10,6 +10,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.doOnPreDraw
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwType
@@ -45,6 +46,9 @@ class ProScreen(
     private lateinit var priceWrap: FrameLayout
     private lateinit var buyWrap: FrameLayout
     private var entrancePlayed = false
+
+    /** Test seam: the order in which the entrance phases actually ran. */
+    internal val entranceSteps = mutableListOf<String>()
 
     init {
         orientation = VERTICAL
@@ -334,16 +338,36 @@ class ProScreen(
         }
         clipChildren = false
 
-        // v2 UI: 74_motion — the Pro entrance. Every animator is finite and
-        // attach-scoped: leaving the screen cancels them, and "Remove animations"
-        // leaves the final state in place with no movement.
-        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {
-                if (!entrancePlayed) {
-                    entrancePlayed = true
-                    playEntrance()
-                }
+        // Every animated part starts in its start state before the first frame;
+        // the pinned bar is left alone so it is at the bottom from frame 1.
+        val lift = SwStyle.dp(context, 12f).toFloat()
+        titleRow.alpha = 0f
+        titleRow.translationY = lift
+        subtitle.alpha = 0f
+        subtitle.translationY = lift * 0.6f
+        trustRow.alpha = 0f
+        trustRow.translationY = lift * 0.7f
+        featureCells.forEach {
+            it.alpha = 0f
+            it.translationY = lift * 0.7f
+        }
+        rings.forEach {
+            it.alpha = 0f
+            it.scaleX = 0.72f
+            it.scaleY = 0.72f
+        }
+        mark.rotation = 0f
+
+        // v2 UI: 74_motion — run the entrance only after the first layout pass.
+        // Starting on attach drew an empty screen with the bar at the top.
+        doOnPreDraw {
+            if (!entrancePlayed) {
+                entrancePlayed = true
+                playEntrance()
             }
+        }
+        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = Unit
 
             override fun onViewDetachedFromWindow(v: View) {
                 rings.forEach { it.animate().cancel() }
@@ -359,8 +383,17 @@ class ProScreen(
     }
 
     private fun playEntrance() {
-        if (!com.scanwhirl.app.ui.kit.SwMotion.enabled(context)) return
+        if (!com.scanwhirl.app.ui.kit.SwMotion.enabled(context)) {
+            // Final state immediately: nothing moves for "Remove animations".
+            rings.forEach { it.alpha = 0.32f; it.scaleX = 1f; it.scaleY = 1f }
+            titleRow.alpha = 1f; titleRow.translationY = 0f
+            subtitle.alpha = 1f; subtitle.translationY = 0f
+            trustRow.alpha = 1f; trustRow.translationY = 0f
+            featureCells.forEach { it.alpha = 1f; it.translationY = 0f }
+            return
+        }
         val lift = SwStyle.dp(context, 12f)
+        entranceSteps += "rings"
         rings.forEachIndexed { index, ring ->
             ring.alpha = 0f
             ring.scaleX = 0.72f
@@ -379,6 +412,7 @@ class ProScreen(
 
         titleRow.alpha = 0f
         titleRow.translationY = lift.toFloat()
+        entranceSteps += "title"
         titleRow.animate().alpha(1f).translationY(0f)
             .setStartDelay(120L).setDuration(320L).start()
         subtitle.alpha = 0f
@@ -387,6 +421,7 @@ class ProScreen(
             .setStartDelay(180L).setDuration(320L).start()
 
         val cascade = mutableListOf(trustRow).apply { addAll(featureCells) }
+        entranceSteps += "cascade"
         cascade.forEachIndexed { index, cell ->
             cell.alpha = 0f
             cell.translationY = (lift * 0.7f)
@@ -396,17 +431,18 @@ class ProScreen(
                 .start()
         }
 
-        priceWrap.post { shine(priceWrap) }
-        buyWrap.post { shine(buyWrap) }
+        // Cascade ends ~690 ms; then one clipped shine, then one pulse.
+        buyWrap.postDelayed({ entranceSteps += "shine"; shine(buyWrap) }, 700L)
         buyButton.postDelayed({
             if (!buyButton.isAttachedToWindow) return@postDelayed
+            entranceSteps += "pulse"
             buyButton.animate().scaleX(1.03f).scaleY(1.03f)
                 .setDuration(120L)
                 .withEndAction {
                     buyButton.animate().scaleX(1f).scaleY(1f).setDuration(120L).start()
                 }
                 .start()
-        }, 900L)
+        }, 1150L)
     }
 
     /** One soft gold sweep across [wrap]; the shine view dies with its parent. */
@@ -459,6 +495,12 @@ class ProScreen(
             )
         }
         row.addView(priceWrap, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        // The shine is clipped to the button's rounded bounds, never the screen.
+        buyWrap.clipChildren = true
+        buyWrap.clipToOutline = true
+        buyWrap.background = SwStyle.rounded(
+            context, android.graphics.Color.TRANSPARENT, radiusDp = 16f
+        )
         row.addView(
             buyWrap,
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 54f))

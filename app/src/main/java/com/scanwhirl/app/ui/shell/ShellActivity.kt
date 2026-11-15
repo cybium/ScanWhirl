@@ -70,6 +70,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private var tab = Tab.LIBRARY
     private var proOpen = false
+    private var lastProState: Boolean? = null
     private var lastShown: View? = null
 
     private lateinit var library: LibraryScreen
@@ -207,6 +208,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         showTab(Tab.LIBRARY)
         revealFromIntent(intent)
+        lastProState = com.scanwhirl.app.util.ProGate.isPro(this)
         if (intent?.getBooleanExtra(EXTRA_OPEN_PRO, false) == true) {
             intent.removeExtra(EXTRA_OPEN_PRO)
             showPro()
@@ -232,9 +234,22 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     override fun onResume() {
         super.onResume()
+        syncProState()
         if (::library.isInitialized) library.reload()
         // The scan disc breathes only while this screen is in front.
         findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.breathe(it) }
+    }
+
+    /** Re-binds tool tiles when Free/Pro changes (purchase or the test switch). */
+    internal fun syncProState() {
+        val pro = com.scanwhirl.app.util.ProGate.isPro(this)
+        if (lastProState == pro) return
+        val hadState = lastProState != null
+        lastProState = pro
+        if (!hadState) return
+        if (::library.isInitialized) library.refreshProState()
+        if (::toolsHub.isInitialized) toolsHub.refreshProState()
+        if (::meScreen.isInitialized) meScreen.refreshProState()
     }
 
     override fun onStop() {
@@ -463,21 +478,6 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }, active = com.scanwhirl.app.util.ProGate.isPro(this))
         setContent(proScreen)
         paintNav()
-        // The Pro gate slides up as a sheet would; off when animations are off.
-        if (com.scanwhirl.app.ui.kit.SwMotion.enabled(this)) {
-            proScreen.alpha = 0f
-            proScreen.translationY =
-                com.scanwhirl.app.ui.kit.SwStyle.dp(this, 24f).toFloat()
-            proScreen.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setDuration(
-                    com.scanwhirl.app.ui.kit.SwMotion.duration(
-                        this, com.scanwhirl.app.ui.kit.SwMotion.MEDIUM
-                    )
-                )
-                .start()
-        }
     }
 
     private fun closePro() {
