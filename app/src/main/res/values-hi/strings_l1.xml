@@ -252,4 +252,20 @@
         <item quantity="one"><!-- review -->%1$d चुना गया</item>
         <item quantity="other"><!-- review -->%1$d चुने गए</item>
     </plurals>
+
+    <string name="sel_batch"><!-- review -->एक साथ</string>
+    <string name="settings_block_screenshots"><!-- review -->दस्तावेज़ों के स्क्रीनशॉट रोकें</string>
+    <string name="settings_block_screenshots_note"><!-- review -->सुरक्षित दस्तावेज़ों के स्क्रीनशॉट हमेशा रुके रहते हैं। साधारण स्कैन के लिए भी रोकने हेतु इसे चालू करें।</string>
+    <string name="about_licences"><!-- review -->लाइसेंस</string>
+    <string name="about_licences_body"><!-- review -->ScanWhirl इनके ओपन-सोर्स लाइसेंस (Apache 2.0) के तहत AndroidX, Material Components, Google ML Kit, PdfBox-Android और kotlinx.coroutines का उपयोग करता है।</string>
+    <string name="settings_accent"><!-- review -->रंग</string>
+    <string name="accent_cyan"><!-- review -->सियान</string>
+    <string name="accent_gold"><!-- review -->गोल्ड</string>
+    <string name="accent_gold_use"><!-- review -->गोल्ड लगाएँ</string>
+    <string name="accent_gold_warning"><!-- review -->गोल्ड ऐप का रंग और ऐप आइकन बदल देता है। होम स्क्रीन पर नया आइकन दिखने में थोड़ा समय लग सकता है, और आपका रखा शॉर्टकट दोबारा जोड़ना पड़ सकता है।</string>
+    <string name="quick_edit"><!-- review -->क्विक टूल बदलें</string>
+    <string name="quick_remove"><!-- review -->%1$s को क्विक टूल से हटाएँ</string>
+    <string name="quick_add"><!-- review -->%1$s को क्विक टूल में जोड़ें</string>
+    <string name="quick_add_tools"><!-- review -->टूल जोड़ें</string>
+    <string name="quick_max_reached"><!-- review -->अधिकतम बारह क्विक टूल हो सकते हैं</string>
 </resources>

@@ -478,8 +478,11 @@ class PerfHarnessTest {
             }
             assertTrue("the search read OCR text off the main thread", threads.size > beforeSearch)
 
-            val onMain = threads.filter { it == mainName }
-            record("library/search reads: ${threads.size}, on main: ${onMain.size}, thread=$mainName")
+            // Background reads may still be appending: iterate a copy taken under the list's lock
+            // (iterating a synchronizedList directly throws ConcurrentModificationException).
+            val seen = synchronized(threads) { threads.toList() }
+            val onMain = seen.filter { it == mainName }
+            record("library/search reads: ${seen.size}, on main: ${onMain.size}, thread=$mainName")
             assertTrue("library and search reads on the main thread: $onMain", onMain.isEmpty())
         } finally {
             ScanRepository.readProbe = null
