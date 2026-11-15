@@ -136,11 +136,15 @@ class ShellLookTest {
 
     @Test
     fun `a Pro Soon tile shows only the Soon tag and keeps it readable`() {
+        // v2 UI: 03_tools_hub - no catalogue tile is Soon any more, so bind a Pro+Soon tool here.
+        val soonTool = com.scanwhirl.app.ui.kit.SwTool(
+            "test_soon", com.scanwhirl.app.ui.kit.ToolGroup.CONVERT, R.string.tool_pdfa,
+            R.drawable.ic_sym_approval, true, com.scanwhirl.app.ui.kit.ToolStatus.SOON, "test",
+            soonNote = R.string.soon_generic
+        )
         launch { activity ->
-            activity.findViewById<View>(R.id.swNavTools).performClick()
-            idle()
-            val tile = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
-                .first { it.tool?.id == "pdfa" } // Pro + Soon
+            val tile = com.scanwhirl.app.ui.kit.ToolTile(activity)
+            tile.bind(soonTool)
             val soon = tile.findViewById<View>(R.id.swToolSoonTag)
             val pro = tile.findViewById<View>(R.id.swToolProTag)
             assertTrue("Soon wins", soon.isVisible)
