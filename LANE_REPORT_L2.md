@@ -121,6 +121,26 @@ brackets:
 8. Cancel the unlock during a restore. [documents restored, dialog says the Vault files were not]
 9. Airplane mode for steps 2-8. [everything works; no network permission]
 
+## Accessibility (L2 screens) and the cloud test crash - this pass
+
+- **A11y findings for Vault / Protect / Unlock fixed** (details in `docs/audit/2026-11-15/ACCESSIBILITY.md`,
+  "Fixed by L2"): 48dp touch targets, readable label/hint contrast, buttons that wrap instead of
+  clipping at font scale 2.0, accessibility pane titles on both sheets, decorative glyphs hidden,
+  and the Vault action buttons keep a single line at every font scale (24dp icon above the label,
+  text size stepping with the system scale). The corresponding `a11y_allowlist.txt` lines are
+  **deleted**, so `AccessibilityAuditTest` now enforces them.
+- **Full gates no longer abort at random** with `F JniConstants: Class not found:
+  java/nio/DoubleBuffer` (Gradle Test Executor exit 134, tests=0). Cause: Robolectric's native
+  runtime was loaded by whichever test class first touched native graphics; on lane/L2's fork
+  composition that could be a background decode thread, and the load aborted the JVM. Fix:
+  `app/src/test/resources/robolectric.properties` sets `graphicsMode=NATIVE` for the whole suite,
+  so the sandbox loads the runtime on the test thread before any test code runs. Evidence: three
+  aborted runs before the change, then two consecutive green full cloud gates (43700233080,
+  43700703356, 1503 tests each).
+- One unrelated flake was seen once between the two green runs (`ScanReviewBackTest` did not delete
+  its staging folder); it passes in isolation and in both green runs, so it is recorded here rather
+  than changed.
+
 ## Save as PDF/A (PDF/A-2b, ISO 19005-2 level B) - previous pass
 
 - `util/PdfA.kt` (XMP with pdfaid part 2 / conformance B, matching Info dates/title/producer,

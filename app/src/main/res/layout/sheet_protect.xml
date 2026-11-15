@@ -38,8 +38,8 @@
 
             <ImageButton
                 android:id="@id/protectClose"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/protect_close"
                 android:padding="7dp"
@@ -112,7 +112,7 @@
             android:layout_marginTop="16dp"
             android:letterSpacing="0.03"
             android:text="@string/protect_label_password"
-            android:textColor="@color/rv_ink_3"
+            android:textColor="@color/rv_ink_2"
             android:textSize="12sp"
             android:textStyle="bold" />
 
@@ -130,7 +130,7 @@
             <ImageView
                 android:layout_width="20dp"
                 android:layout_height="20dp"
-                android:contentDescription="@null"
+                android:importantForAccessibility="no"
                 android:src="@drawable/ic_lock_small"
                 app:tint="@color/rv_ink_3" />
 
@@ -149,13 +149,13 @@
                 android:paddingEnd="0dp"
                 android:singleLine="true"
                 android:textColor="@color/rv_ink"
-                android:textColorHint="@color/rv_ink_3"
+                android:textColorHint="@color/rv_ink_2"
                 android:textSize="16sp" />
 
             <ImageButton
                 android:id="@id/protectPasswordShow"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/protect_show_password"
                 android:padding="10dp"
@@ -211,7 +211,9 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:drawablePadding="5dp"
-            android:textSize="12.5sp"
+            android:paddingEnd="10dp"
+            android:breakStrategy="simple"
+            android:textSize="12sp"
             android:textStyle="bold"
             android:visibility="gone" />
 
@@ -221,7 +223,7 @@
             android:layout_marginTop="16dp"
             android:letterSpacing="0.03"
             android:text="@string/protect_label_confirm"
-            android:textColor="@color/rv_ink_3"
+            android:textColor="@color/rv_ink_2"
             android:textSize="12sp"
             android:textStyle="bold" />
 
@@ -238,7 +240,7 @@
             <ImageView
                 android:layout_width="20dp"
                 android:layout_height="20dp"
-                android:contentDescription="@null"
+                android:importantForAccessibility="no"
                 android:src="@drawable/ic_lock_small"
                 app:tint="@color/rv_ink_3" />
 
@@ -257,13 +259,14 @@
                 android:paddingEnd="0dp"
                 android:singleLine="true"
                 android:textColor="@color/rv_ink"
-                android:textColorHint="@color/rv_ink_3"
+                android:textColorHint="@color/rv_ink_2"
                 android:textSize="16sp" />
 
             <ImageView
                 android:id="@id/protectConfirmCheck"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
+                android:importantForAccessibility="no"
                 android:layout_marginEnd="10dp"
                 android:contentDescription="@string/protect_confirm_ok"
                 android:src="@drawable/ic_check"
@@ -283,7 +286,7 @@
             <ImageView
                 android:layout_width="22dp"
                 android:layout_height="22dp"
-                android:contentDescription="@null"
+                android:importantForAccessibility="no"
                 android:src="@drawable/ic_lock_small"
                 app:tint="@color/cyan_primary" />
 
@@ -306,6 +309,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
+                    android:paddingEnd="12dp"
                     android:text="@string/protect_aes_note"
                     android:textColor="@color/rv_ink_2"
                     android:textSize="12sp" />
@@ -356,7 +360,9 @@
             android:id="@id/protectShare"
             style="@style/Widget.ScanWhirl.Button.Primary"
             android:layout_width="match_parent"
-            android:layout_height="54dp"
+            android:layout_height="wrap_content"
+            android:minHeight="54dp"
+            android:maxLines="2"
             android:layout_marginTop="18dp"
             android:text="@string/protect_action_share"
             android:textSize="16sp"
@@ -369,7 +375,9 @@
             android:id="@id/protectSave"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:maxLines="2"
             android:text="@string/protect_action_save"
             android:textColor="@color/cyan_primary"
             android:textSize="15sp"
