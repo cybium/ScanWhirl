@@ -229,16 +229,6 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- v2 UI: 08_text_ocr — one "Tidy text" chip, the three fixes live in its sheet. -->
-    <LinearLayout
-        android:id="@+id/ocrTidyRow"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingHorizontal="12dp"
-        android:paddingTop="2dp"
-        android:paddingBottom="4dp" />
-
     <!-- v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word (chips). -->
     <LinearLayout
         android:id="@+id/ocrActions"
@@ -261,6 +251,7 @@
         android:drawablePadding="6dp"
         android:drawableTint="@color/ok_green"
         android:fontFamily="@font/manrope"
+        android:maxLines="1"
         android:text="@string/ocr_foot_note"
         android:textColor="@color/text_hologram_dim"
         android:textSize="11.5sp"
