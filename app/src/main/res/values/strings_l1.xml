@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L1 shell & kit strings (70_APP_DESIGN.md §1-§3). -->
-    <string name="trust_offline_no_ads">Offline · No ads</string>
-    <string name="trust_all_offline">All offline</string>
+    <string name="trust_offline_no_ads">On-device · No ads</string>
+    <string name="trust_all_offline">No internet needed</string>
     <!-- Home language chip: the visible label and sheet title are bilingual on purpose. -->
     <string name="language_chip_label" translatable="false">A/अ</string>
     <string name="language_chip_title" translatable="false">Language · भाषा</string>
     <string name="language_chip_desc">Change language</string>
     <string name="trust_no_ads">No ads</string>
     <string name="trust_no_account">No account</string>
-    <string name="trust_offline">Offline</string>
+    <string name="trust_offline">On-device</string>
 
     <string name="shell_nav_library">Library</string>
     <string name="shell_nav_tools">Tools</string>
