@@ -267,11 +267,10 @@ class SettingsActivity : BaseActivity() {
             id = R.id.rowAccent
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            isClickable = true
-            isFocusable = true
-            setBackgroundResource(android.R.drawable.list_selector_background)
+            isClickable = false
+            isFocusable = false
+            alpha = 0.38f
             setPadding((16 * d).toInt(), (12 * d).toInt(), (12 * d).toInt(), (12 * d).toInt())
-            setOnClickListener { chooseAccent() }
         }
         val texts = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -323,10 +322,7 @@ class SettingsActivity : BaseActivity() {
 
     private fun updateAccentSummary() {
         if (!::subAccent.isInitialized) return
-        subAccent.text = getString(
-            if (com.scanwhirl.app.ui.kit.SwTheme.isGold(this)) R.string.accent_gold
-            else R.string.accent_cyan
-        )
+        subAccent.text = getString(R.string.accent_coming_soon)
     }
 
     private fun chooseAccent() {

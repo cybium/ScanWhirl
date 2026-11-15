@@ -476,7 +476,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             override fun onRestore() = showBillingSoon()
             override fun onSeeAllProTools() = showTab(Tab.TOOLS)
         }, active = com.scanwhirl.app.util.ProGate.isPro(this))
-        setContent(proScreen)
+        setContent(scroll(proScreen))
         paintNav()
     }
 

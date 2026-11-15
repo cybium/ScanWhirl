@@ -199,13 +199,22 @@ object Prefs {
         val stored = sp(c).getString(KEY_QUICK_TOOLS, null)
             ?: return DEFAULT_QUICK_TOOLS
         val ids = stored.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-        return ids.distinct().take(MAX_QUICK_TOOLS).ifEmpty { DEFAULT_QUICK_TOOLS }
+        // A tool that is not READY (Coming soon) can never be a quick tool: an
+        // older saved set is filtered here so it disappears on the next launch.
+        val ready = ids.filter { isReady(it) }.distinct().take(MAX_QUICK_TOOLS)
+        return ready.ifEmpty { DEFAULT_QUICK_TOOLS.filter { isReady(it) } }
     }
 
     fun setQuickTools(c: Context, ids: List<String>) {
-        val clean = ids.distinct().filter { it.isNotEmpty() }.take(MAX_QUICK_TOOLS)
+        val clean = ids.distinct().filter { isReady(it) }.take(MAX_QUICK_TOOLS)
         sp(c).edit().putString(KEY_QUICK_TOOLS, clean.joinToString(",")).apply()
     }
+
+    private fun isReady(id: String): Boolean =
+        runCatching {
+            com.scanwhirl.app.ui.kit.ToolRegistry.byId(id)?.status ==
+                com.scanwhirl.app.ui.kit.ToolStatus.READY
+        }.getOrDefault(false)
 
     fun resetQuickTools(c: Context) = sp(c).edit().remove(KEY_QUICK_TOOLS).apply()
 }
