@@ -61,7 +61,8 @@ jobs:
           # ("JniConstants: Class not found: java/nio/DoubleBuffer", exit 134) depending on which
           # tests share a fork. That is a test-infrastructure crash, not a test result: retry ONCE,
           # and only for that exact signature. Real test failures are never retried.
-          if [ $code -ne 0 ] && grep -q "JniConstants: Class not found" tests.log; then
+          # A snapshot that contains .ci/no-retry (root-cause investigation) never retries.
+          if [ $code -ne 0 ] && [ ! -f .ci/no-retry ] && grep -q "JniConstants: Class not found" tests.log; then
             echo "::warning::Robolectric native runtime abort (DoubleBuffer) - retrying the test task once"
             rm -rf app/build/test-results/testDebugUnitTest
             run_tests; code=$?
