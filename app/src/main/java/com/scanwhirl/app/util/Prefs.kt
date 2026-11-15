@@ -116,14 +116,28 @@ object Prefs {
     fun hasVaultPin(c: Context): Boolean =
         !sp(c).getString(KEY_VAULT_PIN, null).isNullOrBlank()
 
+    /**
+     * Stores the legacy 4-digit PIN as a salted PBKDF2-HMAC-SHA256 hash
+     * (`pbkdf2$<iterations>$<saltB64>$<hashB64>`), never the PIN itself and never plain SHA-256
+     * (a 4-digit PIN is only 10,000 guesses for a bare digest). Security audit finding M-3.
+     */
     fun setVaultPin(c: Context, pin: String) {
         require(pin.length == 4 && pin.all { it.isDigit() }) { "PIN must be 4 digits" }
-        sp(c).edit().putString(KEY_VAULT_PIN, sha256("scanwhirl_vault:$pin")).apply()
+        sp(c).edit().putString(KEY_VAULT_PIN, VaultPinHash.create(pin)).apply()
     }
 
+    /**
+     * Verifies the legacy PIN. Older installs carry `sha256("scanwhirl_vault:$pin")`; a correct
+     * PIN against that format is upgraded to the salted hash in place, so the weak digest does
+     * not survive the first successful check.
+     */
     fun verifyVaultPin(c: Context, pin: String): Boolean {
         val stored = sp(c).getString(KEY_VAULT_PIN, null) ?: return false
-        return stored == sha256("scanwhirl_vault:$pin")
+        val ok = VaultPinHash.verify(stored, pin)
+        if (ok && VaultPinHash.isLegacy(stored)) {
+            sp(c).edit().putString(KEY_VAULT_PIN, VaultPinHash.create(pin)).apply()
+        }
+        return ok
     }
 
     internal fun sha256(input: String): String {

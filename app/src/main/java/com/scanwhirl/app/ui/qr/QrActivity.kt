@@ -23,6 +23,7 @@ import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.util.ClipboardPrivacy
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -486,8 +487,9 @@ class QrActivity : BaseActivity() {
     }
 
     private fun copy(text: String) {
-        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.qr_title), text))
+        // Security audit: a Wi-Fi code's copy is a password; mark it sensitive and auto-clear.
+        val secret = current?.kind == QrKind.WIFI
+        ClipboardPrivacy.copy(this, getString(R.string.qr_title), text, sensitive = secret)
         Toast.makeText(this, R.string.qr_copied, Toast.LENGTH_SHORT).show()
     }
 

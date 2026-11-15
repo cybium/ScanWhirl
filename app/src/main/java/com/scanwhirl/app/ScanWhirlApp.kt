@@ -8,6 +8,7 @@ import androidx.core.os.LocaleListCompat
 import com.scanwhirl.app.store.OcrIndexer
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.PrivacySweep
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +38,9 @@ class ScanWhirlApp : Application() {
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
         }
         repository = ScanRepository(this)
+        // Security audit: nothing decrypted or shared survives a cold start. Runs before any
+        // screen can read the cache, and never touches the library, the Vault or user exports.
+        runCatching { PrivacySweep.run(this) }
         indexer = OcrIndexer(
             repository,
             appScope,
