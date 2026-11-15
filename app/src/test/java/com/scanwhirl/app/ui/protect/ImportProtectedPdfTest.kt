@@ -19,7 +19,6 @@ import com.scanwhirl.app.util.PdfDecryptor
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -55,7 +54,11 @@ class ImportProtectedPdfTest {
         ShadowToast.reset()
     }
 
-    @After fun tearDown() = Faults.resetAll()
+    @After
+    fun tearDown() {
+        Faults.resetAll()
+        ProGate.setTestOverride(app, null)
+    }
 
     private fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()
 
@@ -128,7 +131,10 @@ class ImportProtectedPdfTest {
                 repo.listDocuments().any { it.name == "Imported book" && it.pageCount == 1 }
             })
             assertEquals("one attempt per submitted password", 2, importCalls)
-            assertFalse("the sheet closes after a successful import", sheet.isShowing)
+            assertTrue(
+                "the sheet closes after a successful import",
+                pollUntil { !sheet.isShowing }
+            )
             assertTrue(
                 "the imported document has a PDF",
                 repo.listDocuments().first().pdfFile.length() > 0
