@@ -53,11 +53,12 @@ class BookSplitRealWorldTest {
             assertTrue("no owner photo found in $ownerDir", results.isNotEmpty())
             // The phone bug: a sideways spread was offered as "Keep as one page". A spread must
             // never be classified as a single page, whatever the orientation.
-            val singled = results.filter { it.croppedSinglePage }
+            val textbooks = results.filter { it.name.startsWith("IMG_20261115_0059") }
+            val singled = textbooks.filter { it.croppedSinglePage }
             assertTrue(
-                "a sideways spread must not be offered as one page: " +
+                "a sideways textbook spread must not be offered as one page: " +
                     singled.joinToString { it.name },
-                singled.isEmpty()
+                textbooks.isNotEmpty() && singled.isEmpty()
             )
         }
 

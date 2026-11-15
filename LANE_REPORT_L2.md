@@ -29,6 +29,60 @@ debug-path review. Fixed in this lane:
 Tests: `ManifestPrivacyTest`, `PrivacySweepTest`, `ClipboardPrivacyTest`, `VaultPinHashTest`,
 `VaultActivityTest.the vault window blocks screenshots...`.
 
+## Production build hardening (R8) - `docs/audit/2026-11-15/RELEASE_BUILD_HARDENING.md`
+
+Every phone build until now was `-PtestBuild` (no R8). This pass builds the real minified variant
+in CI without the owner's keystore and fixes its keep rules.
+
+- `-PciUnsignedRelease` (new Gradle property): the `release` build type signs with the debug key
+  only when it is set, so CI can produce an installable APK. Without the property nothing changes.
+- New `release` job in `.github/workflows/gate.yml` (the `test` job untouched): builds
+  `:app:assembleRelease -PciUnsignedRelease`, uploads the APK + `mapping.txt` + `missing_rules.txt`
+  + `configuration.txt` + the build log, and prints `RELEASE PASS/FAIL`. It fails on a build error,
+  an R8 error or any unresolved class.
+- `proguard-rules.pro`: the blanket `-keep class com.google.mlkit.**` / `com.google.android.gms.**`
+  are replaced by the rules the code actually needs - Firebase component registrars (ML Kit is
+  instantiated by name from manifest metadata), the Dynamite module descriptors, the bundled
+  Devanagari JNI stack (visionkit pipeline + 1013 protobuf classes), `QrKind` constants (persisted
+  by name in QR history), the XML-inflated custom-view constructors, and line numbers for
+  readable crash reports.
+
+| | blanket keeps | new rules | test build |
+|---|---|---|---|
+| APK | 45.2 MiB | **44.9 MiB** | 49.1 MiB |
+| dex | 4.74 MB, 7160 classes | **3.73 MB, 5606 classes** | 15.65 MB, 14635 classes |
+| R8 warnings / missing classes / errors | 0 / 0 / 0 | **0 / 0 / 0** | - |
+
+Installable artifact for the smoke test:
+`C:\Users\Cybium\Desktop\ScanWhirl-L2\app\build\outputs\apk\release\app-release.apk`
+(`com.scanwhirl.app`, debug-signed, unsigned-for-distribution; test build id is `.test` so both
+coexist). The 41 MB of `libmlkit_google_ocr_pipeline.so` (4 ABIs) dominate the universal APK; a
+Play AAB splits it per ABI. Device checks outstanding: English + Hindi OCR, document scanner, code
+scanner, Vault unlock, Protect PDF.
+
+## Launch readiness - `docs/release/`, `PRIVACY_POLICY.md`
+
+- **AAB**: the `release` job now builds `:app:bundleRelease` too and reports the real per-device
+  download size with `bundletool` (`get-size total --dimensions=ABI`). AAB 23.4 MiB; a phone
+  downloads 7.3 to 8.4 MiB (arm64 8.1 to 8.2 MiB); the universal smoke-test APK stays 44.9 MiB.
+- **`docs/release/DATA_SAFETY.md`**: the Play form answers derived from the code and the built
+  artifact (no collection, no sharing, no account/ads/analytics, encryption of Vault and protected
+  PDFs, deletion and the 30-day Trash, backup off), plus a sourced analysis of the Google Play
+  services components (document scanner, code scanner, ML Kit model delivery): what Google's ML Kit
+  terms and data disclosure say, how to word it honestly, and the conservative fallback answers if
+  Play review asks.
+- **`PRIVACY_POLICY.md`**: rewritten to match the shipped app (no internet permission, what stays on
+  the phone, Vault and PDF encryption, blocked screenshots, clipboard clearing, Play services
+  components, exported copies surviving uninstall, 30-day Trash), plain English, dated changelog.
+- **`docs/release/LAUNCH_CHECKLIST.md`**: everything left before a Play release with owners, the
+  current policy citations (target API 36 from 31 Aug 2026, 12 testers x 14 days for new personal
+  accounts, Play App Signing, content rating, pre-launch report) and the compliance facts already
+  met (targetSdk 36, 64-bit, AAB, size).
+- **Trash now enforces the 30-day window the UI promises**: `recoverTrash()` expires older entries
+  on startup (never an interrupted-Replace entry), `TRASH_RETENTION_MS`, strings in English and
+  Hindi, two new `TrashTest` cases. Without it the policy and the form would have claimed a
+  retention the code did not have.
+
 ## Save as PDF/A (PDF/A-2b, ISO 19005-2 level B) - previous pass
 
 - `util/PdfA.kt` (XMP with pdfaid part 2 / conformance B, matching Info dates/title/producer,
@@ -88,4 +142,7 @@ heap, now configurable in `app/build.gradle.kts` (lead's fix).
 - `dd2a62b` security audit: manifest permission strip, FLAG_SECURE, cold-start sweep, PBKDF2
   legacy PIN, sensitive/auto-clearing clipboard, audit document, tests
 - `6b22dcd` audit: cloud-gate OOM finding · merge of `integration` (build/heap fix, lint fix)
-- (this commit) audit + report: final gate numbers, share-copy lifetime, gate credential review
+- `59cf02e` audit + report: final gate numbers, share-copy lifetime, gate credential review
+- `eb523a6` build: `-PciUnsignedRelease` · `fcbb183` ci: release job
+- `0f6dba6` r8: targeted keep rules · release-build hardening document
+- (this commit) report: production build hardening section

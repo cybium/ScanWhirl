@@ -110,6 +110,12 @@ class ScanRepository(private val context: Context) {
         /** Written into a Trash entry after its move: `v1 / original id / trashedAt`. */
         internal const val TRASH_MARKER = "trashed.txt"
 
+        /**
+         * How long a Trash entry stays restorable. The UI promises 30 days (`shell_trash_note`);
+         * [recoverTrash] deletes an older entry for good on the next start.
+         */
+        internal const val TRASH_RETENTION_MS = 30L * 24 * 60 * 60 * 1000
+
         /** Hidden entries being permanently deleted; finished by [recoverTrash]. */
         internal const val PURGE_PREFIX = ".purge-"
 
@@ -1117,14 +1123,25 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Startup recovery: finishes interrupted permanent deletes (hidden purge
-     * entries) and drops a Trash marker left in a restored document by a crash
-     * between the move and the marker cleanup. Never touches a visible entry.
+     * entries), expires Trash entries older than [TRASH_RETENTION_MS], and drops a
+     * Trash marker left in a restored document by a crash between the move and the
+     * marker cleanup. Entries a Replace moved here (`previous=`) are never expired:
+     * they belong to an interrupted Replace and [recoverOperations] puts them back.
      */
-    fun recoverTrash(): Int {
+    fun recoverTrash(now: Long = System.currentTimeMillis()): Int {
         var finished = 0
         synchronized(TRASH_LOCK) {
             trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }?.forEach { f ->
                 if (f.deleteRecursively()) finished++
+            }
+            trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.forEach { dir ->
+                val trashed = trashedIn(dir) ?: return@forEach
+                if (trashed.previousToken == null && now - trashed.trashedAt >= TRASH_RETENTION_MS) {
+                    if (dir.deleteRecursively()) {
+                        finished++
+                        dropDerivedCaches(trashed.originalId)
+                    }
+                }
             }
             docsDir.listFiles { f -> f.isDirectory }?.forEach { dir -> File(dir, TRASH_MARKER).delete() }
         }
@@ -1684,6 +1701,30 @@ class ScanRepository(private val context: Context) {
             }
         }
     }
+
+    /**
+     * Compresses to a total-size target, one page at a time. The old path built a `List<ByteArray>`
+     * for every page first — a 2000-page book held the whole document (hundreds of MB) in memory.
+     * Here only the current page's bytes and bitmap are alive.
+     */
+    suspend fun compressScanToTarget(id: String, targetBytes: Long): ScanDocument =
+        withContext(Dispatchers.IO) {
+            require(targetBytes > 0) { "Target size must be positive" }
+            val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+            refuseLockedSources(listOf(doc))
+            val sizes = doc.pageFiles.map { it.length().coerceAtLeast(1L) }
+            val sum = sizes.sum().coerceAtLeast(1L)
+            val budget = (targetBytes - (doc.pageFiles.size * 600L + 1000L)).coerceAtLeast(2048L)
+            buildAndPublish(
+                outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }
+            ) { staging ->
+                doc.pageFiles.forEachIndexed { i, file ->
+                    currentCoroutineContext().ensureActive()
+                    val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
+                    stagePageBytes(SizeFit.fitToShare(file.readBytes(), share), staging, i)
+                }
+            }
+        }
 
     /**
      * Imports a password-protected PDF by decrypting a temporary copy first: the source file is
@@ -2432,11 +2473,17 @@ class ScanRepository(private val context: Context) {
         requireUnlocked(dir) // A3 backstop: a locked document's PDF is never rebuilt in plaintext
         val pdfFile = File(dir, "scan.pdf")
         val pages = pageFilesIn(dir)
+        // Read the geometry once for both the write and the flag; the old code re-read the whole
+        // map once per page (and used indexOf per page), which was O(pages²) on a 2000-page book.
+        val geo = if (forceLayers || Prefs.makeSearchable(context)) {
+            ocrStore.readGeo(dir.name)
+        } else {
+            emptyMap()
+        }
         val layered = if (pages.isNotEmpty()) {
-            if (forceLayers) writePdfInto(dir, pdfFile, ocrStore.readGeo(dir.name))
-            else writePdf(dir, pdfFile)
+            writePdfInto(dir, pdfFile, geo)
         } else false
-        updateTextLayerFlag(dir, layered)
+        updateTextLayerFlag(dir, layered, geo)
     }
 
     /**
@@ -2455,11 +2502,15 @@ class ScanRepository(private val context: Context) {
     }
 
     /** `text_layer.flag` exists exactly when every page of [dir] received an invisible text layer. */
-    private fun updateTextLayerFlag(dir: File, layered: Boolean) {
+    private fun updateTextLayerFlag(
+        dir: File,
+        layered: Boolean,
+        geo: Map<String, OcrPage> = emptyMap()
+    ) {
         val id = dir.name
         val pages = pageFilesIn(dir)
-        val searchable = layered && pages.all {
-            ocrStore.readGeo(id).containsKey("page_%03d.jpg".format(pages.indexOf(it)))
+        val searchable = layered && pages.withIndex().all { (index, _) ->
+            geo.containsKey("page_%03d.jpg".format(index))
         }
         val flag = File(dir, "text_layer.flag")
         if (searchable) {
@@ -3445,8 +3496,7 @@ class ScanRepository(private val context: Context) {
                 when (action) {
                     is BatchAction.Compress -> {
                         if (action.targetBytes != null) {
-                            val pages = SizeFit.compressPages(doc.pageFiles, action.targetBytes)
-                            val out = createDocument(outputName(doc.name, "Compressed"), pages)
+                            val out = compressScanToTarget(doc.id, action.targetBytes)
                             BatchItem(id, name, true, outputId = out.id)
                         } else {
                             val out = compressScan(doc.id, action.quality, action.maxDim)

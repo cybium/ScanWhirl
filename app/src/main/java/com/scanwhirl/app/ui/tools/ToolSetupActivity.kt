@@ -29,7 +29,6 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.tools.SizeFit
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.MergePdfActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -942,8 +941,7 @@ class ToolSetupActivity : BaseActivity() {
                 target = targetBytes
                 execute({
                     val out = if (targetBytes != null) {
-                        val pages = SizeFit.compressPages(doc.pageFiles, targetBytes)
-                        repo.createDocument(repo.outputName(doc.name, "Compressed"), pages).id
+                        repo.compressScanToTarget(doc.id, targetBytes).id
                     } else {
                         val (quality, maxDim) = compressLevel()
                         repo.compressScan(doc.id, quality, maxDim).id

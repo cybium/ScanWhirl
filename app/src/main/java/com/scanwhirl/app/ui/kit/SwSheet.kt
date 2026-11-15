@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.scanwhirl.app.R
+import com.scanwhirl.app.util.SecureView
 
 /**
  * v2 UI: 05_protect_pdf / 09_unlock_sheet — the one bottom sheet in the app.
@@ -348,6 +349,9 @@ class SwSheet private constructor(
     }
 
     fun dismiss() = dialog.dismiss()
+
+    /** Secret fields: hide this window from screenshots, recents and casting. */
+    fun secure(): SwSheet = apply { SecureView.apply(dialog.window) }
 
     val isShowing: Boolean get() = dialog.isShowing
 

@@ -57,7 +57,7 @@ class BookSplitTest {
     fun `gutter is found on a two-page spread with a dark middle band`() {
         val bitmap = spread()
         val gutter = BookSplit.scanGutter(bitmap)
-        assertTrue("a dark, uniform band in the middle is a gutter: ${BookSplit.debugScan(bitmap)}", gutter.found)
+        assertTrue("a dark, uniform band in the middle is a gutter", gutter.found)
         assertTrue(
             "gutter sits inside the dark band (${gutter.ratio})",
             gutter.ratio in 0.45f..0.55f
@@ -112,17 +112,18 @@ class BookSplitTest {
 
     /** A close-up of one page on a dark table: one text block, no fold. */
     private fun singlePage(): Bitmap {
-        val bitmap = Bitmap.createBitmap(800, 600, Bitmap.Config.ARGB_8888)
+        // Portrait: the shape rule says one page (a landscape close-up would be a spread).
+        val bitmap = Bitmap.createBitmap(600, 800, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.rgb(45, 42, 40))
         val canvas = Canvas(bitmap)
         canvas.drawRect(
-            60f, 40f, 760f, 560f,
+            40f, 60f, 560f, 740f,
             Paint().apply { color = Color.rgb(242, 238, 228) }
         )
         val ink = Paint().apply { color = Color.rgb(40, 38, 36); strokeWidth = 2f }
-        var y = 90f
-        while (y < 540f) {
-            canvas.drawLine(120f, y, 700f, y, ink)
+        var y = 110f
+        while (y < 720f) {
+            canvas.drawLine(100f, y, 500f, y, ink)
             y += 12f
         }
         return bitmap
@@ -132,9 +133,76 @@ class BookSplitTest {
     fun `a one-page close-up has no fold and is offered as one page`() {
         val bitmap = singlePage()
         val gutter = BookSplit.scanGutter(bitmap)
-        assertFalse("there is no two-page fold to find: ${BookSplit.debugScan(bitmap)}", gutter.found)
+        assertFalse("there is no two-page fold to find", gutter.found)
         assertEquals("the line sits in the middle for review", 0.5f, gutter.ratio, 0.001f)
         assertTrue("one text block + no valley is a single page", gutter.singlePage)
+        bitmap.recycle()
+    }
+
+    /** Two text pages side by side, a dark narrow gutter at the middle. */
+    private fun textSpread(width: Int = 900, height: Int = 600): Bitmap {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.rgb(242, 238, 228))
+        val ink = Paint().apply { color = Color.rgb(40, 38, 36); strokeWidth = 2f }
+        for (side in 0..1) {
+            val left = if (side == 0) width * 0.08f else width * 0.56f
+            val right = if (side == 0) width * 0.44f else width * 0.92f
+            var y = height * 0.12f
+            while (y < height * 0.88f) {
+                canvas.drawLine(left, y, right, y, ink)
+                y += height * 0.035f
+            }
+        }
+        return bitmap
+    }
+
+    @Test
+    fun `a horizontal-text spread is split at its gutter`() {
+        val bitmap = textSpread()
+        val analysis = BookSplit.analyse(bitmap)
+        assertFalse("upright text needs no rotation", analysis.textVertical)
+        assertTrue("a spread is found", analysis.gutter.found)
+        assertEquals(0.5f, analysis.gutter.ratio, 0.05f)
+        val split = BookSplit.split(bitmap, analysis.gutter)
+        assertEquals(2, split.pages.size)
+        split.left.recycle(); split.right.recycle(); bitmap.recycle()
+    }
+
+    @Test
+    fun `a sideways spread is detected by its vertical text and rotated`() {
+        val upright = textSpread()
+        val sideways = BookSplit.rotate(upright, 90)
+        if (sideways !== upright) upright.recycle()
+        val analysis = BookSplit.analyse(sideways)
+        assertTrue("vertical text is recognised", analysis.textVertical)
+        assertTrue("the rotation makes the text upright", analysis.rotation == 90 || analysis.rotation == 270)
+        assertTrue("the spine is still found after the turn", analysis.gutter.found)
+        assertEquals(0.5f, analysis.gutter.ratio, 0.06f)
+        sideways.recycle()
+    }
+
+    @Test
+    fun `a two-column single page is one page, not a split at the column gap`() {
+        val bitmap = Bitmap.createBitmap(600, 900, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.rgb(242, 238, 228))
+        val ink = Paint().apply { color = Color.rgb(40, 38, 36); strokeWidth = 2f }
+        for (column in 0..1) {
+            val left = if (column == 0) 70f else 330f
+            val right = if (column == 0) 270f else 530f
+            var y = 100f
+            while (y < 820f) {
+                canvas.drawLine(left, y, right, y, ink)
+                y += 26f
+            }
+        }
+        val analysis = BookSplit.analyse(bitmap)
+        assertTrue(
+            "a column gap is not a spine on a portrait page",
+            analysis.gutter.singlePage
+        )
+        assertFalse("no split is offered", analysis.gutter.found)
         bitmap.recycle()
     }
 

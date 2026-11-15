@@ -55,7 +55,11 @@ object SwMotion {
     fun enabled(context: Context): Boolean {
         animatorOverride?.let { return it }
         if (isRobolectric) return false
-        return animatorScale(context) > 0f && android.animation.ValueAnimator.areAnimatorsEnabled()
+        // areAnimatorsEnabled() exists from API 26; minSdk is 24 (it would crash on Android 7.x).
+        // Below 26 the animator duration scale alone tells us whether the user turned motion off.
+        val platformOn = android.os.Build.VERSION.SDK_INT < 26 ||
+            android.animation.ValueAnimator.areAnimatorsEnabled()
+        return animatorScale(context) > 0f && platformOn
     }
 
     /** Token duration scaled by the system setting; 0 when animations are off. */

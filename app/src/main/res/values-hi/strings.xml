@@ -590,7 +590,7 @@
     </plurals>
     <string name="trash_delete_failed">कुछ आइटम डिलीट नहीं हो सके। वे अभी भी ट्रैश में हैं।</string>
     <string name="trash_empty_title">ट्रैश खाली है</string>
-    <string name="trash_empty_body">यहाँ से कुछ भी अपने आप डिलीट नहीं होता।</string>
+    <string name="trash_empty_body">30 दिन से पुरानी चीज़ें अपने आप डिलीट हो जाती हैं।</string>
     <string name="trash_header_note">वापस लाए गए दस्तावेज़ पूरे लौटते हैं।</string>
     <string name="trash_error_title">ट्रैश नहीं खुल सका</string>
     <string name="trash_error_body">आपके दस्तावेज़ नहीं बदले। फिर से कोशिश करें।</string>
