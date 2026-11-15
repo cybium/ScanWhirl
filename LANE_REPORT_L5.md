@@ -237,15 +237,73 @@ weakened.
 Find plurals: the sheet says **Found 1 item / N items** and the note **Hid 1 item / N items**
 (English + Hindi); no other count noun in the Find/stamp code was singular-wrong.
 
+## Dead-button audit — owner rule “no dead buttons”
+
+`ui/a11y/DeadButtonAuditTest` (commit `85bcc17`) walks the same 21 v2 screens in **Free and Pro**
+state. For each visible, enabled, clickable view it requires a listener (or an intrinsic control:
+checkbox/radio, EditText, adapter item, toggle-group child, custom canvas) and an **observable
+effect** within 1.2 s of advanced looper time: an activity/result start, a sheet/dialog change
+(including dismissal), a toast/snackbar, a view-state change (text/checked/selected/focus/
+visibility/enabled/inputType) or the screen closing. Disabled views must be alpha ≤ 0.5. It also
+declares the ids each screen's own builders must show, so a row added into a hidden container
+(Settings' old About-card bug) fails as `hidden`.
+
+Result: **no dead button in an L5-owned screen**. The audit itself first exposed three false
+positives which are now understood: a snackbar is a sibling of the content root (hashed the whole
+`android.R.id.content`), toggle-group buttons dispatch through the group, and a custom canvas
+handles touches in `onTouchEvent`.
+
+Remaining allow-list (`app/src/test/resources/dead_buttons_allowlist.txt`), all explained:
+
+| screen | control | owner | why |
+|---|---|---|---|
+| `*` | `swNavScan` | L1 shell | Play Services scanner hand-off; nothing observable in Robolectric |
+| `*` | `swNavTools` | L1 shell | already-selected tab is a deliberate no-op |
+| `*` | `swToolsGrid` | L1 shell | grid/list toggle redraws the list without a view-state change |
+| Tool setup | `toolSetupDocRow` | L4 | system document picker via ActivityResult |
+| Vault | `vaultLock` | L2 | relock prompt is already shown on open |
+| Protect sheet | `protectShare` | **L2 bug** | disabled but alpha 1.0 — owner rule says it must look greyed |
+| Protect sheet | `protectSave` | **L2 bug** | disabled but alpha 1.0 |
+
+The only real app defect found outside L5 is L2's Protect sheet: the two action buttons disable
+themselves until the two passwords match, but keep full opacity, so they look tappable. Dispatched
+to L2 (allow-listed with “dispatched” so the gate stays green).
+
+Settings runtime rows: `rowOcrLanguage`, `rowBlockScreenshots`, `rowAccent` are asserted `isShown`
+and pass after integration's hidden-card fix.
+
+
+
+## Hide private info (release job — 2026-11-15)
+
+Owner decision: drop the “Mask Aadhaar” name. Redact's Find is now **Hide private info** (sheet
+title, editor button, search keywords; Hindi “निजी जानकारी छिपाएँ”). The “Mask Aadhaar” preset
+chip is gone; Aadhaar appears only as an example inside the ID choice.
+
+- The sheet first shows **choices**, all on: Phone numbers · Email addresses · ID numbers
+  (Aadhaar, PAN, driving licence, passport, VID) · Card & bank numbers (cards, IBAN, account
+  numbers) · Other numbers (US SSN). Find scans only the chosen kinds and lists the groups with
+  counts. “Keep last 4 digits” is a separate option, **off** by default.
+- ID numbers now hide the **whole** number by default; with “Keep last 4 digits” Aadhaar masks
+  its first 8 and VID its first 12. Cards still keep the last 4.
+- New safe patterns: Indian driving licence (`MH12 20110012345` variants) and passport
+  (`A1234567`), detected as ID numbers.
+- Saved copy: **“<name> - Private info hidden”**; toast “Saved a copy with private info hidden”.
+  The old Mask option strings/methods and `tool_mask_aadhaar` are removed.
+- Tests: `SensitiveScanTest` (whole-ID default, keep-last-4, DL/passport, kind filtering, all
+  earlier positives/false positives), `SensitiveFindUiTest` (choices on by default, chosen kinds
+  only, grouped counts, no-hits), plus the unchanged detector-level `MaskAadhaarFlowTest` and
+  `AadhaarMaskTest`.
+
 ## Last gate (cloud, full suite)
 
 ```
-cloud: run 43689007712 (5 min)
-tests: total=1456 failures=0 skipped=0
-GATE PASS L5 tests=1456 lint=[skipped]
+cloud: run 43712328849 (6 min)
+tests: total=1530 failures=0 skipped=0
+GATE PASS L5 tests=1530 lint=[skipped]
 ```
 
-TextFit's OcrEditor case is green again after L1's fix. Lint runs at merge.
+TextFit and the accessibility/dead-button audits are green. Lint runs at merge.
 
 ## Owner evaluation
 

@@ -5,16 +5,18 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * L5 "Find and hide numbers": one scan over OCR element boxes that finds the sensitive items a
- * person expects a redaction tool to catch. The Aadhaar quick path lives on as a preset.
+ * L5 "Hide private info": one scan over OCR element boxes that finds the sensitive items a
+ * person expects a redaction tool to catch.
  *
  * Every detector works on **element boxes** (ML Kit words), never guesses from the page image:
  *  - a line is words that share a vertical band, sorted left to right;
  *  - a hit is the union of the characters it covers, padded 15% of the glyph height;
- *  - Aadhaar hides the first 8 digits and stops in the gap before the 9th (UIDAI mask);
+ *  - ID numbers hide the whole number by default; "Keep last 4 digits" switches Aadhaar/VID to
+ *    the leading-digits mask;
  *  - a card keeps its last 4 digits, stopping in the gap before them;
  *  - the box is clipped vertically so it can never cover the OCR line above or below;
- *  - overlapping candidates are resolved by specificity (email/IBAN/PAN/SSN/phone/card/Aadhaar).
+ *  - overlapping candidates are resolved by specificity (email/IBAN/PAN/DL/passport/SSN/phone/
+ *    card/Aadhaar).
  *
  * Dates ("2024-11-15", "15/11/2024"), prices ("1,299.00") and short order numbers never match:
  * the digit-run detector needs 9+ digits and does not cross commas, dots or slashes.
@@ -22,7 +24,7 @@ import kotlin.math.min
 object SensitiveScan {
 
     enum class Kind {
-        AADHAAR, VID, PAN, CARD, PHONE, EMAIL, IBAN, SSN, ACCOUNT
+        AADHAAR, VID, PAN, DRIVING_LICENCE, PASSPORT, CARD, PHONE, EMAIL, IBAN, SSN, ACCOUNT
     }
 
     data class Hit(val kind: Kind, val text: String, val box: PageStamp.Box)
@@ -46,8 +48,8 @@ object SensitiveScan {
     )
 
     private val PRIORITY = mapOf(
-        Kind.EMAIL to 0, Kind.IBAN to 1, Kind.PAN to 2, Kind.SSN to 3, Kind.PHONE to 4,
-        Kind.CARD to 5, Kind.AADHAAR to 6, Kind.VID to 7, Kind.ACCOUNT to 8
+        Kind.EMAIL to 0, Kind.IBAN to 1, Kind.PAN to 2, Kind.DRIVING_LICENCE to 3, Kind.PASSPORT to 4, Kind.SSN to 5, Kind.PHONE to 6,
+        Kind.CARD to 7, Kind.AADHAAR to 8, Kind.VID to 9, Kind.ACCOUNT to 10
     )
 
     private val DIGIT_RUN = Regex("(?<!\\d)\\d(?:[ \\t-]?\\d){8,18}(?!\\d)")
@@ -58,25 +60,33 @@ object SensitiveScan {
     private val PAN = Regex("(?<![A-Z0-9])[A-Z]{5}\\d{4}[A-Z](?![A-Z0-9])")
     private val SSN = Regex("(?<!\\d)\\d{3}-\\d{2}-\\d{4}(?!\\d)")
     private val SSN_SHAPE = Regex("\\d{3}-\\d{2}-\\d{4}")
+    private val DRIVING_LICENCE =
+        Regex("(?<![A-Z0-9])[A-Z]{2}[- ]?\\d{2}[- ]?\\d{4}[- ]?\\d{7}(?![A-Z0-9])")
+    private val PASSPORT = Regex("(?<![A-Z0-9])[A-Z]\\d{7}(?![A-Z0-9])")
     private val IBAN = Regex("(?<![A-Z0-9])[A-Z]{2}\\d{2}[A-Z0-9 ]{10,30}(?![A-Z0-9])")
 
     // ------------------------------------------------------------------ public API
 
-    /** Sensitive items in one page of OCR lines. */
-    fun find(page: OcrPage, wholeAadhaar: Boolean = false): List<Hit> {
+    /** Sensitive items in one page of OCR lines, limited to [kinds]. */
+    fun find(
+        page: OcrPage,
+        kinds: Set<Kind> = Kind.values().toSet(),
+        keepLast4Ids: Boolean = false
+    ): List<Hit> {
         if (page.width <= 0 || page.height <= 0) return emptyList()
         val words = page.lines.map { line ->
             Word(line.text, line.left, line.top, line.right, line.bottom)
         }
-        return find(words, page.width, page.height, wholeAadhaar)
+        return find(words, page.width, page.height, kinds, keepLast4Ids)
     }
 
-    /** Sensitive items in ML Kit element boxes. */
+    /** Sensitive items in ML Kit element boxes, limited to [kinds]. */
     fun find(
         words: List<Word>,
         pageWidth: Int,
         pageHeight: Int,
-        wholeAadhaar: Boolean = false
+        kinds: Set<Kind> = Kind.values().toSet(),
+        keepLast4Ids: Boolean = false
     ): List<Hit> {
         if (pageWidth <= 0 || pageHeight <= 0) return emptyList()
         val valid = words.filter {
@@ -85,7 +95,7 @@ object SensitiveScan {
         val lines = groupLines(valid)
         val out = ArrayList<Hit>()
         for (line in lines) {
-            out += lineHits(line, lines, pageWidth, pageHeight, wholeAadhaar)
+            out += lineHits(line, lines, pageWidth, pageHeight, kinds, keepLast4Ids)
         }
         return out.sortedWith(compareBy({ it.box.top }, { it.box.left }))
     }
@@ -115,7 +125,8 @@ object SensitiveScan {
         allLines: List<List<Word>>,
         pageWidth: Int,
         pageHeight: Int,
-        wholeAadhaar: Boolean
+        kinds: Set<Kind>,
+        keepLast4Ids: Boolean
     ): List<Hit> {
         val sorted = line.sortedBy { it.left }
         val builder = StringBuilder()
@@ -163,6 +174,12 @@ object SensitiveScan {
             val iban = m.value.trimEnd()
             if (ibanValid(iban)) add(Kind.IBAN, m.range.first, m.range.first + iban.length, m.range.first + iban.length)
         }
+        for (m in DRIVING_LICENCE.findAll(upper)) {
+            add(Kind.DRIVING_LICENCE, m.range.first, m.range.last + 1, m.range.last + 1)
+        }
+        for (m in PASSPORT.findAll(upper)) {
+            add(Kind.PASSPORT, m.range.first, m.range.last + 1, m.range.last + 1)
+        }
         for (m in SSN.findAll(digits)) {
             if (ssnValid(m.value)) add(Kind.SSN, m.range.first, m.range.last + 1, m.range.last + 1)
         }
@@ -175,14 +192,19 @@ object SensitiveScan {
             val count = raw.count { it.isDigit() }
             when {
                 count == 12 -> {
-                    val maskEnd = if (wholeAadhaar) end else digitBoundary(digits, start, end, 8)
+                    val maskEnd = if (keepLast4Ids) digitBoundary(digits, start, end, 8) else end
                     add(Kind.AADHAAR, start, end, maskEnd)
                 }
                 count == 16 -> {
                     if (luhn(raw)) {
                         add(Kind.CARD, start, end, digitBoundary(digits, start, end, count - 4))
                     } else {
-                        add(Kind.VID, start, end, digitBoundary(digits, start, end, 12))
+                        val maskEnd = if (keepLast4Ids) {
+                            digitBoundary(digits, start, end, 12)
+                        } else {
+                            end
+                        }
+                        add(Kind.VID, start, end, maskEnd)
                     }
                 }
                 count in 13..19 -> {
@@ -274,7 +296,7 @@ object SensitiveScan {
                 )
             )
         }
-        return out
+        return out.filter { it.kind in kinds }
     }
 
     /** The character index just after the [n]th digit inside a matched run. */
