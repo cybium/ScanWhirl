@@ -195,10 +195,11 @@ class SettingsActivity : BaseActivity() {
             id = R.id.rowBlockScreenshots
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding((16 * d).toInt(), (12 * d).toInt(), (12 * d).toInt(), (12 * d).toInt())
+            setPadding((16 * d).toInt(), (16 * d).toInt(), (16 * d).toInt(), (16 * d).toInt())
         }
         val texts = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(0, 0, (12 * d).toInt(), 0)
         }
         texts.addView(
             android.widget.TextView(this).apply {
@@ -248,6 +249,7 @@ class SettingsActivity : BaseActivity() {
                 )
             )
         }
+        addLeadingIcon(row, R.drawable.ic_sym_visibility_off)
         addToPrivacySection(row, divider)
     }
 
@@ -375,6 +377,26 @@ class SettingsActivity : BaseActivity() {
         recreate()
     }
 
+    /** Matches the XML rows: a 24dp decorative leading icon with a 14dp gap. */
+    private fun addLeadingIcon(row: android.view.ViewGroup, iconRes: Int) {
+        val d = resources.displayMetrics.density
+        val icon = android.widget.ImageView(this).apply {
+            setImageResource(iconRes)
+            imageTintList = android.content.res.ColorStateList.valueOf(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@SettingsActivity, R.color.cyan_primary
+                )
+            )
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        row.addView(
+            icon,
+            0,
+            android.widget.LinearLayout.LayoutParams((24 * d).toInt(), (24 * d).toInt())
+                .apply { marginEnd = (14 * d).toInt() }
+        )
+    }
+
     /** Test build only: flip QA into Free so every Pro gate is visible. */
     private fun addTestFreeRow() {
         val parent = binding.rowPrivacy.parent as? android.view.ViewGroup ?: return
@@ -383,7 +405,7 @@ class SettingsActivity : BaseActivity() {
             id = R.id.rowTestFree
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding((16 * d).toInt(), (12 * d).toInt(), (12 * d).toInt(), (12 * d).toInt())
+            setPadding((16 * d).toInt(), (16 * d).toInt(), (16 * d).toInt(), (16 * d).toInt())
         }
         val texts = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -437,6 +459,7 @@ class SettingsActivity : BaseActivity() {
                 com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_border_hair)
             )
         }
+        addLeadingIcon(row, R.drawable.ic_sym_tune)
         addToPrivacySection(row, divider)
     }
 

@@ -254,7 +254,7 @@
     <!-- v2 UI: selection bar + screenshot policy (SECURITY_AUDIT 2026-11-15). -->
     <string name="sel_batch">Batch</string>
     <string name="settings_block_screenshots">Block screenshots of documents</string>
-    <string name="settings_block_screenshots_note">Protected documents are always blocked. Turn this on to block ordinary scans too.</string>
+    <string name="settings_block_screenshots_note">Protected docs are always blocked. Block ordinary scans too.</string>
     <string name="about_licences">Licences</string>
     <string name="about_licences_body">ScanWhirl uses AndroidX, Material Components, Google ML Kit, PdfBox-Android and kotlinx.coroutines, under their open-source licences (Apache 2.0).</string>
     <string name="settings_accent">Accent</string>

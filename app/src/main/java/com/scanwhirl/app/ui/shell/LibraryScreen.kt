@@ -292,6 +292,12 @@ class LibraryScreen(
 
     // ---- public -----------------------------------------------------------
 
+    /** Re-binds the quick tools and cards after a Free/Pro change. */
+    fun refreshProState() {
+        buildQuickRow()
+        renderDocs()
+    }
+
     fun reload() {
         val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
         if (owner == null) {

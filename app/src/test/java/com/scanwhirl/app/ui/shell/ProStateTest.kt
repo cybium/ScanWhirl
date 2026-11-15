@@ -94,6 +94,37 @@ class ProStateTest {
     }
 
     @Test
+    fun `tags flip when the Pro override changes and the shell resumes`() {
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                fun tiles(): List<com.scanwhirl.app.ui.kit.ToolTile> {
+                    val quick = activity.findViewById<ViewGroup>(R.id.swQuickRow)
+                    return (0 until quick.childCount)
+                        .mapNotNull { quick.getChildAt(it) as? com.scanwhirl.app.ui.kit.ToolTile }
+                }
+                assertTrue("start Pro: no tags", tiles().none { it.proTag.visibility == View.VISIBLE })
+
+                ProGate.setTestOverride(app, false)
+                activity.syncProState()
+                idle()
+                assertTrue(
+                    "flipping to Free re-binds the tiles",
+                    tiles().any { it.tool?.pro == true && it.proTag.visibility == View.VISIBLE }
+                )
+
+                ProGate.setTestOverride(app, null)
+                activity.syncProState()
+                idle()
+                assertTrue(
+                    "flipping back to Pro hides them again",
+                    tiles().none { it.proTag.visibility == View.VISIBLE }
+                )
+            }
+        }
+    }
+
+    @Test
     fun `the test-only Free switch is present in a test build and flips the gate`() {
         assertTrue("this suite runs as a test build", BuildConfig.TEST_BUILD)
         val settings = Robolectric.buildActivity(SettingsActivity::class.java).setup()
@@ -101,6 +132,11 @@ class ProStateTest {
         val toggle = activity.findViewById<SwitchCompat>(R.id.switchTestFree)
         assertNotNull("test-build Settings offers act-as-Free", toggle)
         assertFalse("Pro by default", toggle!!.isChecked)
+        val testRow = activity.findViewById<ViewGroup>(R.id.rowTestFree)
+        assertTrue(
+            "the test row has a leading icon like the other Settings rows",
+            testRow.getChildAt(0) is android.widget.ImageView
+        )
 
         toggle.isChecked = true
         assertFalse("the gate now reports Free", ProGate.isPro(activity))
