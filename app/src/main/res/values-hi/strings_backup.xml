@@ -13,7 +13,7 @@
     <string name="backup_now">अभी बैकअप लें</string>
     <string name="backup_restore">बैकअप से वापस लाएँ</string>
     <string name="backup_remind">अगर पिछला बैकअप एक महीने पुराना हो तो याद दिलाएँ</string>
-    <string name="backup_no_internet">ScanWhirl के पास इंटरनेट की अनुमति नहीं है। Share चुनने पर Google Drive शेयर शीट से खुलता है।</string>
+    <string name="backup_no_internet"><!-- review -->ScanWhirl के पास इंटरनेट की अनुमति नहीं है। जब आप शेयर चुनते हैं तो Google Drive शेयर शीट से खुलता है।</string>
 
     <string name="backup_choose">बैकअप सुरक्षित करें</string>
     <string name="backup_choose_note">तय करें कि यह फ़ाइल किससे खुलेगी। वापस लाने के लिए वही चीज़ चाहिए होगी।</string>
@@ -34,12 +34,12 @@
 
     <string name="backup_working">बैकअप एन्क्रिप्ट हो रहा है…</string>
     <string name="backup_failed">बैकअप नहीं लिखा जा सका।</string>
-    <string name="backup_saved">बैकअप सेव हो गया</string>
+    <string name="backup_saved"><!-- review -->बैकअप सहेजा गया</string>
     <string name="backup_ready">बैकअप तैयार</string>
-    <string name="backup_ready_note">%1$d MB, एन्क्रिप्टेड। फ़ोन में सेव करें या Drive के साथ शेयर करें।</string>
-    <string name="backup_save_device">फ़ोन में सेव करें</string>
+    <string name="backup_ready_note"><!-- review -->%1$d MB, एन्क्रिप्टेड। फ़ोन में सहेजें या Drive के साथ शेयर करें।</string>
+    <string name="backup_save_device"><!-- review -->फ़ोन में सहेजें</string>
     <string name="backup_share">शेयर करें</string>
-    <string name="backup_share_title">बैकअप सेव करें</string>
+    <string name="backup_share_title"><!-- review -->बैकअप सहेजें</string>
     <string name="backup_subject">ScanWhirl बैकअप</string>
 
     <string name="backup_restore_go">वापस लाएँ</string>

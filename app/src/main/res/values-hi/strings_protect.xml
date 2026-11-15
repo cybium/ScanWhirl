@@ -25,7 +25,7 @@
     <string name="protect_remember_title"><!-- review -->वॉल्ट में याद रखें</string>
     <string name="protect_remember_note"><!-- review -->ताकि यह कभी न खोए। फिंगरप्रिंट से खुलेगा।</string>
     <string name="protect_action_share"><!-- review -->सुरक्षित करें और शेयर करें</string>
-    <string name="protect_action_save"><!-- review -->सुरक्षित कॉपी सेव करें</string>
+    <string name="protect_action_save"><!-- review -->सुरक्षित कॉपी सहेजें</string>
     <string name="protect_action_change"><!-- review -->पासवर्ड बदलें</string>
     <string name="protect_result_summary"><!-- review -->%1$s\nAES-256 से सुरक्षित</string>
     <string name="vault_save_prompt"><!-- review -->पासवर्ड वॉल्ट में सहेजें?</string>
@@ -38,7 +38,7 @@
     <string name="unlock_sheet_note"><!-- review -->खोलने के लिए इसका पासवर्ड डालें।</string>
     <string name="unlock_open"><!-- review -->खोलें</string>
     <string name="unlock_or"><!-- review -->या</string>
-    <string name="unlock_use_vault"><!-- review -->वॉल्ट में सेव पासवर्ड उपयोग करें</string>
+    <string name="unlock_use_vault"><!-- review -->वॉल्ट में सहेजा पासवर्ड इस्तेमाल करें</string>
     <string name="unlock_cancel"><!-- review -->रद्द करें</string>
     <string name="unlock_remove"><!-- review -->सुरक्षा हटाएँ…</string>
     <string name="unlock_wrong_tries"><!-- review -->पासवर्ड मेल नहीं खाया। %2$d सेकंड के विराम से पहले %1$d कोशिशें बाकी।</string>
@@ -58,7 +58,7 @@
     <string name="import_unlock_note"><!-- review -->इसके पेज इम्पोर्ट करने के लिए पासवर्ड डालें। मूल फ़ाइल नहीं बदलेगी।</string>
     <string name="import_unlock_unsupported"><!-- review -->यह PDF ऐसा पासवर्ड प्रारूप उपयोग करता है जिसे ScanWhirl नहीं खोल सकता। इसे बनाने वाले ऐप में हटाएँ।</string>
     <string name="import_unlock_failed"><!-- review -->यह PDF इम्पोर्ट नहीं हो सका: %1$s</string>
-    <string name="vault_reason_use_password"><!-- review -->सहेजा पासवर्ड उपयोग करने के लिए वॉल्ट खोलें।</string>
+    <string name="vault_reason_use_password"><!-- review -->सहेजा पासवर्ड इस्तेमाल करने के लिए वॉल्ट खोलें।</string>
     <string name="vault_password_missing"><!-- review -->कोई सहेजा पासवर्ड नहीं। उसे टाइप करें।</string>
     <string name="vault_password_stale"><!-- review -->सहेजा पासवर्ड काम नहीं आया। उसे टाइप करें।</string>
 </resources>

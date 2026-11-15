@@ -38,7 +38,7 @@
     <string name="home_protected"><!-- review -->सुरक्षित</string>
 
     <string name="tools_title"><!-- review -->टूल्स</string>
-    <string name="tools_search_hint"><!-- review -->टूल खोजें, जैसे “sign”, “smaller”</string>
+    <string name="tools_search_hint"><!-- review -->टूल खोजें, जैसे “साइन”</string>
     <string name="tools_no_match"><!-- review -->“%1$s” से कोई टूल नहीं मिला।</string>
     <string name="tools_group_create"><!-- review -->बनाएँ</string>
     <string name="tools_group_organize"><!-- review -->व्यवस्थित करें</string>
@@ -91,7 +91,7 @@
     <string name="tool_coming_soon_title"><!-- review -->जल्द आ रहा है</string>
     <string name="tool_soon_tag"><!-- review -->जल्द</string>
     <string name="tool_coming_soon_note"><!-- review -->यह टूल बन रहा है। जल्द ही यहाँ होगा।</string>
-    <string name="soon_book_pages"><!-- review -->पूरी किताब स्कैन करें: एक साथ कई पन्ने, हर दो पन्नों को अलग-अलग पन्नों में बाँटकर। लॉन्च के बाद आएगा।</string>
+    <string name="soon_book_pages"><!-- review -->पूरी किताब स्कैन करें: एक साथ कई पेज, हर दो पेज को अलग-अलग पेजों में बाँटकर। लॉन्च के बाद आएगा।</string>
     <string name="soon_qr_code"><!-- review -->बिना इंटरनेट इस फ़ोन पर QR कोड पढ़ें।</string>
     <string name="soon_business_card"><!-- review -->कार्ड की फ़ोटो से नाम, फ़ोन और ईमेल निकालें।</string>
     <string name="soon_folders"><!-- review -->दस्तावेज़ों को फ़ोल्डर में रखें और टैग करें।</string>
@@ -218,7 +218,7 @@
     <string name="progress_page_of"><!-- review -->पेज %1$d / %2$d</string>
     <string name="home_search_clear"><!-- review -->खोज मिटाएँ</string>
     <string name="empty_filtered"><!-- review -->यहाँ कोई दस्तावेज़ नहीं</string>
-    <string name="ocr_nothing_to_save"><!-- review -->सेव करने के लिए कुछ बदला नहीं</string>
+    <string name="ocr_nothing_to_save"><!-- review -->सहेजने के लिए कुछ बदला नहीं</string>
     <string name="photo_import_none"><!-- review -->कोई फ़ोटो नहीं जोड़ी गई</string>
     <string name="photos_auto_crop"><!-- review -->पेज अपने आप क्रॉप करें (सुझाया)</string>
     <string name="photos_keep"><!-- review -->फ़ोटो जैसी हैं वैसी रखें</string>

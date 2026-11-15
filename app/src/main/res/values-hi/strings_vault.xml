@@ -129,6 +129,6 @@
     <string name="vault_legacy_continue"><!-- review -->जारी रखें</string>
     <string name="vault_legacy_skip"><!-- review -->पुरानी फ़ाइलों के बिना सेट करें</string>
     <string name="vault_legacy_migrated"><!-- review -->%1$d पुरानी फ़ाइलें वॉल्ट में आ गईं</string>
-    <string name="vault_legacy_later"><!-- review -->पुराना PIN वॉल्ट वॉल्ट विकल्पों से बाद में बदला जा सकता है।</string>
+    <string name="vault_legacy_later"><!-- review -->पुराना PIN बाद में वॉल्ट विकल्पों से बदला जा सकता है।</string>
     <string name="vault_migrate_legacy"><!-- review -->पुरानी PIN फ़ाइलें लाएँ</string>
 </resources>
