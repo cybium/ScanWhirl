@@ -77,9 +77,10 @@ android {
             // Robolectric sandboxes accumulate memory over 1300+ tests; the WSL gate box has ~3.5 GB.
             // A fresh test JVM every 40 classes with a fixed 1.5 GB heap keeps the full suite alive
             // (120 classes / 1 GB still hit OutOfMemoryError in "SDK 35 Main Thread").
+            // The cloud gate (16 GB runner) passes -PtestHeap=4g -PtestForkEvery=200.
             all {
-                it.maxHeapSize = "1536m"
-                it.forkEvery = 40L
+                it.maxHeapSize = (project.findProperty("testHeap") as String?) ?: "1536m"
+                it.forkEvery = (project.findProperty("testForkEvery") as String?)?.toLongOrNull() ?: 40L
             }
         }
     }
