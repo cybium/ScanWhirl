@@ -172,5 +172,12 @@
                 android:name="autoStoreLocales"
                 android:value="true" />
         </service>
+
+        <!-- PM-1.5: the app has no INTERNET permission, so ask Google Play to install the unbundled
+             ML Kit text-recognition (Latin) and code-scanner modules together with the app, instead of
+             on first use. (Devanagari OCR is bundled in the APK; the document scanner is a Play services module.) -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr,barcode_ui" />
     </application>
 </manifest>
