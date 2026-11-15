@@ -72,6 +72,7 @@ object BookSplitEval {
         val photos = if (folder.photoSubdir.isBlank()) folder.dir else File(folder.dir, folder.photoSubdir)
         val lines = mutableListOf<String>()
         val results = mutableListOf<Result>()
+        val diagnostics = mutableListOf<String>()
 
         for ((name, expectation) in folder.expectations) {
             val file = File(photos, "$name.jpg")
@@ -88,6 +89,15 @@ object BookSplitEval {
                 val box = crops[name]
                 val croppedSource = if (box != null) crop(source, box) else source
                 val cropped = BookSplit.analyse(croppedSource)
+                val p90raw = BookSplit.blankMarginPosition(source, 90)
+                val p270raw = BookSplit.blankMarginPosition(source, 270)
+                val p90crop = BookSplit.blankMarginPosition(croppedSource, 90)
+                val p270crop = BookSplit.blankMarginPosition(croppedSource, 270)
+                diagnostics += String.format(
+                    java.util.Locale.ROOT,
+                    "%-24s cue raw p90=%s p270=%s | crop p90=%s p270=%s",
+                    name, p90raw, p270raw, p90crop, p270crop
+                )
                 val croppedPreview = File(out, "${name}_cropped_preview.jpg")
                 writePreview(croppedSource, cropped, croppedPreview)
                 if (croppedSource !== source) croppedSource.recycle()
@@ -121,7 +131,7 @@ object BookSplitEval {
             }
         }
 
-        val report = lines.joinToString("\n")
+        val report = lines.joinToString("\n") + "\n\n" + diagnostics.joinToString("\n")
         val resultsFile = File(out, "RESULTS.txt").absoluteFile
         println("--- Book pages eval: ${folder.label} -> ${resultsFile.absolutePath} ---")
         println(report)
