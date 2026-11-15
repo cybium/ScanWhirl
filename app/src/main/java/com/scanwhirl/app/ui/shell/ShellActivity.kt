@@ -265,10 +265,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 gravity = Gravity.CENTER
                 isClickable = true
                 isFocusable = true
+                contentDescription = getString(label)
                 setOnClickListener { showTab(tab) }
             }
             cell.addView(
-                ImageView(this@ShellActivity).apply { setImageResource(icon) },
+                ImageView(this@ShellActivity).apply {
+                    setImageResource(icon)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
                 LinearLayout.LayoutParams(SwStyle.dp(this@ShellActivity, 24f), SwStyle.dp(this@ShellActivity, 24f))
             )
             cell.addView(
@@ -276,6 +280,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     text = getString(label)
                     gravity = Gravity.CENTER
                     tag = "label"
+                    maxLines = 1
+                    // The cell is a quarter of the bar minus the scan-disc gap;
+                    // cap the label so a long tab name never clips at 2.0x.
+                    val density = resources.displayMetrics.density
+                    val scaled = resources.displayMetrics.scaledDensity
+                    setTextSize(
+                        android.util.TypedValue.COMPLEX_UNIT_PX,
+                        minOf(11f * scaled, 13f * density)
+                    )
                 },
                 LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT

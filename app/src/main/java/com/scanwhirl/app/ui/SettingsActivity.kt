@@ -45,6 +45,13 @@ class SettingsActivity : BaseActivity() {
         setContentView(binding.root)
         binding.root.applySystemBarsPadding()
         binding.toolbar.setNavigationOnClickListener { finish() }
+        binding.toolbar.navigationContentDescription = getString(R.string.a11y_back)
+        // The switches are the row's control: give each the row's own words so
+        // TalkBack never announces an unnamed toggle.
+        binding.switchAutoEnhance.contentDescription = getString(R.string.settings_auto_enhance)
+        binding.switchAutoCopyToDocuments.contentDescription =
+            getString(R.string.settings_auto_copy_to_documents)
+        binding.switchSearchablePdf.contentDescription = getString(R.string.settings_searchable_pdf)
 
         // test25 Phase 5A / D1: Orbital-only dark theme — the row stays in the
         // XML (locked ID) but is hidden, and the summary is pinned to the one
@@ -128,6 +135,7 @@ class SettingsActivity : BaseActivity() {
         row.addView(
             android.widget.ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_language)
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
                     com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_primary)
                 )
@@ -159,6 +167,7 @@ class SettingsActivity : BaseActivity() {
         row.addView(
             android.widget.ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_chevron_right)
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
                     com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_dim)
                 )
@@ -216,6 +225,7 @@ class SettingsActivity : BaseActivity() {
         )
         val toggle = androidx.appcompat.widget.SwitchCompat(this).apply {
             id = R.id.switchBlockScreenshots
+            contentDescription = getString(R.string.settings_block_screenshots)
             isChecked = Prefs.blockDocScreenshots(this@SettingsActivity)
             setOnCheckedChangeListener { _, checked ->
                 Prefs.setBlockDocScreenshots(this@SettingsActivity, checked)
@@ -296,6 +306,7 @@ class SettingsActivity : BaseActivity() {
         row.addView(
             android.widget.ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_chevron_right)
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
                     com.scanwhirl.app.ui.kit.SwStyle.color(
                         this@SettingsActivity, R.color.text_hologram_dim

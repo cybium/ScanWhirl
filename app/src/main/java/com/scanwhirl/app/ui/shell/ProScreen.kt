@@ -61,6 +61,8 @@ class ProScreen(
             SwStyle.iconButton(context, R.drawable.ic_sym_close, SwStyle.color(context, R.color.text_hologram_mid)).apply {
                 id = R.id.swProClose
                 contentDescription = context.getString(R.string.sheet_close)
+                layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
+                setPadding(SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f))
                 setOnClickListener { callbacks.onClose() }
             }
         )
@@ -83,7 +85,10 @@ class ProScreen(
                 FrameLayout.LayoutParams(ring, ring).apply { gravity = Gravity.CENTER }
             )
         }
-        mark = ImageView(context).apply { setImageResource(R.drawable.ic_brand_mark_gold) }
+        mark = ImageView(context).apply {
+            setImageResource(R.drawable.ic_brand_mark_gold)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
         hero.addView(
             mark,
             FrameLayout.LayoutParams(SwStyle.dp(context, 72f), SwStyle.dp(context, 72f))
@@ -120,19 +125,29 @@ class ProScreen(
         )
 
         val trustRow = LinearLayout(context).apply {
-            orientation = HORIZONTAL
+            orientation = VERTICAL
             gravity = Gravity.CENTER
         }
-        for (pill in listOf(
+        val pills = listOf(
             TrustPill.noAds(context),
             TrustPill.noAccount(context),
             TrustPill.offline(context)
-        )) {
-            trustRow.addView(
-                pill,
-                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-                    .apply { marginStart = SwStyle.dp(context, 4f); marginEnd = SwStyle.dp(context, 4f) }
-            )
+        )
+        // Two pills on the first line, one on the second: at 2.0x the three
+        // pills do not fit a 320dp phone on one line.
+        for (chunk in pills.chunked(2)) {
+            val line = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            for (pill in chunk) {
+                line.addView(
+                    pill,
+                    LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                        .apply { marginStart = SwStyle.dp(context, 4f); marginEnd = SwStyle.dp(context, 4f) }
+                )
+            }
+            trustRow.addView(line, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         }
         addView(
             trustRow,
@@ -162,7 +177,7 @@ class ProScreen(
                 featureCells += cell
                 row.addView(
                     cell,
-                    LayoutParams(0, SwStyle.dp(context, 48f), 1f)
+                    LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
                         .apply { marginEnd = SwStyle.dp(context, 10f) }
                 )
             }
@@ -180,7 +195,7 @@ class ProScreen(
                 gravity = Gravity.CENTER
                 isClickable = true
                 setOnClickListener { callbacks.onSeeAllProTools() }
-                minimumHeight = SwStyle.dp(context, 36f)
+                minimumHeight = SwStyle.dp(context, 48f)
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 2f) }
@@ -225,6 +240,7 @@ class ProScreen(
             ImageView(context).apply {
                 setImageResource(R.drawable.ic_sym_workspace_premium)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.gold_pro_primary))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LayoutParams(SwStyle.dp(context, 34f), SwStyle.dp(context, 34f))
         )
@@ -279,10 +295,10 @@ class ProScreen(
                 text = context.getString(R.string.pro_restore)
                 gravity = Gravity.CENTER
                 isClickable = true
-                minimumHeight = SwStyle.dp(context, 44f)
+                minimumHeight = SwStyle.dp(context, 48f)
                 setOnClickListener { callbacks.onRestore() }
             },
-            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 44f))
+            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f))
         )
         addView(SwStyle.spacer(context, 20f))
 
@@ -391,7 +407,8 @@ class ProScreen(
     internal fun priceWrapForTest(): FrameLayout = priceWrap
     internal fun buyWrapForTest(): FrameLayout = buyWrap
 
-    private fun feature(icon: Int, label: Int): View {        val cell = LinearLayout(context).apply {
+    private fun feature(icon: Int, label: Int): View {
+        val cell = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = SwStyle.rounded(
@@ -401,12 +418,14 @@ class ProScreen(
                 stroke = 0x2EFFB800
             )
             val pad = SwStyle.dp(context, 12f)
-            setPadding(pad, 0, pad, 0)
+            setPadding(pad, SwStyle.dp(context, 6f), pad, SwStyle.dp(context, 6f))
+            minimumHeight = SwStyle.dp(context, 48f)
         }
         cell.addView(
             ImageView(context).apply {
                 setImageResource(icon)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.gold_pro_primary))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LayoutParams(SwStyle.dp(context, 22f), SwStyle.dp(context, 22f))
                 .apply { marginEnd = SwStyle.dp(context, 10f) }
@@ -414,6 +433,14 @@ class ProScreen(
         cell.addView(
             SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(label)
+                maxLines = 2
+                setLineSpacing(0f, 1.1f)
+                val density = resources.displayMetrics.density
+                val scaled = resources.displayMetrics.scaledDensity
+                setTextSize(
+                    android.util.TypedValue.COMPLEX_UNIT_PX,
+                    minOf(13.5f * scaled, 16f * density)
+                )
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
