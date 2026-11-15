@@ -11,6 +11,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.OcrStore
+import com.scanwhirl.app.tools.SizeFit
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.DocxWriter
 import com.scanwhirl.app.util.DownloadSaver
@@ -3357,8 +3358,202 @@ class ScanRepository(private val context: Context) {
             }
             OpFaults.at("op:page:$i")
         }
-        if (texts.isNotEmpty() || geo.isNotEmpty()) {
-            OcrStore(OpStaging.root(context.filesDir)).putAll(staging.name, texts, geo)
+    }
+
+    // ------------------------------------------------------------------
+    // Batch tools: one action over many documents
+    // ------------------------------------------------------------------
+
+    /** One action a batch can run over many documents. */
+    sealed interface BatchAction {
+        data class Compress(
+            val quality: Int,
+            val maxDim: Int?,
+            val targetBytes: Long? = null
+        ) : BatchAction
+
+        data object ExportPdf : BatchAction
+        data class PdfToImages(val format: ImageExportFormat, val oneZip: Boolean) : BatchAction
+        data object ToWord : BatchAction
+        data object RemoveMetadata : BatchAction
+        data class Protect(val password: String) : BatchAction
+    }
+
+    /** What happened to one document in a batch. Completed documents stay published. */
+    data class BatchItem(
+        val docId: String,
+        val name: String,
+        val ok: Boolean,
+        val reason: String? = null,
+        val outputId: String? = null,
+        val files: List<File> = emptyList(),
+        val savedName: String? = null
+    )
+
+    /**
+     * Runs [action] over [ids], one document at a time. Every output goes through the same publish
+     * path as the single-document tools; a failure on one document is recorded (reason) and the
+     * batch continues. Cancellation stops the batch, keeps completed outputs, and the publish
+     * path discards the document in progress (nothing partial). [onProgress] is called with the
+     * 1-based document number before it is processed.
+     */
+    suspend fun runBatch(
+        ids: List<String>,
+        action: BatchAction,
+        onProgress: (number: Int, total: Int, name: String) -> Unit = { _, _, _ -> },
+        cancelled: () -> Boolean = { false }
+    ): List<BatchItem> = withContext(Dispatchers.IO) {
+        val unique = ids.distinct()
+        if (unique.isEmpty()) return@withContext emptyList()
+        val outDir = File(context.cacheDir, "documents/batch/${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+        val takenNames = mutableSetOf<String>()
+        if (action is BatchAction.PdfToImages && action.oneZip) {
+            return@withContext runOneZipBatch(unique, action.format, outDir, onProgress, cancelled)
         }
+        val results = mutableListOf<BatchItem>()
+        for ((index, id) in unique.withIndex()) {
+            if (cancelled()) break
+            currentCoroutineContext().ensureActive()
+            val doc = loadDocument(File(docsDir, id))
+            val name = doc?.name ?: id
+            onProgress(index + 1, unique.size, name)
+            currentCoroutineContext().ensureActive()
+            if (doc == null) {
+                results += BatchItem(id, name, ok = false, reason = "Document not found")
+                continue
+            }
+            results += try {
+                when (action) {
+                    is BatchAction.Compress -> {
+                        if (action.targetBytes != null) {
+                            val pages = SizeFit.compressPages(doc.pageFiles, action.targetBytes)
+                            val out = createDocument(outputName(doc.name, "Compressed"), pages)
+                            BatchItem(id, name, true, outputId = out.id)
+                        } else {
+                            val out = compressScan(doc.id, action.quality, action.maxDim)
+                            BatchItem(id, name, true, outputId = out.id)
+                        }
+                    }
+                    BatchAction.ExportPdf -> {
+                        val saved = DownloadSaver.savePdfFile(
+                            context, doc.pdfFile, DownloadSaver.pdfNameFor(doc.name)
+                        )
+                        runCatching { addExport(doc.id, saved) }
+                        BatchItem(id, name, true, savedName = saved.name)
+                    }
+                    is BatchAction.PdfToImages -> {
+                        val zipName = uniqueName(
+                            "${ShareUtils.sanitizeName(doc.name)} - images.zip", takenNames
+                        )
+                        val out = File(outDir, zipName)
+                        pdfToImages(doc.id, action.format, zip = true, outFile = out)
+                        BatchItem(id, name, true, files = listOf(out))
+                    }
+                    BatchAction.ToWord -> {
+                        val out = File(outDir, uniqueName("${ShareUtils.sanitizeName(doc.name)}.docx", takenNames))
+                        exportWord(doc.id, out)
+                        BatchItem(id, name, true, files = listOf(out))
+                    }
+                    BatchAction.RemoveMetadata -> {
+                        val out = removeMetadata(doc.id)
+                        BatchItem(id, name, true, outputId = out.id)
+                    }
+                    is BatchAction.Protect -> {
+                        val out = protectPdf(doc.id, action.password)
+                        BatchItem(id, name, true, outputId = out.id)
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                BatchItem(id, name, ok = false, reason = e.message ?: "Could not finish")
+            }
+            if (cancelled()) break
+        }
+        results
+    }
+
+    /** One aggregate image ZIP for all documents; one document fails alone, cancel leaves nothing. */
+    private suspend fun runOneZipBatch(
+        ids: List<String>,
+        format: ImageExportFormat,
+        outDir: File,
+        onProgress: (Int, Int, String) -> Unit,
+        cancelled: () -> Boolean
+    ): List<BatchItem> {
+        val out = File(outDir, "ScanWhirl images.zip")
+        val failures = mutableMapOf<String, String>()
+        val processed = mutableListOf<String>()
+        try {
+            java.util.zip.ZipOutputStream(FileOutputStream(out)).use { aggregate ->
+                for ((index, id) in ids.withIndex()) {
+                    if (cancelled()) break
+                    currentCoroutineContext().ensureActive()
+                    val doc = loadDocument(File(docsDir, id))
+                    val name = doc?.name ?: id
+                    onProgress(index + 1, ids.size, name)
+                    processed += id
+                    currentCoroutineContext().ensureActive()
+                    if (doc == null) {
+                        failures[id] = "Document not found"
+                        continue
+                    }
+                    val temp = File(outDir, "one_${doc.id}.zip")
+                    try {
+                        pdfToImages(doc.id, format, zip = true, outFile = temp)
+                        java.util.zip.ZipFile(temp).use { zip ->
+                            val folder = ShareUtils.sanitizeName(doc.name)
+                            zip.entries().toList().forEach { entry ->
+                                aggregate.putNextEntry(java.util.zip.ZipEntry("$folder/${entry.name}"))
+                                zip.getInputStream(entry).use { it.copyTo(aggregate) }
+                                aggregate.closeEntry()
+                            }
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        failures[id] = e.message ?: "Could not export the images"
+                    } finally {
+                        temp.delete()
+                    }
+                }
+            }
+            if (out.length() == 0L) {
+                out.delete()
+                return processed.map { BatchItem(it, it, false, reason = "No images were written") }
+            }
+            Durable.syncFile(out)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            out.delete()
+            throw e
+        } catch (e: Exception) {
+            out.delete()
+            throw e
+        }
+        return processed.map { id ->
+            val doc = loadDocument(File(docsDir, id))
+            val name = doc?.name ?: id
+            val reason = failures[id]
+            if (reason == null) {
+                BatchItem(id, name, true, files = listOf(out))
+            } else {
+                BatchItem(id, name, false, reason = reason)
+            }
+        }
+    }
+
+    private fun uniqueName(candidate: String, taken: MutableSet<String>): String {
+        var name = candidate
+        var n = 2
+        while (!taken.add(name.lowercase(Locale.ROOT))) {
+            val dot = candidate.lastIndexOf('.')
+            name = if (dot > 0) {
+                "${candidate.substring(0, dot)} ($n)${candidate.substring(dot)}"
+            } else {
+                "$candidate ($n)"
+            }
+            n++
+        }
+        return name
     }
 }

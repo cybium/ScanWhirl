@@ -110,8 +110,8 @@ class ShellScreenTest {
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val tiles = ToolsHubScreen.tiles(body)
-            assertEquals(44, tiles.size)
-            assertEquals(44, tiles.mapNotNull { it.tool?.id }.toSet().size)
+            assertEquals(45, tiles.size)
+            assertEquals(45, tiles.mapNotNull { it.tool?.id }.toSet().size)
             for (tile in tiles) {
                 assertTrue("${tile.tool?.id} has no tap action", tile.hasOnClickListeners())
             }

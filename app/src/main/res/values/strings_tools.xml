@@ -59,7 +59,34 @@
     <string name="tools_setup_excel_note">Finds tables in the stored text. Other pages go in as plain text.</string>
     <string name="tools_excel_no_table">No table found on this page.</string>
 
-    <!-- v2 UI: 03_tools_hub - big PDF import -->
+    <!-- v2 UI: 03_tools_hub - batch tools -->
+    <string name="tools_batch_title">Batch tools</string>
+    <string name="tools_batch_hint">Pick the documents, then one action for all of them.</string>
+    <string name="tools_batch_select_all">Select all</string>
+    <string name="tools_batch_count">%1$d of %2$d selected</string>
+    <string name="tools_batch_search">Find a document</string>
+    <string name="tools_batch_continue">Continue</string>
+    <string name="tools_batch_none">Pick at least one document.</string>
+    <string name="tools_batch_action_title">What should run?</string>
+    <string name="tools_batch_action_note">One document at a time. A failure does not stop the rest.</string>
+    <string name="tools_batch_export_pdf">Export as PDF</string>
+    <string name="tools_batch_start">Start</string>
+    <string name="tools_batch_one_zip">One ZIP for all</string>
+    <string name="tools_batch_per_doc">ZIP per document</string>
+    <string name="tools_batch_password">One password for all</string>
+    <string name="tools_batch_password_short">Use at least 6 characters.</string>
+    <string name="tools_batch_progress_title">Batch running</string>
+    <string name="tools_batch_progress_start">Preparing…</string>
+    <string name="tools_batch_progress_msg">Document %1$d of %2$d · %3$s</string>
+    <string name="tools_batch_cancelling">Finishing the current document…</string>
+    <string name="tools_batch_cancel_note">Cancel stops after the current document. Finished copies stay.</string>
+    <string name="tools_batch_summary_title">%1$d done, %2$d failed</string>
+    <string name="tools_batch_line_failed">%1$s: %2$s</string>
+    <string name="tools_batch_share_all">Share all</string>
+    <string name="tools_batch_show_library">Show in library</string>
+    <string name="tools_batch_failed">Batch could not finish: %1$s</string>
+    <string name="tools_batch_pro_title">Batch tools are Pro</string>
+    <string name="tools_batch_pro_note">One purchase unlocks Batch tools and every Power Pack tool.</string>
     <string name="tools_import_plan_title">This PDF has %1$d pages</string>
     <string name="tools_import_plan_msg">About %1$s needed; %2$s free. Import all, or choose pages.</string>
     <string name="tools_import_all">Import all</string>
@@ -88,6 +115,7 @@
     <string name="tools_setup_nothing">This tool has no options.</string>
     <string name="tools_id_card_name">ID card</string>
     <string name="tools_tool_to_powerpoint">To PowerPoint</string>
+    <string name="tools_tool_batch">Batch tools</string>
     <string name="tools_id_hint">Scan the front, then the back. Choose one page or one page per side.</string>
     <string name="tools_id_front_title">Front side</string>
     <string name="tools_id_front_msg">Scan the front, or pick a photo from the gallery.</string>
