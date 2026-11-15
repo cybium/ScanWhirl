@@ -46,6 +46,7 @@ run locally (recognised by the test NAME). `-Local` is DISABLED for the full sui
 - Evals run LOCALLY with `-Tests`; in the cloud they must return early and pass. Never commit the private files.
 
 ## Rules
+- PHONE: NEVER enable airplane mode or toggle Wi-Fi / mobile data / hotspot on the test phone: it is the PC's internet (hotspot).
 - Commit every green piece (at least every ~45 min of work). The model provider can drop a session; the lead
   restarts it, but uncommitted hours are a risk.
 - File ownership is strict: if a fix needs another lane's file, report it to the lead instead of editing it
