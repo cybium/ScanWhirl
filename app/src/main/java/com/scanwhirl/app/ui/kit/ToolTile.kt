@@ -140,10 +140,7 @@ class ToolTile(context: Context) : FrameLayout(context) {
         }
         // A Soon/Build tile still has a real action: the sheet is set by the host.
         // Pro gating lives in launchTool, the one dispatch point.
-        setOnClickListener {
-            isSelected = !isSelected
-            host?.launchTool(tool)
-        }
+        setOnClickListener { host?.launchTool(tool) }
     }
 
     /** A short label for the Home quick row (the tile keeps its full title elsewhere). */

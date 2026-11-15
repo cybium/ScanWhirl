@@ -272,6 +272,4 @@
     <string name="settings_test_free"><!-- review -->परीक्षण: मुफ़्त उपयोगकर्ता के रूप में</string>
     <string name="settings_test_free_summary"><!-- review -->केवल टेस्ट बिल्ड में। Pro गेट दिखाता है।</string>
     <string name="settings_privacy_section"><!-- review -->गोपनीयता और सुरक्षा</string>
-    <string name="tools_show_grid"><!-- review -->टूल्स को ग्रिड में दिखाएँ</string>
-    <string name="tools_show_list"><!-- review -->टूल्स को सूची में दिखाएँ</string>
 </resources>

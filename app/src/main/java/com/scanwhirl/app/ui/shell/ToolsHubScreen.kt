@@ -34,8 +34,6 @@ class ToolsHubScreen(
 
     val searchInput: EditText
     private lateinit var clearButton: ImageButton
-    private lateinit var gridToggle: ImageButton
-    private var listMode = false
     val body: LinearLayout
 
     init {
@@ -54,23 +52,8 @@ class ToolsHubScreen(
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
-        bar.addView(
-            SwStyle.iconButton(
-                context, R.drawable.ic_sym_view_day,
-                SwStyle.color(context, R.color.text_hologram_mid)
-            ).apply {
-                id = R.id.swToolsGrid
-                layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
-                setPadding(
-                    SwStyle.dp(context, 12f), SwStyle.dp(context, 12f),
-                    SwStyle.dp(context, 12f), SwStyle.dp(context, 12f)
-                )
-                setOnClickListener { toggleLayout() }
-            }.also { gridToggle = it }
-        )
         bar.addView(TrustPill.allOffline(context))
         addView(bar)
-        updateToggle()
 
         val box = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -147,24 +130,6 @@ class ToolsHubScreen(
     }
 
     /** Rebuilds the body for [query]; blank shows every group. */
-    /** The toggle shows its state: list icon when in list mode, grid otherwise. */
-    private fun toggleLayout() {
-        listMode = !listMode
-        updateToggle()
-        render(searchInput.text?.toString().orEmpty())
-    }
-
-    private fun updateToggle() {
-        if (!::gridToggle.isInitialized) return
-        gridToggle.setImageResource(
-            if (listMode) R.drawable.ic_sym_view_module else R.drawable.ic_sym_view_day
-        )
-        gridToggle.contentDescription = context.getString(
-            if (listMode) R.string.tools_show_grid else R.string.tools_show_list
-        )
-        gridToggle.isSelected = listMode
-    }
-
     /** Re-binds every tile after a Free/Pro change; keeps the current search. */
     fun refreshProState() {
         render(searchInput.text?.toString().orEmpty())
@@ -219,12 +184,11 @@ class ToolsHubScreen(
         card.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         var row: LinearLayout? = null
-        val columns = if (listMode) 1 else 4
         for ((index, tool) in tools.withIndex()) {
-            if (index % columns == 0) {
+            if (index % 4 == 0) {
                 row = LinearLayout(context).apply {
                     orientation = HORIZONTAL
-                    weightSum = columns.toFloat()
+                    weightSum = 4f
                 }
                 card.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             }
@@ -236,8 +200,8 @@ class ToolsHubScreen(
             tile.minimumHeight = SwStyle.dp(context, 96f)
             row!!.addView(tile)
         }
-        // Fill the last row so the columns stay aligned.
-        while (row != null && row.childCount % columns != 0) {
+        // Fill the last row so four columns stay aligned.
+        while (row != null && row.childCount % 4 != 0) {
             row.addView(View(context), LayoutParams(0, SwStyle.dp(context, 96f), 1f))
         }
         return card
