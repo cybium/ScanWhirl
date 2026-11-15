@@ -497,7 +497,7 @@ class VaultActivityTest {
                     "${button.text} is horizontally clipped: ${layout.getLineWidth(0)}px of ${available}px",
                     layout.getLineWidth(0) <= available + 1f
                 )
-                val icon = button.compoundDrawables[0]
+                val icon = button.compoundDrawables[0] ?: button.compoundDrawables[1]
                 assertNotNull("${button.text} lost its icon", icon)
                 assertTrue(
                     "the icon is taller than the button",

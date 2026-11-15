@@ -144,7 +144,19 @@ allow-listed until those lanes ship the fixes.
 | S3 | `pageStatus` clips at 2.0×; title hint is 497px vs 464px | `activity_scan_review.xml:127-144` | wrap/ellipsize by design |
 | S2 | `btnModeFocus`/`btnSavePdf` contrast appeared low in an earlier run; with proper selector/tint resolution both pass | — | none (harness fix) |
 
-### L2 — Vault, Protect, Unlock
+### L2 - Vault, Protect, Unlock
+
+**Fixed by L2** (allow-list lines removed, the audit now enforces them):
+
+| file | change |
+|---|---|
+| `res/layout/sheet_protect.xml` | close 40->48dp, show-password 44->48dp, Protect & share and Save wrap with a 48dp+ minimum and two text lines at 2.0; field labels and hints moved from `rv_ink_3` to `rv_ink_2` (contrast); the AES sentence gets end padding so its second line fits; decorative glyphs and the confirm tick are `importantForAccessibility="no"`. |
+| `ui/protect/ProtectSheet.kt` | the sheet sets the accessibility pane title to its own title. |
+| `res/layout/sheet_unlock.xml` | show-password 44->48dp, Cancel 46->48dp, Open and Cancel wrap with a 48dp+ minimum; "or" moved to `rv_ink_2`; lock/eye glyphs are decorative. |
+| `ui/protect/UnlockSheet.kt` | pane title = the unlock title. |
+| `ui/vault/VaultActivity.kt` | lock and more buttons 40->48dp; Recovery code / Backup file buttons 64dp tall with the 24dp icon above the label (the label keeps the full width; the size steps down with the system font scale so it stays on one line at 2.0); the shield, empty-state and locked-state glyphs are decorative. |
+
+**Original findings** (kept for the record):
 
 **Protect sheet** (`ui/protect/ProtectSheet.kt`, `res/layout/sheet_protect.xml`)
 
