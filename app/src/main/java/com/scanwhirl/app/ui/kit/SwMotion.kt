@@ -41,12 +41,54 @@ object SwMotion {
         )
     }.getOrDefault(1f)
 
-    fun enabled(context: Context): Boolean = animatorScale(context) > 0f
+    private val isRobolectric = Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
+
+    /**
+     * Tests: force motion on/off. Robolectric defaults to OFF (its paused looper
+     * would spin forever on an infinite animator and keep every activity alive);
+     * motion tests opt in explicitly.
+     */
+    @Volatile
+    internal var animatorOverride: Boolean? = null
+
+    /** True when motion may run: override, then the user's setting, then platform. */
+    fun enabled(context: Context): Boolean {
+        animatorOverride?.let { return it }
+        if (isRobolectric) return false
+        return animatorScale(context) > 0f && android.animation.ValueAnimator.areAnimatorsEnabled()
+    }
 
     /** Token duration scaled by the system setting; 0 when animations are off. */
     fun duration(context: Context, baseMs: Long): Long {
         if (!enabled(context)) return 0L
         return (baseMs * animatorScale(context)).toLong().coerceAtLeast(1L)
+    }
+
+    // Live ambient animators, so detaching a view always cancels them.
+    private val ambient = java.util.WeakHashMap<View, android.animation.ValueAnimator>()
+
+    /** Test hook: the ambient animator currently attached to [view], if any. */
+    internal fun ambientAnimator(view: View): android.animation.ValueAnimator? = ambient[view]
+
+    private fun trackAmbient(view: View, animator: android.animation.ValueAnimator) {
+        ambient[view] = animator
+        if (view.getTag(R.id.swMotionTag) == null) {
+            view.setTag(R.id.swMotionTag, true)
+            view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    ambient[v]?.takeIf { !it.isStarted }?.start()
+                }
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    ambient.remove(v)?.cancel()
+                }
+            })
+        }
+        if (view.isAttachedToWindow) animator.start()
+    }
+
+    private fun stopAmbient(view: View) {
+        ambient.remove(view)?.cancel()
     }
 
     /** Every tappable kit view: the same 0.97 press (sw_press) + ripple state. */
@@ -166,8 +208,15 @@ object SwMotion {
         @Suppress("UNUSED_VARIABLE") val unusedDensity = d
     }
 
-    /** Home: the scan disc breathes softly (3 s loop); off when animations are off. */
+    /**
+     * Home: the scan disc breathes softly (3 s loop); off when animations are off.
+     *
+     * Endless animation: it only runs while [view] is attached and is cancelled
+     * the moment it leaves the window, so a closed screen can never keep the
+     * activity (or a test) alive.
+     */
     fun breathe(view: View) {
+        stopAmbient(view)
         if (!enabled(view.context)) return
         val pulse = ObjectAnimator.ofFloat(view, View.ALPHA, 1f, 0.86f).apply {
             duration = 3000L
@@ -175,8 +224,25 @@ object SwMotion {
             repeatCount = ObjectAnimator.INFINITE
             interpolator = AccelerateDecelerateInterpolator()
         }
-        view.tag = pulse
-        pulse.start()
+        trackAmbient(view, pulse)
+    }
+
+    /** A spinning mark (progress sheets): endless, attach-scoped and cancellable. */
+    fun spin(view: View, periodMs: Long = 1400L) {
+        stopAmbient(view)
+        if (!enabled(view.context)) return
+        val spin = ObjectAnimator.ofFloat(view, View.ROTATION, 0f, 360f).apply {
+            duration = periodMs
+            repeatCount = ObjectAnimator.INFINITE
+            interpolator = android.view.animation.LinearInterpolator()
+        }
+        trackAmbient(view, spin)
+    }
+
+    /** Cancel any endless animation started by [breathe]/[spin]/[pulsePlaceholder]. */
+    fun stop(view: View) {
+        stopAmbient(view)
+        view.alpha = 1f
     }
 
     /** Header mark: its rings turn once on cold start (600 ms). */
@@ -192,17 +258,15 @@ object SwMotion {
     fun pulsePlaceholder(view: View, start: Boolean) {
         if (start) {
             if (!enabled(view.context)) return
-            if (view.tag is ObjectAnimator) return
+            if (ambientAnimator(view) != null) return
             val pulse = ObjectAnimator.ofFloat(view, View.ALPHA, 0.35f, 0.6f).apply {
                 duration = 900L
                 repeatMode = ObjectAnimator.REVERSE
                 repeatCount = ObjectAnimator.INFINITE
             }
-            view.tag = pulse
-            pulse.start()
+            trackAmbient(view, pulse)
         } else {
-            (view.tag as? ObjectAnimator)?.cancel()
-            view.tag = null
+            stopAmbient(view)
             view.alpha = 1f
         }
     }

@@ -228,6 +228,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     override fun onResume() {
         super.onResume()
         if (::library.isInitialized) library.reload()
+        // The scan disc breathes only while this screen is in front.
+        findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.breathe(it) }
+    }
+
+    override fun onStop() {
+        // Endless motion must not follow the user onto another screen.
+        findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.stop(it) }
+        super.onStop()
     }
 
     // ---- navigation -------------------------------------------------------

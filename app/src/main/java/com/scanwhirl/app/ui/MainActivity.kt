@@ -421,6 +421,8 @@ class MainActivity : BaseActivity(), HomeHost {
 
     override fun onPause() {
         stopBrandWhirl()
+        // The signal dot's breath is endless: it must not outlive the screen.
+        stopSignalBreath()
         super.onPause()
     }
 
