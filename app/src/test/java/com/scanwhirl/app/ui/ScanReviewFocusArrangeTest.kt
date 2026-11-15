@@ -309,8 +309,10 @@ class ScanReviewFocusArrangeTest {
     @Test fun `Delete in Focus keeps the position and Undo restores the page`() {
         val dir = stage(3)
         launch(dir).use { scenario ->
+            scenario.onActivity { a -> a.showPage(1) }
+            // Delete is refused while a page operation (the Focus decode) is in flight.
+            await { !scenario.get { it.pageOpBusy } }
             scenario.onActivity { a ->
-                a.showPage(1)
                 a.findViewById<View>(R.id.btnToolDelete).performClick()
             }
             // The rename + re-list can settle a tick after the click; wait for the shown count.
