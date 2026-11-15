@@ -42,6 +42,7 @@ class FullBackupTest {
 
     @Before
     fun setUp() {
+        VaultSession.close()
         app = ApplicationProvider.getApplicationContext()
         backup = FullBackup(app)
         out = File(app.cacheDir, "backup-${System.nanoTime()}.swbackup")
@@ -53,6 +54,7 @@ class FullBackupTest {
 
     @After
     fun tearDown() {
+        VaultSession.close()
         out.delete()
         listOf("documents", "vault2", "signatures", "stamps", "drafts").forEach {
             File(app.filesDir, it).deleteRecursively()
