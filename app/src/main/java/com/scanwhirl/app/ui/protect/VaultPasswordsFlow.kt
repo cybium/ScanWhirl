@@ -58,6 +58,29 @@ internal object VaultPasswordsFlow {
     }
 
     /**
+     * The owner chose "Unlock" in the "Save the password in Vault?" prompt: open L2's Vault
+     * (with the reason line) when it is locked, then save on return.
+     */
+    fun rememberWithUnlock(
+        activity: AppCompatActivity,
+        documentId: String,
+        password: String,
+        onResult: (Boolean) -> Unit
+    ) {
+        val store = VaultPasswords.of(activity)
+        if (runCatching { store.save(documentId, password) }.isSuccess) {
+            onResult(true)
+            return
+        }
+        unlockLauncher(
+            activity,
+            activity.getString(com.scanwhirl.app.R.string.vault_reason_save_password)
+        ) {
+            onResult(runCatching { store.save(documentId, password) }.isSuccess)
+        }
+    }
+
+    /**
      * Reads the saved password for the Unlock sheet. A locked Vault opens the Unlock screen first;
      * a missing entry, a locked Vault the user backed out of, or a damaged blob gives null so the
      * sheet can fall back to typing.

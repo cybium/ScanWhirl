@@ -240,12 +240,18 @@ class VaultPasswordsWiringTest {
     }
 
     @Test
-    fun `a locked Vault never blocks protection and the save action still completes`() {
+    fun `a locked Vault offers Unlock after the save completes`() {
         setUpVault()
         VaultSession.close()
         var unlockRequests = 0
-        VaultPasswordsFlow.unlockLauncher = { _, _, onReturn ->
+        VaultPasswordsFlow.unlockLauncher = { _, reason, onReturn ->
             unlockRequests++
+            assertEquals(
+                "the reason names the save",
+                app.getString(R.string.vault_reason_save_password),
+                reason
+            )
+            assertTrue(vaultStore.unlockWithPasscode(passcode).ok)
             onReturn()
         }
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
@@ -260,22 +266,58 @@ class VaultPasswordsWiringTest {
 
             assertTrue("protection is not blocked by the locked Vault",
                 pollUntil { repo.getDocument(id)!!.isLocked })
-            assertTrue("the not-saved note is shown, not a hijacked screen",
+            assertTrue("the save screen opens first", pollUntil {
+                var started: String? = null
+                scenario.onActivity {
+                    started = shadowOf(it).peekNextStartedActivity()?.component?.className
+                }
+                started == com.scanwhirl.app.ui.ExportResultActivity::class.java.name
+            })
+            val prompt = ShadowDialog.getLatestDialog()
+            assertNotNull("the Vault prompt follows the save", prompt)
+            assertEquals(
+                "Save the password in Vault?",
+                prompt!!.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
+            )
+
+            scenario.onActivity { prompt.findViewById<View>(R.id.swSheetPrimary).performClick() }
+            assertTrue("Unlock stores the password",
+                pollUntil { VaultPasswords.of(app).get(id) == password })
+            assertEquals(1, unlockRequests)
+        }
+    }
+
+    @Test
+    fun `declining the Vault prompt says the password was not saved`() {
+        setUpVault()
+        VaultSession.close()
+        VaultPasswordsFlow.unlockLauncher = { _, _, _ ->
+            throw AssertionError("declining must not open the Vault")
+        }
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
+        val password = "declined-vault-pw"
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            waitForHome(scenario, 1)
+            scenario.onActivity { openProtect(it, id) }
+            val sheet = latestSheetWith(R.id.protectPassword)
+            assertNotNull("Protect sheet opens", sheet)
+            scenario.onActivity { submitProtect(sheet!!, password) }
+
+            assertTrue("the prompt follows the save",
+                pollUntil {
+                    ShadowDialog.getLatestDialog()?.findViewById<TextView>(R.id.swSheetTitle)
+                        ?.text?.toString() == "Save the password in Vault?"
+                })
+            val prompt = ShadowDialog.getLatestDialog()!!
+            scenario.onActivity { prompt.findViewById<View>(R.id.swSheetSecondary).performClick() }
+
+            assertTrue("the decline note is shown",
                 pollUntil {
                     ShadowToast.getTextOfLatestToast() ==
                         app.getString(R.string.vault_password_not_saved)
                 })
-            assertEquals("the Vault screen never replaces the save action", 0, unlockRequests)
             assertFalse("nothing was saved", VaultPasswordsFlow.has(app, id))
-            var started: String? = null
-            scenario.onActivity {
-                started = shadowOf(it).peekNextStartedActivity()?.component?.className
-            }
-            assertEquals(
-                "the save screen still opens",
-                com.scanwhirl.app.ui.ExportResultActivity::class.java.name,
-                started
-            )
         }
     }
 
