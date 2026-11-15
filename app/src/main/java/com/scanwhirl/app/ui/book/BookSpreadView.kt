@@ -34,6 +34,12 @@ class BookSpreadView(context: Context) : View(context) {
             invalidate()
         }
 
+    /** The spine at the top and bottom of the image (fractions of the drawn width). */
+    var topRatio: Float = 0.5f
+        private set
+    var bottomRatio: Float = 0.5f
+        private set
+
     /** True when the spine runs across the image (pages above/below). */
     var horizontal: Boolean = false
         private set
@@ -89,6 +95,8 @@ class BookSpreadView(context: Context) : View(context) {
         singlePage = gutter.singlePage
         autoGutter = gutter.found
         ratio = gutter.ratio
+        topRatio = gutter.topRatio
+        bottomRatio = gutter.bottomRatio
         requestLayout()
         invalidate()
     }
@@ -99,7 +107,9 @@ class BookSpreadView(context: Context) : View(context) {
         found = autoGutter,
         confidence = confidence,
         singlePage = singlePage,
-        horizontal = horizontal
+        horizontal = horizontal,
+        topRatio = topRatio,
+        bottomRatio = bottomRatio
     )
 
     fun release() {
@@ -157,10 +167,12 @@ class BookSpreadView(context: Context) : View(context) {
             val knobX = left + drawnWidth / 2f
             drawKnob(canvas, knobX, y, horizontal = true)
         } else {
-            val x = left + ratio * drawnWidth
-            canvas.drawLine(x, top, x, top + drawnHeight, linePaint)
+            val xTop = left + topRatio * drawnWidth
+            val xBottom = left + bottomRatio * drawnWidth
+            canvas.drawLine(xTop, top, xBottom, top + drawnHeight, linePaint)
+            val knobX = left + ratio * drawnWidth
             val knobY = top + drawnHeight / 2f
-            drawKnob(canvas, x, knobY, horizontal = false)
+            drawKnob(canvas, knobX, knobY, horizontal = false)
         }
     }
 
@@ -212,7 +224,16 @@ class BookSpreadView(context: Context) : View(context) {
         val start = if (horizontal) dst.top else dst.left
         val span = if (horizontal) dst.height() else dst.width()
         if (span <= 0f) return
-        ratio = (coordinate - start) / span
+        val next = ((coordinate - start) / span).coerceIn(MIN_RATIO, MAX_RATIO)
+        if (horizontal) {
+            ratio = next
+        } else {
+            // Drag the whole spine, keeping its tilt.
+            val delta = next - ratio
+            ratio = next
+            topRatio = (topRatio + delta).coerceIn(MIN_RATIO, MAX_RATIO)
+            bottomRatio = (bottomRatio + delta).coerceIn(MIN_RATIO, MAX_RATIO)
+        }
         autoGutter = false
         onGutterMoved?.invoke()
     }

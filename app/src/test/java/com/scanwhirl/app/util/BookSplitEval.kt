@@ -98,6 +98,14 @@ object BookSplitEval {
                     "%-24s cue raw p90=%s p270=%s | crop p90=%s p270=%s",
                     name, p90raw, p270raw, p90crop, p270crop
                 )
+                diagnostics += String.format(
+                    java.util.Locale.ROOT,
+                    "%-24s spine raw %.3f→%.3f | crop %.3f→%.3f%s",
+                    name,
+                    raw.gutter.topRatio, raw.gutter.bottomRatio,
+                    cropped.gutter.topRatio, cropped.gutter.bottomRatio,
+                    if (cropped.gutter.slanted) "  SLANTED" else ""
+                )
                 val croppedPreview = File(out, "${name}_cropped_preview.jpg")
                 writePreview(croppedSource, cropped, croppedPreview)
                 if (croppedSource !== source) croppedSource.recycle()
@@ -173,9 +181,10 @@ object BookSplitEval {
             if (photo !== annotated) photo.recycle()
 
             Canvas(annotated).apply {
-                val x = (analysis.gutter.ratio * photoWidth).coerceIn(0f, photoWidth - 1f)
+                val xTop = (analysis.gutter.topRatio * photoWidth).coerceIn(0f, photoWidth - 1f)
+                val xBottom = (analysis.gutter.bottomRatio * photoWidth).coerceIn(0f, photoWidth - 1f)
                 drawLine(
-                    x, 0f, x, photoHeight.toFloat(),
+                    xTop, 0f, xBottom, photoHeight.toFloat(),
                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = Color.RED
                         strokeWidth = max(3f, photoWidth / 200f)
@@ -189,8 +198,11 @@ object BookSplitEval {
                 drawText(
                     String.format(
                         java.util.Locale.ROOT,
-                        "line %.3f  conf %.2f  aspect %.2f  text %s  rot %d  %s",
-                        analysis.gutter.ratio, analysis.gutter.confidence, analysis.aspect,
+                        "line %.3f  spine %.2f→%.2f  conf %.2f  aspect %.2f  text %s  rot %d  %s",
+                        analysis.gutter.ratio,
+                        analysis.gutter.topRatio,
+                        analysis.gutter.bottomRatio,
+                        analysis.gutter.confidence, analysis.aspect,
                         if (analysis.textVertical) "V" else "H",
                         analysis.rotation,
                         if (analysis.gutter.singlePage) "ONE PAGE" else "SPREAD"

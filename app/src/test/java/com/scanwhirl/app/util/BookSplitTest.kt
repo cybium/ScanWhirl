@@ -214,6 +214,72 @@ class BookSplitTest {
         bitmap.recycle()
     }
 
+    /** A spread whose gutter runs from x=400 at the top to x=480 at the bottom. */
+    private fun tiltedSpread(): Bitmap {
+        val w = 900
+        val h = 600
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+        fun lineX(y: Float): Float = 400f + 80f * (y / (h - 1f))
+        canvas.drawLine(
+            lineX(0f), 0f, lineX((h - 1).toFloat()), (h - 1).toFloat(),
+            Paint().apply { color = Color.rgb(70, 70, 70); strokeWidth = 36f }
+        )
+        val ink = Paint().apply { color = Color.rgb(35, 35, 35); strokeWidth = 2f }
+        var y = 50f
+        while (y < h - 20f) {
+            val x = lineX(y)
+            canvas.drawLine(50f, y, x - 22f, y, ink)
+            canvas.drawLine(x + 22f, y, 850f, y, ink)
+            y += 18f
+        }
+        return bitmap
+    }
+
+    @Test
+    fun `a tilted spread is cut along the slanted spine`() {
+        val bitmap = tiltedSpread()
+        val analysis = BookSplit.analyse(bitmap)
+        assertTrue("the tilted spine is found", analysis.gutter.found)
+        assertTrue(
+            "the spine is slanted (${analysis.gutter.topRatio}→${analysis.gutter.bottomRatio})",
+            analysis.gutter.slanted
+        )
+        assertTrue(
+            "the spine leans right towards the bottom",
+            analysis.gutter.topRatio < analysis.gutter.bottomRatio
+        )
+        val split = BookSplit.split(bitmap, analysis.gutter)
+        try {
+            val top = split.gutter.topRatio * bitmap.width
+            val bottom = split.gutter.bottomRatio * bitmap.width
+            val mid = ((top + bottom) / 2f).toInt()
+            val dark = Color.rgb(35, 35, 35)
+            assertTrue(
+                "left output is white beyond the line at the top",
+                split.left.getPixel(mid, 2) == Color.WHITE
+            )
+            assertTrue(
+                "left output has page text before the line at the bottom",
+                split.left.getPixel(mid, 572) == dark
+            )
+            val xRight = 60
+            assertTrue(
+                "right output has page text after the line at the top",
+                split.right.getPixel(xRight, 50) == dark
+            )
+            assertTrue(
+                "right output is white before the line at the bottom",
+                split.right.getPixel(xRight, 572) == Color.WHITE
+            )
+        } finally {
+            split.left.recycle()
+            split.right.recycle()
+            bitmap.recycle()
+        }
+    }
+
     @Test
     fun `a sideways spread is detected by its vertical text and rotated`() {
         val upright = textSpread()

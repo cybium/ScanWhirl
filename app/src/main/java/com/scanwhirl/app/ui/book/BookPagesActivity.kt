@@ -371,8 +371,12 @@ class BookPagesActivity : BaseActivity() {
                 setOnClickListener {
                     val current = spread.bitmap ?: return@setOnClickListener
                     val flipped = BookSplit.rotate(current, 180)
-                    val nextRatio = 1f - spread.ratio
-                    val nextGutter = item.analysis.gutter.copy(ratio = nextRatio)
+                    val currentGutter = item.analysis.gutter
+                    val nextGutter = currentGutter.copy(
+                        ratio = 1f - currentGutter.ratio,
+                        topRatio = 1f - currentGutter.bottomRatio,
+                        bottomRatio = 1f - currentGutter.topRatio
+                    )
                     item.analysis = item.analysis.copy(
                         rotation = (item.analysis.rotation + 180) % 360,
                         gutter = nextGutter
