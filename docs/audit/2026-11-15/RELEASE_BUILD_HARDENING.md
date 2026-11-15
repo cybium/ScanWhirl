@@ -10,7 +10,7 @@ and produces an installable APK for a device smoke test.
 | File | Change |
 |---|---|
 | `app/build.gradle.kts` | `-PciUnsignedRelease` makes the `release` build type sign with the **debug** key (only when the property is set). Without the property nothing changes: release still uses `signingConfigs.release` (the owner's keystore). |
-| `.github/workflows/gate.yml` | New `release` job (the `test` job is untouched): `:app:assembleRelease -PciUnsignedRelease`, then a report + artifact upload + a `RELEASE PASS/FAIL` verdict. Fails on a failed build, on R8 errors or on any unresolved (missing) class. |
+| `.github/workflows/gate.yml` | New `release` job (the `test` job is untouched): builds `:app:assembleRelease :app:bundleRelease -PciUnsignedRelease`, then a report + artifact upload + a `RELEASE PASS/FAIL` verdict. Fails on a failed build, on R8 errors or on any unresolved (missing) class. Also turns the AAB into the exact per-device APK set Play would serve with `bundletool get-size total` (artifacts `release-apk`, `release-aab`, `aab-size.txt`). |
 | `app/proguard-rules.pro` | The two blanket keeps (`-keep class com.google.mlkit.** { *; }`, `-keep class com.google.android.gms.** { *; }`) are replaced by the rules below. |
 
 The CI APK is signed with the Android debug key: installable for a smoke test, **never
@@ -60,6 +60,27 @@ smoke test; a Play AAB splits it per ABI, so a phone downloads one slice (~12 MB
 CI runs: 43675804772 (original rules), 43674515074 (new rules, `release` job **success**),
 43675126893 (unminified comparison). The `test` job in those runs fails only on the known L1
 `TextFitTest > ocr editor text fits` layout issue.
+
+## AAB and the size a phone actually downloads
+
+The release job builds the App Bundle as well (`:app:bundleRelease -PciUnsignedRelease`) and turns it
+into the per-device APKs with `bundletool 1.18.3` (`build-apks --mode=default`, throwaway signing
+key, then `get-size total`). Run 43679221596, `release` job success:
+
+| Artifact | Size |
+|---|---|
+| `app-release.aab` (upload artifact) | 24,586,131 B (23.4 MiB) |
+| Universal APK (smoke test, 4 ABIs) | 47,128,332 B (44.9 MiB) |
+| Download, all devices (min / max) | 7,637,370 / 8,793,675 B (7.3 / 8.4 MiB) |
+| arm64-v8a | 8,529,915 to 8,601,504 B (8.1 to 8.2 MiB) |
+| armeabi-v7a | 7,637,370 to 7,708,959 B (7.3 to 7.4 MiB) |
+| x86 | 8,722,086 to 8,793,675 B |
+| x86_64 | 8,594,308 to 8,665,897 B |
+
+So a phone downloads about **8 MiB** although the universal APK is 45 MiB: Play splits by ABI,
+density and language, and the 41 MB of native OCR pipelines collapse to the one the device needs.
+The AAB is built with the debug key in CI for size validation only, the Play upload must be built
+and signed with the owner's upload key (`docs/release/LAUNCH_CHECKLIST.md`).
 
 ## Verified in the artifact
 
