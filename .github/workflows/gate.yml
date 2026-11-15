@@ -43,17 +43,31 @@ jobs:
         continue-on-error: true
         # gate.ps1 -Tests "<pattern>" (when the PC's build slot is busy) injects .ci/test-filter.txt.
         run: |
+          set +e
           FILTER=""
           if [ -f .ci/test-filter.txt ]; then FILTER=$(head -n1 .ci/test-filter.txt | tr -d '\r'); echo "test filter: $FILTER"; fi
+          ARGS=()
           if [ -n "$FILTER" ]; then
             # "A,B" -> --tests A --tests B (Gradle takes one pattern per flag)
-            ARGS=()
             IFS=',' read -ra PATS <<< "$FILTER"
             for p in "${PATS[@]}"; do p="$(echo "$p" | xargs)"; [ -n "$p" ] && ARGS+=(--tests "$p"); done
-            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q "${ARGS[@]}"
-          else
-            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q
           fi
+          run_tests() {
+            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q "${ARGS[@]}" 2>&1 | tee tests.log
+            return ${PIPESTATUS[0]}
+          }
+          run_tests; code=$?
+          # Robolectric's native graphics runtime sometimes aborts a whole test JVM
+          # ("JniConstants: Class not found: java/nio/DoubleBuffer", exit 134) depending on which
+          # tests share a fork. That is a test-infrastructure crash, not a test result: retry ONCE,
+          # and only for that exact signature. Real test failures are never retried.
+          # A snapshot that contains .ci/no-retry (root-cause investigation) never retries.
+          if [ $code -ne 0 ] && [ ! -f .ci/no-retry ] && grep -q "JniConstants: Class not found" tests.log; then
+            echo "::warning::Robolectric native runtime abort (DoubleBuffer) - retrying the test task once"
+            rm -rf app/build/test-results/testDebugUnitTest
+            run_tests; code=$?
+          fi
+          exit $code
 
       - name: Lint
         id: lint
