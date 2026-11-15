@@ -47,9 +47,10 @@ object SwTheme {
     private const val GOLD_ALIAS = "com.scanwhirl.app.ui.shell.ShellActivityGold"
 
     /**
-     * Shows exactly one launcher icon. Disabling the old alias first can make
-     * the home-screen shortcut vanish for a moment; [DONT_KILL_APP] keeps this
-     * process alive. Some launchers need a moment to redraw the shortcut.
+     * Shows exactly one launcher icon. The new alias is ENABLED FIRST, then the old
+     * one disabled: if the process dies between the two calls the phone briefly shows
+     * two icons (fixed on the next call) instead of none (the app would be unreachable
+     * from the launcher). [DONT_KILL_APP] keeps this process alive.
      */
     fun applyLauncherIcon(context: Context, gold: Boolean) {
         val pm = context.packageManager
@@ -59,11 +60,11 @@ object SwTheme {
         val disabled = ComponentName(context.packageName, if (gold) CYAN_ALIAS else GOLD_ALIAS)
         runCatching {
             pm.setComponentEnabledSetting(
-                disabled, PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                enabled, PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                 PackageManager.DONT_KILL_APP
             )
             pm.setComponentEnabledSetting(
-                enabled, PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                disabled, PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                 PackageManager.DONT_KILL_APP
             )
         }
