@@ -71,6 +71,9 @@ class BackupActivity : BaseActivity() {
     private var pending: File? = null
     private var restoreSource: File? = null
 
+    /** Set while the system share sheet is up, so the "Backup ready" sheet can return with it. */
+    private var awaitingShareReturn = false
+
     private val saveTo = registerForActivityResult(ActivityResultContracts.CreateDocument(FullBackup.MIME)) { uri ->
         val file = pending
         pending = null
@@ -126,6 +129,16 @@ class BackupActivity : BaseActivity() {
         pending?.delete()
         restoreSource?.delete()
         super.onDestroy()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Coming back from the share sheet (shared or cancelled): the archive is still cached, so
+        // offer "Save to device" again instead of making the user rebuild an 18 MB backup.
+        if (!awaitingShareReturn) return
+        awaitingShareReturn = false
+        val file = pending ?: return
+        if (file.isFile) offerSaving(file)
     }
 
     // ------------------------------------------------------------------
@@ -327,6 +340,8 @@ class BackupActivity : BaseActivity() {
     }
 
     private fun share(file: File) {
+        pending = file
+        awaitingShareReturn = true
         val uri: Uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = FullBackup.MIME
@@ -400,14 +415,8 @@ class BackupActivity : BaseActivity() {
                 backup.markBackedUp()
                 refresh()
                 val message = buildString {
-                    append(getString(R.string.backup_restored_docs, r.documents))
-                    if (r.skipped > 0) append("\n").append(getString(R.string.backup_restored_skipped, r.skipped))
-                    if (r.vaultEntries > 0) append("\n").append(getString(R.string.backup_restored_vault, r.vaultEntries))
-                    if (r.vaultReencrypted > 0) {
-                        append("\n").append(getString(R.string.backup_restored_vault_reencrypted, r.vaultReencrypted))
-                    }
-                    if (r.vaultLocked) append("\n").append(getString(R.string.backup_vault_locked))
-                    r.warnings.forEach { append("\n").append(it) }
+                    append(buildParts(r))
+                    r.warnings.forEach { append(" ").append(it) }
                 }
                 SwSheet.builder(this@BackupActivity)
                     .setTitle(R.string.backup_restored)
@@ -429,6 +438,26 @@ class BackupActivity : BaseActivity() {
                     .build().show()
             }
         }
+    }
+
+    /** One sentence per outcome, with plurals: "No new documents. 32 were already here…". */
+    private fun buildParts(report: FullBackup.Report): String {
+        val res = resources
+        val parts = mutableListOf<String>()
+        parts += res.getQuantityString(R.plurals.backup_restored_docs, report.documents, report.documents)
+        if (report.skipped > 0) {
+            parts += res.getQuantityString(R.plurals.backup_restored_skipped, report.skipped, report.skipped)
+        }
+        if (report.vaultEntries > 0) {
+            parts += res.getQuantityString(R.plurals.backup_restored_vault, report.vaultEntries, report.vaultEntries)
+        }
+        if (report.vaultReencrypted > 0) {
+            parts += res.getQuantityString(
+                R.plurals.backup_restored_vault_reencrypted, report.vaultReencrypted, report.vaultReencrypted
+            )
+        }
+        if (report.vaultLocked) parts += getString(R.string.backup_vault_locked)
+        return parts.joinToString(" ")
     }
 
     // ------------------------------------------------------------------

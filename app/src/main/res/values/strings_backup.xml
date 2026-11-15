@@ -45,10 +45,23 @@
     <string name="backup_restore_go">Restore</string>
     <string name="backup_restoring">Restoring…</string>
     <string name="backup_restored">Backup restored</string>
-    <string name="backup_restored_docs">%1$d documents restored</string>
-    <string name="backup_restored_skipped">%1$d already here, left alone</string>
-    <string name="backup_restored_vault">%1$d Vault files restored</string>
-    <string name="backup_restored_vault_reencrypted">%1$d Vault documents re-encrypted into this Vault</string>
+    <plurals name="backup_restored_docs">
+        <item quantity="zero">No new documents.</item>
+        <item quantity="one">1 document restored.</item>
+        <item quantity="other">%1$d documents restored.</item>
+    </plurals>
+    <plurals name="backup_restored_skipped">
+        <item quantity="one">1 was already here and was left alone.</item>
+        <item quantity="other">%1$d were already here and were left alone.</item>
+    </plurals>
+    <plurals name="backup_restored_vault">
+        <item quantity="one">1 Vault file restored.</item>
+        <item quantity="other">%1$d Vault files restored.</item>
+    </plurals>
+    <plurals name="backup_restored_vault_reencrypted">
+        <item quantity="one">1 Vault document was re-encrypted into this Vault.</item>
+        <item quantity="other">%1$d Vault documents were re-encrypted into this Vault.</item>
+    </plurals>
     <string name="backup_vault_locked">Vault files were not restored. Unlock the Vault and restore again.</string>
     <string name="backup_vault_reason">Unlock the Vault so the backup\'s Vault documents can be restored into it.</string>
     <string name="backup_wrong_secret">Wrong password or recovery code. Nothing was changed.</string>
