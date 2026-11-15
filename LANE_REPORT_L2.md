@@ -83,6 +83,25 @@ scanner, Vault unlock, Protect PDF.
   Hindi, two new `TrashTest` cases. Without it the policy and the form would have claimed a
   retention the code did not have.
 
+## OCR performance, Full Backup 2.0, text languages, Hindi on photos - this pass
+
+- **OCR indexing** (L4's L2-1..L2-3): batched store commits (16 pages or 2 s, geometry then text),
+  a pending-queue file instead of a directory scan, and an O(pages) report count. 500 pages on L4's
+  harness: **11 007 ms -> 1 211 ms**. Details in `docs/audit/2026-11-15/PERF_OCR.md`.
+- **Vault buttons**: the recovery/backup buttons stay on one line with their 24dp icons at narrow
+  widths and font scale 1.3 (single line, auto-size 10-14sp, tighter padding), with a layout test.
+- **Full Backup 2.0** (`docs/release/FULL_BACKUP.md`): one streamed AES-256-GCM file with the
+  library, the Vault, signatures/stamps, drafts and settings, opened by a backup password (10+,
+  PBKDF2 310k) or the Vault recovery code (proven before writing). Me -> Backup & restore with SAF
+  save, share sheet (Drive), restore by merge, last-backup line and reminder. 8 tests.
+- **Text languages**: the separate "Hindi text" tool tile is gone; the language lives in the Text
+  screen chip and the Settings row (English / English + Hindi / Hindi). The Chinese/Japanese/Korean
+  recognizers were cancelled by the owner and were never added.
+- **Hindi on photos**: the merge now detects Latin-model noise (low confidence, punctuation,
+  digit-in-word, the "fafI" case, single short tokens on a Devanagari page) and keeps the
+  Devanagari reading of the same box; clean English lines and genuinely different lines are
+  unchanged. 6 new tests.
+
 ## Save as PDF/A (PDF/A-2b, ISO 19005-2 level B) - previous pass
 
 - `util/PdfA.kt` (XMP with pdfaid part 2 / conformance B, matching Info dates/title/producer,
