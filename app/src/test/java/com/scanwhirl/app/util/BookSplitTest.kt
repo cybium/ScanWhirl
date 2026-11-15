@@ -57,7 +57,7 @@ class BookSplitTest {
     fun `gutter is found on a two-page spread with a dark middle band`() {
         val bitmap = spread()
         val gutter = BookSplit.scanGutter(bitmap)
-        assertTrue("a dark, uniform band in the middle is a gutter", gutter.found)
+        assertTrue("a dark, uniform band in the middle is a gutter: ${BookSplit.debugScan(bitmap)}", gutter.found)
         assertTrue(
             "gutter sits inside the dark band (${gutter.ratio})",
             gutter.ratio in 0.45f..0.55f
@@ -132,7 +132,7 @@ class BookSplitTest {
     fun `a one-page close-up has no fold and is offered as one page`() {
         val bitmap = singlePage()
         val gutter = BookSplit.scanGutter(bitmap)
-        assertFalse("there is no two-page fold to find", gutter.found)
+        assertFalse("there is no two-page fold to find: ${BookSplit.debugScan(bitmap)}", gutter.found)
         assertEquals("the line sits in the middle for review", 0.5f, gutter.ratio, 0.001f)
         assertTrue("one text block + no valley is a single page", gutter.singlePage)
         bitmap.recycle()

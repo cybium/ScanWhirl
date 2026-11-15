@@ -34,9 +34,9 @@ import kotlin.math.abs
  * v2 UI: 03_tools_hub — the ID card flow as people use it: front capture, "Add the back side?",
  * Layout, then one document through the publish path.
  *
- * The ML Kit camera cannot run under Robolectric; [IdCardActivity.suppressScannerForTest] opens
- * the front sheet instead, and [IdCardActivity.acceptCapture] is the seam for a captured side
- * (the same method the scanner result and the gallery picker call).
+ * The ML Kit camera cannot run under Robolectric; the screen opens the front sheet first, and
+ * [IdCardActivity.acceptCapture] is the seam for a captured side (the same method the scanner
+ * result and the gallery picker call).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -225,6 +225,25 @@ class IdCardFlowTest {
             }
         }
         assertTrue(repo.listDocuments().isEmpty())
+    }
+
+    @Test
+    fun `the id card gallery goes through the shared scanner crop`() {
+        var started = false
+        com.scanwhirl.app.tools.GalleryCrop.startOverride = { started = true; true }
+        try {
+            ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
+                scenario.onActivity {
+                    idle()
+                    val dialog = requireNotNull(ShadowDialog.getLatestDialog())
+                    dialog.findViewById<View>(R.id.swSheetSecondary).performClick()
+                    idle()
+                }
+            }
+            assertTrue("ID card gallery must open launchGalleryCrop", started)
+        } finally {
+            com.scanwhirl.app.tools.GalleryCrop.startOverride = null
+        }
     }
 
     @Test

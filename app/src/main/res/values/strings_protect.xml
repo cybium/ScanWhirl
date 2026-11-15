@@ -27,6 +27,12 @@
     <string name="protect_action_share">Protect &amp; share</string>
     <string name="protect_action_save">Save protected copy</string>
     <string name="protect_action_change">Change password</string>
+    <string name="protect_result_summary">%1$s\nProtected with AES-256</string>
+    <string name="vault_save_prompt">Save the password in Vault?</string>
+    <string name="vault_save_prompt_note">Unlock the Vault so you never lose it.</string>
+    <string name="vault_unlock_action">Unlock</string>
+    <string name="not_now">Not now</string>
+    <string name="vault_reason_save_password">Unlock the Vault to save this password.</string>
 
     <string name="unlock_sheet_title">%1$s is protected</string>
     <string name="unlock_sheet_note">Enter its password to open it.</string>

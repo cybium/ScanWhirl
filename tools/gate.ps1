@@ -10,12 +10,61 @@ param(
     [string]$Tests = "",
     [switch]$Lint,
     [switch]$NoLint,  # accepted for old prompts; lint is off unless -Lint
-    [switch]$Apk      # lead only: build the debug test APK (no tests) -> app\build\outputs\apk\debug\app-debug.apk
+    [switch]$Apk,     # lead only: build the debug test APK (no tests) -> app\build\outputs\apk\debug\app-debug.apk
+    [switch]$Local    # force the full suite on this PC instead of the cloud
 )
 $ErrorActionPreference = "Continue"
 $root = if ($Lane -eq "main") { "C:\Users\Cybium\Desktop\ScanWhirl" } else { "C:\Users\Cybium\Desktop\ScanWhirl-$Lane" }
 if (-not (Test-Path "$root\gradlew")) { Write-Output "GATE FAIL: no worktree at $root"; exit 2 }
 $wslRoot = "/mnt/c" + (($root.Substring(2)) -replace '\\', '/')
+
+# ---- cloud gate (default for the FULL suite; -Tests and -Apk stay local) ----
+# Snapshots the worktree (incl. untracked, respecting .gitignore) WITHOUT touching the lane branch or index,
+# pushes it to ci/<lane>, waits for the GitHub Actions "gate" run on that exact commit, prints its verdict.
+if (-not $Tests -and -not $Apk -and -not $Local) {
+    $gh = "C:\Program Files\GitHub CLI\gh.exe"
+    $tmpIndex = Join-Path $env:TEMP ("sw-ci-index-" + $Lane + "-" + $PID)
+    $env:GIT_INDEX_FILE = $tmpIndex
+    git -C $root read-tree HEAD
+    git -C $root add -A -- . ':!60_CORE_ENGINE_GUIDE.md' ':!LANE_BLOCKED.md' 2>$null
+    # Always run the lead's current workflow, even if the lane has not merged it yet.
+    $wf = "C:\Users\Cybium\Desktop\ScanWhirl\.github\workflows\gate.yml"
+    $blob = git -C $root hash-object -w $wf
+    git -C $root update-index --add --cacheinfo "100644,$blob,.github/workflows/gate.yml"
+    $tree = git -C $root write-tree
+    Remove-Item Env:GIT_INDEX_FILE; Remove-Item $tmpIndex -ErrorAction SilentlyContinue
+    $parent = git -C $root rev-parse HEAD
+    $commit = git -C $root commit-tree $tree -p $parent -m "ci snapshot $Lane $(Get-Date -Format o)"
+    if (-not $commit) { Write-Output "GATE FAIL $Lane cloud: could not snapshot the worktree"; exit 2 }
+    git -C $root push -q -f origin "${commit}:refs/heads/ci/$Lane" 2>&1 | Where-Object { $_ -notmatch '^remote:\s*$|^remote: (Create|To create|\s+https)' }
+    $env:GH_TOKEN = (("protocol=https`nhost=github.com`n`n" | git credential fill 2>$null) | Where-Object { $_ -like 'password=*' }) -replace '^password=', ''
+    Write-Output "cloud: snapshot $($commit.Substring(0,8)) pushed to ci/$Lane; waiting for the GitHub run (about 8-12 min, no local queue)"
+    $started = Get-Date; $run = $null
+    while (((Get-Date) - $started).TotalMinutes -lt 25) {
+        $runs = & $gh run list -R cybium/ScanWhirl --workflow gate.yml --branch "ci/$Lane" -L 10 --json databaseId,headSha,status,conclusion 2>$null | ConvertFrom-Json
+        $run = $runs | Where-Object { $_.headSha -eq $commit } | Select-Object -First 1
+        if ($run -and $run.status -eq "completed") { break }
+        if (-not $run -and ((Get-Date) - $started).TotalMinutes -gt 5) { Write-Output "GATE FAIL $Lane cloud: no GitHub run started for $commit"; exit 2 }
+        Start-Sleep -Seconds 30
+    }
+    if (-not $run -or $run.status -ne "completed") { Write-Output "GATE FAIL $Lane cloud: timed out waiting for run"; exit 2 }
+    $dl = Join-Path $env:TEMP ("sw-ci-result-" + $Lane + "-" + $PID); Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
+    & $gh run download $run.databaseId -R cybium/ScanWhirl -n gate-result -D $dl 2>$null | Out-Null
+    $resFile = Join-Path $dl "gate-result.txt"
+    $minutes = [int]((Get-Date) - $started).TotalMinutes
+    if (Test-Path $resFile) {
+        $lines = Get-Content $resFile
+        $lines | Select-Object -SkipLast 1 | Select-Object -First 30 | ForEach-Object { Write-Output "  $_" }
+        $verdict = ($lines | Select-Object -Last 1) -replace '^GATE (PASS|FAIL)', "GATE `$1 $Lane"
+        Write-Output "cloud: run $($run.databaseId) finished in $minutes min (https://github.com/cybium/ScanWhirl/actions/runs/$($run.databaseId))"
+        Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue; Remove-Item Env:GH_TOKEN
+        Write-Output $verdict
+        if ($verdict -match '^GATE PASS') { exit 0 } else { exit 1 }
+    }
+    Remove-Item Env:GH_TOKEN
+    Write-Output "GATE FAIL $Lane cloud: run $($run.databaseId) ended '$($run.conclusion)' with no result file (build error?) https://github.com/cybium/ScanWhirl/actions/runs/$($run.databaseId)"
+    exit 1
+}
 
 # ---- queue ----
 $lockDir = "C:\Users\Cybium\Desktop\.sw-locks"; New-Item -ItemType Directory -Force $lockDir | Out-Null
@@ -85,6 +134,11 @@ try {
     }
     $failed | Select-Object -First 30 | ForEach-Object { Write-Output $_ }
     Write-Output "tests: total=$t failures=$f skipped=$s"
+    if ($t -eq 0) {
+        # No results at all: show the tail of the Gradle output so the cause is visible.
+        Write-Output "---- gradle output tail (no test results) ----"
+        $out | Select-Object -Last 40 | ForEach-Object { Write-Output "  | $_" }
+    }
     $ok = ($t -gt 0 -and $f -eq 0 -and $s -eq 0)
 
     $lintMsg = "lint skipped (lead runs it at merge)"

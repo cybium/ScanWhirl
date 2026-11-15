@@ -1,0 +1,95 @@
+# ScanWhirl cloud gate: the full Robolectric suite (+ lint on integration) on GitHub's 16 GB runners.
+# Triggered by tools/gate.ps1 -Cloud (pushes a working-tree snapshot to ci/<lane>) and by pushes to integration.
+# No secrets are used: release signing stays on the owner's PC; test builds (-PtestBuild) need no keystore.
+name: gate
+
+on:
+  push:
+    branches: ["ci/**", "integration"]
+  workflow_dispatch:
+    inputs:
+      lint:
+        description: "Also run lint"
+        type: boolean
+        default: false
+
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Unit tests
+        id: tests
+        continue-on-error: true
+        run: ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q
+
+      - name: Lint
+        id: lint
+        if: github.ref == 'refs/heads/integration' || inputs.lint
+        continue-on-error: true
+        run: ./gradlew :app:lintDebug -PtestBuild --no-daemon -q
+
+      - name: Summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, os, xml.etree.ElementTree as ET
+          total = fail = skip = 0
+          failed = []
+          for f in glob.glob("app/build/test-results/testDebugUnitTest/*.xml"):
+              s = ET.parse(f).getroot()
+              total += int(s.get("tests", 0)); skip += int(s.get("skipped", 0))
+              fail += int(s.get("failures", 0)) + int(s.get("errors", 0))
+              for c in s.findall("testcase"):
+                  e = c.find("failure") if c.find("failure") is not None else c.find("error")
+                  if e is not None:
+                      msg = (e.get("message") or "").splitlines()[0][:220] if e.get("message") else ""
+                      failed.append(f"FAIL {c.get('classname','').split('.')[-1]} > {c.get('name')} :: {msg}")
+          lint = "skipped"
+          rep = glob.glob("app/build/reports/lint-results-debug.txt") + glob.glob("app/build/intermediates/lint_*/**/lint-results-debug.txt", recursive=True)
+          if rep:
+              lines = open(rep[0], encoding="utf-8", errors="replace").read().strip().splitlines()
+              lint = lines[-1] if lines else "empty report"
+              for i, l in enumerate(lines):
+                  if ": Error:" in l:
+                      failed.append("LINT " + l.split("/app/src/")[-1][:240])
+                      if i + 1 < len(lines): failed.append("     " + lines[i + 1].strip()[:200])
+          ok = total > 0 and fail == 0 and skip == 0 and (lint == "skipped" or lint.startswith("0 errors"))
+          verdict = f"GATE {'PASS' if ok else 'FAIL'} tests={total} failures={fail} skipped={skip} lint=[{lint}]"
+          out = ["```", *failed[:40], verdict, "```"]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh: fh.write("\n".join(out) + "\n")
+          with open("gate-result.txt", "w") as fh: fh.write("\n".join(failed[:60] + [verdict]) + "\n")
+          print("\n".join(failed[:60] + [verdict]))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-result
+          path: |
+            gate-result.txt
+            app/build/test-results/testDebugUnitTest/*.xml
+            app/build/reports/lint-results-debug.txt
+          retention-days: 7
+
+      - name: Verdict
+        if: always()
+        run: grep -q "^GATE PASS" gate-result.txt

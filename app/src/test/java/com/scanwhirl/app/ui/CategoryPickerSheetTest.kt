@@ -7,6 +7,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.CategoryRules
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -124,7 +125,7 @@ class CategoryPickerSheetTest {
         onPick: (String) -> Unit = {},
         block: (Activity, LinearLayout, Dialog) -> Unit
     ) {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 CategoryPickerSheet.show(activity, current, onPick)
                 val dialog = ShadowDialog.getLatestDialog()

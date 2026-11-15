@@ -28,7 +28,20 @@ object PdfDecryptor {
      * Returns a decrypted copy of [raw]. Throws [WrongPassword] when neither the user nor the
      * owner password opens it, and [Unsupported] when the encryption or PDF shape is not handled.
      */
-    fun decrypt(raw: ByteArray, password: String): ByteArray {
+    fun decrypt(raw: ByteArray, password: String): ByteArray = try {
+        decryptChecked(raw, password)
+    } catch (e: WrongPassword) {
+        throw e
+    } catch (e: Unsupported) {
+        throw e
+    } catch (e: IllegalArgumentException) {
+        throw Unsupported(e.message ?: "This PDF cannot be opened offline")
+    } catch (e: Exception) {
+        // A malformed xref/dictionary must never surface as an IndexOutOfBounds to the UI.
+        throw Unsupported("This PDF's password protection could not be read")
+    }
+
+    private fun decryptChecked(raw: ByteArray, password: String): ByteArray {
         require(password.isNotEmpty()) { "Password must not be empty" }
         val latin = String(raw, Charsets.ISO_8859_1)
         val trailer = trailerDictionary(latin)

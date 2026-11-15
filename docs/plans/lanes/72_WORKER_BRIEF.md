@@ -18,7 +18,15 @@ merges your work, and reads your final reply. There is no human to answer questi
 4. The kit you must reuse for UI: `app\src\main\java\com\scanwhirl\app\ui\kit\` (SwSheet, PasswordField, ToolTile,
    DocCard, TrustPill, SwStyle, ToolRegistry). Search before you edit (Select-String); never guess file contents.
 
-## Build gate (queued; one build at a time on this PC)
+## Build gate
+
+**Since 2026-11-15 the FULL gate runs in the cloud** (GitHub Actions, 16 GB runner, ~5-6 min, no local queue).
+Same command; it snapshots your worktree (incl. untracked files) WITHOUT touching your branch or index, pushes the
+snapshot to `ci/<LANE>`, waits for the cloud run and prints the verdict (failing tests + lint errors). Lint runs in
+the cloud on integration merges. `-Tests "..."` still runs locally (fast red/green, queued). `-Local` forces the old
+local full run (avoid: this PC has little memory).
+
+### Local details (red/green with -Tests)
 - Red/green loop on one test class:
   `powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane <LANE> -Tests "com.scanwhirl.app.<pkg>.<Class>"`
 - Full gate before every commit: `powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane <LANE>`

@@ -226,10 +226,10 @@ class LockFlow(
                             true
                         }
                     }
-                    if (!remembered) {
-                        Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
-                    }
+                    // The protection/save always completes first. A locked Vault only asks
+                    // afterwards; the owner can unlock then, or decline.
                     if (!changing) offerProtectedCopy(updated, shareNow)
+                    if (remember && !remembered) offerVaultSave(doc.id, password)
                 } catch (e: PdfProtection.WrongPassword) {
                     progress.dismiss()
                     Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
@@ -265,6 +265,28 @@ class LockFlow(
         }
     }
 
+    /**
+     * The Vault was locked when the PDF was protected. Offer to save the password there without
+     * touching the protection the owner already has; only a decline says "not saved".
+     */
+    private fun offerVaultSave(docId: String, password: String) {
+        SwSheet.builder(activity)
+            .setTitle(R.string.vault_save_prompt)
+            .setMessage(R.string.vault_save_prompt_note)
+            .setPrimary(R.string.vault_unlock_action) {
+                VaultPasswordsFlow.rememberWithUnlock(activity, docId, password) { saved ->
+                    if (!saved) {
+                        Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setSecondary(R.string.not_now) {
+                Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
+            }
+            .build()
+            .show()
+    }
+
     /** "Protect & share" shares the protected PDF; "Save protected copy" opens the save screen. */
     private fun offerProtectedCopy(doc: ScanDocument, share: Boolean) {
         if (share) {
@@ -284,7 +306,8 @@ class LockFlow(
                 height = 0,
                 title = activity.getString(R.string.protect_sheet_title),
                 warning = null,
-                docId = doc.id
+                docId = doc.id,
+                summary = activity.getString(R.string.protect_result_summary, doc.name)
             )
         )
     }
@@ -384,20 +407,19 @@ class LockFlow(
                                 height = 0,
                                 title = activity.getString(R.string.lock_device_title),
                                 warning = activity.getString(R.string.lock_device_note),
-                                docId = locked.id // T4.8: record the saved copy on this document
+                                docId = locked.id, // T4.8: record the saved copy on this document
+                                summary = activity.getString(R.string.protect_result_summary, locked.name)
                             )
                         )
                     }
                 }
+                present()
                 if (remember) {
                     val saved = withContext(Dispatchers.IO) {
                         VaultPasswordsFlow.saveIfUnlocked(activity, locked.id, password)
                     }
-                    if (!saved) {
-                        Toast.makeText(activity, R.string.vault_password_not_saved, Toast.LENGTH_LONG).show()
-                    }
+                    if (!saved) offerVaultSave(locked.id, password)
                 }
-                present()
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(

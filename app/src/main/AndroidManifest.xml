@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Legacy storage permission for Android 9 and older only (the app writes into Documents
+         through MediaStore on newer versions). -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Security audit: ScanWhirl is offline by design. ML Kit's code scanner pulls in Google's
+         telemetry transport (transport-runtime / transport-backend-cct) and okhttp, and THOSE
+         libraries declare INTERNET and ACCESS_NETWORK_STATE. The app never opens a socket, so the
+         permission is stripped from the merged manifest for the shipped build. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
     <!-- L2: fingerprint/face unlock for the Vault (API 28+); the passcode works everywhere. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
@@ -110,6 +117,12 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ui.tools.BatchActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".ui.ExportResultActivity"
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
@@ -165,5 +178,12 @@
                 android:name="autoStoreLocales"
                 android:value="true" />
         </service>
+
+        <!-- PM-1.5: the app has no INTERNET permission, so ask Google Play to install the unbundled
+             ML Kit text-recognition (Latin) and code-scanner modules together with the app, instead of
+             on first use. (Devanagari OCR is bundled in the APK; the document scanner is a Play services module.) -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr,barcode_ui" />
     </application>
 </manifest>
