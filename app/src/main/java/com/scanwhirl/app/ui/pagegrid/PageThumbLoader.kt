@@ -37,6 +37,15 @@ object PageThumbLoader {
     }
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /**
+     * Robolectric closes its sandbox class loader between test classes. A decode still running on
+     * a "page-thumb" thread then enters JNI with a dead loader and the JVM aborts with
+     * "JniConstants: Class not found: java/nio/DoubleBuffer". Under Robolectric the decode runs on
+     * the calling (test) thread, so no work survives the test that queued it; production keeps the
+     * pool and the exact same apply-on-the-main-thread behaviour.
+     */
+    private val inlineForTests = android.os.Build.FINGERPRINT == "robolectric"
+
     /** Test seam: counts key computations that had to stat the file. Null in production. */
     internal var keyStatProbe: (() -> Unit)? = null
 
@@ -108,14 +117,14 @@ object PageThumbLoader {
             return
         }
 
-        executor.execute {
+        fun runJob() {
             // The row was recycled for another document before this job started.
-            if (skipStale && into.tag != key) return@execute
+            if (skipStale && into.tag != key) return
             val thumb = decode(file, targetPx, filter, fitExactly)
             if (thumb == null) {
                 failed.put(key, true)
                 mainHandler.post { if (into.tag == key) onFailed?.invoke() }
-                return@execute
+                return
             }
             cache.put(key, thumb)
             mainHandler.post {
@@ -124,6 +133,7 @@ object PageThumbLoader {
                 }
             }
         }
+        if (inlineForTests) runJob() else executor.execute { runJob() }
     }
 
     /**
