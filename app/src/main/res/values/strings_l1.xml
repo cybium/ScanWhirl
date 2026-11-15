@@ -250,4 +250,9 @@
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>
     </plurals>
+
+    <!-- v2 UI: selection bar + screenshot policy (SECURITY_AUDIT 2026-11-15). -->
+    <string name="sel_batch">Batch</string>
+    <string name="settings_block_screenshots">Block screenshots of documents</string>
+    <string name="settings_block_screenshots_note">Protected documents are always blocked. Turn this on to block ordinary scans too.</string>
 </resources>

@@ -163,4 +163,19 @@ object Prefs {
     private const val KEY_GALLERY_CROP = "gallery_auto_crop"
     fun galleryAutoCrop(c: Context): Boolean = sp(c).getBoolean(KEY_GALLERY_CROP, true)
     fun setGalleryAutoCrop(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_GALLERY_CROP, v).apply()
+
+    // ---- documents: block screenshots (SECURITY_AUDIT 2026-11-15) ------------
+
+    private const val KEY_BLOCK_DOC_SCREENSHOTS = "block_doc_screenshots"
+
+    /**
+     * Block screenshots/screen recording of **ordinary** documents. Protected
+     * (locked) and Vault documents are blocked regardless of this setting (see
+     * [SecureView.applyForDocument]); ordinary scans default to screenshot-friendly.
+     */
+    fun blockDocScreenshots(c: Context): Boolean =
+        sp(c).getBoolean(KEY_BLOCK_DOC_SCREENSHOTS, false)
+
+    fun setBlockDocScreenshots(c: Context, v: Boolean) =
+        sp(c).edit().putBoolean(KEY_BLOCK_DOC_SCREENSHOTS, v).apply()
 }

@@ -97,6 +97,9 @@ class SettingsActivity : BaseActivity() {
         // L2: OCR text language - the same setting the Text screen's language chip changes.
         addTextLanguageRow()
 
+        // SECURITY_AUDIT 2026-11-15: screenshot policy for ordinary documents.
+        addBlockScreenshotsRow()
+
         updateSummaries()
     }
 
@@ -157,6 +160,79 @@ class SettingsActivity : BaseActivity() {
         )
         val index = parent.indexOfChild(binding.rowLanguage)
         parent.addView(row, if (index >= 0) index + 1 else parent.childCount)
+    }
+
+    /**
+     * SECURITY_AUDIT 2026-11-15: one switch right under Privacy. Protected and
+     * Vault documents are blocked regardless; this only covers ordinary scans.
+     */
+    private fun addBlockScreenshotsRow() {
+        val parent = binding.rowPrivacy.parent as? android.view.ViewGroup ?: return
+        val d = resources.displayMetrics.density
+        val row = android.widget.LinearLayout(this).apply {
+            id = R.id.rowBlockScreenshots
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((16 * d).toInt(), (12 * d).toInt(), (12 * d).toInt(), (12 * d).toInt())
+        }
+        val texts = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        texts.addView(
+            android.widget.TextView(this).apply {
+                setText(R.string.settings_block_screenshots)
+                textSize = 15f
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(
+                        this@SettingsActivity, R.color.text_hologram_hi
+                    )
+                )
+            }
+        )
+        texts.addView(
+            android.widget.TextView(this).apply {
+                setText(R.string.settings_block_screenshots_note)
+                textSize = 12.5f
+                setPadding(0, (2 * d).toInt(), 0, 0)
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(
+                        this@SettingsActivity, R.color.text_hologram_mid
+                    )
+                )
+            }
+        )
+        row.addView(
+            texts,
+            android.widget.LinearLayout.LayoutParams(
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { marginEnd = (12 * d).toInt() }
+        )
+        val toggle = androidx.appcompat.widget.SwitchCompat(this).apply {
+            id = R.id.switchBlockScreenshots
+            isChecked = Prefs.blockDocScreenshots(this@SettingsActivity)
+            setOnCheckedChangeListener { _, checked ->
+                Prefs.setBlockDocScreenshots(this@SettingsActivity, checked)
+            }
+        }
+        row.addView(toggle)
+        val index = parent.indexOfChild(binding.rowPrivacy)
+        val divider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, (1 * d).toInt()
+            ).apply { marginStart = (54 * d).toInt() }
+            setBackgroundColor(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@SettingsActivity, R.color.cyan_border_hair
+                )
+            )
+        }
+        if (index >= 0) {
+            parent.addView(divider, index + 1)
+            parent.addView(row, index + 2)
+        } else {
+            parent.addView(divider)
+            parent.addView(row)
+        }
     }
 
     private fun chooseOcrLanguage() {

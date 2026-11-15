@@ -288,6 +288,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             return false
         }
         document = doc
+        // SECURITY_AUDIT 2026-11-15: protected/Vault documents never appear in a
+        // screenshot or the recents card; ordinary scans follow the user's setting.
+        com.scanwhirl.app.util.SecureView.applyForDocument(
+            this, window, doc.isVaulted || doc.isLocked
+        )
         val state = withContext(Dispatchers.IO) {
             runCatching { repo.draftPages(id) to repo.draftOf(id) }
         }

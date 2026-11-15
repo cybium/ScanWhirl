@@ -507,6 +507,16 @@ class LibraryScreen(
             val chosen = docs.filter { it.id in selected }
             if (chosen.isNotEmpty()) callbacks.onShareDocs(chosen)
         }
+        // v2 UI: 03_tools_hub — L4's Batch screen opens with these ids preselected.
+        action(R.id.swSelBatch, R.drawable.ic_sym_view_module, R.string.sel_batch) {
+            val ids = docs.filter { it.id in selected }.map { it.id }
+            if (ids.isEmpty()) return@action
+            requirePro {
+                (context as? android.app.Activity)?.let {
+                    com.scanwhirl.app.ui.tools.BatchLauncher.start(it, ids)
+                }
+            }
+        }
         action(R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename) {
             if (selected.size >= 2) requirePro { showBatchRename() }
             else Toast.makeText(context, context.getString(R.string.batch_select_hint), Toast.LENGTH_SHORT).show()

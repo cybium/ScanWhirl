@@ -149,6 +149,12 @@ internal object ImportUnlockSheet {
         }
 
         sheet.show()
+        // A typed PDF password must never be screenshot-able or appear in recents.
+        // The flag lives on the sheet's own window and goes away with it.
+        com.scanwhirl.app.util.SecureView.apply(sheet.window)
+        sheet.setOnDismissListener {
+            com.scanwhirl.app.util.SecureView.clear(sheet.window)
+        }
         field.editText.requestFocus()
     }
 }

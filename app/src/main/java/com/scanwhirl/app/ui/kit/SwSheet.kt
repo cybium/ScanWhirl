@@ -351,6 +351,9 @@ class SwSheet private constructor(
 
     val isShowing: Boolean get() = dialog.isShowing
 
+    /** The sheet's own window (used to set FLAG_SECURE while a password is on screen). */
+    val window: android.view.Window? get() = dialog.window
+
     class Builder internal constructor(private val context: Context) {
         private val sheet = SwSheet(context, BottomSheetDialog(context))
 
