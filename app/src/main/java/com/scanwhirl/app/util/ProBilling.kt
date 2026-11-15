@@ -81,10 +81,21 @@ object ProBilling {
     @Volatile
     private var checkedOnStart = false
 
+    /**
+     * The last localized price Play answered with. The shell starts the query in onCreate, when
+     * no Pro screen exists yet; every Pro screen created later shows this instead of falling back
+     * to the hard-coded ₹100 copy.
+     */
+    @Volatile
+    private var lastPrice: String? = null
+
     private val mainPost: (() -> Unit) -> Unit = { Handler(Looper.getMainLooper()).post(it) }
 
     private fun gateway(context: Context): Gateway =
         gateway ?: gatewayFactory(context.applicationContext).also { gateway = it }
+
+    /** The last price Play reported, or null when it has not answered yet. */
+    fun cachedPrice(): String? = lastPrice
 
     /** Shows Play's localized price when it can be fetched; [onPrice] gets null otherwise. */
     fun price(context: Context, onPrice: (String?) -> Unit) {
@@ -95,28 +106,48 @@ object ProBilling {
                     onPrice(null)
                     return@connect
                 }
-                client.price(onPrice)
+                client.price { text ->
+                    if (text != null) lastPrice = text
+                    onPrice(text)
+                }
             }
         }.onFailure { onPrice(null) }
     }
 
     /** Opens the Play purchase sheet from "Unlock Pro". */
-    fun buy(activity: Activity, onState: (State) -> Unit) {
+    fun buy(activity: Activity, onState: (State) -> Unit) =
+        buy(activity, com.scanwhirl.app.BuildConfig.TEST_BUILD, onState)
+
+    /**
+     * The purchase flow with the test-build switch exposed, so a unit test can drive the real
+     * release path (the gateway is a fake) instead of the test build's "already Pro" shortcut.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun buy(activity: Activity, testBuild: Boolean, onState: (State) -> Unit) {
         // Test builds are Pro unless QA forced Free; there is nothing to buy and no store to ask.
-        if (com.scanwhirl.app.BuildConfig.TEST_BUILD) {
+        if (testBuild) {
             onState(State.Owned)
             return
         }
         val context = activity.applicationContext
         runCatching {
             val client = gateway(context)
-            val controller = Controller(context, client, com.scanwhirl.app.BuildConfig.TEST_BUILD, mainPost, onState)
+            val controller = Controller(context, client, testBuild, mainPost, onState)
             client.setListener { event -> controller.handle(event) }
             client.connect { ok ->
-                if (ok) {
-                    client.launch(activity)
-                } else {
+                if (!ok) {
                     onState(State.Failed("Google Play isn't available on this phone."))
+                    return@connect
+                }
+                // Never rely on the launch-time query: it may have failed (Play busy, offline) and
+                // the cached details would then make "Unlock Pro" say "not available" for the whole
+                // session. Ask again now, and only open the sheet when the product really exists.
+                client.price { price ->
+                    if (price == null) {
+                        onState(State.Failed("The Pro product is not available yet."))
+                    } else {
+                        client.launch(activity)
+                    }
                 }
             }
         }.onFailure { onState(State.Failed("Google Play isn't available on this phone.")) }
@@ -166,6 +197,7 @@ object ProBilling {
         runCatching { gateway?.close() }
         gateway = null
         checkedOnStart = false
+        lastPrice = null
         gatewayFactory = { PlayBilling(it) }
     }
 

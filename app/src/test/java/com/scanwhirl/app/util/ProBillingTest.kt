@@ -33,6 +33,7 @@ class ProBillingTest {
         var launches = 0
         var purchases: List<ProBilling.Owned>? = emptyList()
         var priceText: String? = "₹100"
+        var priceCalls = 0
         var ackResult = true
         var connectResult = true
 
@@ -45,6 +46,7 @@ class ProBillingTest {
         }
 
         override fun price(onPrice: (String?) -> Unit) {
+            priceCalls++
             queue.addLast { onPrice(priceText) }
         }
 
@@ -239,5 +241,37 @@ class ProBillingTest {
         ProBilling.price(app) { price = it }
         gateway.drain()
         assertEquals("₹100", price)
+    }
+
+    @Test
+    fun `buy asks the store for the product again when the first query failed`() {
+        val gateway = FakeGateway().apply { priceText = null }
+        ProBilling.gatewayFactory = { gateway }
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        var state: ProBilling.State? = null
+        ProBilling.buy(activity, testBuild = false) { state = it }
+        gateway.drain()
+
+        assertEquals("Unlock Pro must query the product details again", 1, gateway.priceCalls)
+        assertEquals("a product the store does not have never opens the sheet", 0, gateway.launches)
+        assertTrue("the UI hears about the missing product", state is ProBilling.State.Failed)
+        assertEquals(
+            "The Pro product is not available yet.",
+            (state as ProBilling.State.Failed).message
+        )
+    }
+
+    @Test
+    fun `buy launches the purchase sheet once the product details arrive`() {
+        val gateway = FakeGateway()
+        ProBilling.gatewayFactory = { gateway }
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        var state: ProBilling.State? = null
+        ProBilling.buy(activity, testBuild = false) { state = it }
+        gateway.drain()
+
+        assertEquals("one details query per tap", 1, gateway.priceCalls)
+        assertEquals("the purchase sheet opens", 1, gateway.launches)
+        assertNull("no failure to report", state)
     }
 }

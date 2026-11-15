@@ -483,8 +483,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             override fun onRestore() = restoreBilling()
             override fun onSeeAllProTools() = showTab(Tab.TOOLS)
         }, active = com.scanwhirl.app.util.ProGate.isPro(this))
+        // Play's localized price: the launch-time query usually finishes before this screen
+        // exists, so apply the cached answer now and refresh it on the visible instance.
+        com.scanwhirl.app.util.ProBilling.cachedPrice()?.let { proScreen.setPrice(it) }
         setContent(scroll(proScreen))
         paintNav()
+        com.scanwhirl.app.util.ProBilling.price(this) { price ->
+            if (price != null) runOnUiThread { if (proOpen) proScreen.setPrice(price) }
+        }
     }
 
     private fun closePro() {
