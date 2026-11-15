@@ -30,7 +30,11 @@ internal object TextRotation {
     suspend fun chooseRotation(bitmap: Bitmap, textVertical: Boolean): Int? {
         val candidates = if (textVertical) listOf(90, 270) else listOf(0, 180)
         chooser?.let { return it(bitmap, candidates) }
-        return withContext(Dispatchers.IO) { recognise(bitmap, candidates) }
+        // ML Kit is an optional confirmation: on a device without the model (or in a unit
+        // test) the engine's own rotation is still a complete answer.
+        return withContext(Dispatchers.IO) {
+            runCatching { recognise(bitmap, candidates) }.getOrNull()
+        }
     }
 
     private fun recognise(bitmap: Bitmap, candidates: List<Int>): Int? {
