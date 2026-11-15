@@ -1,13 +1,55 @@
 # LANE_REPORT_L3 — Protect PDF and Book pages
 
-Session 7: 2026-11-15. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
+Session 8: 2026-11-15. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
+Merged `integration` (through `ee5467e`, 45 commits) before the final gate.
 
-## Gate (last full cloud run, after the final code change)
+## Gate (last full cloud run, merged tree)
 
 ```
-tests: total=1393 failures=1 skipped=0
-GATE FAIL L3 · the only failure is TextFitTest > ocr editor text fits (L1's known w320dp issue)
+tests: total=1505 failures=1 skipped=0
+GATE FAIL L3 · AccessibilityAuditTest > text settings tools and vault are accessible
+  - Settings|clip|"Google processing is on" line 1 is 407px wide but 404px fit (@1.3x)
+  - Settings|clip|"Hides OCR text in the PDF so any…" line 1 407px / 404px (@1.3x)
+  - Settings|clip|"Also save a copy to Documents" line 0 409px / 404px (@2.0x)
 ```
+
+Those three are Settings text-fit findings from integration's a11y audit; L3 did not touch
+Settings and they are not allow-listed or hidden here. TextFitTest is green after the merge.
+
+## Book pages — spine fix (005924) and final results
+
+The 005924 crop line was at **0.482**, right of the real spine (0.40–0.44): the search had chosen
+a pale brightness dip inside the right page (between the bright page edge and the red header
+block). An accepted spine must now be a **gap, not a cut through text**:
+
+- `deepShadow`: the valley is at least 25 luminance below *both* plateaus (a real gutter shadow);
+- otherwise **`textCrossing` must be false**: similar ink on both sides *and* ink at the cut
+  means text continues across the line (005924's 0.472–0.479 band), so it is rejected;
+- a clean white gap (330, 949) has no ink at the cut, so it stays accepted.
+
+New `BookSplitTest` case `a cut must not cross text lines` builds a spread with a pale
+inside-the-page band crossed by text and a real spine; it asserts the spine wins. The 005924
+line is now **0.418**, the left output is page 268 only (no strip of 269 / red header), and the
+other results are unchanged:
+762 0.501, 137 0.495, 230 0.602, 330 0.474, 949 0.656, 34042183/18632404 one page.
+
+Final eval run after the merge: `owner\out\L3\RESULTS.txt` **16:02:09**,
+`realworld\out\RESULTS.txt` **16:01:50**; 005924 preview **16:02:00**.
+Owner: 005907 rot270 0.420, 005913 rot270 0.424, **005924 rot270 0.418**.
+
+## Multicoloured line in the 005924 preview
+
+It is **in the raw photo**, not our decode/rotate/downscale: the source JPEG has a vertical
+corrupted stripe at ≈79% width, running through the page and the cloth. Rotating the crop makes
+it the thin horizontal band at ≈22% of the right page. Nothing to fix in L3's pipeline.
+
+## Strings housekeeping
+
+`lock_from_pdf`, `lock_no_documents`, `lock_choose_document` moved out of L1's
+`values/strings_l1.xml` / `values-hi/strings_l1.xml` into L3's
+`values/strings_protect.xml` / `values-hi/strings_protect.xml`.
+
+## Session 7 (previous)
 
 ## Book pages — orientation is now correct (264 before 265)
 
