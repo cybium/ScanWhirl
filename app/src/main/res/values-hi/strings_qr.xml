@@ -17,7 +17,7 @@
     <string name="qr_compose_email"><!-- review -->ईमेल लिखें</string>
     <string name="qr_open_map"><!-- review -->नक्शे में खोलें</string>
     <string name="qr_copy"><!-- review -->कॉपी करें</string>
-    <string name="qr_share"><!-- review -->साझा करें</string>
+    <string name="qr_share"><!-- review -->शेयर करें</string>
     <string name="qr_copied"><!-- review -->कॉपी हो गया</string>
     <string name="qr_no_app"><!-- review -->इस फ़ोन पर कोई ऐप इसे नहीं खोल सकता।</string>
     <string name="qr_no_contacts"><!-- review -->कोई संपर्क ऐप नहीं। कोड कॉपी कर दिया गया।</string>

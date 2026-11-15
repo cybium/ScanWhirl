@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- L2 v2 Vault (04_vault). Hindi values await native review. -->
+    <!-- L2 v2 वॉल्ट (04_vault). Hindi values await native review. -->
     <string name="vault_screen_title"><!-- review -->वॉल्ट</string>
     <plurals name="vault_documents_protected">
         <item quantity="one"><!-- review -->%d दस्तावेज़ सुरक्षित</item>

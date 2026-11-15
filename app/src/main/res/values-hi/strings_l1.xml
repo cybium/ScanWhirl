@@ -70,7 +70,7 @@
     <string name="tool_to_word"><!-- review -->Word में</string>
     <string name="tool_to_excel"><!-- review -->Excel में</string>
     <string name="tool_to_text"><!-- review -->टेक्स्ट में</string>
-    <string name="tool_zip"><!-- review -->ZIP निर्यात</string>
+    <string name="tool_zip"><!-- review -->ZIP एक्सपोर्ट</string>
     <string name="tool_searchable_pdf"><!-- review -->खोजने योग्य PDF</string>
     <string name="tool_pdfa"><!-- review -->PDF/A</string>
     <string name="tool_sign"><!-- review -->हस्ताक्षर</string>
@@ -124,11 +124,11 @@
     <string name="me_pro"><!-- review -->ScanWhirl Pro</string>
     <string name="me_pro_summary"><!-- review -->पूरा सूट अनलॉक करें</string>
     <string name="me_settings"><!-- review -->सेटिंग्स</string>
-    <string name="me_settings_summary"><!-- review -->रूप, टेक्स्ट, गोपनीयता</string>
+    <string name="me_settings_summary"><!-- review -->रूप, टेक्स्ट, प्राइवेसी</string>
     <string name="me_trash"><!-- review -->कूड़ेदान</string>
     <string name="me_trash_summary"><!-- review -->हटाए दस्तावेज़, 30 दिन</string>
     <string name="me_about"><!-- review -->ScanWhirl के बारे में</string>
-    <string name="me_about_summary"><!-- review -->संस्करण, गोपनीयता, लाइसेंस</string>
+    <string name="me_about_summary"><!-- review -->संस्करण, प्राइवेसी, लाइसेंस</string>
 
     <string name="vault_tab_title"><!-- review -->वॉल्ट</string>
     <string name="vault_tab_encrypted"><!-- review -->इस फ़ोन पर एन्क्रिप्टेड</string>
@@ -152,7 +152,7 @@
     <string name="tool_pick_image"><!-- review -->छवि चुनें</string>
     <string name="shell_today"><!-- review -->आज</string>
     <string name="shell_yesterday"><!-- review -->कल</string>
-    <string name="shell_doc_actions_note"><!-- review -->इस दस्तावेज़ को खोलें, साझा करें, या कूड़ेदान में डालें।</string>
+    <string name="shell_doc_actions_note"><!-- review -->इस दस्तावेज़ को खोलें, शेयर करें, या कूड़ेदान में डालें।</string>
     <string name="shell_open"><!-- review -->खोलें</string>
     <string name="shell_move_to_trash"><!-- review -->कूड़ेदान में डालें</string>
     <string name="shell_trash_title"><!-- review -->“%1$s” को कूड़ेदान में डालें?</string>
@@ -169,7 +169,7 @@
     <string name="ocr_page_pane_note"><!-- review -->इस टेक्स्ट फ़ाइल के लिए पेज की छवि उपलब्ध नहीं है।</string>
     <string name="ocr_to_word_pro"><!-- review -->Word में · PRO</string>
     <string name="ocr_foot_note"><!-- review -->इसी फ़ोन पर पढ़ा गया। खोजने योग्य।</string>
-    <string name="ocr_to_word_soon"><!-- review -->Word निर्यात बन रहा है। यह इसी फ़ोन पर इस टेक्स्ट से .docx बनाएगा।</string>
+    <string name="ocr_to_word_soon"><!-- review -->Word एक्सपोर्ट बन रहा है। यह इसी फ़ोन पर इस टेक्स्ट से .docx बनाएगा।</string>
     <string name="ocr_screen_title"><!-- review -->टेक्स्ट</string>
     <string name="ocr_tidy_text"><!-- review -->टेक्स्ट सुधारें</string>
     <string name="ocr_join_lines_desc"><!-- review -->टूटी पंक्तियों को जोड़कर पैराग्राफ बनाएँ।</string>
@@ -273,7 +273,7 @@
     <string name="pro_active_sub"><!-- review -->सभी Pro टूल्स अनलॉक हैं। धन्यवाद!</string>
     <string name="settings_test_free"><!-- review -->परीक्षण: मुफ़्त उपयोगकर्ता के रूप में</string>
     <string name="settings_test_free_summary"><!-- review -->केवल टेस्ट बिल्ड में। Pro गेट दिखाता है।</string>
-    <string name="settings_privacy_section"><!-- review -->गोपनीयता और सुरक्षा</string>
+    <string name="settings_privacy_section"><!-- review -->प्राइवेसी और सुरक्षा</string>
     <string name="pro_sub_compact"><!-- review -->हर Pro टूल, एक भुगतान, हमेशा आपका।</string>
     <string name="pro_more_tools"><!-- review -->सभी %1$d प्रो टूल देखें</string>
 </resources>

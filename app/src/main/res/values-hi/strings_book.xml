@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L3 v2 "Book pages" tool. -->
-    <string name="book_title"><!-- review -->पुस्तक पृष्ठ</string>
-    <string name="book_hint"><!-- review -->हर दो-पृष्ठ फैलाव की एक फ़ोटो चुनें। मोड़ सही न हो तो रेखा खींचें।</string>
+    <string name="book_title"><!-- review -->पुस्तक पेज</string>
+    <string name="book_hint"><!-- review -->हर दो-पेज फैलाव की एक फ़ोटो चुनें। मोड़ सही न हो तो रेखा खींचें।</string>
     <string name="book_pick"><!-- review -->फ़ोटो चुनें</string>
     <string name="book_add"><!-- review -->फ़ोटो जोड़ें</string>
     <string name="book_create"><!-- review -->दस्तावेज़ बनाएँ</string>
@@ -11,11 +11,11 @@
     <string name="book_spread"><!-- review -->फैलाव %1$d</string>
     <string name="book_gutter_found"><!-- review -->मोड़ मिला। समायोजित करने के लिए खींचें।</string>
     <string name="book_gutter_middle"><!-- review -->रेखा जाँचें।</string>
-    <string name="book_gutter_horizontal"><!-- review -->पृष्ठ सीधे किए जाएँगे।</string>
+    <string name="book_gutter_horizontal"><!-- review -->पेज सीधे किए जाएँगे।</string>
     <string name="book_gutter_moved"><!-- review -->रेखा हाथ से सेट की गई।</string>
-    <string name="book_one_page_note"><!-- review -->एक पृष्ठ लगता है।</string>
-    <string name="book_keep_one_page"><!-- review -->एक पृष्ठ रखें</string>
-    <string name="book_rotate"><!-- review -->पृष्ठ पलटें</string>
+    <string name="book_one_page_note"><!-- review -->एक पेज लगता है।</string>
+    <string name="book_keep_one_page"><!-- review -->एक पेज रखें</string>
+    <string name="book_rotate"><!-- review -->पेज पलटें</string>
     <string name="book_add_spread"><!-- review -->फैलाव जोड़ें</string>
     <string name="book_add_spread_note"><!-- review -->स्कैनर किताब के किनारे काटता है; वहाँ कोने ठीक कर सकते हैं।</string>
     <string name="book_scan_camera"><!-- review -->कैमरे से स्कैन करें</string>
@@ -23,12 +23,12 @@
     <string name="book_scanner_fallback"><!-- review -->स्कैनर उपलब्ध नहीं है। इसके बजाय फ़ोटो चुनें।</string>
     <string name="book_doc_name"><!-- review -->पुस्तक %1$s</string>
     <plurals name="book_created">
-        <item quantity="one"><!-- review -->%1$d पृष्ठ बनाया गया</item>
-        <item quantity="other"><!-- review -->%1$d पृष्ठ बनाए गए</item>
+        <item quantity="one"><!-- review -->%1$d पेज बनाया गया</item>
+        <item quantity="other"><!-- review -->%1$d पेज बनाए गए</item>
     </plurals>
     <string name="book_failed"><!-- review -->फ़ोटो अलग नहीं कर सके: %1$s</string>
     <string name="book_no_images"><!-- review -->अभी कोई फ़ोटो नहीं चुनी गई।</string>
     <string name="book_read_failed"><!-- review -->उनमें से एक फ़ोटो पढ़ी नहीं जा सकी।</string>
-    <string name="book_preview_desc"><!-- review -->खींची जा सकने वाली रेखा के साथ दो-पृष्ठ फैलाव</string>
+    <string name="book_preview_desc"><!-- review -->खींची जा सकने वाली रेखा के साथ दो-पेज फैलाव</string>
     <string name="book_close"><!-- review -->बंद करें</string>
 </resources>
