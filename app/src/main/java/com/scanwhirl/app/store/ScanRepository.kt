@@ -2776,17 +2776,28 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
+     * The workbook a To Excel run wrote, plus how many pages carried a table. [file] is null when
+     * [tablesOnly] found no table on any page: nothing is written then, so the caller can offer
+     * the all-text export instead of a workbook full of "no table" notes.
+     */
+    data class ExcelExport(
+        val file: File?,
+        val tablePages: Int,
+        val totalPages: Int
+    )
+
+    /**
      * Writes a `.xlsx` workbook: one sheet per page ("Page 1", ...). A page whose stored OCR
      * geometry forms a table becomes a cell grid; other pages export one line per cell.
-     * [tablesOnly] drops the plain text (a page without a table gets one clear note line).
-     * Pages with no stored OCR are recognised now with the app's existing on-device engine.
+     * [tablesOnly] keeps only the pages with a table (and writes nothing at all when no page has
+     * one). Pages with no stored OCR are recognised now with the app's existing on-device engine.
      */
     suspend fun exportExcel(
         id: String,
         outFile: File,
         tablesOnly: Boolean = false,
         noTableNote: String = "No table found on this page."
-    ): File = withContext(Dispatchers.IO) {
+    ): ExcelExport = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
@@ -2798,20 +2809,25 @@ class ScanRepository(private val context: Context) {
                 .getOrElse { OcrPage(0, 0, emptyList()) }
             pages += ocr
         }
-        val sheets = pages.mapIndexed { index, ocr ->
-            val table = TableDetect.detect(ocr)
-            val rows: List<List<String>> = when {
-                table != null -> table.rows
-                tablesOnly -> listOf(listOf(noTableNote))
-                else -> ocr.lines.filter { it.text.isNotBlank() }.map { listOf(it.text) }
+        val tables = pages.map { TableDetect.detect(it) }
+        val tablePages = tables.count { it != null }
+        if (tablesOnly && tablePages == 0) {
+            return@withContext ExcelExport(file = null, tablePages = 0, totalPages = pages.size)
+        }
+        val sheets = pages.mapIndexedNotNull { index, ocr ->
+            val table = tables[index]
+            when {
+                table != null -> XlsxWriter.Sheet("Page ${index + 1}", table.rows)
+                tablesOnly -> null
+                else -> XlsxWriter.Sheet(
+                    "Page ${index + 1}",
+                    ocr.lines.filter { it.text.isNotBlank() }.map { listOf(it.text) }
+                        .ifEmpty { listOf(listOf(noTableNote)) }
+                )
             }
-            XlsxWriter.Sheet(
-                "Page ${index + 1}",
-                rows.ifEmpty { listOf(listOf(noTableNote)) }
-            )
         }
         XlsxWriter.write(outFile, sheets)
-        outFile
+        ExcelExport(file = outFile, tablePages = tablePages, totalPages = pages.size)
     }
 
     /** A page for a slide: at most 2000 px on the long side, JPEG 90. */
@@ -3357,6 +3373,9 @@ class ScanRepository(private val context: Context) {
                 baseGeo[source]?.let { geo[out.name] = it }
             }
             OpFaults.at("op:page:$i")
+        }
+        if (texts.isNotEmpty() || geo.isNotEmpty()) {
+            OcrStore(OpStaging.root(context.filesDir)).putAll(staging.name, texts, geo)
         }
     }
 

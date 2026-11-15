@@ -58,6 +58,10 @@
     <string name="tools_setup_excel_all_text">All text</string>
     <string name="tools_setup_excel_note">Finds tables in the stored text. Other pages go in as plain text.</string>
     <string name="tools_excel_no_table">No table found on this page.</string>
+    <string name="tools_excel_tables_note">Tables found on %1$d of %2$d pages</string>
+    <string name="tools_excel_no_tables_title">No tables found</string>
+    <string name="tools_excel_no_tables_msg">No page in this document has a table. You can export all the text instead.</string>
+    <string name="tools_excel_export_all">Export all text instead</string>
 
     <!-- v2 UI: 03_tools_hub - batch tools -->
     <string name="tools_batch_title">Batch tools</string>
@@ -168,6 +172,18 @@
         <item quantity="other">%1$d files</item>
     </plurals>
     <string name="tools_result_with_size">%1$s · %2$s</string>
+    <string name="tools_result_type_docx">DOCX</string>
+    <string name="tools_result_type_xlsx">XLSX</string>
+    <string name="tools_result_type_pptx">PPTX</string>
+    <string name="tools_result_type_zip">ZIP</string>
+    <plurals name="tools_result_sheets">
+        <item quantity="one">%1$d sheet</item>
+        <item quantity="other">%1$d sheets</item>
+    </plurals>
+    <plurals name="tools_result_slides">
+        <item quantity="one">%1$d slide</item>
+        <item quantity="other">%1$d slides</item>
+    </plurals>
     <plurals name="tools_result_summary_docs">
         <item quantity="one">%1$d documents · %2$d page · %3$s</item>
         <item quantity="other">%1$d documents · %2$d pages · %3$s</item>

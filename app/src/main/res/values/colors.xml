@@ -127,4 +127,10 @@
     <color name="sw_disc_dark">#00A9B5</color>
     <color name="sw_on_gold">#2B1D00</color>
     <color name="sw_gold_light">#FFCB3D</color>
+
+    <!-- v2 UI: 03_tools_hub - result file-type card (DOCX / XLSX / PPTX / ZIP) -->
+    <color name="file_docx">#5B9BFF</color>
+    <color name="file_xlsx">#3FE07C</color>
+    <color name="file_pptx">#FF9A4D</color>
+    <color name="file_zip">#A9B6BE</color>
 </resources>

@@ -32,6 +32,7 @@ import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.OfficeFileCounts
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
@@ -60,9 +61,11 @@ class ToolResultActivity : BaseActivity() {
     private lateinit var summary: TextView
     private lateinit var nameView: TextView
     private lateinit var errorView: TextView
+    private lateinit var previewHost: FrameLayout
     private lateinit var preview: ImageView
     private lateinit var saveAs: ActivityResultLauncher<String>
     private var toolId = ""
+    private var note: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +75,7 @@ class ToolResultActivity : BaseActivity() {
         docIds = intent.getStringArrayListExtra(EXTRA_DOC_IDS)?.toMutableList() ?: mutableListOf()
         files = intent.getStringArrayListExtra(EXTRA_FILES)?.map { File(it) }?.toMutableList() ?: mutableListOf()
         mime = intent.getStringExtra(EXTRA_MIME) ?: defaultMime()
+        note = intent.getStringExtra(EXTRA_NOTE)
         saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(mime)) { uri ->
             uri ?: return@registerForActivityResult
             saveTo(uri)
@@ -118,14 +122,25 @@ class ToolResultActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
+        previewHost = FrameLayout(this).apply {
+            id = R.id.toolResultPreviewHost
+            background = SwStyle.rounded(
+                this@ToolResultActivity,
+                SwStyle.color(this@ToolResultActivity, R.color.glass_surface),
+                radiusDp = 16f,
+                stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
+            )
+            clipToOutline = true
+        }
         preview = ImageView(this).apply {
             id = R.id.toolResultPreview
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundColor(Color.WHITE)
-            background = SwStyle.rounded(this@ToolResultActivity, Color.WHITE, radiusDp = 16f)
-            clipToOutline = true
         }
-        column.addView(preview, LinearLayout.LayoutParams(
+        previewHost.addView(preview, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        column.addView(previewHost, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, 200f)
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
 
@@ -233,7 +248,7 @@ class ToolResultActivity : BaseActivity() {
             if (showSizes) {
                 line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
             }
-            summary.text = line
+            applySummary(line)
             previewPreview(docs.first().pageFiles.firstOrNull())
         } else if (files.isNotEmpty()) {
             val bytes = files.sumOf { it.length() }
@@ -246,14 +261,109 @@ class ToolResultActivity : BaseActivity() {
             if (showSizes) {
                 line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
             }
-            summary.text = line
-            val image = files.firstOrNull { it.name.endsWith(".jpg") || it.name.endsWith(".png") }
-            previewPreview(image)
-            if (image == null) preview.setImageResource(iconFor(files.first()))
+            applySummary(line)
+            val first = files.first()
+            if (isTypedFile(first)) {
+                showFileCard(first)
+            } else {
+                preview.isVisible = true
+                val image = files.firstOrNull { it.name.endsWith(".jpg") || it.name.endsWith(".png") }
+                previewPreview(image)
+                if (image == null) preview.setImageResource(iconFor(first))
+            }
         } else {
             nameView.text = ""
             summary.text = getString(R.string.tools_result_nothing)
         }
+    }
+
+    private fun applySummary(line: String) {
+        summary.text = if (note.isNullOrBlank()) line else "$line\n$note"
+    }
+
+    /** True for the generated Office/ZIP results that have no page to render. */
+    private fun isTypedFile(file: File): Boolean =
+        file.name.endsWith(".docx") || file.name.endsWith(".xlsx") ||
+            file.name.endsWith(".pptx") || file.name.endsWith(".zip")
+
+    /**
+     * The file-type card (v2 UI run4a): the Office/ZIP results are real files with no page image,
+     * so the preview area shows a big type badge, the file name, its size and page/sheet/slide
+     * count instead of an empty white rectangle.
+     */
+    private fun showFileCard(file: File) {
+        preview.isVisible = false
+        previewHost.removeViews(1, (previewHost.childCount - 1).coerceAtLeast(0))
+        val extension = file.extension.lowercase()
+        val accent = when (extension) {
+            "docx" -> R.color.file_docx
+            "xlsx" -> R.color.file_xlsx
+            "pptx" -> R.color.file_pptx
+            else -> R.color.file_zip
+        }
+        val label = when (extension) {
+            "docx" -> R.string.tools_result_type_docx
+            "xlsx" -> R.string.tools_result_type_xlsx
+            "pptx" -> R.string.tools_result_type_pptx
+            else -> R.string.tools_result_type_zip
+        }
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            val pad = SwStyle.dp(this@ToolResultActivity, 18f)
+            setPadding(pad, pad, pad, pad)
+        }
+        val badge = SwStyle.text(
+            this, 22f, SwStyle.color(this, R.color.sw_disc_ink), bold = true, letterSpacing = 0.08f
+        ).apply {
+            id = R.id.toolResultTypeBadge
+            text = getString(label)
+            gravity = Gravity.CENTER
+            background = SwStyle.rounded(
+                this@ToolResultActivity,
+                SwStyle.color(this@ToolResultActivity, accent),
+                radiusDp = 12f
+            )
+            val h = SwStyle.dp(this@ToolResultActivity, 18f)
+            val v = SwStyle.dp(this@ToolResultActivity, 7f)
+            setPadding(h, v, h, v)
+        }
+        card.addView(badge)
+        card.addView(SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+            id = R.id.toolResultFileName
+            text = file.name
+            gravity = Gravity.CENTER
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
+        val meta = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+            id = R.id.toolResultFileMeta
+            text = StatusLine.formatBytes(file.length())
+            gravity = Gravity.CENTER
+        }
+        card.addView(meta, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
+        previewHost.addView(card, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        lifecycleScope.launch {
+            val count = withContext(Dispatchers.IO) { OfficeFileCounts.count(file) }
+            if (count != null && !isFinishing) {
+                meta.text = getString(
+                    R.string.tools_result_with_size, StatusLine.formatBytes(file.length()), countLabel(extension, count)
+                )
+            }
+        }
+    }
+
+    private fun countLabel(extension: String, count: Int): String = when (extension) {
+        "docx" -> resources.getQuantityString(R.plurals.tools_result_pages, count, count)
+        "xlsx" -> resources.getQuantityString(R.plurals.tools_result_sheets, count, count)
+        "pptx" -> resources.getQuantityString(R.plurals.tools_result_slides, count, count)
+        else -> resources.getQuantityString(R.plurals.tools_result_files_count, count, count)
     }
 
     private fun previewPreview(file: File?) {
@@ -456,17 +566,20 @@ class ToolResultActivity : BaseActivity() {
         private const val EXTRA_DOC_IDS = "doc_ids"
         private const val EXTRA_FILES = "files"
         private const val EXTRA_MIME = "mime"
+        private const val EXTRA_NOTE = "note"
 
         fun intent(
             context: Context,
             toolId: String,
             docIds: List<String> = emptyList(),
             files: List<File> = emptyList(),
-            mime: String? = null
+            mime: String? = null,
+            note: String? = null
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
             .putStringArrayListExtra(EXTRA_FILES, ArrayList(files.map { it.path }))
             .putExtra(EXTRA_MIME, mime)
+            .putExtra(EXTRA_NOTE, note)
     }
 }

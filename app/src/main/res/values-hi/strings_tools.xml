@@ -57,6 +57,10 @@
     <string name="tools_setup_excel_all_text"><!-- review -->सारा पाठ</string>
     <string name="tools_setup_excel_note"><!-- review -->संग्रहीत पाठ में तालिकाएँ खोजता है। बाकी पृष्ठ सादे पाठ में जाते हैं।</string>
     <string name="tools_excel_no_table"><!-- review -->इस पृष्ठ पर कोई तालिका नहीं मिली।</string>
+    <string name="tools_excel_tables_note"><!-- review -->%2$d में से %1$d पृष्ठों पर तालिकाएँ मिलीं</string>
+    <string name="tools_excel_no_tables_title"><!-- review -->कोई तालिका नहीं मिली</string>
+    <string name="tools_excel_no_tables_msg"><!-- review -->इस दस्तावेज़ के किसी पृष्ठ पर तालिका नहीं है। आप इसके बजाय सारा पाठ निर्यात कर सकते हैं।</string>
+    <string name="tools_excel_export_all"><!-- review -->इसके बजाय सारा पाठ निर्यात करें</string>
 
     <string name="tools_import_plan_title"><!-- review -->इस PDF में %1$d पृष्ठ हैं</string>
     <string name="tools_import_plan_msg"><!-- review -->लगभग %1$s चाहिए; %2$s खाली है। सब या कुछ पृष्ठ चुनें।</string>
@@ -165,6 +169,18 @@
         <item quantity="other"><!-- review -->%1$d फ़ाइलें</item>
     </plurals>
     <string name="tools_result_with_size"><!-- review -->%1$s · %2$s</string>
+    <string name="tools_result_type_docx"><!-- review -->DOCX</string>
+    <string name="tools_result_type_xlsx"><!-- review -->XLSX</string>
+    <string name="tools_result_type_pptx"><!-- review -->PPTX</string>
+    <string name="tools_result_type_zip"><!-- review -->ZIP</string>
+    <plurals name="tools_result_sheets">
+        <item quantity="one"><!-- review -->%1$d शीट</item>
+        <item quantity="other"><!-- review -->%1$d शीट</item>
+    </plurals>
+    <plurals name="tools_result_slides">
+        <item quantity="one"><!-- review -->%1$d स्लाइड</item>
+        <item quantity="other"><!-- review -->%1$d स्लाइड</item>
+    </plurals>
     <plurals name="tools_result_summary_docs">
         <item quantity="one"><!-- review -->%1$d दस्तावेज़ · %2$d पृष्ठ · %3$s</item>
         <item quantity="other"><!-- review -->%1$d दस्तावेज़ · %2$d पृष्ठ · %3$s</item>

@@ -35,6 +35,10 @@
     <item name="toolResultLibrary" type="id" />
     <item name="toolResultUndo" type="id" />
     <item name="toolResultPreview" type="id" />
+    <item name="toolResultPreviewHost" type="id" />
+    <item name="toolResultTypeBadge" type="id" />
+    <item name="toolResultFileName" type="id" />
+    <item name="toolResultFileMeta" type="id" />
     <item name="toolResultError" type="id" />
     <item name="toolCropView" type="id" />
     <item name="toolCropApply" type="id" />
