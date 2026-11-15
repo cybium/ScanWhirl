@@ -58,6 +58,8 @@ class ExportHygieneTest {
 
     @After
     fun tearDown() {
+        // A test may opt into auto-copy; never let it leak into the next method/class.
+        Prefs.setAutoCopyToDocuments(app, false)
         media.close()
     }
 
@@ -134,6 +136,13 @@ class ExportHygieneTest {
                 again != null
             }
             assertTrue("second download should report 'Already saved'", settled)
+            // The provider rows are written by the save coroutine: wait until the second
+            // attempt has fully settled before counting (the assertions below still fail on a
+            // real duplicate).
+            assertTrue(
+                "the second save must settle without a write",
+                pollUntil { media.scanwhirlPdfs().size == 1 && media.totalWrites() == 1 }
+            )
             assertEquals(
                 "Undo must not be offered when nothing was created",
                 android.view.View.GONE,
