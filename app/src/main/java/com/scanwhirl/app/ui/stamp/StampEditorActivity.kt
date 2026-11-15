@@ -39,6 +39,7 @@ import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.InkExtract
+import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PageStamp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -314,7 +315,7 @@ class StampEditorActivity : BaseActivity() {
             TOOL_PAGE_NUMBERS -> addMarkToAll(PageStamp.Mark.PageNumber())
             TOOL_STAMP -> promptBadges()
             TOOL_REDACT -> arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
-            TOOL_MASK_AADHAAR -> maskAadhaar()
+            TOOL_MASK_AADHAAR -> askMaskOptions()
             else -> Unit
         }
     }
@@ -386,12 +387,31 @@ class StampEditorActivity : BaseActivity() {
     }
 
     /**
-     * Mask Aadhaar: find 12-digit Aadhaar / 16-digit VID numbers on every page (OCR geometry, or
-     * run recognition when a page has none), seed redaction boxes over the first 8 digits, and
-     * let the user adjust them. The save path uses the true redaction burn and names the copy
-     * "<name> - Masked".
+     * Mask Aadhaar: find 12-digit Aadhaar / 16-digit VID numbers on every page (ML Kit element
+     * boxes; stored OCR geometry when the model is unavailable), seed redaction boxes over the
+     * first 8 digits, optionally hide the QR code, and let the user adjust them. The save path
+     * uses the true redaction burn and names the copy with [OutputNames].
      */
-    private fun maskAadhaar() {
+    private fun askMaskOptions() {
+        val checked = booleanArrayOf(true, false)
+        SwSheet.builder(this)
+            .setTitle(R.string.mask_options_title)
+            .setOptions(
+                listOf(
+                    getString(R.string.mask_opt_number),
+                    getString(R.string.mask_opt_qr)
+                ),
+                multiChecked = checked
+            ) { index, isChecked ->
+                checked[index] = isChecked
+            }
+            .setPrimary(R.string.mask_continue) { maskAadhaar(checked[1]) }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun maskAadhaar(hideQr: Boolean) {
         val id = document.id
         lifecycleScope.launch {
             val found = withContext(Dispatchers.IO) {
@@ -399,16 +419,43 @@ class StampEditorActivity : BaseActivity() {
                 val pages = ArrayList<Pair<Int, List<PageStamp.Box>>>()
                 var count = 0
                 document.pageFiles.forEachIndexed { index, page ->
-                    val geo = geometries[page.name]
-                        ?: runCatching {
-                            com.scanwhirl.app.util.OcrEngine.recognizeFile(page).page
-                        }.getOrNull()
-                    if (geo != null) {
-                        val boxes = com.scanwhirl.app.util.AadhaarMask.find(geo)
-                        if (boxes.isNotEmpty()) {
-                            pages += index to boxes
-                            count += boxes.size
+                    val boxes = ArrayList<PageStamp.Box>()
+                    // Device path: ML Kit element boxes (exact first two 4-digit groups).
+                    val words = runCatching {
+                        com.scanwhirl.app.util.OcrEngine.recognizeWords(page)
+                    }.getOrNull()
+                    if (words != null) {
+                        boxes += com.scanwhirl.app.util.AadhaarMask.findWords(
+                            words.words.map {
+                                com.scanwhirl.app.util.AadhaarMask.Word(
+                                    it.text, it.left, it.top, it.right, it.bottom
+                                )
+                            },
+                            words.page.width,
+                            words.page.height
+                        )
+                    } else {
+                        // Host/old-OCR fallback: the saved line geometry.
+                        val geo = geometries[page.name]
+                            ?: runCatching {
+                                com.scanwhirl.app.util.OcrEngine.recognizeFile(page).page
+                            }.getOrNull()
+                        if (geo != null) {
+                            boxes += com.scanwhirl.app.util.AadhaarMask.find(geo)
                         }
+                    }
+                    if (hideQr) {
+                        val bitmap = com.scanwhirl.app.util.InkExtract.decodeSampled(page, 1400)
+                        if (bitmap != null) {
+                            com.scanwhirl.app.util.AadhaarMask.findQr(bitmap)?.let {
+                                boxes += it
+                            }
+                            bitmap.recycle()
+                        }
+                    }
+                    if (boxes.isNotEmpty()) {
+                        pages += index to boxes
+                        count += boxes.size
                     }
                 }
                 pages to count
@@ -505,11 +552,17 @@ class StampEditorActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val copy = withContext(Dispatchers.IO) {
-                    repo.stampDocument(
-                        document.id,
-                        edits,
-                        if (maskMode) getString(R.string.mask_aadhaar_name, document.name) else null
-                    )
+                    val suggested = if (maskMode) {
+                        val existing = repo.listDocuments(includeVaulted = true).map { it.name }
+                        OutputNames.forTool(
+                            document.name,
+                            getString(R.string.mask_label),
+                            existing
+                        )
+                    } else {
+                        null
+                    }
+                    repo.stampDocument(document.id, edits, suggested)
                 }
                 setResult(
                     RESULT_OK,

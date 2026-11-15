@@ -174,6 +174,30 @@ class PageGridView @JvmOverloads constructor(
         if (index in 0 until gridAdapter.itemCount) scrollToPosition(index)
     }
 
+    /** Test seam: start the same ItemTouchHelper drag a long-press would start. */
+    internal fun startDragAt(index: Int): Boolean {
+        val vh = findViewHolderForAdapterPosition(index) ?: return false
+        dragHelper.startDrag(vh)
+        return true
+    }
+
+    /** Test seam: a full start-drag → adapter move → drop, as a finger drag would produce. */
+    internal fun simulateDrag(from: Int, to: Int): Boolean {
+        val vh = findViewHolderForAdapterPosition(from) ?: return false
+        dragHelper.startDrag(vh)
+        if (dragFrom == NO_POSITION) dragFrom = from
+        val target = findViewHolderForAdapterPosition(to)
+        if (target != null) {
+            dragCallback.onMove(this, vh, target)
+        } else {
+            // Off-screen target in Robolectric: apply the same adapter move the callback would.
+            gridAdapter.move(from, to)
+            dragTo = to
+        }
+        dragCallback.clearView(this, vh)
+        return true
+    }
+
     /** Cell width in px, used as the thumbnail decode target. */
     private fun thumbTargetPx(): Int {
         val usable = if (width > 0) width else resources.displayMetrics.widthPixels
@@ -241,12 +265,9 @@ class PageGridView @JvmOverloads constructor(
                 val pos = bindingAdapterPosition
                 if (pos != NO_POSITION) onTap?.invoke(pos)
             }
-            // Long-press enters selection; ItemTouchHelper also starts the drag from here.
-            binding.root.setOnLongClickListener {
-                val pos = bindingAdapterPosition
-                if (pos != NO_POSITION) onLongPress?.invoke(pos)
-                true
-            }
+            // No OnLongClickListener here: it would consume the gesture before ItemTouchHelper
+            // can start its drag. Selection enters from onSelectedChanged (drag start), so a
+            // long-press without movement still selects; movement drags.
             // Selected state paints the cyan stroke + tinted fill via the drawable.
             binding.root.isSelected = checkedAt(index)
         }

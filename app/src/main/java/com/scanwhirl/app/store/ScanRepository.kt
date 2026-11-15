@@ -2750,12 +2750,12 @@ class ScanRepository(private val context: Context) {
             }
         }
 
+        val marks = effective.flatMap { it.marks }
+        val existingNames = listDocuments(includeVaulted = true).map { it.name }
         val copy = duplicateDocument(
             id,
             suggestedName?.trim()?.takeIf { it.isNotBlank() }
-                // TODO(OutputNames): switch to util/OutputNames.forTool(base, label, existing)
-                // once L4's helper is in integration (not present at this commit).
-                ?: PageStamp.outputName(source.name, effective.flatMap { it.marks })
+                ?: OutputNames.forTool(source.name, PageStamp.outputLabel(marks), existingNames)
         )
         val copyDir = File(docsDir, copy.id)
         try {

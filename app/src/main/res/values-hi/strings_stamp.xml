@@ -128,7 +128,15 @@
     <!-- review -->
     <string name="mask_aadhaar_hint"><!-- review -->पहले 8 अंकों पर बने बॉक्स जाँचें, फिर सहेजें</string>
     <!-- review -->
-    <string name="mask_aadhaar_name"><!-- review -->%1$s - छिपाया गया</string>
+    <string name="mask_options_title"><!-- review -->आधार छिपाएँ</string>
+    <!-- review -->
+    <string name="mask_opt_number"><!-- review -->आधार संख्या छिपाएँ</string>
+    <!-- review -->
+    <string name="mask_opt_qr"><!-- review -->QR कोड भी छिपाएँ</string>
+    <!-- review -->
+    <string name="mask_continue"><!-- review -->जारी रखें</string>
+    <!-- review -->
+    <string name="mask_label"><!-- review -->छिपाया गया</string>
     <!-- review -->
     <string name="mask_aadhaar_none"><!-- review -->यहाँ कोई आधार संख्या नहीं मिली। ज़रूरत हो तो बॉक्स जोड़ें।</string>
     <!-- review -->

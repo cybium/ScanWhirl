@@ -78,4 +78,43 @@ class MaskAadhaarFlowTest {
             bmp.recycle()
         }
     }
+
+    @Test
+    fun `element geometry masks exactly the first two groups`() = runBlocking {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Aadhaar words")
+        val page = repo.getDocument(id)!!.pageFiles.single()
+        val (w, h) = requireNotNull(PageReplace.bounds(page))
+        val y0 = (h * 0.70f).toInt()
+        val y1 = (h * 0.78f).toInt()
+        val words = listOf(
+            AadhaarMask.Word("9233", (w * 0.30f).toInt(), y0, (w * 0.42f).toInt(), y1),
+            AadhaarMask.Word("6926", (w * 0.44f).toInt(), y0, (w * 0.56f).toInt(), y1),
+            AadhaarMask.Word("4947", (w * 0.58f).toInt(), y0, (w * 0.70f).toInt(), y1)
+        )
+        val boxes = AadhaarMask.findWords(words, w, h)
+        assertEquals("first two groups only", 2, boxes.size)
+
+        val masked = repo.stampDocument(
+            id,
+            listOf(PageStamp.PageEdits(0, boxes.map { PageStamp.Mark.Redact(it) })),
+            "Aadhaar words - Masked"
+        )
+
+        val bmp = BitmapFactory.decodeFile(masked.pageFiles.single().path)
+        try {
+            for (box in boxes) {
+                val x = (((box.left + box.right) / 2f) * bmp.width).toInt()
+                val y = (((box.top + box.bottom) / 2f) * bmp.height).toInt()
+                assertTrue("masked group is ink", Color.red(bmp.getPixel(x, y)) < 20)
+            }
+            val lastX = (((words[2].left + words[2].right) / 2f) / w * bmp.width).toInt()
+            val lastY = ((y0 + y1) / 2f / h * bmp.height).toInt()
+            assertTrue(
+                "the last 4 digits must stay visible",
+                Color.red(bmp.getPixel(lastX, lastY)) > 200
+            )
+        } finally {
+            bmp.recycle()
+        }
+    }
 }
