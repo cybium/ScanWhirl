@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.SensitiveScanTest,com.scanwhirl.app.util.AadhaarMaskTest,com.scanwhirl.app.store.MaskAadhaarFlowTest,com.scanwhirl.app.ui.stamp.*,com.scanwhirl.app.ui.a11y.AccessibilityAuditTest,com.scanwhirl.app.ui.a11y.DeadButtonAuditTest,com.scanwhirl.app.ui.kit.ToolRegistryTest,com.scanwhirl.app.ui.shell.ShellScreenTest
