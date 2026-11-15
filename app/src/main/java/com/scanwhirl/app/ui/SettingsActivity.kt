@@ -376,10 +376,17 @@ class SettingsActivity : BaseActivity() {
         recreate()
     }
 
-    /** Hides a settings row's card and the section label right above it. */
+    /**
+     * Hides a settings row's card and the section label right above it.
+     * Walks up to the nearest card: rows sit at different depths (rowTrash's card is its
+     * PARENT, so the old `row.parent.parent` hid the whole page and Settings went blank).
+     */
     private fun hideSection(row: android.view.View) {
-        val card = row.parent?.parent as? android.view.View ?: return
+        var node: android.view.ViewParent? = row.parent
+        while (node != null && node !is com.google.android.material.card.MaterialCardView) node = node.parent
+        val card = node as? android.view.View ?: return
         val parent = card.parent as? android.view.ViewGroup ?: return
+        if (parent === binding.root || parent is android.widget.ScrollView) return
         val index = parent.indexOfChild(card)
         if (index > 0) parent.getChildAt(index - 1).visibility = android.view.View.GONE
         card.visibility = android.view.View.GONE
