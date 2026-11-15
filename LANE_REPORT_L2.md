@@ -64,14 +64,28 @@ Tests: `ManifestPrivacyTest`, `PrivacySweepTest`, `ClipboardPrivacyTest`, `Vault
 
 ## Gate
 
+Full cloud suite on the merged tree (`integration` merged, `app/build.gradle.kts` heap fix from
+`1a924ae`/`f42bc1d` included):
+
 ```
-tests: total=1341 failures=0 skipped=0
-GATE PASS L2 tests=1341 lint=[lint skipped (lead runs it at merge)]
+cloud: run 43673186804 finished in 5 min
+tests: total=1377 failures=1 skipped=0
+GATE FAIL L2 tests=1377 failures=1 lint=[skipped]
+   FAIL TextFitTest > ocr editor text fits (w320dp, scale 1.3, swChipLabel "To Word · PRO")
 ```
+
+The only failure is the known L1-owned integration layout issue (`To Word · PRO` chip at font
+scale 1.3), which the lead allowed pending L1's fix. No L1 file was edited here; the branch diff
+against `integration` is exactly the security files and their tests. All five security tests pass
+and every other test in the suite is green.
+
+The earlier `tests=0`/`OutOfMemoryError` failures were the hardcoded 1 GB / forkEvery 120 test
+heap, now configurable in `app/build.gradle.kts` (lead's fix).
 
 ## Commits
 
 - `2ad6e49` OCR quality + Hindi · `28200c7` PDF/A-2b · `7794a40` Soon-tile follow-ups
-- (this pass) security audit: manifest permission strip, FLAG_SECURE, cold-start sweep, PBKDF2
+- `dd2a62b` security audit: manifest permission strip, FLAG_SECURE, cold-start sweep, PBKDF2
   legacy PIN, sensitive/auto-clearing clipboard, audit document, tests
-- (this report) L2: report
+- `6b22dcd` audit: cloud-gate OOM finding · merge of `integration` (build/heap fix, lint fix)
+- (this commit) audit + report: final gate numbers, share-copy lifetime, gate credential review

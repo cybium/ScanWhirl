@@ -6,14 +6,15 @@ clipboard, crypto parameters, and debug-only paths. Same rules as the lane brief
 files or small isolated changes, everything else assigned to its owner with the exact file.
 
 Method: static review of every source file plus the **merged manifest** (read from the test APK by
-`ManifestPrivacyTest`), inspection of every dependency AAR's `AndroidManifest.xml`, and the gate
-(`GATE PASS L2 tests=1341`) for the fixes and their tests.
+`ManifestPrivacyTest`), inspection of every dependency AAR's `AndroidManifest.xml`, and the full
+cloud gate for the fixes and their tests (§11: 1377 tests, the only failure is the known L1 layout
+issue on the OCR editor's "To Word · PRO" chip).
 
 ## Findings
 
 | # | Sev | Area | Finding (evidence) | Status | Test |
 |---|---|---|---|---|---|
-| H-1 | **High** | Network | `INTERNET` + `ACCESS_NETWORK_STATE` were declared, and the code-scanner dependency re-adds them through `transport-runtime`, `transport-backend-cct` and `okhttp-android` (all declare `INTERNET`). The app never opens a socket, yet the store listing and the manifest said it could. | **Fixed**: deleted from the manifest and stripped from the merged manifest with `tools:node="remove"` (`AndroidManifest.xml:5-13`) | `ManifestPrivacyTest.the merged manifest requests no network permission` |
+| H-1 | **High** | Network | `INTERNET` + `ACCESS_NETWORK_STATE` were declared, and the code-scanner dependency re-adds them through `transport-runtime`, `transport-backend-cct` and `okhttp-android` (all declare `INTERNET`). The app never opens a socket, yet the store listing and the manifest said it could. | **Fixed**: deleted from the manifest and stripped from the merged manifest with `tools:node="remove"` (`AndroidManifest.xml:8-13`) | `ManifestPrivacyTest.the merged manifest requests no network permission` |
 | H-2 | **High** | Screenshots | No `FLAG_SECURE` anywhere: the recovery code, passcodes and private file names were screenshot-able, recordable, and visible on the recents card. | **Fixed for the Vault** (`VaultActivity.kt:143` → `SecureView.apply(window)`). **Open for L3/L1** (below) | `VaultActivityTest.the vault window blocks screenshots and blanks the recents card` |
 | H-3 | **High** | Plaintext lifetime | Decrypted Vault files (`cacheDir/vault_open/*`), viewer temp PDFs (`cacheDir/documents/*`), PDF/A copies (`cacheDir/pdfa/*`), decrypted imports (`cacheDir/decrypted-*.pdf`) and OCR `.txt` copies survived a process kill; only `lock()` wiped the Vault cache, and only while the app was running. | **Fixed**: `PrivacySweep` runs in `ScanWhirlApp.onCreate` (`ScanWhirlApp.kt:43`) before any screen exists | `PrivacySweepTest` (5 cases: dirs, share copies, library/vault/exports untouched, idempotent) |
 | M-1 | Medium | Credentials | The legacy 4-digit PIN was stored as an unsalted bare SHA-256 (`Prefs.kt:121` before the fix): 10,000 guesses from a prefs backup. | **Fixed**: `VaultPinHash` (PBKDF2-HMAC-SHA256, 120k iterations, 16-byte salt, constant-time compare) and an in-place upgrade of old values on the first correct PIN (`Prefs.kt:124-142`) | `VaultPinHashTest` (4 cases incl. legacy upgrade and malformed values) |
@@ -59,9 +60,10 @@ tree that the app already shares on purpose.
 
 ## 2. Plaintext lifetime
 
-Before the audit only `VaultStore.lock()` wiped `cacheDir/vault_open`, and only from the running
-session. Cold start (process killed while the Vault was open, or while a viewer/share held a temp
-file) left plaintext behind. `PrivacySweep` now runs first in `ScanWhirlApp.onCreate` and deletes:
+Before the audit only `VaultStore.lock()` wiped `cacheDir/vault_open` (`VaultStore.kt:223-225`),
+and only from the running session. Cold start (process killed while the Vault was open, or while a
+viewer/share held a temp file) left plaintext behind. `PrivacySweep` now runs first in
+`ScanWhirlApp.onCreate` and deletes:
 
 - `cache/vault_open/` (decrypted Vault documents / page JPEGs / PDF),
 - `cache/vault_verify/` (Vault verification scratch),
@@ -73,7 +75,16 @@ file) left plaintext behind. `PrivacySweep` now runs first in `ScanWhirlApp.onCr
 The library (`files/documents`), the Vault (`files/vault2`) and user exports (`files/exports`) are
 never touched — the sweep test proves it, including the `.swvault` and manifest files. Vault OCR
 text and thumbnails are never written in the clear: adding a document encrypts every file of the
-directory and removes the library copy, and the OCR indexer only sees library documents.
+directory and removes the library copy, and every tool/indexer/thumbnail path works from the
+library listing, which excludes vaulted ids (`ScanRepository.kt:135,144`); drafts are keyed by
+library document id (`DraftStore.kt:11,188`) and no vault id ever reaches them.
+
+**Share copies.** `ShareUtils.namedCopy` (`ShareUtils.kt:98-103`) writes the outgoing PDF/JPEG into
+`cache/documents/share/` under the document's display name, because the chooser needs a real file
+name and the receiver reads the URI lazily. They are therefore not deleted the instant the chooser
+closes (that would break slow receivers), but they live only in the cache and the cold-start sweep
+deletes the whole directory; `PrivacySweepTest.share copies inside the cache documents dir are
+removed` pins that.
 
 ## 3. Screenshots (FLAG_SECURE)
 
@@ -181,22 +192,40 @@ verification (M-1).
 - The snapshot uses a temporary `GIT_INDEX_FILE` and a `commit-tree`, so the lane branch and index
   are untouched, and the pushed branch is only `ci/<lane>`.
 
-## 10. Cloud gate OOM (found while running the gate, lead/infra)
+## 10. Cloud / local test-suite OOM (found while running the gate; fixed by the lead)
 
-The cloud gate currently fails for every lane with `tests=0`: the Robolectric test JVM dies with
-`java.lang.OutOfMemoryError` ("SDK 35 Main Thread", default dispatcher workers, test worker) about
-4-5 minutes into the run. Root cause: `app/build.gradle.kts:80-81` hardcodes
+While verifying this audit the test JVM died with `java.lang.OutOfMemoryError` ("SDK 35 Main
+Thread", default-dispatcher workers, test worker) about 4-5 minutes in, with `tests=0`.
+Evidence: local run at 1 GB / forkEvery 120, then cloud runs 43670860060 (L2), 43670858082 (L5)
+and 43669806617 (integration). Root cause was that `app/build.gradle.kts` hardcoded
 `maxHeapSize = "1g"` / `forkEvery = 120L`, so the workflow's `-PtestHeap=4g -PtestForkEvery=200`
-is ignored — the suite (1300+ Robolectric tests with native graphics since the L1/L4/L5 merges)
-no longer fits in 1 GB. Evidence: runs 43670860060 (L2), 43670858082 (L5), 43669806617
-(integration), all `GATE FAIL tests=0`. Fix for the lead (build file is yours):
-`it.maxHeapSize = (findProperty("testHeap") as String?) ?: "1g"` and
-`it.forkEvery = (findProperty("testForkEvery") as String?)?.toLong() ?: 120L` (or simply raise the
-defaults). My changes needed a local full-suite run to be verified (below).
+was ignored; the suite (1300+ Robolectric tests with native graphics) no longer fits.
+
+The lead fixed it in `integration` (`1a924ae`, `f42bc1d`): the values are now
+`(findProperty("testHeap") as String?) ?: "1536m"` and
+`(findProperty("testForkEvery") as String?)?.toLongOrNull() ?: 40L`, so the cloud gate gets 4 GB /
+200 classes per JVM and a local run gets a smaller fork interval. Nothing in this lane depends on
+the still hardcoded values; the audit's own tests run in either configuration.
+
+Security note on the fix: `testHeap`/`testForkEvery` are Gradle properties, so they only influence
+JVM sizing and fork frequency — they cannot enable a debug path, change `BuildConfig`, or alter the
+shipped manifest. `-PtestBuild` (which enables `TEST_BUILD` seams) is still only passed by the test
+task, never by a release build.
 
 ## 11. Gate
 
+Full cloud suite on the merged tree (after merging `integration`):
+
 ```
-tests: total=1341 failures=0 skipped=0
-GATE PASS L2 tests=1341 lint=[lint skipped (lead runs it at merge)]
+cloud: run 43673186804 finished in 5 min
+tests: total=1377 failures=1 skipped=0
+GATE FAIL L2 tests=1377 failures=1 lint=[skipped]
+   FAIL TextFitTest > ocr editor text fits :: w320dp, scale 1.3:
+        [swChipLabel "To Word · PRO"] needs 94px but the view is 47px tall
 ```
+
+The single failure is **not** from this lane and not a security finding: it is the known
+integration layout issue on the OCR editor's "To Word · PRO" chip at font scale 1.3, owned and
+being fixed by L1 (the lead confirmed it is the only allowed failure until that fix merges; I did
+not touch any L1 file — the branch diff against `integration` is only the files listed in §8).
+Every other test in the 1377 passes, including all five security tests added here.
