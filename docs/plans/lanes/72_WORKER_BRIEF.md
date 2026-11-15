@@ -46,6 +46,8 @@ run locally. `-Local` forces a local run (avoid for the full suite: this PC has 
 - Evals run LOCALLY with `-Tests`; in the cloud they must return early and pass. Never commit the private files.
 
 ## Rules
+- Commit every green piece (at least every ~45 min of work). The model provider can drop a session; the lead
+  restarts it, but uncommitted hours are a risk.
 - File ownership is strict: if a fix needs another lane's file, report it to the lead instead of editing it
   (exception: one-line hooks the lead explicitly allowed).
 - Commit after each GATE PASS: `git add -A ; git commit -m "<LANE>: <what>"`. Small, frequent commits.
