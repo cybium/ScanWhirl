@@ -49,7 +49,7 @@ Branch `lane/L5-stamp`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L5`, 2026-11
   frame, blank), `MaskAadhaarFlowTest` (2: line and element masks, original untouched, OCR gone),
   `StampEditorActivityTest` (first Back pair, tool-row padding), `PageStampPictureTest`,
   `SignatureStoreBitmapTest`, `SignatureDeleteTest`, `ScanReviewBackTest`, `CropPanelTest`.
-- Full suite: **1315 tests, 0 failures, 0 skipped** on the merged tree (final run below).
+- Full suite: **1320 tests, 0 failures, 0 skipped** on the merged tree (final run below).
 
 ## Owner evaluation (private samples, never committed)
 
@@ -69,6 +69,6 @@ ML Kit model; the device path uses element boxes.
 ## Last gate
 
 ```
-tests: total=1315 failures=0 skipped=0
-GATE PASS L5 tests=1315 lint=[lint skipped (lead runs it at merge)]
+tests: total=1320 failures=0 skipped=0
+GATE PASS L5 tests=1320 lint=[lint skipped (lead runs it at merge)]
 ```
