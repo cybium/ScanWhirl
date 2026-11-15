@@ -57,7 +57,7 @@ class ScanFilterTest {
             if (v > beforeMax) beforeMax = v
         }
 
-        val out = ScanFilter.ENHANCE.applyTo(src)
+        val out = ImageTools.enhance(src)
         assertEquals(w, out.width)
         assertEquals(h, out.height)
 
