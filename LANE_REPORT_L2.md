@@ -141,6 +141,36 @@ brackets:
   its staging folder); it passes in isolation and in both green runs, so it is recorded here rather
   than changed.
 
+## Robolectric abort: real cause and fix - this pass
+
+The `JniConstants: Class not found: java/nio/DoubleBuffer` abort (Gradle Test Executor exit 134,
+tests=0) was not the graphics mode. **Cause:** `PageThumbLoader` is a JVM-wide singleton with two
+daemon threads that decode bitmaps and are never stopped. When a test class that bound a grid, a
+library card or a Home thumb finished, a decode could still be queued or running; Robolectric then
+closed that test's sandbox class loader, and the next native call from the "page-thumb" thread made
+`FindClass` fail, aborting the JVM. It depended on timing and fork composition, which is why it
+looked random and why integration and lanes hit it at different commits.
+`graphicsMode=NATIVE` in `robolectric.properties` only made the native load happen earlier; it did
+not stop the leak, so the abort came back.
+
+**Fix (product code, not a test hack):**
+- `ui/pagegrid/PageThumbLoader.kt`: under Robolectric (`Build.FINGERPRINT == "robolectric"`, the
+  same guard `ScanWhirlApp` already uses for OCR) the decode runs on the calling thread, so nothing
+  survives the test that queued it; production keeps the pool and the apply-on-main-thread
+  behaviour unchanged.
+- `ui/PageViewerActivity.kt`: `fullExecutor.shutdownNow()` in `onDestroy` (the other viewers and
+  `ReaderFind` already did this); a full-page decode can no longer outlive the screen.
+
+**Evidence:** every aborted run produced **zero** test XMLs, so the dying fork left no record of
+its last class; the surviving evidence is the leak itself (a JVM-wide executor with no shutdown
+path, reached by every screen that shows thumbnails) and the fact that only graphics work on
+long-lived background threads can call JNI after the sandbox closes. The other three executors
+(`PageViewer`, `PdfViewer`, `ScanReview`/`ReaderFind`) were checked: only `PageViewer` lacked the
+shutdown.
+
+**Proof (retry disabled on the snapshot with `.ci/no-retry`):** three consecutive full cloud runs
+43722723614, 43723586319 and 43724100164, each **1541 tests, 0 failures**.
+
 ## Save as PDF/A (PDF/A-2b, ISO 19005-2 level B) - previous pass
 
 - `util/PdfA.kt` (XMP with pdfaid part 2 / conformance B, matching Info dates/title/producer,

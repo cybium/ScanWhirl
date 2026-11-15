@@ -149,6 +149,9 @@ class PageViewerActivity : BaseActivity() {
     override fun onDestroy() {
         // Leaving the screen makes any pending delete permanent.
         commitPendingDelete()
+        // Stop full-page decodes: a thread that outlives the screen would decode into a dead
+        // context (and, in tests, into a closed Robolectric class loader).
+        fullExecutor.shutdownNow()
         super.onDestroy()
     }
 
