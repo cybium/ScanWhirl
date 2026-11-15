@@ -109,4 +109,6 @@ These are starting points, not proof of ownership. Confirm with search before ed
 
 ## Evidence
 
-`evidence/` contains 15 current screenshots from the M08 device walk. `EVIDENCE.md` maps them. The full audit is at the workspace root: `SCANWHIRL_CRITIQUE.md`.
+`evidence/` contains 15 current screenshots from the M08 device walk. `EVIDENCE.md` maps them. The
+full audit is archived at `docs/history/2026-11/root/SCANWHIRL_CRITIQUE.md` (it describes test27,
+before the 2026-11-13 UX pass — historical, not current findings).

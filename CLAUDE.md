@@ -1,75 +1,91 @@
-# ScanWhirl — working context
+# ScanWhirl — working context for AI sessions
 
-Last updated: 2026-11-13  
-Clean workspace: `C:\Users\Cybium\Desktop\ScanWhirl`  
-Build workspace: Windows 11, JDK 17, Android SDK 36
+Last updated 2026-11-16. This file and `START_HERE.md` are the truth about the repository today;
+anything older under `docs/history/` is not instruction.
 
-## What this project is
+## The project
 
-A local-first Android document scanner in Kotlin. Google ML Kit supplies scanning and OCR. The app owns the native library, review, reader, editor, search, categories, merge/compress/resize, PDF generation, locking, export provenance, and Trash. Test builds install as `com.scanwhirl.app.test` / “ScanWhirl Test”.
+- Android app in Kotlin, package `com.scanwhirl.app`, minSdk 24, target/compileSdk 36, JDK 17.
+- Local-first document scanner: ML Kit document scanner + on-device text recognition, a library of
+  scans, 43 tools (`ui/kit/ToolRegistry.kt`), an encrypted Vault, encrypted full backup, and a
+  one-time Pro unlock through Play Billing (`scanwhirl_pro`).
+- English and Hindi only. No internet permission: the manifest removes `INTERNET` and
+  `ACCESS_NETWORK_STATE`; the app never talks to a server, has no ads and no analytics.
+- Current releases: 1.2.0 (`versionCode 26111501`) on Play closed testing, 1.2.1 (`26111601`) being
+  prepared. Version codes are date based `YYMMDDnn`, defined in `app/build.gradle.kts`.
+- Branches: `master` (main), `integration` (working branch), `lane/<name>` (one task each). Never
+  merge a lane into `integration` yourself — the lead merges.
 
-## Current snapshot
+## Read before editing
 
-- Source basis: `/home/cybium/ScanWhirl`, branch `test26-redesign`, HEAD `d69a304` “M08 edit safety”, plus the uncommitted post-M08 UX fix pass.
-- Version: `versionCode 27`, `versionName 1.1.1-test27`.
-- This clean copy is frozen on branch `clean-workspace-2026-11-13`. The WSL repository remains untouched as a backup.
-- The uncommitted UX pass includes direct save after Google’s scanner, auto-export, whole-word search, hiding dead Vault entry points, one ink palette, tighter Home cards, and shorter Import/Trash copy.
-- The UX pass **compiled successfully in this Windows snapshot** on 2026-11-13 (`:app:compileDebugKotlin`, 1m27s). It has not been fully tested. The latest recorded targeted subset was 101 tests with 3 failures in `SearchMatcherTest` and `LockedDocumentSearchPrivacyTest`.
-- The full suite was last reported green at `d69a304`: 797 tests, 0 failures. Treat that as historical until rerun.
-- The recording `Screen_Recording_20261113_121627.mp4` is test27. It predates the latest UX pass. Do not assume current code matches every frame.
-- Candidate D was walked over ADB on 2026-11-13. `DEVICE_FINDINGS.md` is the current-build evidence. It invalidates the video’s universal B/W failure and stale page-grid finding, and adds the page-edit/discard, PRO/Vault and hidden-action failures.
+1. [`START_HERE.md`](START_HERE.md) — orientation and where everything lives.
+2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — package map, key classes.
+3. The doc for your area (`docs/release/`, `docs/design/2026-11-14/`, `docs/plans/pdf-manager/`,
+   newest `docs/audit/<date>/`).
+4. Only the source files that own the task. Do not bulk-read the tree.
 
-## Read only these first
+Never read, print, copy or move `keystore/`, `keystore.properties` or `local.properties`.
 
-1. `START_HERE.md`
-2. `docs/audit/2026-11-13/HANDOFF.md`
-3. `docs/audit/2026-11-13/DEVICE_FINDINGS.md` — current installed build
-4. `docs/product/pdf-manager-2026-11-13/SPEC.md` — PDF Manager product spec
-5. `docs/product/pdf-manager-2026-11-13/TOOL_MATRIX.md` — Free/PRO and offline feasibility
-6. `docs/product/pdf-manager-2026-11-13/APK_ARCHITECTURE.md` — competitor stack/code footprint
-7. `docs/competitive/2026-11-13/OPUS_BRIEF.md` — competitor synthesis
-8. `docs/competitive/2026-11-13/RANKING.md`, `PRICING.md`, `UI_PATTERNS.md`
-9. `docs/audit/2026-11-13/M08_HANDOFF.md`
-10. `docs/audit/2026-11-13/UX_AUDIT.md`
-11. `SCANWHIRL_CRITIQUE.md` — full video audit; use only the assigned findings
-12. `README.md` — build and product rules
-13. Relevant source files only
+## Build and test (Windows PowerShell, repo root)
 
-Do **not** load `docs/history/`, old plan/log files, or the entire research archive into context. Do not read `keystore/` or `keystore.properties`.
+```powershell
+.\gradlew.bat :app:compileDebugKotlin -PtestBuild --no-daemon   # quick compile
+.\gradlew.bat :app:testDebugUnitTest -PtestBuild --no-daemon     # full unit suite (Robolectric)
+.\gradlew.bat :app:lintDebug -PtestBuild --no-daemon             # lint (abortOnError = true)
+```
 
-## Build and test on Windows
+- In a lane worktree use `powershell -File tools\gate.ps1 -Lane <lane> [-Tests "Class"]`; it
+  serializes builds across lanes and prints `GATE PASS` / `GATE FAIL`. Waiting is normal.
+- The authoritative gate is CI: `.github/workflows/gate.yml` runs the full suite with `-PtestBuild`,
+  lint on `integration`, and the minified release build with `-PciUnsignedRelease`. Only a
+  `GATE PASS` line counts as green.
+- Unit tests are Robolectric/JVM tests under `app/src/test/java/com/scanwhirl/app/`, mirroring the
+  main package names. Any new behaviour needs a test in the same package.
+- Do not run `assembleRelease` without `-PtestBuild` unless the owner asks; that is the Play build.
 
-Use `gradlew.bat` from this directory. `local.properties` points at the Windows Android SDK.
+## Build variants
 
-- Compile: `.\gradlew.bat :app:compileDebugKotlin -PtestBuild --no-daemon`
-- Unit tests: `.\gradlew.bat test -PtestBuild --no-daemon`
-- Test APK: `.\gradlew.bat assembleRelease -PtestBuild --no-daemon`
-- Lint: `.\gradlew.bat lintDebug -PtestBuild --no-daemon`
+| Variant | applicationId | Use |
+| --- | --- | --- |
+| `-PtestBuild` | `com.scanwhirl.app.test` | QA and all agent testing ("ScanWhirl Test", Pro unlocked, no R8, test harness). |
+| `-PtestBuild -PdemoBuild` | `com.scanwhirl.app.demo` | Store screenshots only; a clean, empty library. |
+| `-PciUnsignedRelease` | `com.scanwhirl.app` | CI-only release build signed with the debug key. Never distribute. |
+| (no properties) | `com.scanwhirl.app` | Real Play build signed with the owner's upload key. Owner only. |
 
-The build is memory-sensitive. Run one gate at a time in the foreground. Never build a production APK by omitting `-PtestBuild` unless the owner explicitly asks.
+## Rules that are true now
 
-## Hard rules
+- **Strings:** every new or changed user-visible string goes into `values/strings.xml` (English) and
+  `values-hi/strings.xml` (Hindi) in the same commit. Hindi entries carry `<!-- review -->`.
+  Never hardcode user-visible text in Kotlin.
+- **Privacy:** no network code, no ads, no analytics, no crash reporting, no new permission and no
+  new dependency without the lead's explicit approval. The app has no `INTERNET` permission.
+- **Version:** never change `versionCode`, `versionName`, the applicationId or signing config
+  unless the task is explicitly a release task from the owner.
+- **Secrets:** never print, commit, copy or send keystore material, passwords, or the contents of
+  `keystore.properties` / `local.properties`.
+- **Tests:** no `@Ignore`, no deleting or weakening a test to get green. A flaky Robolectric JVM
+  abort is retried by the gate; a real failure is fixed.
+- **Phone work:** only install and drive `com.scanwhirl.app.test` or `com.scanwhirl.app.demo`.
+  Never uninstall, clear data, force-stop or change settings of the `com.scanwhirl.app` production
+  install. Never toggle airplane mode or other device-wide settings. Use `tools/phone.ps1`;
+  screenshots and recordings stay outside the repo (`Desktop\.sw-qa\shots`).
+- **Screenshots for the store:** always the `-PdemoBuild` copy, never the production app and never a
+  phone with the owner's real library.
+- **Commits:** small and focused, subject `<area>: <what changed>`, one task per commit. Never
+  rewrite history, never push to `master` or `integration`, never `git push --force`.
+- **Docs:** no new files at the repository root. Dated documents go under
+  `docs/<kind>/<yyyy-mm-dd>/`; stale documents move to `docs/history/2026-11/` with `git mv`, never
+  deleted.
 
-- One focused task at a time; no speculative features while the trust/state findings are open.
-- Do not change `versionCode`, `versionName`, Play package ID, signing material, or push to Git.
-- No network/analytics/ads/new permissions/new dependencies.
-- Every changed user-visible string needs English in `values/strings.xml` and Hindi in `values-hi/strings.xml`.
-- Preserve the original file on every save. A destructive action is never the primary visual choice.
-- If a state count, thumbnail, and save summary disagree, treat it as a bug even if the arithmetic is explainable.
+## Code map in one screen
 
-## Current first-session scope — device-verified
-
-Work only on these unless the owner changes the scope:
-
-1. Resolve the page-edit transaction: deletion survived force-stop, Save changes has no Discard, and the target file is unnamed. Prove whether the page set and PDF can diverge.
-2. Fix or remove the PRO/Vault dead end. Do not ship “Not available yet” behind a PRO badge, and do not offer an add-to-Vault path that dies in a toast.
-3. Restore visible document actions and lock state. The reader currently offers only Find; Share/Edit/Text/More are hidden behind Home overflow → Edit pages.
-4. Fix Resize: keyboard hides actions, 500 KB sits alone, the hint looks like a value, and the keyboard is textual.
-5. Make the privacy wording precise: Auto enhance says “Google processing” while About says “no servers.”
-6. Verify the current WIP’s Vault, palette, Tools and direct-save changes on device before adding more UI work.
-
-Do not implement the video-only stale page grid or treat B/W as universally broken; both failed to reproduce on candidate D. Do not start signature, redaction, folders/tags, AI, ID mode, or a visual rebrand in the first session.
-
-## Secrets
-
-`keystore/scanwhirl.keystore` and `keystore.properties` are present because release test builds need them. They are ignored by Git. Never print, copy into documentation, commit, or send their contents to a model or another person. The historical `CLAUDE_CONTEXT.md` in the WSL repo contains credentials; it was deliberately excluded from this clean workspace.
+- `ui/shell/` — `ShellActivity` (launcher screen, bottom tabs Library / Tools / Vault / Me) plus
+  `LibraryScreen`, `ToolsHubScreen`, `VaultScreen`, `MeScreen`, `ProScreen`.
+- `ui/kit/` — design system (`SwTheme`, `SwStyle`, `SwSheet`, `SwSnackbar`, …) and `ToolRegistry`.
+- `ui/tools/`, `ui/stamp/`, `ui/protect/`, `ui/qr/`, `ui/book/`, `ui/pagegrid/`, `ui/vault/`,
+  `ui/backup/`, `ui/home/` — feature screens.
+- `tools/` — non-UI flows that stitch screens to engines (merge, compress, resize, lock, OCR, …).
+- `store/` — `ScanRepository` (documents, pages, exports, trash) and the stores around it;
+  `store/vault/` (encrypted Vault) and `store/backup/` (`FullBackup`).
+- `util/` — PDF writer/encryption/import, OCR engine, image processing, billing, prefs.
+- Details and one line per package: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).

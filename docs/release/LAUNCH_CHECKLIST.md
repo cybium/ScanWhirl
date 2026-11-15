@@ -1,8 +1,15 @@
 # ScanWhirl launch checklist (Google Play)
 
+> **Snapshot, 15 November 2026.** This checklist was written before 1.2.0 went to closed testing:
+> its version numbers ("1.1.1", "currently 28") and "nothing has been uploaded yet" are no longer
+> true. The console steps and the launch requirements below are still the useful part — verify any
+> statement about the current build or console state.
+>
+> Current store copy lives in `docs/release/PLAY_LISTING.md`; data safety answers in
+> `docs/release/DATA_SAFETY.md`; release notes in `docs/release/RELEASE_NOTES_PLAY.txt`.
+
 State of the repo on 15 November 2026. Owners: **lead** = repository owner and Play Console
-account, **L2** = this lane. Copy and asset text live in `STORE_LISTING.md`; the data safety answers
-are in `docs/release/DATA_SAFETY.md`.
+account, **L2** = this lane.
 
 ## 1. Build and signing (owner: lead)
 
@@ -40,17 +47,18 @@ are in `docs/release/DATA_SAFETY.md`.
 
 ## 3. Store listing (owner: lead, assets need a designer or a phone)
 
-Text: `STORE_LISTING.md` is current except for two stale lines: it names the bundle
-`ScanWhirl-v1.3.0.aab` (the build is 1.1.1) and its own checklist predates this file. Text fields:
+Text: `docs/release/PLAY_LISTING.md` holds the current copy; the two stale lines this checklist
+originally called out (a `ScanWhirl-v1.3.0.aab` build name and an older checklist) should be
+re-checked there. Text fields:
 
 - [ ] App name (30), short description (80), full description (4000), English.
 - [ ] Optional Hindi listing (the app ships Hindi strings; a localized listing lifts installs in IN).
 - [ ] App icon 512x512 PNG (32-bit, no alpha).
 - [ ] Feature graphic 1024x500 PNG.
 - [ ] At least 2 phone screenshots (1080x1920 or larger, portrait). The eight shot ideas are in
-      `STORE_LISTING.md`; take them on the release build so the UI matches.
+      `docs/release/PLAY_LISTING.md`; take them on the `-PdemoBuild` copy so the UI matches.
 - [ ] Category: Productivity. Tags: document scanner, scan to pdf, pdf scanner, receipt scanner.
-- [ ] Contact email: t.mecybium@gmail.com.
+- [ ] Contact email: the address shown in the app's About screen (`cybiumsupport@gmail.com`).
 - [ ] Countries: lead's decision (India first is the obvious start given the Hindi support).
 
 ## 4. Testing and rollout (owner: lead)
@@ -107,7 +115,7 @@ unlock and Protect PDF. Still worth a pass on:
 | 6 | Icon, feature graphic, screenshots | lead / design | listing |
 | 7 | Closed test 12 testers x 14 days (if a new personal account) | lead | production access |
 | 8 | Pre-launch report read and crashes triaged | lead | rollout |
-| 9 | `STORE_LISTING.md`: fix the stale `ScanWhirl-v1.3.0.aab` line and point at this checklist | lead | listing |
+| 9 | `docs/release/PLAY_LISTING.md`: confirm every copy line against the current build | lead | listing |
 | 10 | Any missing R8 keep rule found by the QA session | L2 | release build |
 
 Nothing in this list requires a code change except items 1 (build config) and 10 (only if QA finds
