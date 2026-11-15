@@ -244,6 +244,28 @@ object ImageTools {
     fun orientJpeg(bytes: ByteArray): ByteArray = normalizePage(bytes)
 
     /**
+     * v2 UI: 01_home_A — a gallery photo may be HEIC/HEIF or another container
+     * [normalizePage] does not know. Decode it with the platform decoder and
+     * re-encode a real JPEG, so photo import never dies on a modern phone's
+     * default camera format. Unreadable bytes still fail with a clear message.
+     */
+    fun normalizeGalleryPhoto(bytes: ByteArray): ByteArray {
+        return try {
+            normalizePage(bytes)
+        } catch (e: IllegalArgumentException) {
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                ?: throw IllegalArgumentException(
+                    "This photo cannot be read. Choose a JPG or PNG image and try again.", e
+                )
+            try {
+                encodeJpeg(bitmap, 92)
+            } finally {
+                bitmap.recycle()
+            }
+        }
+    }
+
+    /**
      * Conservative perspective straighten for a photographed paper quad.
      * Runs on a bounded copy, only fires when strong corners are found, and
      * never changes color information — a straightened scan, not a fake one.

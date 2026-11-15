@@ -35,6 +35,7 @@ class ToolTile(context: Context) : FrameLayout(context) {
     init {
         isClickable = true
         isFocusable = true
+        SwMotion.press(this)
         background = SwStyle.rounded(context, Color.TRANSPARENT, radiusDp = 14f)
         foreground = RippleDrawable(
             ColorStateList.valueOf(SwStyle.color(context, R.color.sw_cyan_soft)),

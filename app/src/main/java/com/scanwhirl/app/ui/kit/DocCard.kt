@@ -53,6 +53,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         setPadding((10 * d).toInt(), (10 * d).toInt(), (6 * d).toInt(), (10 * d).toInt())
         isClickable = true
         isFocusable = true
+        SwMotion.press(this)
 
         thumbFrame = FrameLayout(context).apply {
             background = SwStyle.rounded(context, SwStyle.color(context, R.color.sw_paper_thumb), radiusDp = 9f)

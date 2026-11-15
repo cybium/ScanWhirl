@@ -217,8 +217,8 @@ class MergePdfActivity : BaseActivity() {
         }
     }
 
-    private fun showProgress(): android.app.Dialog {
-        return SwDialog.progress(this, titleRes = R.string.progress_title)
+    private fun showProgress(): com.scanwhirl.app.ui.kit.SwProgress {
+        return com.scanwhirl.app.ui.kit.SwProgress.show(this, getString(R.string.progress_title))
     }
 
     private inner class PickAdapter : RecyclerView.Adapter<VH>() {
