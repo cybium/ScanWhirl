@@ -448,7 +448,7 @@ class OcrEditorActivity : BaseActivity() {
         // v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word as chips,
         // on two rows so To Word is always visible (never hidden in a scroller).
         val actions = binding.ocrActions
-        fun chip(row: LinearLayout, id: Int, icon: Int, label: Int, pro: Boolean = false): com.scanwhirl.app.ui.kit.SwChip {
+        fun chip(row: LinearLayout, id: Int, icon: Int, label: Int, pro: Boolean = false, weight: Float = 1f): com.scanwhirl.app.ui.kit.SwChip {
             val chip = com.scanwhirl.app.ui.kit.SwChip(this).apply {
                 this.id = id
                 bind(icon, getString(label))
@@ -456,7 +456,7 @@ class OcrEditorActivity : BaseActivity() {
             }
             row.addView(
                 chip,
-                LinearLayout.LayoutParams(0, com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f), 1f)
+                LinearLayout.LayoutParams(0, com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f), weight)
                     .apply { marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f) }
             )
             return chip
@@ -469,7 +469,8 @@ class OcrEditorActivity : BaseActivity() {
             .setOnClickListener { shareCurrent() }
         chip(row2, R.id.btnSave, R.drawable.ic_sym_notes, R.string.ocr_save_btn)
             .setOnClickListener { saveCurrent() }
-        chip(row2, R.id.btnToWord, R.drawable.ic_sym_description, R.string.ocr_to_word_pro, pro = true)
+        chip(row2, R.id.btnToWord, R.drawable.ic_sym_description, R.string.ocr_to_word_pro, weight = 1.45f)
+            .apply { labelView.setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(this@OcrEditorActivity, R.color.gold_pro_primary)) }
             .setOnClickListener {
                 // v2 UI: 08_text_ocr — the real To Word tool, not an info sheet.
                 com.scanwhirl.app.ui.tools.ToolLaunch.start(this, "to_word")
@@ -772,6 +773,7 @@ class OcrEditorActivity : BaseActivity() {
         com.google.android.material.snackbar.Snackbar.make(
             binding.root, R.string.ocr_copied, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
         ).show()
+        findViewById<com.scanwhirl.app.ui.kit.SwChip>(R.id.btnCopy)?.flashDone(R.string.ocr_copied)
     }
 
     private fun shareCurrent() {

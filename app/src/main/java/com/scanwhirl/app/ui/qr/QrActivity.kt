@@ -205,6 +205,10 @@ class QrActivity : BaseActivity() {
             id = R.id.qrEmpty
         }
         card.addView(
+            com.scanwhirl.app.ui.kit.SwMotion.brandArt(this),
+            LinearLayout.LayoutParams(SwStyle.dp(this, 64f), SwStyle.dp(this, 64f))
+        )
+        card.addView(
             ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_qr_code_scanner)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(this@QrActivity, R.color.cyan_primary))

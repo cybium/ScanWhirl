@@ -330,7 +330,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     SwStyle.color(this@ShellActivity, R.color.rv_bg)
                 )
             }
-            setOnClickListener { scanLauncher.launchScanner() }
+            setOnClickListener {
+                com.scanwhirl.app.ui.kit.SwMotion.expandFrom(this) { scanLauncher.launchScanner() }
+            }
             com.scanwhirl.app.ui.kit.SwMotion.press(this)
             com.scanwhirl.app.ui.kit.SwMotion.breathe(this)
         }

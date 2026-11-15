@@ -235,6 +235,7 @@ class VaultActivity : BaseActivity() {
                 if (store.isUnlocked()) {
                     store.lock()
                     com.scanwhirl.app.ui.kit.SwHaptics.tick(findViewById(android.R.id.content))
+                    com.scanwhirl.app.ui.kit.SwMotion.relockRing(lockButton, 0)
                     promptShown = false
                     render()
                     maybePromptOnOpen()
@@ -479,6 +480,10 @@ class VaultActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@VaultActivity, 10f) }
         }
+        empty.addView(
+            com.scanwhirl.app.ui.kit.SwMotion.brandArt(this),
+            LinearLayout.LayoutParams(SwStyle.dp(this, 64f), SwStyle.dp(this, 64f))
+        )
         empty.addView(
             ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_encrypted)
@@ -915,6 +920,7 @@ class VaultActivity : BaseActivity() {
             sheet.dismiss()
             unlockSheet = null
             render()
+            com.scanwhirl.app.ui.kit.SwMotion.relockRing(lockButton)
             offerFingerprintSetup()
             return
         }
@@ -1074,6 +1080,7 @@ class VaultActivity : BaseActivity() {
             unlockSheet?.dismiss()
             unlockSheet = null
             render()
+            com.scanwhirl.app.ui.kit.SwMotion.relockRing(lockButton)
         } else {
             showFingerprintFailed()
         }

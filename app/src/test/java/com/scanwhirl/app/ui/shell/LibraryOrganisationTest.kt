@@ -248,6 +248,17 @@ class LibraryOrganisationTest {
                 activity.resources.getQuantityString(R.plurals.sel_count, 2, 2),
                 activity.findViewById<TextView>(R.id.swSelCount).text.toString()
             )
+            // v2 UI: 74_motion — the bar overlays the list, it does not shrink it.
+            assertEquals(
+                "the selection bar is an overlay",
+                R.id.swListHost,
+                (activity.findViewById<View>(R.id.swSelectionBar).parent as View).id
+            )
+            assertTrue(
+                "the list keeps its rows (inset, not shrunk)",
+                (activity.findViewById<View>(R.id.swDocList)).paddingTop >=
+                    90 * activity.resources.displayMetrics.density
+            )
             activity.findViewById<View>(R.id.swSelRename).performClick()
             idle()
 
@@ -270,6 +281,17 @@ class LibraryOrganisationTest {
             idle()
             assertEquals("undo restores the first name", "Invoice old 1", repo.getDocument(one)!!.name)
             assertEquals("undo restores the second name", "Invoice old 2", repo.getDocument(two)!!.name)
+
+            // v2 UI: 74_motion — the Undo action is anchored above the nav and
+            // carries its words for TalkBack.
+            val snack = library(activity).lastUndoSnackbar
+            assertNotNull("the Undo snackbar is shown", snack)
+            assertNotNull("it is anchored above the nav", snack!!.view.tag)
+            val action = snack.view.findViewById<TextView>(
+                com.google.android.material.R.id.snackbar_action
+            )
+            assertEquals("Undo", action.text.toString())
+            assertEquals("Undo", action.contentDescription.toString())
         }
     }
 }

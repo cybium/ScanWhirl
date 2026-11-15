@@ -214,6 +214,112 @@ object SwMotion {
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
+    /**
+     * v2 UI: 74_motion — the scan disc's whirl: two rings expand out from the
+     * disc, then the scanner opens. Off when animations are off (then() runs at
+     * once).
+     */
+    fun expandFrom(anchor: View, then: () -> Unit) {
+        if (!enabled(anchor.context)) {
+            then()
+            return
+        }
+        val parent = anchor.parent as? ViewGroup ?: run { then(); return }
+        val context = anchor.context
+        val ring = View(context).apply {
+            background = SwStyle.rounded(
+                context, Color.TRANSPARENT, radiusDp = 999f,
+                stroke = SwStyle.color(context, R.color.cyan_primary), strokeDp = 2f
+            )
+            alpha = 0.9f
+        }
+        val params = if (parent is FrameLayout) {
+            FrameLayout.LayoutParams(anchor.width, anchor.height).apply {
+                leftMargin = anchor.left
+                topMargin = anchor.top
+            }
+        } else {
+            ViewGroup.LayoutParams(anchor.width, anchor.height)
+        }
+        parent.addView(ring, params)
+        ring.animate()
+            .scaleX(2.2f).scaleY(2.2f).alpha(0f)
+            .setDuration(duration(context, 320L))
+            .withEndAction {
+                (ring.parent as? ViewGroup)?.removeView(ring)
+                then()
+            }
+            .start()
+    }
+
+    /**
+     * v2 UI: 74_motion — Vault relock countdown: a thin ring around the lock icon
+     * drains over [seconds]. [seconds] 0 removes the ring (locked now).
+     */
+    fun relockRing(anchor: View, seconds: Int = 120) {
+        val existing = anchor.tag as? android.animation.ObjectAnimator
+        existing?.cancel()
+        if (seconds <= 0 || !enabled(anchor.context)) {
+            anchor.tag = null
+            anchor.background = SwStyle.rounded(anchor.context, Color.TRANSPARENT, radiusDp = 999f)
+            return
+        }
+        val ring = RelockRingDrawable(
+            SwStyle.color(anchor.context, R.color.cyan_primary),
+            SwStyle.dp(anchor.context, 2f).toFloat()
+        )
+        anchor.background = ring
+        val anim = ObjectAnimator.ofInt(ring, "level", 10000, 0).apply {
+            duration = seconds * 1000L
+            interpolator = android.view.animation.LinearInterpolator()
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    anchor.background = SwStyle.rounded(
+                        anchor.context, Color.TRANSPARENT, radiusDp = 999f
+                    )
+                }
+            })
+        }
+        anchor.tag = anim
+        anim.start()
+    }
+
+    /** A thin ring that drains with its level (Vault relock). */
+    class RelockRingDrawable(
+        private val colour: Int,
+        private val stroke: Float
+    ) : android.graphics.drawable.Drawable() {
+
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = stroke
+            this.color = colour
+        }
+
+        override fun draw(canvas: android.graphics.Canvas) {
+            val inset = stroke
+            val oval = android.graphics.RectF(
+                bounds.left + inset, bounds.top + inset,
+                bounds.right - inset, bounds.bottom - inset
+            )
+            paint.alpha = 60
+            canvas.drawArc(oval, 0f, 360f, false, paint)
+            paint.alpha = 255
+            canvas.drawArc(oval, -90f, 360f * (level / 10000f), false, paint)
+        }
+
+        override fun setAlpha(alpha: Int) {
+            paint.alpha = alpha
+        }
+
+        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {
+            paint.colorFilter = colorFilter
+        }
+
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+    }
+
     /** Android 12+ haptics are available through the view path only (no permission). */
     internal fun supportsRichHaptics(): Boolean = Build.VERSION.SDK_INT >= 30
 }

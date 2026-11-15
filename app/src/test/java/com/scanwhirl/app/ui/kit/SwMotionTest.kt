@@ -126,6 +126,32 @@ class SwMotionTest {
     }
 
     @Test
+    fun `kit motion entry points exist and the list animator follows the tokens`() {
+        setScale(1f)
+        assertNotNull(com.scanwhirl.app.ui.kit.SwItemAnimator(app))
+        val animator = com.scanwhirl.app.ui.kit.SwItemAnimator(app)
+        assertEquals(com.scanwhirl.app.ui.kit.SwMotion.MEDIUM, animator.addDuration)
+        assertEquals(com.scanwhirl.app.ui.kit.SwMotion.MEDIUM, animator.moveDuration)
+
+        setScale(0f)
+        val still = com.scanwhirl.app.ui.kit.SwItemAnimator(app)
+        assertEquals("no list motion when animations are off", 0L, still.addDuration)
+        assertEquals(0L, still.removeDuration)
+    }
+
+    @Test
+    fun `the copied chip morphs to a check and back`() {
+        setScale(1f)
+        val chip = com.scanwhirl.app.ui.kit.SwChip(app)
+            .bind(com.scanwhirl.app.R.drawable.ic_sym_content_copy, "Copy all")
+        chip.flashDone(com.scanwhirl.app.R.string.ocr_copied)
+        val label = chip.findViewById<TextView>(com.scanwhirl.app.R.id.swChipLabel)
+        assertEquals(app.getString(com.scanwhirl.app.R.string.ocr_copied), label.text.toString())
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+        assertEquals("Copy all", label.text.toString())
+    }
+
+    @Test
     fun `no SwDialog progress spinner is left in the app source`() {
         val roots = listOf(File("src/main/java"), File("../app/src/main/java"))
         val src = roots.firstOrNull { it.isDirectory }
