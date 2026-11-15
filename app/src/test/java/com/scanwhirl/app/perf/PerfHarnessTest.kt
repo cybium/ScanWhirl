@@ -60,7 +60,14 @@ class PerfHarnessTest {
     private val repo by lazy { ScanRepository(app) }
 
     private val big: Boolean by lazy {
-        ownerRoots().any { File(it, "EVAL_ON").isFile }
+        ownerRoots().any { File(it, "L4_EVAL_ON").isFile }
+    }
+
+    init {
+        println(
+            if (big) "EVAL RAN: perf big sizes (300 docs / 500 pages)"
+            else "EVAL SKIPPED: no L4_EVAL_ON; perf harness runs modest sizes"
+        )
     }
 
     private val docCount get() = if (big) 300 else 40

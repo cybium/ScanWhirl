@@ -936,7 +936,7 @@ class ScanReviewActivity : BaseActivity() {
     private fun chooseFilterForCurrent() {
         val file = pages.getOrNull(currentIndex) ?: return
         if (refuseWhileBusy()) return
-        val all = ScanFilter.entries
+        val all = ScanFilter.uiFilters
         val index = currentIndex
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.filter_title)

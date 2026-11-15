@@ -261,7 +261,7 @@ class PageViewerActivity : BaseActivity() {
     private fun filterCurrent() {
         val pos = currentPosition()
         val file = pages.getOrNull(pos) ?: return
-        val filters = ScanFilter.entries
+        val filters = ScanFilter.uiFilters
         val dir = stagingDir
         if (dir != null) {
             // Staging: the choice is virtual, persisted for the review screen.

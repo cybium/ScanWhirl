@@ -206,9 +206,11 @@
     <string name="edit_pdf_note_title"><!-- review -->Import PDF</string>
     <string name="export_zip"><!-- review -->Export ZIP</string>
     <string name="filter_action"><!-- review -->Filter</string>
-    <string name="filter_bw"><!-- review -->B/W</string>
+    <string name="filter_bw"><!-- review -->ब्लैक एंड व्हाइट</string>
     <string name="filter_clean"><!-- review -->Clean</string>
-    <string name="filter_enhance"><!-- review -->Enhance</string>
+    <string name="filter_colour"><!-- review -->रंग बढ़ाएँ</string>
+    <string name="filter_enhance"><!-- review -->ऑटो</string>
+    <string name="filter_grey"><!-- review -->ग्रे</string>
     <string name="filter_original"><!-- review -->Original (as स्कैनned)</string>
     <string name="filter_title"><!-- review -->Page फ़िल्टर</string>
     <string name="last_page_guard"><!-- review -->A दस्तावेज़ ज़रूरत है at least चालूe पृष्ठ. Delete the दस्तावेज़ instead.</string>
