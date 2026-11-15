@@ -295,15 +295,18 @@ chip is gone; Aadhaar appears only as an example inside the ID choice.
   only, grouped counts, no-hits), plus the unchanged detector-level `MaskAadhaarFlowTest` and
   `AadhaarMaskTest`.
 
-## Last gate (cloud, full suite)
+## Last gate (cloud)
 
+Release job targeted run (`Hide private info`):
 ```
-cloud: run 43712328849 (6 min)
-tests: total=1530 failures=0 skipped=0
-GATE PASS L5 tests=1530 lint=[skipped]
+cloud: run 43733797503 (5 min)
+tests: total=94 failures=0 skipped=0
+GATE PASS L5 tests=94 lint=[skipped]
 ```
+It covers SensitiveScanTest, AadhaarMaskTest, MaskAadhaarFlowTest, the whole stamp package,
+AccessibilityAuditTest, DeadButtonAuditTest, ToolRegistryTest and ShellScreenTest.
 
-TextFit and the accessibility/dead-button audits are green. Lint runs at merge.
+Last full suite before this job: run `43712328849` — 1530 tests, 0 failures.
 
 ## Owner evaluation
 
