@@ -104,6 +104,18 @@ object VaultCrypto {
         return out.toByteArray()
     }
 
+    /**
+     * Streams [totalLength] bytes of [input] into [output] with the same chunked AES-256-GCM
+     * container [encryptFile] uses (one random IV and one 128-bit tag per 64 KiB chunk), so a
+     * backup of a large library costs one chunk of memory. The caller owns the destination.
+     */
+    fun encryptStream(input: InputStream, totalLength: Long, output: OutputStream, key: ByteArray) =
+        encrypt(input, totalLength, output, key)
+
+    /** Reads the container written by [encryptStream]; throws [VaultAuthException] on any change. */
+    fun decryptStream(input: InputStream, output: OutputStream, key: ByteArray) =
+        decrypt(input, output, key)
+
     fun encryptFile(src: File, dest: File, key: ByteArray) {
         val part = File(dest.parentFile, "${dest.name}.part")
         try {

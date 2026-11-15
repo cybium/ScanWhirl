@@ -50,6 +50,14 @@
             android:parentActivityName=".ui.shell.ShellActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Full Backup 2.0: one encrypted file with the library, the Vault and settings. -->
+        <activity
+            android:name=".ui.backup.BackupActivity"
+            android:exported="false"
+            android:label="@string/backup_title"
+            android:parentActivityName=".ui.shell.ShellActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- L2 v2 QR code reader: scan result, actions and the local history. -->
         <activity
             android:name=".ui.qr.QrActivity"
