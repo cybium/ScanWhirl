@@ -130,7 +130,7 @@ object ToolRegistry {
                 com.scanwhirl.app.ui.DocumentViewerActivity.openOrganizePicker(activity)
             }
         }),
-        ready("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_note_add, "insert add pages into pdf", launch = { host, tool ->
+        ready("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_add, "insert add pages into pdf", launch = { host, tool ->
             val activity = host as? android.app.Activity
             if (activity == null) {
                 host.comingSoon(tool)

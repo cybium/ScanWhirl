@@ -169,6 +169,51 @@ class BookSplitTest {
         split.left.recycle(); split.right.recycle(); bitmap.recycle()
     }
 
+    /**
+     * A pale band inside the right page's text (text lines cross it) is not the spine: the
+     * valley must be darker than BOTH text blocks and the cut must not run along a text column.
+     */
+    private fun spreadWithTextCrossingGap(): Bitmap {
+        val bitmap = Bitmap.createBitmap(900, 600, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.rgb(245, 245, 245))
+        // Left page slightly dimmer than the right, like a photographed page in shadow.
+        canvas.drawRect(0f, 0f, 440f, 600f, Paint().apply { color = Color.rgb(200, 200, 200) })
+        val ink = Paint().apply { color = Color.rgb(35, 35, 35); strokeWidth = 3f }
+        var y = 60f
+        while (y < 540f) {
+            canvas.drawLine(40f, y, 400f, y, ink)
+            canvas.drawLine(500f, y, 860f, y, ink)
+            y += 24f
+        }
+        // The real spine: a continuous dark gap with no text across it.
+        canvas.drawRect(410f, 0f, 440f, 600f, Paint().apply { color = Color.rgb(90, 90, 90) })
+        // A pale "gutter-looking" band inside the right text; the lines below cross it.
+        canvas.drawRect(560f, 0f, 585f, 600f, Paint().apply { color = Color.rgb(200, 200, 200) })
+        y = 60f
+        while (y < 540f) {
+            canvas.drawLine(500f, y, 860f, y, ink)
+            y += 24f
+        }
+        return bitmap
+    }
+
+    @Test
+    fun `a cut must not cross text lines`() {
+        val bitmap = spreadWithTextCrossingGap()
+        val analysis = BookSplit.analyse(bitmap)
+        assertTrue("the real spine is found", analysis.gutter.found)
+        assertEquals(
+            "the line is the left-side spine, not the pale band inside the right text",
+            0.48f, analysis.gutter.ratio, 0.05f
+        )
+        assertTrue(
+            "the pale text-crossed band must not be chosen",
+            kotlin.math.abs(analysis.gutter.ratio - 0.63f) > 0.04f
+        )
+        bitmap.recycle()
+    }
+
     @Test
     fun `a sideways spread is detected by its vertical text and rotated`() {
         val upright = textSpread()

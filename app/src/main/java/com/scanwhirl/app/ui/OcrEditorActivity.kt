@@ -144,8 +144,9 @@ class OcrEditorActivity : BaseActivity() {
         setupToolbar()
         setupPageTabs()
         setupEditText()
-        setupCleanupBar()
         setupActionBar()
+        // One short line normally; at large text a second line is better than clipping.
+        if (resources.configuration.fontScale > 1.5f) binding.ocrFootNote.maxLines = 2
         binding.btnOcrRetry.setOnClickListener { retryReading() }
         showPage(currentPageKey)
 
@@ -173,6 +174,7 @@ class OcrEditorActivity : BaseActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_ocr_editor, menu)
+        A11yTargets.widenOverflow(binding.toolbar)
         return true
     }
 
@@ -226,6 +228,7 @@ class OcrEditorActivity : BaseActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = getString(R.string.ocr_screen_title)
         updateSubtitle()
+        A11yTargets.stackToolbarText(toolbar)
         toolbar.setNavigationOnClickListener {
             if (isDirty) showUnsavedConfirm() else finish()
         }
@@ -248,9 +251,10 @@ class OcrEditorActivity : BaseActivity() {
             chip,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
         )
+        com.scanwhirl.app.ui.A11yTargets.fixChip(chip)
     }
 
     private fun languageLabel(language: OcrLanguage): Int = when (language) {
@@ -353,21 +357,6 @@ class OcrEditorActivity : BaseActivity() {
         isDirty = pageTexts.any { (k, v) -> v != (originalTexts[k] ?: "") }
     }
 
-    private fun setupCleanupBar() {
-        val chip = com.scanwhirl.app.ui.kit.SwChip(this).apply {
-            id = R.id.btnTidyText
-            bind(R.drawable.ic_sym_auto_fix_high, getString(R.string.ocr_tidy_text))
-            setOnClickListener { showTidySheet() }
-        }
-        binding.ocrTidyRow.addView(
-            chip,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
-            )
-        )
-    }
-
     /** v2 UI: 08_text_ocr — the three text fixes live in one sheet. */
     private fun showTidySheet() {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -456,13 +445,22 @@ class OcrEditorActivity : BaseActivity() {
             }
             row.addView(
                 chip,
-                LinearLayout.LayoutParams(0, com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f), weight)
-                    .apply { marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f) }
+                LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    weight
+                ).apply {
+                    marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f)
+                }
             )
+            com.scanwhirl.app.ui.A11yTargets.fixChip(chip)
             return chip
         }
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        // Tidy shares the first action row: its own row stole the height the text pane needs at 1.3.
+        chip(row1, R.id.btnTidyText, R.drawable.ic_sym_auto_fix_high, R.string.ocr_tidy_text)
+            .setOnClickListener { showTidySheet() }
         chip(row1, R.id.btnCopy, R.drawable.ic_sym_content_copy, R.string.ocr_copy_btn)
             .setOnClickListener { copyCurrent() }
         chip(row1, R.id.btnShare, R.drawable.ic_sym_share, R.string.ocr_share_btn)
@@ -510,7 +508,7 @@ class OcrEditorActivity : BaseActivity() {
                 )
             )
             view.setPadding(0, 0, 0, 0)
-            view.minimumHeight = (34 * d).toInt()
+            view.minimumHeight = (48 * d).toInt()
         }
         if (page) loadPageImage(currentPageKey)
     }
@@ -567,7 +565,9 @@ class OcrEditorActivity : BaseActivity() {
         val name = docTitle ?: getString(R.string.ocr_screen_title)
         val total = maxOf(1, pageTexts.size)
         val current = pageNumberOf(currentPageKey).coerceIn(1, total)
-        supportActionBar?.subtitle = getString(R.string.ocr_page_sub, name, current, total)
+        // Short form: the full "page N of M" wording is ellipsized at font scale 2.0.
+        binding.toolbar.subtitle = getString(R.string.ocr_page_sub_short, name, current, total)
+        A11yTargets.stackToolbarText(binding.toolbar)
     }
 
     // ------------------------------------------------------------------

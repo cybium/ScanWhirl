@@ -48,6 +48,11 @@
     <string name="unlock_remove_confirm"><!-- review -->सुरक्षा हटाएँ</string>
     <string name="unlock_removed"><!-- review -->पासवर्ड हट गया। PDF खुल गया।</string>
 
+    <!-- L3: the Tools/Home Protect and Unlock tiles' document chooser. -->
+    <string name="lock_from_pdf"><!-- review -->PDF फ़ाइल से</string>
+    <string name="lock_no_documents"><!-- review -->कोई असुरक्षित PDF नहीं है। पहले स्कैन या आयात करें।</string>
+    <string name="lock_choose_document"><!-- review -->दस्तावेज़ चुनें</string>
+
     <!-- L3 + L2: remembered PDF passwords in the Vault. -->
     <string name="vault_password_not_saved"><!-- review -->पासवर्ड Vault में सहेजा नहीं गया।</string>
     <string name="import_unlock_note"><!-- review -->इसके पृष्ठ आयात करने के लिए पासवर्ड डालें। मूल फ़ाइल नहीं बदलेगी।</string>

@@ -115,18 +115,27 @@ class PageGridAccessibilityTest {
                 val secondPage = grid.pageAt(1)
                 grid.onLongPress?.invoke(0)
                 idle()
+                assertTrue(
+                    "selection enters on page 1",
+                    pollUntil {
+                        tileOf(grid, 0)?.contentDescription?.toString() == "Page 1 of 3, selected"
+                    }
+                )
 
                 val tile = requireNotNull(tileOf(grid, 0))
                 assertTrue("no move up on the first tile", R.id.a11y_move_up !in actionsOf(tile))
                 tile.performAccessibilityAction(R.id.a11y_move_down, null)
                 idle()
 
-                assertEquals("the pages swapped", firstPage, grid.pageAt(1))
-                assertEquals(secondPage, grid.pageAt(0))
-                assertEquals(
-                    "the moved tile announces its new slot",
-                    "Page 2 of 3",
-                    requireNotNull(tileOf(grid, 1)).contentDescription?.toString()
+                // A move must not change selection: the same page is still selected, now at slot 2.
+                assertTrue(
+                    "the pages swapped and the moved tile stays selected",
+                    pollUntil {
+                        grid.pageAt(0) == secondPage &&
+                            grid.pageAt(1) == firstPage &&
+                            tileOf(grid, 1)?.contentDescription?.toString() ==
+                            "Page 2 of 3, selected"
+                    }
                 )
             }
         }

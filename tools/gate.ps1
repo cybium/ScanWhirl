@@ -29,10 +29,19 @@ if (Test-Path "$lockDirPeek\build.lock") {
     try { $p = [IO.File]::Open("$lockDirPeek\build.lock", 'Open', 'Read', 'ReadWrite'); $p.Close() } catch { $slotBusy = $true }
 }
 if (@(Get-ChildItem "$lockDirPeek\queue" -Filter *.t -ErrorAction SilentlyContinue).Count -gt 0) { $slotBusy = $true }
-$evalish = ($Tests -match 'Eval|PerfHarness|RealWorld|HostSample') -or
-    (Test-Path "C:\Users\Cybium\Desktop\.sw-qa\owner\${Lane}_EVAL_ON") -or
-    (Test-Path "C:\Users\Cybium\Desktop\.sw-qa\realworld\${Lane}_EVAL_ON") -or
-    (Test-Path "C:\Users\Cybium\Desktop\.sw-qa\owner\EVAL_ON")
+# Evals are recognised by the TEST NAME only (a leftover <LANE>_EVAL_ON flag must not pin all of a lane's tests
+# to the local queue: that blocked every lane for 25 min on 11-15).
+$evalish = ($Tests -match 'Eval|PerfHarness|RealWorld|HostSample')
+# A full local suite holds the PC's only build slot for 40+ min and blocks every lane: disabled for lanes.
+if ($Local -and -not $Tests -and -not $Apk -and $env:SW_LEAD_LOCAL -ne '1') {
+    Write-Output "gate: full-suite -Local is disabled (it blocks every lane for 40+ min) -> running the full suite in the CLOUD"
+    $Local = [switch]$false
+}
+# -Local on a -Tests run is honoured only while the slot is free; when busy, non-eval tests go to the cloud.
+if ($Tests -and $Local -and $slotBusy -and -not $evalish -and -not $Apk) {
+    Write-Output "gate: -Local ignored because the build slot is busy -> CLOUD (no waiting in line)"
+    $Local = [switch]$false
+}
 $cloudTests = $Tests -and $slotBusy -and -not $evalish -and -not $Local -and -not $Apk
 if ($Tests -and -not $cloudTests -and -not $Apk) { Write-Output ("tests: running locally (" + $(if ($evalish) { "eval on private files" } elseif ($Local) { "-Local" } else { "build slot free" }) + ")") }
 if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {

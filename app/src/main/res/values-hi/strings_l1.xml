@@ -82,9 +82,6 @@
     <string name="tool_redact"><!-- review -->नामेट करें</string>
     <string name="tool_protect"><!-- review -->PDF सुरक्षित करें</string>
     <string name="tool_unlock"><!-- review -->PDF खोलें</string>
-    <string name="lock_from_pdf"><!-- review -->PDF फ़ाइल से</string>
-    <string name="lock_no_documents"><!-- review -->कोई असुरक्षित PDF नहीं है। पहले स्कैन या आयात करें।</string>
-    <string name="lock_choose_document"><!-- review -->दस्तावेज़ चुनें</string>
     <string name="tool_vault"><!-- review -->वॉल्ट</string>
     <string name="tool_remove_metadata"><!-- review -->मेटाडेटा हटाएँ</string>
     <string name="tool_read_text"><!-- review -->टेक्स्ट पढ़ें</string>
@@ -253,6 +250,7 @@
         <item quantity="other"><!-- review -->%1$d चुने गए</item>
     </plurals>
 
+    <string name="a11y_back"><!-- review -->वापस</string>
     <string name="sel_batch"><!-- review -->एक साथ</string>
     <string name="settings_block_screenshots"><!-- review -->दस्तावेज़ों के स्क्रीनशॉट रोकें</string>
     <string name="settings_block_screenshots_note"><!-- review -->सुरक्षित दस्तावेज़ों के स्क्रीनशॉट हमेशा रुके रहते हैं। साधारण स्कैन के लिए भी रोकने हेतु इसे चालू करें।</string>
@@ -268,4 +266,10 @@
     <string name="quick_add"><!-- review -->%1$s को क्विक टूल में जोड़ें</string>
     <string name="quick_add_tools"><!-- review -->टूल जोड़ें</string>
     <string name="quick_max_reached"><!-- review -->अधिकतम बारह क्विक टूल हो सकते हैं</string>
+    <string name="me_pro_active"><!-- review -->ScanWhirl Pro — सक्रिय</string>
+    <string name="me_pro_active_summary"><!-- review -->धन्यवाद — सभी Pro टूल्स अनलॉक हैं।</string>
+    <string name="pro_active_sub"><!-- review -->सभी Pro टूल्स अनलॉक हैं। धन्यवाद!</string>
+    <string name="settings_test_free"><!-- review -->परीक्षण: मुफ़्त उपयोगकर्ता के रूप में</string>
+    <string name="settings_test_free_summary"><!-- review -->केवल टेस्ट बिल्ड में। Pro गेट दिखाता है।</string>
+    <string name="settings_privacy_section"><!-- review -->गोपनीयता और सुरक्षा</string>
 </resources>

@@ -30,6 +30,7 @@
             android:layout_height="wrap_content"
             android:minHeight="?attr/actionBarSize"
             app:contentInsetStartWithNavigation="0dp"
+            app:contentInsetEnd="0dp"
             app:navigationContentDescription="@string/close"
             app:navigationIcon="@drawable/ic_close"
             app:navigationIconTint="@color/rv_ink"
@@ -47,17 +48,18 @@
                 android:hint="@string/name_hint"
                 android:importantForAutofill="no"
                 android:inputType="textCapWords"
-                android:maxLines="1"
+                android:minHeight="48dp"
                 android:paddingHorizontal="12dp"
-                android:paddingVertical="8dp"
+                android:paddingVertical="10dp"
                 android:selectAllOnFocus="true"
-                android:singleLine="true"
                 android:textColor="@color/rv_ink"
                 android:textColorHint="@color/rv_ink_3"
                 android:textSize="18sp"
                 android:textStyle="bold" />
         </com.google.android.material.appbar.MaterialToolbar>
     </com.google.android.material.appbar.AppBarLayout>
+
+
 
     <!-- "5 pages · Forms · Not saved yet": what is on disk, never "Saved". -->
     <TextView
@@ -128,6 +130,10 @@
                 style="@style/Widget.ScanWhirl.Button.ModeToggle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="2"
+                android:minHeight="48dp"
                 android:text="@string/review_mode_focus"
                 app:icon="@drawable/ic_sw_focus_page" />
 
@@ -136,22 +142,27 @@
                 style="@style/Widget.ScanWhirl.Button.ModeToggle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="2"
+                android:minHeight="48dp"
                 android:text="@string/review_mode_arrange"
                 app:icon="@drawable/ic_sw_arrange" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <TextView
-            android:id="@+id/pageStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:accessibilityLiveRegion="polite"
-            android:gravity="end"
-            android:textColor="@color/rv_ink_2"
-            android:textSize="14sp"
-            tools:text="Page 4 of 5" />
     </LinearLayout>
+
+    <!-- Page N of M on its own row: at font scale 2.0 the toggle leaves it too narrow. -->
+    <TextView
+        android:id="@+id/pageStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:accessibilityLiveRegion="polite"
+        android:gravity="end"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="2dp"
+        android:textColor="@color/rv_ink_2"
+        android:textSize="14sp"
+        tools:text="Page 4 of 5" />
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -513,4 +524,5 @@
             android:text="@string/review_save_pdf"
             app:icon="@drawable/ic_sw_saved" />
     </LinearLayout>
+
 </LinearLayout>

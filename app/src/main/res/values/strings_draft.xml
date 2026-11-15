@@ -94,4 +94,8 @@
     <string name="a11y_rotate_cw">Rotate clockwise</string>
     <string name="a11y_rotate_ccw">Rotate anticlockwise</string>
     <string name="a11y_delete_mark">Delete mark</string>
+
+    <!-- Scan review: short visual hint, full name for TalkBack. -->
+    <string name="review_name_hint">Name</string>
+    <string name="ocr_page_sub_short">%1$s · %2$d / %3$d</string>
 </resources>

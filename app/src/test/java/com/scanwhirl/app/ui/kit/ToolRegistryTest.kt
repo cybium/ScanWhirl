@@ -44,6 +44,32 @@ class ToolRegistryTest {
     }
 
     @Test
+    fun `every READY tool has a visible icon`() {
+        val app = androidx.test.core.app.ApplicationProvider
+            .getApplicationContext<android.app.Application>()
+        for (tool in ToolRegistry.all.filter { it.status == ToolStatus.READY }) {
+            val drawable = app.getDrawable(tool.icon)
+            assertNotNull("${tool.id} has no drawable", drawable)
+            val bitmap = android.graphics.Bitmap.createBitmap(
+                48, 48, android.graphics.Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bitmap)
+            drawable!!.setBounds(0, 0, 48, 48)
+            drawable.draw(canvas)
+            var visible = false
+            outer@ for (x in 0 until 48) {
+                for (y in 0 until 48) {
+                    if (bitmap.getPixel(x, y) ushr 24 != 0) {
+                        visible = true
+                        break@outer
+                    }
+                }
+            }
+            assertTrue("${tool.id} (${tool.title}) draws an empty icon", visible)
+        }
+    }
+
+    @Test
     fun `every tool has a title, an icon and a group`() {
         for (tool in ToolRegistry.all) {
             assertTrue("${tool.id} has a title", tool.title != 0)

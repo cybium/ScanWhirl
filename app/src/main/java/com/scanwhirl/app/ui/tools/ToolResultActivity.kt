@@ -103,6 +103,9 @@ class ToolResultActivity : BaseActivity() {
             this, R.drawable.ic_sym_arrow_back, SwStyle.color(this, R.color.text_hologram_hi)
         ).apply {
             contentDescription = getString(R.string.tools_setup_back)
+            layoutParams = LinearLayout.LayoutParams(
+                SwStyle.dp(this@ToolResultActivity, 48f), SwStyle.dp(this@ToolResultActivity, 48f)
+            )
             setOnClickListener { finish() }
         })
         bar.addView(
@@ -136,6 +139,7 @@ class ToolResultActivity : BaseActivity() {
             id = R.id.toolResultPreview
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundColor(Color.WHITE)
+            contentDescription = getString(R.string.tools_result_preview)
         }
         previewHost.addView(preview, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
@@ -172,7 +176,7 @@ class ToolResultActivity : BaseActivity() {
         column.addView(
             button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true) { open() },
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, 54f)
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
         )
         column.addView(
@@ -193,10 +197,10 @@ class ToolResultActivity : BaseActivity() {
     private fun rowOf(left: TextView, right: TextView): View =
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(left, LinearLayout.LayoutParams(0, SwStyle.dp(this@ToolResultActivity, 50f), 1f).apply {
+            addView(left, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = SwStyle.dp(this@ToolResultActivity, 8f)
             })
-            addView(right, LinearLayout.LayoutParams(0, SwStyle.dp(this@ToolResultActivity, 50f), 1f).apply {
+            addView(right, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = SwStyle.dp(this@ToolResultActivity, 8f)
             })
             layoutParams = LinearLayout.LayoutParams(
@@ -211,6 +215,8 @@ class ToolResultActivity : BaseActivity() {
             this.id = id
             this.text = text
             gravity = Gravity.CENTER
+            maxLines = 2
+            minimumHeight = SwStyle.dp(this@ToolResultActivity, 50f)
             background = if (primary) {
                 SwStyle.rounded(this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.cyan_primary), radiusDp = 16f)
             } else {

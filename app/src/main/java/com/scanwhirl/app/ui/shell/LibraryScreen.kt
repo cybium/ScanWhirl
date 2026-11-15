@@ -170,7 +170,7 @@ class LibraryScreen(
         quickRow = LinearLayout(context).apply {
             id = R.id.swQuickRow
             orientation = HORIZONTAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.TOP
             val pad = SwStyle.dp(context, 8f)
             setPadding(pad, 0, pad, 0)
         }
@@ -178,7 +178,7 @@ class LibraryScreen(
         quickRow2 = LinearLayout(context).apply {
             id = R.id.swQuickRow2
             orientation = HORIZONTAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.TOP
             val pad = SwStyle.dp(context, 8f)
             setPadding(pad, 0, pad, 0)
             isVisible = false
@@ -239,6 +239,7 @@ class LibraryScreen(
                     imageTintList = ColorStateList.valueOf(
                         SwStyle.color(context, R.color.text_hologram_dim)
                     )
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 },
                 LayoutParams(d, d)
             )
@@ -417,7 +418,7 @@ class LibraryScreen(
         val chip = SwStyle.text(context, 13f, color, bold = true).apply {
             text = label
             setPadding(SwStyle.dp(context, 14f), 0, SwStyle.dp(context, 14f), 0)
-            minimumHeight = SwStyle.dp(context, 34f)
+            minimumHeight = SwStyle.dp(context, 48f)
             gravity = Gravity.CENTER
             background = SwStyle.pill(
                 context,
@@ -432,7 +433,7 @@ class LibraryScreen(
         }
         folderRow.addView(
             chip,
-            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 34f))
+            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                 .apply { marginEnd = SwStyle.dp(context, 8f) }
         )
         return chip
@@ -535,7 +536,7 @@ class LibraryScreen(
             id = R.id.swSelDone
             text = context.getString(R.string.sel_done)
             setPadding(SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 10f), 0)
-            minimumHeight = SwStyle.dp(context, 32f)
+            minimumHeight = SwStyle.dp(context, 48f)
             gravity = Gravity.CENTER
             isClickable = true
             setOnClickListener { exitSelection() }
@@ -803,6 +804,7 @@ class LibraryScreen(
                 if (com.scanwhirl.app.ui.kit.SwTheme.isGold(context)) R.drawable.ic_brand_mark_gold
                 else R.drawable.ic_brand_mark
             )
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         row.addView(
             mark,
@@ -840,6 +842,7 @@ class LibraryScreen(
             ImageView(context).apply {
                 setImageResource(R.drawable.ic_sym_search)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_dim))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LayoutParams(SwStyle.dp(context, 22f), SwStyle.dp(context, 22f))
                 .apply { marginEnd = SwStyle.dp(context, 12f) }
@@ -877,7 +880,7 @@ class LibraryScreen(
         ).apply {
             id = R.id.swHomeClear
             contentDescription = context.getString(R.string.home_search_clear)
-            layoutParams = LayoutParams(SwStyle.dp(context, 34f), SwStyle.dp(context, 34f))
+            layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
             isVisible = false
             setOnClickListener {
                 searchInput.setText("")
@@ -909,7 +912,8 @@ class LibraryScreen(
                 main = true,
                 id = R.id.swCreateIdCard
             ) { callbacks.onCreateIdCard() },
-            LayoutParams(0, SwStyle.dp(context, 92f), 1f)
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                .apply { minimumHeight = SwStyle.dp(context, 92f) }
         )
         createRow.addView(
             createCard(
@@ -918,8 +922,11 @@ class LibraryScreen(
                 main = false,
                 id = R.id.swCreatePhotos
             ) { callbacks.onCreatePhotos() },
-            LayoutParams(0, SwStyle.dp(context, 92f), 1f)
-                .apply { marginStart = SwStyle.dp(context, 10f) }
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                .apply {
+                    minimumHeight = SwStyle.dp(context, 92f)
+                    marginStart = SwStyle.dp(context, 10f)
+                }
         )
         createRow.addView(
             createCard(
@@ -928,8 +935,11 @@ class LibraryScreen(
                 main = false,
                 id = R.id.swCreateImport
             ) { callbacks.onCreateImport() },
-            LayoutParams(0, SwStyle.dp(context, 92f), 1f)
-                .apply { marginStart = SwStyle.dp(context, 10f) }
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                .apply {
+                    minimumHeight = SwStyle.dp(context, 92f)
+                    marginStart = SwStyle.dp(context, 10f)
+                }
         )
         return createRow
     }
@@ -958,6 +968,7 @@ class LibraryScreen(
             ImageView(context).apply {
                 setImageResource(icon)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_primary))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LayoutParams(SwStyle.dp(context, 28f), SwStyle.dp(context, 28f))
         )
@@ -965,6 +976,7 @@ class LibraryScreen(
             SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = label
                 gravity = Gravity.CENTER
+                maxLines = 2
             },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 8f) }
@@ -991,7 +1003,7 @@ class LibraryScreen(
                 text = action
                 isClickable = onAction != null
                 setOnClickListener { onAction?.invoke() }
-                minimumHeight = SwStyle.dp(context, 32f)
+                minimumHeight = SwStyle.dp(context, 48f)
                 gravity = Gravity.CENTER_VERTICAL
             }
             sortAction = actionView
@@ -1083,7 +1095,7 @@ class LibraryScreen(
             id = R.id.swQuickCancel
             text = context.getString(android.R.string.cancel)
             gravity = Gravity.CENTER
-            minimumHeight = SwStyle.dp(context, 36f)
+            minimumHeight = SwStyle.dp(context, 48f)
             isClickable = true
             setPadding(SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f), 0)
             isVisible = false
@@ -1094,7 +1106,7 @@ class LibraryScreen(
             id = R.id.swQuickDone
             text = context.getString(R.string.sel_done)
             gravity = Gravity.CENTER
-            minimumHeight = SwStyle.dp(context, 36f)
+            minimumHeight = SwStyle.dp(context, 48f)
             isClickable = true
             setPadding(SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f), 0)
             isVisible = false
@@ -1167,6 +1179,11 @@ class LibraryScreen(
                     LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
                 )
             }
+            // Keep the six-column grid: a short second row stays left-aligned
+            // instead of stretching its lone tile across the screen.
+            repeat(6 - rowTools.size) {
+                row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            }
         }
         quickRow2.isVisible = tools.size > 6
         if (quickEditing) buildQuickAddGrid()
@@ -1215,9 +1232,9 @@ class LibraryScreen(
             tile.addView(
                 badge,
                 FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
-                    gravity = Gravity.TOP or Gravity.END
+                    gravity = Gravity.TOP or Gravity.START
                     topMargin = SwStyle.dp(context, 2f)
-                    marginEnd = SwStyle.dp(context, 2f)
+                    marginStart = SwStyle.dp(context, 2f)
                 }
             )
         }
@@ -1280,13 +1297,16 @@ class LibraryScreen(
                     addView(
                         plus,
                         FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
-                            gravity = Gravity.TOP or Gravity.END
+                            gravity = Gravity.TOP or Gravity.START
                             topMargin = SwStyle.dp(context, 2f)
-                            marginEnd = SwStyle.dp(context, 2f)
+                            marginStart = SwStyle.dp(context, 2f)
                         }
                     )
                 }
                 row.addView(tile, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            }
+            repeat(6 - chunk.size) {
+                row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             }
             quickAddGrid.addView(
                 row,
@@ -1315,7 +1335,7 @@ class LibraryScreen(
             ).apply {
                 text = label
                 setPadding(SwStyle.dp(context, 14f), 0, SwStyle.dp(context, 14f), 0)
-                minimumHeight = SwStyle.dp(context, 34f)
+                minimumHeight = SwStyle.dp(context, 48f)
                 gravity = Gravity.CENTER
                 background = SwStyle.pill(
                     context,
@@ -1332,7 +1352,7 @@ class LibraryScreen(
             }
             chipRow.addView(
                 chip,
-                LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 34f))
+                LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                     .apply { marginEnd = SwStyle.dp(context, 8f) }
             )
         }

@@ -196,6 +196,37 @@ class Phase5ScreensTest {
     }
 
     @Test
+    fun `settings shows its rows - hiding About and Trash never blanks the page`() {
+        // Regression (lead phone check 11-15): hideSection(rowTrash) hid the whole page.
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                for (rowId in listOf(R.id.rowFont, R.id.rowLanguage, R.id.rowViewer, R.id.rowAutoEnhance)) {
+                    val row = activity.findViewById<View>(rowId)
+                    assertTrue(
+                        "row ${activity.resources.getResourceEntryName(rowId)} is shown",
+                        row.isShown
+                    )
+                }
+                // The moved sections are hidden (they live in Me now) …
+                assertFalse("About lives in Me", activity.findViewById<View>(R.id.rowAbout).isShown)
+                assertFalse("Trash lives in Me", activity.findViewById<View>(R.id.rowTrash).isShown)
+                // … but rows added at runtime into the old About card must stay visible
+                // (lead phone check 11-15: they vanished with the hidden About card).
+                assertTrue(
+                    "Block screenshots switch is shown",
+                    activity.findViewById<View>(R.id.rowBlockScreenshots).isShown
+                )
+                if (com.scanwhirl.app.BuildConfig.TEST_BUILD) {
+                    assertTrue(
+                        "test-build Free/Pro switch is shown",
+                        activity.findViewById<View>(R.id.rowTestFree).isShown
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `settings rows carry cyan icons and no text chevrons`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -302,7 +333,7 @@ class Phase5ScreensTest {
                 val rowPrivacy = activity.findViewById<View>(R.id.rowPrivacy)
                 assertSame("about and privacy share a section container",
                     rowAbout.parent, rowPrivacy.parent)
-                assertEquals("about card: 3 rows + 2 dividers", 5, (rowAbout.parent as ViewGroup).childCount)
+                assertEquals("about card: 4 rows + 2 dividers", 6, (rowAbout.parent as ViewGroup).childCount)
 
                 // Language is a card with the app language row and the OCR text-language row.
                 val rowLanguage = activity.findViewById<View>(R.id.rowLanguage)
@@ -320,7 +351,8 @@ class Phase5ScreensTest {
                 // Four cyan section headers label the groups.
                 val headerTexts = listOf(
                     R.string.settings_appearance, R.string.settings_language_section,
-                    R.string.settings_viewing, R.string.settings_about_section
+                    // The old About card is now "Privacy & security" (About itself lives in Me).
+                    R.string.settings_viewing, R.string.settings_privacy_section
                 ).map { activity.getString(it) }
                 val headers = allViews(activity.window.decorView)
                     .filterIsInstance<TextView>()

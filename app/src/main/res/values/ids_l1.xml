@@ -101,6 +101,9 @@
     <item name="swQuickDone" type="id" />
     <item name="swQuickCancel" type="id" />
     <item name="swQuickAll" type="id" />
+    <item name="rowTestFree" type="id" />
+    <item name="switchTestFree" type="id" />
+    <item name="swProScroll" type="id" />
     <item name="swNavMe" type="id" />
     <item name="swShellTab" type="id" />
     <item name="swHomeSearch" type="id" />

@@ -102,4 +102,7 @@
     <string name="a11y_rotate_cw"><!-- review -->दक्षिणावर्त घुमाएँ</string>
     <string name="a11y_rotate_ccw"><!-- review -->वामावर्त घुमाएँ</string>
     <string name="a11y_delete_mark"><!-- review -->निशान हटाएँ</string>
+
+    <string name="review_name_hint"><!-- review -->नाम</string>
+    <string name="ocr_page_sub_short"><!-- review -->%1$s · %2$d / %3$d</string>
 </resources>

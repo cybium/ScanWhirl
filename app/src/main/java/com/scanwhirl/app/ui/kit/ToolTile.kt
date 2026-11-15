@@ -46,7 +46,7 @@ class ToolTile(context: Context) : FrameLayout(context) {
 
         inner = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             setPadding((4 * d).toInt(), (6 * d).toInt(), (4 * d).toInt(), (6 * d).toInt())
         }
         addView(
@@ -66,8 +66,28 @@ class ToolTile(context: Context) : FrameLayout(context) {
         ).apply {
             id = R.id.swToolLabel
             gravity = Gravity.CENTER
-            maxLines = 2
+            maxLines = 3
+            minLines = 2
             setLineSpacing(0f, 1.15f)
+            // Break at spaces/hyphens only; a single long word shrinks instead
+            // of being split mid-word ("To PowerP|oint").
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
+            val density = resources.displayMetrics.density
+            val scaled = resources.displayMetrics.scaledDensity
+            setTextSize(
+                TypedValue.COMPLEX_UNIT_PX,
+                minOf(11.5f * scaled, 14f * density)
+            )
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                this,
+                (8f * density).toInt(),
+                (11.5f * density).toInt(),
+                1,
+                TypedValue.COMPLEX_UNIT_PX
+            )
         }
         inner.addView(
             labelView,
@@ -97,8 +117,10 @@ class ToolTile(context: Context) : FrameLayout(context) {
         setImageResourceInternal(tool.icon)
         labelView.text = context.getString(tool.title)
         // One tag at most: Soon wins over PRO, and the tag is never dimmed.
+        // A Pro build owns every tool, so no PRO tag is drawn there at all.
         val soon = tool.status == ToolStatus.SOON
-        proTag.isVisible = tool.pro && !soon
+        val showPro = tool.pro && !com.scanwhirl.app.util.ProGate.isPro(context)
+        proTag.isVisible = showPro && !soon
         soonTag.isVisible = soon
         // Only the icon + label fade on a Soon tile; the tag stays readable.
         inner.alpha = if (soon) 0.55f else 1f
@@ -113,7 +135,7 @@ class ToolTile(context: Context) : FrameLayout(context) {
         }
         contentDescription = buildString {
             append(labelView.text)
-            if (tool.pro) append(", ").append(context.getString(R.string.badge_pro))
+            if (showPro) append(", ").append(context.getString(R.string.badge_pro))
             if (soon) append(", ").append(context.getString(R.string.tool_soon_tag))
         }
         // A Soon/Build tile still has a real action: the sheet is set by the host.
@@ -154,8 +176,26 @@ class ToolTile(context: Context) : FrameLayout(context) {
             bottomMargin = 0
         }
         labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-        labelView.maxLines = 1
+        labelView.maxLines = 2
+        labelView.minLines = 2
         labelView.setLineSpacing(0f, 1f)
+        labelView.hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+        // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
+        //noinspection WrongConstant
+        labelView.breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
+        val density = resources.displayMetrics.density
+        val scaled = resources.displayMetrics.scaledDensity
+        labelView.setTextSize(
+            TypedValue.COMPLEX_UNIT_PX,
+            minOf(11f * scaled, 13.5f * density)
+        )
+        androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+            labelView,
+            (8f * density).toInt(),
+            (11f * density).toInt(),
+            1,
+            TypedValue.COMPLEX_UNIT_PX
+        )
         soonTag.visibility = View.GONE
         // PRO sits on the circle's top-right edge, inside the column.
         proTag.translationX = 0f

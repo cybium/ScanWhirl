@@ -68,6 +68,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -97,6 +98,7 @@
                         </LinearLayout>
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:importantForAutofill="no"
@@ -122,6 +124,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -151,6 +154,7 @@
                         </LinearLayout>
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:importantForAutofill="no"
@@ -179,6 +183,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -236,6 +241,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -375,6 +381,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -404,6 +411,7 @@
                         </LinearLayout>
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:importantForAutofill="no"
@@ -447,6 +455,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -476,6 +485,7 @@
                         </LinearLayout>
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:importantForAutofill="no"
@@ -498,6 +508,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -512,18 +523,20 @@
                             android:orientation="vertical">
 
                             <TextView
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="@string/settings_auto_enhance"
                                 android:textAppearance="?attr/textAppearanceTitleSmall" />
 
                             <TextView
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
                                 android:text="@string/settings_auto_enhance_summary"
                                 android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?android:attr/textColorSecondary" />
+                                android:textColor="?android:attr/textColorSecondary" 
+                                android:paddingEnd="8dp" 
+                                android:layout_marginEnd="20dp" />
                         </LinearLayout>
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
@@ -550,6 +563,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -564,13 +578,15 @@
                             android:orientation="vertical">
 
                             <TextView
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="@string/settings_auto_copy_to_documents"
-                                android:textAppearance="?attr/textAppearanceTitleSmall" />
+                                android:textAppearance="?attr/textAppearanceTitleSmall" 
+                                android:paddingEnd="8dp" 
+                                android:layout_marginEnd="12dp" />
 
                             <TextView
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
                                 android:text="@string/settings_auto_copy_to_documents_summary"
@@ -602,6 +618,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -616,18 +633,20 @@
                             android:orientation="vertical">
 
                             <TextView
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="@string/settings_searchable_pdf"
                                 android:textAppearance="?attr/textAppearanceTitleSmall" />
 
                             <TextView
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
                                 android:text="@string/settings_searchable_pdf_summary"
                                 android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?android:attr/textColorSecondary" />
+                                android:textColor="?android:attr/textColorSecondary" 
+                                android:paddingEnd="8dp" 
+                                android:layout_marginEnd="12dp" />
                         </LinearLayout>
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
@@ -674,6 +693,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -703,6 +723,7 @@
                         </LinearLayout>
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:importantForAutofill="no"
@@ -728,6 +749,7 @@
                         android:padding="16dp">
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_marginEnd="14dp"
@@ -757,6 +779,7 @@
                         </LinearLayout>
 
                         <ImageView
+        android:importantForAccessibility="no"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:importantForAutofill="no"

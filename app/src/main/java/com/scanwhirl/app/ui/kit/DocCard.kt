@@ -62,6 +62,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         thumbView = ImageView(context).apply {
             id = R.id.swDocThumb
             scaleType = ImageView.ScaleType.CENTER_CROP
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         thumbFrame.addView(
             thumbView,
@@ -70,6 +71,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         lockIcon = ImageView(context).apply {
             id = R.id.swDocLock
             setImageResource(R.drawable.ic_sym_lock)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.gold_pro_primary))
             scaleType = ImageView.ScaleType.CENTER
             isVisible = false
@@ -126,8 +128,25 @@ class DocCard(context: Context) : LinearLayout(context) {
         nameView = SwStyle.text(context, 15.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.swDocName
             typeface = SwType.bold(context)
-            maxLines = 1
+            maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
+            val density = resources.displayMetrics.density
+            val scaled = resources.displayMetrics.scaledDensity
+            setTextSize(
+                android.util.TypedValue.COMPLEX_UNIT_PX,
+                minOf(15.5f * scaled, 17f * density)
+            )
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                this,
+                (11f * density).toInt(),
+                (15.5f * density).toInt(),
+                1,
+                android.util.TypedValue.COMPLEX_UNIT_PX
+            )
         }
         nameRow.addView(nameView, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         lockBadge = SwStyle.text(context, 11f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
@@ -145,7 +164,7 @@ class DocCard(context: Context) : LinearLayout(context) {
 
         metaView = SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_dim)).apply {
             id = R.id.swDocMeta
-            maxLines = 1
+            maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         info.addView(
@@ -167,6 +186,8 @@ class DocCard(context: Context) : LinearLayout(context) {
         )
         categoryView = SwStyle.text(context, 11f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             id = R.id.swDocCategory
+            minimumHeight = (14 * d).toInt()
+            gravity = Gravity.CENTER_VERTICAL
         }
         categoryRow.addView(categoryView)
         info.addView(
@@ -186,14 +207,16 @@ class DocCard(context: Context) : LinearLayout(context) {
         ).apply {
             id = R.id.swDocShare
             contentDescription = context.getString(R.string.share_pdf)
-            layoutParams = LayoutParams(SwStyle.dp(context, 36f), SwStyle.dp(context, 36f))
+            layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
+            setPadding(SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f))
         }
         moreButton = SwStyle.iconButton(
             context, R.drawable.ic_sym_more_vert, SwStyle.color(context, R.color.text_hologram_mid)
         ).apply {
             id = R.id.swDocMore
             contentDescription = context.getString(R.string.more)
-            layoutParams = LayoutParams(SwStyle.dp(context, 36f), SwStyle.dp(context, 36f))
+            layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
+            setPadding(SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f))
         }
         actions.addView(shareButton)
         actions.addView(moreButton)
@@ -252,8 +275,8 @@ class DocCard(context: Context) : LinearLayout(context) {
         categoryRow.visibility = View.GONE
         actions.visibility = View.GONE
         selectionBadge.visibility = View.GONE
-        nameView.maxLines = 1
-        metaView.maxLines = 1
+        nameView.maxLines = 2
+        metaView.maxLines = 2
     }
 
     /**

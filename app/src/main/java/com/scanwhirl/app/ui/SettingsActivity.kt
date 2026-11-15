@@ -45,6 +45,13 @@ class SettingsActivity : BaseActivity() {
         setContentView(binding.root)
         binding.root.applySystemBarsPadding()
         binding.toolbar.setNavigationOnClickListener { finish() }
+        binding.toolbar.navigationContentDescription = getString(R.string.a11y_back)
+        // The switches are the row's control: give each the row's own words so
+        // TalkBack never announces an unnamed toggle.
+        binding.switchAutoEnhance.contentDescription = getString(R.string.settings_auto_enhance)
+        binding.switchAutoCopyToDocuments.contentDescription =
+            getString(R.string.settings_auto_copy_to_documents)
+        binding.switchSearchablePdf.contentDescription = getString(R.string.settings_searchable_pdf)
 
         // test25 Phase 5A / D1: Orbital-only dark theme — the row stays in the
         // XML (locked ID) but is hidden, and the summary is pinned to the one
@@ -93,7 +100,10 @@ class SettingsActivity : BaseActivity() {
         binding.rowViewer.setOnClickListener { chooseViewer() }
         // Me-hub cleanup: About lives once, in the Me tab. Settings owns look,
         // text, privacy and storage only — no nested About/storage duplicates.
-        hideSection(binding.rowAbout)
+        // About and the privacy policy live in Me > About now. Their card stays as the
+        // "Privacy & security" section: the screenshot switch (and, in test builds, the
+        // Free/Pro switch) are added into it below. Hiding the whole card hid those rows.
+        keepCardAsPrivacySection()
         hideSection(binding.rowTrash)
         binding.rowAbout.setOnClickListener { showAbout() }
         binding.rowTrash.setOnClickListener { startActivity(TrashActivity.intent(this)) }
@@ -106,6 +116,9 @@ class SettingsActivity : BaseActivity() {
 
         // Pro accent theme: Cyan (default) or Gold.
         addAccentRow()
+
+        // Test builds only: let QA see the Free/Pro gate.
+        if (com.scanwhirl.app.BuildConfig.TEST_BUILD) addTestFreeRow()
 
         updateSummaries()
     }
@@ -128,6 +141,7 @@ class SettingsActivity : BaseActivity() {
         row.addView(
             android.widget.ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_language)
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
                     com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_primary)
                 )
@@ -159,6 +173,7 @@ class SettingsActivity : BaseActivity() {
         row.addView(
             android.widget.ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_chevron_right)
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
                     com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_dim)
                 )
@@ -216,13 +231,13 @@ class SettingsActivity : BaseActivity() {
         )
         val toggle = androidx.appcompat.widget.SwitchCompat(this).apply {
             id = R.id.switchBlockScreenshots
+            contentDescription = getString(R.string.settings_block_screenshots)
             isChecked = Prefs.blockDocScreenshots(this@SettingsActivity)
             setOnCheckedChangeListener { _, checked ->
                 Prefs.setBlockDocScreenshots(this@SettingsActivity, checked)
             }
         }
         row.addView(toggle)
-        val index = parent.indexOfChild(binding.rowPrivacy)
         val divider = android.view.View(this).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, (1 * d).toInt()
@@ -233,13 +248,7 @@ class SettingsActivity : BaseActivity() {
                 )
             )
         }
-        if (index >= 0) {
-            parent.addView(divider, index + 1)
-            parent.addView(row, index + 2)
-        } else {
-            parent.addView(divider)
-            parent.addView(row)
-        }
+        addToPrivacySection(row, divider)
     }
 
     private lateinit var subAccent: android.widget.TextView
@@ -296,6 +305,7 @@ class SettingsActivity : BaseActivity() {
         row.addView(
             android.widget.ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_chevron_right)
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
                     com.scanwhirl.app.ui.kit.SwStyle.color(
                         this@SettingsActivity, R.color.text_hologram_dim
@@ -365,10 +375,107 @@ class SettingsActivity : BaseActivity() {
         recreate()
     }
 
-    /** Hides a settings row's card and the section label right above it. */
+    /** Test build only: flip QA into Free so every Pro gate is visible. */
+    private fun addTestFreeRow() {
+        val parent = binding.rowPrivacy.parent as? android.view.ViewGroup ?: return
+        val d = resources.displayMetrics.density
+        val row = android.widget.LinearLayout(this).apply {
+            id = R.id.rowTestFree
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((16 * d).toInt(), (12 * d).toInt(), (12 * d).toInt(), (12 * d).toInt())
+        }
+        val texts = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        texts.addView(
+            android.widget.TextView(this).apply {
+                setText(R.string.settings_test_free)
+                textSize = 15f
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(
+                        this@SettingsActivity, R.color.text_hologram_hi
+                    )
+                )
+            }
+        )
+        texts.addView(
+            android.widget.TextView(this).apply {
+                setText(R.string.settings_test_free_summary)
+                textSize = 12.5f
+                setPadding(0, (2 * d).toInt(), 0, 0)
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(
+                        this@SettingsActivity, R.color.text_hologram_mid
+                    )
+                )
+            }
+        )
+        row.addView(
+            texts,
+            android.widget.LinearLayout.LayoutParams(
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { marginEnd = (12 * d).toInt() }
+        )
+        val toggle = androidx.appcompat.widget.SwitchCompat(this).apply {
+            id = R.id.switchTestFree
+            contentDescription = getString(R.string.settings_test_free)
+            isChecked = com.scanwhirl.app.util.ProGate.testOverride(this@SettingsActivity) == false
+            setOnCheckedChangeListener { _, checked ->
+                com.scanwhirl.app.util.ProGate.setTestOverride(
+                    this@SettingsActivity, if (checked) false else null
+                )
+                recreate()
+            }
+        }
+        row.addView(toggle)
+        val divider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, (1 * d).toInt()
+            ).apply { marginStart = (16 * d).toInt() }
+            setBackgroundColor(
+                com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_border_hair)
+            )
+        }
+        addToPrivacySection(row, divider)
+    }
+
+    /** Hides the About + Privacy policy rows (and the divider between them), keeps their
+     *  card, and relabels its section "Privacy & security". */
+    private fun keepCardAsPrivacySection() {
+        val rows = binding.rowAbout.parent as? android.view.ViewGroup ?: return
+        for (i in 0 until rows.childCount) rows.getChildAt(i).visibility = android.view.View.GONE
+        var node: android.view.ViewParent? = rows
+        while (node != null && node !is com.google.android.material.card.MaterialCardView) node = node.parent
+        val card = node as? android.view.View ?: return
+        val section = card.parent as? android.view.ViewGroup ?: return
+        val index = section.indexOfChild(card)
+        (section.getChildAt(index - 1) as? android.widget.TextView)?.setText(R.string.settings_privacy_section)
+    }
+
+    /** Adds [row] at the end of the Privacy & security card, with a divider only when a
+     *  visible row is already above it. */
+    private fun addToPrivacySection(row: android.view.View, divider: android.view.View) {
+        val parent = binding.rowPrivacy.parent as? android.view.ViewGroup ?: return
+        val hasVisibleRow = (0 until parent.childCount).any {
+            val child = parent.getChildAt(it)
+            child.visibility == android.view.View.VISIBLE && child is android.widget.LinearLayout
+        }
+        if (hasVisibleRow) parent.addView(divider)
+        parent.addView(row)
+    }
+
+    /**
+     * Hides a settings row's card and the section label right above it.
+     * Walks up to the nearest card: rows sit at different depths (rowTrash's card is its
+     * PARENT, so the old `row.parent.parent` hid the whole page and Settings went blank).
+     */
     private fun hideSection(row: android.view.View) {
-        val card = row.parent?.parent as? android.view.View ?: return
+        var node: android.view.ViewParent? = row.parent
+        while (node != null && node !is com.google.android.material.card.MaterialCardView) node = node.parent
+        val card = node as? android.view.View ?: return
         val parent = card.parent as? android.view.ViewGroup ?: return
+        if (parent === binding.root || parent is android.widget.ScrollView) return
         val index = parent.indexOfChild(card)
         if (index > 0) parent.getChildAt(index - 1).visibility = android.view.View.GONE
         card.visibility = android.view.View.GONE

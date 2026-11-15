@@ -14,6 +14,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.IdCard
+import com.scanwhirl.app.util.PaperSize
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -148,6 +149,36 @@ class IdCardFlowTest {
         assertColor(Color.RED, top)
         assertColor(Color.WHITE, bottom)
         assertEquals(1, repo.listDocuments().size)
+    }
+
+    @Test
+    fun `letter paper is chosen, remembered and used for the page`() {
+        ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.acceptCapture(IdCardActivity.Side.FRONT, jpeg(Color.RED))
+                activity.acceptCapture(IdCardActivity.Side.BACK, jpeg(Color.BLUE))
+                clickSheetText(R.string.tools_id_paper_letter)
+                clickSheet(R.id.swSheetPrimary)
+            }
+            assertTrue("the card document is created", waitUntil { repo.listDocuments().isNotEmpty() })
+        }
+        assertEquals(PaperSize.LETTER, IdCardPrefs.paper(app))
+        val doc = newestDoc()
+        val page = newestPageFile(doc.id, 0)
+        val bitmap = BitmapFactory.decodeFile(page.path)
+        try {
+            assertEquals(PaperSize.LETTER.width, bitmap.width)
+            assertEquals(PaperSize.LETTER.height, bitmap.height)
+            val card = IdCard.frontRect(PaperSize.LETTER)
+            assertColor(Color.RED, bitmap.getPixel(card.centerX().toInt(), card.centerY().toInt()))
+            assertEquals(
+                IdCard.ID1_RATIO,
+                card.width() / card.height(),
+                0.01f
+            )
+        } finally {
+            bitmap.recycle()
+        }
     }
 
     @Test

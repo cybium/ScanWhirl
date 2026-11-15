@@ -48,6 +48,11 @@
     <string name="unlock_remove_confirm">Remove protection</string>
     <string name="unlock_removed">Password removed. The PDF is unlocked.</string>
 
+    <!-- L3: the Tools/Home Protect and Unlock tiles' document chooser. -->
+    <string name="lock_from_pdf">From a PDF file</string>
+    <string name="lock_no_documents">No unprotected PDFs. Scan or import one first.</string>
+    <string name="lock_choose_document">Choose a document</string>
+
     <!-- L3 + L2: remembered PDF passwords in the Vault. Short, plain lines. -->
     <string name="vault_password_not_saved">Password not saved in Vault.</string>
     <string name="import_unlock_note">Enter its password to import its pages. The original file is not changed.</string>

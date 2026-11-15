@@ -80,4 +80,53 @@ class ProAnimationTest {
         assertTrue(screen.buyButton.scaleX == 1f)
         controller.pause().stop().destroy()
     }
+
+    @Test
+    fun `the price and Unlock bar is pinned and visible without scrolling`() {
+        SwMotion.animatorOverride = false
+        val controller = controller()
+        val activity = controller.get()
+        val screen = pro(activity)
+        activity.setContentView(screen)
+        controller.visible()
+        val width = (360 * activity.resources.displayMetrics.density).toInt()
+        val height = (640 * activity.resources.displayMetrics.density).toInt()
+        screen.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(height, android.view.View.MeasureSpec.EXACTLY)
+        )
+        screen.layout(0, 0, width, height)
+
+        assertTrue("the Unlock button is on screen", screen.buyButton.isShown)
+        assertTrue("the Unlock button has a real size", screen.buyButton.height > 0)
+        assertTrue(
+            "the bar never falls below the 640dp viewport",
+            screen.buyButton.bottom <= height
+        )
+        assertEquals(
+            "the price is on the same pinned bar",
+            screen.buyWrapForTest().parent,
+            screen.priceWrapForTest().parent
+        )
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun `an active Pro build has no buy bar`() {
+        SwMotion.animatorOverride = false
+        val controller = controller()
+        val activity = controller.get()
+        val screen = ProScreen(activity, object : ProScreen.Callbacks {
+            override fun onClose() = Unit
+            override fun onBuy() = Unit
+            override fun onRestore() = Unit
+            override fun onSeeAllProTools() = Unit
+        }, active = true)
+        activity.setContentView(screen)
+        controller.visible()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("no price card", null, screen.priceWrapForTest().parent)
+        assertEquals("no buy button", null, screen.buyWrapForTest().parent)
+        controller.pause().stop().destroy()
+    }
 }

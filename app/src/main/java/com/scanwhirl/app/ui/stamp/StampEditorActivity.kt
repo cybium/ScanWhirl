@@ -582,7 +582,9 @@ class StampEditorActivity : BaseActivity() {
         }
         val checked = BooleanArray(kinds.size) { true }
         SwSheet.builder(this)
-            .setTitle(getString(R.string.find_results_title, hits.size))
+            .setTitle(
+                resources.getQuantityString(R.plurals.find_results_title, hits.size, hits.size)
+            )
             .setOptions(labels, multiChecked = checked) { index, isChecked ->
                 checked[index] = isChecked
             }
@@ -611,7 +613,9 @@ class StampEditorActivity : BaseActivity() {
         disarm()
         refresh()
         showPage()
-        binding.hint.setText(getString(R.string.find_applied, added))
+        binding.hint.setText(
+            resources.getQuantityString(R.plurals.find_applied, added, added)
+        )
         binding.hint.visibility = View.VISIBLE
     }
 

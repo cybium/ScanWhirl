@@ -26,7 +26,7 @@ snapshot to `ci/<LANE>`, waits for the cloud run and prints the verdict (failing
 the cloud on integration merges. `-Tests "..."` runs locally when the PC's build slot is free (~1 min) and goes to
 the CLOUD automatically when anyone is building or queued (~4 min, no waiting; branch `ci/<LANE>-t`). Evals on the
 owner's private files (names containing Eval/PerfHarness/RealWorld, or while your `<LANE>_EVAL_ON` flag exists) always
-run locally. `-Local` forces a local run (avoid for the full suite: this PC has little memory).
+run locally (recognised by the test NAME). `-Local` is DISABLED for the full suite (it held the only build slot for 40+ min\nand blocked every lane) and is ignored for -Tests while the slot is busy. Delete your `<LANE>_EVAL_ON` flag as soon as your eval run ends.
 
 ### Local details (red/green with -Tests)
 - Red/green loop on one test class:
@@ -46,6 +46,7 @@ run locally. `-Local` forces a local run (avoid for the full suite: this PC has 
 - Evals run LOCALLY with `-Tests`; in the cloud they must return early and pass. Never commit the private files.
 
 ## Rules
+- PHONE: NEVER enable airplane mode or toggle Wi-Fi / mobile data / hotspot on the test phone: it is the PC's internet (hotspot).
 - Commit every green piece (at least every ~45 min of work). The model provider can drop a session; the lead
   restarts it, but uncommitted hours are a risk.
 - File ownership is strict: if a fix needs another lane's file, report it to the lead instead of editing it
