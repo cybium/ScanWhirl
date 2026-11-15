@@ -22,14 +22,14 @@
     <string name="stamp_redo">Redo</string>
     <string name="stamp_delete">Delete</string>
     <string name="stamp_save_copy">Save as new copy</string>
-    <string name="stamp_saving">Saving the copyâ€¦</string>
+    <string name="stamp_saving">Saving the copy…</string>
     <string name="stamp_saved">Saved as a new copy: %1$s</string>
     <string name="stamp_save_failed">Could not save: %1$s</string>
     <string name="stamp_page_indicator">%1$d / %2$d</string>
     <string name="stamp_prev_page">Previous page</string>
     <string name="stamp_next_page">Next page</string>
-    <string name="stamp_prev_symbol">â€¹</string>
-    <string name="stamp_next_symbol">â€º</string>
+    <string name="stamp_prev_symbol">‹</string>
+    <string name="stamp_next_symbol">›</string>
     <string name="stamp_text_title">Add text</string>
     <string name="stamp_text_hint">Text to add</string>
     <string name="stamp_watermark_title">Watermark</string>
