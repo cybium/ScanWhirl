@@ -1,132 +1,97 @@
-# LANE_REPORT_L4 — Tools engine (To Excel, huge PDF import, QA fixes)
+# LANE_REPORT_L4 — Tools engine (shared PDF gate, result names, merge naming)
 
 Session: 2026-11-15. Branch `lane/L4-tools`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L4`.
-Merged `integration` (kept both sides of the ShellActivity/LibraryScreen reveal change); removed the
-"Translate" catalogue entry (no INTERNET permission by design); the Devanagari OCR dependency and
-L1/L2 work are in.
+Merged `integration` (L3's protected-PDF import + L1/L2 work).
 
 ## Done this batch
 
-### To Excel (Pro, Convert) — READY
+### Protected PDFs still reach the Unlock sheet through the planned import
 
-- **`util/TableDetect.kt`**: from one page's stored OCR geometry, rows are grouped by vertical centre
-  (baseline tolerance from the median line height), columns are clustered by horizontal gaps
-  (gap-based), and a page is a table only with **>= 2 columns and >= 3 rows** (and at least two filled
-  cells in most rows). Everything else is one-cell-per-line text.
-- **`util/XlsxWriter.kt`**: minimal valid `.xlsx` with `java.util.zip` only — `[Content_Types].xml`,
-  `_rels/.rels`, `xl/workbook.xml` (+ rels), `xl/worksheets/sheetN.xml` (one sheet per page, named
-  "Page N"), `xl/styles.xml` (number formats), inline strings. Atomic `.part` + rename.
-- **Numbers**: `₹4,560`, `Rs. 4,999`, `1,234.50`, `12%`, `1,23,456.00`, `-1,000` become real numeric
-  cells with number formats; a currency cell keeps its symbol in the display format (`"₹"#,##0.00`);
-  long plain digit runs (phones) and leading-zero references stay text.
-- **`ScanRepository.exportExcel(id, out, tablesOnly, noTableNote)`**: uses stored OCR; pages without
-  geometry are recognised first with the existing on-device OCR. Setup option **Tables only / All
-  text**, wired to the setup screen and result screen (mime + icon). 1225-test gate passed before the
-  later batch.
+- The planned path reads the page count with `PdfImport.pageCount(fd)` **before** any budget sheet;
+  `PdfRenderer`'s `SecurityException` is classified as `PdfImport.Reason.PASSWORD`, and the shell's
+  catch (kept from L3) calls `LockFlow.importProtectedPdf`, which opens `ImportUnlockSheet`.
+- New `ui/tools/ProtectedPdfPlannedTest` drives a real `ShellActivity` import with the page-count
+  seam throwing `PASSWORD` and asserts the Unlock sheet opens with nothing imported. **Passing.**
 
-### Compression level chips (QA run2 193/194)
+### One shared huge-PDF gate on every path that renders a device PDF
 
-- Light / Medium / Strong are now a single-choice kit chip group: **Medium by default**, selected
-  chip = cyan border + soft cyan fill + check, and an **"Estimated size: …"** line under the chips
-  (same two-page sampling/extrapolation as CompressFlow, recomputed per selected document).
-  `ToolsUiTest` asserts exactly one selected chip and the estimate.
+- **`ScanRepository.withPlannedPdfPages(uris, ..., preset, onCopied, onPlan, block)`** is the single
+  primitive: copies each PDF once (bounded), counts pages, applies `PdfImportBudget` (question when
+  >50 pages or >25% free, refuse when leaving <500 MB), asks once, then runs the block with every
+  source open and the selected page indices. `inspectDevicePdf` exposes the same budget for callers
+  with their own renderer.
+- **`ui/tools/DevicePdfGate`** is the single UI helper: refusal sheet, decision sheet
+  (Import all / Choose pages / Cancel) and the "Page k of N" progress sheet with Cancel.
+- Wired paths:
+  - **Import PDF** (shell, the ImportSheet path) — unchanged behaviour, now uses the shared helper;
+  - **Vault add-from-device** — `importPdfIntoVaultPlanned` + gate + progress/cancel;
+  - **Device Merge** (`MergePdfActivity`) — `mergePdfUrisPlanned`, one aggregate plan, pages rendered
+    one at a time, progress/cancel, cancel publishes nothing;
+  - **Compress on a device PDF** — `inspectDevicePdf` gate + chosen pages; the quality path imports
+    only those pages (`importPdfAsScanSelected`), the target-size path renders only those pages, both
+    with the progress sheet and Cancel;
+  - **Protect a device PDF** — gated planned import before protecting.
+  - **ID card / Passport** accept images only (`image/*` pickers); no PDF path to gate.
+- Page cap raised to 10 000; range imports are renumbered from page 0; page rendering is one at a
+  time at ≤ import resolution (2048 px), so memory stays flat.
 
-### Huge PDF import (owner's 56 MB textbooks)
+### Result screens name the output (QA run3b 14/17)
 
-- **Pre-check** (`util/PdfImportBudget.kt`): page count is read before rendering; the estimate is
-  pages × a typical page (600 KB at 2048 px, 450 KB at 1600, 320 KB at 1024); free storage is read
-  from the documents volume. A PDF needs confirmation when **pages > 50 or estimate > 25% of free**.
-- **Refusal**: if the import would leave **< 500 MB** free, it refuses before starting with a clear
-  message (needed MB / free MB).
-- **Sheet** (`ui/tools/PdfImportSheets.kt`): "This PDF has N pages" with **Import all**, **Choose
-  pages** (the PageRanges field, e.g. "1-20, 45", invalid input stays open with a line) and **Cancel**
-  (also closing the sheet = Cancel).
-- **Progress sheet**: "Importing page k of N" updated per page, **Cancel** cancels the coroutine; the
-  seekable copy and the private staging folder are deleted in `finally`, and the document is published
-  only after every chosen page is written, so a cancel leaves **no partial document**.
-- **Pages one at a time**, max long side = import resolution (`maxDim`, default 2048); the page cap is
-  raised to 10 000 (up from 500) so a chosen range works for the textbooks; range imports are
-  renumbered from page 0.
-- Memory: `PdfImport.renderPages` holds one rendered JPEG and writes it before the next page. Test
-  with a **fake 2000-page source**: all 2000 files written sequentially, cancellation stops before a
-  page, a mid-render failure leaves staging to be discarded.
+- Under the thumbnail there is now a one-line, ellipsized **output name** (`toolResultName`); the
+  summary below shows the page count ("3 pages"), or the file count for exports. A size line
+  ("· 12 KB") is shown **only for Compress/Resize**, never for Merge/ID card/etc.
 
-#### Host check (EVAL_ON is present; private data not committed)
+### Merge names the output after a source (QA run3b 14f)
 
-PyMuPDF in WSL, reading the owner PDFs only for this eval:
-
-```
-Harrison's ... Part-1.pdf   pages: 2223   open+count: 171 ms
-27th-Bailey ... Surgery.pdf pages: 1633   open+count: 2261 ms
-```
-
-The app pre-check copies the PDF once to a seekable cache file (bounded at 256 MB) and then reads
-`PdfRenderer.pageCount`; the copy dominates, so both books are checked in seconds, not minutes.
-Estimates: 2223 pages ≈ 1.27 GB, 1633 pages ≈ 0.94 GB; both trigger the page-count sheet and the
-free-space rule (they are refused if leaving < 500 MB).
-
-### ID card gallery crop (B)
-
-`ScanLauncher.launchGalleryCrop(...)` is **not in integration yet**, so the ID card gallery steps keep
-the current path (`GetContent` → `readImage` → the ID-1 compositor) as instructed; switch them to the
-auto-crop route when L1 lands it.
-
-### Translate removal
-
-`translate` removed from `ToolRegistry` and its `tool_translate` / `soon_translate` strings (en + hi);
-catalogue is 43 tools / 18 Pro and the tests counts were updated accordingly.
+- Library Merge with no typed name now uses `OutputNames.forTool(first source name, "Merged",
+  existing)`: `isz14 - Merged`, then `isz14 - Merged (2)`. The setup screen no longer prefills the
+  name field with a source name, so this rule applies. Test added (two sources `isz14`/`isz12`).
 
 ## Tests added / updated
 
-- `TableDetectTest` (5): 4-column invoice, 2-column list, paragraphs, too few rows/one column, single-
-  cell rows.
-- `XlsxWriterTest` (4): parts + rels/content types resolve, sheet names/count, numeric cells with
-  styles, numeric parsing (currency, Indian grouping, percent, phone/leading zero as text), atomic
-  failure, escaping.
-- `ToolsEngineTest` (+2): repository export one sheet per page with a detected table and numbers,
-  tables-only page note, locked source refused.
-- `ToolsUiTest` (+2): To Excel chips; compression chips single selection + estimate.
-- `PdfImportBudgetTest` (5): decision thresholds, 25% rule, 500 MB refusal, resolution estimate,
-  range parsing.
-- `PdfImportRenderTest` (5): 2000-page fake source, selected range, failure, cancellation, bad page.
-- `PdfImportSheetsTest` (5): Import all / Cancel / close = Cancel, range decision, invalid range,
-  progress text + cancel.
-- Updated L1 tests that assumed `to_excel` was Soon (now uses `pdfa`).
+- `ui/tools/ProtectedPdfPlannedTest` (1): protected PDF → Unlock sheet via the planned import.
+- `store/ToolsEngineTest` (+1): merge default name and uniqueness.
+- `ui/tools/ResultNameTest` (3): output name + page count, no size line for Split, size kept for
+  Compress, exported file name.
+- `PdfImportTest` still green after the refactor (COPIED fault hook preserved).
+- Updated `ScanRepositoryTest` merge-default expectation.
+
+## To Excel phone-check steps (QA)
+
+1. Prepare/photograph an invoice with a clear table, e.g. columns **Item | Qty | Rate | Amount** and
+   rows `Pen 2 ₹10 ₹20`, `Book 1 ₹250 ₹250`, `Bag 3 ₹500 ₹1,500` (a printed invoice or a scan).
+2. Library → Import/Scan it and let text recognition finish (open the document → Text once if needed).
+3. Tools → Convert → **To Excel** → pick the document → **Tables only** → Continue.
+4. Result → **Open**: sheet `Page 1` should hold one cell per column; tap `₹1,500`: it is a real
+   number (not text) and displays with ₹; `2`, `1`, `3` are integers. Change **All text** to include
+   non-table lines. Each page gets its own `Page N` sheet.
+5. Optional negative: a text-only letter page in “Tables only” shows one clear “No table found on
+   this page.” line.
+
+## Gallery crop (B)
+
+`ScanLauncher.launchGalleryCrop(...)` is still **not present** in `integration` after the merge
+(checked the whole tree), so the ID card front/back gallery steps keep the current `GetContent` path
+as instructed; nothing was switched.
 
 ## Gate result (last full run)
 
 ```
-tests: total=1240 failures=0 skipped=0
-GATE PASS L4 tests=1240 lint=[lint skipped (lead runs it at merge)]
+tests: total=1285 failures=0 skipped=0
+GATE PASS L4 tests=1285 lint=[lint skipped (lead runs it at merge)]
 ```
-
-## To Excel host check (sample produced by the test, env only for this run)
-
-```
-testzip: None
-parts: 7
-sheets: ['Page 1', 'Page 2']
--- Page 1
-   [('A1', 'text', '')]
--- Page 2
-   [('A1', 'text', '')]
-```
-
-(The sample uses the DocFixtures OCR text; `XlsxWriterTest` covers numeric/currency cells and a
-4-column grid from synthetic geometry. openpyxl is not installed in WSL; the grid was read with
-`zipfile` + XML, independent of our code.)
 
 ## Notes for the lead
 
-- `SwSheet.setOnDismissListener` was added to the kit (additive) so closing the import sheet counts as
-  Cancel; keep both sides on merge.
-- Legacy/other import entry points (`MainActivity`, Vault import, Compress/Lock device PDF) still use
-  the automatic import path; the ImportSheet path in the shell uses the new pre-check. Say if you
-  want the same gate on Vault import.
-- The owner PDFs were read only because `EVAL_ON` is present; nothing from `.sw-qa` is committed.
+- `ImportSheet`-based import, Vault, Merge, Compress and Protect device PDFs now share the gate; the
+  legacy `MainActivity` import still uses the automatic path (launcher is the shell).
+- `DevicePdfGate.decide` always runs the plan callback now, so even small imports get the progress
+  sheet and Cancel.
+- Protect's own ExportResult "Before → After" line is L3's; this lane only stopped showing sizes in
+  the shared tool result outside Compress/Resize.
 
 ## Commits
 
-- `165f8f2` L4: To Excel (table detection, numbers, minimal xlsx) and selected compression levels
-- `668d16c` L4: huge PDF import pre-check, page range, progress and cancel; 2000-page render test
+- `508ea23` merge L4: To Excel, compression chips, huge-PDF import guard, Translate removed
+- `295cca6` L4: shared huge-PDF gate for Vault/Merge/Compress/Protect, result names, merge naming
 - (report) L4: report

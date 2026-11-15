@@ -1251,7 +1251,7 @@ class ScanRepository(private val context: Context) {
         val pages = sources.flatMap { d -> d.pageFiles.filter { it.exists() && it.length() > 0 } }
         if (pages.isEmpty()) throw IllegalStateException("No pages to merge")
         val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
-            ?: "Merged scan ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())}"
+            ?: OutputNames.forTool(sources.first().name, "Merged", existingDocumentNames())
         buildAndPublish(name, null, pages.sumOf { it.length() }) { staging ->
             pages.forEachIndexed { i, p -> stagePageCopy(p, staging, i) }
         }
@@ -1781,51 +1781,34 @@ class ScanRepository(private val context: Context) {
         quality: Int,
         vaulted: Boolean,
         onPlan: (suspend (PdfImportBudget.Plan) -> ImportDecision)?,
-        onPage: ((Int, Int) -> Unit)?
+        onPage: ((Int, Int) -> Unit)?,
+        preset: ImportDecision? = null
     ): ScanDocument? = withContext(Dispatchers.IO) {
         val staging = File(importStagingDir, UUID.randomUUID().toString().take(12))
         if (!staging.mkdirs()) throw PdfImport.ImportException(PdfImport.Reason.SAVE_FAILED, "Could not prepare the import")
         try {
-            val rendered = PdfImport.withSeekableCopy(context, uri) { fd, sourceBytes ->
-                importFault(ImportStage.COPIED)
-                val pageCount = PdfImport.pageCount(fd)
-                val plan = PdfImportBudget.plan(
-                    pageCount, usableSpace(docsDir), PdfImportBudget.pageBytes(maxDim)
-                )
-                if (plan.tooLittleSpace) {
-                    throw PdfImport.ImportException(
-                        PdfImport.Reason.NO_SPACE,
-                        context.getString(
-                            R.string.tools_import_no_space,
-                            plan.estimateBytes / (1024 * 1024),
-                            plan.freeBytes / (1024 * 1024)
-                        ),
-                        pages = pageCount
-                    )
-                }
-                val decision = if (plan.needsDecision && onPlan != null) {
-                    onPlan(plan)
-                } else {
-                    ImportDecision.All
-                }
-                val indices = when (decision) {
-                    ImportDecision.All -> (0 until pageCount).toList()
-                    is ImportDecision.Pages -> decision.indices.distinct().sorted()
-                    ImportDecision.Cancel -> emptyList()
-                }
-                if (indices.isEmpty()) {
+            val rendered = withPlannedPdfPages(
+                uris = listOf(uri),
+                dpi = dpi,
+                maxDim = maxDim,
+                quality = quality,
+                preset = preset,
+                onCopied = { importFault(ImportStage.COPIED) },
+                onPlan = onPlan ?: { ImportDecision.All }
+            ) { planned ->
+                val pdf = planned.first()
+                if (pdf.indices.isEmpty()) {
                     false
                 } else {
-                    val source = PdfImport.PdfRendererSource(fd, dpi, maxDim, quality)
-                    source.use {
-                        PdfImport.renderPages(it, staging, indices, usableSpace(docsDir)) { done, total ->
-                            importFault(ImportStage.PAGE_RENDERED)
-                            onPage?.invoke(done, total)
-                        }
+                    PdfImport.renderPages(
+                        pdf.source, staging, pdf.indices, usableSpace(docsDir)
+                    ) { done, total ->
+                        importFault(ImportStage.PAGE_RENDERED)
+                        onPage?.invoke(done, total)
                     }
                     true
                 }
-            }
+            } ?: false
             if (!rendered) {
                 staging.deleteRecursively()
                 return@withContext null
@@ -1865,9 +1848,167 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /** One opened PDF in a planned batch, with the pages the user chose (0-based). */
+    data class PlannedPdf(
+        val source: PdfImport.PageSource,
+        val indices: List<Int>,
+        val pageCount: Int
+    )
+
+    /** Counts and estimates a device PDF without rendering it (for Compress's own renderer). */
+    suspend fun inspectDevicePdf(uri: Uri, maxDim: Int = 2048): PdfImportBudget.Plan =
+        withContext(Dispatchers.IO) {
+            PdfImport.withSeekableCopy(context, uri) { fd, _ ->
+                PdfImportBudget.plan(
+                    PdfImport.pageCount(fd),
+                    usableSpace(docsDir),
+                    PdfImportBudget.pageBytes(maxDim)
+                )
+            }
+        }
+
+    /**
+     * The one huge-PDF gate for every path that renders a device PDF into pages: copies each PDF
+     * once, counts pages, applies the shared budget/refusal, asks once (when needed), then runs
+     * [block] with every source open and the selected indices. Returns null when the user cancels.
+     */
+    suspend fun <T> withPlannedPdfPages(
+        uris: List<Uri>,
+        dpi: Float = 150f,
+        maxDim: Int = 2048,
+        quality: Int = 85,
+        preset: ImportDecision? = null,
+        onCopied: (() -> Unit)? = null,
+        onPlan: suspend (PdfImportBudget.Plan) -> ImportDecision = { ImportDecision.All },
+        block: suspend (List<PlannedPdf>) -> T
+    ): T? = withContext(Dispatchers.IO) {
+        require(uris.isNotEmpty()) { "Pick a PDF" }
+        openPlannedPdfs(uris, 0, emptyList(), dpi, maxDim, quality, preset, onCopied, onPlan, block)
+    }
+
+    private suspend fun <T> openPlannedPdfs(
+        uris: List<Uri>,
+        index: Int,
+        opened: List<Pair<PdfImport.PageSource, Int>>,
+        dpi: Float,
+        maxDim: Int,
+        quality: Int,
+        preset: ImportDecision?,
+        onCopied: (() -> Unit)?,
+        onPlan: suspend (PdfImportBudget.Plan) -> ImportDecision,
+        block: suspend (List<PlannedPdf>) -> T
+    ): T? {
+        if (index == uris.size) {
+            val totalPages = opened.sumOf { it.second }
+            val plan = PdfImportBudget.plan(
+                totalPages, usableSpace(docsDir), PdfImportBudget.pageBytes(maxDim)
+            )
+            if (plan.tooLittleSpace) {
+                throw PdfImport.ImportException(
+                    PdfImport.Reason.NO_SPACE,
+                    context.getString(
+                        R.string.tools_import_no_space,
+                        plan.estimateBytes / (1024 * 1024),
+                        plan.freeBytes / (1024 * 1024)
+                    ),
+                    pages = totalPages
+                )
+            }
+            val decision = preset ?: onPlan(plan)
+            if (decision == ImportDecision.Cancel) return null
+            val chosen: List<List<Int>> = when (decision) {
+                ImportDecision.All -> opened.map { (_, count) -> (0 until count).toList() }
+                is ImportDecision.Pages -> {
+                    val flat = decision.indices.distinct().sorted()
+                    var cursor = 0
+                    opened.map { (_, count) ->
+                        val pages = flat.filter { it in cursor until cursor + count }.map { it - cursor }
+                        cursor += count
+                        pages
+                    }
+                }
+                ImportDecision.Cancel -> return null
+            }
+            if (chosen.all { it.isEmpty() }) return null
+            return block(opened.mapIndexed { i, (source, count) ->
+                PlannedPdf(source, chosen[i], count)
+            })
+        }
+        return PdfImport.withSeekableCopy(context, uris[index]) { fd, _ ->
+            onCopied?.invoke()
+            val count = PdfImport.pageCount(fd)
+            val source = PdfImport.PdfRendererSource(fd, dpi, maxDim, quality)
+            source.use {
+                openPlannedPdfs(
+                    uris, index + 1, opened + (source to count),
+                    dpi, maxDim, quality, preset, onCopied, onPlan, block
+                )
+            }
+        }
+    }
+
+    /**
+     * Merges device PDFs after the pre-check; pages are rendered one at a time into private
+     * staging and published once. Cancelling returns null and leaves nothing.
+     */
+    suspend fun mergePdfUrisPlanned(
+        uris: List<Uri>,
+        suggestedName: String?,
+        onPlan: suspend (PdfImportBudget.Plan) -> ImportDecision,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): ScanDocument? {
+        require(uris.size >= 2) { "Pick at least 2 PDFs" }
+        val name = suggestedName ?: defaultMergedName("Merged PDF")
+        return withPlannedPdfPages(uris, onPlan = onPlan) { planned ->
+            val total = planned.sumOf { it.indices.size }
+            var done = 0
+            buildAndPublish(name, null, 0L) { staging ->
+                for (pdf in planned) {
+                    if (pdf.indices.isEmpty()) continue
+                    PdfImport.renderPages(pdf.source, staging, pdf.indices, usableSpace(docsDir)) { pageDone, _ ->
+                        OpFaults.at("op:page:${done + pageDone - 1}")
+                        onPage(done + pageDone, total)
+                    }
+                    done += pdf.indices.size
+                }
+                if (done == 0) throw IllegalStateException("No pages to merge")
+            }
+        }
+    }
+
+    /**
+     * Imports one device PDF with pre-chosen pages (Compress has already shown the gate), without
+     * asking a second time. Returns null for an empty selection.
+     */
+    suspend fun importPdfAsScanSelected(
+        uri: Uri,
+        name: String?,
+        dpi: Float = 150f,
+        maxDim: Int = 2048,
+        quality: Int = 85,
+        indices: List<Int>,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): ScanDocument? = importPdfInternal(
+        uri, name, dpi, maxDim, quality, vaulted = false,
+        onPlan = null, onPage = onPage, preset = ImportDecision.Pages(indices)
+    )
+
+    /** Vault import with the shared huge-PDF gate. */
+    suspend fun importPdfIntoVaultPlanned(
+        uri: Uri,
+        name: String?,
+        onPlan: suspend (PdfImportBudget.Plan) -> ImportDecision,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): ScanDocument? = importPdfInternal(
+        uri, name, 150f, 2048, 85, vaulted = true,
+        onPlan = onPlan, onPage = onPage, preset = null
+    )
+
     /** Private staging for imports in progress (same filesystem as `documents/`). */
     private val importStagingDir: File
         get() = File(context.filesDir, "import_staging").apply { mkdirs() }
+
+
 
     /**
      * Startup cleanup: an import staging folder only exists while an import runs, so
