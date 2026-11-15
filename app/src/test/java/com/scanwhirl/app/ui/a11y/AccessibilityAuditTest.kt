@@ -635,7 +635,9 @@ class AccessibilityAuditTest {
         while (cur != null) {
             // A Material button/card paints its fill through backgroundTint, not only through
             // the drawable's own colour.
-            val tint = cur.backgroundTintList?.defaultColor
+            val tint = cur.backgroundTintList?.let { list ->
+                list.getColorForState(cur.drawableState, list.defaultColor)
+            }
             if (tint != null && Color.alpha(tint) > 128) {
                 layers += tint
             } else {

@@ -70,11 +70,6 @@ Protect sheet|image|AppCompatImageView|L2 protect sheet: touch, contrast, images
 Protect sheet|touch|protectClose|L2 protect sheet: touch, contrast, images, pane title - dispatched
 Protect sheet|touch|protectPasswordShow|L2 protect sheet: touch, contrast, images, pane title - dispatched
 Protect sheet|touch|protectSave|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Scan review|clip|pageStatus|L1 review: touch, contrast, clipping - dispatched
-Scan review|clip|titleInput|L1 review: touch, contrast, clipping - dispatched
-Scan review|contrast|btnModeFocus|L1 review: touch, contrast, clipping - dispatched
-Scan review|touch|OverflowMenuButton|L1 review: touch, contrast, clipping - dispatched
-Scan review|touch|titleInput|L1 review: touch, contrast, clipping - dispatched
 Settings|clip|Also save a copy to Docu|legacy Settings (L1): labels, images, clipping - dispatched
 Settings|clip|Google processing is on|legacy Settings (L1): labels, images, clipping - dispatched
 Settings|clip|Hides OCR text in the PD|legacy Settings (L1): labels, images, clipping - dispatched
@@ -85,22 +80,6 @@ Settings|label|switchAutoEnhance|legacy Settings (L1): labels, images, clipping 
 Settings|label|switchSearchablePdf|legacy Settings (L1): labels, images, clipping - dispatched
 Shell vault|clip|Library|L1 shell: Vault tab clipping - dispatched
 Shell vault|contrast|swVaultStatus|L1 shell: Vault tab clipping - dispatched
-Text screen|clip|Audit text page 1 of 1|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|clip|ocrFootNote|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|clip|ocrModePage|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|clip|ocrModeText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|clip|swChipLabel|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnCopy|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnRedo|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnSave|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnShare|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnTidyText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnToWord|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|btnUndo|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|ocrLangChip|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|ocrModePage|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|ocrModeText|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
-Text screen|touch|OverflowMenuButton|L1 OcrEditor: 48dp touch, contrast, clipping - dispatched
 Tool result|clip|toolResultLibrary|L4 tools: result screen touch/image/clip - dispatched
 Tool result|image|toolResultPreview|L4 tools: result screen touch/image/clip - dispatched
 Tool result|touch|ImageButton|L4 tools: result screen touch/image/clip - dispatched
@@ -138,3 +117,4 @@ Vault|touch|vaultBackupButton|L2 vault: touch targets and image description - di
 Vault|touch|vaultLock|L2 vault: touch targets and image description - dispatched
 Vault|touch|vaultMore|L2 vault: touch targets and image description - dispatched
 Vault|touch|vaultRecoveryButton|L2 vault: touch targets and image description - dispatched
+Tools|contrast|1|L1 shell: tool count contrast - dispatched

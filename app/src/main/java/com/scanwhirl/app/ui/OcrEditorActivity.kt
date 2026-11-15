@@ -173,6 +173,7 @@ class OcrEditorActivity : BaseActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_ocr_editor, menu)
+        A11yTargets.widenOverflow(binding.toolbar)
         return true
     }
 
@@ -226,6 +227,7 @@ class OcrEditorActivity : BaseActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = getString(R.string.ocr_screen_title)
         updateSubtitle()
+        A11yTargets.stackToolbarText(toolbar)
         toolbar.setNavigationOnClickListener {
             if (isDirty) showUnsavedConfirm() else finish()
         }
@@ -248,9 +250,10 @@ class OcrEditorActivity : BaseActivity() {
             chip,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
         )
+        com.scanwhirl.app.ui.A11yTargets.fixChip(chip)
     }
 
     private fun languageLabel(language: OcrLanguage): Int = when (language) {
@@ -363,9 +366,10 @@ class OcrEditorActivity : BaseActivity() {
             chip,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f)
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
         )
+        com.scanwhirl.app.ui.A11yTargets.fixChip(chip)
     }
 
     /** v2 UI: 08_text_ocr — the three text fixes live in one sheet. */
@@ -456,9 +460,15 @@ class OcrEditorActivity : BaseActivity() {
             }
             row.addView(
                 chip,
-                LinearLayout.LayoutParams(0, com.scanwhirl.app.ui.kit.SwStyle.dp(this, 38f), weight)
-                    .apply { marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f) }
+                LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    weight
+                ).apply {
+                    marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f)
+                }
             )
+            com.scanwhirl.app.ui.A11yTargets.fixChip(chip)
             return chip
         }
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -510,7 +520,7 @@ class OcrEditorActivity : BaseActivity() {
                 )
             )
             view.setPadding(0, 0, 0, 0)
-            view.minimumHeight = (34 * d).toInt()
+            view.minimumHeight = (48 * d).toInt()
         }
         if (page) loadPageImage(currentPageKey)
     }
@@ -567,7 +577,9 @@ class OcrEditorActivity : BaseActivity() {
         val name = docTitle ?: getString(R.string.ocr_screen_title)
         val total = maxOf(1, pageTexts.size)
         val current = pageNumberOf(currentPageKey).coerceIn(1, total)
-        supportActionBar?.subtitle = getString(R.string.ocr_page_sub, name, current, total)
+        // Short form: the full "page N of M" wording is ellipsized at font scale 2.0.
+        binding.toolbar.subtitle = getString(R.string.ocr_page_sub_short, name, current, total)
+        A11yTargets.stackToolbarText(binding.toolbar)
     }
 
     // ------------------------------------------------------------------
