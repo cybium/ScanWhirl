@@ -56,7 +56,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // The cloud gate builds this variant on a runner that never has the
+            // owner's keystore, so `-PciUnsignedRelease` swaps in the debug key:
+            // the APK is installable for a smoke test and NOT distributable.
+            // Without the switch the release build signs exactly as before.
+            signingConfig = if (project.hasProperty("ciUnsignedRelease")) {
+                signingConfigs.getByName("debug")
+            } else {
+                signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false

@@ -149,6 +149,7 @@ internal object ImportUnlockSheet {
         }
 
         sheet.show()
+        sheet.secure()
         field.editText.requestFocus()
     }
 }

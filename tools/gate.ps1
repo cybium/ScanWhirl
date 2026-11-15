@@ -40,7 +40,7 @@ if (-not $Tests -and -not $Apk -and -not $Local) {
     $env:GH_TOKEN = (("protocol=https`nhost=github.com`n`n" | git credential fill 2>$null) | Where-Object { $_ -like 'password=*' }) -replace '^password=', ''
     Write-Output "cloud: snapshot $($commit.Substring(0,8)) pushed to ci/$Lane; waiting for the GitHub run (about 8-12 min, no local queue)"
     $started = Get-Date; $run = $null
-    while (((Get-Date) - $started).TotalMinutes -lt 70) {
+    while (((Get-Date) - $started).TotalMinutes -lt 25) {
         $runs = & $gh run list -R cybium/ScanWhirl --workflow gate.yml --branch "ci/$Lane" -L 10 --json databaseId,headSha,status,conclusion 2>$null | ConvertFrom-Json
         $run = $runs | Where-Object { $_.headSha -eq $commit } | Select-Object -First 1
         if ($run -and $run.status -eq "completed") { break }

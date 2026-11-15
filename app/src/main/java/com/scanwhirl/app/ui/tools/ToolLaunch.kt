@@ -30,6 +30,7 @@ object ToolLaunch {
             "passport" -> PassportActivity.intent(context)
             "id_card" -> IdCardActivity.intent(context)
             "business_card" -> BusinessCardActivity.intent(context)
+            "batch_tools" -> BatchActivity.intent(context, emptyList())
             else -> ToolSetupActivity.intent(context, toolId)
         }
         if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

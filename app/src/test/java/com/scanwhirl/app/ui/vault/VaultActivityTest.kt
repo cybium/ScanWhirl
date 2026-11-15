@@ -466,6 +466,16 @@ class VaultActivityTest {
     }
 
     @Test
+    fun `the vault window blocks screenshots and blanks the recents card`() {
+        store.setup("246810")
+        val activity = launch()
+        assertTrue(
+            "FLAG_SECURE must be set on the Vault window",
+            com.scanwhirl.app.util.SecureView.isSecure(activity.window)
+        )
+    }
+
+    @Test
     fun `the old four-digit PIN is asked once before the new Vault setup`() {
         Prefs.setVaultPin(app, "1234")
         val activity = launch()

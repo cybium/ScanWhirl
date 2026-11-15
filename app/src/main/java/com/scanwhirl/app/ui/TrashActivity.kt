@@ -59,6 +59,7 @@ class TrashActivity : BaseActivity() {
         binding.toolbar.setNavigationOnClickListener { finish() }
         binding.trashList.layoutManager = LinearLayoutManager(this)
         binding.trashList.adapter = adapter
+        binding.trashList.itemAnimator = com.scanwhirl.app.ui.kit.SwItemAnimator(this)
         binding.trashList.addItemDecoration(TrashGap())
         binding.btnTrashRetry.setOnClickListener { reload() }
     }

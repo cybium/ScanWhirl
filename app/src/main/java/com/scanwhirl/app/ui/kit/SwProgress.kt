@@ -50,13 +50,10 @@ class SwProgress private constructor(
             setImageResource(R.drawable.ic_brand_mark)
         }
         root.addView(whirl, LinearLayout.LayoutParams((44 * d).toInt(), (44 * d).toInt()))
-        if (SwMotion.enabled(context)) {
-            android.animation.ObjectAnimator.ofFloat(whirl, View.ROTATION, 0f, 360f).apply {
-                duration = 1400L
-                repeatCount = android.animation.ObjectAnimator.INFINITE
-                interpolator = android.view.animation.LinearInterpolator()
-            }.start()
-        }
+        // Endless whirl, attach-scoped: started only while the sheet is attached
+        // and cancelled with it, so a dismissed sheet never leaks the activity.
+        SwMotion.spin(whirl)
+        dialog.setOnDismissListener { SwMotion.stop(whirl) }
 
         label = SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.swProgressLabel
@@ -135,6 +132,7 @@ class SwProgress private constructor(
     }
 
     fun dismiss() {
+        SwMotion.stop(whirl)
         if (dialog.isShowing) dialog.dismiss()
     }
 

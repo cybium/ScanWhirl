@@ -26,6 +26,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.launchGalleryCrop
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -81,10 +82,6 @@ class IdCardActivity : BaseActivity() {
         } else {
             readImage(uri, pendingSide)
         }
-    }
-
-    private val gallery = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri == null) onCaptureCancelled() else readImage(uri, pendingSide)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -273,7 +270,14 @@ class IdCardActivity : BaseActivity() {
 
     private fun pickFromGallery(side: Side) {
         pendingSide = side
-        gallery.launch("image/*")
+        launchGalleryCrop(
+            activity = this,
+            maxPages = 1,
+            onResult = { uris ->
+                val uri = uris.firstOrNull()
+                if (uri == null) onCaptureCancelled() else readImage(uri, side)
+            }
+        )
     }
 
     private fun onCaptureCancelled() {

@@ -27,6 +27,12 @@
     <string name="protect_action_share"><!-- review -->सुरक्षित करें और शेयर करें</string>
     <string name="protect_action_save"><!-- review -->सुरक्षित कॉपी सेव करें</string>
     <string name="protect_action_change"><!-- review -->पासवर्ड बदलें</string>
+    <string name="protect_result_summary"><!-- review -->%1$s\nAES-256 से सुरक्षित</string>
+    <string name="vault_save_prompt"><!-- review -->पासवर्ड Vault में सहेजें?</string>
+    <string name="vault_save_prompt_note"><!-- review -->Vault खोलें ताकि यह कभी न खोए।</string>
+    <string name="vault_unlock_action"><!-- review -->खोलें</string>
+    <string name="not_now"><!-- review -->अभी नहीं</string>
+    <string name="vault_reason_save_password"><!-- review -->यह पासवर्ड सहेजने के लिए Vault खोलें।</string>
 
     <string name="unlock_sheet_title"><!-- review -->%1$s सुरक्षित है</string>
     <string name="unlock_sheet_note"><!-- review -->खोलने के लिए इसका पासवर्ड डालें।</string>

@@ -13,6 +13,8 @@ import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
+import com.scanwhirl.app.model.OcrLine
+import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
@@ -33,6 +35,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import java.io.File
 
 /**
@@ -251,6 +254,37 @@ class ToolsUiTest {
                 assertNotNull(activity.findViewById<View>(R.id.toolSetupRun))
             }
         }
+    }
+
+    @Test
+    fun `to excel tables only offers all text when no page has a table`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Plain letter")
+        repo.ocrStore.putPage(
+            id, "page_000.jpg", "letter",
+            OcrPage(1000, 1400, listOf(OcrLine("Dear sir", 60, 80, 420, 120)))
+        )
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "to_excel")).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                activity.findViewById<View>(R.id.toolSetupRun).performClick()
+            }
+            assertTrue("the no-tables sheet opens", waitUntil {
+                ShadowDialog.getLatestDialog()?.findViewById<TextView>(R.id.swSheetTitle)
+                    ?.text?.toString() == app.getString(R.string.tools_excel_no_tables_title)
+            })
+            scenario.onActivity {
+                ShadowDialog.getLatestDialog().findViewById<View>(R.id.swSheetPrimary).performClick()
+            }
+            assertTrue("the all-text export opens the result", waitUntil {
+                var opened = false
+                scenario.onActivity { opened = shadowOf(it).peekNextStartedActivity()
+                    ?.component?.className == ToolResultActivity::class.java.name }
+                opened
+            })
+        }
+        val workbooks = File(app.cacheDir, "documents/tools").walkTopDown()
+            .filter { it.name.endsWith(".xlsx") }.toList()
+        assertEquals("one all-text workbook is written", 1, workbooks.size)
     }
 
     @Test

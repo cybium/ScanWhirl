@@ -1,7 +1,5 @@
 package com.scanwhirl.app.ui.vault
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -44,6 +42,7 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.util.ClipboardPrivacy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -139,6 +138,9 @@ class VaultActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Security audit: the Vault shows secrets (recovery code, passcodes, private file
+        // names). FLAG_SECURE blocks screenshots/screen recording and blanks the recents card.
+        com.scanwhirl.app.util.SecureView.apply(window)
         repo = ScanWhirlApp.from(this).repository
         store = storeOverride ?: VaultStore(this, repo)
         reason = intent?.getStringExtra(EXTRA_REASON)
@@ -235,6 +237,7 @@ class VaultActivity : BaseActivity() {
                 if (store.isUnlocked()) {
                     store.lock()
                     com.scanwhirl.app.ui.kit.SwHaptics.tick(findViewById(android.R.id.content))
+                    com.scanwhirl.app.ui.kit.SwMotion.relockRing(lockButton, 0)
                     promptShown = false
                     render()
                     maybePromptOnOpen()
@@ -479,6 +482,10 @@ class VaultActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@VaultActivity, 10f) }
         }
+        empty.addView(
+            com.scanwhirl.app.ui.kit.SwMotion.brandArt(this),
+            LinearLayout.LayoutParams(SwStyle.dp(this, 64f), SwStyle.dp(this, 64f))
+        )
         empty.addView(
             ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_encrypted)
@@ -915,6 +922,7 @@ class VaultActivity : BaseActivity() {
             sheet.dismiss()
             unlockSheet = null
             render()
+            com.scanwhirl.app.ui.kit.SwMotion.relockRing(lockButton)
             offerFingerprintSetup()
             return
         }
@@ -1074,6 +1082,7 @@ class VaultActivity : BaseActivity() {
             unlockSheet?.dismiss()
             unlockSheet = null
             render()
+            com.scanwhirl.app.ui.kit.SwMotion.relockRing(lockButton)
         } else {
             showFingerprintFailed()
         }
@@ -1510,8 +1519,9 @@ class VaultActivity : BaseActivity() {
         }
 
     private fun copyRecoveryCode(code: String) {
-        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.vault_recovery_button), code))
+        // Security audit: a recovery code is a master key. Mark the clip sensitive (Android 13+
+        // hides it from the clipboard preview) and clear it after a minute.
+        ClipboardPrivacy.copy(this, getString(R.string.vault_recovery_button), code, sensitive = true)
         Toast.makeText(this, R.string.vault_copy_done, Toast.LENGTH_SHORT).show()
     }
 

@@ -35,6 +35,10 @@
     <item name="toolResultLibrary" type="id" />
     <item name="toolResultUndo" type="id" />
     <item name="toolResultPreview" type="id" />
+    <item name="toolResultPreviewHost" type="id" />
+    <item name="toolResultTypeBadge" type="id" />
+    <item name="toolResultFileName" type="id" />
+    <item name="toolResultFileMeta" type="id" />
     <item name="toolResultError" type="id" />
     <item name="toolCropView" type="id" />
     <item name="toolCropApply" type="id" />
@@ -43,6 +47,29 @@
     <item name="toolIdCardError" type="id" />
     <item name="toolImportRange" type="id" />
     <item name="toolImportChoosePages" type="id" />
+    <item name="batchList" type="id" />
+    <item name="batchSearch" type="id" />
+    <item name="batchSelectAll" type="id" />
+    <item name="batchCount" type="id" />
+    <item name="batchContinue" type="id" />
+    <item name="batchError" type="id" />
+    <item name="batchRow" type="id" />
+    <item name="batchActionCompress" type="id" />
+    <item name="batchActionExport" type="id" />
+    <item name="batchActionImages" type="id" />
+    <item name="batchActionWord" type="id" />
+    <item name="batchActionClean" type="id" />
+    <item name="batchActionProtect" type="id" />
+    <item name="batchTarget" type="id" />
+    <item name="batchLevelLight" type="id" />
+    <item name="batchLevelMedium" type="id" />
+    <item name="batchLevelStrong" type="id" />
+    <item name="batchFormatJpg" type="id" />
+    <item name="batchFormatPng" type="id" />
+    <item name="batchPerDoc" type="id" />
+    <item name="batchOneZip" type="id" />
+    <item name="batchPassword" type="id" />
+    <item name="batchSummary" type="id" />
     <item name="bcPreview" type="id" />
     <item name="bcForm" type="id" />
     <item name="bcError" type="id" />

@@ -18,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -143,6 +144,21 @@ class ToolsEngineTest {
 
         val again = runBlocking { repo.splitByRange(first.id, listOf(PageRanges.Span(1, 2))) }
         assertEquals("Contract - Pages 1-2 (2)", again.first().name)
+    }
+
+    @Test
+    fun `compress to a target size streams pages and publishes them`() {
+        val id = DocFixtures.saved(repo, app, pages = 3, name = "Target")
+        val before = requireNotNull(repo.getDocument(id))
+        val copy = runBlocking { repo.compressScanToTarget(id, 120_000L) }
+        assertEquals("Target - Compressed", copy.name)
+        assertEquals(3, copy.pageCount)
+        assertTrue("the published PDF exists", copy.pdfFile.isFile)
+        assertTrue(
+            "the target path re-encodes pages",
+            copy.pageFiles.first().length() <= before.pageFiles.first().length()
+        )
+        assertEquals("the source is untouched", 3, repo.getDocument(id)!!.pageCount)
     }
 
     // ---------------------------------------------------------------- PDF to images
@@ -523,19 +539,44 @@ class ToolsEngineTest {
         }
 
         val tablesOnly = work("tables.xlsx")
-        runBlocking {
+        val report = runBlocking {
             repo.exportExcel(id, tablesOnly, tablesOnly = true, noTableNote = "No table here")
         }
+        assertEquals("one of two pages has a table", 1, report.tablePages)
+        assertEquals(2, report.totalPages)
+        assertEquals(tablesOnly, report.file)
         ZipFile(tablesOnly).use { zip ->
-            val second = zip.getInputStream(zip.getEntry("xl/worksheets/sheet2.xml")).use {
+            val workbook = zip.getInputStream(zip.getEntry("xl/workbook.xml")).use {
                 String(it.readBytes(), Charsets.UTF_8)
             }
-            assertTrue("tables-only page 2 explains itself", second.contains("No table here"))
+            assertEquals("only the table page becomes a sheet", 1, Regex("<sheet ").findAll(workbook).count())
             val first = zip.getInputStream(zip.getEntry("xl/worksheets/sheet1.xml")).use {
                 String(it.readBytes(), Charsets.UTF_8)
             }
             assertTrue(first.contains("Pen"))
+            assertTrue("no note sheet in tables-only", !first.contains("No table here"))
         }
+    }
+
+    @Test
+    fun `exportExcel tables only stops before writing when no page has a table`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        repo.ocrStore.putPage(
+            id, "page_000.jpg", "letter",
+            OcrPage(1200, 1600, listOf(ocrLine("Dear sir", 50, 100, 400)))
+        )
+        repo.ocrStore.putPage(
+            id, "page_001.jpg", "letter",
+            OcrPage(1200, 1600, listOf(ocrLine("Regards", 50, 100, 200)))
+        )
+        val out = work("no-tables.xlsx")
+        val report = runBlocking {
+            repo.exportExcel(id, out, tablesOnly = true, noTableNote = "No table here")
+        }
+        assertEquals(0, report.tablePages)
+        assertEquals(2, report.totalPages)
+        assertNull("nothing is written without a table", report.file)
+        assertTrue("no workbook file exists", !out.exists())
     }
 
     @Test

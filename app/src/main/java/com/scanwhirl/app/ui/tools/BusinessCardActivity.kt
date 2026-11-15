@@ -28,6 +28,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.launchGalleryCrop
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -85,15 +86,13 @@ class BusinessCardActivity : BaseActivity() {
         if (uri == null) showCaptureSheet() else readImage(uri)
     }
 
-    private val gallery = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri == null) showCaptureSheet() else readImage(uri)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
         setContentView(buildRoot())
-        if (suppressScannerForTest) showCaptureSheet() else scan()
+        // v2 UI run4a: always start with the same camera/gallery choice as ID card; the camera is
+        // one tap away, and people without a good camera angle can pick a photo instead.
+        showCaptureSheet()
     }
 
     // ---- screen -----------------------------------------------------------
@@ -224,9 +223,25 @@ class BusinessCardActivity : BaseActivity() {
             .setTitle(R.string.tool_business_card)
             .setMessage(R.string.tools_bc_scan_msg)
             .setPrimary(R.string.tools_bc_scan) { scan() }
-            .setSecondary(R.string.tools_id_pick_gallery) { gallery.launch("image/*") }
+            .setSecondary(R.string.tools_id_pick_gallery) { pickFromGallery() }
             .build()
             .show()
+    }
+
+    /** Gallery import through the shared scanner crop (same path as ID card and Home → Photos). */
+    private fun pickFromGallery() {
+        launchGalleryCrop(
+            activity = this,
+            maxPages = 1,
+            onResult = { uris ->
+                val uri = uris.firstOrNull()
+                if (uri == null) showCaptureSheet() else readImage(uri)
+            },
+            onFallback = { uris ->
+                val uri = uris.firstOrNull()
+                if (uri == null) showCaptureSheet() else readImage(uri)
+            }
+        )
     }
 
     private fun readImage(uri: Uri) {
@@ -473,9 +488,6 @@ class BusinessCardActivity : BaseActivity() {
     }
 
     companion object {
-        /** Test seam: ML Kit cannot run under Robolectric, so tests open the capture sheet. */
-        internal var suppressScannerForTest = false
-
         /** Test seam: replaces the on-device OCR with a fixed text in UI tests. */
         internal var recognizeForTest: ((ByteArray) -> String)? = null
 

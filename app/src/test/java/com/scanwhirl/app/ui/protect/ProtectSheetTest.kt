@@ -2,7 +2,6 @@ package com.scanwhirl.app.ui.protect
 
 import android.app.Dialog
 import android.view.View
-import android.view.WindowManager
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
@@ -17,6 +16,7 @@ import com.scanwhirl.app.R
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -67,24 +67,15 @@ class ProtectSheetTest {
     ) { password, remember, share -> result.add(Triple(password, remember, share)) }
 
     @Test
-    fun `the sheet scrolls and caps above the keyboard so the primary button stays reachable`() {
+    fun `the sheet consumes the IME inset and the primary button stays reachable`() {
         val activity = host()
         val dialog = sheet(activity, rememberAvailable = true)
         val root = dialog.view<View>(R.id.protectSheet)
-        assertTrue(
-            "the form lives in a scroll container",
-            root is NestedScrollView
-        )
-        assertTrue(
-            "the primary button is inside that container",
-            root.findViewById<View>(R.id.protectShare) != null
-        )
-        assertEquals(
-            "the dialog window resizes for the keyboard",
-            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
-            dialog.window!!.attributes.softInputMode and
-                WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST
-        )
+        assertTrue("the password window is FLAG_SECURE",
+            com.scanwhirl.app.util.SecureView.isSecure(dialog.window))
+        assertTrue("the form lives in a scroll container", root is NestedScrollView)
+        val primary = root.findViewById<View>(R.id.protectShare)
+        assertNotNull("the primary button is inside that container", primary)
 
         val screen = activity.resources.displayMetrics.heightPixels
         root.measure(
@@ -92,17 +83,31 @@ class ProtectSheetTest {
             View.MeasureSpec.makeMeasureSpec(screen, View.MeasureSpec.AT_MOST)
         )
         root.layout(0, 0, 1080, root.measuredHeight)
+        val basePadding = root.paddingBottom
         val ime = screen / 3
-        ViewCompat.dispatchApplyWindowInsets(
-            root,
-            WindowInsetsCompat.Builder()
-                .setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, ime))
-                .build()
-        )
-        val height = root.layoutParams?.height ?: root.height
+        val insets = WindowInsetsCompat.Builder()
+            .setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, ime))
+            .build()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        ViewCompat.dispatchApplyWindowInsets(root, insets)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         assertTrue(
-            "the sheet is capped above the IME ($height vs screen $screen, ime $ime)",
-            height <= screen - ime
+            "the IME inset becomes bottom padding (${root.paddingBottom} vs $basePadding + $ime)",
+            root.paddingBottom >= basePadding + ime
+        )
+        assertTrue(
+            "the sheet is expanded, never collapsed",
+            dialog.behavior.skipCollapsed &&
+                dialog.behavior.state == com.google.android.material.bottomsheet
+                    .BottomSheetBehavior.STATE_EXPANDED
+        )
+        // The content is taller than the viewport, so the owner can scroll the primary button
+        // above the keyboard; at the bottom the button is inside the visible box.
+        val scroll = root as NestedScrollView
+        scroll.scrollTo(0, scroll.getChildAt(0).height)
+        assertTrue(
+            "the primary button is reachable at the bottom",
+            primary!!.bottom - scroll.scrollY <= scroll.height + 1
         )
     }
 

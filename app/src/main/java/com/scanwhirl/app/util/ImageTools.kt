@@ -19,6 +19,14 @@ import kotlin.math.roundToInt
 
 object ImageTools {
 
+    /**
+     * Test seam (perf harness): records the downsampling a thumbnail request chose —
+     * `(maxDim, inSampleSize, decodedWidth, decodedHeight)`. Null in production.
+     */
+    @Volatile
+    internal var thumbProbe: ((maxDim: Int, sample: Int, width: Int, height: Int) -> Unit)? = null
+
+
     private val PNG_SIG = byteArrayOf(
         0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
     )
@@ -70,6 +78,7 @@ object ImageTools {
             w /= 2
             h /= 2
         }
+        thumbProbe?.invoke(maxDim, sample, w, h)
 
         val opts = BitmapFactory.Options().apply {
             inSampleSize = sample
@@ -96,6 +105,7 @@ object ImageTools {
             w /= 2
             h /= 2
         }
+        thumbProbe?.invoke(maxDim, sample, w, h)
         val opts = BitmapFactory.Options().apply {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.ARGB_8888
@@ -115,7 +125,7 @@ object ImageTools {
     /** Decodes a downsampled thumbnail from a file for lists; null when unreadable. */
     fun decodeThumb(file: java.io.File, maxDim: Int): Bitmap? = try {
         if (!file.exists() || file.length() == 0L) null
-        else decodeSampled(file.readBytes(), maxDim)
+        else decodeSampledFile(file, maxDim)
     } catch (e: Exception) {
         null
     }

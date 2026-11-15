@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -90,6 +91,8 @@ class LibraryScreen(
     private val selected = linkedSetOf<String>()
     private var lastBatchUndo: List<Pair<String, String>>? = null
     private var listStaggered = false
+    /** The last batch-rename Undo snackbar (tests inspect its anchored, accessible action). */
+    internal var lastUndoSnackbar: com.google.android.material.snackbar.Snackbar? = null
     private var quickHeader: View? = null
     private var recentHeader: View? = null
     private var folderScroll: View? = null
@@ -162,7 +165,7 @@ class LibraryScreen(
         addView(chipRow)
         addView(SwStyle.spacer(context, 6f))
 
-        addView(selectionBar())
+        val selectBar = selectionBar()
 
         listHeader = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -180,7 +183,6 @@ class LibraryScreen(
             // The last card must clear the nav bar and the scan disc.
             setPadding(0, 0, 0, SwStyle.dp(context, 96f))
         }
-        addView(docList)
 
         emptyView = LinearLayout(context).apply {
             id = R.id.swHomeEmpty
@@ -219,7 +221,31 @@ class LibraryScreen(
                     .apply { topMargin = SwStyle.dp(context, 6f) }
             )
         }
-        addView(emptyView)
+        // v2 UI: 01_home_A — the selection bar OVERLAYS the list (it never
+        // shrinks it): top bar over the first rows, which get a matching inset.
+        val listHost = FrameLayout(context).apply { id = R.id.swListHost }
+        listHost.addView(
+            docList,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        listHost.addView(
+            emptyView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        listHost.addView(
+            selectBar,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply { gravity = Gravity.TOP }
+        )
+        addView(
+            listHost,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        )
 
         buildQuickRow()
     }
@@ -498,6 +524,13 @@ class LibraryScreen(
 
     private fun renderSelectionBar() {
         selectionBar.isVisible = selectionMode
+        // The bar overlays the list; inset the first rows so nothing is hidden.
+        docList.setPadding(
+            0,
+            if (selectionMode) SwStyle.dp(context, 92f) else 0,
+            0,
+            SwStyle.dp(context, 96f)
+        )
         if (selectionMode) {
             selectionCount.text = resources.getQuantityString(
                 R.plurals.sel_count, selected.size, selected.size
@@ -667,9 +700,22 @@ class LibraryScreen(
         exitSelection()
         reload()
         if (undo.isEmpty()) return
-        Snackbar.make(this, context.getString(R.string.batch_done, undo.size), Snackbar.LENGTH_LONG)
-            .setAction(R.string.undo_action) { undoLastBatchRename() }
-            .show()
+        // v2 UI: 74_motion — glass snackbar above the nav, after the IME closes.
+        val host = context as? android.app.Activity
+        val snack = if (host != null) {
+            com.scanwhirl.app.ui.kit.SwSnackbar.show(
+                host,
+                this,
+                context.getString(R.string.batch_done, undo.size),
+                context.getString(R.string.undo_action),
+                onAction = { undoLastBatchRename() }
+            )
+        } else {
+            Snackbar.make(this, context.getString(R.string.batch_done, undo.size), Snackbar.LENGTH_LONG)
+                .setAction(R.string.undo_action) { undoLastBatchRename() }
+                .also { it.show() }
+        }
+        lastUndoSnackbar = snack
     }
 
     // ---- pieces -----------------------------------------------------------

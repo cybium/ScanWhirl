@@ -116,6 +116,8 @@ class ChangePasswordSheetTest {
 
             val sheet = currentPasswordSheet()
             assertNotNull("Change password asks for the current password", sheet)
+            assertTrue("the password window is FLAG_SECURE",
+                com.scanwhirl.app.util.SecureView.isSecure(sheet!!.window))
             assertEquals(
                 "Current password",
                 sheet!!.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
