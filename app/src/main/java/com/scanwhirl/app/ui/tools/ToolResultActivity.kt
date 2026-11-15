@@ -76,6 +76,8 @@ class ToolResultActivity : BaseActivity() {
         }
         setContentView(buildRoot())
         render()
+        // v2 UI: 74_motion — the one success moment call for every tool result.
+        com.scanwhirl.app.ui.kit.SwMotion.success(this)
     }
 
     private fun buildRoot(): View {

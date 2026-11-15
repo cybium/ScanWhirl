@@ -239,20 +239,14 @@
         android:paddingBottom="4dp" />
 
     <!-- v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word (chips). -->
-    <HorizontalScrollView
+    <LinearLayout
+        android:id="@+id/ocrActions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:orientation="vertical"
         android:paddingHorizontal="12dp"
         android:paddingTop="2dp"
-        android:paddingBottom="4dp"
-        android:scrollbars="none">
-
-        <LinearLayout
-            android:id="@+id/ocrActions"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-    </HorizontalScrollView>
+        android:paddingBottom="4dp" />
 
     <!-- v2 UI: 08_text_ocr — the honest footer, one short line. -->
     <TextView

@@ -35,6 +35,7 @@ class SwChip(context: Context) : LinearLayout(context) {
         val padH = SwStyle.dp(context, 12f)
         setPadding(padH, 0, padH, 0)
         minimumHeight = SwStyle.dp(context, 38f)
+        SwMotion.press(this)
 
         iconView = ImageView(context).apply {
             id = R.id.swChipIcon

@@ -246,7 +246,8 @@ class ScanLauncher(
                                     ?: throw IllegalArgumentException("Cannot read this image. Choose it again.")
                                 File(staging, String.format(Locale.ROOT, "page_%03d.jpg", index + 1))
                                     // Real JPEG, white alpha and EXIF orientation; no perspective crop.
-                                    .writeBytes(ImageTools.normalizePage(bytes))
+                                    // HEIC/HEIF photos from a phone gallery are re-encoded here.
+                                    .writeBytes(ImageTools.normalizeGalleryPhoto(bytes))
                             } catch (e: Exception) {
                                 throw IllegalArgumentException("Page ${index + 1}: ${e.message}", e)
                             }

@@ -63,4 +63,10 @@ abstract class BaseActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setBackgroundDrawableResource(R.color.rv_bg)
     }
+
+    /** v2 UI: 74_motion — every drill-in uses the kit screen transition. */
+    override fun startActivity(intent: android.content.Intent) {
+        super.startActivity(intent)
+        com.scanwhirl.app.ui.kit.SwMotion.drillIn(this)
+    }
 }

@@ -214,6 +214,11 @@
     <string name="undo_action"><!-- review -->वापस</string>
     <string name="tools_clear_search"><!-- review -->खोज मिटाएँ</string>
     <string name="photos_add_title"><!-- review -->फ़ोटो जोड़ें</string>
+    <string name="progress_page_of"><!-- review -->पेज %1$d / %2$d</string>
+    <string name="home_search_clear"><!-- review -->खोज मिटाएँ</string>
+    <string name="empty_filtered"><!-- review -->यहाँ कोई दस्तावेज़ नहीं</string>
+    <string name="ocr_nothing_to_save"><!-- review -->सेव करने के लिए कुछ बदला नहीं</string>
+    <string name="photo_import_none"><!-- review -->कोई फ़ोटो नहीं जोड़ी गई</string>
     <string name="photos_auto_crop"><!-- review -->पेज अपने आप क्रॉप करें (सुझाया)</string>
     <string name="photos_keep"><!-- review -->फ़ोटो जैसी हैं वैसी रखें</string>
     <string name="sort_title"><!-- review -->क्रम</string>

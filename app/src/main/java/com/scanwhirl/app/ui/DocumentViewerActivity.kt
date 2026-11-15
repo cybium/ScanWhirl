@@ -1138,8 +1138,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         lifecycleScope.launch { reloadDocument() }
     }
 
-    override fun showProgress(titleRes: Int): androidx.appcompat.app.AlertDialog =
-        SwDialog.progress(this, titleRes = titleRes)
+    override fun showProgress(titleRes: Int): com.scanwhirl.app.ui.kit.SwProgress =
+        com.scanwhirl.app.ui.kit.SwProgress.show(this, getString(titleRes))
 
     override fun toast(res: Int, duration: Int) {
         Toast.makeText(this, res, duration).show()

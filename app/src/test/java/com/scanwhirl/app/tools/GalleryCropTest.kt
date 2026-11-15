@@ -68,8 +68,8 @@ class GalleryCropTest {
 
     private fun host(activity: ShellActivity): HomeHost = object : HomeHost {
         override fun refreshList() = Unit
-        override fun showProgress(titleRes: Int): AlertDialog =
-            AlertDialog.Builder(activity).create()
+        override fun showProgress(titleRes: Int): com.scanwhirl.app.ui.kit.SwProgress =
+            com.scanwhirl.app.ui.kit.SwProgress.show(activity, "test")
         override fun toast(res: Int, duration: Int) = Unit
         override fun toast(message: CharSequence, duration: Int) = Unit
     }
