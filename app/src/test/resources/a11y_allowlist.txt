@@ -9,24 +9,6 @@
 # This file must stay narrow. Fixing a finding means deleting its line.
 # Findings for other lanes are listed in docs/audit/2026-11-15/ACCESSIBILITY.md.
 
-Protect sheet|clip|protectSave|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|clip|protectShare|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|clip|The modern standard. Str|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|contrast|PASSWORD|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|contrast|TYPE IT AGAIN|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|focus|DecorView|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|image|AppCompatImageView|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|touch|protectClose|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|touch|protectPasswordShow|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|touch|protectSave|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Settings|clip|Also save a copy to Docu|legacy Settings (L1): labels, images, clipping - dispatched
-Settings|clip|Google processing is on|legacy Settings (L1): labels, images, clipping - dispatched
-Settings|clip|Hides OCR text in the PD|legacy Settings (L1): labels, images, clipping - dispatched
-Settings|image|AppCompatImageView|legacy Settings (L1): labels, images, clipping - dispatched
-Settings|label|AppCompatImageButton|legacy Settings (L1): labels, images, clipping - dispatched
-Settings|label|switchAutoCopyToDocuments|legacy Settings (L1): labels, images, clipping - dispatched
-Settings|label|switchAutoEnhance|legacy Settings (L1): labels, images, clipping - dispatched
-Settings|label|switchSearchablePdf|legacy Settings (L1): labels, images, clipping - dispatched
 Shell vault|clip|Library|L1 shell: Vault tab clipping - dispatched
 Shell vault|contrast|swVaultStatus|L1 shell: Vault tab clipping - dispatched
 Tool result|clip|toolResultLibrary|L4 tools: result screen touch/image/clip - dispatched
@@ -37,18 +19,7 @@ Tool setup|clip|toolSetupRanges|L4 tools: setup touch/contrast/clip - dispatched
 Tool setup|contrast|OPTIONS|L4 tools: setup touch/contrast/clip - dispatched
 Tool setup|contrast|SOURCE|L4 tools: setup touch/contrast/clip - dispatched
 Tool setup|touch|ImageButton|L4 tools: setup touch/contrast/clip - dispatched
-Unlock sheet|clip|unlockCancel|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|clip|unlockOpen|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|contrast|or|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|focus|DecorView|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|image|AppCompatImageView|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|touch|unlockCancel|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|touch|unlockPasswordShow|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Vault|clip|vaultBackupButton|L2 vault: touch targets and image description - dispatched
-Vault|clip|vaultRecoveryButton|L2 vault: touch targets and image description - dispatched
-Vault|image|ImageView|L2 vault: touch targets and image description - dispatched
-Vault|touch|vaultBackupButton|L2 vault: touch targets and image description - dispatched
-Vault|touch|vaultLock|L2 vault: touch targets and image description - dispatched
-Vault|touch|vaultMore|L2 vault: touch targets and image description - dispatched
-Vault|touch|vaultRecoveryButton|L2 vault: touch targets and image description - dispatched
-Tools|contrast|1|L1 shell: tool count contrast - dispatched
+Tools|contrast|1|L1 shell: TEXT section count uses cyan_dim (4.06:1) - dispatched
+Settings|clip|Google processing is on|L1 settings: description 3px too wide at 1.3x (exposed once the blank-page bug was fixed) - dispatched
+Settings|clip|Hides OCR text in the PD|L1 settings: description 3px too wide at 1.3x (exposed once the blank-page bug was fixed) - dispatched
+Settings|clip|Also save a copy to Docu|L1 settings: title 5px too wide at 2.0x (exposed once the blank-page bug was fixed) - dispatched
