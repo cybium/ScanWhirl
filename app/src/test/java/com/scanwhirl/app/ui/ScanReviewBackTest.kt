@@ -8,7 +8,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.ImportFixtures
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,6 +32,23 @@ class ScanReviewBackTest {
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
 
     private fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()
+
+    private fun pollUntil(timeoutMs: Long = 8_000, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            idle()
+            if (condition()) return true
+            Thread.sleep(25)
+        }
+        idle()
+        return condition()
+    }
+
+    private fun discardSheet(): android.app.Dialog? =
+        ShadowDialog.getLatestDialog()?.takeIf {
+            it.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString() ==
+                app.getString(R.string.review_discard_title)
+        }
 
     @Test
     fun `back from scan review asks to discard and keep editing keeps the scan`() {
@@ -59,13 +75,14 @@ class ScanReviewBackTest {
 
             // A second Back, then Discard: the staging folder goes.
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-            idle()
-            ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary)!!.performClick()
-            idle()
-            assertFalse("Discard removes the staged scan", dir.exists())
+            assertTrue("Back asks again", pollUntil { discardSheet() != null })
+            discardSheet()!!.findViewById<View>(R.id.swSheetPrimary)!!.performClick()
+            assertTrue("Discard removes the staged scan", pollUntil { !dir.exists() })
             var finishing = false
-            scenario.onActivity { finishing = it.isFinishing }
-            assertTrue("the review closes", finishing)
+            assertTrue("the review closes", pollUntil {
+                scenario.onActivity { finishing = it.isFinishing }
+                finishing
+            })
         }
     }
 }
