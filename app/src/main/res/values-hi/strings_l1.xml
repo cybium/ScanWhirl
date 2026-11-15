@@ -258,6 +258,7 @@
     <string name="about_licences_body"><!-- review -->ScanWhirl इनके ओपन-सोर्स लाइसेंस (Apache 2.0) के तहत AndroidX, Material Components, Google ML Kit, PdfBox-Android और kotlinx.coroutines का उपयोग करता है।</string>
     <string name="settings_accent"><!-- review -->रंग</string>
     <string name="accent_cyan"><!-- review -->सियान</string>
+    <string name="accent_coming_soon"><!-- review -->सियान · गोल्ड जल्द आ रहा है</string>
     <string name="accent_gold"><!-- review -->गोल्ड</string>
     <string name="accent_gold_use"><!-- review -->गोल्ड लगाएँ</string>
     <string name="accent_gold_warning"><!-- review -->गोल्ड ऐप का रंग और ऐप आइकन बदल देता है। होम स्क्रीन पर नया आइकन दिखने में थोड़ा समय लग सकता है, और आपका रखा शॉर्टकट दोबारा जोड़ना पड़ सकता है।</string>
@@ -272,4 +273,6 @@
     <string name="settings_test_free"><!-- review -->परीक्षण: मुफ़्त उपयोगकर्ता के रूप में</string>
     <string name="settings_test_free_summary"><!-- review -->केवल टेस्ट बिल्ड में। Pro गेट दिखाता है।</string>
     <string name="settings_privacy_section"><!-- review -->गोपनीयता और सुरक्षा</string>
+    <string name="pro_sub_compact"><!-- review -->हर Pro टूल, एक भुगतान, हमेशा आपका।</string>
+    <string name="pro_more_tools"><!-- review -->+ %1$d और Pro टूल</string>
 </resources>

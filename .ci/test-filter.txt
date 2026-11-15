@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.shell.ProAnimationTest,com.scanwhirl.app.ui.shell.ProStateTest,com.scanwhirl.app.ui.kit.SwThemeTest,com.scanwhirl.app.ui.shell.QuickToolsTest,com.scanwhirl.app.ui.a11y.DeadButtonAuditTest,com.scanwhirl.app.ui.a11y.AccessibilityAuditTest
