@@ -294,7 +294,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             this, window, doc.isVaulted || doc.isLocked
         )
         val state = withContext(Dispatchers.IO) {
-            runCatching { repo.draftPages(id) to repo.draftOf(id) }
+            runCatching {
+                // L1-5: open the draft first. With no draft the already-loaded
+                // document's pages are reused instead of listing them again.
+                val openDraft = repo.draftOf(id)
+                val draftPages = if (openDraft == null) doc.pageFiles else repo.draftPages(id)
+                draftPages to openDraft
+            }
         }
         val failure = state.exceptionOrNull()
         if (failure is DraftStore.DraftDamaged) {

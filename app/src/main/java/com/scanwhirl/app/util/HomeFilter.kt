@@ -84,7 +84,9 @@ object HomeFilter {
     fun sort(docs: List<ScanDocument>, mode: String): List<ScanDocument> = when (mode) {
         Prefs.SORT_NAME -> docs.sortedBy { it.name.lowercase(Locale.getDefault()) }
         Prefs.SORT_MODIFIED -> docs.sortedByDescending {
-            maxOf(
+            // Cached while listing: no per-page stat pass on every sort.
+            if (it.cachedModified > 0L) it.cachedModified
+            else maxOf(
                 it.pdfFile.lastModified(),
                 it.pageFiles.maxOfOrNull { p -> p.lastModified() } ?: 0L
             )

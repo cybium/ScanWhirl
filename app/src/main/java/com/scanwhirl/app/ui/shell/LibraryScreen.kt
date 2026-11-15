@@ -20,7 +20,13 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
@@ -103,6 +109,16 @@ class LibraryScreen(
     private var query = ""
     private var category: String? = null
     private var revealId: String? = null
+
+    // L1 performance: never read the library on the main thread.
+    private var loadJob: Job? = null
+    private var renderJob: Job? = null
+    private var renderedDocs: List<ScanDocument> = emptyList()
+    private var renderedSignatures: List<String> = emptyList()
+
+    /** Tests wait on this after [reload] when they force a threaded IO dispatcher. */
+    internal var loaded = false
+        private set
 
     private val quickIds = listOf("merge", "compress", "sign", "protect", "to_word", "read_text")
 
@@ -253,10 +269,30 @@ class LibraryScreen(
     // ---- public -----------------------------------------------------------
 
     fun reload() {
-        docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
-        renderFolders()
-        renderChips()
-        renderDocs()
+        val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
+        if (owner == null) {
+            // No lifecycle (unit-only host): keep the old synchronous behaviour.
+            docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            loaded = true
+            renderFolders()
+            renderChips()
+            renderDocs()
+            return
+        }
+        loadJob?.cancel()
+        loadJob = owner.launch {
+            // L1-1: the whole library load (including the per-page stats inside
+            // listDocuments) happens off the main thread; the old list stays up.
+            val fresh = withContext(ioDispatcher) {
+                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            }
+            if (!isActive) return@launch
+            docs = fresh
+            loaded = true
+            renderFolders()
+            renderChips()
+            renderDocs()
+        }
     }
 
     /**
@@ -1035,16 +1071,21 @@ class LibraryScreen(
         }
     }
 
-    private fun visibleDocs(): List<ScanDocument> {
-        val q = query.lowercase(Locale.getDefault())
+    private fun computeVisible(
+        q: String,
+        folderFilter: String?,
+        categoryFilter: String?,
+        sortMode: String
+    ): List<ScanDocument> {
+        val needle = q.lowercase(Locale.getDefault())
         val filtered = docs.filter { doc ->
-            (folder == null || doc.folder.equals(folder, true)) &&
-                (category == null || doc.category == category) &&
-                (q.isEmpty() || doc.name.lowercase(Locale.getDefault()).contains(q) ||
-                    doc.tags.any { it.lowercase(Locale.getDefault()).contains(q) } ||
-                    runCatching { textCache.normalized(doc.id).contains(q) }.getOrDefault(false))
+            (folderFilter == null || doc.folder.equals(folderFilter, true)) &&
+                (categoryFilter == null || doc.category == categoryFilter) &&
+                (needle.isEmpty() || doc.name.lowercase(Locale.getDefault()).contains(needle) ||
+                    doc.tags.any { it.lowercase(Locale.getDefault()).contains(needle) } ||
+                    runCatching { textCache.normalized(doc.id).contains(needle) }.getOrDefault(false))
         }
-        return when (sort) {
+        return when (sortMode) {
             com.scanwhirl.app.util.Prefs.LIB_OLDEST -> filtered.sortedBy { it.createdAt }
             com.scanwhirl.app.util.Prefs.LIB_NAME_ASC ->
                 filtered.sortedBy { it.name.lowercase(Locale.getDefault()) }
@@ -1055,60 +1096,124 @@ class LibraryScreen(
         }
     }
 
-    private fun docSize(doc: ScanDocument): Long = runCatching {
-        if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
-    }.getOrDefault(0L)
+    /** L1-4: the size is cached by [ScanRepository.loadDocument]; no page stat pass. */
+    private fun docSize(doc: ScanDocument): Long =
+        if (doc.cachedSize > 0L) doc.cachedSize
+        else runCatching {
+            if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
+        }.getOrDefault(0L)
 
+    /**
+     * L1-2: a keystroke cancels the previous search, waits 200 ms, runs the
+     * name/tag/OCR match off the main thread and only then rebinds the list.
+     * Under Robolectric the wait is 0 and the dispatcher is immediate, so tests
+     * still settle on one `idle()`.
+     */
     private fun renderDocs() {
-        val shown = visibleDocs()
-        docList.removeAllViews()
+        val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
+        if (owner == null) {
+            applyDocs(computeVisible(query, folder, category, sort))
+            return
+        }
+        renderJob?.cancel()
+        val q = query
+        val f = folder
+        val c = category
+        val s = sort
+        renderJob = owner.launch {
+            if (q.isNotBlank() && searchDebounceMs > 0L) delay(searchDebounceMs)
+            val shown = withContext(ioDispatcher) { computeVisible(q, f, c, s) }
+            if (isActive) applyDocs(shown)
+        }
+    }
+
+    /** What a card shows; a change here means that one row must rebind. */
+    private fun signature(doc: ScanDocument): String = buildString {
+        append(doc.id).append('\u0000')
+        append(doc.name).append('\u0000')
+        append(doc.category).append('\u0000')
+        append(doc.folder).append('\u0000')
+        append(doc.tags.joinToString("\u0001")).append('\u0000')
+        append(doc.pageCount).append('\u0000')
+        append(doc.revision).append('\u0000')
+        append(doc.isLocked).append('\u0000')
+        append(doc.isVaulted).append('\u0000')
+        append(selectionMode && doc.id in selected).append('\u0000')
+        append(doc.id == revealId)
+    }
+
+    private fun bindCard(card: DocCard, doc: ScanDocument) {
+        card.bind(
+            doc,
+            metaFor(doc),
+            onShare = { callbacks.onShareDoc(doc) },
+            onMore = { callbacks.onMoreDoc(doc) }
+        )
+        card.setSelection(selectionMode, doc.id in selected)
+        card.setOnClickListener {
+            if (selectionMode) toggleSelection(doc.id) else callbacks.onOpenDoc(doc)
+        }
+        card.setOnLongClickListener {
+            com.scanwhirl.app.ui.kit.SwHaptics.tick(it)
+            if (!selectionMode) enterSelection(doc.id) else toggleSelection(doc.id)
+            true
+        }
+        if (doc.id == revealId) {
+            card.isSelected = true
+            card.background = SwStyle.gradient(
+                context,
+                SwStyle.color(context, R.color.glass_surface_raised),
+                SwStyle.color(context, R.color.glass_surface),
+                18f,
+                SwStyle.color(context, R.color.cyan_primary)
+            )
+            card.requestFocus()
+            card.post {
+                card.requestRectangleOnScreen(
+                    android.graphics.Rect(0, 0, card.width, card.height), true
+                )
+            }
+        }
+    }
+
+    private fun newCard(doc: ScanDocument): DocCard = DocCard(context).also { bindCard(it, doc) }
+
+    /**
+     * L1-2: only changed rows are rebuilt. Same ids in the same order (the
+     * common rename/selection/sort-in-place case) rebinds just the rows whose
+     * content signature changed; an insert/remove/filter reorders the list.
+     */
+    private fun applyDocs(shown: List<ScanDocument>) {
+        val limit = shown.take(maxDocCards)
+        val signatures = limit.map { signature(it) }
+        val sameIds = limit.map { it.id } == renderedDocs.map { it.id }
+        if (sameIds && docList.childCount == limit.size) {
+            limit.forEachIndexed { index, doc ->
+                if (renderedSignatures.getOrNull(index) != signatures[index]) {
+                    val card = docList.getChildAt(index) as? DocCard ?: return@forEachIndexed
+                    bindCard(card, doc)
+                }
+            }
+        } else {
+            docList.removeAllViews()
+            for (doc in limit) {
+                docList.addView(
+                    newCard(doc),
+                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                        val m = SwStyle.dp(context, 18f)
+                        setMargins(m, 0, m, SwStyle.dp(context, 10f))
+                    }
+                )
+            }
+        }
+        renderedDocs = limit
+        renderedSignatures = signatures
+
         renderSelectionBar()
         listHeader.isVisible = shown.isNotEmpty()
         countLabel.text = resources.getQuantityString(
             com.scanwhirl.app.R.plurals.list_count, shown.size, shown.size
         )
-        for (doc in shown.take(maxDocCards)) {
-            val card = DocCard(context).apply {
-                bind(
-                    doc,
-                    metaFor(doc),
-                    onShare = { callbacks.onShareDoc(doc) },
-                    onMore = { callbacks.onMoreDoc(doc) }
-                )
-                setSelection(selectionMode, doc.id in selected)
-                setOnClickListener {
-                    if (selectionMode) toggleSelection(doc.id) else callbacks.onOpenDoc(doc)
-                }
-                setOnLongClickListener {
-                    com.scanwhirl.app.ui.kit.SwHaptics.tick(it)
-                    if (!selectionMode) enterSelection(doc.id) else toggleSelection(doc.id)
-                    true
-                }
-            }
-            docList.addView(
-                card,
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                    val m = SwStyle.dp(context, 18f)
-                    setMargins(m, 0, m, SwStyle.dp(context, 10f))
-                }
-            )
-            if (doc.id == revealId) {
-                card.isSelected = true
-                card.background = SwStyle.gradient(
-                    context,
-                    SwStyle.color(context, R.color.glass_surface_raised),
-                    SwStyle.color(context, R.color.glass_surface),
-                    18f,
-                    SwStyle.color(context, R.color.cyan_primary)
-                )
-                card.requestFocus()
-                card.post {
-                    card.requestRectangleOnScreen(
-                        android.graphics.Rect(0, 0, card.width, card.height), true
-                    )
-                }
-            }
-        }
         val filtering = query.isNotBlank() || folder != null || category != null
         noMatchView.isVisible = shown.isEmpty() && filtering
         if (noMatchView.isVisible) {
@@ -1182,5 +1287,25 @@ class LibraryScreen(
             docDay.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
         if (yesterday) return context.getString(R.string.shell_yesterday)
         return fmt.format(Date(doc.createdAt))
+    }
+
+    internal companion object {
+        private val isRobolectric =
+            android.os.Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
+
+        /**
+         * Every library read (list + search) runs here. Production uses the IO
+         * pool; the Robolectric suite uses an immediate dispatcher so its
+         * single `idle()` still sees the loaded list. The perf test overrides
+         * this with a real threaded dispatcher to prove no disk I/O on main.
+         */
+        @Volatile
+        var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher =
+            if (isRobolectric) kotlinx.coroutines.Dispatchers.Unconfined
+            else kotlinx.coroutines.Dispatchers.IO
+
+        /** 200 ms between keystroke and search; 0 under Robolectric. */
+        @Volatile
+        var searchDebounceMs: Long = if (isRobolectric) 0L else 200L
     }
 }
