@@ -164,3 +164,4 @@ The old lock mixed two jobs. They are now two features.
 - 2026-11-14: Long image part limit 16,000 px (E20).
 
 - 2026-11-15 (owner review): global-first. 'Hindi text' tile removed (language = Read text setting; + Chinese/Japanese/Korean bundled). 'Mask Aadhaar' tile removed -> Redact 'Find and hide numbers' (Aadhaar/VID/PAN/cards/phone/email/IBAN/SSN, Aadhaar preset chip). ID card paper A4/Letter by locale. Full Backup 2.0 (library + Vault, recovery code or backup password, share to Drive; no password ZIP: ZipCrypto weak, AES-ZIP not openable in Windows Explorer). Me tab: one About, no nested Settings. Pro perk: Gold theme + gold launcher icon (activity-alias), Cyan keeps Pro.
+- 2026-11-15 (owner): audience = English + Hindi; NO Chinese/Japanese/Korean OCR. Home quick tools customisable (pencil edit, add/remove/reorder, up to 2 rows / 12). Pro screen + Pro gate sheet animated (gold ring burst, cascade, shine sweep, one pulse; off when animations are off).

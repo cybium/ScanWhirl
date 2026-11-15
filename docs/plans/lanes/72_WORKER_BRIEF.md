@@ -36,7 +36,16 @@ local full run (avoid: this PC has little memory).
   Your first build is ~3 min (cold), later ones ~1 min. The last line says GATE PASS or GATE FAIL.
 - Never run gradle yourself (no gradlew, no assemble): only through the gate.
 
+## Evals on private test data (C:\Users\Cybium\Desktop\.sw-qa\)
+- Gate evals with YOUR OWN flag file `C:\Users\Cybium\Desktop\.sw-qa\owner\<LANE>_EVAL_ON` — never a shared `EVAL_ON`
+  (another lane deleting it makes your eval skip silently and "pass").
+- Robolectric runs under WSL: write outputs to `/mnt/c/Users/Cybium/Desktop/.sw-qa/...` (Windows paths do not work).
+- Every eval prints `EVAL RAN: <n> -> <output dir>`; the lead checks file timestamps before accepting numbers.
+- Evals run LOCALLY with `-Tests`; in the cloud they must return early and pass. Never commit the private files.
+
 ## Rules
+- File ownership is strict: if a fix needs another lane's file, report it to the lead instead of editing it
+  (exception: one-line hooks the lead explicitly allowed).
 - Commit after each GATE PASS: `git add -A ; git commit -m "<LANE>: <what>"`. Small, frequent commits.
 - `git merge integration` is allowed (and asked for below) to pick up merged work. Resolve conflicts carefully: keep both
   sides' intent; for files you do not own, take the integration side. Never push, rebase, reset, stash, force, or merge
