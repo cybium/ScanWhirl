@@ -9,10 +9,15 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
+import android.os.Bundle
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.PageStamp
 import kotlin.math.atan2
@@ -44,6 +49,9 @@ class StampCanvasView @JvmOverloads constructor(
         fun onRotate(index: Int, degrees: Float)
         fun onFreehand(strokes: List<PageStamp.Stroke>)
         fun onBox(tool: Tool, box: PageStamp.Box)
+
+        /** Accessibility "Delete mark"; hosts without a delete path ignore it. */
+        fun onDelete(index: Int) {}
     }
 
     var listener: Listener? = null
@@ -59,17 +67,29 @@ class StampCanvasView @JvmOverloads constructor(
     var marks: List<PageStamp.Mark> = emptyList()
         set(value) {
             field = value
+            contentDescription = describeState()
             rebuild()
         }
 
     var selectedIndex: Int? = null
         set(value) {
+            if (field == value) return
             field = value
+            contentDescription = describeState()
+            if (value != null) announceForAccessibility(describeState())
             invalidate()
         }
 
     var pageNumber: Int = 1
+        set(value) {
+            field = value
+            contentDescription = describeState()
+        }
     var pageCount: Int = 1
+        set(value) {
+            field = value
+            contentDescription = describeState()
+        }
 
     var tool: Tool = Tool.SELECT
         set(value) {
@@ -118,6 +138,131 @@ class StampCanvasView @JvmOverloads constructor(
         color = cyan
     }
     private val dimPaint = Paint().apply { color = (voidInk and 0x00FFFFFF) or 0x66000000 }
+
+    init {
+        // A TalkBack user reaches the marks through the local context menu: move, resize,
+        // rotate and delete are custom accessibility actions, never a precision drag.
+        isClickable = true
+        isFocusable = true
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        contentDescription = describeState()
+        ViewCompat.setAccessibilityDelegate(this, CanvasAccessibility())
+    }
+
+    private fun markLabel(mark: PageStamp.Mark): String = context.getString(
+        when (mark) {
+            is PageStamp.Mark.Text -> R.string.a11y_mark_text
+            is PageStamp.Mark.Signature -> R.string.a11y_mark_signature
+            is PageStamp.Mark.Picture -> R.string.a11y_mark_picture
+            is PageStamp.Mark.Highlight -> R.string.a11y_mark_highlight
+            is PageStamp.Mark.Badge -> R.string.a11y_mark_badge
+            is PageStamp.Mark.Redact -> R.string.a11y_mark_redact
+            is PageStamp.Mark.Freehand -> R.string.a11y_mark_ink
+            is PageStamp.Mark.Watermark -> R.string.a11y_mark_watermark
+            is PageStamp.Mark.PageNumber -> R.string.a11y_mark_page_number
+        }
+    )
+
+    private fun describeState(): String {
+        val mark = marks.getOrNull(selectedIndex ?: -1)
+        return if (mark == null) {
+            context.getString(R.string.a11y_no_mark_selected, pageNumber, pageCount)
+        } else {
+            context.getString(
+                R.string.a11y_mark_selected, markLabel(mark), pageNumber, pageCount
+            )
+        }
+    }
+
+    private fun resizeBy(index: Int, mark: PageStamp.Mark, delta: Float): Boolean {
+        val bounds = normalizedBounds(mark) ?: return false
+        val hw = (bounds.width() / 2f + delta).coerceAtLeast(0.01f)
+        val hh = (bounds.height() / 2f + delta).coerceAtLeast(0.01f)
+        val cx = bounds.centerX()
+        val cy = bounds.centerY()
+        val left = (cx - hw).coerceIn(0f, 1f)
+        val top = (cy - hh).coerceIn(0f, 1f)
+        val right = (cx + hw).coerceIn(0f, 1f)
+        val bottom = (cy + hh).coerceIn(0f, 1f)
+        listener?.onResize(index, PageStamp.Box(left, top, right, bottom))
+        return true
+    }
+
+    private inner class CanvasAccessibility : AccessibilityDelegateCompat() {
+        override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+            super.onInitializeAccessibilityNodeInfo(host, info)
+            info.contentDescription = describeState()
+            info.isFocusable = true
+            val index = selectedIndex ?: return
+            val mark = marks.getOrNull(index) ?: return
+            fun action(id: Int, label: Int) {
+                info.addAction(
+                    AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                        id, context.getString(label)
+                    )
+                )
+            }
+            if (tool == Tool.SELECT) {
+                action(R.id.a11y_move_left, R.string.a11y_move_left)
+                action(R.id.a11y_move_right, R.string.a11y_move_right)
+                action(R.id.a11y_move_up, R.string.a11y_move_up)
+                action(R.id.a11y_move_down, R.string.a11y_move_down)
+                if (mark !is PageStamp.Mark.Freehand) {
+                    action(R.id.a11y_grow, R.string.a11y_grow)
+                    action(R.id.a11y_shrink, R.string.a11y_shrink)
+                }
+                if (canRotate(mark)) {
+                    action(R.id.a11y_rotate_cw, R.string.a11y_rotate_cw)
+                    action(R.id.a11y_rotate_ccw, R.string.a11y_rotate_ccw)
+                }
+            }
+            action(R.id.a11y_delete_mark, R.string.a11y_delete_mark)
+        }
+
+        override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean {
+            val index = selectedIndex
+            val mark = marks.getOrNull(index ?: -1)
+            if (index != null && mark != null) {
+                when (action) {
+                    R.id.a11y_move_left -> {
+                        listener?.onMove(index, -0.02f, 0f)
+                        contentDescription = describeState()
+                        return true
+                    }
+                    R.id.a11y_move_right -> {
+                        listener?.onMove(index, 0.02f, 0f)
+                        contentDescription = describeState()
+                        return true
+                    }
+                    R.id.a11y_move_up -> {
+                        listener?.onMove(index, 0f, -0.02f)
+                        contentDescription = describeState()
+                        return true
+                    }
+                    R.id.a11y_move_down -> {
+                        listener?.onMove(index, 0f, 0.02f)
+                        contentDescription = describeState()
+                        return true
+                    }
+                    R.id.a11y_grow -> return resizeBy(index, mark, 0.02f)
+                    R.id.a11y_shrink -> return resizeBy(index, mark, -0.02f)
+                    R.id.a11y_rotate_cw -> {
+                        listener?.onRotate(index, 5f)
+                        return true
+                    }
+                    R.id.a11y_rotate_ccw -> {
+                        listener?.onRotate(index, -5f)
+                        return true
+                    }
+                    R.id.a11y_delete_mark -> {
+                        listener?.onDelete(index)
+                        return true
+                    }
+                }
+            }
+            return super.performAccessibilityAction(host, action, args)
+        }
+    }
 
     private var mode = Mode.NONE
     private var moveIndex = -1

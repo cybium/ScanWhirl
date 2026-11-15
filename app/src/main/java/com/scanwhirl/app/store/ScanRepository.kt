@@ -3004,6 +3004,15 @@ class ScanRepository(private val context: Context) {
     /** Result of [replaceWithDraft]: the same document id and the Trash key of its old version. */
     internal data class ReplaceResult(val document: ScanDocument, val trashKey: String)
 
+    /** One manifest read for the viewer: the document, its visible pages and its draft. */
+    internal data class DraftState(
+        val document: ScanDocument?,
+        val pages: List<File>,
+        val draft: DraftStore.Draft?,
+        /** Set when the manifest is damaged; the viewer shows the base pages and Discard only. */
+        val damage: DraftStore.DraftDamaged? = null
+    )
+
     /**
      * The draft of [id], or null. Never writes: opening a draft is O(1) (G14). A damaged manifest
      * throws [DraftStore.DraftDamaged] rather than returning a partial draft.
@@ -3012,15 +3021,38 @@ class ScanRepository(private val context: Context) {
         synchronized(DRAFT_LOCK) { drafts.load(id) }
     }
 
+    /**
+     * Everything the viewer needs in **one** manifest parse and one document load. The old
+     * `draftPages(id) to draftOf(id)` pair read and parsed the same manifest twice (L5-2).
+     */
+    internal suspend fun draftState(id: String): DraftState = withContext(Dispatchers.IO) {
+        val document = getDocument(id)
+        try {
+            val draft = synchronized(DRAFT_LOCK) { drafts.load(id) }
+            DraftState(document, pagesOf(id, document, draft), draft)
+        } catch (damage: DraftStore.DraftDamaged) {
+            DraftState(document, document?.pageFiles.orEmpty(), null, damage)
+        }
+    }
+
     /** Pages as the draft sees them (replacement files where an edit wrote one), or the base pages. */
     internal suspend fun draftPages(id: String): List<File> = withContext(Dispatchers.IO) {
         synchronized(DRAFT_LOCK) {
             val draft = drafts.load(id)
-                ?: return@withContext getDocument(id)?.pageFiles.orEmpty()
-            draft.entries.map { entry ->
-                entry.replacement?.let { drafts.fileOf(id, it) }
-                    ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
-            }
+            if (draft == null) getDocument(id)?.pageFiles.orEmpty()
+            else pagesOf(id, null, draft)
+        }
+    }
+
+    private fun pagesOf(
+        id: String,
+        document: ScanDocument?,
+        draft: DraftStore.Draft?
+    ): List<File> {
+        if (draft == null) return document?.pageFiles.orEmpty()
+        return draft.entries.map { entry ->
+            entry.replacement?.let { drafts.fileOf(id, it) }
+                ?: File(File(docsDir, id), requireNotNull(entry.source) { "Draft page has no source" })
         }
     }
 

@@ -64,6 +64,7 @@ internal class DraftStore(filesDir: File) {
      * draft exists. A damaged draft throws [DraftDamaged]; a partial one is never returned.
      */
     fun load(id: String): Draft? {
+        loadProbe?.invoke()
         if (!SAFE_ID.matches(id)) throw DraftDamaged("Bad draft id")
         val file = manifest(id)
         if (!file.isFile) return null
@@ -185,6 +186,9 @@ internal class DraftStore(filesDir: File) {
     }
 
     internal companion object {
+        /** Test seam: counts manifest parses. Null in production (L5-2 measurement). */
+        internal var loadProbe: (() -> Unit)? = null
+
         const val DIR = "drafts"
         private const val MANIFEST = "draft.txt"
         private const val HEADER = "scanwhirl-draft-v1"

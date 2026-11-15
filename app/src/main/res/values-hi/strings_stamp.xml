@@ -183,4 +183,27 @@
     <string name="stamp_redact_warn_message"><!-- review -->छिपाए गए पाठ और पिक्सेल नई प्रति से हमेशा के लिए हट जाते हैं। मूल दस्तावेज़ नहीं बदलता।</string>
     <!-- review -->
     <string name="stamp_redact_warn_save"><!-- review -->रिडैक्ट की गई प्रति सहेजें</string>
+    <!-- review: Find and hide numbers (Redact). -->
+    <string name="find_button"><!-- review -->खोजें</string>
+    <string name="find_title"><!-- review -->नंबर खोजें और छिपाएँ</string>
+    <string name="find_explanation"><!-- review -->हर पेज पर आधार, VID, PAN, कार्ड, फ़ोन नंबर, ईमेल, IBAN, US SSN और लंबे खाता नंबर खोजता है.</string>
+    <string name="find_preset_aadhaar"><!-- review -->आधार छिपाएँ</string>
+    <string name="find_whole_aadhaar"><!-- review -->पूरा आधार नंबर छिपाएँ</string>
+    <string name="find_action"><!-- review -->खोजें</string>
+    <string name="find_scanning"><!-- review -->नंबर खोजे जा रहे हैं…</string>
+    <string name="find_none"><!-- review -->कोई संवेदनशील नंबर नहीं मिला. आप फिर भी बॉक्स बना सकते हैं.</string>
+    <string name="find_results_title"><!-- review -->%1$d चीज़ें मिलीं</string>
+    <string name="find_hide_selected"><!-- review -->चुनी हुई छिपाएँ</string>
+    <string name="find_applied"><!-- review -->%1$d चीज़ें छिपाई गईं. बॉक्स जाँचें, फिर सहेजें.</string>
+    <string name="find_kind_aadhaar"><!-- review -->आधार</string>
+    <string name="find_kind_vid"><!-- review -->आधार VID</string>
+    <string name="find_kind_pan"><!-- review -->PAN</string>
+    <string name="find_kind_card"><!-- review -->कार्ड नंबर</string>
+    <string name="find_kind_phone"><!-- review -->फ़ोन नंबर</string>
+    <string name="find_kind_email"><!-- review -->ईमेल पते</string>
+    <string name="find_kind_iban"><!-- review -->IBAN</string>
+    <string name="find_kind_ssn"><!-- review -->US SSN</string>
+    <string name="find_kind_account"><!-- review -->खाता नंबर</string>
+    <string name="redact_label"><!-- review -->काला किया गया</string>
+    <string name="redacted_saved"><!-- review -->काला किया गया कॉपी सहेजा: %1$s</string>
 </resources>

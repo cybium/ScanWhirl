@@ -1,0 +1,343 @@
+package com.scanwhirl.app.util
+
+import com.scanwhirl.app.model.OcrPage
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * L5 "Find and hide numbers": one scan over OCR element boxes that finds the sensitive items a
+ * person expects a redaction tool to catch. The Aadhaar quick path lives on as a preset.
+ *
+ * Every detector works on **element boxes** (ML Kit words), never guesses from the page image:
+ *  - a line is words that share a vertical band, sorted left to right;
+ *  - a hit is the union of the characters it covers, padded 15% of the glyph height;
+ *  - Aadhaar hides the first 8 digits and stops in the gap before the 9th (UIDAI mask);
+ *  - a card keeps its last 4 digits, stopping in the gap before them;
+ *  - the box is clipped vertically so it can never cover the OCR line above or below;
+ *  - overlapping candidates are resolved by specificity (email/IBAN/PAN/SSN/phone/card/Aadhaar).
+ *
+ * Dates ("2024-11-15", "15/11/2024"), prices ("1,299.00") and short order numbers never match:
+ * the digit-run detector needs 9+ digits and does not cross commas, dots or slashes.
+ */
+object SensitiveScan {
+
+    enum class Kind {
+        AADHAAR, VID, PAN, CARD, PHONE, EMAIL, IBAN, SSN, ACCOUNT
+    }
+
+    data class Hit(val kind: Kind, val text: String, val box: PageStamp.Box)
+
+    /** A word/element box, in the decoded bitmap's pixels. */
+    data class Word(
+        val text: String,
+        val left: Int,
+        val top: Int,
+        val right: Int,
+        val bottom: Int
+    )
+
+    private data class Candidate(
+        val kind: Kind,
+        val start: Int,
+        val end: Int,
+        val maskEnd: Int,
+        val text: String,
+        val digits: Int = 0
+    )
+
+    private val PRIORITY = mapOf(
+        Kind.EMAIL to 0, Kind.IBAN to 1, Kind.PAN to 2, Kind.SSN to 3, Kind.PHONE to 4,
+        Kind.CARD to 5, Kind.AADHAAR to 6, Kind.VID to 7, Kind.ACCOUNT to 8
+    )
+
+    private val DIGIT_RUN = Regex("(?<!\\d)\\d(?:[ \\t-]?\\d){8,18}(?!\\d)")
+    private val INDIAN_PHONE = Regex("(?<!\\d)(?:\\+?91[ \\t-]?)?[6-9]\\d{4}[ \\t-]?\\d{5}(?!\\d)")
+    private val INTL_PHONE = Regex("(?<!\\d)\\+\\d{1,3}(?:[ \\t.-]?\\(?\\d{1,4}\\)?){2,4}(?!\\d)")
+    private val LOCAL_PHONE = Regex("(?<!\\d)\\(?\\d{3}\\)?[ \\t.-]\\d{3}[ \\t.-]\\d{4}(?!\\d)")
+    private val EMAIL = Regex("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}")
+    private val PAN = Regex("(?<![A-Z0-9])[A-Z]{5}\\d{4}[A-Z](?![A-Z0-9])")
+    private val SSN = Regex("(?<!\\d)\\d{3}-\\d{2}-\\d{4}(?!\\d)")
+    private val SSN_SHAPE = Regex("\\d{3}-\\d{2}-\\d{4}")
+    private val IBAN = Regex("(?<![A-Z0-9])[A-Z]{2}\\d{2}[A-Z0-9 ]{10,30}(?![A-Z0-9])")
+
+    // ------------------------------------------------------------------ public API
+
+    /** Sensitive items in one page of OCR lines. */
+    fun find(page: OcrPage, wholeAadhaar: Boolean = false): List<Hit> {
+        if (page.width <= 0 || page.height <= 0) return emptyList()
+        val words = page.lines.map { line ->
+            Word(line.text, line.left, line.top, line.right, line.bottom)
+        }
+        return find(words, page.width, page.height, wholeAadhaar)
+    }
+
+    /** Sensitive items in ML Kit element boxes. */
+    fun find(
+        words: List<Word>,
+        pageWidth: Int,
+        pageHeight: Int,
+        wholeAadhaar: Boolean = false
+    ): List<Hit> {
+        if (pageWidth <= 0 || pageHeight <= 0) return emptyList()
+        val valid = words.filter {
+            it.right > it.left && it.bottom > it.top && it.text.isNotBlank()
+        }.sortedWith(compareBy({ it.top }, { it.left }))
+        val lines = groupLines(valid)
+        val out = ArrayList<Hit>()
+        for (line in lines) {
+            out += lineHits(line, lines, pageWidth, pageHeight, wholeAadhaar)
+        }
+        return out.sortedWith(compareBy({ it.box.top }, { it.box.left }))
+    }
+
+    // ------------------------------------------------------------------ detection
+
+    private fun groupLines(words: List<Word>): List<List<Word>> {
+        val lines = ArrayList<MutableList<Word>>()
+        for (word in words) {
+            val line = lines.lastOrNull()
+            if (line != null) {
+                val ref = line.last()
+                val overlap = min(ref.bottom, word.bottom) - max(ref.top, word.top)
+                val minH = min(ref.bottom - ref.top, word.bottom - word.top)
+                if (overlap > minH * 0.5f) {
+                    line.add(word)
+                    continue
+                }
+            }
+            lines += mutableListOf(word)
+        }
+        return lines
+    }
+
+    private fun lineHits(
+        line: List<Word>,
+        allLines: List<List<Word>>,
+        pageWidth: Int,
+        pageHeight: Int,
+        wholeAadhaar: Boolean
+    ): List<Hit> {
+        val sorted = line.sortedBy { it.left }
+        val builder = StringBuilder()
+        val starts = IntArray(sorted.size)
+        sorted.forEachIndexed { index, word ->
+            if (index > 0) builder.append(' ')
+            starts[index] = builder.length
+            builder.append(word.text)
+        }
+        val text = builder.toString()
+        if (text.isBlank()) return emptyList()
+        val digits = AadhaarMask.normalize(text)
+        val upper = text.uppercase()
+        val candidates = ArrayList<Candidate>()
+
+        fun add(kind: Kind, start: Int, endExclusive: Int, maskEnd: Int) {
+            if (start < 0 || endExclusive <= start || start >= text.length) return
+            val end = min(endExclusive, text.length)
+            val masked = min(maskEnd, end)
+            candidates += Candidate(kind, start, end, masked, text.substring(start, end).trim())
+        }
+
+        // Phone formats first: they must win over "long account number".
+        for (m in INDIAN_PHONE.findAll(digits)) {
+            add(Kind.PHONE, m.range.first, m.range.last + 1, m.range.last + 1)
+        }
+        for (m in INTL_PHONE.findAll(digits)) {
+            val count = m.value.count { it.isDigit() }
+            if (count in 8..15) add(Kind.PHONE, m.range.first, m.range.last + 1, m.range.last + 1)
+        }
+        for (m in LOCAL_PHONE.findAll(digits)) {
+            if (m.value.count { it.isDigit() } == 10) {
+                add(Kind.PHONE, m.range.first, m.range.last + 1, m.range.last + 1)
+            }
+        }
+
+        // Emails, PAN, IBAN and SSN need the original letters, not the digit-normalised copy.
+        for (m in EMAIL.findAll(text)) {
+            add(Kind.EMAIL, m.range.first, m.range.last + 1, m.range.last + 1)
+        }
+        for (m in PAN.findAll(upper)) {
+            add(Kind.PAN, m.range.first, m.range.last + 1, m.range.last + 1)
+        }
+        for (m in IBAN.findAll(upper)) {
+            val iban = m.value.trimEnd()
+            if (ibanValid(iban)) add(Kind.IBAN, m.range.first, m.range.first + iban.length, m.range.first + iban.length)
+        }
+        for (m in SSN.findAll(digits)) {
+            if (ssnValid(m.value)) add(Kind.SSN, m.range.first, m.range.last + 1, m.range.last + 1)
+        }
+
+        // Numbered formats: Aadhaar (12), VID (16), cards (Luhn), accounts (9-18).
+        for (m in DIGIT_RUN.findAll(digits)) {
+            val start = m.range.first
+            val end = m.range.last + 1
+            val raw = digits.substring(start, end)
+            val count = raw.count { it.isDigit() }
+            when {
+                count == 12 -> {
+                    val maskEnd = if (wholeAadhaar) end else digitBoundary(digits, start, end, 8)
+                    add(Kind.AADHAAR, start, end, maskEnd)
+                }
+                count == 16 -> {
+                    if (luhn(raw)) {
+                        add(Kind.CARD, start, end, digitBoundary(digits, start, end, count - 4))
+                    } else {
+                        add(Kind.VID, start, end, digitBoundary(digits, start, end, 12))
+                    }
+                }
+                count in 13..19 -> {
+                    if (luhn(raw)) {
+                        add(Kind.CARD, start, end, digitBoundary(digits, start, end, count - 4))
+                    } else if (!SSN_SHAPE.matches(raw.trim())) {
+                        add(Kind.ACCOUNT, start, end, end)
+                    }
+                }
+                count in 9..11 -> {
+                    // A 3-2-4 hyphenated run is an SSN, valid or not; never an account.
+                    if (!SSN_SHAPE.matches(raw.trim())) add(Kind.ACCOUNT, start, end, end)
+                }
+            }
+        }
+
+        // Specific detectors win an overlap (a card is not also an account; SSN is not an account).
+        val chosen = ArrayList<Candidate>()
+        candidates.sortedWith(
+            compareBy({ PRIORITY[it.kind] ?: 99 }, { it.start })
+        ).forEach { candidate ->
+            if (chosen.none { it.start < candidate.end && candidate.start < it.end }) {
+                chosen += candidate
+            }
+        }
+        chosen.sortBy { it.start }
+
+        val lineTop = sorted.minOf { it.top }
+        val lineBottom = sorted.maxOf { it.bottom }
+        val lineHeight = (lineBottom - lineTop).toFloat().coerceAtLeast(1f)
+        val padX = lineHeight * 0.15f
+        val padY = lineHeight * 0.10f
+        val topBound = lineTop - padY
+        val bottomBound = lineBottom + padY
+
+        fun xAt(index: Int): Float {
+            for (i in sorted.indices) {
+                val wordStart = starts[i]
+                val wordEnd = wordStart + sorted[i].text.length
+                if (index in wordStart..wordEnd) {
+                    val word = sorted[i]
+                    val width = (word.right - word.left).toFloat()
+                    val frac = if (word.text.isEmpty()) 0f
+                    else (index - wordStart).toFloat() / word.text.length
+                    return word.left + frac * width
+                }
+            }
+            return sorted.last().right.toFloat()
+        }
+
+        fun firstDigitAtOrAfter(from: Int): Int {
+            for (i in from until digits.length) if (digits[i].isDigit()) return i
+            return -1
+        }
+
+        val out = ArrayList<Hit>()
+        for (c in chosen) {
+            var left = xAt(c.start) - padX
+            var right = xAt(c.end) + padX
+            if (c.maskEnd < c.end) {
+                val next = firstDigitAtOrAfter(c.maskEnd)
+                if (next in 0 until digits.length) {
+                    val nextX = xAt(next)
+                    right = min((xAt(c.maskEnd) + nextX) / 2f, nextX)
+                } else {
+                    right = xAt(c.maskEnd) + padX
+                }
+            }
+            // Vertical: never cross into another OCR line.
+            var top = topBound
+            var bottom = bottomBound
+            for (other in allLines) {
+                if (other === line) continue
+                val otherTop = other.minOf { it.top }.toFloat()
+                val otherBottom = other.maxOf { it.bottom }.toFloat()
+                val horizontal = other.any { it.left < right && it.right > left }
+                if (!horizontal) continue
+                if (otherBottom <= lineTop) top = max(top, otherBottom)
+                if (otherTop >= lineBottom) bottom = min(bottom, otherTop)
+            }
+            out += Hit(
+                c.kind,
+                c.text,
+                PageStamp.Box(
+                    (left / pageWidth).coerceIn(0f, 1f),
+                    (top / pageHeight).coerceIn(0f, 1f),
+                    (right / pageWidth).coerceIn(0f, 1f),
+                    (bottom / pageHeight).coerceIn(0f, 1f)
+                )
+            )
+        }
+        return out
+    }
+
+    /** The character index just after the [n]th digit inside a matched run. */
+    private fun digitBoundary(text: String, start: Int, end: Int, n: Int): Int {
+        if (n <= 0) return start
+        var seen = 0
+        for (i in start until end) {
+            if (text[i].isDigit()) {
+                seen++
+                if (seen == n) return i + 1
+            }
+        }
+        return end
+    }
+
+    // ------------------------------------------------------------------ checks
+
+    fun luhn(text: String): Boolean {
+        val digits = text.filter { it.isDigit() }
+        if (digits.length !in 13..19) return false
+        var sum = 0
+        var double = false
+        for (i in digits.indices.reversed()) {
+            var value = digits[i] - '0'
+            if (double) {
+                value *= 2
+                if (value > 9) value -= 9
+            }
+            sum += value
+            double = !double
+        }
+        return sum % 10 == 0
+    }
+
+    fun ibanValid(text: String): Boolean {
+        val compact = text.replace(" ", "").uppercase()
+        if (compact.length < 15 || compact.length > 34) return false
+        if (!compact.substring(0, 2).all { it in 'A'..'Z' }) return false
+        if (!compact.substring(2, 4).all { it.isDigit() }) return false
+        val rearranged = compact.substring(4) + compact.substring(0, 4)
+        var remainder = 0
+        for (c in rearranged) {
+            val value = when (c) {
+                in '0'..'9' -> c - '0'
+                in 'A'..'Z' -> c - 'A' + 10
+                else -> return false
+            }
+            remainder = if (value >= 10) (remainder * 100 + value) % 97
+            else (remainder * 10 + value) % 97
+        }
+        return remainder == 1
+    }
+
+    private fun ssnValid(text: String): Boolean {
+        val parts = text.split('-')
+        if (parts.size != 3 || parts[0].length != 3 || parts[1].length != 2 || parts[2].length != 4) {
+            return false
+        }
+        val area = parts[0].toIntOrNull() ?: return false
+        val group = parts[1].toIntOrNull() ?: return false
+        val serial = parts[2].toIntOrNull() ?: return false
+        if (area == 0 || area == 666 || area >= 900) return false
+        if (group == 0 || serial == 0) return false
+        return true
+    }
+}

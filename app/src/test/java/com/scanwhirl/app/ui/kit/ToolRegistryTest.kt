@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.kit
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,7 +23,8 @@ class ToolRegistryTest {
     fun `organize pages and insert pages are ready`() {
         assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
         assertEquals(ToolStatus.READY, ToolRegistry.byId("insert_pages")?.status)
-        assertEquals(ToolStatus.READY, ToolRegistry.byId("mask_aadhaar")?.status)
+        assertNull("Mask Aadhaar folded into Redact's Find", ToolRegistry.byId("mask_aadhaar"))
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("redact")?.status)
     }
 
     @Test

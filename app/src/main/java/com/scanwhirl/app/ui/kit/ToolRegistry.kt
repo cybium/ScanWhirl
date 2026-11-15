@@ -196,17 +196,9 @@ object ToolRegistry {
         ready("stamp", ToolGroup.EDIT, R.string.tool_stamp, R.drawable.ic_sym_approval, "stamp paid approved date badge", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "stamp") } ?: host.comingSoon(tool) }
         ),
-        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove", pro = true).copy(
+        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "redact black box hide remove find numbers aadhaar pan card phone email iban ssn account", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "redact") } ?: host.comingSoon(tool) }
         ),
-        ready("mask_aadhaar", ToolGroup.EDIT, R.string.tool_mask_aadhaar, R.drawable.ic_sym_visibility_off, "aadhaar mask uidai hide aadhar vid", launch = { host, tool ->
-            val activity = host as? android.app.Activity
-            if (activity == null) {
-                host.comingSoon(tool)
-            } else {
-                com.scanwhirl.app.ui.stamp.StampToolLauncher.openMaskAadhaar(activity)
-            }
-        }),
 
         // Secure (4)
         // L3: both open a real document chooser, then the Protect/Unlock sheet. Free tools.
