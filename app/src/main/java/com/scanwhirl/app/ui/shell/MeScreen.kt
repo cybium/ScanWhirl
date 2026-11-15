@@ -58,8 +58,14 @@ class MeScreen(
         list.addView(
             row(
                 R.drawable.ic_sym_star_filled,
-                context.getString(R.string.me_pro),
-                context.getString(R.string.me_pro_summary),
+                context.getString(
+                    if (com.scanwhirl.app.util.ProGate.isPro(context)) R.string.me_pro_active
+                    else R.string.me_pro
+                ),
+                context.getString(
+                    if (com.scanwhirl.app.util.ProGate.isPro(context)) R.string.me_pro_active_summary
+                    else R.string.me_pro_summary
+                ),
                 R.id.swMePro,
                 gold = true
             ) { callbacks.onPro() }

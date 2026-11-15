@@ -155,6 +155,7 @@ class ShellScreenTest {
 
     @Test
     fun `pro screen shows the one-time price and buy is a Coming soon sheet`() {
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavMe).performClick()
             idle()

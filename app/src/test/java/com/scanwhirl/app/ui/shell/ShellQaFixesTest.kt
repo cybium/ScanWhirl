@@ -258,6 +258,8 @@ class ShellQaFixesTest {
 
     @Test
     fun `no tool tag sits on its icon`() {
+        // Free is the only build that draws PRO tags now; force it for this audit.
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()

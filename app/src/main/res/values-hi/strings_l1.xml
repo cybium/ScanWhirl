@@ -269,4 +269,9 @@
     <string name="quick_add"><!-- review -->%1$s को क्विक टूल में जोड़ें</string>
     <string name="quick_add_tools"><!-- review -->टूल जोड़ें</string>
     <string name="quick_max_reached"><!-- review -->अधिकतम बारह क्विक टूल हो सकते हैं</string>
+    <string name="me_pro_active"><!-- review -->ScanWhirl Pro — सक्रिय</string>
+    <string name="me_pro_active_summary"><!-- review -->धन्यवाद — सभी Pro टूल्स अनलॉक हैं।</string>
+    <string name="pro_active_sub"><!-- review -->सभी Pro टूल्स अनलॉक हैं। धन्यवाद!</string>
+    <string name="settings_test_free"><!-- review -->परीक्षण: मुफ़्त उपयोगकर्ता के रूप में</string>
+    <string name="settings_test_free_summary"><!-- review -->केवल टेस्ट बिल्ड में। Pro गेट दिखाता है।</string>
 </resources>

@@ -60,4 +60,15 @@ object ProGate {
         else edit.putInt(KEY_TEST_OVERRIDE, if (pro) 2 else 1)
         edit.apply()
     }
+
+    /** Test-build only: true when QA forced Free, false when forced Pro, null for default. */
+    fun testOverride(context: Context): Boolean? {
+        if (!com.scanwhirl.app.BuildConfig.TEST_BUILD) return null
+        return when (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_TEST_OVERRIDE, 0)) {
+            1 -> false
+            2 -> true
+            else -> null
+        }
+    }
 }
