@@ -1,4 +1,4 @@
-package com.scanwhirl.app.ui.protect
+﻿package com.scanwhirl.app.ui.protect
 
 import android.os.Handler
 import android.os.Looper
@@ -149,6 +149,7 @@ internal object ImportUnlockSheet {
         }
 
         sheet.show()
+        // A typed PDF password must never be screenshot-able or appear in recents.
         sheet.secure()
         field.editText.requestFocus()
     }

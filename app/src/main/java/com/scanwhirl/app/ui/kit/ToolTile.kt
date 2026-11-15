@@ -206,4 +206,10 @@ class ToolTile(context: Context) : FrameLayout(context) {
                 )
             }
         }
+
+    /** Unavailable actions are visibly greyed (38%), never a silent dead tap. */
+    override fun setEnabled(enabled: Boolean) {
+        super.setEnabled(enabled)
+        alpha = if (enabled) 1f else 0.38f
+    }
 }

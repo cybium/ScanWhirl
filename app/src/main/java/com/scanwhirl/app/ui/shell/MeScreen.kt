@@ -64,6 +64,8 @@ class MeScreen(
                 gold = true
             ) { callbacks.onPro() }
         )
+        // L2's single Backup & restore row (ui/backup/BackupActivity), directly
+        // after Pro. Do not add another.
         list.addView(
             row(
                 R.drawable.ic_sym_settings,

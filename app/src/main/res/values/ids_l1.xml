@@ -89,6 +89,18 @@
     <item name="swNoMatches" type="id" />
     <item name="swListHost" type="id" />
     <item name="swMotionTag" type="id" />
+    <item name="rowBlockScreenshots" type="id" />
+    <item name="switchBlockScreenshots" type="id" />
+    <item name="swSelBatch" type="id" />
+    <item name="rowAccent" type="id" />
+    <item name="subAccent" type="id" />
+    <item name="swQuickRow2" type="id" />
+    <item name="swQuickAddGrid" type="id" />
+    <item name="swQuickAddTitle" type="id" />
+    <item name="swQuickEdit" type="id" />
+    <item name="swQuickDone" type="id" />
+    <item name="swQuickCancel" type="id" />
+    <item name="swQuickAll" type="id" />
     <item name="swNavMe" type="id" />
     <item name="swShellTab" type="id" />
     <item name="swHomeSearch" type="id" />

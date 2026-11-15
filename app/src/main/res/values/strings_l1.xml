@@ -253,4 +253,21 @@
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>
     </plurals>
+
+    <!-- v2 UI: selection bar + screenshot policy (SECURITY_AUDIT 2026-11-15). -->
+    <string name="sel_batch">Batch</string>
+    <string name="settings_block_screenshots">Block screenshots of documents</string>
+    <string name="settings_block_screenshots_note">Protected documents are always blocked. Turn this on to block ordinary scans too.</string>
+    <string name="about_licences">Licences</string>
+    <string name="about_licences_body">ScanWhirl is built on AndroidX, Material Components, Google ML Kit, PdfBox-Android and kotlinx.coroutines. Their licence texts are bundled with the app and reproduced under the AndroidX/Material Apache 2.0 and the respective project licences.</string>
+    <string name="settings_accent">Accent</string>
+    <string name="accent_cyan">Cyan</string>
+    <string name="accent_gold">Gold</string>
+    <string name="accent_gold_use">Use Gold</string>
+    <string name="accent_gold_warning">Gold swaps the cyan accent and the app icon. This, and adding the gold launcher alias, can briefly remove the home-screen shortcut; some launchers need a moment to put the gold icon back.</string>
+    <string name="quick_edit">Edit quick tools</string>
+    <string name="quick_remove">Remove %1$s from Quick tools</string>
+    <string name="quick_add">Add %1$s to Quick tools</string>
+    <string name="quick_add_tools">Add tools</string>
+    <string name="quick_max_reached">Twelve quick tools is the maximum</string>
 </resources>

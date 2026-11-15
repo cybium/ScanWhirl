@@ -20,5 +20,9 @@ data class ScanDocument(
     /** Revision: max lastModified of meta.txt, scan.pdf, locked.meta, vault.flag, page files. */
     val revision: Long = 0L,
     /** True when text_layer.flag exists in the document directory. */
-    val isSearchable: Boolean = false
+    val isSearchable: Boolean = false,
+    /** Bytes of the PDF (or of all pages when there is no PDF): cached while listing. */
+    val cachedSize: Long = 0L,
+    /** Newest content modification time (the [revision]): cached while listing. */
+    val cachedModified: Long = 0L
 )
