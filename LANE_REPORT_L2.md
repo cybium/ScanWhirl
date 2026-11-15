@@ -93,7 +93,10 @@ scanner, Vault unlock, Protect PDF.
 - **Full Backup 2.0** (`docs/release/FULL_BACKUP.md`): one streamed AES-256-GCM file with the
   library, the Vault, signatures/stamps, drafts and settings, opened by a backup password (10+,
   PBKDF2 310k) or the Vault recovery code (proven before writing). Me -> Backup & restore with SAF
-  save, share sheet (Drive), restore by merge, last-backup line and reminder. 8 tests.
+  save, share sheet (Drive), restore by merge, last-backup line and reminder. 12 tests. Vault
+  entries now merge into an existing Vault: the backup carries the old Vault key, the current Vault
+  is unlocked on demand, and every entry is decrypted with the old key and re-encrypted with the
+  new one (verified, atomic publish); declining the unlock restores everything else and says so.
 - **Text languages**: the separate "Hindi text" tool tile is gone; the language lives in the Text
   screen chip and the Settings row (English / English + Hindi / Hindi). The Chinese/Japanese/Korean
   recognizers were cancelled by the owner and were never added.
@@ -101,6 +104,22 @@ scanner, Vault unlock, Protect PDF.
   digit-in-word, the "fafI" case, single short tokens on a Devanagari page) and keeps the
   Devanagari reading of the same box; clean English lines and genuinely different lines are
   unchanged. 6 new tests.
+
+## Backup & restore — phone QA script (SAF, share, restore)
+
+Full detail in `docs/release/FULL_BACKUP.md` (§ Device QA script). Short version, expected result in
+brackets:
+
+1. Me -> Backup & restore: "No backup yet", both buttons, reminder, no-internet note. [visible]
+2. Back up now -> recovery code -> exact code -> Continue. [encrypting…, then "Backup ready" with size]
+3. Save to device -> pick a folder. ["Backup saved", "Last backup: today"; `ScanWhirl-<date>.swbackup`]
+4. Back up now -> password: 9 chars refused, 12 accepted. [error text / strength meter moves]
+5. Share. [chooser lists Drive when installed; the file is attached there]
+6. Restore, wrong password. ["Wrong password or recovery code. Nothing was changed."]
+7. Restore, correct secret on a phone that already has a Vault. [unlock prompt with the reason;
+   entries re-encrypted, duplicates skipped, same-name gets "(restored)"]
+8. Cancel the unlock during a restore. [documents restored, dialog says the Vault files were not]
+9. Airplane mode for steps 2-8. [everything works; no network permission]
 
 ## Save as PDF/A (PDF/A-2b, ISO 19005-2 level B) - previous pass
 

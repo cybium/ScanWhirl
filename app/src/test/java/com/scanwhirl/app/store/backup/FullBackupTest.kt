@@ -2,8 +2,13 @@ package com.scanwhirl.app.store.backup
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.store.vault.FakeVaultKeys
 import com.scanwhirl.app.store.vault.VaultAuthException
 import com.scanwhirl.app.store.vault.VaultCrypto
+import com.scanwhirl.app.store.vault.VaultPasscodeGate
+import com.scanwhirl.app.store.vault.VaultSession
+import com.scanwhirl.app.store.vault.VaultStore
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -221,6 +226,140 @@ class FullBackupTest {
         // 120 x 2 KiB pages + the archive: a buffered implementation stays far below 64 MiB.
         assertTrue("restore grew the heap by ${(after - before) / 1024 / 1024} MiB", after - before < 64L * 1024 * 1024)
     }
+
+    @Test
+    fun `vault entries are re-encrypted into an existing vault`() {
+        val oldVault = vaultStore()
+        val setup = oldVault.setup("246810")
+        val docDir = File(docsDir, "doc_vault").apply { mkdirs() }
+        File(docDir, "meta.txt").writeText("Bank statement\n${System.currentTimeMillis()}\nOther\n")
+        File(docDir, "scan.pdf").writeBytes(ByteArray(4096) { 7 })
+        File(docDir, "page_000.jpg").writeBytes(ByteArray(1024) { 3 })
+        oldVault.addDocument("doc_vault")
+        assertEquals(1, oldVault.listEntries().size)
+
+        // A locked Vault, a recovery-code backup: the key has to come out of recovery.bin.
+        VaultSession.close()
+        backup.write(out, setup.recoveryCode, FullBackup.Wrap.RECOVERY_CODE)
+        assertTrue("the file carries the Vault key", backup.header(out).hasVaultKey)
+
+        // A different phone: new Vault key, same folders.
+        File(app.filesDir, "vault2").deleteRecursively()
+        val newVault = vaultStore()
+        newVault.setup("135790")
+        val onNewPhone = FullBackup(app, newVault)
+
+        val report = onNewPhone.restore(out, setup.recoveryCode)
+        assertEquals("one entry re-encrypted", 1, report.vaultReencrypted)
+        assertFalse("nothing was skipped", report.vaultLocked)
+        val entries = newVault.listEntries()
+        assertEquals(1, entries.size)
+        assertEquals("Bank statement", entries.single().name)
+        assertEquals("the entry opens under the new key", 1, entries.single().pageCount)
+    }
+
+    @Test
+    fun `a locked vault is skipped with a message and a second restore merges it`() {
+        val oldVault = vaultStore()
+        val setup = oldVault.setup("246810")
+        doc("doc_lib", "Library doc")
+        val docDir = File(docsDir, "doc_merge").apply { mkdirs() }
+        File(docDir, "meta.txt").writeText("Insurance\n${System.currentTimeMillis()}\nOther\n")
+        File(docDir, "scan.pdf").writeBytes(ByteArray(2048) { 1 })
+        oldVault.addDocument("doc_merge")
+        VaultSession.close()
+        backup.write(out, setup.recoveryCode, FullBackup.Wrap.RECOVERY_CODE)
+
+        File(app.filesDir, "vault2").deleteRecursively()
+        val newVault = vaultStore()
+        newVault.setup("135790")
+        VaultSession.close()
+        val onNewPhone = FullBackup(app, newVault)
+        File(docsDir, "doc_merge").deleteRecursively()
+        File(docsDir, "doc_lib").deleteRecursively()
+
+        val first = onNewPhone.restore(out, setup.recoveryCode)
+        assertTrue("the restore says the Vault was locked", first.vaultLocked)
+        assertTrue(
+            "nothing was merged into the locked Vault",
+            File(app.filesDir, "vault2").listFiles().orEmpty().none { it.isDirectory }
+        )
+        assertEquals("everything else was restored", 1, first.documents)
+
+        assertTrue(newVault.unlockWithPasscode("135790").ok)
+        val second = onNewPhone.restore(out, setup.recoveryCode)
+        assertEquals(1, second.vaultReencrypted)
+        assertEquals("documents are not duplicated", 0, second.documents)
+        assertEquals(1, second.skipped)
+        assertEquals("Insurance", newVault.listEntries().single().name)
+    }
+
+    @Test
+    fun `a tampered vault entry fails safely without publishing`() {
+        val oldVault = vaultStore()
+        oldVault.setup("246810")
+        val docDir = File(docsDir, "doc_tamper").apply { mkdirs() }
+        File(docDir, "meta.txt").writeText("Tamper me\n${System.currentTimeMillis()}\nOther\n")
+        File(docDir, "scan.pdf").writeBytes(ByteArray(1024) { 2 })
+        oldVault.addDocument("doc_tamper")
+        val oldKey = VaultSession.keyOrNull()!!.copyOf()
+
+        // Copy the entry out, flip one byte of an encrypted file, and try to re-encrypt it.
+        val source = File(app.cacheDir, "tampered-entry").apply { deleteRecursively(); mkdirs() }
+        File(app.filesDir, "vault2/doc_tamper").copyRecursively(source)
+        val stored = source.listFiles()!!.first { it.name.endsWith(".enc") && it.name != "manifest.enc" }
+        val bytes = stored.readBytes()
+        bytes[bytes.size / 2] = (bytes[bytes.size / 2].toInt() xor 0x5A).toByte()
+        stored.writeBytes(bytes)
+
+        File(app.filesDir, "vault2").deleteRecursively()
+        val newVault = vaultStore()
+        newVault.setup("135790")
+        try {
+            newVault.restoreEntryFromBackup(source, oldKey)
+            fail("a tampered entry was accepted")
+        } catch (_: VaultAuthException) {
+        } catch (_: IllegalStateException) {
+            // A bad chunk can also surface as a locked/short entry; either way nothing publishes.
+        }
+        assertTrue("nothing was published", newVault.listEntries().isEmpty())
+        assertTrue(
+            "no staging left behind",
+            File(app.filesDir, "vault2").listFiles().orEmpty().none { it.name.startsWith(".") }
+        )
+    }
+
+    @Test
+    fun `restoring a large vault entry streams`() {
+        val oldVault = vaultStore()
+        val setup = oldVault.setup("246810")
+        val docDir = File(docsDir, "doc_big_vault").apply { mkdirs() }
+        File(docDir, "meta.txt").writeText("Big vault doc\n${System.currentTimeMillis()}\nOther\n")
+        val page = ByteArray(4 * 1024 * 1024) { (it % 251).toByte() }
+        File(docDir, "page_000.jpg").writeBytes(page)
+        oldVault.addDocument("doc_big_vault")
+        VaultSession.close()
+        backup.write(out, setup.recoveryCode, FullBackup.Wrap.RECOVERY_CODE)
+
+        File(app.filesDir, "vault2").deleteRecursively()
+        val newVault = vaultStore()
+        newVault.setup("135790")
+        val before = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+        val report = FullBackup(app, newVault).restore(out, setup.recoveryCode)
+        val after = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+
+        assertEquals(1, report.vaultReencrypted)
+        assertEquals("Big vault doc", newVault.listEntries().single().name)
+        assertTrue("heap grew ${(after - before) / 1024 / 1024} MiB", after - before < 96L * 1024 * 1024)
+    }
+
+    private fun vaultStore(iterations: Int = 2_000): VaultStore = VaultStore(
+        app,
+        com.scanwhirl.app.store.ScanRepository(app),
+        com.scanwhirl.app.store.vault.FakeVaultKeys(),
+        com.scanwhirl.app.store.vault.VaultPasscodeGate(),
+        iterations
+    )
 
     @Test
     fun `the last backup timestamp drives the reminder`() {
