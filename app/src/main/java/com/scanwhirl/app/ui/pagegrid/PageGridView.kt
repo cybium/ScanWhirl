@@ -292,6 +292,7 @@ class PageGridView @JvmOverloads constructor(
 
             // The round check exists only in selection mode; it is not a drag handle.
             binding.checkSelectTouch.isVisible = checkboxesVisible
+            binding.checkSelect.isVisible = checkboxesVisible
             binding.checkSelect.imageAlpha = if (selected) 255 else 0
             binding.checkSelectTouch.setOnClickListener {
                 val pos = bindingAdapterPosition

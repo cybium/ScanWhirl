@@ -136,6 +136,19 @@
             android:textSize="14sp" />
 
         <TextView
+            android:id="@+id/findRedactions"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:minWidth="72dp"
+            android:paddingHorizontal="@dimen/sw_space_2"
+            android:text="@string/find_button"
+            android:textColor="@color/cyan_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/selectionHint"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

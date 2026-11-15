@@ -152,6 +152,58 @@ ML Kit model; the device path uses element boxes.
   the user adjusting boxes.
 - Hindi copy is marked `<!-- review -->`; no long dashes in user-visible strings.
 
+## Accessibility audit (commits `2dcf0ec`, `3260726`)
+
+- **Always-on audit**: `ui/a11y/AccessibilityAuditTest` walks 21 v2 screens at 360dp and font
+  scale 1.3/2.0: shell tabs, document/Organize/selection/draft bar, page and stamp editors, Text
+  screen, Tools setup/result, Vault, Protect/Unlock, Scan review, insert/mask sheets, Settings.
+  Rules: label, 48dp touch, WCAG contrast on composited kit surfaces, clip/ellipsis/overlap, image
+  description, sheet pane title. 129 findings remain for other lanes, allow-listed with their lane
+  in `app/src/test/resources/a11y_allowlist.txt` and listed with file:line + fix in
+  `docs/audit/2026-11-15/ACCESSIBILITY.md` (S1 4, S2 65, S3 49, S4 11).
+- **Fixed here**: Organize tiles announce “Page 3 of 10[, selected]” and expose **Move up /
+  Move down** as actions that run the drag's reorder path; the tick gets a 48dp wrapper. The stamp
+  canvas announces its selected mark/page and exposes **Move, bigger/smaller, rotate, delete**.
+  Page-viewer images announce “Page 2 of 5”. 48dp targets and 2–3-line wrapping in the stamp tool
+  row, page nav, delete/save, document selection bar, draft bar and page-viewer dock.
+- `StampCanvasAccessibilityTest` and `PageGridAccessibilityTest` prove the actions and wording.
+
+## Performance — L5-1 / L5-2 (commit `ea7486f`)
+
+Measured with L4's `perf/PerfHarnessTest` in big mode (300 docs, one 500-page document, 6 cells):
+
+| row | before | after |
+|---|---:|---:|
+| Organize grid first screen | 986 ms | 864 ms |
+| open document + draftPages | 9 ms | 9 ms (tmpfs) |
+
+Deterministic (not runner noise): **2 → 0** file stats per grid bind (`PageThumbFastBindTest`), and
+**2 → 1** draft manifest parses per viewer open (`DraftStateLoadsTest`). `submit()` hashes the page
+paths once; every bind reuses that revision, which is safe because page edits write a new `r_<n>`
+file. `ScanRepository.draftState(id)` returns document + pages + draft from one `getDocument` and
+one manifest parse and reports a damaged manifest instead of throwing; `DocumentViewerActivity`
+uses it instead of `draftPages` + `draftOf`.
+
+## Find and hide numbers — Mask Aadhaar folded into Redact (owner decision)
+
+- Registry: `mask_aadhaar` entry removed (45 → 44 tools); its tests moved onto the Redact path.
+  Redact's keywords now include the sensitive kinds so search finds it.
+- **Redact editor** shows a **Find** button. Find scans every page, lists checkable groups with
+  counts, and turns the tapped groups into ordinary redaction boxes the user can still move/resize;
+  saving keeps the existing true-redaction copy (`stampDocument`, pixels + OCR burned, source
+  untouched). Output label “Redacted” (the Aadhaar preset keeps “Masked”).
+- **Detectors** (`util/SensitiveScan.kt`): Aadhaar (first 8; “whole number” option), Aadhaar VID
+  (first 12, keeps last 4), PAN, cards 13–19 digits passing Luhn (keeps last 4), phone numbers
+  (Indian and international), emails, IBAN (mod-97), US SSN (range-checked), long account numbers
+  9–18. Precision: element boxes, 15% horizontal padding, Aadhaar/card inner edge in the gap before
+  the next digit, vertical ±10% clipped against neighbouring lines. Dates, prices, slashes/commas
+  and short numbers are ignored.
+- **Quick path kept**: the Find sheet carries a **Mask Aadhaar** preset chip that opens the old
+  number/VID/QR options.
+- Tests: `SensitiveScanTest` (9: true positives with OCR noise, dates/prices/SSN-shape false
+  positives, Luhn/IBAN, line bleed), `SensitiveFindUiTest` (4: groups→boxes, preset chip, no-hits
+  message, registry), plus the existing `MaskAadhaarFlowTest` (2) unchanged.
+
 ## Last gate (cloud, full suite)
 
 ```

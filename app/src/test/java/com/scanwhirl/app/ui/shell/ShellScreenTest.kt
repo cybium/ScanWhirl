@@ -102,16 +102,16 @@ class ShellScreenTest {
         }
     }
 
-    // v2 UI: 03_tools_hub (44 tools: Mask Aadhaar joins Edit & sign).
+    // v2 UI: 03_tools_hub (44 tools: Mask Aadhaar folded into Redact's Find).
     @Test
-    fun `the tools hub holds all 45 tiles and every tile is wired`() {
+    fun `the tools hub holds all 44 tiles and every tile is wired`() {
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val tiles = ToolsHubScreen.tiles(body)
-            assertEquals(45, tiles.size)
-            assertEquals(45, tiles.mapNotNull { it.tool?.id }.toSet().size)
+            assertEquals(44, tiles.size)
+            assertEquals(44, tiles.mapNotNull { it.tool?.id }.toSet().size)
             for (tile in tiles) {
                 assertTrue("${tile.tool?.id} has no tap action", tile.hasOnClickListeners())
             }

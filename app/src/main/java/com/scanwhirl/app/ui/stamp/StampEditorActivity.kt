@@ -14,6 +14,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -41,6 +42,7 @@ import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.InkExtract
 import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PageStamp
+import com.scanwhirl.app.util.SensitiveScan
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -122,8 +124,16 @@ class StampEditorActivity : BaseActivity() {
     internal lateinit var editor: StampEditorState
         private set
 
-    /** True for the "Mask Aadhaar" tool: save as "<name> - Masked" and seed redaction boxes. */
-    private var maskMode = false
+    /** True once a find/mask flow seeded redactions: save as "<name> - Masked/Redacted". */
+    private var hideMode = false
+
+    /** Output label for the current hide flow: "Masked" (Aadhaar preset) or "Redacted". */
+    private var hideLabelRes = R.string.mask_label
+
+    private var findRunning = false
+
+    /** Test seam: replaces OCR detection with synthetic per-page hits. */
+    internal var findScanner: (suspend (List<File>) -> List<Pair<Int, SensitiveScan.Hit>>)? = null
 
     private var saving = false
 
@@ -208,6 +218,7 @@ class StampEditorActivity : BaseActivity() {
         binding.deleteMark.setOnClickListener {
             if (editor.removeSelected()) refresh()
         }
+        binding.findRedactions.setOnClickListener { openFindSheet() }
         binding.undo.setOnClickListener {
             if (editor.undo()) refresh()
         }
@@ -323,7 +334,7 @@ class StampEditorActivity : BaseActivity() {
             TOOL_PAGE_NUMBERS -> addMarkToAll(PageStamp.Mark.PageNumber())
             TOOL_STAMP -> promptBadges()
             TOOL_REDACT -> arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
-            TOOL_MASK_AADHAAR -> askMaskOptions()
+            TOOL_MASK_AADHAAR -> openFindSheet()
             else -> Unit
         }
     }
@@ -333,12 +344,16 @@ class StampEditorActivity : BaseActivity() {
         binding.canvas.tool = tool
         binding.hint.setText(hintRes)
         binding.hint.visibility = android.view.View.VISIBLE
+        binding.findRedactions.visibility =
+            if (tool == StampCanvasView.Tool.REDACT) android.view.View.VISIBLE
+            else android.view.View.GONE
         refreshSelection()
     }
 
     private fun disarm() {
         binding.canvas.tool = StampCanvasView.Tool.SELECT
         binding.hint.visibility = android.view.View.GONE
+        binding.findRedactions.visibility = android.view.View.GONE
     }
 
     private fun addMark(mark: PageStamp.Mark) {
@@ -438,6 +453,169 @@ class StampEditorActivity : BaseActivity() {
     }
 
     /**
+     * Redact → **Find**: a "Find" button in the redact editor opens this sheet. It keeps the
+     * Aadhaar quick path as a preset chip and offers the whole-number option for Aadhaar.
+     */
+    private fun openFindSheet() {
+        if (findRunning) return
+        val whole = CheckBox(this).apply {
+            id = R.id.findWholeAadhaar
+            text = getString(R.string.find_whole_aadhaar)
+            setTextColor(SwStyle.color(this@StampEditorActivity, R.color.text_hologram_hi))
+            minimumHeight = SwStyle.dp(this@StampEditorActivity, 48f)
+            buttonTintList = android.content.res.ColorStateList.valueOf(
+                SwStyle.color(this@StampEditorActivity, R.color.cyan_primary)
+            )
+        }
+        val preset = com.scanwhirl.app.ui.kit.SwChip(this).apply {
+            id = R.id.findPresetAadhaar
+            bind(
+                R.drawable.ic_sym_visibility_off,
+                getString(R.string.find_preset_aadhaar)
+            )
+            minimumHeight = SwStyle.dp(this@StampEditorActivity, 48f)
+            setOnClickListener { askMaskOptions() }
+        }
+        val explanation = TextView(this).apply {
+            text = getString(R.string.find_explanation)
+            setTextColor(SwStyle.color(this@StampEditorActivity, R.color.text_hologram_mid))
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
+            setLineSpacing(0f, 1.2f)
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(explanation)
+            addView(
+                preset,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = SwStyle.dp(this@StampEditorActivity, 12f)
+                    bottomMargin = SwStyle.dp(this@StampEditorActivity, 4f)
+                }
+            )
+            addView(whole)
+        }
+        SwSheet.builder(this)
+            .setTitle(R.string.find_title)
+            .setContent(content)
+            .setPrimary(R.string.find_action) { runFind(whole.isChecked) }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun findKindLabel(kind: SensitiveScan.Kind): String = getString(
+        when (kind) {
+            SensitiveScan.Kind.AADHAAR -> R.string.find_kind_aadhaar
+            SensitiveScan.Kind.VID -> R.string.find_kind_vid
+            SensitiveScan.Kind.PAN -> R.string.find_kind_pan
+            SensitiveScan.Kind.CARD -> R.string.find_kind_card
+            SensitiveScan.Kind.PHONE -> R.string.find_kind_phone
+            SensitiveScan.Kind.EMAIL -> R.string.find_kind_email
+            SensitiveScan.Kind.IBAN -> R.string.find_kind_iban
+            SensitiveScan.Kind.SSN -> R.string.find_kind_ssn
+            SensitiveScan.Kind.ACCOUNT -> R.string.find_kind_account
+        }
+    )
+
+    private fun runFind(wholeAadhaar: Boolean) {
+        if (findRunning) return
+        findRunning = true
+        binding.hint.setText(R.string.find_scanning)
+        binding.hint.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            val hits = try {
+                findScanner?.invoke(document.pageFiles) ?: scanSensitive(wholeAadhaar)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+            findRunning = false
+            binding.hint.visibility = View.GONE
+            if (hits.isEmpty()) {
+                note(getString(R.string.find_none))
+                return@launch
+            }
+            showFindResults(hits)
+        }
+    }
+
+    /** OCR (element boxes) on every page, then the detectors; saved geometry is the fallback. */
+    private suspend fun scanSensitive(
+        wholeAadhaar: Boolean
+    ): List<Pair<Int, SensitiveScan.Hit>> = withContext(Dispatchers.IO) {
+        val out = ArrayList<Pair<Int, SensitiveScan.Hit>>()
+        document.pageFiles.forEachIndexed { index, file ->
+            val words = runCatching {
+                com.scanwhirl.app.util.OcrEngine.recognizeWords(file)
+            }.getOrNull()
+            if (words != null) {
+                val found = SensitiveScan.find(
+                    words.words.map {
+                        SensitiveScan.Word(it.text, it.left, it.top, it.right, it.bottom)
+                    },
+                    words.page.width,
+                    words.page.height,
+                    wholeAadhaar
+                )
+                out += found.map { index to it }
+            } else {
+                val page = runCatching {
+                    com.scanwhirl.app.util.OcrEngine.recognizeFile(file).page
+                }.getOrNull()
+                if (page != null) {
+                    out += SensitiveScan.find(page, wholeAadhaar).map { index to it }
+                }
+            }
+        }
+        out
+    }
+
+    private fun showFindResults(hits: List<Pair<Int, SensitiveScan.Hit>>) {
+        val groups = hits.groupBy { it.second.kind }
+        val kinds = SensitiveScan.Kind.values().filter { groups.containsKey(it) }
+        val labels = kinds.map { kind ->
+            "${findKindLabel(kind)} (${groups.getValue(kind).size})"
+        }
+        val checked = BooleanArray(kinds.size) { true }
+        SwSheet.builder(this)
+            .setTitle(getString(R.string.find_results_title, hits.size))
+            .setOptions(labels, multiChecked = checked) { index, isChecked ->
+                checked[index] = isChecked
+            }
+            .setPrimary(R.string.find_hide_selected) { applyFind(hits, kinds, checked) }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    private fun applyFind(
+        hits: List<Pair<Int, SensitiveScan.Hit>>,
+        kinds: List<SensitiveScan.Kind>,
+        checked: BooleanArray
+    ) {
+        val chosenKinds = kinds.filterIndexed { index, _ -> checked[index] }.toSet()
+        val chosen = hits.filter { it.second.kind in chosenKinds }
+        if (chosen.isEmpty()) return
+        editor.currentPage = chosen.minOf { it.first }
+        var added = 0
+        chosen.groupBy({ it.first }, { it.second.box }).forEach { (page, boxes) ->
+            editor.addAllAt(page, boxes.map { PageStamp.Mark.Redact(it) })
+            added += boxes.size
+        }
+        hideMode = true
+        hideLabelRes = R.string.redact_label
+        disarm()
+        refresh()
+        showPage()
+        binding.hint.setText(getString(R.string.find_applied, added))
+        binding.hint.visibility = View.VISIBLE
+    }
+
+    /**
      * Mask Aadhaar: find 12-digit Aadhaar / 16-digit VID numbers on every page (ML Kit element
      * boxes; stored OCR geometry when the model is unavailable), seed redaction boxes over the
      * first 8 digits, optionally hide the QR code, and let the user adjust them. The save path
@@ -519,12 +697,13 @@ class StampEditorActivity : BaseActivity() {
                 return@launch
             }
             val start = editor.currentPage
+            if (pages.isNotEmpty()) editor.currentPage = pages.first().first
             pages.forEach { (index, boxes) ->
-                editor.currentPage = index
-                editor.addAll(boxes.map { PageStamp.Mark.Redact(it) })
+                editor.addAllAt(index, boxes.map { PageStamp.Mark.Redact(it) })
             }
-            editor.currentPage = start
-            maskMode = true
+            if (pages.isEmpty()) editor.currentPage = start
+            hideMode = true
+            hideLabelRes = R.string.mask_label
             showPage()
             binding.hint.setText(R.string.mask_aadhaar_hint)
             binding.hint.visibility = android.view.View.VISIBLE
@@ -609,11 +788,11 @@ class StampEditorActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val copy = withContext(Dispatchers.IO) {
-                    val suggested = if (maskMode) {
+                    val suggested = if (hideMode) {
                         val existing = repo.listDocuments(includeVaulted = true).map { it.name }
                         OutputNames.forTool(
                             document.name,
-                            getString(R.string.mask_label),
+                            getString(hideLabelRes),
                             existing
                         )
                     } else {
@@ -627,8 +806,12 @@ class StampEditorActivity : BaseActivity() {
                 )
                 Toast.makeText(
                     this@StampEditorActivity,
-                    if (maskMode) getString(R.string.mask_aadhaar_saved, copy.name)
-                    else getString(R.string.stamp_saved, copy.name),
+                    when {
+                        hideLabelRes == R.string.mask_label ->
+                            getString(R.string.mask_aadhaar_saved, copy.name)
+                        hideMode -> getString(R.string.redacted_saved, copy.name)
+                        else -> getString(R.string.stamp_saved, copy.name)
+                    },
                     Toast.LENGTH_LONG
                 ).show()
                 finish()

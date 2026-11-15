@@ -14,7 +14,7 @@ Robolectric can start, at **360dp width** and font scale **1.3 and 2.0**:
 | editors | Page editor, Stamp editor, Text screen (OCR) |
 | tools | Tool setup, Tool result |
 | safety | Vault, Protect sheet, Unlock sheet |
-| other | Scan review, Insert-pages sheet, Mask Aadhaar sheet, Settings |
+| other | Scan review, insert-pages sheet, Find sheet (Redact; Aadhaar preset), Settings |
 
 The checks are plain view-tree walks (no Espresso):
 
