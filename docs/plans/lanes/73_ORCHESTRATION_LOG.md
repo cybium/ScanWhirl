@@ -71,3 +71,5 @@ Brief every worker follows: `72_WORKER_BRIEF.md`. Gate: `tools/gate.ps1` (WSL mi
 ## Cloud gate (11-15 08:22)
 - Repo public (owner OK). .github/workflows/gate.yml on ubuntu-latest (16 GB): full suite + lint on integration, ~5.2 min warm. gate.ps1: full suite -> cloud by default (snapshot via temp index -> ci/<lane>, injects lead's gate.yml, gh run list/download with GH_TOKEN from git credential, never printed). -Tests/-Apk local. First cloud runs: 1360 tests (no OOM). Found TextFitTest (L1) + lint StringFormatInvalid draft_replace_msg (lead fixed).
 - gh CLI: C:\Program Files\GitHub CLI\gh.exe (no gh auth login; GH_TOKEN per call; token scopes gist, repo, workflow).
+
+- 11-15 09:18 Merged L2 security audit (INTERNET stripped: verified with aapt2 on APK; FLAG_SECURE vault; privacy sweep; PIN PBKDF2; sensitive clipboard). Lead added ML Kit install-time deps meta-data (PM-1.5). Merged L3 (Protect IME/vault/result, protected import, 212-PDF sweep 0 crashes, Book pages partial). Book pages new algorithm sent (text direction -> aspect -> cut). L2 next: release (R8) build in CI + keep rules. L1: + FLAG_SECURE setting. Known allowed failure: TextFitTest (L1 fixing).
