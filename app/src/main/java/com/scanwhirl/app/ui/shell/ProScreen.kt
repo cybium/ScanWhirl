@@ -34,6 +34,17 @@ class ProScreen(
 
     val buyButton: TextView
 
+    private val rings = mutableListOf<View>()
+    private lateinit var mark: ImageView
+    private lateinit var titleRow: View
+    private lateinit var subtitle: TextView
+    private lateinit var trustRow: View
+    private val featureCells = mutableListOf<View>()
+    private lateinit var priceCard: View
+    private lateinit var priceWrap: FrameLayout
+    private lateinit var buyWrap: FrameLayout
+    private var entrancePlayed = false
+
     init {
         orientation = VERTICAL
         id = R.id.swProScreen
@@ -50,6 +61,8 @@ class ProScreen(
             SwStyle.iconButton(context, R.drawable.ic_sym_close, SwStyle.color(context, R.color.text_hologram_mid)).apply {
                 id = R.id.swProClose
                 contentDescription = context.getString(R.string.sheet_close)
+                layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
+                setPadding(SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f))
                 setOnClickListener { callbacks.onClose() }
             }
         )
@@ -60,18 +73,24 @@ class ProScreen(
         }
         for (size in listOf(250, 180, 120)) {
             val ring = SwStyle.dp(context, size.toFloat())
+            val ringView = View(context).apply {
+                background = SwStyle.rounded(
+                    context, 0x00FFB800, radiusDp = 999f,
+                    stroke = 0x29FFB800, strokeDp = 1f
+                )
+            }
+            rings += ringView
             hero.addView(
-                View(context).apply {
-                    background = SwStyle.rounded(
-                        context, 0x00FFB800, radiusDp = 999f,
-                        stroke = 0x29FFB800, strokeDp = 1f
-                    )
-                },
+                ringView,
                 FrameLayout.LayoutParams(ring, ring).apply { gravity = Gravity.CENTER }
             )
         }
+        mark = ImageView(context).apply {
+            setImageResource(R.drawable.ic_brand_mark_gold)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
         hero.addView(
-            ImageView(context).apply { setImageResource(R.drawable.ic_brand_mark_gold) },
+            mark,
             FrameLayout.LayoutParams(SwStyle.dp(context, 72f), SwStyle.dp(context, 72f))
                 .apply { gravity = Gravity.CENTER }
         )
@@ -94,35 +113,48 @@ class ProScreen(
             }
         )
         addView(title, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        titleRow = title
+        subtitle = SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
+            text = context.getString(R.string.pro_sub)
+            gravity = Gravity.CENTER
+        }
         addView(
-            SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-                text = context.getString(R.string.pro_sub)
-                gravity = Gravity.CENTER
-            },
+            subtitle,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 6f) }
         )
 
         val trustRow = LinearLayout(context).apply {
-            orientation = HORIZONTAL
+            orientation = VERTICAL
             gravity = Gravity.CENTER
         }
-        for (pill in listOf(
+        val pills = listOf(
             TrustPill.noAds(context),
             TrustPill.noAccount(context),
             TrustPill.offline(context)
-        )) {
-            trustRow.addView(
-                pill,
-                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-                    .apply { marginStart = SwStyle.dp(context, 4f); marginEnd = SwStyle.dp(context, 4f) }
-            )
+        )
+        // Two pills on the first line, one on the second: at 2.0x the three
+        // pills do not fit a 320dp phone on one line.
+        for (chunk in pills.chunked(2)) {
+            val line = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            for (pill in chunk) {
+                line.addView(
+                    pill,
+                    LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                        .apply { marginStart = SwStyle.dp(context, 4f); marginEnd = SwStyle.dp(context, 4f) }
+                )
+            }
+            trustRow.addView(line, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         }
         addView(
             trustRow,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 14f) }
         )
+        this.trustRow = trustRow
 
         val feat = LinearLayout(context).apply {
             orientation = VERTICAL
@@ -141,9 +173,11 @@ class ProScreen(
         for (pair in features.chunked(2)) {
             val row = LinearLayout(context).apply { orientation = HORIZONTAL }
             for ((icon, label) in pair) {
+                val cell = feature(icon, label)
+                featureCells += cell
                 row.addView(
-                    feature(icon, label),
-                    LayoutParams(0, SwStyle.dp(context, 48f), 1f)
+                    cell,
+                    LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
                         .apply { marginEnd = SwStyle.dp(context, 10f) }
                 )
             }
@@ -161,7 +195,7 @@ class ProScreen(
                 gravity = Gravity.CENTER
                 isClickable = true
                 setOnClickListener { callbacks.onSeeAllProTools() }
-                minimumHeight = SwStyle.dp(context, 36f)
+                minimumHeight = SwStyle.dp(context, 48f)
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 2f) }
@@ -206,11 +240,21 @@ class ProScreen(
             ImageView(context).apply {
                 setImageResource(R.drawable.ic_sym_workspace_premium)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.gold_pro_primary))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LayoutParams(SwStyle.dp(context, 34f), SwStyle.dp(context, 34f))
         )
+        priceCard = price
+        priceWrap = FrameLayout(context).apply {
+            addView(
+                price,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
         addView(
-            price,
+            priceWrap,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 val m = SwStyle.dp(context, 18f)
                 setMargins(m, SwStyle.dp(context, 10f), m, 0)
@@ -230,8 +274,16 @@ class ProScreen(
             isClickable = true
             setOnClickListener { callbacks.onBuy() }
         }
+        buyWrap = FrameLayout(context).apply {
+            addView(
+                buyButton,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
         addView(
-            buyButton,
+            buyWrap,
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 54f)).apply {
                 val m = SwStyle.dp(context, 18f)
                 setMargins(m, SwStyle.dp(context, 16f), m, 0)
@@ -243,13 +295,117 @@ class ProScreen(
                 text = context.getString(R.string.pro_restore)
                 gravity = Gravity.CENTER
                 isClickable = true
-                minimumHeight = SwStyle.dp(context, 44f)
+                minimumHeight = SwStyle.dp(context, 48f)
                 setOnClickListener { callbacks.onRestore() }
             },
-            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 44f))
+            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f))
         )
         addView(SwStyle.spacer(context, 20f))
+
+        // v2 UI: 74_motion — the Pro entrance. Every animator is finite and
+        // attach-scoped: leaving the screen cancels them, and "Remove animations"
+        // leaves the final state in place with no movement.
+        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                if (!entrancePlayed) {
+                    entrancePlayed = true
+                    playEntrance()
+                }
+            }
+
+            override fun onViewDetachedFromWindow(v: View) {
+                rings.forEach { it.animate().cancel() }
+                mark.animate().cancel()
+                titleRow.animate().cancel()
+                subtitle.animate().cancel()
+                trustRow.animate().cancel()
+                featureCells.forEach { it.animate().cancel() }
+                priceCard.animate().cancel()
+                buyButton.animate().cancel()
+            }
+        })
     }
+
+    private fun playEntrance() {
+        if (!com.scanwhirl.app.ui.kit.SwMotion.enabled(context)) return
+        val lift = SwStyle.dp(context, 12f)
+        rings.forEachIndexed { index, ring ->
+            ring.alpha = 0f
+            ring.scaleX = 0.72f
+            ring.scaleY = 0.72f
+            ring.animate()
+                .alpha(0.7f).scaleX(1f).scaleY(1f)
+                .setStartDelay(index * 80L)
+                .setDuration(600L)
+                .withEndAction {
+                    ring.animate().alpha(0.32f).setDuration(260L).start()
+                }
+                .start()
+        }
+        mark.rotation = 0f
+        mark.animate().rotation(360f).setDuration(600L).start()
+
+        titleRow.alpha = 0f
+        titleRow.translationY = lift.toFloat()
+        titleRow.animate().alpha(1f).translationY(0f)
+            .setStartDelay(120L).setDuration(320L).start()
+        subtitle.alpha = 0f
+        subtitle.translationY = lift * 0.6f
+        subtitle.animate().alpha(1f).translationY(0f)
+            .setStartDelay(180L).setDuration(320L).start()
+
+        val cascade = mutableListOf(trustRow).apply { addAll(featureCells) }
+        cascade.forEachIndexed { index, cell ->
+            cell.alpha = 0f
+            cell.translationY = (lift * 0.7f)
+            cell.animate().alpha(1f).translationY(0f)
+                .setStartDelay(200L + index * 30L)
+                .setDuration(220L)
+                .start()
+        }
+
+        priceWrap.post { shine(priceWrap) }
+        buyWrap.post { shine(buyWrap) }
+        buyButton.postDelayed({
+            if (!buyButton.isAttachedToWindow) return@postDelayed
+            buyButton.animate().scaleX(1.03f).scaleY(1.03f)
+                .setDuration(120L)
+                .withEndAction {
+                    buyButton.animate().scaleX(1f).scaleY(1f).setDuration(120L).start()
+                }
+                .start()
+        }, 900L)
+    }
+
+    /** One soft gold sweep across [wrap]; the shine view dies with its parent. */
+    private fun shine(wrap: FrameLayout) {
+        if (wrap.width <= 0 || !wrap.isAttachedToWindow) return
+        val width = SwStyle.dp(context, 90f)
+        val shine = View(context).apply {
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0x00FFB800, 0x66FFD257.toInt(), 0x00FFB800)
+            )
+            alpha = 0f
+            translationX = -width.toFloat()
+        }
+        wrap.addView(
+            shine,
+            FrameLayout.LayoutParams(width, FrameLayout.LayoutParams.MATCH_PARENT)
+        )
+        shine.animate()
+            .translationX(wrap.width.toFloat())
+            .alpha(0.8f)
+            .setDuration(600L)
+            .withEndAction { (shine.parent as? ViewGroup)?.removeView(shine) }
+            .start()
+    }
+
+    // Test seams for the entrance (no behavioural change).
+    internal fun entrancePlayedForTest(): Boolean = entrancePlayed
+    internal fun titleForTest(): View = titleRow
+    internal fun priceWrapForTest(): FrameLayout = priceWrap
+    internal fun buyWrapForTest(): FrameLayout = buyWrap
 
     private fun feature(icon: Int, label: Int): View {
         val cell = LinearLayout(context).apply {
@@ -262,12 +418,14 @@ class ProScreen(
                 stroke = 0x2EFFB800
             )
             val pad = SwStyle.dp(context, 12f)
-            setPadding(pad, 0, pad, 0)
+            setPadding(pad, SwStyle.dp(context, 6f), pad, SwStyle.dp(context, 6f))
+            minimumHeight = SwStyle.dp(context, 48f)
         }
         cell.addView(
             ImageView(context).apply {
                 setImageResource(icon)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.gold_pro_primary))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LayoutParams(SwStyle.dp(context, 22f), SwStyle.dp(context, 22f))
                 .apply { marginEnd = SwStyle.dp(context, 10f) }
@@ -275,6 +433,14 @@ class ProScreen(
         cell.addView(
             SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(label)
+                maxLines = 2
+                setLineSpacing(0f, 1.1f)
+                val density = resources.displayMetrics.density
+                val scaled = resources.displayMetrics.scaledDensity
+                setTextSize(
+                    android.util.TypedValue.COMPLEX_UNIT_PX,
+                    minOf(13.5f * scaled, 16f * density)
+                )
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )

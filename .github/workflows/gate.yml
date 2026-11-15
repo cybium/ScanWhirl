@@ -46,7 +46,11 @@ jobs:
           FILTER=""
           if [ -f .ci/test-filter.txt ]; then FILTER=$(head -n1 .ci/test-filter.txt | tr -d '\r'); echo "test filter: $FILTER"; fi
           if [ -n "$FILTER" ]; then
-            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q --tests "$FILTER"
+            # "A,B" -> --tests A --tests B (Gradle takes one pattern per flag)
+            ARGS=()
+            IFS=',' read -ra PATS <<< "$FILTER"
+            for p in "${PATS[@]}"; do p="$(echo "$p" | xargs)"; [ -n "$p" ] && ARGS+=(--tests "$p"); done
+            ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q "${ARGS[@]}"
           else
             ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g -PtestForkEvery=200 --continue --no-daemon -q
           fi

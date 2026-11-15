@@ -89,6 +89,9 @@ class PdfViewerActivity : BaseActivity() {
             finish()
             return
         }
+        // SECURITY_AUDIT 2026-11-15: a locked/Vault PDF is never screenshot-able;
+        // an ordinary PDF follows the user's "Block screenshots of documents".
+        com.scanwhirl.app.util.SecureView.applyForDocument(this, window, privateDoc)
 
         binding.toolbar.title = title
         binding.toolbar.setNavigationOnClickListener { handleBack() }

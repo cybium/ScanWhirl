@@ -24,7 +24,9 @@ object SwStyle {
     fun dp(context: Context, value: Float): Int =
         (value * context.resources.displayMetrics.density).toInt()
 
-    fun color(context: Context, res: Int): Int = ContextCompat.getColor(context, res)
+    fun color(context: Context, res: Int): Int =
+        if (SwTheme.isGold(context)) SwTheme.accent(context, res)
+        else ContextCompat.getColor(context, res)
 
     /** Glass card: `#1C252A → #161D21`, 1dp cyan hairline, radius 18/26. */
     fun card(context: Context, radiusDp: Float = 18f): GradientDrawable =
@@ -104,11 +106,11 @@ object SwStyle {
         LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val label = text(context, 12f, color(context, R.color.cyan_dim), bold = true, letterSpacing = 0.08f)
+            val label = text(context, 12f, color(context, R.color.text_hologram_mid), bold = true, letterSpacing = 0.08f)
             label.text = title.uppercase(java.util.Locale.getDefault())
             addView(label, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             addView(
-                text(context, 12f, color(context, R.color.cyan_dim), bold = true).apply {
+                text(context, 12f, color(context, R.color.text_hologram_mid), bold = true).apply {
                     text = count.toString()
                 }
             )

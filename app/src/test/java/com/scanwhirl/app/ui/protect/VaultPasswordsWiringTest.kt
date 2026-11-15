@@ -381,8 +381,8 @@ class VaultPasswordsWiringTest {
 
             assertTrue("the saved password opens the document",
                 pollUntil { !repo.getDocument(id)!!.isLocked })
-            assertFalse("the entry is dropped after unlocking",
-                VaultPasswords.of(app).has(id))
+            assertTrue("the entry is dropped after unlocking",
+                pollUntil { !VaultPasswords.of(app).has(id) })
         }
     }
 

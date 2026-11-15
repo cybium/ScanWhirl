@@ -11,7 +11,6 @@ import android.text.InputFilter
 import android.text.InputType
 import android.text.TextUtils
 import android.text.format.Formatter
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -27,7 +26,6 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
-import androidx.core.widget.TextViewCompat
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -235,6 +233,10 @@ class VaultActivity : BaseActivity() {
             this, R.drawable.ic_sym_lock, SwStyle.color(this, R.color.text_hologram_mid)
         ).apply {
             id = R.id.vaultLock
+            // 48dp touch target (the kit glyph is 40dp); a11y audit, S2.
+            layoutParams = LinearLayout.LayoutParams(
+                SwStyle.dp(this@VaultActivity, 48f), SwStyle.dp(this@VaultActivity, 48f)
+            )
             contentDescription = getString(R.string.vault_locked_desc)
             setOnClickListener {
                 if (store.isUnlocked()) {
@@ -255,6 +257,9 @@ class VaultActivity : BaseActivity() {
                 this, R.drawable.ic_sym_more_vert, SwStyle.color(this, R.color.text_hologram_mid)
             ).apply {
                 id = R.id.vaultMore
+                layoutParams = LinearLayout.LayoutParams(
+                    SwStyle.dp(this@VaultActivity, 48f), SwStyle.dp(this@VaultActivity, 48f)
+                )
                 contentDescription = getString(R.string.vault_more_desc)
                 setOnClickListener { showMore() }
             }
@@ -309,6 +314,7 @@ class VaultActivity : BaseActivity() {
             ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_shield_lock)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(this@VaultActivity, R.color.cyan_primary))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             FrameLayout.LayoutParams(
                 SwStyle.dp(this@VaultActivity, 34f), SwStyle.dp(this@VaultActivity, 34f)
@@ -362,10 +368,10 @@ class VaultActivity : BaseActivity() {
             id = R.id.vaultBackupButton
             setOnClickListener { startBackup() }
         }
-        row.addView(recoveryButton, LinearLayout.LayoutParams(0, SwStyle.dp(this, 46f), 1f))
+        row.addView(recoveryButton, LinearLayout.LayoutParams(0, SwStyle.dp(this, 64f), 1f))
         row.addView(
             backupButton,
-            LinearLayout.LayoutParams(0, SwStyle.dp(this, 46f), 1f).apply {
+            LinearLayout.LayoutParams(0, SwStyle.dp(this, 64f), 1f).apply {
                 marginStart = SwStyle.dp(this@VaultActivity, 10f)
             }
         )
@@ -493,6 +499,7 @@ class VaultActivity : BaseActivity() {
             ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_encrypted)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(this@VaultActivity, R.color.text_hologram_dim))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LinearLayout.LayoutParams(SwStyle.dp(this, 44f), SwStyle.dp(this, 44f))
         )
@@ -534,6 +541,7 @@ class VaultActivity : BaseActivity() {
             ImageView(this).apply {
                 setImageResource(R.drawable.ic_sym_lock)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(this@VaultActivity, R.color.text_hologram_dim))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             LinearLayout.LayoutParams(SwStyle.dp(this, 20f), SwStyle.dp(this, 20f))
         )
@@ -557,25 +565,30 @@ class VaultActivity : BaseActivity() {
                 radiusDp = 14f,
                 stroke = SwStyle.color(this@VaultActivity, R.color.sw_cyan_hair_strong)
             )
-            setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
-            compoundDrawablePadding = SwStyle.dp(this@VaultActivity, 6f)
+            setCompoundDrawablesRelativeWithIntrinsicBounds(0, icon, 0, 0)
+            compoundDrawablePadding = SwStyle.dp(this@VaultActivity, 2f)
             compoundDrawableTintList = ColorStateList.valueOf(
                 SwStyle.color(this@VaultActivity, R.color.cyan_primary)
             )
-            // Two of these share a 360dp row: the 24dp icon plus a label must never wrap and
-            // push the icon out of the 46dp button. One line, and the label shrinks to 10sp
-            // before it is ever clipped (owner saw the icons leaving the button on a phone).
+            // Two of these share a 360dp row: a side-by-side 24dp icon plus label would elide
+            // the label at large font scales (owner saw the icon escaping the button), so the
+            // icon sits above the label and the label keeps the full button width on one line.
             includeFontPadding = false
             maxLines = 1
             isSingleLine = true
             ellipsize = TextUtils.TruncateAt.END
             setPadding(
-                SwStyle.dp(this@VaultActivity, 6f), 0,
-                SwStyle.dp(this@VaultActivity, 6f), 0
+                SwStyle.dp(this@VaultActivity, 4f), 0,
+                SwStyle.dp(this@VaultActivity, 4f), 0
             )
-            TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
-                this, 10, 14, 1, TypedValue.COMPLEX_UNIT_SP
-            )
+            // The label must fit on one line in half of a 360dp row. Autosize alone did not
+            // shrink far enough at font scale 2.0 (the a11y audit still saw 5 characters
+            // elided), so the size steps down with the system scale.
+            textSize = when {
+                resources.configuration.fontScale >= 1.8f -> 9f
+                resources.configuration.fontScale >= 1.25f -> 11.5f
+                else -> 14f
+            }
             isClickable = true
             isFocusable = true
         }

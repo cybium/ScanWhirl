@@ -163,4 +163,49 @@ object Prefs {
     private const val KEY_GALLERY_CROP = "gallery_auto_crop"
     fun galleryAutoCrop(c: Context): Boolean = sp(c).getBoolean(KEY_GALLERY_CROP, true)
     fun setGalleryAutoCrop(c: Context, v: Boolean) = sp(c).edit().putBoolean(KEY_GALLERY_CROP, v).apply()
+
+    // ---- documents: block screenshots (SECURITY_AUDIT 2026-11-15) ------------
+
+    private const val KEY_BLOCK_DOC_SCREENSHOTS = "block_doc_screenshots"
+
+    /**
+     * Block screenshots/screen recording of **ordinary** documents. Protected
+     * (locked) and Vault documents are blocked regardless of this setting (see
+     * [SecureView.applyForDocument]); ordinary scans default to screenshot-friendly.
+     */
+    fun blockDocScreenshots(c: Context): Boolean =
+        sp(c).getBoolean(KEY_BLOCK_DOC_SCREENSHOTS, false)
+
+    fun setBlockDocScreenshots(c: Context, v: Boolean) =
+        sp(c).edit().putBoolean(KEY_BLOCK_DOC_SCREENSHOTS, v).apply()
+
+    // ---- Pro accent theme (Cyan default, Gold for Pro) -----------------------
+
+    private const val KEY_ACCENT = "accent_theme"
+    const val ACCENT_CYAN = "cyan"
+    const val ACCENT_GOLD = "gold"
+
+    fun accent(c: Context): String = sp(c).getString(KEY_ACCENT, ACCENT_CYAN) ?: ACCENT_CYAN
+    fun setAccent(c: Context, v: String) = sp(c).edit().putString(KEY_ACCENT, v).apply()
+
+    // ---- Home quick tools (customisable, max two rows) -----------------------
+
+    private const val KEY_QUICK_TOOLS = "quick_tools"
+    const val MAX_QUICK_TOOLS = 12
+    val DEFAULT_QUICK_TOOLS = listOf("merge", "compress", "sign", "protect", "to_word", "read_text")
+
+    /** The tool ids on Home; defaults to the shipped six, capped at two rows. */
+    fun quickTools(c: Context): List<String> {
+        val stored = sp(c).getString(KEY_QUICK_TOOLS, null)
+            ?: return DEFAULT_QUICK_TOOLS
+        val ids = stored.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        return ids.distinct().take(MAX_QUICK_TOOLS).ifEmpty { DEFAULT_QUICK_TOOLS }
+    }
+
+    fun setQuickTools(c: Context, ids: List<String>) {
+        val clean = ids.distinct().filter { it.isNotEmpty() }.take(MAX_QUICK_TOOLS)
+        sp(c).edit().putString(KEY_QUICK_TOOLS, clean.joinToString(",")).apply()
+    }
+
+    fun resetQuickTools(c: Context) = sp(c).edit().remove(KEY_QUICK_TOOLS).apply()
 }

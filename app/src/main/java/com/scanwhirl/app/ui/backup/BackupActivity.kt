@@ -51,9 +51,18 @@ class BackupActivity : BaseActivity() {
         fun intent(context: Context): Intent = Intent(context, BackupActivity::class.java)
     }
 
-    private val backup by lazy { FullBackup(this) }
+    private val backup by lazy { FullBackup(this, vault) }
     private val vault: VaultStore by lazy {
         vaultOverride ?: VaultStore(this, ScanWhirlApp.from(this).repository)
+    }
+
+    private var pendingRestore: Pair<File, String>? = null
+
+    /** The Vault was locked: prompt for it, then run the restore that was waiting. */
+    private val unlockVault = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val pending = pendingRestore ?: return@registerForActivityResult
+        pendingRestore = null
+        runRestore(pending.first, pending.second)
     }
 
     private lateinit var lastLine: TextView
@@ -376,6 +385,15 @@ class BackupActivity : BaseActivity() {
     }
 
     private fun runRestore(file: File, secret: String) {
+        // The backup carries Vault entries and this phone's Vault is set up: unlock it first, so
+        // the entries can be re-encrypted under its key instead of being skipped.
+        if (runCatching { backup.needsVaultUnlock(file) }.getOrDefault(false)) {
+            pendingRestore = file to secret
+            unlockVault.launch(
+                com.scanwhirl.app.ui.vault.VaultActivity.intent(this, getString(R.string.backup_vault_reason))
+            )
+            return
+        }
         toast(R.string.backup_restoring)
         lifecycleScope.launch {
             val report = withContext(Dispatchers.IO) { runCatching { backup.restore(file, secret) } }
@@ -387,6 +405,10 @@ class BackupActivity : BaseActivity() {
                     append(getString(R.string.backup_restored_docs, r.documents))
                     if (r.skipped > 0) append("\n").append(getString(R.string.backup_restored_skipped, r.skipped))
                     if (r.vaultEntries > 0) append("\n").append(getString(R.string.backup_restored_vault, r.vaultEntries))
+                    if (r.vaultReencrypted > 0) {
+                        append("\n").append(getString(R.string.backup_restored_vault_reencrypted, r.vaultReencrypted))
+                    }
+                    if (r.vaultLocked) append("\n").append(getString(R.string.backup_vault_locked))
                     r.warnings.forEach { append("\n").append(it) }
                 }
                 SwSheet.builder(this@BackupActivity)

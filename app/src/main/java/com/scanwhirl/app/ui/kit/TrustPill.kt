@@ -14,6 +14,12 @@ class TrustPill(context: Context) : AppCompatTextView(context) {
     init {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
         typeface = SwType.bold(context)
+        maxLines = 1
+        // The three trust pills share one row; cap the label so 2.0x font
+        // cannot make the row wider than the phone.
+        val density = resources.displayMetrics.density
+        val scaled = resources.displayMetrics.scaledDensity
+        setTextSize(TypedValue.COMPLEX_UNIT_PX, minOf(11.5f * scaled, 13f * density))
         setTextColor(SwStyle.color(context, R.color.ok_green))
         background = SwStyle.pill(
             context,

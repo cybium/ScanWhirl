@@ -182,6 +182,37 @@ class LibraryOrganisationTest {
     }
 
     @Test
+    fun `the Batch action opens BatchActivity with the selected ids`() {
+        val one = DocFixtures.saved(repo, app, pages = 1, name = "One")
+        val two = DocFixtures.saved(repo, app, pages = 1, name = "Two")
+        launch { activity ->
+            val all = cards(activity)
+            all[0].performLongClick()
+            idle()
+            all[1].performClick()
+            idle()
+            // Drop anything the shell started while loading.
+            while (shadowOf(activity).nextStartedActivity != null) Unit
+
+            activity.findViewById<View>(R.id.swSelBatch).performClick()
+            idle()
+            val started = shadowOf(activity).nextStartedActivity
+            assertNotNull("Batch opens the Batch screen", started)
+            assertEquals(
+                com.scanwhirl.app.ui.tools.BatchActivity::class.java.name,
+                started!!.component?.className
+            )
+            assertEquals(
+                "both selected ids are passed, nothing else",
+                setOf(one, two),
+                started.getStringArrayListExtra(
+                    com.scanwhirl.app.ui.tools.BatchActivity.EXTRA_DOC_IDS
+                )?.toSet()
+            )
+        }
+    }
+
+    @Test
     fun `search also matches a tag`() {
         val tagged = DocFixtures.saved(repo, app, pages = 1, name = "Alpha")
         DocFixtures.saved(repo, app, pages = 1, name = "Beta")

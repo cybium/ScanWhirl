@@ -48,6 +48,9 @@
     <string name="backup_restored_docs">%1$d documents restored</string>
     <string name="backup_restored_skipped">%1$d already here, left alone</string>
     <string name="backup_restored_vault">%1$d Vault files restored</string>
+    <string name="backup_restored_vault_reencrypted">%1$d Vault documents re-encrypted into this Vault</string>
+    <string name="backup_vault_locked">Vault files were not restored. Unlock the Vault and restore again.</string>
+    <string name="backup_vault_reason">Unlock the Vault so the backup\'s Vault documents can be restored into it.</string>
     <string name="backup_wrong_secret">Wrong password or recovery code. Nothing was changed.</string>
     <string name="backup_not_a_backup">That file is not a ScanWhirl backup, or it is damaged.</string>
     <string name="backup_failed_title">Could not restore</string>

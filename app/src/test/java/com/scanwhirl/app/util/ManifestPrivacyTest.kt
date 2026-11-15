@@ -71,8 +71,21 @@ class ManifestPrivacyTest {
             .getPackageInfo(app.packageName, PackageManager.GET_ACTIVITIES)
             .activities.orEmpty()
         val exported = activities.filter { it.exported }.map { it.name }
-        assertEquals("one exported entry point (the launcher shell)", 1, exported.size)
-        assertTrue("exported: $exported", exported.single().endsWith("ShellActivity"))
+        // The launcher is an activity-alias pair (Cyan/Gold); nothing else may be
+        // exported. PackageManager resolves only the enabled alias as a launcher.
+        assertTrue("exported: $exported", exported.all { it.contains("ShellActivity") })
+        assertTrue("exported: $exported", exported.size in 1..3)
+        val launchers = app.packageManager.queryIntentActivities(
+            android.content.Intent(android.content.Intent.ACTION_MAIN)
+                .addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+                .setPackage(app.packageName),
+            0
+        )
+        assertEquals("exactly one launcher entry point is enabled", 1, launchers.size)
+        assertTrue(
+            "the launcher is the shell: ${launchers.map { it.activityInfo.name }}",
+            launchers.single().activityInfo.name.contains("ShellActivity")
+        )
     }
 
     @Test

@@ -578,7 +578,7 @@ class PageViewerActivity : BaseActivity() {
             )
 
         override fun onBindViewHolder(holder: PagerVH, position: Int) {
-            holder.bind(items[position])
+            holder.bind(items[position], position, items.size)
         }
 
         override fun getItemCount() = items.size
@@ -598,7 +598,10 @@ class PageViewerActivity : BaseActivity() {
          * in saved documents alike. The key includes the filter so a filter
          * change re-renders even though the file itself did not change.
          */
-        fun bind(file: File) {
+        fun bind(file: File, position: Int, total: Int) {
+            binding.pageImage.contentDescription = binding.root.context.getString(
+                R.string.a11y_page_image, position + 1, total
+            )
             val filter = pagerAdapter.filterFor(file)
             val key = "${file.path}|${file.lastModified()}|${file.length()}|${filter.id}"
             binding.pageImage.tag = key
