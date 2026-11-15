@@ -1,0 +1,18 @@
+open document (page list): 8ms
+open document + draftPages: 18ms
+organize grid first screen: 988ms
+organize grid visible cells: 6
+compress 500 pages: 3273ms
+make searchable 500 pages: 262ms
+ocr index 500 pages: 10370ms
+target compress old (all pages in memory): 11ms
+target compress streaming (1 page at a time): 2663ms
+target compress peak pages in memory: old=500 new=1
+thumbnail sample: target=220px sample=8 decoded=200x275
+merge 3x200 pages: 3113ms
+pdf 500 pages: 69ms
+library load: 39ms
+search name cold: 36ms
+search name warm: 3ms
+search OCR cold: 56ms
+search OCR warm: 41ms

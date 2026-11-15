@@ -146,6 +146,21 @@ class ToolsEngineTest {
         assertEquals("Contract - Pages 1-2 (2)", again.first().name)
     }
 
+    @Test
+    fun `compress to a target size streams pages and publishes them`() {
+        val id = DocFixtures.saved(repo, app, pages = 3, name = "Target")
+        val before = requireNotNull(repo.getDocument(id))
+        val copy = runBlocking { repo.compressScanToTarget(id, 120_000L) }
+        assertEquals("Target - Compressed", copy.name)
+        assertEquals(3, copy.pageCount)
+        assertTrue("the published PDF exists", copy.pdfFile.isFile)
+        assertTrue(
+            "the target path re-encodes pages",
+            copy.pageFiles.first().length() <= before.pageFiles.first().length()
+        )
+        assertEquals("the source is untouched", 3, repo.getDocument(id)!!.pageCount)
+    }
+
     // ---------------------------------------------------------------- PDF to images
 
     @Test

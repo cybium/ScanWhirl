@@ -1686,6 +1686,30 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
+     * Compresses to a total-size target, one page at a time. The old path built a `List<ByteArray>`
+     * for every page first — a 2000-page book held the whole document (hundreds of MB) in memory.
+     * Here only the current page's bytes and bitmap are alive.
+     */
+    suspend fun compressScanToTarget(id: String, targetBytes: Long): ScanDocument =
+        withContext(Dispatchers.IO) {
+            require(targetBytes > 0) { "Target size must be positive" }
+            val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+            refuseLockedSources(listOf(doc))
+            val sizes = doc.pageFiles.map { it.length().coerceAtLeast(1L) }
+            val sum = sizes.sum().coerceAtLeast(1L)
+            val budget = (targetBytes - (doc.pageFiles.size * 600L + 1000L)).coerceAtLeast(2048L)
+            buildAndPublish(
+                outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }
+            ) { staging ->
+                doc.pageFiles.forEachIndexed { i, file ->
+                    currentCoroutineContext().ensureActive()
+                    val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
+                    stagePageBytes(SizeFit.fitToShare(file.readBytes(), share), staging, i)
+                }
+            }
+        }
+
+    /**
      * Imports a password-protected PDF by decrypting a temporary copy first: the source file is
      * only read, the plaintext copy lives in `cacheDir` and is deleted before returning. Pages are
      * then rendered through the normal [importPdfAsScan] path, so the new document is a regular
@@ -2432,11 +2456,17 @@ class ScanRepository(private val context: Context) {
         requireUnlocked(dir) // A3 backstop: a locked document's PDF is never rebuilt in plaintext
         val pdfFile = File(dir, "scan.pdf")
         val pages = pageFilesIn(dir)
+        // Read the geometry once for both the write and the flag; the old code re-read the whole
+        // map once per page (and used indexOf per page), which was O(pages²) on a 2000-page book.
+        val geo = if (forceLayers || Prefs.makeSearchable(context)) {
+            ocrStore.readGeo(dir.name)
+        } else {
+            emptyMap()
+        }
         val layered = if (pages.isNotEmpty()) {
-            if (forceLayers) writePdfInto(dir, pdfFile, ocrStore.readGeo(dir.name))
-            else writePdf(dir, pdfFile)
+            writePdfInto(dir, pdfFile, geo)
         } else false
-        updateTextLayerFlag(dir, layered)
+        updateTextLayerFlag(dir, layered, geo)
     }
 
     /**
@@ -2455,11 +2485,15 @@ class ScanRepository(private val context: Context) {
     }
 
     /** `text_layer.flag` exists exactly when every page of [dir] received an invisible text layer. */
-    private fun updateTextLayerFlag(dir: File, layered: Boolean) {
+    private fun updateTextLayerFlag(
+        dir: File,
+        layered: Boolean,
+        geo: Map<String, OcrPage> = emptyMap()
+    ) {
         val id = dir.name
         val pages = pageFilesIn(dir)
-        val searchable = layered && pages.all {
-            ocrStore.readGeo(id).containsKey("page_%03d.jpg".format(pages.indexOf(it)))
+        val searchable = layered && pages.withIndex().all { (index, _) ->
+            geo.containsKey("page_%03d.jpg".format(index))
         }
         val flag = File(dir, "text_layer.flag")
         if (searchable) {
@@ -3445,8 +3479,7 @@ class ScanRepository(private val context: Context) {
                 when (action) {
                     is BatchAction.Compress -> {
                         if (action.targetBytes != null) {
-                            val pages = SizeFit.compressPages(doc.pageFiles, action.targetBytes)
-                            val out = createDocument(outputName(doc.name, "Compressed"), pages)
+                            val out = compressScanToTarget(doc.id, action.targetBytes)
                             BatchItem(id, name, true, outputId = out.id)
                         } else {
                             val out = compressScan(doc.id, action.quality, action.maxDim)

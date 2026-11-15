@@ -89,15 +89,8 @@ object PdfGenerator {
             throw PdfProtection.PlainWriteRefused(outFile)
         }
 
-        // Validate every JPEG up front, before touching outFile or the tmp file.
-        images.forEach { file ->
-            require(file.exists() && file.length() > 0L) { "Missing page image: ${file.name}" }
-            val bytes = file.readBytes()
-            val info = readJpegInfo(bytes)
-            PageImageFormat.checkJpeg(bytes)
-            require(info.components == 1 || info.components == 3) { "Page must be grayscale or RGB JPEG: ${file.name}" }
-        }
-
+        // Every JPEG is validated in the write loop below: one read per page, not two. A bad page
+        // still fails before publish because the tmp is deleted and outFile is untouched.
         val tmp = File(outFile.parentFile ?: outFile, "${outFile.name}.tmp")
         tmp.parentFile?.mkdirs()
 
@@ -152,8 +145,15 @@ object PdfGenerator {
                 }
 
                 images.forEachIndexed { i, imageFile ->
+                    require(imageFile.exists() && imageFile.length() > 0L) {
+                        "Missing page image: ${imageFile.name}"
+                    }
                     val bytes = imageFile.readBytes()
                     val info = readJpegInfo(bytes)
+                    PageImageFormat.checkJpeg(bytes)
+                    require(info.components == 1 || info.components == 3) {
+                        "Page must be grayscale or RGB JPEG: ${imageFile.name}"
+                    }
                     val pageW = (info.width * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
                     val pageH = (info.height * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
                     val pageObj = pageBase + i * 3
