@@ -66,20 +66,6 @@ object ToolRegistry {
         launch = launch ?: { host, tool -> host.open(tool) }
     )
 
-    private fun build(
-        id: String,
-        group: ToolGroup,
-        title: Int,
-        icon: Int,
-        keywords: String,
-        pro: Boolean = false,
-        note: Int = R.string.soon_generic,
-        launch: ((ToolHost, SwTool) -> Unit)? = null
-    ) = SwTool(
-        id, group, title, icon, pro, ToolStatus.BUILD, keywords, note,
-        launch = launch ?: { host, tool -> host.open(tool) }
-    )
-
     private fun soon(
         id: String,
         group: ToolGroup,
@@ -222,8 +208,41 @@ object ToolRegistry {
         }),
 
         // Secure (4)
-        build("protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted, "protect password encrypt aes"),
-        build("unlock", ToolGroup.SECURE, R.string.tool_unlock, R.drawable.ic_sym_lock_open, "unlock password remove protection"),
+        // L3: both open a real document chooser, then the Protect/Unlock sheet. Free tools.
+        ready(
+            "protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted,
+            "protect password encrypt aes",
+            launch = { host, tool ->
+                val activity = host as? android.app.Activity
+                if (activity == null) {
+                    host.comingSoon(tool)
+                } else {
+                    activity.startActivity(
+                        com.scanwhirl.app.ui.protect.LockToolsActivity.intent(
+                            activity,
+                            com.scanwhirl.app.ui.protect.LockToolsActivity.MODE_PROTECT
+                        )
+                    )
+                }
+            }
+        ),
+        ready(
+            "unlock", ToolGroup.SECURE, R.string.tool_unlock, R.drawable.ic_sym_lock_open,
+            "unlock password remove protection",
+            launch = { host, tool ->
+                val activity = host as? android.app.Activity
+                if (activity == null) {
+                    host.comingSoon(tool)
+                } else {
+                    activity.startActivity(
+                        com.scanwhirl.app.ui.protect.LockToolsActivity.intent(
+                            activity,
+                            com.scanwhirl.app.ui.protect.LockToolsActivity.MODE_UNLOCK
+                        )
+                    )
+                }
+            }
+        ),
         SwTool(
             "vault", ToolGroup.SECURE, R.string.tool_vault, R.drawable.ic_sym_shield_lock,
             false, ToolStatus.READY, "vault private encrypted hidden",

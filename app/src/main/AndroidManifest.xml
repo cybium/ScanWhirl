@@ -127,6 +127,12 @@
             android:exported="false"
             android:parentActivityName=".ui.shell.ShellActivity" />
 
+        <!-- L3: Tools/Home Protect PDF and Unlock PDF — document chooser, then the sheet. -->
+        <activity
+            android:name=".ui.protect.LockToolsActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity" />
+
         <activity
             android:name=".ui.PageViewerActivity"
             android:exported="false"
