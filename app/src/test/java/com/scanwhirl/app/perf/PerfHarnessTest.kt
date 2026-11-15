@@ -41,7 +41,7 @@ import kotlin.system.measureNanoTime
  * v2 UI performance harness (owner imports 2000-page textbooks).
  *
  * Normal runs use modest sizes so the cloud gate stays fast; when the owner QA folder carries an
- * `EVAL_ON` sentinel the same harness builds a 300-document library with one 500-page document and
+ * `L4_EVAL_ON` sentinel the same harness builds a 300-document library with one 500-page document and
  * writes the measured table to `docs/audit/2026-11-15/PERF_RAW.txt`.
  *
  * It measures the paths that decide whether a big library feels usable:

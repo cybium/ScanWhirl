@@ -75,7 +75,6 @@ object ScanEnhance {
         removeThinHorizontalRuns(work.pixels, work.w, work.h)
         removeThinVerticalRuns(work.pixels, work.w, work.h)
         removeRulingLines(work.pixels, work.w, work.h, gray)
-        removeBorderConnectedBlobs(work.pixels, work.w, work.h)
         // Pictures (a portrait on an ID card, a photo on a page) are continuous tone, not text:
         // render them as grey from the Auto image instead of a black/white blotch.
         if (picture != null) {
@@ -386,7 +385,9 @@ object ScanEnhance {
             val maxC = max(r, max(g, b))
             val minC = min(r, min(g, b))
             val sat = if (maxC == 0) 0f else (maxC - minC).toFloat() / maxC
-            val boost = (1.18f + 0.55f * (1f - sat)).coerceAtMost(1.9f)
+            // Paper tint (very low saturation) stays neutral; actual colour gets a strong boost.
+            val ramp = ((sat - 0.10f) / 0.18f).coerceIn(0f, 1f)
+            val boost = 1f + (0.22f + 0.55f * (1f - sat)) * ramp
             if (boost <= 1.001f) continue
             val l = luma(c)
             val nr = (l + (r - l) * boost).roundToInt().coerceIn(0, 255)
@@ -517,6 +518,7 @@ object ScanEnhance {
                 var mid = 0
                 var dark = 0
                 var bright = 0
+                var edges = 0
                 var count = 0
                 for (y in y0 until y1) {
                     val row = y * w
@@ -531,6 +533,13 @@ object ScanEnhance {
                         sumL += l
                         sumSat += if (mx == 0) 0f else (mx - mn).toFloat() / mx
                         if (l < 70) dark++ else if (l > 210) bright++ else mid++
+                        if (x + 1 < x1) {
+                            val c2 = work.pixels[row + x + 1]
+                            val l2 = (((c2 shr 16) and 0xFF) * 77 +
+                                ((c2 shr 8) and 0xFF) * 151 +
+                                (c2 and 0xFF) * 28) shr 8
+                            if (abs(l - l2) > 50) edges++
+                        }
                         count++
                     }
                 }
@@ -538,10 +547,10 @@ object ScanEnhance {
                 val meanL = sumL.toDouble() / count
                 val sat = sumSat / count
                 val midFrac = mid.toDouble() / count
-                val darkFrac = dark.toDouble() / count
                 val brightFrac = bright.toDouble() / count
-                val picture = sat > 0.30f ||
-                    (midFrac > 0.45 && darkFrac < 0.55 && brightFrac < 0.60 && meanL in 60.0..235.0)
+                val edgeFrac = edges.toDouble() / count
+                val picture = (sat > 0.15f || midFrac > 0.35) &&
+                    brightFrac < 0.45 && edgeFrac < 0.30 && meanL in 20.0..238.0
                 if (picture) {
                     cand[gy * gw + gx] = 1
                     any = true
@@ -549,6 +558,28 @@ object ScanEnhance {
             }
         }
         if (!any) return null
+
+        // Close across hair, glasses and shirt edges so the whole photo is one region.
+        val closed = ByteArray(gw * gh)
+        for (y in 0 until gh) {
+            for (x in 0 until gw) {
+                var on = false
+                for (dy in -2..2) {
+                    val yy = y + dy
+                    if (yy !in 0 until gh) continue
+                    for (dx in -2..2) {
+                        val xx = x + dx
+                        if (xx in 0 until gw && cand[yy * gw + xx].toInt() != 0) {
+                            on = true
+                            break
+                        }
+                    }
+                    if (on) break
+                }
+                closed[y * gw + x] = if (on) 1 else 0
+            }
+        }
+        closed.copyInto(cand)
 
         // Fill enclosed holes (a photo's dark hair, a shirt edge).
         val outside = ByteArray(gw * gh)
@@ -582,7 +613,7 @@ object ScanEnhance {
 
         // Keep only large picture areas (a photo), so red headings/stamps stay black text.
         val visited = ByteArray(gw * gh)
-        val minArea = max(6, (gw * gh) / 45)
+        val minArea = max(6, (gw * gh) / 12)
         val comp = IntArray(gw * gh)
         for (start in cand.indices) {
             if (cand[start].toInt() == 0 || visited[start].toInt() != 0) continue
@@ -590,9 +621,18 @@ object ScanEnhance {
             var cTail = 0
             comp[cTail++] = start
             visited[start] = 1
+            var minX = gw
+            var maxX = 0
+            var minY = gh
+            var maxY = 0
             while (cHead < cTail) {
                 val i = comp[cHead++]
                 val x = i % gw
+                val y = i / gw
+                if (x < minX) minX = x
+                if (x > maxX) maxX = x
+                if (y < minY) minY = y
+                if (y > maxY) maxY = y
                 if (x > 0 && cand[i - 1].toInt() != 0 && visited[i - 1].toInt() == 0) {
                     visited[i - 1] = 1; comp[cTail++] = i - 1
                 }
@@ -608,6 +648,10 @@ object ScanEnhance {
             }
             if (cTail < minArea) {
                 for (k in 0 until cTail) cand[comp[k]] = 0
+            } else {
+                // A printed photo is a rectangle: fill its bbox so hair/shirt edges inside the
+                // frame are picture too, not black blotches.
+                for (y in minY..maxY) for (x in minX..maxX) cand[y * gw + x] = 1
             }
         }
 
