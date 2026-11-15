@@ -197,12 +197,18 @@ class KitComponentsTest {
 
     @Test
     fun `ToolTile shows label and PRO tag for Pro tools`() {
+        // A Free build draws the tag; a Pro build owns every tool and hides it.
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         val tile = ToolTile(app)
         val sign = ToolRegistry.byId("sign")!!
         tile.bind(sign)
         assertEquals(app.getString(sign.title), tile.labelView.text.toString())
         assertTrue(tile.proTag.isVisible)
         assertFalse(tile.soonTag.isVisible)
+
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
+        tile.bind(sign)
+        assertFalse("a Pro build hides the PRO tag", tile.proTag.isVisible)
 
         val scan = ToolRegistry.byId("scan")!!
         tile.bind(scan)
