@@ -45,8 +45,8 @@
     <string name="backup_restore_go">Restore</string>
     <string name="backup_restoring">Restoring…</string>
     <string name="backup_restored">Backup restored</string>
+    <string name="backup_restored_none">No new documents.</string>
     <plurals name="backup_restored_docs">
-        <item quantity="zero">No new documents.</item>
         <item quantity="one">1 document restored.</item>
         <item quantity="other">%1$d documents restored.</item>
     </plurals>

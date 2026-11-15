@@ -444,7 +444,9 @@ class BackupActivity : BaseActivity() {
     private fun buildParts(report: FullBackup.Report): String {
         val res = resources
         val parts = mutableListOf<String>()
-        parts += res.getQuantityString(R.plurals.backup_restored_docs, report.documents, report.documents)
+        // English and Hindi plural rules have no "zero" form, so 0 is worded explicitly.
+        parts += if (report.documents == 0) res.getString(R.string.backup_restored_none)
+        else res.getQuantityString(R.plurals.backup_restored_docs, report.documents, report.documents)
         if (report.skipped > 0) {
             parts += res.getQuantityString(R.plurals.backup_restored_skipped, report.skipped, report.skipped)
         }
