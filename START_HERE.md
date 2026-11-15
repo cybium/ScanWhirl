@@ -1,56 +1,56 @@
 # Start here
 
-This is the clean ScanWhirl workspace created on 2026-11-13.
+One page of orientation for ScanWhirl. Everything below describes the repository **today**
+(2026-11-16); older handoffs are archived in `docs/history/` and must not be used as instructions.
 
-## What changed
+## Where the project stands
 
-- Current source and Git history were copied from the WSL repository.
-- The uncommitted M08 UX pass is preserved exactly as it was.
-- Candidate APKs, the current handoff, the UX audit, 15 selected M08 screenshots, and the 2026-11-13 device walk were copied into `docs/audit/2026-11-13/` and `builds/2026-11-13/`.
-- Build caches, old research screenshots, duplicate ZIPs, and historical plans are excluded.
-- The WSL repository and original research folder remain untouched.
+- **Product:** offline Android document scanner, package `com.scanwhirl.app`, English + Hindi,
+  no internet permission.
+- **Releases:** 1.2.0 (versionCode `26111501`) on Play closed testing; 1.2.1 (`26111601`) in
+  preparation. Version codes are date based `YYMMDDnn` and live in `app/build.gradle.kts`.
+- **Branches:** `master` is the main branch, `integration` is the working branch that everything
+  is merged into. Lanes work on `lane/<name>` branches in their own worktrees and never merge.
+- **Referee:** the CI gate — `.github/workflows/gate.yml` runs the full unit suite with
+  `-PtestBuild`, lint on `integration`, and a minified release build with `-PciUnsignedRelease`.
+  A task is done only when the gate prints `GATE PASS`.
+- **Pro:** one-time Play Billing product `scanwhirl_pro` (`util/ProBilling.kt`, `util/ProGate.kt`).
+  Test builds unlock Pro so the paid UI can be reviewed.
 
-## What is current
+## Read order (only these, in this order)
 
-- Build: `1.1.1-test27`, versionCode 27.
-- Source baseline: `d69a304` plus the uncommitted UX pass.
-- Latest APK in this workspace: `builds/2026-11-13/ScanWhirl-M08-candidate-D.apk`.
-- Candidate D does **not** include the latest uncommitted UX pass.
-- The current tree compiles successfully in this Windows workspace. It has not been fully tested. The last recorded targeted run was 101 tests with 3 search-related failures.
-- The full suite was last reported green at `d69a304` with 797 tests.
-- The installed candidate D was walked on device. It invalidates the video’s stale-grid and universal-B/W findings and adds current failures: page deletion survives force-stop with no discard; PRO/Vault is a dead end; document actions and lock state are hidden.
-- A device-based competitor teardown of ten scanner apps was added at `docs/competitive/2026-11-13/`. It contains actual Home, camera, document, paywall, pricing and tool-flow screenshots.
+1. [`README.md`](README.md) — product, build variants, how to build and test.
+2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — package map and the key classes.
+3. [`CLAUDE.md`](CLAUDE.md) — working rules for an implementation session.
+4. The doc for the area you are touching:
+   - release / store: `docs/release/PLAY_LISTING.md`, `docs/release/DATA_SAFETY.md`,
+     `docs/release/RELEASE_NOTES_PLAY.txt`, `docs/release/LAUNCH_CHECKLIST.md` (a 2026-11-15
+     pre-launch snapshot — verify anything about console state).
+   - UI: `docs/design/2026-11-14/70_APP_DESIGN.md`, then the newest `docs/audit/<date>/` folder.
+   - PDF engine / tool behaviour: `docs/plans/pdf-manager/`.
+5. The smallest set of source files that owns the problem.
 
-## Read order
+Do **not** read `docs/history/` unless the owner asks for archaeology. Do **not** read
+`keystore/`, `keystore.properties` or `local.properties`.
 
-1. `docs/audit/2026-11-13/HANDOFF.md`
-2. `docs/audit/2026-11-13/DEVICE_FINDINGS.md` — current installed build
-3. `docs/product/pdf-manager-2026-11-13/SPEC.md` — new PDF Manager product spec
-4. `docs/product/pdf-manager-2026-11-13/TOOL_MATRIX.md` — Free/PRO and feasibility
-5. `docs/product/pdf-manager-2026-11-13/OPUS_BRIEF.md` — design brief
-6. `docs/competitive/2026-11-13/OPUS_BRIEF.md` — competitor synthesis
-7. `docs/competitive/2026-11-13/RANKING.md`
-8. `docs/competitive/2026-11-13/PRICING.md`
-9. `docs/competitive/2026-11-13/UI_PATTERNS.md`
-10. `docs/audit/2026-11-13/M08_HANDOFF.md`
-11. `docs/audit/2026-11-13/UX_AUDIT.md`
-12. `SCANWHIRL_CRITIQUE.md` — only the assigned findings
-13. The smallest set of source files that owns those findings
+## Where things live
 
-Do not read `docs/history/`; it is deliberately historical. Do not read signing material.
+| Need | Location |
+| --- | --- |
+| App code | `app/src/main/java/com/scanwhirl/app/` (packages explained in `docs/ARCHITECTURE.md`) |
+| Strings | `app/src/main/res/values/strings.xml` (English), `app/src/main/res/values-hi/strings.xml` (Hindi) |
+| Tests | `app/src/test/java/com/scanwhirl/app/` — same package names as the code |
+| Gate, phone and store tooling | `tools/` (`gate.ps1`, `wait-integration.ps1`, `lane-review.ps1`, `phone.ps1`, `store_*.py`, `promo/`) |
+| Release copy | `docs/release/` |
+| Audits (dated) | `docs/audit/<yyyy-mm-dd>/` — the newest date is the current one |
+| Design specs / mockups | `docs/design/2026-11-14/` |
+| Older material | `docs/history/` — frozen, provenance only |
+| Play icon + feature graphic | `store_assets/` |
 
-## First action
+## First actions for a new session
 
-Do not start by “fixing” the video’s B/W or stale-grid findings. Both failed to reproduce on candidate D. The current device-verified first five are:
-
-1. Page-edit transaction and Save changes discard/provenance.
-2. PRO/Vault dead end.
-3. Document actions and lock state in the reader/row.
-4. Resize keyboard, units and preset precedence.
-5. Privacy language around “Google processing” and “no servers.”
-
-The working tree contains post-candidate-D fixes for Vault visibility, palette, Tools, Home and search. Verify those on a fresh build before editing the old surfaces.
-
-Before proposing a new Home, document action model or Pro offer, read `docs/competitive/2026-11-13/OPUS_BRIEF.md`, `RANKING.md`, `PRICING.md` and `UI_PATTERNS.md`. Use the competitor patterns to brainstorm, but do not copy ads, watermarks, forced accounts or cloud-first storage.
-
-Produce a short discrepancy report first: still reproducible, partially fixed, or obsolete because the recording predates the current tree. Then implement only the confirmed top five.
+1. `git status` and `git log --oneline -10` in your worktree; read the last few commit subjects —
+   they are the real changelog.
+2. Read your lane brief (if one exists) or ask the lead for the one task you own.
+3. Run `powershell -File tools\gate.ps1 -Lane <lane>` on the untouched tree before editing, so you
+   know whether the baseline is green. Waiting in the queue is normal; do not cancel it.
