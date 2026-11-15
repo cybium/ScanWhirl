@@ -15,14 +15,12 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.scanwhirl.app.R
-import kotlin.math.min
 
 /**
  * v2 Protect PDF sheet — mockup `05_protect_pdf`, design `70` §4.2.
@@ -59,40 +57,37 @@ object ProtectSheet {
         val root = LayoutInflater.from(activity).inflate(R.layout.sheet_protect, null)
         dialog.setContentView(root)
         dialog.window?.setDimAmount(0.85f)
-        // The form is taller than a phone with the keyboard open: let the window shrink and the
-        // NestedScrollView scroll, so the focused field and the primary button stay reachable.
-        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // The app is edge-to-edge, so the window does not resize for the keyboard: the sheet
+        // consumes the IME inset itself as bottom padding on the scroll container. The sheet is
+        // always expanded (never collapsed), so the focused field and the primary button can be
+        // scrolled above the keyboard.
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         dialog.setOnShowListener {
             dialog.behavior.isFitToContents = false
+            dialog.behavior.skipCollapsed = true
             dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
-            val content = (root as? ViewGroup)?.getChildAt(0)
-            val screenHeight = activity.resources.displayMetrics.heightPixels
-            val margin = (24 * activity.resources.displayMetrics.density).toInt()
-            ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val scroll = root as? ViewGroup ?: return@setOnShowListener
+            val baseBottom = scroll.paddingBottom
+            ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
                 val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
                 val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
-                val hidden = maxOf(ime, bars)
-                val available = (screenHeight - hidden - margin).coerceAtLeast(margin * 4)
-                val desired = maxOf(content?.height ?: 0, view.height, margin * 4)
-                view.layoutParams = view.layoutParams?.apply {
-                    height = min(desired, available)
-                } ?: ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    min(desired, available)
+                view.setPadding(
+                    view.paddingLeft,
+                    view.paddingTop,
+                    view.paddingRight,
+                    baseBottom + maxOf(ime, bars)
                 )
                 view.requestLayout()
+                view.findFocus()?.let { focused ->
+                    focused.post {
+                        focused.requestRectangleOnScreen(
+                            android.graphics.Rect(0, 0, focused.width, focused.height), true
+                        )
+                    }
+                }
                 insets
             }
-            // A real IME dispatch arrives on its own; this also caps a tall sheet without one
-            // (posted so the content has been measured first).
-            root.post {
-                ViewCompat.dispatchApplyWindowInsets(
-                    root,
-                    WindowInsetsCompat.Builder()
-                        .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.NONE)
-                        .build()
-                )
-            }
+            root.post { ViewCompat.requestApplyInsets(scroll) }
         }
 
         root.findViewById<TextView>(R.id.protectTitle).setText(titleRes)
