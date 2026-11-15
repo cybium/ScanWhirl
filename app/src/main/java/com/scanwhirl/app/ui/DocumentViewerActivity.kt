@@ -45,7 +45,6 @@ import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
-import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.CancellationException
@@ -999,20 +998,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * test26 T5.2 (§4.5, D-A): the Free upgrade pitch — the Pro suite sheet.
-     * Every locked action funnels here from the More sheet's PRO pills.
-     */
-    private fun showProPanel() {
-        val dossier = layoutInflater.inflate(R.layout.dialog_pro_panel, null)
-        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
-            .setTitle(R.string.pro_suite_title)
-            .setContent(dossier)
-            .setPrimary(android.R.string.ok)
-            .build()
-            .show()
-    }
-
-    /**
      * Dock "Text" (§4.5): OCR through the shared [OcrFlow] — one home per
      * action; Free taps land on the Pro panel.
      */
@@ -1032,7 +1017,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val sheet = BottomSheetDialog(this)
         val view = layoutInflater.inflate(R.layout.sheet_more_document, null)
         sheet.setContentView(view)
-        val pro = ProGate.isPro(this)
         fun icon(rowId: Int, res: Int, tint: Int = R.color.cyan_primary) {
             val row = view.findViewById<android.widget.LinearLayout>(rowId) ?: return
             if (row.getChildAt(0) is android.widget.ImageView) return
@@ -1066,7 +1050,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // PRO pills: visible only to Free (D-A); Pro sees no badges. A locked
         // PDF's row is Unlock (Free, WP-22-5) and the vault row is never Pro
         // (remove is Free, new additions are unavailable), so neither is badged.
-        view.findViewById<android.widget.TextView>(R.id.pillLock).isVisible = !pro && !doc.isLocked
+        // Protect PDF is a free tool (`ToolRegistry` secure group), so its row is never badged
+        // and never opens the old "Pro is not available yet" panel.
+        view.findViewById<android.widget.TextView>(R.id.pillLock).isVisible = false
         view.findViewById<android.widget.TextView>(R.id.pillVault).isVisible = false
 
         // Organize
@@ -1087,14 +1073,15 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             sheet.dismiss()
             compressFlow.startWith(doc)
         }
-        // Unlock is free (WP-22-5); protect remains Pro-gated.
+        // Unlock and Protect are both free (WP-22-5; Protect PDF is a free registry tool).
         view.findViewById<View>(R.id.rowMoreLock).setOnClickListener {
             sheet.dismiss()
-            if (doc.isLocked) unlockCurrentPdf()
-            else if (pro) {
+            if (doc.isLocked) {
+                unlockCurrentPdf()
+            } else {
                 // v2 UI: 05_protect_pdf — the same Protect sheet as Tools → Protect PDF.
                 LockFlow(this, repo, this, { listOf(doc) }, { _ -> }).protectDocument(doc)
-            } else showProPanel()
+            }
         }
         // Vault row is NOT Pro-guarded (WP-22): removing an existing vaulted
         // doc is Free; adding is unavailable and says so (no Pro redirect).

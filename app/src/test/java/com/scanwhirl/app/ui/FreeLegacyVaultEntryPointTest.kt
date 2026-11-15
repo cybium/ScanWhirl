@@ -352,12 +352,23 @@ class FreeLegacyVaultEntryPointTest {
     }
 
     @Test
-    fun `free user still sees the Pro badge and panel for Protect on an unlocked doc`() {
+    fun `free user can protect an unlocked doc from More and sees no Pro badge`() {
         val id = seedDoc("Open doc")
-        withMoreSheet(id) { _, sheet ->
-            assertTrue(sheet.findViewById<View>(R.id.pillLock).isVisible)
+        withMoreSheet(id) { activity, sheet ->
+            assertFalse(
+                "Protect PDF is a free tool — no Pro badge",
+                sheet.findViewById<View>(R.id.pillLock).isVisible
+            )
             sheet.findViewById<View>(R.id.rowMoreLock).performClick()
-            assertTrue("Protect stays Pro until G5", proPanelShown())
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            assertFalse("no Pro-panel redirect for a free Protect", proPanelShown())
+            val protectSheet = ShadowDialog.getLatestDialog()
+            assertNotNull("Protect opens the shared Protect sheet", protectSheet)
+            assertNotNull(
+                "the shared Protect flow asks for a password",
+                protectSheet!!.findViewById<EditText>(R.id.protectPassword)
+            )
+            protectSheet.dismiss()
         }
     }
 

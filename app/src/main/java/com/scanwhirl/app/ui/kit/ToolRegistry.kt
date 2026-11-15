@@ -249,6 +249,13 @@ object ToolRegistry {
 
     fun byId(id: String): SwTool? = byId[id]
 
+    /**
+     * The Pro tools that are actually on sale: Pro and shipped. A Pro tool that is still
+     * [ToolStatus.SOON] is not counted (and must never be sold): "See all N Pro tools" and the
+     * hub's PRO tags then agree.
+     */
+    fun proCount(): Int = all.count { it.pro && it.status != ToolStatus.SOON }
+
     fun byGroup(group: ToolGroup): List<SwTool> = all.filter { it.group == group }
 
     /** Grouped catalogue in mockup order, including empty groups only if they ever appear. */
