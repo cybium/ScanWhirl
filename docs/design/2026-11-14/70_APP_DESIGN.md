@@ -162,3 +162,5 @@ The old lock mixed two jobs. They are now two features.
 - 2026-11-15: Approved libraries: `androidx.biometric:biometric:1.1.0` (Vault unlock), `play-services-code-scanner:16.1.0` (QR), `com.google.mlkit:text-recognition-devanagari:16.0.1` (bundled Hindi OCR).
 - 2026-11-14: Header logo = the launcher brand mark (two rings + page), not the three-arc whirl. Icons = official Material Symbols Rounded (Apache 2.0).
 - 2026-11-14: Long image part limit 16,000 px (E20).
+
+- 2026-11-15 (owner review): global-first. 'Hindi text' tile removed (language = Read text setting; + Chinese/Japanese/Korean bundled). 'Mask Aadhaar' tile removed -> Redact 'Find and hide numbers' (Aadhaar/VID/PAN/cards/phone/email/IBAN/SSN, Aadhaar preset chip). ID card paper A4/Letter by locale. Full Backup 2.0 (library + Vault, recovery code or backup password, share to Drive; no password ZIP: ZipCrypto weak, AES-ZIP not openable in Windows Explorer). Me tab: one About, no nested Settings. Pro perk: Gold theme + gold launcher icon (activity-alias), Cyan keeps Pro.
