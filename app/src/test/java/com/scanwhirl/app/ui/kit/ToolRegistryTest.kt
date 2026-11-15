@@ -19,6 +19,13 @@ import org.robolectric.annotation.GraphicsMode
 class ToolRegistryTest {
 
     @Test
+    fun `organize pages and insert pages are ready`() {
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("insert_pages")?.status)
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("mask_aadhaar")?.status)
+    }
+
+    @Test
     fun `catalogue holds all 44 tools, each id once`() {
         assertEquals(44, ToolRegistry.all.size)
         assertEquals(

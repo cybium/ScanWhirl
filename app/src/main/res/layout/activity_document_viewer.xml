@@ -205,9 +205,13 @@
                     android:layout_height="44dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="6dp"
+                    android:drawableStart="@drawable/ic_sym_close"
+                    android:drawablePadding="4dp"
+                    android:drawableTint="@color/text_hologram_hi"
                     android:gravity="center"
-                    android:text="@string/draft_discard"
-                    android:textSize="14sp" />
+                    android:singleLine="true"
+                    android:text="@string/draft_bar_discard"
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/btnDraftReplace"
@@ -215,18 +219,26 @@
                     android:layout_height="44dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="6dp"
+                    android:drawableStart="@drawable/ic_sym_content_copy"
+                    android:drawablePadding="4dp"
+                    android:drawableTint="@color/text_hologram_hi"
                     android:gravity="center"
-                    android:text="@string/draft_replace"
-                    android:textSize="14sp" />
+                    android:singleLine="true"
+                    android:text="@string/draft_bar_replace"
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/btnDraftSave"
                     android:layout_width="0dp"
                     android:layout_height="44dp"
-                    android:layout_weight="1.2"
+                    android:layout_weight="1"
+                    android:drawableStart="@drawable/ic_sym_download"
+                    android:drawablePadding="4dp"
+                    android:drawableTint="@color/sw_disc_ink"
                     android:gravity="center"
-                    android:text="@string/draft_save_new"
-                    android:textSize="14sp" />
+                    android:singleLine="true"
+                    android:text="@string/draft_bar_save"
+                    android:textSize="13sp" />
             </LinearLayout>
         </LinearLayout>
 

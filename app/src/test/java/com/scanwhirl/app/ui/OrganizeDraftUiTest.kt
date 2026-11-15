@@ -2,13 +2,17 @@ package com.scanwhirl.app.ui
 
 import android.app.Application
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.PdfInvariants
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.kit.SwTool
+import com.scanwhirl.app.ui.kit.ToolHost
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,6 +21,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -36,6 +41,12 @@ class OrganizeDraftUiTest {
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
+
+    /** A ToolHost for the registry launch, like the shell. */
+    class Host : AppCompatActivity(), ToolHost {
+        override fun open(tool: SwTool) = Unit
+        override fun comingSoon(tool: SwTool) = Unit
+    }
 
     private fun digest(id: String) =
         PdfInvariants.dirDigest(File(repo.docsDir, id))
@@ -258,7 +269,8 @@ class OrganizeDraftUiTest {
                     android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
                 )
                 grid.layout(0, 0, 1080, 1920)
-                grid.findViewHolderForAdapterPosition(0)!!.itemView.performLongClick()
+                assertTrue(grid.startDragAt(0))
+                grid.moveItem(0, 0)
                 activity.findViewById<android.view.View>(R.id.btnSelRotate)!!.performClick()
             }
             assertTrue("rotate writes to the draft", pollUntil { draftChanges(id) == 1 })
@@ -321,6 +333,98 @@ class OrganizeDraftUiTest {
     }
 
     @Test
+    fun `the organize pages tool opens the grid for the picked document`() {
+        DocFixtures.saved(repo, app, pages = 1)
+        val host = Robolectric.buildActivity(Host::class.java).setup().get()
+        val tool = requireNotNull(
+            com.scanwhirl.app.ui.kit.ToolRegistry.byId("organize_pages")
+        )
+        tool.launch(host, tool)
+        idle()
+        val sheet = requireNotNull(sheet()) { "the document chooser opens" }
+        val rows = requireNotNull(sheet.findViewById<LinearLayout>(R.id.swSheetItems))
+        rows.getChildAt(0).performClick()
+        idle()
+        val started = requireNotNull(shadowOf(host).nextStartedActivity)
+        assertEquals(DocumentViewerActivity::class.java.name, started.component?.className)
+    }
+
+    @Test
+    fun `a long press drag moves the tile and the draft`() {
+        val id = DocFixtures.saved(repo, app, pages = 3)
+        val baseFirst = repo.getDocument(id)!!.pageFiles.first().path
+        val d0 = digest(id)
+        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+            var cells = 0
+            assertTrue(pollUntil {
+                scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
+                cells == 3
+            })
+            var moved = false
+            scenario.onActivity { activity ->
+                val grid = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                grid.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
+                )
+                grid.layout(0, 0, 1080, 1920)
+                moved = grid.simulateDrag(0, 2)
+            }
+            assertTrue("the drag must start and report a drop", moved)
+            assertTrue(
+                "the draft order must change",
+                pollUntil {
+                    runBlocking { repo.draftPages(id) }.firstOrNull()?.path != baseFirst
+                }
+            )
+            assertEquals("the base changed during a drag", d0, digest(id))
+        }
+    }
+
+    @Test
+    fun `selection more has rotate duplicate insert and extract and duplicate works`() {
+        val id = DocFixtures.saved(repo, app, pages = 3)
+        val d0 = digest(id)
+        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+            var cells = 0
+            assertTrue(pollUntil {
+                scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
+                cells == 3
+            })
+            scenario.onActivity { activity ->
+                val grid = activity.findViewById<com.scanwhirl.app.ui.pagegrid.PageGridView>(R.id.pageList)
+                grid.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
+                )
+                grid.layout(0, 0, 1080, 1920)
+                grid.startDragAt(0)
+                activity.findViewById<android.view.View>(R.id.btnSelMore).performClick()
+            }
+            idle()
+            val sheet = requireNotNull(sheet())
+            val rows = requireNotNull(sheet.findViewById<LinearLayout>(R.id.draftMoreRows))
+            val labels = (0 until rows.childCount).map { i ->
+                (rows.getChildAt(i) as LinearLayout).getChildAt(1) as TextView
+            }.map { it.text.toString() }
+            assertTrue(labels.contains(app.getString(R.string.draft_rotate_left)))
+            assertTrue(labels.contains(app.getString(R.string.draft_rotate_right)))
+            assertTrue(labels.contains(app.getString(R.string.draft_duplicate)))
+            assertTrue(labels.contains(app.getString(R.string.draft_insert_here)))
+            assertTrue(labels.contains(app.getString(R.string.draft_extract_new)))
+            assertFalse("Move to is for 10+ pages", labels.contains(app.getString(R.string.draft_move_to)))
+
+            // Duplicate row (index 2) copies the selected page into the draft.
+            (rows.getChildAt(2)).performClick()
+            assertTrue(
+                "duplicate must add a draft page",
+                pollUntil { runBlocking { repo.draftPages(id) }.size == 4 }
+            )
+            assertEquals(d0, digest(id))
+        }
+    }
+
+    @Test
     fun `reopening after process death shows the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
@@ -347,7 +451,11 @@ class OrganizeDraftUiTest {
             })
             scenario.onActivity { activity ->
                 assertEquals(
-                    app.getString(R.string.draft_header, 3, 1),
+                    app.getString(
+                        R.string.draft_header,
+                        activity.resources.getQuantityString(R.plurals.draft_pages, 3, 3),
+                        activity.resources.getQuantityString(R.plurals.draft_changes, 1, 1)
+                    ),
                     activity.findViewById<TextView>(R.id.draftHeader).text.toString()
                 )
             }

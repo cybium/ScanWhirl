@@ -11,6 +11,9 @@ import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -333,6 +336,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         updateSelectionUi()
     }
 
+    private fun dp(value: Float): Int = (value * resources.displayMetrics.density).toInt()
+
     private fun updateSelectionUi() {
         val count = selected.size
         if (selectMode && count == 0) selectMode = false
@@ -348,8 +353,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** Kit paint for the selection bars (icons already come from the layout). */
     private fun styleSelectionBars() {
-        val density = resources.displayMetrics.density
-        fun dp(value: Float) = (value * density).toInt()
         binding.selectionActionBar.background = SwStyle.card(this, 18f)
         listOf(binding.btnSelRotate, binding.btnSelDelete, binding.btnSelExtract, binding.btnSelShare, binding.btnSelMore)
             .forEach { view ->
@@ -437,28 +440,105 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         ShareUtils.shareImages(this, files, doc.name)
     }
 
-    /** ⋯ for long documents: Add pages, Rotate left and Move to… (one page). */
+    /** ⋯ for selection: Rotate left/right, Duplicate, Move to… (10+), Insert pages here, Extract. */
     private fun showSelectionMore() {
-        val labels = ArrayList<CharSequence>()
-        labels += getString(R.string.add_pages)
-        labels += getString(R.string.draft_rotate_left)
-        val canMove = visiblePages.size >= 10 && selected.size == 1
-        if (canMove) labels += getString(R.string.draft_move_to)
-        var sheetRef: com.scanwhirl.app.ui.kit.SwSheet? = null
-        val sheet = SwSheet.builder(this)
-            .setTitle(R.string.more)
-            .setOptions(labels) { index, _ ->
-                sheetRef?.dismiss()
-                when (index) {
-                    0 -> startInsertPages()
-                    1 -> rotateSelected(clockwise = false)
-                    else -> promptMoveTo()
-                }
+        data class Action(val icon: Int, val label: Int, val run: () -> Unit)
+
+        val actions = mutableListOf(
+            Action(R.drawable.ic_sw_rotate, R.string.draft_rotate_left) { rotateSelected(false) },
+            Action(R.drawable.ic_sym_redo, R.string.draft_rotate_right) { rotateSelected(true) },
+            Action(R.drawable.ic_sym_content_copy, R.string.draft_duplicate) {
+                duplicateSelectedPages()
+            },
+            Action(R.drawable.ic_sym_note_add, R.string.draft_insert_here) {
+                startInsertPagesHere()
+            },
+            Action(R.drawable.ic_sym_content_cut, R.string.draft_extract_new) {
+                extractSelected()
             }
+        )
+        if (visiblePages.size >= 10 && selected.size == 1) {
+            actions.add(
+                3,
+                Action(R.drawable.ic_sw_move_page, R.string.draft_move_to) { promptMoveTo() }
+            )
+        }
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            id = R.id.draftMoreRows
+        }
+        lateinit var sheet: com.scanwhirl.app.ui.kit.SwSheet
+        actions.forEach { action ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12f), 0, dp(12f), 0)
+                minimumHeight = dp(52f)
+                isClickable = true
+                isFocusable = true
+                background = SwStyle.rounded(
+                    this@DocumentViewerActivity,
+                    SwStyle.color(this@DocumentViewerActivity, R.color.glass_surface_raised),
+                    radiusDp = 14f
+                )
+            }
+            row.addView(
+                ImageView(this).apply {
+                    setImageResource(action.icon)
+                    imageTintList = android.content.res.ColorStateList.valueOf(
+                        SwStyle.color(this@DocumentViewerActivity, R.color.cyan_primary)
+                    )
+                },
+                LinearLayout.LayoutParams(dp(24f), dp(24f)).apply { marginEnd = dp(12f) }
+            )
+            row.addView(
+                SwStyle.text(
+                    this,
+                    15f,
+                    SwStyle.color(this@DocumentViewerActivity, R.color.text_hologram_hi)
+                ).apply { setText(action.label) },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            )
+            row.setOnClickListener {
+                sheet.dismiss()
+                action.run()
+            }
+            list.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = dp(6f) }
+            )
+        }
+        sheet = SwSheet.builder(this)
+            .setTitle(R.string.more)
+            .setContent(list)
             .setSecondary(R.string.draft_keep_editing)
             .build()
-        sheetRef = sheet
         sheet.show()
+    }
+
+    /** Duplicate the ticked draft pages right after the last one. */
+    private fun duplicateSelectedPages() {
+        val id = docId ?: return
+        val files = pages.filter { it.path in selected }
+        if (files.isEmpty()) return
+        val insertAt = (pages.indexOfLast { it.path in selected } + 1).coerceAtLeast(files.size)
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repo.draftInsertPages(id, files, insertAt)
+                }
+                reloadDocument()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     /** Move exactly one selected page to a typed page number (long documents only). */
@@ -509,12 +589,29 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
     }
 
+    /** Where a "Insert pages here" action puts the picked pages (null = ask). */
+    private var insertHere: Int? = null
+
     // ------------------------------------------------------------------
     // Insert pages (Free, Organize): into the draft, never the base
     // ------------------------------------------------------------------
 
     /** "Add pages from": camera, photos or another library document. */
     internal fun startInsertPages() {
+        insertHere = null
+        showInsertSources()
+    }
+
+    /** Insert at the position after the current selection (the ⋯ action). */
+    private fun startInsertPagesHere() {
+        val maxIndex = visiblePages.indices
+            .filter { visiblePages[it].path in selected }
+            .maxOrNull()
+        insertHere = (maxIndex ?: -1) + 1
+        showInsertSources()
+    }
+
+    private fun showInsertSources() {
         val options = listOf(
             getString(R.string.insert_from_camera),
             getString(R.string.insert_from_photos),
@@ -587,6 +684,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private fun askInsertPosition(files: List<File>) {
         if (files.isEmpty()) {
             toast(R.string.insert_none, Toast.LENGTH_SHORT)
+            return
+        }
+        val here = insertHere
+        if (here != null) {
+            insertHere = null
+            insertFiles(files, here)
             return
         }
         val options = listOf(
@@ -1156,7 +1259,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private fun updateDraftBar() {
         val changes = draft?.changes ?: 0
         binding.draftBar.isVisible = !selectMode && changes > 0
-        binding.draftHeader.text = getString(R.string.draft_header, pages.size, changes)
+        val pagesText = resources.getQuantityString(R.plurals.draft_pages, pages.size, pages.size)
+        val changesText = resources.getQuantityString(R.plurals.draft_changes, changes, changes)
+        binding.draftHeader.text = getString(R.string.draft_header, pagesText, changesText)
     }
 
     /** Kit paint for the bar: glass card, cyan Save, quiet Discard/Replace. */
@@ -1437,6 +1542,15 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         /** Insert pages tool: pick the target document first, then the source. */
         fun openInsertPicker(activity: android.app.Activity) {
+            openPicker(activity, insert = true)
+        }
+
+        /** Organize pages tool: pick a document, then open its grid. */
+        fun openOrganizePicker(activity: android.app.Activity) {
+            openPicker(activity, insert = false)
+        }
+
+        private fun openPicker(activity: android.app.Activity, insert: Boolean) {
             if (activity !is androidx.appcompat.app.AppCompatActivity) return
             val docs = runCatching { ScanRepository(activity).listDocuments() }
                 .getOrDefault(emptyList())
@@ -1445,8 +1559,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 Toast.makeText(activity, R.string.empty_title, Toast.LENGTH_SHORT).show()
                 return
             }
-            FlowUtil.pickScan(activity, R.string.insert_pages_title, docs) { doc ->
-                activity.startActivity(insertIntent(activity, doc.id))
+            FlowUtil.pickScan(activity, R.string.tool_pick_document, docs) { doc ->
+                activity.startActivity(
+                    if (insert) insertIntent(activity, doc.id) else intent(activity, doc.id)
+                )
             }
         }
     }

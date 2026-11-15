@@ -67,7 +67,11 @@
     <string name="stamp_stamp_full">You can keep up to 10 stamps. Delete one to save another.</string>
     <string name="tool_mask_aadhaar">Mask Aadhaar</string>
     <string name="mask_aadhaar_hint">Check the boxes over the first 8 digits, then save</string>
-    <string name="mask_aadhaar_name">%1$s - Masked</string>
+    <string name="mask_options_title">Mask Aadhaar</string>
+    <string name="mask_opt_number">Mask Aadhaar number</string>
+    <string name="mask_opt_qr">Also hide the QR code</string>
+    <string name="mask_continue">Continue</string>
+    <string name="mask_label">Masked</string>
     <string name="mask_aadhaar_none">No Aadhaar number found here. Add redaction boxes if needed.</string>
     <string name="mask_aadhaar_saved">Saved a masked copy: %1$s</string>
     <string name="stamp_hint_draw">Draw with one finger</string>
