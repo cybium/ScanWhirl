@@ -47,7 +47,8 @@ class FakeMediaStore : ContentProvider() {
         fun bytes(): ByteArray = if (file.exists()) file.readBytes() else ByteArray(0)
     }
 
-    val rows = LinkedHashMap<Long, Row>()
+    val rows = java.util.Collections.synchronizedMap(LinkedHashMap<Long, Row>())
+    private val lock = Any()
     private var nextId = 1L
     private val workDir: File =
         File.createTempFile("fake_media", null).let { it.delete(); it.apply { mkdirs() } }
@@ -74,16 +75,20 @@ class FakeMediaStore : ContentProvider() {
         row.values.getAsString(MediaStore.MediaColumns.RELATIVE_PATH)?.trimEnd('/')
 
     /** Published rows in Documents/ScanWhirl (what a person can see in Files). */
-    fun scanwhirlPdfs(): List<Row> = rows.values.filter {
-        relPathOf(it) == "${Environment.DIRECTORY_DOCUMENTS}/ScanWhirl" && !it.pending
+    fun scanwhirlPdfs(): List<Row> = synchronized(lock) {
+        rows.values.filter {
+            relPathOf(it) == "${Environment.DIRECTORY_DOCUMENTS}/ScanWhirl" && !it.pending
+        }
     }
 
     /** Hidden in-flight / abandoned rows anywhere. */
-    fun pendingRows(): List<Row> = rows.values.filter { it.pending }
+    fun pendingRows(): List<Row> = synchronized(lock) { rows.values.filter { it.pending } }
 
-    fun totalWrites(): Int = rows.values.sumOf { it.writes }
+    fun totalWrites(): Int = synchronized(lock) { rows.values.sumOf { it.writes } }
 
-    fun rowNamed(name: String): Row = rows.values.single { it.name == name && !it.pending }
+    fun rowNamed(name: String): Row = synchronized(lock) {
+        rows.values.single { it.name == name && !it.pending }
+    }
 
     /** Seeds a row directly (e.g. another app's file, or a pending orphan from a crash). */
     fun addRow(
@@ -92,7 +97,7 @@ class FakeMediaStore : ContentProvider() {
         owner: String?,
         pending: Boolean = false,
         relPath: String = "${Environment.DIRECTORY_DOCUMENTS}/ScanWhirl"
-    ): Row {
+    ): Row = synchronized(lock) {
         val id = nextId++
         val v = ContentValues().apply {
             put(MediaStore.MediaColumns._ID, id)
@@ -104,7 +109,7 @@ class FakeMediaStore : ContentProvider() {
         val row = Row(id, v, File(workDir, "row_$id.bin"), owner = owner)
         row.file.writeBytes(bytes)
         rows[id] = row
-        return row
+        row
     }
 
     override fun onCreate(): Boolean = true
@@ -128,7 +133,7 @@ class FakeMediaStore : ContentProvider() {
         selection: String?,
         selectionArgs: Array<out String>?,
         sortOrder: String?
-    ): Cursor {
+    ): Cursor = synchronized(lock) {
         val proj: Array<String> = projection ?: arrayOf(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.DISPLAY_NAME,
@@ -159,11 +164,11 @@ class FakeMediaStore : ContentProvider() {
         for (row in matches) {
             cursor.addRow(proj.map { col -> columnValue(row, col) })
         }
-        return cursor
+        cursor
     }
 
-    override fun insert(uri: Uri, values: ContentValues?): Uri? {
-        if (failInsert) return null
+    override fun insert(uri: Uri, values: ContentValues?): Uri? = synchronized(lock) {
+        if (failInsert) return@synchronized null
         val v = ContentValues(values ?: ContentValues())
         val id = nextId++
         v.put(MediaStore.MediaColumns._ID, id)
@@ -192,7 +197,7 @@ class FakeMediaStore : ContentProvider() {
             id, v, File(workDir, "row_$id.bin"),
             owner = v.getAsString(MediaStore.MediaColumns.OWNER_PACKAGE_NAME)
         )
-        return ContentUris.withAppendedId(uri, id)
+        ContentUris.withAppendedId(uri, id)
     }
 
     override fun update(
@@ -200,21 +205,21 @@ class FakeMediaStore : ContentProvider() {
         values: ContentValues?,
         selection: String?,
         selectionArgs: Array<out String>?
-    ): Int {
+    ): Int = synchronized(lock) {
         if (failUpdate) throw IllegalStateException("update refused (failpoint)")
-        if (updateReturnsZero) return 0
-        val row = rows[ContentUris.parseId(uri)] ?: return 0
+        if (updateReturnsZero) return@synchronized 0
+        val row = rows[ContentUris.parseId(uri)] ?: return@synchronized 0
         values?.let { row.values.putAll(it) }
-        return 1
+        1
     }
 
     override fun delete(
         uri: Uri,
         selection: String?,
         selectionArgs: Array<out String>?
-    ): Int {
+    ): Int = synchronized(lock) {
         if (failDelete) throw IllegalStateException("delete refused (failpoint)")
-        val row = rows[ContentUris.parseId(uri)] ?: return 0
+        val row = rows[ContentUris.parseId(uri)] ?: return@synchronized 0
         // Real MediaStore refuses to delete rows owned by another package.
         val own = context?.packageName
         if (row.owner != null && own != null && row.owner != own) {
@@ -222,10 +227,10 @@ class FakeMediaStore : ContentProvider() {
         }
         rows.remove(row.id)
         row.file.delete()
-        return 1
+        1
     }
 
-    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
+    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor = synchronized(lock) {
         val row = rows[ContentUris.parseId(uri)]
             ?: throw FileNotFoundException("no row for $uri")
         if (mode.contains("w")) {
@@ -234,12 +239,12 @@ class FakeMediaStore : ContentProvider() {
             // "w" / "wt": truncate, then hand out a writable descriptor.
             row.file.writeBytes(ByteArray(0))
             row.writes++
-            return ParcelFileDescriptor.open(
+            return@synchronized ParcelFileDescriptor.open(
                 row.file,
                 ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_CREATE
             )
         }
         if (!row.file.exists()) row.file.writeBytes(ByteArray(0))
-        return ParcelFileDescriptor.open(row.file, ParcelFileDescriptor.MODE_READ_ONLY)
+        ParcelFileDescriptor.open(row.file, ParcelFileDescriptor.MODE_READ_ONLY)
     }
 }
