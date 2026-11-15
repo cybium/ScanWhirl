@@ -273,4 +273,5 @@
     <string name="pro_active_sub">Every Pro tool is unlocked. Thank you!</string>
     <string name="settings_test_free">Testing: act as a Free user</string>
     <string name="settings_test_free_summary">Test builds only. Shows the Pro gate.</string>
+    <string name="settings_privacy_section">Privacy &amp; security</string>
 </resources>

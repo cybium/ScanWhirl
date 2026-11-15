@@ -210,6 +210,18 @@ class Phase5ScreensTest {
                 // The moved sections are hidden (they live in Me now) …
                 assertFalse("About lives in Me", activity.findViewById<View>(R.id.rowAbout).isShown)
                 assertFalse("Trash lives in Me", activity.findViewById<View>(R.id.rowTrash).isShown)
+                // … but rows added at runtime into the old About card must stay visible
+                // (lead phone check 11-15: they vanished with the hidden About card).
+                assertTrue(
+                    "Block screenshots switch is shown",
+                    activity.findViewById<View>(R.id.rowBlockScreenshots).isShown
+                )
+                if (com.scanwhirl.app.BuildConfig.TEST_BUILD) {
+                    assertTrue(
+                        "test-build Free/Pro switch is shown",
+                        activity.findViewById<View>(R.id.rowTestFree).isShown
+                    )
+                }
             }
         }
     }
@@ -339,7 +351,8 @@ class Phase5ScreensTest {
                 // Four cyan section headers label the groups.
                 val headerTexts = listOf(
                     R.string.settings_appearance, R.string.settings_language_section,
-                    R.string.settings_viewing, R.string.settings_about_section
+                    // The old About card is now "Privacy & security" (About itself lives in Me).
+                    R.string.settings_viewing, R.string.settings_privacy_section
                 ).map { activity.getString(it) }
                 val headers = allViews(activity.window.decorView)
                     .filterIsInstance<TextView>()

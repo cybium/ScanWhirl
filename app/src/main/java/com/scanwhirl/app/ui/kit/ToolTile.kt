@@ -72,6 +72,8 @@ class ToolTile(context: Context) : FrameLayout(context) {
             // Break at spaces/hyphens only; a single long word shrinks instead
             // of being split mid-word ("To PowerP|oint").
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
+            //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
             val density = resources.displayMetrics.density
             val scaled = resources.displayMetrics.scaledDensity
@@ -178,6 +180,8 @@ class ToolTile(context: Context) : FrameLayout(context) {
         labelView.minLines = 2
         labelView.setLineSpacing(0f, 1f)
         labelView.hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+        // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
+        //noinspection WrongConstant
         labelView.breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
         val density = resources.displayMetrics.density
         val scaled = resources.displayMetrics.scaledDensity

@@ -100,7 +100,10 @@ class SettingsActivity : BaseActivity() {
         binding.rowViewer.setOnClickListener { chooseViewer() }
         // Me-hub cleanup: About lives once, in the Me tab. Settings owns look,
         // text, privacy and storage only — no nested About/storage duplicates.
-        hideSection(binding.rowAbout)
+        // About and the privacy policy live in Me > About now. Their card stays as the
+        // "Privacy & security" section: the screenshot switch (and, in test builds, the
+        // Free/Pro switch) are added into it below. Hiding the whole card hid those rows.
+        keepCardAsPrivacySection()
         hideSection(binding.rowTrash)
         binding.rowAbout.setOnClickListener { showAbout() }
         binding.rowTrash.setOnClickListener { startActivity(TrashActivity.intent(this)) }
@@ -235,7 +238,6 @@ class SettingsActivity : BaseActivity() {
             }
         }
         row.addView(toggle)
-        val index = parent.indexOfChild(binding.rowPrivacy)
         val divider = android.view.View(this).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, (1 * d).toInt()
@@ -246,13 +248,7 @@ class SettingsActivity : BaseActivity() {
                 )
             )
         }
-        if (index >= 0) {
-            parent.addView(divider, index + 1)
-            parent.addView(row, index + 2)
-        } else {
-            parent.addView(divider)
-            parent.addView(row)
-        }
+        addToPrivacySection(row, divider)
     }
 
     private lateinit var subAccent: android.widget.TextView
@@ -433,10 +429,40 @@ class SettingsActivity : BaseActivity() {
             }
         }
         row.addView(toggle)
-        val privacyRow = findViewById<android.view.View>(R.id.rowBlockScreenshots)
-        val index = if (privacyRow != null) parent.indexOfChild(privacyRow) + 1
-        else parent.indexOfChild(binding.rowPrivacy) + 1
-        parent.addView(row, index.coerceAtMost(parent.childCount))
+        val divider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, (1 * d).toInt()
+            ).apply { marginStart = (16 * d).toInt() }
+            setBackgroundColor(
+                com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_border_hair)
+            )
+        }
+        addToPrivacySection(row, divider)
+    }
+
+    /** Hides the About + Privacy policy rows (and the divider between them), keeps their
+     *  card, and relabels its section "Privacy & security". */
+    private fun keepCardAsPrivacySection() {
+        val rows = binding.rowAbout.parent as? android.view.ViewGroup ?: return
+        for (i in 0 until rows.childCount) rows.getChildAt(i).visibility = android.view.View.GONE
+        var node: android.view.ViewParent? = rows
+        while (node != null && node !is com.google.android.material.card.MaterialCardView) node = node.parent
+        val card = node as? android.view.View ?: return
+        val section = card.parent as? android.view.ViewGroup ?: return
+        val index = section.indexOfChild(card)
+        (section.getChildAt(index - 1) as? android.widget.TextView)?.setText(R.string.settings_privacy_section)
+    }
+
+    /** Adds [row] at the end of the Privacy & security card, with a divider only when a
+     *  visible row is already above it. */
+    private fun addToPrivacySection(row: android.view.View, divider: android.view.View) {
+        val parent = binding.rowPrivacy.parent as? android.view.ViewGroup ?: return
+        val hasVisibleRow = (0 until parent.childCount).any {
+            val child = parent.getChildAt(it)
+            child.visibility == android.view.View.VISIBLE && child is android.widget.LinearLayout
+        }
+        if (hasVisibleRow) parent.addView(divider)
+        parent.addView(row)
     }
 
     /**

@@ -131,6 +131,8 @@ class DocCard(context: Context) : LinearLayout(context) {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
+            //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
             val density = resources.displayMetrics.density
             val scaled = resources.displayMetrics.scaledDensity
