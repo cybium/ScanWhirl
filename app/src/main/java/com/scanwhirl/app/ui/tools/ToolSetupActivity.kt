@@ -855,9 +855,6 @@ class ToolSetupActivity : BaseActivity() {
             selected.clear()
             selected += docId
         }
-        if (nameText.isBlank() || docs.any { it.name == nameText }) {
-            nameText = docs.firstOrNull { it.id == docId }?.name.orEmpty()
-        }
         render()
     }
 

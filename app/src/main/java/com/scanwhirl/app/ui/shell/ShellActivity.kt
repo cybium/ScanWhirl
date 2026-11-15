@@ -44,14 +44,12 @@ import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.launchTool
 import com.scanwhirl.app.util.PdfImport
-import com.scanwhirl.app.ui.tools.PdfImportSheets
+import com.scanwhirl.app.ui.tools.DevicePdfGate
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.resume
 
 /**
  * v2 UI: 01_home_A / 03_tools_hub / 06_pro — the v2 shell.
@@ -574,7 +572,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     // ---- Import -----------------------------------------------------------
 
-    private fun importPdf(uri: android.net.Uri) {
+    internal fun importPdf(uri: android.net.Uri) {
         // Lead merge: L4's planned import (page count, range, progress sheet) + L3's protected-PDF path.
         var job: kotlinx.coroutines.Job? = null
         var name: String? = null
@@ -589,14 +587,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     uri = uri,
                     name = name,
                     onPlan = { plan ->
-                        val decision = withContext(Dispatchers.Main) {
-                            suspendCancellableCoroutine<ScanRepository.ImportDecision> { cont ->
-                                PdfImportSheets.ask(this@ShellActivity, plan) { cont.resume(it) }.show()
-                            }
-                        }
+                        val decision = DevicePdfGate.decide(this@ShellActivity, plan)
                         if (decision != ScanRepository.ImportDecision.Cancel) {
                             progress = withContext(Dispatchers.Main) {
-                                PdfImportSheets.progress(this@ShellActivity) { job?.cancel() }
+                                DevicePdfGate.progress(this@ShellActivity) { job?.cancel() }
                                     .also { it.show() }
                             }
                         }
@@ -605,7 +599,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     onPage = { done, total ->
                         runOnUiThread {
                             progress?.setMessage(
-                                PdfImportSheets.progressText(this@ShellActivity, done, total)
+                                DevicePdfGate.progressText(this@ShellActivity, done, total)
                             )
                         }
                     }

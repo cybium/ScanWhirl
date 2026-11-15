@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
+import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.databinding.ActivityMergePdfBinding
 import com.scanwhirl.app.databinding.ItemMergePdfBinding
 import kotlinx.coroutines.Dispatchers
@@ -152,12 +153,35 @@ class MergePdfActivity : BaseActivity() {
     }
 
     private fun doMerge(name: String?) {
-        val progress = showProgress()
-        lifecycleScope.launch {
+        var job: kotlinx.coroutines.Job? = null
+        var sheet: com.scanwhirl.app.ui.kit.SwSheet? = null
+        job = lifecycleScope.launch {
             try {
                 val uris = picked.map { it.uri }
-                val doc = withContext(Dispatchers.IO) { repo.mergePdfUris(uris, name) }
-                progress.dismiss()
+                val doc = repo.mergePdfUrisPlanned(
+                    uris = uris,
+                    suggestedName = name,
+                    onPlan = { plan ->
+                        val decision = com.scanwhirl.app.ui.tools.DevicePdfGate
+                            .decide(this@MergePdfActivity, plan)
+                        if (decision != ScanRepository.ImportDecision.Cancel) {
+                            sheet = com.scanwhirl.app.ui.tools.DevicePdfGate
+                                .progress(this@MergePdfActivity) { job?.cancel() }
+                                .also { it.show() }
+                        }
+                        decision
+                    },
+                    onPage = { done, total ->
+                        runOnUiThread {
+                            sheet?.setMessage(
+                                com.scanwhirl.app.ui.tools.DevicePdfGate
+                                    .progressText(this@MergePdfActivity, done, total)
+                            )
+                        }
+                    }
+                )
+                sheet?.dismiss()
+                if (doc == null) return@launch
                 Toast.makeText(
                     this@MergePdfActivity,
                     R.string.merge_done,
@@ -165,11 +189,25 @@ class MergePdfActivity : BaseActivity() {
                 ).show()
                 startActivity(PdfViewerActivity.intent(this@MergePdfActivity, doc.id, doc.name))
                 finish()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                sheet?.dismiss()
+                throw e
             } catch (e: SecurityException) {
-                progress.dismiss()
+                sheet?.dismiss()
                 Toast.makeText(this@MergePdfActivity, R.string.pdf_protected, Toast.LENGTH_LONG).show()
+            } catch (e: com.scanwhirl.app.util.PdfImport.ImportException) {
+                sheet?.dismiss()
+                if (e.reason == com.scanwhirl.app.util.PdfImport.Reason.PASSWORD) {
+                    Toast.makeText(this@MergePdfActivity, R.string.pdf_protected, Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(
+                        this@MergePdfActivity,
+                        getString(R.string.merge_pdf_failed, e.message),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             } catch (e: Exception) {
-                progress.dismiss()
+                sheet?.dismiss()
                 Toast.makeText(
                     this@MergePdfActivity,
                     getString(R.string.merge_pdf_failed, e.message),

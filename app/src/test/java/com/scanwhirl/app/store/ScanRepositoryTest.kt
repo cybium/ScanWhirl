@@ -163,12 +163,12 @@ class ScanRepositoryTest {
     }
 
     @Test
-    fun `merge default name is timestamped`() = runBlocking {
+    fun `merge default name follows the first source`() = runBlocking {
         val repo = ScanRepository(context)
         val a = saveDoc(repo, "A")
         val b = saveDoc(repo, "B")
         val merged = repo.mergeDocuments(listOf(a.id, b.id), null)
-        assertTrue(merged.name.startsWith("Merged scan "))
+        assertTrue(merged.name == "A - Merged")
     }
 
     @Test

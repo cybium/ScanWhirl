@@ -58,14 +58,16 @@ class ToolResultActivity : BaseActivity() {
     private var mime = "application/pdf"
     private var undone = false
     private lateinit var summary: TextView
+    private lateinit var nameView: TextView
     private lateinit var errorView: TextView
     private lateinit var preview: ImageView
     private lateinit var saveAs: ActivityResultLauncher<String>
+    private var toolId = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
-        val toolId = intent.getStringExtra(EXTRA_TOOL_ID).orEmpty()
+        toolId = intent.getStringExtra(EXTRA_TOOL_ID).orEmpty()
         toolName = ToolRegistry.byId(toolId)?.let { getString(it.title) }.orEmpty()
         docIds = intent.getStringArrayListExtra(EXTRA_DOC_IDS)?.toMutableList() ?: mutableListOf()
         files = intent.getStringArrayListExtra(EXTRA_FILES)?.map { File(it) }?.toMutableList() ?: mutableListOf()
@@ -124,6 +126,15 @@ class ToolResultActivity : BaseActivity() {
         column.addView(preview, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, 200f)
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
+
+        nameView = SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+            id = R.id.toolResultName
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        column.addView(nameView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) })
 
         summary = SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
             id = R.id.toolResultSummary
@@ -201,31 +212,44 @@ class ToolResultActivity : BaseActivity() {
     // ---- content ----------------------------------------------------------
 
     private fun render() {
+        val showSizes = toolId == "compress" || toolId == "resize"
         val docs = docIds.mapNotNull { runCatching { repo.getDocument(it) }.getOrNull() }
         if (docs.isNotEmpty()) {
             val pages = docs.sumOf { it.pageCount }
             val bytes = docs.sumOf { if (it.pdfFile.exists()) it.pdfFile.length() else 0L }
-            summary.text = if (docs.size == 1) {
-                resources.getQuantityString(
-                    R.plurals.tools_result_summary_one_doc, pages, pages, StatusLine.formatBytes(bytes)
-                )
+            nameView.text = if (docs.size == 1) {
+                docs.first().name
             } else {
-                resources.getQuantityString(
-                    R.plurals.tools_result_summary_docs, pages, docs.size, pages,
-                    StatusLine.formatBytes(bytes)
+                getString(R.string.tools_result_name_more, docs.first().name, docs.size - 1)
+            }
+            var line = resources.getQuantityString(R.plurals.tools_result_pages, pages, pages)
+            if (docs.size > 1) {
+                line += " · " + resources.getQuantityString(
+                    R.plurals.tools_result_documents, docs.size, docs.size
                 )
             }
+            if (showSizes) {
+                line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
+            }
+            summary.text = line
             previewPreview(docs.first().pageFiles.firstOrNull())
         } else if (files.isNotEmpty()) {
             val bytes = files.sumOf { it.length() }
-            summary.text = resources.getQuantityString(
-                R.plurals.tools_result_summary_files, files.size, files.size,
-                StatusLine.formatBytes(bytes)
-            )
+            nameView.text = if (files.size == 1) {
+                files.first().name
+            } else {
+                getString(R.string.tools_result_name_more, files.first().name, files.size - 1)
+            }
+            var line = resources.getQuantityString(R.plurals.tools_result_files_count, files.size, files.size)
+            if (showSizes) {
+                line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
+            }
+            summary.text = line
             val image = files.firstOrNull { it.name.endsWith(".jpg") || it.name.endsWith(".png") }
             previewPreview(image)
             if (image == null) preview.setImageResource(iconFor(files.first()))
         } else {
+            nameView.text = ""
             summary.text = getString(R.string.tools_result_nothing)
         }
     }
