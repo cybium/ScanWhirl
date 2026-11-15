@@ -46,6 +46,7 @@ run locally (recognised by the test NAME). `-Local` is DISABLED for the full sui
 - Evals run LOCALLY with `-Tests`; in the cloud they must return early and pass. Never commit the private files.
 
 ## Rules
+- Never change app behaviour just to make a test pass (e.g. toggling a state so an audit sees an 'effect'). Fix the app if it is wrong, or fix the test's detection if it is blind.
 - PHONE: NEVER enable airplane mode or toggle Wi-Fi / mobile data / hotspot on the test phone: it is the PC's internet (hotspot).
 - Commit every green piece (at least every ~45 min of work). The model provider can drop a session; the lead
   restarts it, but uncommitted hours are a risk.
