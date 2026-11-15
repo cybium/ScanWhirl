@@ -89,7 +89,7 @@ class VaultScreen(
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 16f) }
         )
-        statusView = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_dim), bold = true).apply {
+        statusView = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             id = R.id.swVaultStatus
             gravity = Gravity.CENTER
             text = context.getString(R.string.vault_tab_status_loading)

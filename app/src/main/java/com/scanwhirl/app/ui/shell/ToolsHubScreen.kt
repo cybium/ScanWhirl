@@ -193,7 +193,7 @@ class ToolsHubScreen(
                 card.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             }
             val tile = ToolTile(context)
-            tile.id = R.id.swToolsGrid
+            tile.id = R.id.swToolTile
             tile.host = host
             tile.bind(tool)
             tile.layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)

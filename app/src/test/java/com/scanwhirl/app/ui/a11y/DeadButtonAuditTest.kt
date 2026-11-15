@@ -78,6 +78,7 @@ class DeadButtonAuditTest {
     private data class Snapshot(
         val dialogs: String,
         val toast: String?,
+        val toastCount: Int,
         val state: Pair<Int, Int>,
         val finishing: Boolean
     )
@@ -299,11 +300,15 @@ class DeadButtonAuditTest {
         val startedApp = if (startedActivity == null) shadowOf(app).nextStartedActivity else null
         val result = shadowOf(activity).nextStartedActivityForResult
         val toast = ShadowToast.getTextOfLatestToast()
+        val toastCount = ShadowToast.shownToastCount()
         val dialog = ShadowDialog.getLatestDialog()?.takeIf { it.isShowing }
         val state = stateHash(root) to contentHash(activity)
         val dialogTag = dialog?.let { dialogTag(it) }.orEmpty()
         val dialogChanged = dialogTag != before.dialogs
-        val toastChanged = !toast.isNullOrBlank() && toast != before.toast
+        // A toast is an effect even when the previous control showed the same words
+        // (the scan tile reports the same Robolectric ML Kit message every time).
+        val toastChanged = toastCount != before.toastCount ||
+            (!toast.isNullOrBlank() && toast != before.toast)
         val moved = startedActivity != null || startedApp != null || result != null
         val closed = activity.isFinishing || activity.isDestroyed
         return state != before.state || dialogChanged || toastChanged || moved || closed
@@ -346,6 +351,7 @@ class DeadButtonAuditTest {
     private fun before(activity: Activity, root: View): Snapshot = Snapshot(
         dialogs = ShadowDialog.getLatestDialog()?.takeIf { it.isShowing }?.let { dialogTag(it) }.orEmpty(),
         toast = ShadowToast.getTextOfLatestToast(),
+        toastCount = ShadowToast.shownToastCount(),
         state = stateHash(root) to contentHash(activity),
         finishing = activity.isFinishing
     )
