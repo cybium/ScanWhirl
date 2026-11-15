@@ -162,7 +162,39 @@ verification (M-1).
   SHA-256 verified and upgraded, malformed values rejected, only 4-digit PINs accepted.
 - `ui/vault/VaultActivityTest` — the Vault window carries `FLAG_SECURE`.
 
-## 9. Gate
+## 9. Gate script credential handling (reviewed as asked)
+
+`tools/gate.ps1` (cloud path):
+
+- The GitHub token is produced by `git credential fill` with the credential **request on stdin**
+  (`protocol=https\nhost=github.com`), so no token appears in any process command line.
+- It is kept only in `$env:GH_TOKEN` of that PowerShell process (which `gh` reads) and is removed
+  with `Remove-Item Env:GH_TOKEN` on the normal result paths; it is never written to a file and
+  never printed (`gh`/`git` output is filtered and the verdict line carries no token).
+- Residual risks, all low: (a) environment variables are readable by the same user while the
+  process runs (the window is a few seconds, and the process exits right after); (b) two early
+  `exit 2` paths after the token is set rely on process exit to drop it, which it does; (c) the
+  snapshot `git push -f` itself uses the stored git credential via the helper, so the PAT never
+  enters the script either; (d) the **snapshot includes untracked files that `.gitignore` does not
+  match**, so no secret may live in an unignored file in a worktree (`local.properties`, the
+  keystore and `60_CORE_ENGINE_GUIDE.md`/`LANE_BLOCKED.md` are excluded/ignored).
+- The snapshot uses a temporary `GIT_INDEX_FILE` and a `commit-tree`, so the lane branch and index
+  are untouched, and the pushed branch is only `ci/<lane>`.
+
+## 10. Cloud gate OOM (found while running the gate, lead/infra)
+
+The cloud gate currently fails for every lane with `tests=0`: the Robolectric test JVM dies with
+`java.lang.OutOfMemoryError` ("SDK 35 Main Thread", default dispatcher workers, test worker) about
+4-5 minutes into the run. Root cause: `app/build.gradle.kts:80-81` hardcodes
+`maxHeapSize = "1g"` / `forkEvery = 120L`, so the workflow's `-PtestHeap=4g -PtestForkEvery=200`
+is ignored — the suite (1300+ Robolectric tests with native graphics since the L1/L4/L5 merges)
+no longer fits in 1 GB. Evidence: runs 43670860060 (L2), 43670858082 (L5), 43669806617
+(integration), all `GATE FAIL tests=0`. Fix for the lead (build file is yours):
+`it.maxHeapSize = (findProperty("testHeap") as String?) ?: "1g"` and
+`it.forkEvery = (findProperty("testForkEvery") as String?)?.toLong() ?: 120L` (or simply raise the
+defaults). My changes needed a local full-suite run to be verified (below).
+
+## 11. Gate
 
 ```
 tests: total=1341 failures=0 skipped=0
