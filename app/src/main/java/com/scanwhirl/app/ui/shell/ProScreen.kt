@@ -475,6 +475,14 @@ class ProScreen(
     internal fun priceWrapForTest(): FrameLayout = priceWrap
     internal fun buyWrapForTest(): FrameLayout = buyWrap
 
+    /**
+     * Billing: show Play's localized price when the store answers. Only the price text changes;
+     * the rest of the layout is untouched.
+     */
+    fun setPrice(text: String) {
+        findViewById<android.widget.TextView>(R.id.swProPrice)?.text = text
+    }
+
     /** Pinned price + Unlock row (never scrolls out of view). */
     private fun stickyBar(): View {
         val bar = LinearLayout(context).apply {
