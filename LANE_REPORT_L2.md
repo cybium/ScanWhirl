@@ -161,7 +161,8 @@ Full cloud suite on the merged tree (`integration` merged, `app/build.gradle.kts
 
 ```
 cloud: run 43673186804 finished in 5 min
-tests: total=1377 failures=1 skipped=0
+tests: total=1447 failures=1 skipped=0
+GATE FAIL L2 tests=1447 failures=1 (only TextFitTest, L1's known layout issue)
 GATE FAIL L2 tests=1377 failures=1 lint=[skipped]
    FAIL TextFitTest > ocr editor text fits (w320dp, scale 1.3, swChipLabel "To Word · PRO")
 ```
