@@ -59,7 +59,9 @@ object BookSplit {
     data class Analysis(
         val rotation: Int,
         val gutter: Gutter,
-        val textVertical: Boolean
+        val textVertical: Boolean,
+        /** Width/height after the text-direction rotation. */
+        val aspect: Float = 1f
     )
 
     data class Split(val gutter: Gutter, val left: Bitmap, val right: Bitmap) {
@@ -179,7 +181,7 @@ object BookSplit {
                 textBlocks = blocks)
         }
         if (upright !== bitmap) upright.recycle()
-        return Analysis(rotation, gutter, textVertical = false)
+        return Analysis(rotation, gutter, textVertical = false, aspect = aspect)
     }
 
     /** The old entry point used by simple callers/tests: no text-rotation, no shape override. */
