@@ -43,7 +43,7 @@ class StampStore(context: android.content.Context) {
         if (!manifest.isFile) return null
         return try {
             val lines = manifest.readLines()
-            if (lines.firstOrNull() != HEADER || lines.size < 4) return null
+            if (lines.firstOrNull() != HEADER || lines.size < 3) return null
             val createdAt = lines[1].toLongOrNull() ?: return null
             val name = String(
                 android.util.Base64.decode(lines[2], android.util.Base64.NO_WRAP),

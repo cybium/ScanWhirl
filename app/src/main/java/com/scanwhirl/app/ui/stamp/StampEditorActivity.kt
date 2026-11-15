@@ -334,9 +334,52 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun addMark(mark: PageStamp.Mark) {
-        editor.add(mark)
+        editor.add(cascade(mark, editor.marks().size))
         disarm()
         refresh()
+    }
+
+    /** Each new mark is offset 6% down-right from the previous one; wraps after five. */
+    private fun cascade(mark: PageStamp.Mark, index: Int): PageStamp.Mark {
+        if (index <= 0) return mark
+        val step = 0.06f * (index % 5)
+        fun shiftedBox(box: PageStamp.Box): PageStamp.Box {
+            val width = (box.right - box.left).coerceAtLeast(0.02f)
+            val height = (box.bottom - box.top).coerceAtLeast(0.02f)
+            val left = (box.left + step).coerceIn(0f, (1f - width).coerceAtLeast(0f))
+            val top = (box.top + step).coerceIn(0f, (1f - height).coerceAtLeast(0f))
+            return PageStamp.Box(left, top, left + width, top + height)
+        }
+        return when (mark) {
+            is PageStamp.Mark.Text -> mark.copy(box = shiftedBox(mark.box))
+            is PageStamp.Mark.Signature -> mark.copy(box = shiftedBox(mark.box))
+            is PageStamp.Mark.Picture -> mark.copy(box = shiftedBox(mark.box))
+            is PageStamp.Mark.Badge -> mark.copy(box = shiftedBox(mark.box))
+            is PageStamp.Mark.Redact -> mark.copy(box = shiftedBox(mark.box))
+            is PageStamp.Mark.Highlight -> mark.copy(box = shiftedBox(mark.box))
+            is PageStamp.Mark.Freehand -> mark.copy(
+                strokes = mark.strokes.map { stroke ->
+                    PageStamp.Stroke(stroke.points.map {
+                        PageStamp.Point(
+                            (it.x + step).coerceIn(0f, 1f),
+                            (it.y + step).coerceIn(0f, 1f)
+                        )
+                    })
+                }
+            )
+            is PageStamp.Mark.Watermark, is PageStamp.Mark.PageNumber -> mark
+        }
+    }
+
+    /** Test seams: the photo-ink save+place path without a gallery dialog. */
+    internal fun placeImportedSignatureForTest(bitmap: Bitmap) {
+        inkKind = InkKind.SIGNATURE
+        saveInk(bitmap)
+    }
+
+    internal fun placeImportedStampForTest(bitmap: Bitmap) {
+        inkKind = InkKind.STAMP
+        saveInk(bitmap)
     }
 
     private fun addMarkToAll(mark: PageStamp.Mark) {
@@ -393,25 +436,26 @@ class StampEditorActivity : BaseActivity() {
      * uses the true redaction burn and names the copy with [OutputNames].
      */
     private fun askMaskOptions() {
-        val checked = booleanArrayOf(true, false)
+        val checked = booleanArrayOf(true, true, false)
         SwSheet.builder(this)
             .setTitle(R.string.mask_options_title)
             .setOptions(
                 listOf(
                     getString(R.string.mask_opt_number),
+                    getString(R.string.mask_opt_vid),
                     getString(R.string.mask_opt_qr)
                 ),
                 multiChecked = checked
             ) { index, isChecked ->
                 checked[index] = isChecked
             }
-            .setPrimary(R.string.mask_continue) { maskAadhaar(checked[1]) }
+            .setPrimary(R.string.mask_continue) { maskAadhaar(checked[1], checked[2]) }
             .setSecondary(android.R.string.cancel)
             .build()
             .show()
     }
 
-    private fun maskAadhaar(hideQr: Boolean) {
+    private fun maskAadhaar(hideVid: Boolean, hideQr: Boolean) {
         val id = document.id
         lifecycleScope.launch {
             val found = withContext(Dispatchers.IO) {
@@ -432,7 +476,8 @@ class StampEditorActivity : BaseActivity() {
                                 )
                             },
                             words.page.width,
-                            words.page.height
+                            words.page.height,
+                            maskVid = hideVid
                         )
                     } else {
                         // Host/old-OCR fallback: the saved line geometry.
@@ -441,7 +486,7 @@ class StampEditorActivity : BaseActivity() {
                                 com.scanwhirl.app.util.OcrEngine.recognizeFile(page).page
                             }.getOrNull()
                         if (geo != null) {
-                            boxes += com.scanwhirl.app.util.AadhaarMask.find(geo)
+                            boxes += com.scanwhirl.app.util.AadhaarMask.find(geo, maskVid = hideVid)
                         }
                     }
                     if (hideQr) {
@@ -528,7 +573,11 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun save() {
-        if (saving || editor.isEmpty()) return
+        if (saving) return
+        if (editor.isEmpty()) {
+            note(getString(R.string.stamp_no_marks))
+            return
+        }
         // I9/E10: redaction destroys pixels and text in the copy — warn before anything is written.
         if (editor.hasRedaction()) {
             SwSheet.builder(this)

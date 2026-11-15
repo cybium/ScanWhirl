@@ -76,10 +76,18 @@ class PageEditorDraftTest {
                 scenario.onActivity { open = it.findViewById<android.view.View>(R.id.cropOverlay)!!.visibility == android.view.View.VISIBLE }
                 open
             })
+            // The page bitmap is decoded off the main thread; Apply is a no-op until it exists.
+            var ready = false
+            assertTrue("crop image decodes", pollUntil {
+                scenario.onActivity {
+                    ready = it.findViewById<CropView>(R.id.cropView).getCropRect().width() > 0f
+                }
+                ready
+            })
             scenario.onActivity { cropCorners(it) }
             assertTrue(
                 "the draft must exist",
-                pollUntil { runBlocking { repo.draftOf(id) } != null }
+                pollUntil(30_000) { runBlocking { repo.draftOf(id) } != null }
             )
             assertEquals("the saved document changed before Save", d0, digest(id))
             val cropped = runBlocking { repo.draftPages(id) }.first()

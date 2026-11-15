@@ -69,6 +69,7 @@
     <string name="mask_aadhaar_hint">Check the boxes over the first 8 digits, then save</string>
     <string name="mask_options_title">Mask Aadhaar</string>
     <string name="mask_opt_number">Mask Aadhaar number</string>
+    <string name="mask_opt_vid">Also hide the VID</string>
     <string name="mask_opt_qr">Also hide the QR code</string>
     <string name="mask_continue">Continue</string>
     <string name="mask_label">Masked</string>
