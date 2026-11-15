@@ -42,6 +42,7 @@ object UnlockSheet {
         val root = LayoutInflater.from(activity).inflate(R.layout.sheet_unlock, null)
         dialog.setContentView(root)
         dialog.window?.setDimAmount(0.85f)
+        com.scanwhirl.app.util.SecureView.apply(dialog.window)
 
         root.findViewById<TextView>(R.id.unlockTitle).text =
             activity.getString(R.string.unlock_sheet_title, documentName)
@@ -177,6 +178,7 @@ object UnlockSheet {
         val root = LayoutInflater.from(activity).inflate(R.layout.sheet_protect, null)
         dialog.setContentView(root)
         dialog.window?.setDimAmount(0.85f)
+        com.scanwhirl.app.util.SecureView.apply(dialog.window)
         // Keep only the shell: title + message + two buttons.
         val parent = (root as? android.view.ViewGroup)?.getChildAt(0) as? android.widget.LinearLayout
             ?: return

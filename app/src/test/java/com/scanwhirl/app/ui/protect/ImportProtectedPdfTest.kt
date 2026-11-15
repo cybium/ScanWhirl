@@ -104,6 +104,8 @@ class ImportProtectedPdfTest {
 
             assertTrue("the Unlock sheet opens", pollUntil { unlockSheet() != null })
             val sheet = unlockSheet()!!
+            assertTrue("the password window is FLAG_SECURE",
+                com.scanwhirl.app.util.SecureView.isSecure(sheet.window))
             assertTrue(
                 "the title names the file",
                 sheet.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()

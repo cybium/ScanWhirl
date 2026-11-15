@@ -631,6 +631,7 @@ class LockFlow(
             if (!cooldown.canTry()) tickPause()
 
             sheet.show()
+            sheet.secure()
             field.editText.requestFocus()
         }
     }

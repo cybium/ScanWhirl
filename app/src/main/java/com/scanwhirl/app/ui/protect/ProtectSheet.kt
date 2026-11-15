@@ -57,6 +57,7 @@ object ProtectSheet {
         val root = LayoutInflater.from(activity).inflate(R.layout.sheet_protect, null)
         dialog.setContentView(root)
         dialog.window?.setDimAmount(0.85f)
+        com.scanwhirl.app.util.SecureView.apply(dialog.window)
         // The app is edge-to-edge, so the window does not resize for the keyboard: the sheet
         // consumes the IME inset itself as bottom padding on the scroll container. The sheet is
         // always expanded (never collapsed), so the focused field and the primary button can be
