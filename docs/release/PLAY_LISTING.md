@@ -104,7 +104,13 @@ page or Google Sites) and paste the link — required.
    rating questionnaire (productivity tool, no user content shared).
 
 ## 5. The release
-- AAB: `builds\<date>\ScanWhirl-<version>.aab` (signed with your upload key).
+- AAB: `builds\2026-11-15\release-1.2.0\ScanWhirl-1.2.0.aab` (signed with your upload key).
 - Track: **Closed testing** (personal accounts need 12+ testers opted in for 14 days before production).
 - Release notes: see `RELEASE_NOTES_PLAY.txt` next to the AAB.
 - Data safety form: answers in `docs/release/DATA_SAFETY.md` (no data collected, no data shared).
+
+## 6. AI-generated asset declaration (Play Console, per image)
+- Screenshots: do NOT tick (real app screens captured on the phone; only a headline and background frame added).
+- App icon and feature graphic: TICK "AI-generated" (the brand mark was designed by an AI coding assistant as vector
+  shapes; the declaration is cheap, an undeclared asset can get an update rejected).
+- Store text was drafted by AI and reviewed by you; if the Console offers a checkbox for text, tick it.
