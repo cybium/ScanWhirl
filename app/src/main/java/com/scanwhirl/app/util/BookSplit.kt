@@ -5,6 +5,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Matrix
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -48,9 +50,14 @@ object BookSplit {
         val singlePage: Boolean = false,
         /** Kept for source compatibility; the upright-spread model is always vertical. */
         val horizontal: Boolean = false,
-        val textBlocks: Int = 0
+        val textBlocks: Int = 0,
+        /** A tilted spine (SpineLine): x at the top/bottom edge as fractions of the width. */
+        val topRatio: Float? = null,
+        val bottomRatio: Float? = null
     ) {
         val lowConfidence: Boolean get() = !found || confidence < LOW_CONFIDENCE
+        val slanted: Boolean get() =
+            topRatio != null && bottomRatio != null && abs(topRatio - bottomRatio) > 0.002f
 
         companion object {
             val MIDDLE = Gutter(0.5f, false)
@@ -314,6 +321,16 @@ object BookSplit {
             )
             else -> Gutter(0.5f, found = false, confidence = 0f, singlePage = false,
                 textBlocks = blocks)
+        }.let { g ->
+            // Lead 11-15: follow a tilted spine through the gap between the text blocks.
+            if (g.singlePage || (!confidentValley && !spreadByShape)) return@let g
+            val line = runCatching { SpineLine.find(upright, if (g.found) g.ratio else 0.5f) }.getOrNull()
+                ?: return@let g
+            g.copy(
+                ratio = line.middleRatio, found = true,
+                confidence = max(g.confidence, 0.6f),
+                topRatio = line.topRatio, bottomRatio = line.bottomRatio
+            )
         }
         if (upright !== bitmap) upright.recycle()
         return Analysis(rotation, gutter, textVertical = false, aspect = aspect)
@@ -328,6 +345,7 @@ object BookSplit {
         val width = bitmap.width
         val height = bitmap.height
         require(width > 1 && height > 1) { "The spread has no usable pixels" }
+        if (gutter.slanted) return splitAlong(bitmap, gutter)
         val ratio = gutter.ratio.coerceIn(0.05f, 0.95f)
         val cut = (ratio * width).roundToInt().coerceIn(1, width - 1)
         val left = Bitmap.createBitmap(bitmap, 0, 0, cut, height)
@@ -336,6 +354,60 @@ object BookSplit {
             gutter.copy(ratio = cut.toFloat() / width, horizontal = false),
             left, right
         )
+    }
+
+    /**
+     * Cuts along a tilted spine. Each page is its side of the line, cropped to its bounding box;
+     * the wedge beyond the line is filled with that page's own paper colour (sampled next to the
+     * line), so no strip of the other page survives.
+     */
+    private fun splitAlong(bitmap: Bitmap, gutter: Gutter): Split {
+        val width = bitmap.width
+        val height = bitmap.height
+        val xTop = (gutter.topRatio!! * width).coerceIn(1f, width - 1f)
+        val xBottom = (gutter.bottomRatio!! * width).coerceIn(1f, width - 1f)
+        val leftW = ceil(max(xTop, xBottom)).toInt().coerceIn(1, width - 1)
+        val rightX = floor(min(xTop, xBottom)).toInt().coerceIn(1, width - 1)
+
+        val left = Bitmap.createBitmap(bitmap, 0, 0, leftW, height).copy(Bitmap.Config.ARGB_8888, true)
+        val right = Bitmap.createBitmap(bitmap, rightX, 0, width - rightX, height)
+            .copy(Bitmap.Config.ARGB_8888, true)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.FILL
+        }
+        // Left page: fill everything right of the line.
+        paint.color = paperColour(bitmap, xTop, xBottom, side = -1)
+        android.graphics.Canvas(left).drawPath(android.graphics.Path().apply {
+            moveTo(xTop, 0f); lineTo(leftW.toFloat() + 1f, 0f)
+            lineTo(leftW.toFloat() + 1f, height.toFloat()); lineTo(xBottom, height.toFloat()); close()
+        }, paint)
+        // Right page: fill everything left of the line.
+        paint.color = paperColour(bitmap, xTop, xBottom, side = +1)
+        android.graphics.Canvas(right).drawPath(android.graphics.Path().apply {
+            moveTo(-1f, 0f); lineTo(xTop - rightX, 0f)
+            lineTo(xBottom - rightX, height.toFloat()); lineTo(-1f, height.toFloat()); close()
+        }, paint)
+        return Split(gutter.copy(ratio = (xTop + xBottom) / 2f / width, horizontal = false), left, right)
+    }
+
+    /** Median colour of a thin strip 2-4% of the width away from the line on [side] (-1 left, +1 right). */
+    private fun paperColour(bitmap: Bitmap, xTop: Float, xBottom: Float, side: Int): Int {
+        val reds = ArrayList<Int>(); val greens = ArrayList<Int>(); val blues = ArrayList<Int>()
+        val step = max(1, bitmap.height / 60)
+        var y = (bitmap.height * 0.05f).toInt()
+        while (y < bitmap.height * 0.95f) {
+            val x0 = xTop + (xBottom - xTop) * y / bitmap.height
+            for (k in 2..4) {
+                val x = (x0 + side * bitmap.width * k / 100f).roundToInt().coerceIn(0, bitmap.width - 1)
+                val c = bitmap.getPixel(x, y)
+                reds += (c shr 16) and 0xFF; greens += (c shr 8) and 0xFF; blues += c and 0xFF
+            }
+            y += step
+        }
+        if (reds.isEmpty()) return android.graphics.Color.WHITE
+        // A bright percentile, not the median: text near the line must not darken the fill.
+        fun pick(v: ArrayList<Int>) = v.sorted()[(v.size * 0.8f).toInt().coerceAtMost(v.size - 1)]
+        return android.graphics.Color.rgb(pick(reds), pick(greens), pick(blues))
     }
 
     /** Compatibility overload for callers that already hold a gutter. */

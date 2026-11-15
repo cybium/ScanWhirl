@@ -61,9 +61,9 @@ object BookSplitEval {
         "IMG_20261115_005907_312" to Expectation(0.30f, 0.70f, false, "sideways textbook"),
         "IMG_20261115_005913_843" to Expectation(0.30f, 0.70f, false, "sideways textbook"),
         "IMG_20261115_005924_273" to Expectation(0.30f, 0.70f, false, "sideways textbook"),
-        "IMG_20261115_010022_505" to Expectation(0.20f, 0.85f, false, "notebook"),
-        "IMG_20261115_010034_806" to Expectation(0.20f, 0.85f, false, "notebook"),
-        "IMG_20261115_010054_411" to Expectation(0.20f, 0.85f, false, "notebook")
+        "IMG_20261115_010022_505" to Expectation(null, null, true, "single notebook page"),
+        "IMG_20261115_010034_806" to Expectation(null, null, true, "single notebook page"),
+        "IMG_20261115_010054_411" to Expectation(null, null, true, "single notebook page")
     )
 
     fun run(folder: Folder): List<Result> {
@@ -110,12 +110,14 @@ object BookSplitEval {
                     !cropped.gutter.singlePage && lo != null && hi != null &&
                         cropped.gutter.ratio in lo..hi
                 }
+                val cg = cropped.gutter
+                val slant = if (cg.slanted) String.format(java.util.Locale.ROOT, " slant %.3f->%.3f", cg.topRatio, cg.bottomRatio) else " vertical"
                 val line = String.format(
                     java.util.Locale.ROOT,
-                    "%-24s RAW r=%.3f c=%.2f a=%.2f rot=%d | CROP r=%.3f c=%.2f a=%.2f rot=%d single=%s %s (%s)",
+                    "%-24s RAW r=%.3f c=%.2f a=%.2f rot=%d | CROP r=%.3f c=%.2f a=%.2f rot=%d single=%s%s %s (%s)",
                     name, raw.gutter.ratio, raw.gutter.confidence, raw.aspect, raw.rotation,
-                    cropped.gutter.ratio, cropped.gutter.confidence, cropped.aspect,
-                    cropped.rotation, cropped.gutter.singlePage.toString(),
+                    cg.ratio, cg.confidence, cropped.aspect,
+                    cropped.rotation, cg.singlePage.toString(), slant,
                     if (pass) "PASS" else "FAIL", expectation.note
                 )
                 lines += line
@@ -172,13 +174,18 @@ object BookSplitEval {
             val annotated = photo.copy(Bitmap.Config.ARGB_8888, true)
             if (photo !== annotated) photo.recycle()
 
+            val g = analysis.gutter
+            val topR = g.topRatio ?: g.ratio
+            val bottomR = g.bottomRatio ?: g.ratio
+            val inkRows = SpineLine.inkRowsFraction(SpineLine.grid(upright), topR, bottomR)
             Canvas(annotated).apply {
-                val x = (analysis.gutter.ratio * photoWidth).coerceIn(0f, photoWidth - 1f)
+                // A thin line so the reviewer can see whether it touches letters.
                 drawLine(
-                    x, 0f, x, photoHeight.toFloat(),
+                    (topR * photoWidth).coerceIn(0f, photoWidth - 1f), 0f,
+                    (bottomR * photoWidth).coerceIn(0f, photoWidth - 1f), photoHeight.toFloat(),
                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = Color.RED
-                        strokeWidth = max(3f, photoWidth / 200f)
+                        strokeWidth = 2f
                     }
                 )
                 val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -189,8 +196,8 @@ object BookSplitEval {
                 drawText(
                     String.format(
                         java.util.Locale.ROOT,
-                        "line %.3f  conf %.2f  aspect %.2f  text %s  rot %d  %s",
-                        analysis.gutter.ratio, analysis.gutter.confidence, analysis.aspect,
+                        "line %.3f->%.3f  ink %.1f%%  conf %.2f  aspect %.2f  text %s  rot %d  %s",
+                        topR, bottomR, inkRows * 100f, analysis.gutter.confidence, analysis.aspect,
                         if (analysis.textVertical) "V" else "H",
                         analysis.rotation,
                         if (analysis.gutter.singlePage) "ONE PAGE" else "SPREAD"
