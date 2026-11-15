@@ -175,10 +175,10 @@ def end_frame(height, icon, t):
     image.paste(mark, ((1080 - iz) // 2, iy), mask)
     text(d, (540, 347 if compact else 603), 'ScanWhirl', 64 if compact else 78, WHITE, True)
     text(d, (540, 486 if compact else 796), 'Get early access', 78 if compact else 88, CYAN, True)
-    text(d, (540, 590 if compact else 916), 'Free · Be one of the first testers', 35, MUTED)
+    text(d, (540, 590 if compact else 916), 'Free · Be one of the first', 35, MUTED)
     by = 665 if compact else 1030
     d.rounded_rectangle((315, by, 765, by + 100), 50, fill=CYAN)
-    text(d, (540, by + 25), 'Link in bio', 40, '#091014', True)
+    text(d, (540, by + 25), 'DM us to join', 40, '#091014', True)
     d.text((540, 922 if compact else 1340), 'Offline · No ads · English & हिंदी',
            font=ImageFont.truetype(DEVA, 34), fill=MUTED, anchor='mt')
     return image
@@ -288,7 +288,7 @@ def write_notes(root, videos):
 | 8.5–14 | Hide private info / before you share | |
 | 14–18 | 40+ PDF tools | |
 | 18–21 | Pro once. / No subscription. | ₹100 one-time |
-| 21–26 | ScanWhirl / Get early access | Free · Be one of the first testers / Link in bio / Offline · No ads · English & हिंदी |
+| 21–26 | ScanWhirl / Get early access | Free · Be one of the first / DM us to join / Offline · No ads · English & हिंदी |
 
 ## Footage and edit
 
@@ -303,9 +303,9 @@ Revision uses only existing clips; the phone was not touched. Hard cuts skip all
 - Scan sequence shows the settled fictional invoice page rather than a live camera capture.
 - The end card renders हिंदी with the installed Windows Nirmala font and Pillow's shaping support. The OCR headline remains “English & Hindi”.
 - App navigation and peripheral content are deliberately cropped to prioritize readable proof.
-- No early-access URL was supplied. Before posting, point the profile bio at the Google Group/closed-testing instructions. For Telegram, put that same link in the message caption; “Link in bio” is retained for the shared video asset.
+- The invitation is “DM us to join”; testers are added by email after contacting the team.
 - The five-second end card is deliberate: viewers have time to understand the beta invitation.
-- More time: record a staged live paper scan, add a licensed music bed with gentle action sounds, and export a Telegram-specific end card using the confirmed early-access URL.
+- More time: record a staged live paper scan and add a licensed music bed with gentle action sounds.
 
 ## Phone restoration
 
