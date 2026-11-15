@@ -379,7 +379,6 @@ class SettingsActivity : BaseActivity() {
         recreate()
     }
 
-<<<<<<< HEAD
     /** Test build only: flip QA into Free so every Pro gate is visible. */
     private fun addTestFreeRow() {
         val parent = binding.rowPrivacy.parent as? android.view.ViewGroup ?: return
