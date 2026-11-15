@@ -59,9 +59,21 @@ class PerfHarnessTest {
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo by lazy { ScanRepository(app) }
 
-    private val big: Boolean by lazy {
-        ownerRoots().any { File(it, "EVAL_ON").isFile }
+    /**
+     * Big-configuration switch. The owner folder is shared by every lane, so the flag must be
+     * per lane (L2_EVAL_ON for the OCR/PDF-A lane): a lane that deletes a shared EVAL_ON while
+     * another lane's eval runs turns that eval into a silent small run. Any `*_EVAL_ON` file
+     * enables the big sizes, and each eval prints `EVAL RAN: ...` so a skip is visible.
+     */
+    private val evalFlag: String? by lazy {
+        ownerRoots().asSequence()
+            .flatMap { root -> root.listFiles().orEmpty().asSequence() }
+            .filter { it.isFile && (it.name == "EVAL_ON" || it.name.endsWith("_EVAL_ON")) }
+            .map { it.name }
+            .firstOrNull()
     }
+
+    private val big: Boolean get() = evalFlag != null
 
     private val docCount get() = if (big) 300 else 40
     private val heavyPages get() = if (big) 500 else 80
@@ -384,8 +396,10 @@ class PerfHarnessTest {
         val ms = time("ocr index $indexPages pages", warmups = 0, runs = 1) {
             runBlocking { indexer.indexNow(dir.name) }
         }
+        val stored = repo.ocrStore.readText(dir.name).size
+        println("EVAL RAN: ocr index rebuild pages=$indexPages flag=${evalFlag ?: "none"} big=$big -> ${ms}ms, stored=$stored")
         assertTrue("index too slow: ${ms}ms", ms < 240_000)
-        assertEquals(indexPages, repo.ocrStore.readText(dir.name).size)
+        assertEquals(indexPages, stored)
     }
 
     // ------------------------------------------------------------------
