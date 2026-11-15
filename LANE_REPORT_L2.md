@@ -60,6 +60,29 @@ coexist). The 41 MB of `libmlkit_google_ocr_pipeline.so` (4 ABIs) dominate the u
 Play AAB splits it per ABI. Device checks outstanding: English + Hindi OCR, document scanner, code
 scanner, Vault unlock, Protect PDF.
 
+## Launch readiness - `docs/release/`, `PRIVACY_POLICY.md`
+
+- **AAB**: the `release` job now builds `:app:bundleRelease` too and reports the real per-device
+  download size with `bundletool` (`get-size total --dimensions=ABI`). AAB 23.4 MiB; a phone
+  downloads 7.3 to 8.4 MiB (arm64 8.1 to 8.2 MiB); the universal smoke-test APK stays 44.9 MiB.
+- **`docs/release/DATA_SAFETY.md`**: the Play form answers derived from the code and the built
+  artifact (no collection, no sharing, no account/ads/analytics, encryption of Vault and protected
+  PDFs, deletion and the 30-day Trash, backup off), plus a sourced analysis of the Google Play
+  services components (document scanner, code scanner, ML Kit model delivery): what Google's ML Kit
+  terms and data disclosure say, how to word it honestly, and the conservative fallback answers if
+  Play review asks.
+- **`PRIVACY_POLICY.md`**: rewritten to match the shipped app (no internet permission, what stays on
+  the phone, Vault and PDF encryption, blocked screenshots, clipboard clearing, Play services
+  components, exported copies surviving uninstall, 30-day Trash), plain English, dated changelog.
+- **`docs/release/LAUNCH_CHECKLIST.md`**: everything left before a Play release with owners, the
+  current policy citations (target API 36 from 31 Aug 2026, 12 testers x 14 days for new personal
+  accounts, Play App Signing, content rating, pre-launch report) and the compliance facts already
+  met (targetSdk 36, 64-bit, AAB, size).
+- **Trash now enforces the 30-day window the UI promises**: `recoverTrash()` expires older entries
+  on startup (never an interrupted-Replace entry), `TRASH_RETENTION_MS`, strings in English and
+  Hindi, two new `TrashTest` cases. Without it the policy and the form would have claimed a
+  retention the code did not have.
+
 ## Save as PDF/A (PDF/A-2b, ISO 19005-2 level B) - previous pass
 
 - `util/PdfA.kt` (XMP with pdfaid part 2 / conformance B, matching Info dates/title/producer,
