@@ -19,7 +19,7 @@ CAPTIONS = {
     "04_text_ocr": ("Read text from any page", "English and Hindi, right on your phone"),
     "05_pro": ("Pro: pay once, keep it forever", "No subscription. Family sharing included."),
     "06_private": ("Hide private info", "Cover phone numbers, emails and ID numbers before you share"),
-    "07_sign": ("Sign and fill PDFs", "Your signature, text, stamps and highlights"),
+    "06a_private_choices": ("Choose what to hide", "Phone numbers, emails, ID numbers and card numbers"),
     "08_vault": ("Vault for sensitive files", "Locked behind your fingerprint"),
     "09_backup": ("One encrypted backup", "Every scan, the Vault and your settings in one file"),
 }

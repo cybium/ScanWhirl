@@ -89,7 +89,21 @@ page or Google Sites) and paste the link — required.
 - Feature graphic 1024x500 PNG: `C:\Users\Cybium\Desktop\.sw-qa\store\feature_1024x500.png`
 - Phone screenshots (2–8, 1080x1920, 9:16): `C:\Users\Cybium\Desktop\.sw-qa\store\screenshots\`
 
-## 4. The release
+## 4. Click by click (about 20 minutes)
+1. **Upload**: Play Console > ScanWhirl > Test and release > Testing > **Closed testing** > (create a track
+   if none, e.g. "Testers") > Create new release > upload `ScanWhirl-1.2.0.aab` > paste the release notes
+   from `RELEASE_NOTES_PLAY.txt` (both languages) > Next > Save > **Send for review**.
+   Testers: add a Google Group or email list with at least 12 people, share the opt-in link, they must opt in
+   and keep the app installed for 14 days.
+2. **Store listing**: Grow users > Store presence > Main store listing > paste name, short and full description
+   (section 2), upload icon, feature graphic and screenshots (section 3) > Save.
+3. **Pro product**: after step 1 is processed, Monetize with Play > Products > One-time products > Create
+   (section 1) > Activate.
+4. **App content**: Policy > App content — Data safety (from DATA_SAFETY.md: no data collected, no data
+   shared, no network access), Privacy policy URL, Ads: "No ads", Target audience: 18+ (or 13+), Content
+   rating questionnaire (productivity tool, no user content shared).
+
+## 5. The release
 - AAB: `builds\<date>\ScanWhirl-<version>.aab` (signed with your upload key).
 - Track: **Closed testing** (personal accounts need 12+ testers opted in for 14 days before production).
 - Release notes: see `RELEASE_NOTES_PLAY.txt` next to the AAB.

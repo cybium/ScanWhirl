@@ -70,11 +70,15 @@ class SignaturePadView @JvmOverloads constructor(
         )
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                // The pad lives in a pull-down-to-close sheet: claim the gesture so a downward
+                // stroke draws ink instead of dragging the sheet away (owner, 11-15).
+                parent?.requestDisallowInterceptTouchEvent(true)
                 active = mutableListOf(point)
                 strokes += active!!
                 invalidate()
             }
             MotionEvent.ACTION_MOVE -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
                 val current = active ?: return true
                 val last = current.last()
                 if (kotlin.math.abs(point.x - last.x) + kotlin.math.abs(point.y - last.y) > 0.002f) {
@@ -83,6 +87,7 @@ class SignaturePadView @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
                 active = null
                 invalidate()
             }
