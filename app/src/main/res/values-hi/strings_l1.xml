@@ -90,7 +90,7 @@
     <string name="tool_coming_soon_title"><!-- review -->जल्द आ रहा है</string>
     <string name="tool_soon_tag"><!-- review -->जल्द</string>
     <string name="tool_coming_soon_note"><!-- review -->यह टूल बन रहा है। जल्द ही यहाँ होगा।</string>
-    <string name="soon_book_pages"><!-- review -->दो पेजों वाली एक फ़ोटो को दो साफ़ पेजों में बाँटें।</string>
+    <string name="soon_book_pages"><!-- review -->पूरी किताब स्कैन करें: एक साथ कई पन्ने, हर दो पन्नों को अलग-अलग पन्नों में बाँटकर। लॉन्च के बाद आएगा।</string>
     <string name="soon_qr_code"><!-- review -->बिना इंटरनेट इस फ़ोन पर QR कोड पढ़ें।</string>
     <string name="soon_business_card"><!-- review -->कार्ड की फ़ोटो से नाम, फ़ोन और ईमेल निकालें।</string>
     <string name="soon_folders"><!-- review -->दस्तावेज़ों को फ़ोल्डर में रखें और टैग करें।</string>

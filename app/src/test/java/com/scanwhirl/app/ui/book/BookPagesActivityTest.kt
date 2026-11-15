@@ -215,17 +215,14 @@ class BookPagesActivityTest {
     }
 
     @Test
-    fun `Book pages is a ready Pro tool that launches its own screen`() {
+    fun `Book pages is Coming soon (owner 11-15) and never opens a half-built screen`() {
         val tool = ToolRegistry.byId("book_pages")
-        assertNotNull("the catalogue has Book pages", tool)
-        assertEquals(ToolStatus.READY, tool!!.status)
-        assertTrue("Book pages is Pro", tool.pro)
-
+        assertNotNull("the catalogue still lists Book pages", tool)
+        assertEquals(ToolStatus.SOON, tool!!.status)
         val host = RecordingHost(app)
         tool.launch(host, tool)
-        val started = host.started
-        assertNotNull("the tile starts a real screen", started)
-        assertEquals(BookPagesActivity::class.java.name, started!!.component?.className)
+        assertEquals("the tile starts nothing", null, host.started)
+        assertTrue("the tile shows Coming soon", host.soon)
     }
 
     /** A ToolHost that is also a Context (the shell is one), recording what the tile starts. */
@@ -237,6 +234,7 @@ class BookPagesActivityTest {
         }
 
         override fun open(tool: SwTool) = throw AssertionError("Book pages must open its screen")
-        override fun comingSoon(tool: SwTool) = throw AssertionError("Book pages is built")
+        var soon = false
+        override fun comingSoon(tool: SwTool) { soon = true }
     }
 }

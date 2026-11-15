@@ -83,23 +83,12 @@ object ToolRegistry {
         // Create (8)
         ready("scan", ToolGroup.CREATE, R.string.tool_scan, R.drawable.ic_sym_document_scanner, "scan camera capture photo"),
         ready("id_card", ToolGroup.CREATE, R.string.tool_id_card, R.drawable.ic_sym_badge, "id card front back aadhaar licence", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        // L3: built tool — the launch starts the Book pages screen (status + launch only).
-        SwTool(
-            id = "book_pages",
-            group = ToolGroup.CREATE,
-            title = R.string.tool_book_pages,
-            icon = R.drawable.ic_sym_menu_book,
-            pro = true,
-            status = ToolStatus.READY,
-            keywords = "book spread split two page",
-            launch = { host, tool ->
-                val context = host as? android.content.Context
-                if (context != null) {
-                    context.startActivity(com.scanwhirl.app.ui.book.BookPagesActivity.intent(context))
-                } else {
-                    host.open(tool)
-                }
-            }
+        // Owner 11-15: Book pages is COMING SOON. Real users scan a whole book (many pages in the
+        // scanner or many photos at once), not one spread at a time; that is a post-launch feature.
+        // The BookPagesActivity + SpineLine engine stay in the code for it.
+        soon(
+            "book_pages", ToolGroup.CREATE, R.string.tool_book_pages, R.drawable.ic_sym_menu_book,
+            "book spread split two page", pro = true, note = R.string.soon_book_pages
         ),
         ready("photos_pdf", ToolGroup.CREATE, R.string.tool_photos_pdf, R.drawable.ic_sym_photo_library, "photos gallery images jpg png"),
         ready("import_pdf", ToolGroup.CREATE, R.string.tool_import_pdf, R.drawable.ic_sym_upload_file, "import pdf file open"),

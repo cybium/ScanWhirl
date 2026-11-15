@@ -90,7 +90,7 @@
     <string name="tool_coming_soon_title">Coming soon</string>
     <string name="tool_soon_tag">Soon</string>
     <string name="tool_coming_soon_note">This tool is being built. It will be here soon.</string>
-    <string name="soon_book_pages">Split one photo of a two-page spread into two clean pages.</string>
+    <string name="soon_book_pages">Scan a whole book: many pages at once, each spread split into single pages. Coming after launch.</string>
     <string name="soon_qr_code">Read a QR code on this phone, with no network.</string>
     <string name="soon_business_card">Capture a card and pick out the name, phone and email.</string>
     <string name="soon_folders">Group documents in folders and tag them for search.</string>
