@@ -207,13 +207,21 @@ uses it instead of `draftPages` + `draftOf`.
 ## Last gate (cloud, full suite)
 
 ```
-cloud: snapshot a9f5dd55, run 43674046705 (4 min)
-tests: total=1367 failures=1 skipped=0
-  FAIL TextFitTest > ocr editor text fits :: 1 text-fit problem(s) at w320dp font scale 1.0 and 1.3
-GATE FAIL L5 tests=1367 failures=1 lint=[skipped]
+cloud: run 43689007712 (5 min)
+tests: total=1456 failures=0 skipped=0
+GATE PASS L5 tests=1456 lint=[skipped]
 ```
 
-The single failure is the lead-approved L1 issue; every other test passes. Lint runs at merge.
+TextFit's OcrEditor case is green again after L1's fix. Lint runs at merge.
+
+## Owner evaluation
+
+`eval/L5OwnerEvalTest` now keys on the lane's own
+`…\.sw-qa\owner\L5_EVAL_ON` (never the shared `EVAL_ON`, which other lanes delete mid-run) and
+prints `EVAL RAN: <n> files -> <dir>` on success or `EVAL SKIPPED: L5_EVAL_ON missing` on a skip.
+Latest run: **EVAL RAN: 13 files**, Aadhaar cards `find=AADHAAR:1` (this host has no ML Kit model,
+so the preview geometry is the lead-approved fake line; the device path uses element boxes).
+Private samples were read in place and never committed; the flag was deleted afterwards.
 
 ## Files deleted / APK size
 
