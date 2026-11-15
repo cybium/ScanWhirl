@@ -6,7 +6,7 @@ import android.net.Uri
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.MainActivity
+import com.scanwhirl.app.ui.shell.ShellActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -129,7 +129,7 @@ class LongImageTest {
         // Still decodes as a normal image and still shares via ACTION_SEND.
         val dims = ImageTools.imageSize(exported.readBytes())
         assertEquals(310 to 444, dims)
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 ShareUtils.shareFile(activity, exported, "image/jpeg")
                 val chooser = shadowOf(activity).nextStartedActivity

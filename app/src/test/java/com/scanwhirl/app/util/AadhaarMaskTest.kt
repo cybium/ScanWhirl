@@ -68,10 +68,12 @@ class AadhaarMaskTest {
         val boxes = AadhaarMask.findWords(words, 1000, 1000)
         assertEquals("two groups, not the last", 2, boxes.size)
         assertTrue("nothing may cover the last group: $boxes", boxes.all { it.right <= 0.275f })
-        assertEquals(0.10f, boxes[0].left, 0.002f)
+        // 15% of the glyph height (40px) = 6px of left padding on the outer side.
+        assertEquals(0.094f, boxes[0].left, 0.002f)
         assertEquals(0.18f, boxes[0].right, 0.002f)
         assertEquals(0.19f, boxes[1].left, 0.002f)
-        assertEquals(0.27f, boxes[1].right, 0.002f)
+        // The inner edge stops in the middle of the 10px gap before 4947.
+        assertEquals(0.275f, boxes[1].right, 0.002f)
     }
 
     @Test
@@ -81,12 +83,50 @@ class AadhaarMaskTest {
         val boxes = AadhaarMask.findWords(listOf(box), 1000, 1000)
         assertEquals(1, boxes.size)
 
-        val expectedRight = (100f + (9f / text.length) * 280f) / 1000f
+        // Glyph span 0..9/14; the 9th digit starts at 10/14, so the mask ends at 9.5/14.
+        val expectedRight = (100f + (9.5f / text.length) * 280f) / 1000f
         assertEquals(expectedRight, boxes[0].right, 0.005f)
         val lastGroupStart = (100f + (10f / text.length) * 280f) / 1000f
         assertTrue(
             "the mask must stop before 4947: ${boxes[0].right} / $lastGroupStart",
             boxes[0].right < lastGroupStart
+        )
+    }
+
+    @Test
+    fun `the mask never spills into the OCR line below`() {
+        val words = listOf(
+            AadhaarMask.Word("9233", 100, 100, 180, 140),
+            AadhaarMask.Word("6926", 190, 100, 270, 140),
+            AadhaarMask.Word("4947", 280, 100, 360, 140),
+            AadhaarMask.Word("1234", 100, 146, 180, 186),
+            AadhaarMask.Word("5678", 190, 146, 270, 186),
+            AadhaarMask.Word("9012", 280, 146, 360, 186),
+            AadhaarMask.Word("3456", 370, 146, 450, 186)
+        )
+        val boxes = AadhaarMask.findWords(words, 1000, 1000, maskVid = false)
+        assertEquals("the VID line is off, only the Aadhaar", 2, boxes.size)
+        val vidTop = 146f / 1000f
+        assertTrue(
+            "the Aadhaar mask must not reach the VID line: ${boxes.map { it.bottom }}",
+            boxes.all { it.bottom <= vidTop }
+        )
+    }
+
+    @Test
+    fun `the VID masks its first 12 digits and can be switched off`() {
+        val words = listOf(
+            AadhaarMask.Word("1234", 100, 100, 180, 140),
+            AadhaarMask.Word("5678", 190, 100, 270, 140),
+            AadhaarMask.Word("9012", 280, 100, 360, 140),
+            AadhaarMask.Word("3456", 370, 100, 450, 140)
+        )
+        val boxes = AadhaarMask.findWords(words, 1000, 1000, maskVid = true)
+        assertEquals("first three VID groups", 3, boxes.size)
+        assertTrue("the last 4 stay visible", boxes.all { it.right <= 0.37f })
+        assertTrue(
+            "the VID toggle off yields no boxes",
+            AadhaarMask.findWords(words, 1000, 1000, maskVid = false).isEmpty()
         )
     }
 

@@ -13,7 +13,7 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.LockFlow
-import com.scanwhirl.app.ui.MainActivity
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.PdfDecryptor
 import com.scanwhirl.app.util.ProGate
@@ -90,7 +90,7 @@ class ImportProtectedPdfTest {
         }
         var importCalls = 0
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 LockFlow(
                     activity, repo, activity, { emptyList() }, { _ -> },

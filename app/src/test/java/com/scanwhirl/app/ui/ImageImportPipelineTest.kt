@@ -14,6 +14,7 @@ import android.os.ParcelFileDescriptor
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.ScanLauncher
@@ -157,7 +158,7 @@ class ImageImportPipelineTest {
         val uris = providerUris(bytes)
         val initial = maxOf(1, count / 2)
         var reviewIntent: Intent? = null
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { activity -> ScanLauncher(activity, repo, activity) {}.stageAndReview(uris.take(initial)) }
             await {
                 scenario.onActivity { reviewIntent = shadowOf(it).nextStartedActivity }
@@ -250,7 +251,7 @@ class ImageImportPipelineTest {
     @Test fun `empty initial staged input shows an actionable error and preserves provider file`() {
         val bytes = listOf(byteArrayOf())
         val uris = providerUris(bytes)
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { activity -> ScanLauncher(activity, repo, activity) {}.stageAndReview(uris) }
             await { ShadowToast.getTextOfLatestToast()?.contains("Choose") == true }
             scenario.onActivity { assertNull(shadowOf(it).nextStartedActivity) }
@@ -273,7 +274,7 @@ class ImageImportPipelineTest {
         val bytes = listOf(ImportFixtures.image(Bitmap.CompressFormat.PNG), byteArrayOf(1, 2, 3), ImportFixtures.image())
         val uris = providerUris(bytes)
         assertTrue(pendingDirs().isEmpty())
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { activity -> ScanLauncher(activity, repo, activity) {}.stageAndReview(uris) }
             await { ShadowToast.getTextOfLatestToast()?.contains("Page 2") == true }
             val message = ShadowToast.getTextOfLatestToast()!!
@@ -298,7 +299,7 @@ class ImageImportPipelineTest {
         val earlierBytes = earlierPage.readBytes()
         val bytes = listOf(ImportFixtures.image(), ImportFixtures.image(Bitmap.CompressFormat.PNG).copyOf(40))
         val uris = providerUris(bytes)
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
             scenario.onActivity { activity -> ScanLauncher(activity, repo, activity) {}.stageAndReview(uris) }
             await { ShadowToast.getTextOfLatestToast()?.contains("Page 2") == true }
             scenario.onActivity { assertNull(shadowOf(it).nextStartedActivity) }

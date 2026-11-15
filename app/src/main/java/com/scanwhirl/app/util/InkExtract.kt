@@ -177,6 +177,39 @@ object InkExtract {
         }
         if (strongCount == 0) return null
 
+        // A scanned page often keeps a thin straight line at an edge (a frame remnant). Drop
+        // full-height/full-width isolated lines in the outer 12%, before measuring the bounds.
+        val railZoneX = (w * 0.12f).toInt()
+        val railZoneY = (h * 0.12f).toInt()
+        val railColumns = ArrayList<Int>()
+        val railRows = ArrayList<Int>()
+        for (x in 0 until w) {
+            if (x > railZoneX && x < w - railZoneX) continue
+            val strong = colInk[x] > h * 0.5f
+            val isolatedLeft = x < 3 || colInk[x - 3] < h * 0.2f
+            val isolatedRight = x >= w - 3 || colInk[x + 3] < h * 0.2f
+            if (strong && isolatedLeft && isolatedRight) railColumns += x
+        }
+        for (y in 0 until h) {
+            if (y > railZoneY && y < h - railZoneY) continue
+            val strong = rowInk[y] > w * 0.5f
+            val isolatedUp = y < 3 || rowInk[y - 3] < w * 0.2f
+            val isolatedDown = y >= h - 3 || rowInk[y + 3] < w * 0.2f
+            if (strong && isolatedUp && isolatedDown) railRows += y
+        }
+        if (railColumns.isNotEmpty() || railRows.isNotEmpty()) {
+            for (y in 0 until h) {
+                for (x in railColumns) {
+                    out[y * w + x] = 0
+                    colInk[x] = 0
+                }
+                if (y in railRows) {
+                    for (x in 0 until w) out[y * w + x] = 0
+                }
+            }
+            railRows.forEach { rowInk[it] = 0 }
+        }
+
         val avgR = (sumR / strongCount).toFloat()
         val avgG = (sumG / strongCount).toFloat()
         val avgB = (sumB / strongCount).toFloat()
