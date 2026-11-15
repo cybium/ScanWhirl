@@ -8,8 +8,8 @@ import com.scanwhirl.app.R
 /**
  * test26 T8.3 — scan-line sweep over a thumbnail while OCR runs.
  *
- * Finite 1.2 s sweep, gated on [SwMotion.ambientAllowed] so the suite stays
- * deterministic under Robolectric (fingerprint = "robolectric" → no animation).
+ * Finite 1.2 s sweep (no repeat), gated on [SwMotion.ambientAllowed] so the suite
+ * stays deterministic under Robolectric (fingerprint = "robolectric" → no animation).
  *
  * Usage:
  *   val animator = ScanLineAnimator.start(thumbnailView)
@@ -24,10 +24,11 @@ object ScanLineAnimator {
     fun start(view: View): ValueAnimator? {
         if (!SwMotion.ambientAllowed(view.context)) return null
         view.background = ContextCompat.getDrawable(view.context, R.drawable.bg_scan_line)
+        // One 1.2 s sweep per OCR pass — never endless. An endless animator would
+        // outlive the thumbnail (and, under Robolectric's paused looper, the test).
         val animator = ValueAnimator.ofFloat(-1f, 1f).apply {
             duration = SWEEP_MS
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
+            repeatCount = 0
             addUpdateListener { anim ->
                 val t = anim.animatedValue as Float
                 // Move the line diagonally across the view by shifting the gradient offset.

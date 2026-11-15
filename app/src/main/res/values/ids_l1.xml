@@ -87,6 +87,8 @@
     <item name="swEmptyAction" type="id" />
     <item name="swHomeClear" type="id" />
     <item name="swNoMatches" type="id" />
+    <item name="swListHost" type="id" />
+    <item name="swMotionTag" type="id" />
     <item name="swNavMe" type="id" />
     <item name="swShellTab" type="id" />
     <item name="swHomeSearch" type="id" />

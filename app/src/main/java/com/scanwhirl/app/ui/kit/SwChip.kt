@@ -32,7 +32,7 @@ class SwChip(context: Context) : LinearLayout(context) {
             radiusDp = 12f,
             stroke = SwStyle.color(context, R.color.sw_cyan_hair)
         )
-        val padH = SwStyle.dp(context, 12f)
+        val padH = SwStyle.dp(context, 10f)
         setPadding(padH, 0, padH, 0)
         minimumHeight = SwStyle.dp(context, 38f)
         SwMotion.press(this)
@@ -44,15 +44,16 @@ class SwChip(context: Context) : LinearLayout(context) {
         }
         addView(
             iconView,
-            LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f))
-                .apply { marginEnd = SwStyle.dp(context, 7f) }
+            LayoutParams(SwStyle.dp(context, 16f), SwStyle.dp(context, 16f))
+                .apply { marginEnd = SwStyle.dp(context, 6f) }
         )
 
         labelView = SwStyle.text(
-            context, 13f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
+            context, 11.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
         ).apply {
             id = R.id.swChipLabel
             maxLines = 1
+            isSingleLine = true
             includeFontPadding = false
         }
         addView(labelView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
@@ -69,12 +70,30 @@ class SwChip(context: Context) : LinearLayout(context) {
         contentDescription = label
     }
 
+    /**
+     * v2 UI: 74_motion — "Copied" morph: the chip turns into a check for 1.2 s,
+     * then back. No animation (and no flicker) when animations are off.
+     */
+    fun flashDone(textRes: Int) {
+        if (labelView.text == context.getString(textRes)) return
+        val oldIcon = iconView.drawable
+        val oldText = labelView.text
+        iconView.setImageResource(R.drawable.ic_sym_check_circle_filled)
+        labelView.text = context.getString(textRes)
+        val delay = SwMotion.duration(context, 1200L).coerceAtLeast(1L)
+        postDelayed({
+            iconView.setImageDrawable(oldIcon)
+            labelView.text = oldText
+        }, delay)
+    }
+
     /** Adds the small gold PRO pill after the label. */
-    fun withProTag(): SwChip = apply {
-        val pill = SwStyle.text(context, 9f, SwStyle.color(context, R.color.gold_pro_primary), bold = true)
+    fun withProTag(): SwChip = apply {        val pill = SwStyle.text(context, 9f, SwStyle.color(context, R.color.gold_pro_primary), bold = true)
             .apply {
                 text = context.getString(R.string.badge_pro)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f)
+                isSingleLine = true
+                maxLines = 1
                 gravity = Gravity.CENTER
                 background = SwStyle.pill(
                     context,
@@ -83,8 +102,8 @@ class SwChip(context: Context) : LinearLayout(context) {
                     SwStyle.color(context, R.color.gold_tile_border)
                 )
                 setPadding(
-                    SwStyle.dp(context, 6f), SwStyle.dp(context, 1f),
-                    SwStyle.dp(context, 6f), SwStyle.dp(context, 1f)
+                    SwStyle.dp(context, 4f), SwStyle.dp(context, 1f),
+                    SwStyle.dp(context, 4f), SwStyle.dp(context, 1f)
                 )
             }
         addView(
