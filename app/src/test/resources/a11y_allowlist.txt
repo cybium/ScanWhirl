@@ -9,6 +9,3 @@
 # This file must stay narrow. Fixing a finding means deleting its line.
 # Findings for other lanes are listed in docs/audit/2026-11-15/ACCESSIBILITY.md.
 
-Shell vault|clip|Library|L1 shell: Vault tab clipping - dispatched
-Shell vault|contrast|swVaultStatus|L1 shell: Vault tab clipping - dispatched
-Tools|contrast|1|L1 shell: TEXT section count uses cyan_dim (4.06:1) - dispatched

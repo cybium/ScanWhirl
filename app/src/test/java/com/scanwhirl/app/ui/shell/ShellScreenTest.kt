@@ -14,6 +14,8 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -120,6 +122,34 @@ class ShellScreenTest {
 
     // v2 UI: 03_tools_hub - Save as PDF/A ships now, so the tile opens its real picker instead
     // of a Coming soon sheet (the Coming soon sheet itself is covered by KitComponentsTest).
+    @Test
+    fun `the tools layout toggle shows its state`() {
+        scrollActivity { activity ->
+            activity.findViewById<View>(R.id.swNavTools).performClick()
+            idle()
+            val toggle = activity.findViewById<android.widget.ImageButton>(R.id.swToolsGrid)
+            assertFalse("grid is the default", toggle.isSelected)
+            assertTrue(
+                "the control says what tapping it will do: ${toggle.contentDescription}",
+                toggle.contentDescription.contains("list", ignoreCase = true)
+            )
+            val gridDrawable = toggle.drawable
+
+            toggle.performClick()
+            idle()
+            assertTrue("list mode is selected", toggle.isSelected)
+            assertTrue(
+                "the control now offers the grid: ${toggle.contentDescription}",
+                toggle.contentDescription.contains("grid", ignoreCase = true)
+            )
+            assertNotSame("the icon swapped", gridDrawable, toggle.drawable)
+
+            toggle.performClick()
+            idle()
+            assertFalse("back to grid", toggle.isSelected)
+        }
+    }
+
     @Test
     fun `a tool tile opens its own flow, never a dead end`() {
         scrollActivity { activity ->
