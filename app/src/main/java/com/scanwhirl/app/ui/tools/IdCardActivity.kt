@@ -33,6 +33,7 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.IdCard
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.PaperSize
 import com.scanwhirl.app.util.Prefs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -364,22 +365,73 @@ class IdCardActivity : BaseActivity() {
             if (remembered == IdCardPrefs.Layout.ONE_PAGE) R.string.tools_id_layout_one
             else R.string.tools_id_layout_own
         )
-        SwSheet.builder(this)
+        var chosenPaper = IdCardPrefs.paper(this)
+        val sheet = SwSheet.builder(this)
             .setTitle(R.string.tools_id_layout_title)
             .setMessage(getString(R.string.tools_id_layout_msg, last))
-            .setPrimary(
-                if (remembered == IdCardPrefs.Layout.ONE_PAGE) R.string.tools_id_layout_one
-                else R.string.tools_id_layout_own
-            ) { create(remembered) }
             .setSecondary(
                 if (other == IdCardPrefs.Layout.ONE_PAGE) R.string.tools_id_layout_one
                 else R.string.tools_id_layout_own
-            ) { create(other) }
+            ) { create(other, IdCardPrefs.paper(this)) }
             .build()
-            .show()
+
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+            text = getString(R.string.tools_id_paper_title)
+            setPadding(0, 0, 0, SwStyle.dp(this@IdCardActivity, 8f))
+        })
+        val a4 = paperChip(getString(R.string.tools_id_paper_a4))
+        val letter = paperChip(getString(R.string.tools_id_paper_letter))
+        fun paint() {
+            paintPaperChip(a4, chosenPaper == PaperSize.A4)
+            paintPaperChip(letter, chosenPaper == PaperSize.LETTER)
+        }
+        a4.setOnClickListener { chosenPaper = PaperSize.A4; paint() }
+        letter.setOnClickListener { chosenPaper = PaperSize.LETTER; paint() }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(a4, LinearLayout.LayoutParams(0, SwStyle.dp(this@IdCardActivity, 42f), 1f).apply {
+            marginEnd = SwStyle.dp(this@IdCardActivity, 8f)
+        })
+        row.addView(letter, LinearLayout.LayoutParams(0, SwStyle.dp(this@IdCardActivity, 42f), 1f))
+        content.addView(row)
+        paint()
+        sheet.setContent(content)
+        sheet.setPrimary(
+            if (remembered == IdCardPrefs.Layout.ONE_PAGE) R.string.tools_id_layout_one
+            else R.string.tools_id_layout_own
+        ) {
+            IdCardPrefs.rememberPaper(this, chosenPaper)
+            create(remembered, chosenPaper)
+        }
+        sheet.show()
     }
 
-    private fun create(layout: IdCardPrefs.Layout) {
+    private fun paperChip(text: String): TextView =
+        SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_dim), bold = true).apply {
+            this.text = text
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+        }
+
+    private fun paintPaperChip(chip: TextView, selected: Boolean) {
+        chip.setTextColor(
+            SwStyle.color(this, if (selected) R.color.cyan_primary else R.color.text_hologram_dim)
+        )
+        chip.background = if (selected) {
+            SwStyle.rounded(
+                this, SwStyle.color(this, R.color.sw_cyan_soft), radiusDp = 12f,
+                stroke = SwStyle.color(this, R.color.cyan_primary)
+            )
+        } else {
+            SwStyle.rounded(
+                this, SwStyle.color(this, R.color.glass_surface), radiusDp = 12f,
+                stroke = SwStyle.color(this, R.color.sw_field_border)
+            )
+        }
+    }
+
+    private fun create(layout: IdCardPrefs.Layout, paper: PaperSize) {
         if (creating) return
         val frontBytes = front ?: return
         val backBytes = back
@@ -389,12 +441,13 @@ class IdCardActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 IdCardPrefs.remember(this@IdCardActivity, layout)
+                IdCardPrefs.rememberPaper(this@IdCardActivity, paper)
                 val pages = withContext(Dispatchers.IO) {
                     if (layout == IdCardPrefs.Layout.ONE_PAGE) {
-                        listOf(IdCard.compose(frontBytes, backBytes))
+                        listOf(IdCard.compose(frontBytes, backBytes, paper))
                     } else {
-                        val list = mutableListOf(IdCard.composeSingle(frontBytes))
-                        backBytes?.let { list += IdCard.composeSingle(it) }
+                        val list = mutableListOf(IdCard.composeSingle(frontBytes, paper))
+                        backBytes?.let { list += IdCard.composeSingle(it, paper) }
                         list
                     }
                 }

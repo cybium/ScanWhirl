@@ -41,6 +41,7 @@ import com.scanwhirl.app.util.IdCard
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.PageRanges
+import com.scanwhirl.app.util.PaperSize
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.CancellationException
@@ -756,6 +757,59 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun buildIdCardOption() {
         optionsHost.addView(note(getString(R.string.tools_setup_id_note)))
+        optionsHost.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+            text = getString(R.string.tools_id_paper_title)
+            setPadding(0, SwStyle.dp(this@ToolSetupActivity, 8f), 0, SwStyle.dp(this@ToolSetupActivity, 6f))
+        })
+        var paper = IdCardPrefs.paper(this)
+        val a4 = idCardPaperChip(getString(R.string.tools_id_paper_a4))
+        val letter = idCardPaperChip(getString(R.string.tools_id_paper_letter))
+        fun paint() {
+            paintPaperChip(a4, paper == PaperSize.A4)
+            paintPaperChip(letter, paper == PaperSize.LETTER)
+        }
+        a4.setOnClickListener {
+            paper = PaperSize.A4
+            IdCardPrefs.rememberPaper(this, paper)
+            paint()
+        }
+        letter.setOnClickListener {
+            paper = PaperSize.LETTER
+            IdCardPrefs.rememberPaper(this, paper)
+            paint()
+        }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(a4, LinearLayout.LayoutParams(0, SwStyle.dp(this@ToolSetupActivity, 42f), 1f).apply {
+            marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
+        })
+        row.addView(letter, LinearLayout.LayoutParams(0, SwStyle.dp(this@ToolSetupActivity, 42f), 1f))
+        optionsHost.addView(row)
+        paint()
+    }
+
+    private fun idCardPaperChip(text: String): TextView =
+        SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_dim), bold = true).apply {
+            this.text = text
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+        }
+
+    private fun paintPaperChip(chip: TextView, selected: Boolean) {
+        chip.setTextColor(
+            SwStyle.color(this, if (selected) R.color.cyan_primary else R.color.text_hologram_dim)
+        )
+        chip.background = if (selected) {
+            SwStyle.rounded(
+                this, SwStyle.color(this, R.color.sw_cyan_soft), radiusDp = 12f,
+                stroke = SwStyle.color(this, R.color.cyan_primary)
+            )
+        } else {
+            SwStyle.rounded(
+                this, SwStyle.color(this, R.color.glass_surface), radiusDp = 12f,
+                stroke = SwStyle.color(this, R.color.sw_field_border)
+            )
+        }
     }
 
     private fun note(text: String): TextView =
@@ -1035,7 +1089,9 @@ class ToolSetupActivity : BaseActivity() {
                 val front = frontBytes ?: return fail(getString(R.string.tools_setup_need_front))
                 val back = backBytes ?: return fail(getString(R.string.tools_setup_need_back))
                 execute({
-                    val page = withContext(Dispatchers.Default) { IdCard.compose(front, back) }
+                    val page = withContext(Dispatchers.Default) {
+                        IdCard.compose(front, back, IdCardPrefs.paper(this@ToolSetupActivity))
+                    }
                     listOf(repo.createDocument(getString(R.string.tools_id_card_name), listOf(page)).id)
                 }) { openDocs(it) }
             }
