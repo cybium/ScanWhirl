@@ -89,9 +89,14 @@ object ProtectSheet {
                 insets
             }
             root.post { ViewCompat.requestApplyInsets(scroll) }
+            ViewCompat.setAccessibilityPaneTitle(
+                dialog.window?.decorView ?: root, activity.getString(titleRes)
+            )
         }
 
         root.findViewById<TextView>(R.id.protectTitle).setText(titleRes)
+        // TalkBack starts at the pane title instead of the first control (a11y audit, S3).
+        ViewCompat.setAccessibilityPaneTitle(root, activity.getString(titleRes))
         val chip = root.findViewById<View>(R.id.protectDocChip)
         root.findViewById<TextView>(R.id.protectDocName).text = doc.name
         val pagesView = root.findViewById<TextView>(R.id.protectDocPages)
