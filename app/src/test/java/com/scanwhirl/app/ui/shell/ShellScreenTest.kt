@@ -171,13 +171,10 @@ class ShellScreenTest {
             )
             activity.findViewById<View>(R.id.swProBuy).performClick()
             idle()
-            val dialog = ShadowDialog.getLatestDialog()
-            assertNotNull(dialog)
-            assertEquals(
-                activity.getString(R.string.pro_buy_coming),
-                dialog.findViewById<TextView>(R.id.swSheetMessage).text.toString()
-            )
-            dialog.dismiss()
+            // Test builds are already Pro: the tap re-renders the unlocked screen. There is no
+            // "coming soon" sheet any more (release builds open Play Billing here).
+            assertNull(ShadowDialog.getLatestDialog())
+            assertTrue(activity.findViewById<View>(R.id.swProScreen).isVisible)
 
             activity.findViewById<View>(R.id.swProClose).performClick()
             idle()

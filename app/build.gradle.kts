@@ -143,6 +143,9 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     // Vault unlock (70_APP_DESIGN §4.1): in-app fingerprint/face sheet with device-credential fallback. Offline, no permission beyond USE_BIOMETRIC.
     implementation("androidx.biometric:biometric:1.1.0")
+    // Play Billing for the one-time Pro unlock. The store talks to Play itself; ScanWhirl keeps
+    // no network permission (the manifest strips INTERNET/ACCESS_NETWORK_STATE).
+    implementation("com.android.billingclient:billing-ktx:8.3.0")
     // QR code reader tool (lead-approved): Google code scanner UI, same delivery model as the document scanner; no camera permission.
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     // Hindi OCR (lead-approved, PM-6.3): bundled Devanagari model, works fully offline.

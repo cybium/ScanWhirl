@@ -417,7 +417,50 @@ class ProScreen(
     internal fun titleForTest(): View = titleRow
     internal fun priceWrapForTest(): FrameLayout = priceWrap
     internal fun buyWrapForTest(): FrameLayout = buyWrap
+    /**
+     * Billing: show Play's localized price when the store answers. Only the price text changes;
+     * the rest of the layout is untouched.
+     */
+    fun setPrice(text: String) {
+        findViewById<android.widget.TextView>(R.id.swProPrice)?.text = text
+    }
+
+    /** Pinned price + Unlock row (never scrolls out of view). */
+    private fun stickyBar(): View {
+        val bar = LinearLayout(context).apply {
+            orientation = VERTICAL
+            setBackgroundColor(0xFF0E1316.toInt())
+        }
+        bar.addView(
+            View(context).apply {
+                setBackgroundColor(SwStyle.color(context, R.color.sw_cyan_hair))
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, 1)
+        )
+        val row = LinearLayout(context).apply {
+            orientation = VERTICAL
+            setPadding(
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 8f),
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 8f)
+            )
+        }
+        row.addView(priceWrap, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        // The shine is clipped to the button's rounded bounds, never the screen.
+        buyWrap.clipChildren = true
+        buyWrap.clipToOutline = true
+        buyWrap.background = SwStyle.rounded(
+            context, android.graphics.Color.TRANSPARENT, radiusDp = 16f
+        )
+        row.addView(
+            buyWrap,
+            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 54f))
+                .apply { topMargin = SwStyle.dp(context, 8f) }
+        )
+        bar.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        return bar
+    }
     internal fun featureCellsForTest(): List<View> = featureCells
+
 
     private fun feature(icon: Int, label: Int): View {
         val cell = LinearLayout(context).apply {
