@@ -49,6 +49,12 @@ class PageGridView @JvmOverloads constructor(
     /** Which filter a cell's file should display (file-based so it stays correct mid-drag). */
     var filterFor: (File) -> ScanFilter = { ScanFilter.ORIGINAL }
 
+    /**
+     * Identity of the submitted page set. Pages are immutable: every edit writes a new
+     * `r_<n>` replacement, so the set itself is the revision and binding never stats a file.
+     */
+    private var pageRevision: String = "0"
+
     /** Whether the cell at [index] shows a ticked check (host state). */
     var checkedAt: (Int) -> Boolean = { false }
 
@@ -148,7 +154,14 @@ class PageGridView @JvmOverloads constructor(
     /** Replaces the displayed pages. The list is copied; callers may pass a temp. */
     fun submit(pages: List<File>) {
         gridAdapter.pages = pages.toMutableList()
+        pageRevision = revisionOf(pages)
         gridAdapter.notifyDataSetChanged()
+    }
+
+    private fun revisionOf(pages: List<File>): String {
+        var hash = 17
+        for (page in pages) hash = hash * 31 + page.path.hashCode()
+        return Integer.toHexString(hash)
     }
 
     /** Re-binds every cell (selection, filter or file content changed in place). */
@@ -273,7 +286,8 @@ class PageGridView @JvmOverloads constructor(
                 file,
                 thumbTargetPx(),
                 filterFor(file),
-                binding.pageThumb
+                binding.pageThumb,
+                revision = pageRevision
             )
 
             // The round check exists only in selection mode; it is not a drag handle.
