@@ -199,6 +199,7 @@ class SettingsActivity : BaseActivity() {
         }
         val texts = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(0, 0, (12 * d).toInt(), 0)
         }
         texts.addView(
             android.widget.TextView(this).apply {
