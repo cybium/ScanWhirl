@@ -364,13 +364,19 @@ class LibraryScreen(
     // ---- folders ----------------------------------------------------------
 
     private fun folderSection(): View {
-        val scroll = HorizontalScrollView(context).apply {
-            id = R.id.swFolderScroll
-            isHorizontalScrollBarEnabled = false
+        // Folder chips scroll; the A/अ language chip sits outside the scroll at the right end,
+        // so it is always visible on Home whatever the number of folders.
+        val section = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 val m = SwStyle.dp(context, 18f)
                 setMargins(m, SwStyle.dp(context, 8f), m, 0)
             }
+        }
+        val scroll = HorizontalScrollView(context).apply {
+            id = R.id.swFolderScroll
+            isHorizontalScrollBarEnabled = false
         }
         folderRow = LinearLayout(context).apply {
             id = R.id.swFolderRow
@@ -378,7 +384,13 @@ class LibraryScreen(
             gravity = Gravity.CENTER_VERTICAL
         }
         scroll.addView(folderRow)
-        return scroll
+        section.addView(scroll, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        section.addView(
+            languageChip(),
+            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
+                .apply { marginStart = SwStyle.dp(context, 8f) }
+        )
+        return section
     }
 
     private fun renderFolders() {
@@ -831,23 +843,10 @@ class LibraryScreen(
             },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
         )
-        // The pill gets whatever is left, right-aligned, and shortens with "…" if it must.
-        val pillSlot = android.widget.FrameLayout(context)
-        pillSlot.addView(
+        row.addView(android.view.View(context), LayoutParams(0, 1, 1f))
+        row.addView(
             TrustPill.offlineNoAds(context).apply { ellipsize = android.text.TextUtils.TruncateAt.END },
-            android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.END or Gravity.CENTER_VERTICAL
-            )
-        )
-        row.addView(
-            pillSlot,
-            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = SwStyle.dp(context, 8f) }
-        )
-        row.addView(
-            languageChip(),
-            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
+            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
                 .apply { marginStart = SwStyle.dp(context, 8f) }
         )
         return row
