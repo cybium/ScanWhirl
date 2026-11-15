@@ -312,6 +312,10 @@ class ScanReviewFocusArrangeTest {
             scenario.onActivity { a ->
                 a.showPage(1)
                 a.findViewById<View>(R.id.btnToolDelete).performClick()
+            }
+            // The rename + re-list can settle a tick after the click; wait for the shown count.
+            await { scenario.get { it.text(R.id.pageStatus) == "Page 2 of 2" } }
+            scenario.onActivity { a ->
                 assertTrue(File(dir, "page_001.jpg.del").exists())
                 assertEquals(1, a.currentIndex)
                 assertEquals("Page 2 of 2", a.text(R.id.pageStatus))
@@ -320,8 +324,12 @@ class ScanReviewFocusArrangeTest {
             shadowOf(Looper.getMainLooper()).idle()
             scenario.onActivity { a ->
                 a.findViewById<View>(com.google.android.material.R.id.snackbar_action).performClick()
-                assertTrue(File(dir, "page_001.jpg").exists())
-                assertEquals("Save 3 pages", a.text(R.id.btnSavePdf))
+            }
+            await {
+                scenario.get {
+                    File(dir, "page_001.jpg").exists() &&
+                        it.text(R.id.btnSavePdf) == "Save 3 pages"
+                }
             }
         }
     }
@@ -422,7 +430,7 @@ class ScanReviewFocusArrangeTest {
                 fun check(ids: List<Int>) = ids.forEach { id ->
                     val b = a.findViewById<MaterialButton>(id)
                     assertTrue("${b.text} is shown", b.isShown)
-                    assertTrue("${b.text} is >= 48dp tall", b.height >= 48 * dp)
+                    assertTrue("${b.text} is >= 48dp tall (${b.height}px)", b.height >= 48 * dp)
                     assertTrue("${b.text} is >= 48dp wide", b.width >= 48 * dp)
                     assertEquals("${b.text} label on one line", 1, b.layout.lineCount)
                     assertEquals("${b.text} label not cut", 0, b.layout.getEllipsisCount(0))
