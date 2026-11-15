@@ -34,14 +34,14 @@ Test builds count as Pro; Settings > Privacy & security > "Testing: act as a Fre
 - Book pages: cut through words on a tilted spine.
 
 ## Checked on the owner's phone (Infinix) by the lead
-Quick tools editing (add, remove, drag, saved after restart); Pro screen + Pro pop-up animation (recorded,
+Quick tools editing (add, remove, drag, saved after restart); Book pages from photos on the owner's textbook photo (Google's scanner crops and straightens it, the app cuts the gutter: page 268 then 269, upright, no words cut); Pro screen + Pro pop-up animation (recorded,
 frame by frame); Find and hide numbers on an Aadhaar card with the real text reader (first 8 digits fully
 covered); Backup with the spaced recovery code, Share, Save, Restore (no duplicates); Settings sections;
 Me tab.
 
 ## NOT yet checked on the phone (checked by tests and on the owner's photos only)
-- Book pages tilted cut inside the app (the phone was disconnected); verified on photo 005924 by zooming the
-  result at five heights and by automatic tests.
+- Book pages TILTED cut on a photo that stays tilted after Google's scanner (the scanner usually straightens the
+  page first); the tilted cut is verified on the raw photo 005924 at five heights and by automatic tests.
 - Restoring Vault files into a phone that already has a Vault (the test Vault is empty).
 - Gold app-icon swap on the home screen.
 
