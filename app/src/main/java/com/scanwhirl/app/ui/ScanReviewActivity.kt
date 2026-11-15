@@ -270,8 +270,13 @@ class ScanReviewActivity : BaseActivity() {
         }
         applyMode(animate = false)
         binding.toolbar.setNavigationOnClickListener { if (!saving) confirmDiscard() }
+        A11yTargets.fixTitleField(binding.titleInput)
+        binding.titleInput.hint = getString(R.string.review_name_hint)
+        binding.titleInput.contentDescription = getString(R.string.name_hint)
+        A11yTargets.stackToolbarText(binding.toolbar, leaveId = R.id.titleInput)
 
         binding.toolbar.inflateMenu(R.menu.menu_review)
+        A11yTargets.widenOverflow(binding.toolbar)
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_rotate_left -> {

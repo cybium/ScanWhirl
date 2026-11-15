@@ -83,7 +83,8 @@
 
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="38dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:layout_weight="1"
             android:background="@drawable/bg_sw_segment"
             android:orientation="horizontal"
@@ -201,8 +202,8 @@
 
         <ImageButton
             android:id="@+id/btnUndo"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/ocr_undo_desc"
             android:src="@drawable/ic_sym_undo"
@@ -210,8 +211,8 @@
 
         <ImageButton
             android:id="@+id/btnRedo"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/ocr_redo_desc"
@@ -260,8 +261,6 @@
         android:drawablePadding="6dp"
         android:drawableTint="@color/ok_green"
         android:fontFamily="@font/manrope"
-        android:maxLines="1"
-        android:singleLine="true"
         android:text="@string/ocr_foot_note"
         android:textColor="@color/text_hologram_dim"
         android:textSize="11.5sp"
