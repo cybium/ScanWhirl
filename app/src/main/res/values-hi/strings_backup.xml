@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Full Backup 2.0: वापसी और बैकअप. -->
 <resources>
-    <string name="me_backup">बैकअप और वापसी</string>
+    <string name="me_backup"><!-- review -->बैकअप और रीस्टोर</string>
     <string name="me_backup_summary">हर स्कैन, वॉल्ट और सेटिंग्स वाली एक एन्क्रिप्टेड फ़ाइल</string>
 
-    <string name="backup_title">बैकअप और वापसी</string>
+    <string name="backup_title"><!-- review -->बैकअप और रीस्टोर</string>
     <string name="backup_explain">हर स्कैन, वॉल्ट, हस्ताक्षर और सेटिंग्स वाली एक एन्क्रिप्टेड फ़ाइल। नए फ़ोन पर वापस लाएँ और सब कुछ अपनी जगह लौट आता है।</string>
     <string name="backup_never">अभी कोई बैकअप नहीं</string>
     <string name="backup_today">पिछला बैकअप: आज</string>

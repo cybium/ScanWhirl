@@ -119,7 +119,7 @@
     <string name="tools_batch_failed"><!-- review -->बैच पूरा नहीं हुआ: %1$s</string>
     <string name="tools_batch_pro_title"><!-- review -->बैच टूल Pro हैं</string>
     <string name="tools_batch_pro_note"><!-- review -->एक खरीद से बैच टूल और सभी Power Pack टूल खुलते हैं।</string>
-    <string name="tools_id_hint"><!-- review -->आगे, फिर पीछे स्कैन करें। एक पेज या अलग पेज।</string>
+    <string name="tools_id_hint"><!-- review -->आगे, फिर पीछे स्कैन करें। दोनों एक पेज पर, या हर तरफ़ का अलग पेज।</string>
     <string name="tools_id_front_title"><!-- review -->आगे का भाग</string>
     <string name="tools_id_front_msg"><!-- review -->आगे का भाग स्कैन करें, या गैलरी से फ़ोटो चुनें।</string>
     <string name="tools_id_scan_camera"><!-- review -->कैमरे से स्कैन करें</string>

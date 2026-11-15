@@ -360,7 +360,7 @@
     <string name="settings_auto_copy_to_documents_summary"><!-- review -->सहेजी गई कॉपी Documents/ScanWhirl में जाती हैं।</string>
     <string name="settings_auto_enhance"><!-- review -->स्कैन अपने आप बेहतर करें</string>
     <string name="settings_auto_enhance_summary"><!-- review -->Google की प्रोसेसिंग चालू है। बंद करने पर स्कैन जल्दी और मूल जैसा बनेगा।</string>
-    <string name="settings_searchable_pdf"><!-- review -->पीडीएफ सर्च करने योग्य बनाएं</string>
+    <string name="settings_searchable_pdf"><!-- review -->PDF सर्च करने योग्य बनाएँ</string>
     <string name="settings_searchable_pdf_summary"><!-- review -->OCR टेक्स्ट PDF में छिपाता है ताकि PDF ऐप्स उसे खोज सकें।</string>
     <string name="settings_privacy"><!-- review -->प्राइवेसी पॉलिसी</string>
     <string name="settings_privacy_summary"><!-- review -->प्राइवेसी पॉलिसी आपके ब्राउज़र में खुलेगी</string>
@@ -591,7 +591,7 @@
     </plurals>
     <string name="trash_delete_failed"><!-- review -->कुछ आइटम हटाए नहीं जा सके। वे अभी भी ट्रैश में हैं।</string>
     <string name="trash_empty_title">ट्रैश खाली है</string>
-    <string name="trash_empty_body"><!-- review -->30 दिन से पुरानी चीज़ें अपने आप हट जाती हैं।</string>
+    <string name="trash_empty_body"><!-- review -->30 दिन से पुराने दस्तावेज़ अपने आप हट जाते हैं।</string>
     <string name="trash_header_note">वापस लाए गए दस्तावेज़ पूरे लौटते हैं।</string>
     <string name="trash_error_title">ट्रैश नहीं खुल सका</string>
     <string name="trash_error_body">आपके दस्तावेज़ नहीं बदले। फिर से कोशिश करें।</string>
