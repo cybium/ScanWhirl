@@ -68,6 +68,18 @@ class PrivacySweepTest {
     }
 
     /**
+     * B9: inserting pages from the camera or the gallery copies normalised JPEGs into
+     * `cacheDir/insert_<id>/`; cancelling the insert used to leave the whole folder behind.
+     */
+    @Test
+    fun `insert page copies are removed on a cold start`() {
+        val page = file("insert_abcd1234/page_000.jpg", ByteArray(2048) { 5 })
+        PrivacySweep.run(app)
+        assertFalse("the copied page must not survive the process", page.exists())
+        assertFalse(File(cache, "insert_abcd1234").exists())
+    }
+
+    /**
      * B2: a backup or a restore killed halfway leaves the plaintext archive (and, for a restore,
      * the decrypted document tree) in the cache. Both use `fullbackup-<id>.tmp`, `restore-<id>.tmp`
      * and `restore-<id>/`, none of which the sweep knew about.

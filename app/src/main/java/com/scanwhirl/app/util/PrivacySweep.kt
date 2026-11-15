@@ -39,6 +39,11 @@ object PrivacySweep {
         "ocr_"
     )
 
+    /** Cache directories (relative to cacheDir) whose names start with a marker. */
+    internal val CACHE_DIR_PREFIXES = listOf(
+        "insert_"
+    )
+
     /**
      * Cache names a backup or a restore creates while it runs: the plaintext archive of a
      * backup (`fullbackup-<id>.tmp`), and the decrypted archive plus its extracted document
@@ -77,17 +82,22 @@ object PrivacySweep {
             if (dir.exists() && dir.deleteRecursively()) removed++
         }
         cache.listFiles()?.forEach { file ->
-            val plain = CACHE_FILE_PREFIXES.any { file.name.startsWith(it) }
+            val plainFile = file.isFile && CACHE_FILE_PREFIXES.any { file.name.startsWith(it) }
+            val plainDir = file.isDirectory && CACHE_DIR_PREFIXES.any { file.name.startsWith(it) }
             // The plaintext archive of an interrupted backup (`fullbackup-<id>.tmp`), and the
             // decrypted archive plus its document tree of an interrupted restore
             // (`restore-<id>.tmp`, `restore-<id>/`). A live job keeps its own.
             val backupTemp = BACKUP_CACHE_PREFIXES.any { file.name.startsWith(it) }
-            if (!plain && !backupTemp) return@forEach
-            if (backupTemp && jobRunning) return@forEach
-            if (file.isFile) {
-                if (file.delete()) removed++
-            } else if (file.isDirectory && file.deleteRecursively()) {
-                removed++
+            when {
+                plainFile -> if (file.delete()) removed++
+                plainDir -> if (file.deleteRecursively()) removed++
+                backupTemp && !jobRunning -> {
+                    if (file.isDirectory) {
+                        if (file.deleteRecursively()) removed++
+                    } else if (file.delete()) {
+                        removed++
+                    }
+                }
             }
         }
         return removed
