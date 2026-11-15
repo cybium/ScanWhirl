@@ -35,6 +35,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
@@ -463,6 +464,49 @@ class VaultActivityTest {
         assertFalse("the key is gone", store.isUnlocked())
         assertFalse("no unlocked banner", activity.need<View>(R.id.vaultBanner).isVisible)
         assertEquals("Unlock Vault", sheet().need<TextView>(R.id.swSheetTitle).text)
+    }
+
+    @Test
+    fun `recovery and backup buttons keep one line and their icons at narrow widths`() {
+        store.setup("246810")
+        RuntimeEnvironment.setFontScale(1.3f)
+        try {
+            val activity = launch()
+            val root = activity.window.decorView
+            val density = activity.resources.displayMetrics.density
+            val w = (360 * density).toInt()
+            val h = (640 * density).toInt()
+            root.measure(
+                View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
+            )
+            root.layout(0, 0, w, h)
+
+            for (id in listOf(R.id.vaultRecoveryButton, R.id.vaultBackupButton)) {
+                val button = activity.findViewById<TextView>(id)
+                assertTrue("button $id is visible", button.isVisible)
+                val layout = button.layout
+                assertNotNull("button $id was never laid out", layout)
+                assertEquals("${button.text} must stay on one line", 1, layout!!.lineCount)
+                assertTrue(
+                    "${button.text} is vertically clipped: layout ${layout.height}px in ${button.height}px",
+                    layout.height <= button.height
+                )
+                val available = button.width - button.compoundPaddingLeft - button.compoundPaddingRight
+                assertTrue(
+                    "${button.text} is horizontally clipped: ${layout.getLineWidth(0)}px of ${available}px",
+                    layout.getLineWidth(0) <= available + 1f
+                )
+                val icon = button.compoundDrawables[0]
+                assertNotNull("${button.text} lost its icon", icon)
+                assertTrue(
+                    "the icon is taller than the button",
+                    icon!!.intrinsicHeight <= button.height
+                )
+            }
+        } finally {
+            RuntimeEnvironment.setFontScale(1f)
+        }
     }
 
     @Test

@@ -9,7 +9,9 @@ import android.os.Build
 import android.os.Bundle
 import android.text.InputFilter
 import android.text.InputType
+import android.text.TextUtils
 import android.text.format.Formatter
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -25,6 +27,7 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.TextViewCompat
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -550,9 +553,23 @@ class VaultActivity : BaseActivity() {
                 stroke = SwStyle.color(this@VaultActivity, R.color.sw_cyan_hair_strong)
             )
             setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
-            compoundDrawablePadding = SwStyle.dp(this@VaultActivity, 7f)
+            compoundDrawablePadding = SwStyle.dp(this@VaultActivity, 6f)
             compoundDrawableTintList = ColorStateList.valueOf(
                 SwStyle.color(this@VaultActivity, R.color.cyan_primary)
+            )
+            // Two of these share a 360dp row: the 24dp icon plus a label must never wrap and
+            // push the icon out of the 46dp button. One line, and the label shrinks to 10sp
+            // before it is ever clipped (owner saw the icons leaving the button on a phone).
+            includeFontPadding = false
+            maxLines = 1
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
+            setPadding(
+                SwStyle.dp(this@VaultActivity, 6f), 0,
+                SwStyle.dp(this@VaultActivity, 6f), 0
+            )
+            TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                this, 10, 14, 1, TypedValue.COMPLEX_UNIT_SP
             )
             isClickable = true
             isFocusable = true
