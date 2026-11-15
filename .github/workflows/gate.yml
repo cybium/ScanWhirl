@@ -68,6 +68,10 @@ jobs:
           if rep:
               lines = open(rep[0], encoding="utf-8", errors="replace").read().strip().splitlines()
               lint = lines[-1] if lines else "empty report"
+              for i, l in enumerate(lines):
+                  if ": Error:" in l:
+                      failed.append("LINT " + l.split("/app/src/")[-1][:240])
+                      if i + 1 < len(lines): failed.append("     " + lines[i + 1].strip()[:200])
           ok = total > 0 and fail == 0 and skip == 0 and (lint == "skipped" or lint.startswith("0 errors"))
           verdict = f"GATE {'PASS' if ok else 'FAIL'} tests={total} failures={fail} skipped={skip} lint=[{lint}]"
           out = ["```", *failed[:40], verdict, "```"]
@@ -83,6 +87,7 @@ jobs:
           path: |
             gate-result.txt
             app/build/test-results/testDebugUnitTest/*.xml
+            app/build/reports/lint-results-debug.txt
           retention-days: 7
 
       - name: Verdict
