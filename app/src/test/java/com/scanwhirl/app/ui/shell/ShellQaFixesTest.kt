@@ -247,6 +247,48 @@ class ShellQaFixesTest {
         }
     }
 
+    @Test
+    fun `home has a language chip that offers English and Hindi in their own scripts`() {
+        launch { activity ->
+            val chip = activity.findViewById<TextView>(R.id.swLanguageChip)
+            assertNotNull("Home shows the language chip", chip)
+            assertEquals("A/अ", chip.text.toString())
+            assertTrue("chip is a 48dp target", chip.layoutParams.height >= (48 * activity.resources.displayMetrics.density).toInt())
+            assertNotNull("chip is announced", chip.contentDescription)
+            chip.performClick()
+            idle()
+            val sheet = ShadowDialog.getLatestDialog()
+            assertNotNull("the language sheet opens", sheet)
+            val options = sheet.findViewById<ViewGroup>(R.id.swSheetItems)
+            assertEquals("only English and Hindi", 2, options.childCount)
+            val labels = (0 until options.childCount).map { i ->
+                val row = options.getChildAt(i)
+                (if (row is TextView) row.text else allText(row as ViewGroup)).toString()
+            }
+            assertTrue(labels.toString(), labels[0].contains("English"))
+            assertTrue(labels.toString(), labels[1].contains("हिन्दी"))
+        }
+    }
+
+    @Test
+    fun `the brand name stays on one line in the home header`() {
+        launch { activity ->
+            val bar = activity.findViewById<View>(R.id.swBrandMark).parent as ViewGroup
+            val title = (0 until bar.childCount).map { bar.getChildAt(it) }
+                .filterIsInstance<TextView>()
+                .first { it.text.toString() == activity.getString(R.string.app_name) }
+            assertEquals(1, title.maxLines)
+        }
+    }
+
+    private fun allText(root: ViewGroup): String = (0 until root.childCount).joinToString(" ") { i ->
+        when (val v = root.getChildAt(i)) {
+            is TextView -> v.text.toString()
+            is ViewGroup -> allText(v)
+            else -> ""
+        }
+    }
+
     private fun findTrustPill(root: ViewGroup): TextView? {
         for (i in 0 until root.childCount) {
             val v = root.getChildAt(i)

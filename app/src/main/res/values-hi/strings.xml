@@ -33,7 +33,6 @@
     <string name="settings_language_section">भाषा</string>
     <string name="settings_language">ऐप की भाषा</string>
     <string name="language_system">सिस्टम डिफ़ॉल्ट</string>
-    <string name="language_more">और भाषाएँ…</string>
     <string name="settings_viewing">देखने का तरीका</string>
     <string name="settings_default_viewer">डिफ़ॉल्ट PDF व्यूअर</string>
     <string name="viewer_in_app">ScanWhirl व्यूअर</string>

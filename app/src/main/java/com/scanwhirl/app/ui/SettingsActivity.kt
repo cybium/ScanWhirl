@@ -4,12 +4,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -621,21 +619,19 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun chooseLanguage() {
+        // The app is translated into English and Hindi only; offering other languages showed
+        // English anyway, so they are not listed.
         val tags = arrayOf(
-            "", "en", "hi", "ur", "es", "fr", "de", "pt", "ar", "bn", "ru", "zh"
+            com.scanwhirl.app.util.AppLanguage.PHONE,
+            com.scanwhirl.app.util.AppLanguage.ENGLISH,
+            com.scanwhirl.app.util.AppLanguage.HINDI
         )
         val labels = tags.map { if (it.isEmpty()) getString(R.string.language_system) else languageLabel(it) }
-            .toMutableList()
-        labels.add(getString(R.string.language_more))
         val checked = tags.indexOf(Prefs.localeTag(this)).coerceAtLeast(0)
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.settings_language)
-            .setOptions(labels.toList(), checked) { which, _ ->
-                if (which >= tags.size) {
-                    openSystemLanguageSettings()
-                } else {
-                    applyLanguage(tags[which])
-                }
+            .setOptions(labels, checked) { which, _ ->
+                applyLanguage(tags[which.coerceIn(0, tags.lastIndex)])
             }
             .setSecondary(android.R.string.cancel)
             .build()
@@ -643,25 +639,8 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun applyLanguage(tag: String) {
-        Prefs.setLocaleTag(this, tag)
-        AppCompatDelegate.setApplicationLocales(
-            if (tag.isEmpty()) LocaleListCompat.getEmptyLocaleList()
-            else LocaleListCompat.forLanguageTags(tag)
-        )
+        com.scanwhirl.app.util.AppLanguage.apply(this, tag)
         updateSummaries()
-    }
-
-    private fun openSystemLanguageSettings() {
-        try {
-            val intent = if (Build.VERSION.SDK_INT >= 33) {
-                Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.parse("package:$packageName"))
-            } else {
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
-            }
-            startActivity(intent)
-        } catch (_: Exception) {
-            startActivity(Intent(Settings.ACTION_SETTINGS))
-        }
     }
 
     private fun chooseViewer() {

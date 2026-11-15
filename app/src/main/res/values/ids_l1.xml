@@ -43,6 +43,7 @@
     <item name="swNavScan" type="id" />
     <item name="swNavVault" type="id" />
     <item name="swBrandMark" type="id" />
+    <item name="swLanguageChip" type="id" />
     <item name="swChip" type="id" />
     <item name="swChipIcon" type="id" />
     <item name="swChipLabel" type="id" />

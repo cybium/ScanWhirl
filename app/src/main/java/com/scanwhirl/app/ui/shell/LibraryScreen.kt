@@ -41,6 +41,7 @@ import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
+import com.scanwhirl.app.util.AppLanguage
 import com.scanwhirl.app.util.BatchRename
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
@@ -823,11 +824,72 @@ class LibraryScreen(
                 text = context.getString(R.string.app_name)
                 typeface = SwType.extraBold(context)
                 letterSpacing = -0.01f
+                // The brand name never breaks: a longer translated pill used to squeeze it
+                // into "ScanWhi / rl" (Hindi). The name keeps its natural width on one line.
+                maxLines = 1
+                isSingleLine = true
             },
-            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
         )
-        row.addView(TrustPill.offlineNoAds(context))
+        // The pill gets whatever is left, right-aligned, and shortens with "…" if it must.
+        val pillSlot = android.widget.FrameLayout(context)
+        pillSlot.addView(
+            TrustPill.offlineNoAds(context).apply { ellipsize = android.text.TextUtils.TruncateAt.END },
+            android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.END or Gravity.CENTER_VERTICAL
+            )
+        )
+        row.addView(
+            pillSlot,
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = SwStyle.dp(context, 8f) }
+        )
+        row.addView(
+            languageChip(),
+            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
+                .apply { marginStart = SwStyle.dp(context, 8f) }
+        )
         return row
+    }
+
+    /**
+     * "A/अ" chip on Home: a Hindi reader can switch language without finding the English
+     * Settings row. Opens a two-choice sheet written in each language's own script.
+     */
+    private fun languageChip(): View =
+        SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+            id = R.id.swLanguageChip
+            text = context.getString(R.string.language_chip_label)
+            contentDescription = context.getString(R.string.language_chip_desc)
+            gravity = Gravity.CENTER
+            maxLines = 1
+            minWidth = SwStyle.dp(context, 48f)
+            val padH = SwStyle.dp(context, 12f)
+            setPadding(padH, 0, padH, 0)
+            background = SwStyle.rounded(
+                context,
+                SwStyle.color(context, R.color.glass_surface),
+                radiusDp = 24f,
+                stroke = SwStyle.color(context, R.color.sw_cyan_hair)
+            )
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { pickLanguage() }
+        }
+
+    private fun pickLanguage() {
+        val tags = listOf(AppLanguage.ENGLISH, AppLanguage.HINDI)
+        val checked = if (AppLanguage.showingHindi(context)) 1 else 0
+        com.scanwhirl.app.ui.kit.SwSheet.builder(context)
+            .setTitle(R.string.language_chip_title)
+            .setOptions(tags.map { AppLanguage.label(it) }, checked) { which, _ ->
+                val tag = tags[which.coerceIn(0, tags.lastIndex)]
+                if (which != checked) AppLanguage.apply(context, tag)
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun searchBox(): View {

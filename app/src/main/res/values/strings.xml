@@ -361,7 +361,6 @@
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>
     <string name="language_system">System default</string>
-    <string name="language_more">More languages…</string>
     <string name="settings_viewing">Viewing</string>
     <string name="settings_default_viewer">Default PDF viewer</string>
     <string name="viewer_in_app">ScanWhirl viewer</string>
