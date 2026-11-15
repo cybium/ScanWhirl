@@ -105,9 +105,15 @@
     <string name="find_action">Find</string>
     <string name="find_scanning">Looking for numbers…</string>
     <string name="find_none">No sensitive numbers found. You can still draw a box.</string>
-    <string name="find_results_title">Found %1$d items</string>
     <string name="find_hide_selected">Hide selected</string>
-    <string name="find_applied">Hid %1$d items. Check the boxes, then save.</string>
+    <plurals name="find_results_title">
+        <item quantity="one">Found %1$d item</item>
+        <item quantity="other">Found %1$d items</item>
+    </plurals>
+    <plurals name="find_applied">
+        <item quantity="one">Hid %1$d item. Check the box, then save.</item>
+        <item quantity="other">Hid %1$d items. Check the boxes, then save.</item>
+    </plurals>
     <string name="find_kind_aadhaar">Aadhaar</string>
     <string name="find_kind_vid">Aadhaar VID</string>
     <string name="find_kind_pan">PAN</string>
