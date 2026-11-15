@@ -110,6 +110,12 @@ class ScanRepository(private val context: Context) {
         /** Written into a Trash entry after its move: `v1 / original id / trashedAt`. */
         internal const val TRASH_MARKER = "trashed.txt"
 
+        /**
+         * How long a Trash entry stays restorable. The UI promises 30 days (`shell_trash_note`);
+         * [recoverTrash] deletes an older entry for good on the next start.
+         */
+        internal const val TRASH_RETENTION_MS = 30L * 24 * 60 * 60 * 1000
+
         /** Hidden entries being permanently deleted; finished by [recoverTrash]. */
         internal const val PURGE_PREFIX = ".purge-"
 
@@ -1117,14 +1123,25 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Startup recovery: finishes interrupted permanent deletes (hidden purge
-     * entries) and drops a Trash marker left in a restored document by a crash
-     * between the move and the marker cleanup. Never touches a visible entry.
+     * entries), expires Trash entries older than [TRASH_RETENTION_MS], and drops a
+     * Trash marker left in a restored document by a crash between the move and the
+     * marker cleanup. Entries a Replace moved here (`previous=`) are never expired:
+     * they belong to an interrupted Replace and [recoverOperations] puts them back.
      */
-    fun recoverTrash(): Int {
+    fun recoverTrash(now: Long = System.currentTimeMillis()): Int {
         var finished = 0
         synchronized(TRASH_LOCK) {
             trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }?.forEach { f ->
                 if (f.deleteRecursively()) finished++
+            }
+            trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.forEach { dir ->
+                val trashed = trashedIn(dir) ?: return@forEach
+                if (trashed.previousToken == null && now - trashed.trashedAt >= TRASH_RETENTION_MS) {
+                    if (dir.deleteRecursively()) {
+                        finished++
+                        dropDerivedCaches(trashed.originalId)
+                    }
+                }
             }
             docsDir.listFiles { f -> f.isDirectory }?.forEach { dir -> File(dir, TRASH_MARKER).delete() }
         }
