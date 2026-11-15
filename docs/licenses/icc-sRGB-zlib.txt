@@ -1,0 +1,39 @@
+sRGB.icc - sRGB colour profile embedded in ScanWhirl for PDF/A OutputIntents
+==========================================================================
+
+File:            app/src/main/res/raw/srgb.icc
+Size:            6922 bytes
+Format:          ICC v2 display ('mntr') profile, RGB / XYZ PCS, 'acsp' signature
+Upstream:        Debian package "icc-profiles-free" 2.0.1+dfsg-1.1
+                 (/usr/share/color/icc/sRGB.icc)
+Source:          http://debian.tagancha.org/icc-profiles/
+Copyright:       Kai-Uwe Behrmann <www.behrmann.name>
+                 Marti Maria <www.littlecms.com>
+                 Photogamut <www.photogamut.org>
+                 Graeme Gill <www.argyllcms.com>
+                 ColorSolutions <www.basICColor.com>
+Licence:         zlib/libpng (below), as stated in the package's copyright file.
+Not modified:    the file is embedded byte for byte.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source
+   distribution.
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.

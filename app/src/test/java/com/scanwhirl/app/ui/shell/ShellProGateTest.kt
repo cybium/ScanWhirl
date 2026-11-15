@@ -162,15 +162,15 @@ class ShellProGateTest {
                 started.component?.className
             )
 
-            // A Soon Pro tool keeps its honest Coming soon sheet in Pro.
-            val toExcel = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
+            // v2 UI: 03_tools_hub - Save as PDF/A ships now: in Pro it opens its real picker.
+            val pdfa = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
                 .first { it.tool?.id == "pdfa" }
-            toExcel.performClick()
+            pdfa.performClick()
             idle()
             val dialog = ShadowDialog.getLatestDialog()
             assertNotNull(dialog)
             assertEquals(
-                activity.getString(R.string.tool_coming_soon_title),
+                activity.getString(R.string.pdfa_pick),
                 dialog.findViewById<android.widget.TextView>(R.id.swSheetTitle).text.toString()
             )
             dialog.dismiss()
