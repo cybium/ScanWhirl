@@ -187,6 +187,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         meScreen = MeScreen(this, object : MeScreen.Callbacks {
             override fun onPro() = showPro()
             override fun onSettings() = startActivity(SettingsActivity.intent(this@ShellActivity))
+            override fun onBackup() = startActivity(com.scanwhirl.app.ui.backup.BackupActivity.intent(this@ShellActivity))
             override fun onTrash() = startActivity(TrashActivity.intent(this@ShellActivity))
             override fun onAbout() = showAbout()
         })

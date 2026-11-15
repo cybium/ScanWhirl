@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full Backup 2.0 (Me -> Backup & restore). -->
+<resources>
+    <string name="me_backup">Backup &amp; restore</string>
+    <string name="me_backup_summary">One encrypted file with every scan, the Vault and your settings</string>
+
+    <string name="backup_title">Backup &amp; restore</string>
+    <string name="backup_explain">One encrypted file with every scan, the Vault, signatures and settings. Restore it on a new phone and everything comes back in its place.</string>
+    <string name="backup_never">No backup yet</string>
+    <string name="backup_today">Last backup: today</string>
+    <string name="backup_one_day">Last backup: yesterday</string>
+    <string name="backup_days_ago">Last backup: %1$d days ago</string>
+    <string name="backup_now">Back up now</string>
+    <string name="backup_restore">Restore from backup</string>
+    <string name="backup_remind">Remind me if my last backup is a month old</string>
+    <string name="backup_no_internet">ScanWhirl has no internet permission. Google Drive opens through the share sheet when you choose Share.</string>
+
+    <string name="backup_choose">Protect the backup</string>
+    <string name="backup_choose_note">Choose what opens this file. You will need the same thing to restore it.</string>
+    <string name="backup_use_code">Use the Vault recovery code</string>
+    <string name="backup_use_password">Use a backup password</string>
+    <string name="backup_cancel">Cancel</string>
+
+    <string name="backup_code_title">Vault recovery code</string>
+    <string name="backup_code_note">Type your Vault recovery code. The backup is encrypted with it, so nobody without the code can open it.</string>
+    <string name="backup_code_hint">ABCD EFGH IJKL MNOP QRST UVWX</string>
+    <string name="backup_code_wrong">That is not your Vault recovery code.</string>
+    <string name="backup_continue">Continue</string>
+
+    <string name="backup_password_title">Backup password</string>
+    <string name="backup_password_note">At least %1$d characters. Write it down: without it the backup cannot be opened.</string>
+    <string name="backup_password_hint">Backup password</string>
+    <string name="backup_password_short">Use at least %1$d characters.</string>
+
+    <string name="backup_working">Encrypting the backup…</string>
+    <string name="backup_failed">The backup could not be written.</string>
+    <string name="backup_saved">Backup saved</string>
+    <string name="backup_ready">Backup ready</string>
+    <string name="backup_ready_note">%1$d MB, encrypted. Save it to your phone or share it with Drive.</string>
+    <string name="backup_save_device">Save to device</string>
+    <string name="backup_share">Share</string>
+    <string name="backup_share_title">Save the backup</string>
+    <string name="backup_subject">ScanWhirl backup</string>
+
+    <string name="backup_restore_go">Restore</string>
+    <string name="backup_restoring">Restoring…</string>
+    <string name="backup_restored">Backup restored</string>
+    <string name="backup_restored_docs">%1$d documents restored</string>
+    <string name="backup_restored_skipped">%1$d already here, left alone</string>
+    <string name="backup_restored_vault">%1$d Vault files restored</string>
+    <string name="backup_wrong_secret">Wrong password or recovery code. Nothing was changed.</string>
+    <string name="backup_not_a_backup">That file is not a ScanWhirl backup, or it is damaged.</string>
+    <string name="backup_failed_title">Could not restore</string>
+</resources>
