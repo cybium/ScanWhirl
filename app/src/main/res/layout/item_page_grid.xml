@@ -48,18 +48,30 @@
             android:textColor="#FFFFFFFF"
             android:textSize="12sp" />
 
-        <!-- Round selection check: visible only in selection mode (owner revision). -->
-        <ImageView
-            android:id="@+id/checkSelect"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+        <!-- Round selection check: visible only in selection mode (owner revision).
+             The 48dp wrapper is the touch target; the 28dp circle is the visual. -->
+        <FrameLayout
+            android:id="@+id/checkSelectTouch"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_gravity="top|end"
-            android:layout_margin="6dp"
-            android:background="@drawable/bg_page_check"
+            android:clickable="true"
             android:contentDescription="@string/review_select_page"
-            android:padding="5dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_sw_check"
-            app:tint="#FFFFFFFF" />
+            android:focusable="true"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/checkSelect"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_page_check"
+                android:contentDescription="@null"
+                android:importantForAccessibility="no"
+                android:padding="5dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_sw_check"
+                app:tint="#FFFFFFFF" />
+        </FrameLayout>
     </com.scanwhirl.app.ui.pagegrid.AspectRatioLayout>
 </com.google.android.material.card.MaterialCardView>

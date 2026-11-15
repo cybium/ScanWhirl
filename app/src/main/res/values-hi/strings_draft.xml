@@ -75,4 +75,31 @@
         <item quantity="one"><!-- review -->%1$d पेज जोड़ा गया</item>
         <item quantity="other"><!-- review -->%1$d पेज जोड़े गए</item>
     </plurals>
+
+    <!-- review: accessibility announcements and actions. -->
+    <string name="a11y_page_of"><!-- review -->पेज %1$d / %2$d</string>
+    <string name="a11y_page_of_selected"><!-- review -->पेज %1$d / %2$d, चयनित</string>
+    <string name="a11y_select_page_of"><!-- review -->पेज %1$d / %2$d चुनें</string>
+    <string name="a11y_moved_to"><!-- review -->पेज %1$d / %2$d पर ले जाया गया</string>
+    <string name="a11y_page_image"><!-- review -->पेज %1$d / %2$d</string>
+    <string name="a11y_no_mark_selected"><!-- review -->पेज %1$d / %2$d. कोई निशान नहीं चुना गया.</string>
+    <string name="a11y_mark_selected"><!-- review -->%1$s, पेज %2$d / %3$d पर चयनित</string>
+    <string name="a11y_mark_text"><!-- review -->टेक्स्ट</string>
+    <string name="a11y_mark_signature"><!-- review -->हस्ताक्षर</string>
+    <string name="a11y_mark_picture"><!-- review -->चित्र</string>
+    <string name="a11y_mark_highlight"><!-- review -->हाइलाइट</string>
+    <string name="a11y_mark_badge"><!-- review -->बैज</string>
+    <string name="a11y_mark_redact"><!-- review -->काला किया गया भाग</string>
+    <string name="a11y_mark_ink"><!-- review -->स्याही</string>
+    <string name="a11y_mark_watermark"><!-- review -->वॉटरमार्क</string>
+    <string name="a11y_mark_page_number"><!-- review -->पेज नंबर</string>
+    <string name="a11y_move_left"><!-- review -->बाएँ ले जाएँ</string>
+    <string name="a11y_move_right"><!-- review -->दाएँ ले जाएँ</string>
+    <string name="a11y_move_up"><!-- review -->ऊपर ले जाएँ</string>
+    <string name="a11y_move_down"><!-- review -->नीचे ले जाएँ</string>
+    <string name="a11y_grow"><!-- review -->बड़ा करें</string>
+    <string name="a11y_shrink"><!-- review -->छोटा करें</string>
+    <string name="a11y_rotate_cw"><!-- review -->दक्षिणावर्त घुमाएँ</string>
+    <string name="a11y_rotate_ccw"><!-- review -->वामावर्त घुमाएँ</string>
+    <string name="a11y_delete_mark"><!-- review -->निशान हटाएँ</string>
 </resources>

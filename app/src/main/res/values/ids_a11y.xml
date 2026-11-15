@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Accessibility action ids for canvas marks and page tiles. Custom actions appear in
+     TalkBack's local context menu, so drag/resize/rotate work without a precision touch. -->
+<resources>
+    <item name="a11y_move_left" type="id" />
+    <item name="a11y_move_right" type="id" />
+    <item name="a11y_move_up" type="id" />
+    <item name="a11y_move_down" type="id" />
+    <item name="a11y_grow" type="id" />
+    <item name="a11y_shrink" type="id" />
+    <item name="a11y_rotate_cw" type="id" />
+    <item name="a11y_rotate_ccw" type="id" />
+    <item name="a11y_delete_mark" type="id" />
+</resources>

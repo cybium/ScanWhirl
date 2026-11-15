@@ -185,6 +185,10 @@ class StampEditorActivity : BaseActivity() {
                     else -> Unit
                 }
             }
+
+            override fun onDelete(index: Int) {
+                if (editor.selected == index && editor.removeSelected()) refresh()
+            }
         }
 
         binding.prevPage.setOnClickListener {
@@ -275,8 +279,12 @@ class StampEditorActivity : BaseActivity() {
         return ToolTile(this).apply {
             this.id = id
             bind(tool)
+            labelView.maxLines = 3
             setOnClickListener { action() }
-            layoutParams = LinearLayout.LayoutParams(dp(82f), dp(68f)).apply {
+            minimumHeight = dp(68f)
+            layoutParams = LinearLayout.LayoutParams(
+                dp(82f), LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
                 marginEnd = dp(2f)
             }
         }
