@@ -1,4 +1,4 @@
-# Dead-button audit allow-list (owner rule: no dead buttons; greyed when unavailable).
+﻿# Dead-button audit allow-list (owner rule: no dead buttons; greyed when unavailable).
 #
 # One exception per line:  screen|rule|control|reason
 #   screen  audit screen name, or * for every screen
@@ -17,7 +17,4 @@
 # L4 tools: the row launches the system document picker through ActivityResult.
 Tool setup|dead|toolSetupDocRow|L4 tools: system document picker launcher
 # L2 vault: the lock button re-prompts only once; the sheet was already shown on open.
-Vault|dead|vaultLock|L2 vault: relock prompt already shown
 # L2 protect sheet: real owner-rule defect (disabled buttons keep alpha 1) - dispatched.
-Protect sheet|disabled-look|protectShare|L2 app bug: disabled button not greyed - dispatched
-Protect sheet|disabled-look|protectSave|L2 app bug: disabled button not greyed - dispatched

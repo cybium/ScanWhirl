@@ -35,6 +35,9 @@ import com.scanwhirl.app.R
  */
 object ProtectSheet {
 
+    /** Material's disabled alpha; a disabled button at full alpha still looks tappable. */
+    private const val DISABLED_ALPHA = 0.38f
+
     data class Doc(val name: String, val pages: Int, val sizeBytes: Long)
 
     /**
@@ -158,6 +161,10 @@ object ProtectSheet {
             val enabled = ProtectPassword.accepts(password.text.toString()) && matches
             shareButton.isEnabled = enabled
             saveButton.isEnabled = enabled
+            // A disabled MaterialButton keeps full alpha and still looks tappable; grey it out
+            // (DeadButtonAuditTest, owner rule).
+            shareButton.alpha = if (enabled) 1f else DISABLED_ALPHA
+            saveButton.alpha = if (enabled) 1f else DISABLED_ALPHA
         }
 
         val watcher = SimpleTextWatcher { refresh() }
