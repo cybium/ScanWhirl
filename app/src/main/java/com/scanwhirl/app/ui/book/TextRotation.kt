@@ -6,62 +6,57 @@ import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import com.scanwhirl.app.util.BookSplit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.max
-import kotlin.math.roundToInt
 
 /**
- * Which way to turn the top page of a **horizontal** spread so both pages come out upright.
+ * Which 90° turn makes a sideways page's text upright: ML Kit text recognition on both candidate
+ * rotations of a downscaled page, more recognised words wins. The engine's margin heuristic is
+ * the offline fallback; the preview's "Rotate pages" button flips the other candidate.
  *
- * On a phone with Google Play services, ML Kit text recognition runs on both 90° candidate
- * rotations of a downscaled top page and picks the one with more recognised words. Without it
- * (Robolectric, no model), the offline margin heuristic in [BookSplit.topRotatesClockwise] is
- * used, and the preview's "Rotate" button lets the owner flip the result.
- *
- * [chooser] is the test seam; a fake returns a fixed direction.
+ * [chooser] is the test seam; a fake returns a fixed rotation.
  */
 internal object TextRotation {
 
     @Volatile
-    internal var chooser: (suspend (Bitmap, BookSplit.Gutter) -> Boolean)? = null
+    internal var chooser: (suspend (Bitmap) -> Int?)? = null
 
-    suspend fun choose(bitmap: Bitmap, gutter: BookSplit.Gutter): Boolean {
-        chooser?.let { return it(bitmap, gutter) }
-        if (!gutter.horizontal) return true
-        return withContext(Dispatchers.IO) {
-            recognise(bitmap, gutter) ?: BookSplit.topRotatesClockwise(bitmap, gutter)
-        }
+    suspend fun chooseRotation(bitmap: Bitmap): Int? {
+        chooser?.let { return it(bitmap) }
+        return withContext(Dispatchers.IO) { recognise(bitmap) }
     }
 
-    private fun recognise(bitmap: Bitmap, gutter: BookSplit.Gutter): Boolean? {
-        val cut = (gutter.ratio * bitmap.height).roundToInt().coerceIn(1, bitmap.height - 1)
-        val top = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, cut)
-        val scale = 700f / max(bitmap.width, cut)
+    private fun recognise(bitmap: Bitmap): Int? {
+        val scale = 700f / max(bitmap.width, bitmap.height)
         val small = if (scale < 1f) {
             Bitmap.createScaledBitmap(
-                top, max(1, (bitmap.width * scale).toInt()), max(1, (cut * scale).toInt()), true
+                bitmap,
+                max(1, (bitmap.width * scale).toInt()),
+                max(1, (bitmap.height * scale).toInt()),
+                true
             )
         } else {
-            top
+            bitmap
         }
-        if (small !== top) top.recycle()
-
         val clockwise = rotate(small, 90f)
         val counter = rotate(small, -90f)
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         return try {
             val cw = words(recognizer, clockwise)
             val ccw = words(recognizer, counter)
-            if (cw == ccw) null else cw > ccw
+            when {
+                cw == ccw -> null
+                cw > ccw -> 90
+                else -> 270
+            }
         } catch (_: Exception) {
             null
         } finally {
             recognizer.close()
             clockwise.recycle()
             counter.recycle()
-            small.recycle()
+            if (small !== bitmap) small.recycle()
         }
     }
 

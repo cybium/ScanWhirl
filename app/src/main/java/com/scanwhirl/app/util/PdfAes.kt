@@ -128,6 +128,7 @@ object PdfAes {
     ): Encryption {
         require(password.isNotEmpty()) { "Password must not be empty" }
         val pw = normalizePassword(password)
+        try {
 
         val uValidation = randomBytes(SALT_BYTES)
         val uKeySalt = randomBytes(SALT_BYTES)
@@ -157,6 +158,9 @@ object PdfAes {
         val perms = aesEcb(true, fileKey, permsBlock)
 
         return Encryption(fileKey, o, u, oe, ue, perms, permissions, fileId, encryptMetadata)
+        } finally {
+            pw.fill(0)
+        }
     }
 
     /**
@@ -166,20 +170,28 @@ object PdfAes {
     fun userKey(password: String, u: ByteArray, ue: ByteArray): ByteArray? {
         if (u.size != 48 || ue.size != KEY_BYTES) return null
         val pw = normalizePassword(password)
-        val validationSalt = u.copyOfRange(32, 40)
-        if (!MessageDigest.isEqual(hash(pw, validationSalt), u.copyOfRange(0, 32))) return null
-        val intermediate = hash(pw, u.copyOfRange(40, 48))
-        return aesCbc(false, intermediate, ZERO_IV, ue, "AES/CBC/NoPadding")
+        return try {
+            val validationSalt = u.copyOfRange(32, 40)
+            if (!MessageDigest.isEqual(hash(pw, validationSalt), u.copyOfRange(0, 32))) return null
+            val intermediate = hash(pw, u.copyOfRange(40, 48))
+            aesCbc(false, intermediate, ZERO_IV, ue, "AES/CBC/NoPadding")
+        } finally {
+            pw.fill(0)
+        }
     }
 
     /** Algorithm 2.A for the owner password (Algorithm 11): /U is the owner hash's user data. */
     fun ownerKey(password: String, o: ByteArray, oe: ByteArray, u: ByteArray): ByteArray? {
         if (o.size != 48 || oe.size != KEY_BYTES || u.size != 48) return null
         val pw = normalizePassword(password)
-        val validationSalt = o.copyOfRange(32, 40)
-        if (!MessageDigest.isEqual(hash(pw, validationSalt, u), o.copyOfRange(0, 32))) return null
-        val intermediate = hash(pw, o.copyOfRange(40, 48), u)
-        return aesCbc(false, intermediate, ZERO_IV, oe, "AES/CBC/NoPadding")
+        return try {
+            val validationSalt = o.copyOfRange(32, 40)
+            if (!MessageDigest.isEqual(hash(pw, validationSalt, u), o.copyOfRange(0, 32))) return null
+            val intermediate = hash(pw, o.copyOfRange(40, 48), u)
+            aesCbc(false, intermediate, ZERO_IV, oe, "AES/CBC/NoPadding")
+        } finally {
+            pw.fill(0)
+        }
     }
 
     /** NFKC, UTF-8, at most [MAX_PASSWORD_BYTES] bytes — the standard's password preparation. */
