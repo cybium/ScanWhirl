@@ -3,4 +3,6 @@
     <files-path name="internal_docs" path="documents/" />
     <files-path name="internal_exports" path="exports/" />
     <cache-path name="cache_docs" path="documents/" />
+    <!-- Full Backup 2.0 archives live here until the user saves or shares them. -->
+    <cache-path name="backup" path="fullbackup/" />
 </paths>

@@ -121,7 +121,7 @@ class FullBackup(
                     out.writeByte(END)
                 }
                 val salt = VaultCrypto.newSalt()
-                val key = VaultCrypto.deriveKey(secret, salt, VaultCrypto.PBKDF2_ITERATIONS)
+                val key = secretKey(secret, wrap, salt, VaultCrypto.PBKDF2_ITERATIONS)
                 target.parentFile?.mkdirs()
                 val part = File(target.parentFile, target.name + ".part")
                 try {
@@ -155,6 +155,24 @@ class FullBackup(
         } finally {
             plain.delete()
         }
+    }
+
+    /**
+     * The key for the outer container. The recovery code is normalised first, so a code typed
+     * with or without spaces (and in either case) opens the same file: the device QA found a
+     * backup written with the formatted code and a restore that derived from the normalised one,
+     * which produced different keys.
+     */
+    private fun secretKey(secret: String, wrap: Wrap, salt: ByteArray, iterations: Int): ByteArray {
+        val normalized = if (wrap == Wrap.RECOVERY_CODE) VaultCrypto.normalizeRecoveryCode(secret) else secret
+        return VaultCrypto.deriveKey(normalized, salt, iterations)
+    }
+
+    /** Where the UI writes an archive before saving or sharing it (covered by the FileProvider). */
+    fun newArchiveFile(): File {
+        val dir = File(context.cacheDir, "fullbackup").apply { mkdirs() }
+        val stamp = java.text.SimpleDateFormat("yyyy-MM-dd-HHmm", java.util.Locale.US).format(java.util.Date())
+        return File(dir, "ScanWhirl-$stamp.$EXTENSION")
     }
 
     /**
@@ -220,7 +238,7 @@ class FullBackup(
                 else "This backup needs the Vault recovery code"
             )
         }
-        val key = VaultCrypto.deriveKey(secret, header.salt, header.iterations)
+        val key = secretKey(secret, header.wrap, header.salt, header.iterations)
         val plain = File(context.cacheDir, "restore-${UUID.randomUUID().toString().take(8)}.tmp")
         val staging = File(context.cacheDir, "restore-${UUID.randomUUID().toString().take(8)}")
         try {

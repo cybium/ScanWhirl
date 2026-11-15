@@ -25,7 +25,8 @@ object PrivacySweep {
         "vault_verify",
         "documents",
         "pdfa",
-        "exports"
+        "exports",
+        "fullbackup"
     )
 
     /** Cache files (relative to cacheDir) whose names start with a marker. */
