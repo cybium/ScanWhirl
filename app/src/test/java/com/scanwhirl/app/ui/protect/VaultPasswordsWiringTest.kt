@@ -439,8 +439,10 @@ class VaultPasswordsWiringTest {
             scenario.onActivity { button!!.performClick() }
 
             assertTrue("protection is removed", pollUntil { !repo.getDocument(id)!!.isLocked })
-            assertFalse("the saved password is removed too",
-                VaultPasswords.of(app).has(id))
+            assertTrue(
+                "the saved password is removed too",
+                pollUntil { !VaultPasswords.of(app).has(id) }
+            )
         }
     }
 
