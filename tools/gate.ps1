@@ -125,7 +125,7 @@ try {
     # Build from a mirror on the Linux disk (~/swbuild/<lane>): reading/writing /mnt/c from WSL is several times slower.
     # The mirror keeps its own build folder, so builds stay incremental and never mix with Windows (lint) outputs.
     $mirror = "/home/cybium/swbuild/$Lane"
-    $filter = if ($Tests) { "--tests '$Tests'" } else { "" }
+    $filter = if ($Tests) { ($Tests.Split(',') | % { $_.Trim() } | ? { $_ } | % { "--tests '$_'" }) -join ' ' } else { "" }
     $sync = "mkdir -p $mirror && rsync -a --delete --exclude=/.git --exclude=/.gradle --exclude=/.kotlin --exclude=/build --exclude=/app/build --exclude=/builds --exclude=/keystore $wslRoot/ $mirror/ && rm -rf $mirror/app/build/test-results/testDebugUnitTest"
     if ($Apk) {
         $apkOut = "$root\app\build\outputs\apk\debug\app-debug.apk"
