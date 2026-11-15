@@ -46,6 +46,12 @@ object UnlockSheet {
 
         root.findViewById<TextView>(R.id.unlockTitle).text =
             activity.getString(R.string.unlock_sheet_title, documentName)
+        dialog.setOnShowListener {
+            androidx.core.view.ViewCompat.setAccessibilityPaneTitle(
+                dialog.window?.decorView ?: root,
+                activity.getString(R.string.unlock_sheet_title, documentName)
+            )
+        }
         val field = root.findViewById<EditText>(R.id.unlockPassword)
         val showButton = root.findViewById<ImageButton>(R.id.unlockPasswordShow)
         val error = root.findViewById<TextView>(R.id.unlockError)

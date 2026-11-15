@@ -9,16 +9,6 @@
 # This file must stay narrow. Fixing a finding means deleting its line.
 # Findings for other lanes are listed in docs/audit/2026-11-15/ACCESSIBILITY.md.
 
-Protect sheet|clip|protectSave|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|clip|protectShare|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|clip|The modern standard. Str|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|contrast|PASSWORD|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|contrast|TYPE IT AGAIN|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|focus|DecorView|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|image|AppCompatImageView|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|touch|protectClose|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|touch|protectPasswordShow|L2 protect sheet: touch, contrast, images, pane title - dispatched
-Protect sheet|touch|protectSave|L2 protect sheet: touch, contrast, images, pane title - dispatched
 Scan review|clip|pageStatus|L1 review: touch, contrast, clipping - dispatched
 Scan review|clip|titleInput|L1 review: touch, contrast, clipping - dispatched
 Scan review|contrast|btnModeFocus|L1 review: touch, contrast, clipping - dispatched
@@ -50,17 +40,4 @@ Tool setup|clip|toolSetupRanges|L4 tools: setup touch/contrast/clip - dispatched
 Tool setup|contrast|OPTIONS|L4 tools: setup touch/contrast/clip - dispatched
 Tool setup|contrast|SOURCE|L4 tools: setup touch/contrast/clip - dispatched
 Tool setup|touch|ImageButton|L4 tools: setup touch/contrast/clip - dispatched
-Unlock sheet|clip|unlockCancel|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|clip|unlockOpen|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|contrast|or|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|focus|DecorView|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|image|AppCompatImageView|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|touch|unlockCancel|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Unlock sheet|touch|unlockPasswordShow|L2 unlock sheet: touch, contrast, images, pane title - dispatched
-Vault|clip|vaultBackupButton|L2 vault: touch targets and image description - dispatched
-Vault|clip|vaultRecoveryButton|L2 vault: touch targets and image description - dispatched
-Vault|image|ImageView|L2 vault: touch targets and image description - dispatched
-Vault|touch|vaultBackupButton|L2 vault: touch targets and image description - dispatched
-Vault|touch|vaultLock|L2 vault: touch targets and image description - dispatched
-Vault|touch|vaultMore|L2 vault: touch targets and image description - dispatched
-Vault|touch|vaultRecoveryButton|L2 vault: touch targets and image description - dispatched
+Tools|contrast|1|L1 shell: TEXT section count uses cyan_dim (4.06:1) - dispatched
