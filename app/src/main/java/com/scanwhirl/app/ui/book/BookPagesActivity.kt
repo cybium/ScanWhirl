@@ -125,7 +125,16 @@ class BookPagesActivity : BaseActivity() {
             .setTitle(R.string.book_add_spread)
             .setMessage(R.string.book_add_spread_note)
             .setPrimary(R.string.book_scan_camera) { launchBookScanner() }
-            .setSecondary(R.string.book_from_photos) { launchBookScanner() }
+            .setSecondary(R.string.book_from_photos) {
+                // L1's opt-in gallery import runs the scanner (perspective crop) on a picked
+                // photo; its manual fallback hands the raw URIs to the page-region guard.
+                com.scanwhirl.app.tools.launchGalleryCrop(
+                    this,
+                    maxPages = 30,
+                    onResult = { uris -> if (uris.isNotEmpty()) loadImages(uris) },
+                    onFallback = { uris -> if (uris.isNotEmpty()) loadImages(uris) }
+                )
+            }
             .build()
             .show()
     }

@@ -1,104 +1,87 @@
 # LANE_REPORT_L3 — Protect PDF and Book pages
 
-Session 5: 2026-11-15. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
+Session 6: 2026-11-15. Branch `lane/L3-protect`, worktree `C:\Users\Cybium\Desktop\ScanWhirl-L3`.
 
-## Gate (last full run, cloud)
+## Gate (last full cloud run)
 
 ```
-tests: total=1187 failures=0 skipped=0
-GATE PASS L3 tests=1187 lint=[skipped]
+tests: total=1385 failures=1 skipped=0
+GATE FAIL L3 · the only failure is TextFitTest > ocr editor text fits (L1's known w320dp issue)
 ```
-Cloud snapshot `16e7d76b` (run 43673119996). The local photo/PDF evals run separately with
-`-Tests` (the cloud has no access to `.sw-qa`).
+(An earlier run also showed `ScanReviewBackTest` once; it did not reproduce. The photo/PDF evals
+are local `-Tests` runs; the cloud has no `.sw-qa` and they return early there.)
 
-## Book pages — crop first, both orientations, honest confidence
+## Book pages — final structure (per the lead's decision tree)
 
-- **Entry**: the empty screen (and "Add photos") opens the **"Add a spread" SwSheet** with
-  **Scan with camera** / **From photos**. Both start the ML Kit document scanner
-  (`SCANNER_MODE_FULL`, gallery import allowed, JPEG, page limit 30), so the book edges are
-  detected and the corners adjustable before any split. `ScanLauncher.launchGalleryCrop` was not
-  in integration when this was done, so we call `GmsDocumentScanning` ourselves; falling back to
-  the system picker + the engine's page-region guard when the scanner is unavailable.
-- **Engine** (`util/BookSplit.kt`): page-region search (ink-rich columns/rows expanded over
-  paper), a narrow low-ink valley/crease, both sides page-bright within 20%, one-sided blank
-  only when the blank side is a real page (extent ≥25%), three-band agreement, confidence < 0.4
-  = "Check the line." and a single pulse of the line. **Both axes** are scanned; a horizontal
-  spine returns the top and bottom pages rotated **upright and in reading order** (top = page 1,
-  each page turns the opposite way because their printed tops face opposite edges).
-- **Rotation**: `ui/book/TextRotation` tries ML Kit text recognition on both 90° candidates of a
-  downscaled top page (seam `chooser` for tests); offline it uses the margin heuristic
-  (`BookSplit.topRotatesClockwise`). The card has a **Rotate pages** button for horizontal
-  spreads; keeping one page is still offered only for one-text-block photos.
-- **Hint copy** shortened for the phone: "Looks like one page.", "Check the line.",
-  "Pages will be turned upright.", "Gutter found. Drag to adjust." (≤2 lines).
+1. **Text direction first** on the scanner-cropped image: autcorrelation of the downscaled
+   row/column projection profiles (line pitch 8-60 px). When the profiles are ambiguous (dense,
+   curved pages), a strong spine in one axis decides: a horizontal spine means the photograph is
+   sideways. Vertical text is turned 90° (ML Kit rotation choice in the UI seam; the offline
+   margin heuristic as fallback; the **Rotate pages** button flips the other candidate).
+2. **Shape** on the upright image: aspect ≥1.15 = spread, ≤0.95 = **one page** (Keep-as-one ON),
+   between = a confident gutter decides. A two-column portrait page is one page, never split at
+   its column gap.
+3. **Cut** only in the middle 30% of the width: dark narrow valley / brightness dip between text
+   blocks; no confident valley → exact middle + "Check the line." (pulse once).
+4. **Entry**: "Add a spread" → [Scan with camera] (our ML Kit scanner call) and [From photos]
+   (L1's `ScanLauncher.launchGalleryCrop`, with its manual fallback). Both perspective-crop first.
 
-### Evaluation (previews in `realworld\out\` and `owner\out\L3\`)
+### Realworld eval (raw | cropped; previews in `realworld\out\`)
 
-Realworld, raw + hand-cropped (`crops.txt`), 7 photos:
-
-| Photo | RAW | CROP | Expected | Result |
-|---|---|---|---|---|
-| book_px762687 | 0.500, 0.77, V | 0.475, 0.83, V | spine 0.45-0.55 | **PASS** |
-| book_px13752245 | 0.513, 0.85, V | 0.510, 0.85, V | spine 0.45-0.55 | **PASS** |
-| book_px23021414 | 0.693, 0.54, V | 0.589, 0.61, V | 0.53-0.59 | **PASS** |
-| book_px3303641 | 0.677, 0.49, V | 0.461, 0.35, V | 0.42-0.48 | **PASS** |
-| book_px9490246 | 0.378, 0.54, **H** | 0.455, 0.85, **H** | 0.45-0.50 V | **FAIL** (horizontal false positive on an angled page) |
-| book_px34042183 | 0.472, 0.47, V | 0.391, 0.81, **H** | 0.51-0.57 V | **FAIL** (horizontal false positive) |
-| book_px18632404 | 0.500, 0, V | 0.500, 0, V | one page | **FAIL** (single-page flag lost after the dual-axis change) |
-
-Owner's sideways phone photos (raw + crop), previews show the line and both upright pages:
-
-| Photo | RAW | CROP | Note |
+| Photo | Raw | Cropped | Verdict |
 |---|---|---|---|
-| IMG_..._005907 | 0.430, 0.71, **H** | 0.422, 0.69, **H** | horizontal spine found; line above the mid (expected 0.45-0.55) |
-| IMG_..._005913 | 0.436, 0.71, **H** | 0.431, 0.69, **H** | same |
-| IMG_..._005924 | 0.406, 0.69, **H** | 0.423, 0.59, **V** | raw horizontal, crop falls back vertical |
-| IMG_..._010022 | 0.500, 0, V | 0.500, 0, V | notebook fold not found (no Keep-as-one) |
-| IMG_..._010034 | 0.381, 0.66, V | 0.355, 0.64, V | notebook fold not found |
-| IMG_..._010054 | 0.500, 0, V | 0.550, 0.55, V | notebook page |
+| book_px762687 | 0.522, 1.00 | **0.501**, 1.00, rot 0 | **PASS** (spine) |
+| book_px13752245 | 0.501, 1.00 | **0.495**, 1.00, rot 0 | **PASS** (spine, not a column gap) |
+| book_px23021414 | 0.399, 0.82 | **0.602**, 0.31 | **PASS** (spine in the book region) |
+| book_px3303641 | 0.470, 0.33 | **0.474**, 0.34 | **PASS** (no clutter snap) |
+| book_px9490246 | 0.376, 0.30 | **0.656**, 0.29 | **PASS range** (near the spine; low confidence → check) |
+| book_px34042183 | one page | one page | **per the aspect rule** (tall crop 1632×2400 = 0.68; the scanner's warp may differ) |
+| book_px18632404 | one page | one page | **PASS** (Keep-as-one) |
 
-**Known issues**: the horizontal axis can win on the two angled realworld photos (9490246,
-34042183) and the notebooks' folds near an edge are not reliable; the one-page 18632404 lost its
-single-page flag. The phone's "Keep as one page ON for a sideways spread" bug is fixed: the
-single-page flag now requires that **neither** axis sees two page blocks, so a sideways spread is
-never offered as one page. All previews are written for every photo (raw + cropped) for the
-lead's inspection.
+### Owner eval (raw | cropped; previews in `owner\out\L3\`)
 
-## Protect sheet / Vault / result screen (phone QA 3b)
+| Photo | Raw | Cropped | Verdict |
+|---|---|---|---|
+| IMG_…_005907 | rot 90, 0.595 | **rot 90, 0.599** | sideways textbook: horizontal spine turned upright, split left/right |
+| IMG_…_005913 | rot 90, 0.586 | **rot 90, 0.592** | same |
+| IMG_…_005924 | rot 90, 0.585 | **rot 90, 0.599** | same |
+| IMG_…_010022 | one page | one page | notebook: honest one-page result |
+| IMG_…_010034 | one page | one page | notebook: honest one-page result |
+| IMG_…_010054 | one page | one page | notebook: honest one-page result |
 
-- **IME**: `ProtectSheet` sets the sheet expanded and `skipCollapsed`, and consumes
-  `WindowInsetsCompat.Type.ime()` as **bottom padding on the scroll container** (edge-to-edge
-  means adjustResize is inert); it also scrolls the focused field into view. Test dispatches an
-  IME inset and asserts the padding, expanded state and that the primary button is reachable.
-- **Save password prompt**: a locked Vault no longer silently fails. After the protect/save
-  action completes, an SwSheet asks **"Save the password in Vault?"** with **Unlock** (L2
-  `VaultActivity.intent(context, reason)`, then save on return) and **Not now** (only then
-  "Password not saved in Vault."). Tests cover Unlock saving and declining.
-- **Result screen**: Protect passes a `summary` to `ExportResultActivity`; the screen shows
-  "<document>\nProtected with AES-256" instead of "Before 0 B -> After …". Test pins it.
-- Page plurals: `protect_doc_meta` and `book_created` are `<plurals>` ("1 page", "6 pages").
+The phone bug ("sideways spread → Keep as one page ON") is fixed: the three sideways textbooks
+are recognised as spreads and rotated; the notebooks are honestly one page under the aspect rule.
 
-## Protected-PDF import (A) and PDF robustness
+## Security audit fixes (L2)
 
-- `PdfDecryptor` (V5/R6 AESV3 classic-xref) + `ScanRepository.importProtectedPdfAsScan` +
-  `ImportUnlockSheet`: the import dead end now asks for the password (tries-left/cooldown),
-  decrypts a **temporary** copy, imports the pages and deletes the copy; the source is untouched.
-  "Use password saved in Vault" appears when the file matches a locked library doc with `has()`.
-- **Hostile PDF sweep** (`PdfRobustnessEval`, 212 PDFs: 204 Isartor + downloads, `broken.pdf`):
-  **0 crashes**, `OK=0, ENCRYPTED=3, NOT_A_PDF=1, UNSUPPORTED=208`; results in
-  `owner\out\L3\PDF_RESULTS.txt`. The two 53 MB textbooks are classified UNSUPPORTED ("too large
-  to inspect offline", the import path handles them separately); 208 valid PDFs are outside the
-  generator shape our strict verifier rewrites (honest "not one ScanWhirl rewrites").
-- Always-on `MalformedPdfTest` (empty, header-only, truncated xref, huge /Length, bad /Encrypt)
-  pins friendly `Unsupported`, no IndexOutOfBounds.
-- DEVICE-UNPROVEN: the real `TextRotation` ML Kit path, the real `VaultActivity` return, and the
-  real `PdfRenderer` import of a decrypted file (Robolectric has no renderer).
+- `SecureView.apply(window)` on the **Protect PDF**, **Unlock**, **import Unlock**, and the
+  **current-password** sheet windows (plus `SwSheet.secure()` for the kit sheet). Tests assert
+  `FLAG_SECURE` on all three password surfaces.
+- `PdfAes` zeroes the prepared password byte array in `create`, `userKey` and `ownerKey`
+  (`try/finally { pw.fill(0) }`); the String itself is Java-immutable and out of our control.
+
+## Earlier work carried in this branch (accepted by the lead)
+
+- Protect sheet IME inset scroll; save-in-Vault prompt after the save (Unlock/Not now); Protect
+  result summary ("Protected with AES-256" instead of Before/After); page plurals.
+- Protected-PDF import Unlock sheet with offline AESV3 V5/R6 decrypt; hostile PDF sweep 212 files,
+  **0 crashes** (`ENCRYPTED=3`, `NOT_A_PDF=1`, `UNSUPPORTED=208`; two 53 MB books "too large to
+  inspect offline"); `MalformedPdfTest`.
+- Vault reason lines via `VaultActivity.intent(context, reason)`; real-photo Book pages eval
+  harness.
 
 ## Commits (this batch)
 
-- `a639e12` Book pages crop-first scanner, both spine orientations/upright rotation, honest
-  confidence, real-photo eval
-- `e9b22d3` Protect sheet IME inset scroll, save-in-Vault prompt after the save, protected result
-  summary, page plurals
-- `01b84f5` protected-PDF import Unlock sheet with offline AESV3 decrypt; hostile PDF sweep
-- (this report)
+- `44f4b34` Book pages text-direction-first structure (upright rotation, aspect shape, middle-30%
+  spine) + both evals
+- `86994e1` FLAG_SECURE on password sheets (L2 `SecureView`), zero prepared password bytes in
+  `PdfAes`
+- (this commit) "From photos" via L1's `launchGalleryCrop` + report
+
+## Known / carried
+
+- The tall `book_px34042183` crop is one page under the aspect rule; the scanner's perspective
+  warp may make the real device crop landscape. Lead's call if it should be forced to a spread.
+- Notebooks are one page (honest); their fold near an edge is not trusted as a spread.
+- DEVICE-UNPROVEN: ML Kit text-rotation choice, real VaultActivity return, real PdfRenderer import
+  of a decrypted file.
