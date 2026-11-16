@@ -186,11 +186,7 @@ object ProBilling {
 
     internal fun lastOperation(): Op = lastOp
 
-    /**
-     * Runs [block] on the main thread. Work that is already on main runs immediately, so callers
-     * on the UI thread keep their synchronous behaviour; a Play callback on a worker thread is
-     * posted. Every public state delivery and every UI touch goes through here.
-     */
+    /** The one client for the process, with the one purchase listener installed at creation. */
     private fun gateway(context: Context): Gateway {
         val app = context.applicationContext
         appContext = app
@@ -205,8 +201,9 @@ object ProBilling {
     }
 
     /**
-     * Runs [block] on the main thread. The body is inside the posted runnable, so a throw
-     * in a Play callback cannot escape the looper or leave Buy latched (R5).
+     * Runs [block] on the main thread: immediately when already on main (callers on the UI thread
+     * keep their synchronous behaviour), posted otherwise. The body is inside the runnable, so a
+     * throw in a Play callback cannot escape the looper or leave Buy latched (R5).
      */
     internal fun onMain(block: () -> Unit) {
         val safe = {
@@ -460,6 +457,12 @@ object ProBilling {
         }
         onMain {
             try {
+                // A Buy is waiting on Play: Restore must not take over its callback. The screen
+                // shows Busy until the Buy ends; the user can restore afterwards.
+                if (buyOpen) {
+                    onState(State.Busy)
+                    return@onMain
+                }
                 lastOp = Op.RESTORE
                 opListener = onState
                 val client = try {
@@ -544,7 +547,8 @@ object ProBilling {
                     onMain {
                         try {
                             if (!ok) {
-                                if (!buyOpen) client.close()
+                                // Never close the shared client here: a price query, Restore or
+                                // Buy may be using it. The next process start retries.
                             } else {
                                 val startGeneration = generation
                                 client.queryPurchases { owned ->

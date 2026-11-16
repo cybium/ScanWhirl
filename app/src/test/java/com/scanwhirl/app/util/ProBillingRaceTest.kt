@@ -31,7 +31,7 @@ class ProBillingRaceTest {
     private lateinit var gateway: HoldingGateway
 
     private class HoldingGateway : ProBilling.Gateway {
-        var listener: ((ProBilling.Event) -> Unit)? = null
+        private var storeListener: ((ProBilling.Event) -> Unit)? = null
         var listenerClears = 0
         val launched = mutableListOf<String>()
         var launchOnMain = false
@@ -51,7 +51,7 @@ class ProBillingRaceTest {
 
         override fun setListener(listener: ((ProBilling.Event) -> Unit)?) {
             if (listener == null) listenerClears++
-            this.listener = listener
+            storeListener = listener
         }
 
         override fun connect(onReady: (Boolean) -> Unit) {
@@ -96,7 +96,7 @@ class ProBillingRaceTest {
             if (heldPurchases.isNotEmpty()) heldPurchases.removeFirst()(purchases)
         }
 
-        fun emit(event: ProBilling.Event) = listener?.invoke(event)
+        fun emit(event: ProBilling.Event) = storeListener?.invoke(event)
     }
 
     private fun purchased(): Boolean =
@@ -230,6 +230,8 @@ class ProBillingRaceTest {
         assertFalse(ProBilling.isPurchaseInFlight())
 
         ProBilling.resetForTests()
+        // A fresh fake: the first half already launched once, so its `launched` list is not empty.
+        gateway = HoldingGateway()
         ProBilling.gatewayFactory = { gateway }
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
         val hosted = controller.get()
