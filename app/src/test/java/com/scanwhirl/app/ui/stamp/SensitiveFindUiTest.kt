@@ -79,10 +79,12 @@ class SensitiveFindUiTest {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Find doc")
         val screen = activity(id)
         screen.findScanner = {
-            listOf(
-                0 to hit(SensitiveScan.Kind.AADHAAR),
-                0 to hit(SensitiveScan.Kind.PAN),
-                1 to hit(SensitiveScan.Kind.CARD)
+            StampEditorActivity.FindOutcome(
+                listOf(
+                    0 to hit(SensitiveScan.Kind.AADHAAR),
+                    0 to hit(SensitiveScan.Kind.PAN),
+                    1 to hit(SensitiveScan.Kind.CARD)
+                )
             )
         }
 
@@ -134,10 +136,12 @@ class SensitiveFindUiTest {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Choice doc")
         val screen = activity(id)
         screen.findScanner = {
-            listOf(
-                0 to hit(SensitiveScan.Kind.AADHAAR),
-                0 to hit(SensitiveScan.Kind.PAN),
-                1 to hit(SensitiveScan.Kind.CARD)
+            StampEditorActivity.FindOutcome(
+                listOf(
+                    0 to hit(SensitiveScan.Kind.AADHAAR),
+                    0 to hit(SensitiveScan.Kind.PAN),
+                    1 to hit(SensitiveScan.Kind.CARD)
+                )
             )
         }
         val find = openFind(screen)
@@ -163,7 +167,7 @@ class SensitiveFindUiTest {
     fun `no hits is said plainly and adds nothing`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Empty find")
         val screen = activity(id)
-        screen.findScanner = { emptyList() }
+        screen.findScanner = { StampEditorActivity.FindOutcome(emptyList()) }
         val find = openFind(screen)
         find.findViewById<View>(R.id.swSheetPrimary).performClick()
         idle()
@@ -172,7 +176,7 @@ class SensitiveFindUiTest {
         val snackbar = screen.findViewById<TextView>(
             com.google.android.material.R.id.snackbar_text
         )
-        assertEquals(app.getString(R.string.find_none), snackbar?.text?.toString())
+        assertEquals(app.getString(R.string.find_none_clean), snackbar?.text?.toString())
     }
 
     @Test
