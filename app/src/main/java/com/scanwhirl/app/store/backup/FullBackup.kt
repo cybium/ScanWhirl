@@ -2,6 +2,7 @@ package com.scanwhirl.app.store.backup
 
 import android.content.Context
 import com.scanwhirl.app.BuildConfig
+import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.vault.VaultAuthException
 import com.scanwhirl.app.store.vault.VaultCrypto
@@ -464,17 +465,31 @@ class FullBackup(
         // 1b. Legacy Vault flags (B1). `vault_pin_sha256` is device state and deliberately never
         //     travels with a backup, so a restored `vault.flag` would hide its document from every
         //     screen with no PIN that could open it: unreachable, not restored. Follow the path the
-        //     app already has for legacy documents: migrate them into the current encrypted Vault
-        //     when this phone can, otherwise clear the flag so they come back as ordinary documents
-        //     (and say so). A phone that still has the old PIN keeps its flags: its legacy Vault
-        //     screen can open and migrate them.
-        if (!vault.hasLegacyPin() && legacyVaultFlagged().isNotEmpty()) {
-            if (vault.isSetUp() && vault.isUnlocked()) {
-                runCatching { vault.migrateLegacyVault() }
-            }
-            if (legacyVaultFlagged().isNotEmpty()) {
-                warnings.add(context.getString(com.scanwhirl.app.R.string.backup_warn_legacy_vault))
-                clearLegacyVaultFlags()
+        //     app already has for legacy documents (VaultStore.migrateLegacyVault):
+        //       - a phone that still has the old PIN keeps its flags: its legacy Vault screen can
+        //         open and migrate them;
+        //       - the v2 Vault is set up and unlocked: migrate them into it now;
+        //       - the v2 Vault is set up but locked: KEEP the flags (these documents were hidden by
+        //         the user; exposing them in the open library would be a privacy regression) and
+        //         migrate them on the next successful unlock (VaultStore);
+        //       - no v2 Vault on this phone: nothing could ever open them, so clear the flag and
+        //         say plainly that they are in the library now.
+        val legacyFlagged = legacyVaultFlagged()
+        if (legacyFlagged.isNotEmpty() && !vault.hasLegacyPin()) {
+            when {
+                !vault.isSetUp() -> {
+                    warnings.add(quantity(R.plurals.backup_legacy_vault_visible, legacyFlagged.size))
+                    clearLegacyVaultFlags()
+                }
+                vault.isUnlocked() -> {
+                    runCatching { vault.migrateLegacyVault() }
+                    val remaining = legacyVaultFlagged()
+                    if (remaining.isNotEmpty()) {
+                        // A migration failure keeps them hidden; the next unlock retries it.
+                        warnings.add(quantity(R.plurals.backup_legacy_vault_pending, remaining.size))
+                    }
+                }
+                else -> warnings.add(quantity(R.plurals.backup_legacy_vault_pending, legacyFlagged.size))
             }
         }
 
@@ -574,6 +589,10 @@ class FullBackup(
     /** Documents still flagged as legacy Vault items in the library. */
     private fun legacyVaultFlagged(): List<File> =
         docsDir.listFiles { f -> f.isDirectory && File(f, VAULT_FLAG).isFile }.orEmpty().toList()
+
+    /** One warning sentence with its count (Arabic digits, English/Hindi plural rules). */
+    private fun quantity(id: Int, count: Int): String =
+        context.resources.getQuantityString(id, count, count)
 
     /**
      * Drops the legacy flag from documents nothing can open any more. The content stays in the
