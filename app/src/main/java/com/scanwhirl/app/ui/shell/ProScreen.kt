@@ -14,6 +14,7 @@ import androidx.core.view.doOnPreDraw
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwType
+import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.TrustPill
 
 /**
@@ -192,7 +193,7 @@ class ProScreen(
         addView(
             SwStyle.text(context, 14f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
                 id = R.id.swProMore
-                text = context.getString(R.string.pro_more_tools, 18)
+                text = context.getString(R.string.pro_more_tools, ToolRegistry.proCount())
                 gravity = Gravity.CENTER
                 isClickable = true
                 background = SwStyle.rounded(

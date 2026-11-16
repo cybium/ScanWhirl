@@ -333,20 +333,18 @@ class OrganizeDraftUiTest {
     }
 
     @Test
-    fun `the organize pages tool opens the grid for the picked document`() {
+    fun `the organize pages tool is coming soon instead of a dead reorder tile`() {
         DocFixtures.saved(repo, app, pages = 1)
         val host = Robolectric.buildActivity(Host::class.java).setup().get()
         val tool = requireNotNull(
             com.scanwhirl.app.ui.kit.ToolRegistry.byId("organize_pages")
         )
+        assertEquals(com.scanwhirl.app.ui.kit.ToolStatus.SOON, tool.status)
+        assertNotNull("a Coming-soon tile explains itself", tool.soonNote)
         tool.launch(host, tool)
         idle()
-        val sheet = requireNotNull(sheet()) { "the document chooser opens" }
-        val rows = requireNotNull(sheet.findViewById<LinearLayout>(R.id.swSheetItems))
-        rows.getChildAt(0).performClick()
-        idle()
-        val started = requireNotNull(shadowOf(host).nextStartedActivity)
-        assertEquals(DocumentViewerActivity::class.java.name, started.component?.className)
+        assertNull("the Coming-soon tile never opens the page grid", sheet())
+        assertNull(shadowOf(host).nextStartedActivity)
     }
 
     @Test
