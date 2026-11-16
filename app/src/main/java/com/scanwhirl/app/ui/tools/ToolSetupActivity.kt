@@ -107,6 +107,14 @@ class ToolSetupActivity : BaseActivity() {
             finish()
             return
         }
+        // Registry-driven backstop: a Pro tool must not be executable from a direct internal
+        // intent either (the Text screen's Context launch, a future caller). Free gets the same
+        // shell offer the hub shows, before any executable UI is built.
+        if (found.pro && !com.scanwhirl.app.util.ProGate.isPro(this)) {
+            com.scanwhirl.app.ui.kit.ProOffer.require(this)
+            finish()
+            return
+        }
         tool = found
         docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
         docs.firstOrNull()?.let { selected += it.id }
