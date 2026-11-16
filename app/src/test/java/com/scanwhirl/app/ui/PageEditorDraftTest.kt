@@ -44,6 +44,19 @@ class PageEditorDraftTest {
     private fun draftDir(id: String) = File(app.filesDir, "drafts/$id")
     private fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()
 
+    /** C03: the page list loads off main; interact only once the pager has it. */
+    private fun awaitPages(scenario: ActivityScenario<PageViewerActivity>, count: Int) {
+        val loaded = pollUntil {
+            var n = 0
+            scenario.onActivity { a ->
+                n = (a.findViewById<android.view.View>(R.id.pager) as androidx.recyclerview.widget.RecyclerView)
+                    .adapter?.itemCount ?: 0
+            }
+            n == count
+        }
+        assertTrue("the pager shows $count pages", loaded)
+    }
+
     private fun pollUntil(timeoutMs: Long = 12_000, condition: () -> Boolean): Boolean {
         val end = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < end) {
@@ -70,6 +83,7 @@ class PageEditorDraftTest {
         val id = DocFixtures.saved(repo, app, pages = 1)
         val d0 = digest(id)
         ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+            awaitPages(scenario, 1)
             scenario.onActivity { it.findViewById<android.view.View>(R.id.btnCrop)!!.performClick() }
             var open = false
             assertTrue("crop overlay", pollUntil {
@@ -127,12 +141,14 @@ class PageEditorDraftTest {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
         ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+            awaitPages(scenario, 3)
             scenario.onActivity { activity ->
                 forceLayout(activity.findViewById(R.id.pager))
                 activity.findViewById<android.view.View>(R.id.btnRotateRight)!!.performClick()
             }
             assertTrue(pollUntil { runBlocking { repo.draftOf(id) }?.changes == 1 })
             assertEquals(d0, digest(id))
+            awaitPages(scenario, 3) // the rotated page list is back on screen
 
             scenario.onActivity { activity ->
                 forceLayout(activity.findViewById(R.id.pager))
@@ -178,6 +194,7 @@ class PageEditorDraftTest {
         val id = DocFixtures.saved(repo, app, pages = 2)
         val d0 = digest(id)
         ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+            awaitPages(scenario, 2)
             scenario.onActivity { activity ->
                 forceLayout(activity.findViewById(R.id.pager))
                 activity.findViewById<android.view.View>(R.id.btnRotateRight)!!.performClick()

@@ -105,6 +105,14 @@ class CropPanelTest {
     fun `crop mode hides the page toolbar and shows only cancel and apply`() {
         val id = DocFixtures.saved(repo, app, pages = 1)
         ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+            assertTrue("the page loads off main", pollUntil {
+                var n = 0
+                scenario.onActivity { a ->
+                    n = (a.findViewById<View>(R.id.pager) as androidx.recyclerview.widget.RecyclerView)
+                        .adapter?.itemCount ?: 0
+                }
+                n >= 1
+            })
             scenario.onActivity { it.findViewById<View>(R.id.btnCrop)!!.performClick() }
             var open = false
             assertTrue("crop overlay opens", pollUntil {
@@ -132,6 +140,14 @@ class CropPanelTest {
     fun `picking a preset chip reshapes the shown frame and the row scrolls to the end`() {
         val id = DocFixtures.saved(repo, app, pages = 1)
         ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+            assertTrue("the page loads off main", pollUntil {
+                var n = 0
+                scenario.onActivity { a ->
+                    n = (a.findViewById<View>(R.id.pager) as androidx.recyclerview.widget.RecyclerView)
+                        .adapter?.itemCount ?: 0
+                }
+                n >= 1
+            })
             scenario.onActivity { it.findViewById<View>(R.id.btnCrop)!!.performClick() }
             var ready = false
             assertTrue("crop page decodes", pollUntil {

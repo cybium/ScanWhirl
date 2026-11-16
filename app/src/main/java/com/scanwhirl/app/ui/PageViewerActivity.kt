@@ -95,13 +95,6 @@ class PageViewerActivity : BaseActivity() {
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         intent.getStringExtra(EXTRA_STAGING)?.let { stagingDir = File(it) }
-        if (!reload()) return
-
-        val start = intent.getIntExtra(EXTRA_PAGE, 0)
-            .coerceIn(0, (pages.lastIndex).coerceAtLeast(0))
-        currentPos = start
-        binding.pager.scrollToPosition(start)
-        updateIndicator()
 
         binding.btnClose.setOnClickListener { finish() }
         binding.btnRotateRight.setOnClickListener { rotateCurrent(clockwise = true) }
@@ -120,10 +113,20 @@ class PageViewerActivity : BaseActivity() {
             }
         })
 
-        // Review slice 1: Review's labelled "Crop" lands straight in the existing crop
-        // overlay (same CropView + ImageTools.cropTo; nothing is duplicated).
-        if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_START_CROP, false)) {
-            binding.pager.post { if (!isFinishing) startCrop() }
+        // C03: the draft read is async; once the pages are here, land on the requested one.
+        reload { ok ->
+            if (!ok) return@reload
+            val start = intent.getIntExtra(EXTRA_PAGE, 0)
+                .coerceIn(0, (pages.lastIndex).coerceAtLeast(0))
+            currentPos = start
+            binding.pager.scrollToPosition(start)
+            updateIndicator()
+
+            // Review slice 1: Review's labelled "Crop" lands straight in the existing crop
+            // overlay (same CropView + ImageTools.cropTo; nothing is duplicated).
+            if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_START_CROP, false)) {
+                binding.pager.post { if (!isFinishing) startCrop() }
+            }
         }
     }
 
@@ -155,28 +158,43 @@ class PageViewerActivity : BaseActivity() {
         super.onDestroy()
     }
 
-    /** Re-reads the current page list (minus pending deletes) into the pager. */
-    private fun reload(): Boolean {
+    /**
+     * C03: re-reads the page list into the pager. The saved-document read runs in the caller's
+     * lifecycle scope (disk + DRAFT_LOCK) and resumes on main; [after] gets false when the
+     * document disappeared and the screen closed.
+     */
+    private fun reload(after: (Boolean) -> Unit = {}) {
         val dir = stagingDir
-        return if (dir != null) reloadStaging(dir) else reloadSaved()
-    }
-
-    private fun reloadSaved(): Boolean {
-        val id = docId ?: run { finish(); return false }
-        val doc = repo.getDocument(id)
-        if (doc == null) {
-            Toast.makeText(this, R.string.doc_not_found, Toast.LENGTH_SHORT).show()
+        if (dir != null) {
+            after(reloadStaging(dir))
+            return
+        }
+        val id = docId ?: run {
             finish()
-            return false
+            after(false)
+            return
         }
-        document = doc
-        // PM-2.3b: the pager shows the draft's pages (base pages where nothing was edited).
-        pages = kotlinx.coroutines.runBlocking { repo.draftPages(id) }.filter {
-            it.path != pendingDelete && it.path !in committingDeletes
+        lifecycleScope.launch {
+            val doc = withContext(Dispatchers.IO) { repo.getDocument(id) }
+            if (doc == null) {
+                Toast.makeText(
+                    this@PageViewerActivity, R.string.doc_not_found, Toast.LENGTH_SHORT
+                ).show()
+                finish()
+                after(false)
+                return@launch
+            }
+            document = doc
+            // PM-2.3b: the pager shows the draft's pages (base pages where nothing was edited).
+            val loaded = withContext(Dispatchers.IO) { repo.draftPages(id) }
+            if (isFinishing || isDestroyed) return@launch
+            pages = loaded.filter {
+                it.path != pendingDelete && it.path !in committingDeletes
+            }
+            pagerAdapter.filterFor = { file -> filterChoice[file.path] ?: ScanFilter.ORIGINAL }
+            pagerAdapter.submit(pages)
+            after(true)
         }
-        pagerAdapter.filterFor = { file -> filterChoice[file.path] ?: ScanFilter.ORIGINAL }
-        pagerAdapter.submit(pages)
-        return true
     }
 
     private fun reloadStaging(dir: File): Boolean {
@@ -235,7 +253,7 @@ class PageViewerActivity : BaseActivity() {
     }
 
     private fun rotateCurrent(clockwise: Boolean) {
-        val pos = currentPosition()
+        val pos = currentPosition().takeIf { it in pages.indices } ?: currentPos
         val file = pages.getOrNull(pos) ?: return
         val dir = stagingDir
         lifecycleScope.launch {
@@ -247,10 +265,12 @@ class PageViewerActivity : BaseActivity() {
                     withContext(Dispatchers.IO) { commitPendingDeleteNow() }
                     repo.draftRotate(id, pos, clockwise)
                 }
-                reload()
-                currentPos = pos.coerceAtMost(pages.lastIndex)
-                binding.pager.scrollToPosition(currentPos)
-                updateIndicator()
+                reload { ok ->
+                    if (!ok) return@reload
+                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    binding.pager.scrollToPosition(currentPos)
+                    updateIndicator()
+                }
             } catch (e: Exception) {
                 Toast.makeText(
                     this@PageViewerActivity,
@@ -262,7 +282,7 @@ class PageViewerActivity : BaseActivity() {
     }
 
     private fun filterCurrent() {
-        val pos = currentPosition()
+        val pos = currentPosition().takeIf { it in pages.indices } ?: currentPos
         val file = pages.getOrNull(pos) ?: return
         val filters = ScanFilter.uiFilters
         val dir = stagingDir
@@ -274,10 +294,12 @@ class PageViewerActivity : BaseActivity() {
                 .setOptions(filters.map { getString(it.labelRes) }, checked) { which, _ ->
                     stagingFilters[file.path] = filters[which]
                     writeStagingFilters(dir)
-                    reload()
-                    currentPos = pos.coerceAtMost(pages.lastIndex)
-                    binding.pager.scrollToPosition(currentPos)
-                    updateIndicator()
+                    reload { ok ->
+                        if (!ok) return@reload
+                        currentPos = pos.coerceAtMost(pages.lastIndex)
+                        binding.pager.scrollToPosition(currentPos)
+                        updateIndicator()
+                    }
                 }
                 .setSecondary(android.R.string.cancel)
                 .build()
@@ -316,12 +338,14 @@ class PageViewerActivity : BaseActivity() {
                 repo.draftFilter(id, pos, filter)
                 // The edited page is a new file: map the choice onto its new path.
                 filterChoice.remove(file.path)
-                reload()
-                pages.getOrNull(pos)?.let { filterChoice[it.path] = filter }
-                pagerAdapter.notifyDataSetChanged()
-                currentPos = pos.coerceAtMost(pages.lastIndex)
-                binding.pager.scrollToPosition(currentPos)
-                updateIndicator()
+                reload { ok ->
+                    if (!ok) return@reload
+                    pages.getOrNull(pos)?.let { filterChoice[it.path] = filter }
+                    pagerAdapter.notifyDataSetChanged()
+                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    binding.pager.scrollToPosition(currentPos)
+                    updateIndicator()
+                }
             } catch (e: Exception) {
                 Toast.makeText(
                     this@PageViewerActivity,
@@ -334,7 +358,7 @@ class PageViewerActivity : BaseActivity() {
 
     /** Hides the page immediately and offers Undo (files go only after). */
     private fun deleteCurrent() {
-        val pos = currentPosition()
+        val pos = currentPosition().takeIf { it in pages.indices } ?: currentPos
         val file = pages.getOrNull(pos) ?: return
         if (pages.size <= 1) {
             // Deleting the last page of an unsaved scan = discarding it (confirmed).
@@ -347,10 +371,12 @@ class PageViewerActivity : BaseActivity() {
 
         if (stagingDir != null && !file.renameTo(File(file.path + DEL_SUFFIX))) return
         pendingDelete = file.path
-        reload()
-        currentPos = pos.coerceAtMost(pages.lastIndex)
-        binding.pager.scrollToPosition(currentPos)
-        updateIndicator()
+        reload { ok ->
+            if (!ok) return@reload
+            currentPos = pos.coerceAtMost(pages.lastIndex)
+            binding.pager.scrollToPosition(currentPos)
+            updateIndicator()
+        }
 
         val path = file.path
         Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
@@ -359,10 +385,12 @@ class PageViewerActivity : BaseActivity() {
                     File(path + DEL_SUFFIX).takeIf { it.exists() }?.renameTo(File(path))
                 }
                 pendingDelete = null
-                reload()
-                currentPos = pos.coerceAtMost(pages.lastIndex)
-                binding.pager.scrollToPosition(currentPos)
-                updateIndicator()
+                reload { ok ->
+                    if (!ok) return@reload
+                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    binding.pager.scrollToPosition(currentPos)
+                    updateIndicator()
+                }
             }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
@@ -504,10 +532,12 @@ class PageViewerActivity : BaseActivity() {
                     val id = docId ?: return@launch
                     repo.draftCrop(id, pos, fileRect)
                 }
-                reload()
-                currentPos = pos.coerceAtMost(pages.lastIndex)
-                binding.pager.scrollToPosition(currentPos)
-                updateIndicator()
+                reload { ok ->
+                    if (!ok) return@reload
+                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    binding.pager.scrollToPosition(currentPos)
+                    updateIndicator()
+                }
             } catch (e: Exception) {
                 Toast.makeText(
                     this@PageViewerActivity,
@@ -541,10 +571,12 @@ class PageViewerActivity : BaseActivity() {
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
                     val keep = currentPosition().takeIf { it in pages.indices } ?: currentPos
-                    reload()
-                    currentPos = keep.coerceAtMost(pages.lastIndex)
-                    binding.pager.scrollToPosition(currentPos)
-                    updateIndicator()
+                    reload { ok ->
+                        if (!ok) return@reload
+                        currentPos = keep.coerceAtMost(pages.lastIndex)
+                        binding.pager.scrollToPosition(currentPos)
+                        updateIndicator()
+                    }
                 }
             }
         }

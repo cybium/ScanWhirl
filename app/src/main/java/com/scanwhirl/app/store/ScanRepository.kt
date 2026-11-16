@@ -3051,6 +3051,7 @@ class ScanRepository(private val context: Context) {
 
     /** Pages as the draft sees them (replacement files where an edit wrote one), or the base pages. */
     internal suspend fun draftPages(id: String): List<File> = withContext(Dispatchers.IO) {
+        readProbe?.invoke(Thread.currentThread().name)
         synchronized(DRAFT_LOCK) {
             val draft = drafts.load(id)
             if (draft == null) getDocument(id)?.pageFiles.orEmpty()
