@@ -50,6 +50,7 @@ import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
 import com.scanwhirl.app.store.SavedCopyPolicy
 import com.scanwhirl.app.store.SavedReviewConflictException
 import com.scanwhirl.app.store.PendingScans
+import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.DownloadSaver
@@ -399,7 +400,7 @@ class ScanReviewActivity : BaseActivity() {
             val chip = Chip(ctx).apply {
                 id = android.view.View.generateViewId()
                 tag = cat
-                text = CategoryRules.label(cat)
+                text = CategoryLabels.display(ctx, cat)
                 setOnClickListener { pickCategory(cat) }
             }
             binding.categoryRail.addView(chip)
@@ -885,7 +886,7 @@ class ScanReviewActivity : BaseActivity() {
         val text = SpannableStringBuilder()
         text.append(resources.getQuantityString(R.plurals.review_page_count, pages.size, pages.size))
         if (chosenCategory != CategoryRules.UNSORTED) {
-            text.append(" · ").append(CategoryRules.label(chosenCategory))
+            text.append(" · ").append(CategoryLabels.display(this, chosenCategory))
         }
         text.append(" · ")
         text.append(

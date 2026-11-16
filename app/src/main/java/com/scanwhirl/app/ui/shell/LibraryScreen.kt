@@ -43,6 +43,7 @@ import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
 import com.scanwhirl.app.util.AppLanguage
 import com.scanwhirl.app.util.BatchRename
+import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.ProGate
@@ -880,7 +881,12 @@ class LibraryScreen(
 
     private fun pickLanguage() {
         val tags = listOf(AppLanguage.ENGLISH, AppLanguage.HINDI)
-        val checked = if (AppLanguage.showingHindi(context)) 1 else 0
+        // Same source as Settings: AppCompat's application locales first (also covers a
+        // language set from Android's per-app language screen), then our saved tag.
+        val current = AppLanguage.currentTag(context)
+        val checked = tags.indexOf(current).let {
+            if (it >= 0) it else if (AppLanguage.showingHindi(context)) 1 else 0
+        }
         com.scanwhirl.app.ui.kit.SwSheet.builder(context)
             .setTitle(R.string.language_chip_title)
             .setOptions(tags.map { AppLanguage.label(it) }, checked) { which, _ ->
@@ -1391,7 +1397,7 @@ class LibraryScreen(
         entries += null to context.getString(R.string.home_chip_all, docs.size)
         for (cat in CategoryRules.ALL) {
             val count = counts[cat] ?: 0
-            if (count > 0) entries += cat to context.getString(R.string.home_chip_category, CategoryRules.label(cat), count)
+            if (count > 0) entries += cat to context.getString(R.string.home_chip_category, CategoryLabels.display(context, cat), count)
         }
         for ((key, label) in entries) {
             val active = key == category

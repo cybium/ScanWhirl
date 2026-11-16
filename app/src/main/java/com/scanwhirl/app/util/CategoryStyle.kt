@@ -4,7 +4,7 @@ package com.scanwhirl.app.util
  * Visual styling tokens for document categories.
  * Pure Kotlin — no Android dependencies so it can be tested in pure JVM unit tests.
  *
- * Display names live in [CategoryRules.label] only (R9); this object never
+ * Display names live in [CategoryLabels.display] only; this object never
  * invents a second naming system. The ring-index helpers that used to live
  * here were deleted in test26 T1.3 (the globe that needed them dies in P7 —
  * its two index-based lookups survive in `ui/globe/GlobeRingShim.kt`).

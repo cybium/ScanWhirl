@@ -63,6 +63,7 @@ import com.scanwhirl.app.ui.home.HomeRow
 import com.scanwhirl.app.ui.home.HomeRowDivider
 import com.scanwhirl.app.ui.home.HomeReveal
 import com.scanwhirl.app.util.BrandWhirl
+import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.HomeFilter
@@ -822,7 +823,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 val cat = selectedCategory
                 binding.emptyTitle.text =
                     if (cat != null) {
-                        getString(R.string.empty_category, CategoryRules.label(cat))
+                        getString(R.string.empty_category, CategoryLabels.display(this, cat))
                     } else {
                         getString(R.string.empty_no_match)
                     }
@@ -887,10 +888,10 @@ class MainActivity : BaseActivity(), HomeHost {
         val entries = mutableListOf<Pair<String?, String>>()
         entries += null to getString(R.string.chip_all)
         if ((counts[CategoryRules.UNSORTED] ?: 0) > 0) {
-            entries += CategoryRules.UNSORTED to CategoryRules.label(CategoryRules.UNSORTED)
+            entries += CategoryRules.UNSORTED to CategoryLabels.display(this, CategoryRules.UNSORTED)
         }
         for (cat in CategoryRules.ALL) {
-            entries += cat to CategoryRules.label(cat)
+            entries += cat to CategoryLabels.display(this, cat)
         }
 
         // Scoped context so only these chips pick up Widget.ScanWhirl.Chip;
@@ -969,7 +970,7 @@ class MainActivity : BaseActivity(), HomeHost {
             if (cat == null) {
                 resources.getQuantityString(R.plurals.list_count, shownCount, shownCount)
             } else {
-                getString(R.string.list_count_category, shownCount, CategoryRules.label(cat))
+                getString(R.string.list_count_category, shownCount, CategoryLabels.display(this, cat))
             }
 
         val label = when (Prefs.sortMode(this)) {
@@ -1131,7 +1132,7 @@ class MainActivity : BaseActivity(), HomeHost {
             val chip = Chip(ctx).apply {
                 id = android.view.View.generateViewId()
                 tag = cat
-                text = CategoryRules.label(cat)
+                text = CategoryLabels.display(ctx, cat)
                 setOnClickListener {
                     val doc = queue.pick(cat) ?: return@setOnClickListener
                     // Picking saves instantly + one tick of haptic (plan).

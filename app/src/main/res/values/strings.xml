@@ -456,6 +456,7 @@
     <string name="cat_label_ids">IDs</string>
     <string name="cat_label_forms">Forms</string>
     <string name="cat_label_other">Other</string>
+    <string name="cat_label_unsorted">Unsorted</string>
     <!-- test26 T4.1: scan-review category rail hint while nothing is selected -->
     <string name="category_unsorted_hint">Not sorted yet. Pick one or skip</string>
     <!-- test26 T4.2: category picker sheet title (T4.3/T4.4/T4.6) -->

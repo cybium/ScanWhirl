@@ -10,6 +10,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.scanwhirl.app.R
+import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 
@@ -61,7 +62,7 @@ object CategoryPickerSheet {
         }
 
         val label = TextView(activity).apply {
-            text = CategoryRules.label(cat)
+            text = CategoryLabels.display(activity, cat)
             textSize = 15f
             setTextColor(activity.getColor(R.color.text_hologram_hi))
             letterSpacing = com.scanwhirl.app.ui.kit.SwStyle.tracking(activity, 0.02f)

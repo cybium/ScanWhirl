@@ -25,6 +25,24 @@ object AppLanguage {
     fun showingHindi(context: Context): Boolean =
         context.resources.configuration.locales[0].language == HINDI
 
+    /**
+     * The language actually in effect, as an [ENGLISH]/[HINDI] tag or [PHONE].
+     *
+     * AppCompat's application locales are the source of truth: Android's per-app language
+     * settings (Settings > Apps > ScanWhirl > Language) and `adb shell cmd locale
+     * set-app-locales` write there, not to our own preference. The saved tag is only the
+     * fallback for builds/states where AppCompat has nothing to report.
+     */
+    fun currentTag(context: Context): String {
+        val locales = AppCompatDelegate.getApplicationLocales()
+        if (!locales.isEmpty) {
+            val language = locales[0]?.language
+            if (language == ENGLISH || language == HINDI) return language
+        }
+        val saved = Prefs.localeTag(context)
+        return if (saved == ENGLISH || saved == HINDI) saved else PHONE
+    }
+
     fun apply(context: Context, tag: String) {
         Prefs.setLocaleTag(context.applicationContext, tag)
         AppCompatDelegate.setApplicationLocales(

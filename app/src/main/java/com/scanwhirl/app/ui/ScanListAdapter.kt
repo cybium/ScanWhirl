@@ -18,6 +18,7 @@ import com.scanwhirl.app.ui.home.HomeRow
 import com.scanwhirl.app.ui.home.PageHitViews
 import com.scanwhirl.app.ui.home.PageLink
 import com.scanwhirl.app.ui.home.TextState
+import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.StatusLine
@@ -119,7 +120,7 @@ class ScanListAdapter(
                 dateFmt.format(Date(doc.createdAt)).replace(' ', ' ')
 
             // Category: swatch + sentence-case label; tapping it moves the document.
-            val catLabel = CategoryRules.label(doc.category.orEmpty())
+            val catLabel = CategoryLabels.display(context, doc.category.orEmpty())
             binding.catChip.text = catLabel
             binding.catChip.setTextColor(catColor)
             binding.catChip.compoundDrawablesRelative[0]?.mutate()?.setTint(catColor)
@@ -214,7 +215,7 @@ class ScanListAdapter(
             val parts = mutableListOf(
                 context.getString(
                     R.string.doc_row_desc, doc.name, doc.pageCount,
-                    CategoryRules.label(doc.category.orEmpty())
+                    CategoryLabels.display(context, doc.category.orEmpty())
                 )
             )
             if (doc.isLocked) parts += context.getString(R.string.badge_locked)
