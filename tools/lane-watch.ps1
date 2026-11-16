@@ -5,9 +5,18 @@ $now = Get-Date
 "=== lane watch {0:HH:mm:ss}" -f $now
 $warn = @()
 
-foreach ($n in 1..5) {
-    $p = "C:\Users\Cybium\Desktop\ScanWhirl-L$n"
+# Every lane worktree (ScanWhirl-<lane>), not just L1-L5: night lanes are named data/ui/pro/... .
+# Lanes whose branch is fully merged and idle > 6 h are listed once, without warnings.
+$lanes = @(git -C C:\Users\Cybium\Desktop\ScanWhirl worktree list --porcelain 2>$null |
+    Where-Object { $_ -match '^worktree (.+ScanWhirl-([^/\\]+))$' } | ForEach-Object { $Matches[2] })
+$idle = @()
+foreach ($n in $lanes) {
+    $p = "C:\Users\Cybium\Desktop\ScanWhirl-$n"
     if (-not (Test-Path $p)) { continue }
+    $ahead = [int](git -C $p rev-list --count "integration..HEAD" 2>$null)
+    $lastTouch = (Get-ChildItem "$p\app\src", "$p\docs", "$p\tools" -Recurse -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+    if ($ahead -eq 0 -and $lastTouch -and ($now - $lastTouch).TotalHours -gt 6) { $idle += $n; continue }
     $f = Get-ChildItem "$p\app\src", "$p\docs", "$p\tools" -Recurse -File -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
     $editMin = if ($f) { [int]($now - $f.LastWriteTime).TotalMinutes } else { 9999 }
@@ -18,16 +27,18 @@ foreach ($n in 1..5) {
     $dirty = @(git -C $p status --porcelain 2>$null)
     $unmerged = @(git -C $p diff --name-only --diff-filter=U 2>$null)
     $behind = (git -C $p rev-list --count "HEAD..integration" 2>$null)
-    "L{0}: last edit {1,4} min ago ({2}) | last commit {3,4} min ago | uncommitted {4,3} | behind integration {5}" -f `
-        $n, $editMin, $(if ($f) { $f.Name } else { '-' }), $commitMin, $dirty.Count, $behind
-    "     commit: $subject"
-    if ($editMin -ge 30) { $warn += "L$n no file edits for $editMin min (stuck or waiting on a long gate?)" }
-    if ($commitMin -ge 90 -and $dirty.Count -gt 0) { $warn += "L$n has $($dirty.Count) uncommitted files and no commit for $commitMin min" }
-    if ($unmerged.Count) { $warn += "L$n has UNRESOLVED merge conflicts: $($unmerged -join ', ')" }
-    if ($dirty.Count -gt 40) { $warn += "L$n has $($dirty.Count) uncommitted files (possible mess)" }
+    $branch = (git -C $p rev-parse --abbrev-ref HEAD 2>$null)
+    "{0,-6} {1,-22} edit {2,4}m ({3}) | commit {4,4}m | dirty {5,3} | ahead {6} behind {7}" -f `
+        $n, $branch, $editMin, $(if ($f) { $f.Name } else { '-' }), $commitMin, $dirty.Count, $ahead, $behind
+    "       commit: $subject"
+    if ($editMin -ge 30) { $warn += "$n no file edits for $editMin min (stuck or waiting on a long gate?)" }
+    if ($commitMin -ge 90 -and $dirty.Count -gt 0) { $warn += "$n has $($dirty.Count) uncommitted files and no commit for $commitMin min" }
+    if ($unmerged.Count) { $warn += "$n has UNRESOLVED merge conflicts: $($unmerged -join ', ')" }
+    if ($dirty.Count -gt 40) { $warn += "$n has $($dirty.Count) uncommitted files (possible mess)" }
     $stray = $dirty | Where-Object { $_ -match '\.(orig|rej|bak)$|hs_err_pid|\.swbackup$|keystore' }
-    if ($stray) { $warn += "L$n stray files: $($stray -join '; ')" }
+    if ($stray) { $warn += "$n stray files: $($stray -join '; ')" }
 }
+if ($idle.Count) { "idle (merged, untouched > 6 h): " + ($idle -join ', ') }
 
 "--- gate processes"
 Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
