@@ -446,7 +446,7 @@ class OcrEditorActivity : BaseActivity() {
             row.addView(
                 chip,
                 LinearLayout.LayoutParams(
-                    0,
+                    if (weight > 0f) 0 else LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     weight
                 ).apply {
@@ -458,12 +458,19 @@ class OcrEditorActivity : BaseActivity() {
         }
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        // 2026-11-16 layout audit, item 1: three equal thirds (weight 1 each) gave the
+        // Hindi label ~45dp and cut it mid-word. The chips now keep their natural
+        // width; the row scrolls only if the words are genuinely wider than the phone.
+        val row1Scroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+        }
+        row1Scroll.addView(row1)
         // Tidy shares the first action row: its own row stole the height the text pane needs at 1.3.
-        chip(row1, R.id.btnTidyText, R.drawable.ic_sym_auto_fix_high, R.string.ocr_tidy_text)
+        chip(row1, R.id.btnTidyText, R.drawable.ic_sym_auto_fix_high, R.string.ocr_tidy_text, weight = 0f)
             .setOnClickListener { showTidySheet() }
-        chip(row1, R.id.btnCopy, R.drawable.ic_sym_content_copy, R.string.ocr_copy_btn)
+        chip(row1, R.id.btnCopy, R.drawable.ic_sym_content_copy, R.string.ocr_copy_btn, weight = 0f)
             .setOnClickListener { copyCurrent() }
-        chip(row1, R.id.btnShare, R.drawable.ic_sym_share, R.string.ocr_share_btn)
+        chip(row1, R.id.btnShare, R.drawable.ic_sym_share, R.string.ocr_share_btn, weight = 0f)
             .setOnClickListener { shareCurrent() }
         chip(row2, R.id.btnSave, R.drawable.ic_sym_notes, R.string.ocr_save_btn)
             .setOnClickListener { saveCurrent() }
@@ -473,7 +480,7 @@ class OcrEditorActivity : BaseActivity() {
                 // v2 UI: 08_text_ocr — the real To Word tool, not an info sheet.
                 com.scanwhirl.app.ui.tools.ToolLaunch.start(this, "to_word")
             }
-        actions.addView(row1)
+        actions.addView(row1Scroll)
         actions.addView(row2)
         setupModeSwitch()
         updateWordCount()

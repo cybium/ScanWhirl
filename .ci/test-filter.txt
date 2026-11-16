@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.OcrTextScreenTest,com.scanwhirl.app.ui.PageEditorDraftTest,com.scanwhirl.app.ui.LayoutNarrowHindiTest

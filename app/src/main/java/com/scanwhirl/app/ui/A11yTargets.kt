@@ -70,12 +70,17 @@ internal object A11yTargets {
         )
     }
 
-    /** A kit chip with a 48dp target and a label that wraps instead of clipping at 2.0. */
+    /**
+     * A kit chip with a 48dp target and a label that wraps instead of clipping at
+     * 2.0. Order matters: `isSingleLine = false` *resets* maxLines to unlimited, so
+     * it must come first — otherwise a Hindi label used three lines in a row that
+     * only has room for two (2026-11-16 layout audit, item 1).
+     */
     fun fixChip(chip: com.scanwhirl.app.ui.kit.SwChip) {
         chip.minimumHeight = dp(chip, 48)
-        chip.labelView.maxLines = 2
         chip.labelView.isSingleLine = false
-        chip.labelView.ellipsize = null
+        chip.labelView.maxLines = 2
+        chip.labelView.ellipsize = android.text.TextUtils.TruncateAt.END
         chip.labelView.maxWidth = dp(chip, 150)
     }
 }
