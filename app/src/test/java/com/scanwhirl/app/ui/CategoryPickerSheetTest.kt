@@ -99,7 +99,7 @@ class CategoryPickerSheetTest {
                 val row = rows.getChildAt(i) as LinearLayout
                 val label = row.getChildAt(1) as TextView
                 assertEquals(
-                    CategoryRules.label(row.tag as String),
+                    com.scanwhirl.app.util.CategoryLabels.display(activity, row.tag as String),
                     label.text.toString()
                 )
                 assertEquals(
@@ -119,6 +119,7 @@ class CategoryPickerSheetTest {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
 
     private fun withSheet(
         current: String?,

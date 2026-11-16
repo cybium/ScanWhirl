@@ -167,6 +167,7 @@
     <string name="cat_label_forms"><!-- review -->फ़ॉर्म</string>
     <string name="cat_label_ids"><!-- review -->आईडी</string>
     <string name="cat_label_other"><!-- review -->अन्य</string>
+    <string name="cat_label_unsorted"><!-- review -->बिना श्रेणी</string>
     <string name="cat_label_receipts"><!-- review -->रसीदें</string>
     <string name="cat_label_study"><!-- review -->पढ़ाई</string>
     <string name="clear_selection"><!-- review -->चयन हटाएँ</string>

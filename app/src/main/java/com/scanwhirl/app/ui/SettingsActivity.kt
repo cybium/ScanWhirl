@@ -543,11 +543,11 @@ class SettingsActivity : BaseActivity() {
                 else -> R.string.font_default
             }
         )
-        val tag = Prefs.localeTag(this)
+        val tag = com.scanwhirl.app.util.AppLanguage.currentTag(this)
         binding.subLanguage.text = if (tag.isEmpty()) {
             getString(R.string.language_system)
         } else {
-            languageLabel(tag)
+            com.scanwhirl.app.util.AppLanguage.label(tag)
         }
         binding.subViewer.setText(
             if (Prefs.defaultViewer(this) == Prefs.VIEWER_SYSTEM) {
@@ -626,8 +626,10 @@ class SettingsActivity : BaseActivity() {
             com.scanwhirl.app.util.AppLanguage.ENGLISH,
             com.scanwhirl.app.util.AppLanguage.HINDI
         )
-        val labels = tags.map { if (it.isEmpty()) getString(R.string.language_system) else languageLabel(it) }
-        val checked = tags.indexOf(Prefs.localeTag(this)).coerceAtLeast(0)
+        val labels = tags.map { if (it.isEmpty()) getString(R.string.language_system) else com.scanwhirl.app.util.AppLanguage.label(it) }
+        // Same source as the summary: AppCompat's application locales win, our saved tag is
+        // only the fallback, so a language set outside the app still shows the right tick.
+        val checked = tags.indexOf(com.scanwhirl.app.util.AppLanguage.currentTag(this)).coerceAtLeast(0)
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.settings_language)
             .setOptions(labels, checked) { which, _ ->
@@ -673,21 +675,6 @@ class SettingsActivity : BaseActivity() {
             .setPrimary(android.R.string.ok)
             .build()
             .show()
-    }
-
-    private fun languageLabel(tag: String): String = when (tag) {
-        "en" -> "English"
-        "hi" -> "हिन्दी"
-        "ur" -> "اردو"
-        "es" -> "Español"
-        "fr" -> "Français"
-        "de" -> "Deutsch"
-        "pt" -> "Português"
-        "ar" -> "العربية"
-        "bn" -> "বাংলা"
-        "ru" -> "Русский"
-        "zh" -> "中文"
-        else -> tag
     }
 
     companion object {

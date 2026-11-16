@@ -15,6 +15,7 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 
@@ -237,7 +238,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         alpha = if (document.isLocked) 0.92f else 1f
         pageBadge.text = document.pageCount.toString()
         pageBadge.isVisible = document.pageCount > 0
-        categoryView.text = CategoryRules.label(document.category)
+        categoryView.text = CategoryLabels.display(context, document.category)
         categoryDot.background = SwStyle.rounded(
             context, CategoryStyle.color(document.category), radiusDp = 3f
         )
