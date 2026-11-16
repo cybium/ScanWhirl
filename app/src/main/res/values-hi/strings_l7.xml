@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L7: "Hide private info" must never turn a failed read into "nothing found". -->
+<resources>
+    <!-- Text was read and no sensitive item matched. -->
+    <string name="find_none_clean"><!-- review -->इस पेज पर कोई फ़ोन नंबर, ईमेल, आईडी या कार्ड नंबर नहीं मिला। शेयर करने से पहले खुद जाँच लें।</string>
+    <!-- The page's text could not be read: nothing was checked, so never say it is clean. -->
+    <string name="find_unreadable_one"><!-- review -->इस पेज का टेक्स्ट पढ़ा नहीं जा सका, इसलिए अपने आप कुछ नहीं मिला। निजी जानकारी को बॉक्स टूल से हाथ से ढकें।</string>
+    <plurals name="find_unreadable_pages">
+        <item quantity="one"><!-- review -->इस पेज का टेक्स्ट पढ़ा नहीं जा सका, इसलिए अपने आप कुछ नहीं मिला। निजी जानकारी को बॉक्स टूल से हाथ से ढकें।</item>
+        <item quantity="other"><!-- review -->%1$d पेजों का टेक्स्ट पढ़ा नहीं जा सका, इसलिए वहाँ अपने आप कुछ नहीं मिला। निजी जानकारी को बॉक्स टूल से हाथ से ढकें।</item>
+    </plurals>
+    <!-- Action on the unreadable-page notice: arm the manual redaction box tool. -->
+    <string name="find_draw_box"><!-- review -->खुद बॉक्स बनाएँ</string>
+</resources>

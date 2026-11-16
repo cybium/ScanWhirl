@@ -132,8 +132,17 @@ class StampEditorActivity : BaseActivity() {
 
     private var findRunning = false
 
+    /**
+     * What one "Hide private info" run found. [unreadablePages] are 0-based indexes whose text
+     * could not be read at all: those pages were not checked, so they are never called clean.
+     */
+    internal data class FindOutcome(
+        val hits: List<Pair<Int, SensitiveScan.Hit>>,
+        val unreadablePages: List<Int> = emptyList()
+    )
+
     /** Test seam: replaces OCR detection with synthetic per-page hits. */
-    internal var findScanner: (suspend (List<File>) -> List<Pair<Int, SensitiveScan.Hit>>)? = null
+    internal var findScanner: (suspend (List<File>) -> FindOutcome)? = null
 
     private var saving = false
 
@@ -555,35 +564,70 @@ class StampEditorActivity : BaseActivity() {
         binding.hint.setText(R.string.find_scanning)
         binding.hint.visibility = View.VISIBLE
         lifecycleScope.launch {
-            val found = try {
+            val outcome = try {
                 findScanner?.invoke(document.pageFiles) ?: scanSensitive(kinds, keepLast4)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                emptyList()
+                // The whole run failed: every page is unchecked, never "nothing found".
+                FindOutcome(emptyList(), document.pageFiles.indices.toList())
             }
             findRunning = false
             binding.hint.visibility = View.GONE
-            val hits = found.filter { it.second.kind in kinds }
+            val hits = outcome.hits.filter { it.second.kind in kinds }
             if (hits.isEmpty()) {
-                note(getString(R.string.find_none))
+                if (outcome.unreadablePages.isEmpty()) {
+                    // Text was read on every page and nothing matched.
+                    note(getString(R.string.find_none_clean))
+                } else {
+                    warnUnreadable(outcome.unreadablePages)
+                }
                 return@launch
             }
-            showFindResults(hits)
+            showFindResults(hits, outcome.unreadablePages)
         }
     }
 
-    /** OCR (element boxes) on every page, then the detectors; saved geometry is the fallback. */
+    /**
+     * At least one page's text could not be read: say so, say how many pages, and offer the
+     * manual box tool. Never a "no private info" line on an unchecked page.
+     */
+    private fun warnUnreadable(pages: List<Int>) {
+        SwSheet.builder(this)
+            .setTitle(R.string.find_title)
+            .setMessage(unreadableMessage(pages))
+            .setPrimary(R.string.find_draw_box) {
+                arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
+            }
+            .setSecondary(R.string.sheet_got_it)
+            .build()
+            .show()
+    }
+
+    /** "this page" for one failure, the page count for several. */
+    private fun unreadableMessage(pages: List<Int>): String =
+        if (pages.size == 1) {
+            getString(R.string.find_unreadable_one)
+        } else {
+            resources.getQuantityString(R.plurals.find_unreadable_pages, pages.size, pages.size)
+        }
+
+    /**
+     * OCR (element boxes) on every page, then the detectors; saved geometry is the fallback.
+     * A page with no recognisable text (recognizer error, model unavailable, empty result) is
+     * reported as unreadable instead of contributing an empty, falsely clean result.
+     */
     private suspend fun scanSensitive(
         kinds: Set<SensitiveScan.Kind>,
         keepLast4: Boolean
-    ): List<Pair<Int, SensitiveScan.Hit>> = withContext(Dispatchers.IO) {
+    ): FindOutcome = withContext(Dispatchers.IO) {
         val out = ArrayList<Pair<Int, SensitiveScan.Hit>>()
+        val unreadable = ArrayList<Int>()
         document.pageFiles.forEachIndexed { index, file ->
             val words = runCatching {
                 com.scanwhirl.app.util.OcrEngine.recognizeWords(file)
             }.getOrNull()
-            if (words != null) {
+            if (words != null && words.words.isNotEmpty()) {
                 val found = SensitiveScan.find(
                     words.words.map {
                         SensitiveScan.Word(it.text, it.left, it.top, it.right, it.bottom)
@@ -594,19 +638,24 @@ class StampEditorActivity : BaseActivity() {
                     keepLast4
                 )
                 out += found.map { index to it }
+                return@forEachIndexed
+            }
+            val page = runCatching {
+                com.scanwhirl.app.util.OcrEngine.recognizeFile(file).page
+            }.getOrNull()
+            if (page != null && page.lines.any { it.text.isNotBlank() }) {
+                out += SensitiveScan.find(page, kinds, keepLast4).map { index to it }
             } else {
-                val page = runCatching {
-                    com.scanwhirl.app.util.OcrEngine.recognizeFile(file).page
-                }.getOrNull()
-                if (page != null) {
-                    out += SensitiveScan.find(page, kinds, keepLast4).map { index to it }
-                }
+                unreadable += index
             }
         }
-        out
+        FindOutcome(out, unreadable)
     }
 
-    private fun showFindResults(hits: List<Pair<Int, SensitiveScan.Hit>>) {
+    private fun showFindResults(
+        hits: List<Pair<Int, SensitiveScan.Hit>>,
+        unreadablePages: List<Int> = emptyList()
+    ) {
         val groups = hits.groupBy { categoryLabel(it.second.kind) }
         val order = listOf(
             R.string.find_choice_phone, R.string.find_choice_email, R.string.find_choice_id,
@@ -617,10 +666,13 @@ class StampEditorActivity : BaseActivity() {
             "${getString(label)} (${groups.getValue(label).size})"
         }
         val checked = BooleanArray(categories.size) { true }
-        SwSheet.builder(this)
+        val builder = SwSheet.builder(this)
             .setTitle(
                 resources.getQuantityString(R.plurals.find_results_title, hits.size, hits.size)
             )
+        // Partial failure: the counts below do not cover the pages that could not be read.
+        if (unreadablePages.isNotEmpty()) builder.setMessage(unreadableMessage(unreadablePages))
+        builder
             .setOptions(labels, multiChecked = checked) { index, isChecked ->
                 checked[index] = isChecked
             }
