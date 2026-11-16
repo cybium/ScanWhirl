@@ -13,6 +13,7 @@ import com.scanwhirl.app.store.PdfInvariants
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -497,6 +498,62 @@ class OrganizeDraftUiTest {
                     activity.findViewById<TextView>(R.id.draftHeader).text.toString()
                 )
             }
+        }
+    }
+
+    /**
+     * B10: a pending delete whose async commit has already started is invisible to
+     * `commitPendingDeletesNow` (the paths were removed from the set), so Replace republished the
+     * page the user deleted and the late job then wrote a phantom draft.
+     */
+    @Test
+    fun `Replace waits for a pending delete that is already committing`() {
+        val id = DocFixtures.saved(repo, app, pages = 3)
+        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+            var cells = 0
+            assertTrue("the grid loads", pollUntil {
+                scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
+                cells == 3
+            })
+
+            val gate = java.util.concurrent.CountDownLatch(1)
+            val entered = java.util.concurrent.CountDownLatch(1)
+            lateinit var activity: DocumentViewerActivity
+            scenario.onActivity { a ->
+                activity = a
+                a.deleteCommitGate = {
+                    entered.countDown()
+                    gate.await()
+                }
+            }
+            scenario.onActivity { a ->
+                a.toggleSelected(0)
+                a.findViewById<android.view.View>(R.id.btnSelDelete)!!.performClick()
+            }
+            idle()
+            primary()
+            scenario.onActivity { it.commitPendingDelete() }
+            assertTrue(
+                "the delete job is running",
+                entered.await(5, java.util.concurrent.TimeUnit.SECONDS)
+            )
+
+            val replace = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+                .async { activity.replaceOriginalNow() }
+            Thread.sleep(300) // let Replace reach the pending deletes
+            gate.countDown()
+            val replaced = runBlocking { replace.await() }
+
+            assertEquals(
+                "Replace must not republish the page the user deleted",
+                2,
+                replaced.document.pageFiles.size
+            )
+            idle()
+            assertNull(
+                "no phantom draft may be re-created by the late delete job",
+                runBlocking { repo.draftOf(id) }
+            )
         }
     }
 }

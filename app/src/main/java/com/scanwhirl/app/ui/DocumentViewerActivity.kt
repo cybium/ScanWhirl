@@ -51,6 +51,7 @@ import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -104,6 +105,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** Not lifecycle-bound: a pending delete must land even during onDestroy. */
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /** The last async delete commit, so index-sensitive work can wait for it (B10). */
+    private var pendingDeleteJob: Job? = null
+
+    /** Test seam: runs before the async delete commit does its work (lets a test hold it open). */
+    @Volatile
+    internal var deleteCommitGate: () -> Unit = {}
 
     private var pendingDownload: (() -> Unit)? = null
     private val permissionLauncher =
@@ -879,8 +887,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         if (toDelete.isEmpty()) return
         pendingDeletes.removeAll(toDelete.toSet())
         committingDeletes.addAll(toDelete)
-        deleteScope.launch {
+        pendingDeleteJob = deleteScope.launch {
             try {
+                deleteCommitGate()
                 for (path in toDelete) {
                     val now = repo.draftPages(id)
                     val idx = now.indexOfFirst { it.path == path }
@@ -910,6 +919,17 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             val idx = now.indexOfFirst { it.path == path }
             if (idx >= 0 && now.size > 1) repo.draftDelete(id, idx)
         }
+    }
+
+    /**
+     * The Replace commit path (B10): every pending delete must have landed before the draft is
+     * published, or the "replaced" document still contains the page the user deleted and the late
+     * delete job then writes a phantom draft. Test seam for the same path the sheet uses.
+     */
+    internal suspend fun replaceOriginalNow(): ScanRepository.ReplaceResult {
+        val id = requireNotNull(docId)
+        commitPendingDeletesNow()
+        return repo.replaceWithDraft(id)
     }
 
     // ------------------------------------------------------------------
@@ -1337,8 +1357,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 lifecycleScope.launch {
                     try {
                         val replaced = withContext(Dispatchers.IO) {
-                            commitPendingDeletesNow()
-                            repo.replaceWithDraft(id)
+                            replaceOriginalNow()
                         }
                         ScanWhirlApp.from(this@DocumentViewerActivity).indexer.enqueue(replaced.document.id)
                         Toast.makeText(
