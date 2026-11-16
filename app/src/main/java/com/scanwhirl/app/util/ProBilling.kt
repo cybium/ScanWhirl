@@ -464,27 +464,30 @@ object ProBilling {
                     return@onMain
                 }
                 lastOp = Op.RESTORE
-                opListener = onState
+                // Restore reports through its own callback and the subscribers; it never takes
+                // the shared opListener, so a Buy that starts while this query is pending keeps
+                // its own callback (R1). While a Buy is open, only Owned is shared.
+                fun report(state: State) {
+                    runCatching { onState(state) }
+                    if (buyOpen && state !is State.Owned) return
+                    latest = state
+                    subscribers.toList().forEach { runCatching { it(state) } }
+                }
                 val client = try {
                     gateway(app)
                 } catch (t: Throwable) {
-                    deliver(State.Failed(app.getString(R.string.pro_error_play)))
-                    opListener = null
+                    report(State.Failed(app.getString(R.string.pro_error_play)))
                     return@onMain
                 }
                 // A restore query must not replace the purchase listener (R2).
                 val controller = Controller(
                     app, client, testBuild = false, post = { block -> onMain(block) }
-                ) { state ->
-                    deliver(state)
-                    if (state !is State.Finishing) opListener = null
-                }
+                ) { state -> report(state) }
                 client.connect { ok ->
                     onMain {
                         try {
                             if (!ok) {
-                                deliver(State.Failed(app.getString(R.string.pro_error_play)))
-                                opListener = null
+                                report(State.Failed(app.getString(R.string.pro_error_play)))
                                 return@onMain
                             }
                             val startGeneration = generation
@@ -492,26 +495,22 @@ object ProBilling {
                                 onMain {
                                     try {
                                         if (owned == null) {
-                                            deliver(State.Failed(app.getString(R.string.pro_error_play)))
-                                            opListener = null
+                                            report(State.Failed(app.getString(R.string.pro_error_play)))
                                         } else {
                                             controller.applyOwned(owned, startGeneration, silent = false)
                                         }
                                     } catch (t: Throwable) {
-                                        deliver(State.Failed(app.getString(R.string.pro_error_play)))
-                                        opListener = null
+                                        report(State.Failed(app.getString(R.string.pro_error_play)))
                                     }
                                 }
                             }
                         } catch (t: Throwable) {
-                            deliver(State.Failed(app.getString(R.string.pro_error_play)))
-                            opListener = null
+                            report(State.Failed(app.getString(R.string.pro_error_play)))
                         }
                     }
                 }
             } catch (t: Throwable) {
-                deliver(State.Failed(app.getString(R.string.pro_error_play)))
-                opListener = null
+                runCatching { onState(State.Failed(app.getString(R.string.pro_error_play))) }
             }
         }
     }

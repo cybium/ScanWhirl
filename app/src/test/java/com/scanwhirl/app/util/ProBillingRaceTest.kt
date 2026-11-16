@@ -177,6 +177,35 @@ class ProBillingRaceTest {
     }
 
     @Test
+    fun `R1b a Restore that answers during a Buy never takes the Buy's callback`() {
+        val restoreStates = mutableListOf<ProBilling.State>()
+        gateway.purchases = emptyList()
+        ProBilling.restore(app, testBuild = false) { restoreStates += it }
+        gateway.releaseNext(); idle() // restore connect; its purchase query is held
+
+        val buyStates = mutableListOf<ProBilling.State>()
+        ProBilling.buy(activity(), testBuild = false) { buyStates += it }
+        gateway.releaseNext(); idle() // buy connect
+        gateway.releaseNext(); idle() // buy offer -> launch
+        assertTrue(ProBilling.isPurchaseInFlight())
+
+        gateway.releasePurchases(); idle() // Restore answers "nothing" while the Buy is open
+        assertEquals(ProBilling.State.None, restoreStates.last())
+        assertTrue("the Buy is still open", ProBilling.isPurchaseInFlight())
+        assertTrue("the Buy never saw the Restore result", buyStates.none { it == ProBilling.State.None })
+
+        gateway.emit(
+            ProBilling.Event.Purchased(
+                ProBilling.Owned("scanwhirl_pro", acknowledged = true, token = "paid")
+            )
+        )
+        idle()
+        assertEquals(ProBilling.State.Owned, buyStates.last())
+        assertTrue(purchased())
+        assertFalse(ProBilling.isPurchaseInFlight())
+    }
+
+    @Test
     fun `R2 startup empty result after Buy launches does not drop the purchase`() {
         ProBilling.refreshOwned(app, testBuild = false)
         gateway.releaseNext(); idle() // connect; purchase query is held

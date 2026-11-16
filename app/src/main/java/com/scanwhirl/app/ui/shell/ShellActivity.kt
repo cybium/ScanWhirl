@@ -246,7 +246,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             if (isFinishing || isDestroyed) return@subscribe
             if (replay) {
                 setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
-                if (state == com.scanwhirl.app.util.ProBilling.State.Owned) syncProState()
+                if (state == com.scanwhirl.app.util.ProBilling.State.Owned) {
+                    syncProState()
+                    // A purchase that finished while this screen was stopped (behind Play's sheet,
+                    // or before a rotation) must not leave a Free paywall on screen: redraw it.
+                    if (proOpen && com.scanwhirl.app.util.ProGate.isPro(this)) showPro()
+                }
                 return@subscribe
             }
             showBillingState(state)
