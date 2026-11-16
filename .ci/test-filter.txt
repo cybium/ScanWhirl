@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.PickerOffMainTest,com.scanwhirl.app.ui.shell.ShellPickerOffMainTest,com.scanwhirl.app.ui.vault.VaultActivityTest,com.scanwhirl.app.ui.ViewerProtectSheetTest

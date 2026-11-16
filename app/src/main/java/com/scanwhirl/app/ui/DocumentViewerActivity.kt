@@ -655,11 +655,20 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     private fun pickDocumentForInsert() {
-        val docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
-            .filter { it.id != docId && !it.isLocked && !it.isVaulted }
-        FlowUtil.pickScan(this, R.string.insert_pages_title, docs) { source ->
-            // Copies, never moves: the source document keeps every page.
-            askInsertPosition(source.pageFiles)
+        // C08: the library stat runs off the main thread; the chooser follows when it is ready.
+        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+            this, getString(R.string.crash_loading_documents)
+        )
+        lifecycleScope.launch {
+            val docs = withContext(Dispatchers.IO) {
+                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            }.filter { it.id != docId && !it.isLocked && !it.isVaulted }
+            progress.dismiss()
+            if (isFinishing || isDestroyed) return@launch
+            FlowUtil.pickScan(this@DocumentViewerActivity, R.string.insert_pages_title, docs) { source ->
+                // Copies, never moves: the source document keeps every page.
+                askInsertPosition(source.pageFiles)
+            }
         }
     }
 
@@ -1549,18 +1558,26 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
 
         private fun openPicker(activity: android.app.Activity, insert: Boolean) {
-            if (activity !is androidx.appcompat.app.AppCompatActivity) return
-            val docs = runCatching { ScanRepository(activity).listDocuments() }
-                .getOrDefault(emptyList())
-                .filter { !it.isLocked && !it.isVaulted }
-            if (docs.isEmpty()) {
-                Toast.makeText(activity, R.string.empty_title, Toast.LENGTH_SHORT).show()
-                return
-            }
-            FlowUtil.pickScan(activity, R.string.tool_pick_document, docs) { doc ->
-                activity.startActivity(
-                    if (insert) insertIntent(activity, doc.id) else intent(activity, doc.id)
-                )
+            val host = activity as? androidx.appcompat.app.AppCompatActivity ?: return
+            // C08: tapping the Tools tile also stat'd the whole library on the main thread.
+            val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+                host, host.getString(R.string.crash_loading_documents)
+            )
+            host.lifecycleScope.launch {
+                val docs = withContext(Dispatchers.IO) {
+                    runCatching { ScanRepository(host).listDocuments() }.getOrDefault(emptyList())
+                }.filter { !it.isLocked && !it.isVaulted }
+                progress.dismiss()
+                if (host.isFinishing || host.isDestroyed) return@launch
+                if (docs.isEmpty()) {
+                    Toast.makeText(host, R.string.empty_title, Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                FlowUtil.pickScan(host, R.string.tool_pick_document, docs) { doc ->
+                    host.startActivity(
+                        if (insert) insertIntent(host, doc.id) else intent(host, doc.id)
+                    )
+                }
             }
         }
     }

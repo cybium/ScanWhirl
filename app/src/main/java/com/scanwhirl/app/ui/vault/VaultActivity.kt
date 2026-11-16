@@ -1228,7 +1228,21 @@ class VaultActivity : BaseActivity() {
             showUnlock()
             return
         }
-        val docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+        // C08: the library stat runs off the main thread; the sheet follows when it is ready.
+        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+            this, getString(R.string.crash_loading_documents)
+        )
+        lifecycleScope.launch {
+            val docs = withContext(Dispatchers.IO) {
+                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            }
+            progress.dismiss()
+            if (isFinishing || isDestroyed) return@launch
+            showAddFilesSheet(docs)
+        }
+    }
+
+    private fun showAddFilesSheet(docs: List<ScanDocument>) {
         if (docs.isEmpty()) {
             SwSheet.note(this, getString(R.string.vault_add_sheet_title), getString(R.string.vault_add_empty)).show()
             return
