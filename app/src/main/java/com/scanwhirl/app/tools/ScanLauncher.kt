@@ -350,6 +350,18 @@ object GalleryCrop {
         hosts[activity] = host
     }
 
+    /**
+     * C04: screens come and go; the bridge must not keep a destroyed activity (or its pending
+     * lambdas, which capture it) in a process-wide map.
+     */
+    internal fun unregister(activity: AppCompatActivity) {
+        hosts.remove(activity)
+        pending.remove(activity)
+    }
+
+    /** Tests: how many live screens the bridge still holds. */
+    internal fun hostCountForTest(): Int = hosts.size
+
     /** The scanner returned cropped pages. */
     internal fun deliver(activity: AppCompatActivity, uris: List<Uri>) {
         pending.remove(activity)?.onCropped?.invoke(uris)
@@ -359,6 +371,9 @@ object GalleryCrop {
     internal fun cancel(activity: AppCompatActivity) {
         pending.remove(activity)
     }
+
+    /** Tests: how many screens are waiting for a gallery-crop result. */
+    internal fun pendingCountForTest(): Int = pending.size
 
     /** The fallback picker returned photos for the caller's manual crop. */
     internal fun deliverFallback(activity: AppCompatActivity, uris: List<Uri>) {

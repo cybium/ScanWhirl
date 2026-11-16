@@ -69,4 +69,11 @@ abstract class BaseActivity : AppCompatActivity() {
         super.startActivity(intent)
         com.scanwhirl.app.ui.kit.SwMotion.drillIn(this)
     }
+
+    override fun onDestroy() {
+        // C04: the gallery-crop bridge is process-wide; a destroyed screen must not stay in it
+        // (its Host/Pending lambdas capture this activity).
+        com.scanwhirl.app.tools.GalleryCrop.unregister(this)
+        super.onDestroy()
+    }
 }
