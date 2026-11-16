@@ -16,7 +16,7 @@ ROOT = Path('/mnt/c/Users/Cybium/Desktop/.sw-qa/promo_v2')
 FF = imageio_ffmpeg.get_ffmpeg_exe()
 FONT = str(ROOT/'fonts/NotoSansDevanagari-Bold.ttf')
 CAPTIONS = {
-    'en': ['HOOK', 'Scan to PDF in seconds', 'Read text: English & हिंदी',
+    'en': ['Your phone is now a PDF office', 'Scan to PDF in seconds', 'Read text: English & हिंदी',
            'Hide private info before you share', '35+ PDF tools', 'English | हिंदी',
            'No ads · No account · Pro ₹100 once'],
     'hi': ['आपका फ़ोन, अब PDF ऑफ़िस', 'सेकंडों में PDF', 'अंग्रेज़ी और हिंदी में टेक्स्ट',

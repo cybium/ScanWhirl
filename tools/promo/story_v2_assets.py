@@ -54,7 +54,7 @@ def card():
     dev = str(ROOT/'fonts/NotoSansDevanagari-Bold.ttf')
     d.text((540, 750), 'ScanWhirl', font=ImageFont.truetype(font, 100), fill='white', anchor='mm')
     d.text((540, 940), 'Early access: DM us', font=ImageFont.truetype(font, 62), fill='#28d2e1', anchor='mm')
-    d.text((540, 1080), 'English & हिंदी · No ads · Nothing uploaded', font=ImageFont.truetype(dev, 34), fill='white', anchor='mm')
+    d.text((540, 1080), 'English & हिंदी · No ads · No account', font=ImageFont.truetype(dev, 34), fill='white', anchor='mm')
     im.save(ROOT/'cover_en.png')
 
 if __name__ == '__main__':
