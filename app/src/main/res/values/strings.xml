@@ -389,7 +389,7 @@
     <string name="resize_action">Resize</string>
     <string name="resize_share">Share resized image</string>
     <string name="resize_failed">Resize failed: %1$s</string>
-    <string name="resize_invalid_size">Enter a valid size (1–12000 px)</string>
+    <string name="resize_invalid_size">Enter a valid size (1 to 12000 px)</string>
     <string name="resize_invalid_target">Enter a size like 500 KB or 3 MB</string>
     <string name="resize_done">Saved %1$s (%2$s)</string>
 

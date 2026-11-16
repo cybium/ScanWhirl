@@ -33,14 +33,14 @@ is needed — payments go through the Play Store app.
 **App name** (30): `ScanWhirl: PDF Scanner & Tools`
 
 **Short description** (80):
-`Scan to PDF, edit, sign & protect — on your phone. No ads, no account.`
+`Scan to PDF, edit, sign and protect on your phone. No ads, no account.`
 
 **Full description** (≤ 4000):
 
 ```
-ScanWhirl is a document scanner and PDF tool kit that runs on your phone. Scan paper to clean PDFs, turn photos into PDFs, read text in English and Hindi, and edit, sign and protect your files — with no ads and no account. The app has no internet permission, so nothing you scan is uploaded; Google Play may download the scanner and text-reading parts once.
+ScanWhirl is a document scanner and PDF tool kit that runs on your phone. Scan paper to clean PDFs, turn photos into PDFs, read text in English and Hindi, and edit, sign and protect your files, with no ads and no account. The app has no internet permission, so nothing you scan is uploaded; Google Play may download the scanner and text-reading parts once.
 
-SCAN AND CREATE — FREE
+SCAN AND CREATE (FREE)
 • Document scanner with automatic edge detection, crop and enhance
 • ID card scan: both sides on one A4 or Letter page
 • Passport scan, photos to PDF, import any PDF
@@ -48,14 +48,14 @@ SCAN AND CREATE — FREE
 • Read text (OCR) in English and Hindi, copy it or export it
 • Make PDFs searchable so any PDF app can find words in them
 
-ORGANISE AND OPTIMISE — FREE
+ORGANISE AND OPTIMISE (FREE)
 • Merge PDFs, extract, reorder, insert and duplicate pages
 • Compress PDF to fit email and upload limits, resize pages
 • PDF to images, one long image, text export, ZIP export
 • Protect PDF with a password (AES-256) and unlock PDFs you own
 • Remove hidden metadata before you share
 
-PRO — ONE-TIME PURCHASE, NO SUBSCRIPTION
+PRO: ONE-TIME PURCHASE, NO SUBSCRIPTION
 • Sign PDFs: draw your signature once, place it anywhere
 • Add text, draw, highlight, stamps, watermark and page numbers
 • Hide private info: find and cover phone numbers, emails, ID numbers and card numbers before you share
