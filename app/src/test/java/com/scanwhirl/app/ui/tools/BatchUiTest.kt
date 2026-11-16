@@ -72,6 +72,27 @@ class BatchUiTest {
     }
 
     @Test
+    fun `the primary button carries its label for the screen and TalkBack`() {
+        ActivityScenario.launch<BatchActivity>(BatchActivity.intent(app, emptyList())).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val go = activity.findViewById<TextView>(R.id.batchContinue)
+                assertNotNull("the primary button exists", go)
+                assertEquals(
+                    "the blank cyan pill must show its label",
+                    activity.getString(R.string.tools_batch_continue),
+                    go.text.toString()
+                )
+                assertEquals(
+                    "TalkBack must hear the same label",
+                    activity.getString(R.string.tools_batch_continue),
+                    go.contentDescription?.toString()
+                )
+            }
+        }
+    }
+
+    @Test
     fun `free sees the Pro screen`() {
         ProGate.setTestOverride(app, false)
         ActivityScenario.launch<BatchActivity>(BatchActivity.intent(app, emptyList())).use { scenario ->
