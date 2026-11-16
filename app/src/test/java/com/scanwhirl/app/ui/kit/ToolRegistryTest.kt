@@ -20,12 +20,25 @@ import org.robolectric.annotation.GraphicsMode
 class ToolRegistryTest {
 
     @Test
-    fun `organize pages and insert pages are ready`() {
-        assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
+    fun `insert pages is ready and the two unfinished organize tools are coming soon`() {
+        // Owner 2026-11-16: Batch rename has no reachable rename action and Organize pages has no
+        // working reorder, so both are Coming soon instead of shipping a dead tile.
+        assertEquals(ToolStatus.SOON, ToolRegistry.byId("organize_pages")?.status)
+        assertEquals(ToolStatus.SOON, ToolRegistry.byId("batch_rename")?.status)
         assertEquals(ToolStatus.READY, ToolRegistry.byId("insert_pages")?.status)
         assertNull("Mask Aadhaar folded into Redact's Find", ToolRegistry.byId("mask_aadhaar"))
         assertNull("Hindi is a language choice, not a tile", ToolRegistry.byId("hindi_text"))
         assertEquals(ToolStatus.READY, ToolRegistry.byId("redact")?.status)
+    }
+
+    @Test
+    fun `the See all count only counts Pro tools that are on sale`() {
+        assertEquals(
+            "a Coming-soon Pro tile must not be advertised as a Pro tool",
+            ToolRegistry.all.count { it.pro && it.status != ToolStatus.SOON },
+            ToolRegistry.proCount()
+        )
+        assertEquals(17, ToolRegistry.proCount())
     }
 
     @Test

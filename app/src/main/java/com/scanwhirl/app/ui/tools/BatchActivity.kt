@@ -195,6 +195,10 @@ class BatchActivity : BaseActivity() {
 
         continueButton = SwStyle.text(this, 16f, SwStyle.color(this, R.color.sw_disc_ink), bold = true).apply {
             id = R.id.batchContinue
+            // The primary action must never render as a blank cyan pill: its label travels to
+            // TalkBack through contentDescription as well.
+            text = getString(R.string.tools_batch_continue)
+            contentDescription = getString(R.string.tools_batch_continue)
             gravity = Gravity.CENTER
             background = SwStyle.rounded(
                 this@BatchActivity, SwStyle.color(this@BatchActivity, R.color.cyan_primary), radiusDp = 16f

@@ -111,14 +111,13 @@ object ToolRegistry {
         ready("merge", ToolGroup.ORGANIZE, R.string.tool_merge, R.drawable.ic_sym_call_merge, "merge join combine together", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("split", ToolGroup.ORGANIZE, R.string.tool_split, R.drawable.ic_sym_call_split, "split range separate", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("extract", ToolGroup.ORGANIZE, R.string.tool_extract, R.drawable.ic_sym_content_cut, "extract pages pick remove", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        ready("organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages, R.drawable.ic_sym_view_module, "organize reorder pages move", launch = { host, tool ->
-            val activity = host as? android.app.Activity
-            if (activity == null) {
-                host.comingSoon(tool)
-            } else {
-                com.scanwhirl.app.ui.DocumentViewerActivity.openOrganizePicker(activity)
-            }
-        }),
+        // Owner 11-16: Organize pages ships its document grid, but page reorder is not reachable
+        // there yet; the tile is Coming soon instead of a dead reorder promise.
+        soon(
+            "organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages,
+            R.drawable.ic_sym_view_module, "organize reorder pages move",
+            note = R.string.soon_organize_pages
+        ),
         ready("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_add, "insert add pages into pdf", launch = { host, tool ->
             val activity = host as? android.app.Activity
             if (activity == null) {
@@ -129,7 +128,13 @@ object ToolRegistry {
         }),
         ready("duplicate", ToolGroup.ORGANIZE, R.string.tool_duplicate, R.drawable.ic_sym_content_copy, "duplicate copy clone", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = true),
-        ready("batch_rename", ToolGroup.ORGANIZE, R.string.tool_batch_rename, R.drawable.ic_sym_drive_file_rename, "batch rename many files", pro = true),
+        // Owner 11-16: the Batch rename tool is Coming soon. The pattern + preview + undo sheet
+        // exists, but the owner asked for a Coming-soon tile until that entry point is finished.
+        soon(
+            "batch_rename", ToolGroup.ORGANIZE, R.string.tool_batch_rename,
+            R.drawable.ic_sym_drive_file_rename, "batch rename many files",
+            pro = true, note = R.string.soon_batch_rename
+        ),
         ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sym_view_module, "batch many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Optimize (4)
