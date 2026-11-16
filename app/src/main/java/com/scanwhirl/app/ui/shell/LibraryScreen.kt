@@ -84,6 +84,7 @@ class LibraryScreen(
     lateinit var docList: LinearLayout
 
     private val chipRow: LinearLayout
+    private var chipScroll: View? = null
     private val emptyView: LinearLayout
     private val listHeader: LinearLayout
     private val countLabel: TextView
@@ -198,12 +199,27 @@ class LibraryScreen(
             showSortSheet()
         }
         addView(recentHeader)
+        // The category chips scroll like the folder chips: five or more chips are wider than a
+        // 320-360dp phone, and a plain LinearLayout squeezed the trailing ones to zero width.
         chipRow = LinearLayout(context).apply {
+            id = R.id.swChipRow
             orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             val pad = SwStyle.dp(context, 18f)
             setPadding(pad, 0, pad, 0)
         }
-        addView(chipRow)
+        chipScroll = HorizontalScrollView(context).apply {
+            id = R.id.swChipScroll
+            isHorizontalScrollBarEnabled = false
+            addView(
+                chipRow,
+                android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+        addView(chipScroll)
         addView(SwStyle.spacer(context, 6f))
 
         val selectBar = selectionBar()
@@ -1616,7 +1632,7 @@ class LibraryScreen(
         quickRow2.isVisible = !searching && !firstRun && quickRow2.childCount > 0
         quickAddGrid.isVisible = quickEditing && !searching
         recentHeader?.isVisible = !searching && !firstRun
-        chipRow.isVisible = !searching && !firstRun && docs.isNotEmpty()
+        chipScroll?.isVisible = !searching && !firstRun && docs.isNotEmpty()
         listHeader.isVisible = !searching && !firstRun
     }
 
