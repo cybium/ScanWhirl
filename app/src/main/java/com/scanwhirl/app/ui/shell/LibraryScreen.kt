@@ -26,6 +26,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
@@ -327,7 +328,25 @@ class LibraryScreen(
     }
 
     /**
-     * v2 UI: 01_home_A — highlight and scroll to a document after a tool's "Show in library".
+     * C05: folder/tag/batch metadata writes rewrite every touched `meta.txt` with an fsync; they
+     * run off the main thread, one writer at a time, then [after] (UI work) resumes on main.
+     */
+    private fun <T> ioWrite(block: () -> T, after: (T) -> Unit = {}) {
+        val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
+        if (owner == null) {
+            after(block())
+            return
+        }
+        owner.launch {
+            val result = metaWrite.withLock { withContext(ioDispatcher) { block() } }
+            after(result)
+        }
+    }
+
+    private val metaWrite = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * v2 UI: 01_home_A - highlight and scroll to a document after a tool's "Show in library".
      * The target is kept so the post-onResume reload shows it highlighted too.
      */
     fun revealDocument(id: String) {
@@ -357,8 +376,7 @@ class LibraryScreen(
     fun undoLastBatchRename() {
         val undo = lastBatchUndo ?: return
         lastBatchUndo = null
-        undo.forEach { (id, name) -> repo.renameDocument(id, name) }
-        reload()
+        ioWrite({ undo.forEach { (id, name) -> repo.renameDocument(id, name) } }, { reload() })
     }
 
     // ---- folders ----------------------------------------------------------
@@ -467,11 +485,12 @@ class LibraryScreen(
             .build()
         sheet.setPrimary(R.string.folder_create) {
             val name = sheet.inputView?.text?.toString().orEmpty()
-            val created = repo.createFolder(name)
-            if (!created) {
-                Toast.makeText(context, context.getString(R.string.folder_exists), Toast.LENGTH_SHORT).show()
+            ioWrite({ repo.createFolder(name) }) { created ->
+                if (!created) {
+                    Toast.makeText(context, context.getString(R.string.folder_exists), Toast.LENGTH_SHORT).show()
+                }
+                reload()
             }
-            reload()
         }
         sheet.show()
     }
@@ -494,13 +513,14 @@ class LibraryScreen(
             .build()
         sheet.setPrimary(R.string.save) {
             val next = sheet.inputView?.text?.toString().orEmpty()
-            val renamed = repo.renameFolder(name, next)
-            if (!renamed) {
-                Toast.makeText(context, context.getString(R.string.folder_exists), Toast.LENGTH_SHORT).show()
-            } else if (folder.equals(name, true)) {
-                folder = com.scanwhirl.app.store.LibraryMeta.normalizeFolder(next)
+            ioWrite({ repo.renameFolder(name, next) }) { renamed ->
+                if (!renamed) {
+                    Toast.makeText(context, context.getString(R.string.folder_exists), Toast.LENGTH_SHORT).show()
+                } else if (folder.equals(name, true)) {
+                    folder = com.scanwhirl.app.store.LibraryMeta.normalizeFolder(next)
+                }
+                reload()
             }
-            reload()
         }
         sheet.show()
     }
@@ -510,10 +530,11 @@ class LibraryScreen(
             .setTitle(R.string.folder_delete_title)
             .setMessage(context.getString(R.string.folder_delete_msg, name))
             .setPrimary(R.string.folder_delete) {
-                repo.deleteFolder(name)
-                if (folder.equals(name, true)) folder = null
-                reload()
-                Toast.makeText(context, context.getString(R.string.folder_deleted), Toast.LENGTH_SHORT).show()
+                ioWrite({ repo.deleteFolder(name) }) {
+                    if (folder.equals(name, true)) folder = null
+                    reload()
+                    Toast.makeText(context, context.getString(R.string.folder_deleted), Toast.LENGTH_SHORT).show()
+                }
             }
             .setSecondary(R.string.sheet_cancel)
             .build()
@@ -655,10 +676,11 @@ class LibraryScreen(
             .setTitle(R.string.folder_move_title)
             .setOptions(labels) { which, _ ->
                 val target = if (which == 0) null else folderNames[which - 1]
-                repo.setFolder(ids, target)
-                folder = target
-                exitSelection()
-                reload()
+                ioWrite({ repo.setFolder(ids, target) }) {
+                    folder = target
+                    exitSelection()
+                    reload()
+                }
             }
             .setSecondary(R.string.sheet_cancel)
             .build()
@@ -681,7 +703,11 @@ class LibraryScreen(
             .setOptions(labels, multiChecked = checked) { which, isChecked ->
                 if (allTags.isEmpty()) return@setOptions
                 val tag = allTags[which]
-                if (isChecked) repo.addTag(ids, tag) else ids.forEach { repo.removeTag(it, tag) }
+                if (isChecked) {
+                    ioWrite({ repo.addTag(ids, tag) }, { reload() })
+                } else {
+                    ioWrite({ ids.forEach { repo.removeTag(it, tag) } }, { reload() })
+                }
             }
             .setPrimary(R.string.tags_new) { newTagSheet(ids) }
             .setSecondary(R.string.tags_done) { reload() }
@@ -697,8 +723,7 @@ class LibraryScreen(
             .build()
         sheet.setPrimary(R.string.tags_add) {
             val tag = sheet.inputView?.text?.toString().orEmpty()
-            repo.addTag(ids, tag)
-            reload()
+            ioWrite({ repo.addTag(ids, tag) }, { reload() })
         }
         sheet.show()
     }
@@ -709,10 +734,11 @@ class LibraryScreen(
             .setTitle(context.getString(R.string.sel_delete_title, ids.size))
             .setMessage(R.string.shell_trash_note)
             .setPrimary(R.string.shell_move_to_trash) {
-                ids.forEach { repo.deleteDocument(it) }
-                exitSelection()
-                reload()
-                Toast.makeText(context, context.getString(R.string.shell_moved_to_trash), Toast.LENGTH_SHORT).show()
+                ioWrite({ ids.forEach { repo.deleteDocument(it) } }) {
+                    exitSelection()
+                    reload()
+                    Toast.makeText(context, context.getString(R.string.shell_moved_to_trash), Toast.LENGTH_SHORT).show()
+                }
             }
             .setSecondary(R.string.sheet_cancel)
             .build()
@@ -780,33 +806,36 @@ class LibraryScreen(
 
     private fun applyBatchRename(chosen: List<ScanDocument>, newNames: List<String>) {
         val undo = mutableListOf<Pair<String, String>>()
-        chosen.forEachIndexed { index, doc ->
-            val next = newNames.getOrNull(index) ?: doc.name
-            if (next != doc.name) {
-                repo.renameDocument(doc.id, next)
-                undo += doc.id to doc.name
+        ioWrite({
+            chosen.forEachIndexed { index, doc ->
+                val next = newNames.getOrNull(index) ?: doc.name
+                if (next != doc.name) {
+                    repo.renameDocument(doc.id, next)
+                    undo += doc.id to doc.name
+                }
             }
+        }) {
+            lastBatchUndo = undo.ifEmpty { null }
+            exitSelection()
+            reload()
+            if (undo.isEmpty()) return@ioWrite
+            // v2 UI: 74_motion — glass snackbar above the nav, after the IME closes.
+            val host = context as? android.app.Activity
+            val snack = if (host != null) {
+                com.scanwhirl.app.ui.kit.SwSnackbar.show(
+                    host,
+                    this,
+                    context.getString(R.string.batch_done, undo.size),
+                    context.getString(R.string.undo_action),
+                    onAction = { undoLastBatchRename() }
+                )
+            } else {
+                Snackbar.make(this, context.getString(R.string.batch_done, undo.size), Snackbar.LENGTH_LONG)
+                    .setAction(R.string.undo_action) { undoLastBatchRename() }
+                    .also { it.show() }
+            }
+            lastUndoSnackbar = snack
         }
-        lastBatchUndo = undo.ifEmpty { null }
-        exitSelection()
-        reload()
-        if (undo.isEmpty()) return
-        // v2 UI: 74_motion — glass snackbar above the nav, after the IME closes.
-        val host = context as? android.app.Activity
-        val snack = if (host != null) {
-            com.scanwhirl.app.ui.kit.SwSnackbar.show(
-                host,
-                this,
-                context.getString(R.string.batch_done, undo.size),
-                context.getString(R.string.undo_action),
-                onAction = { undoLastBatchRename() }
-            )
-        } else {
-            Snackbar.make(this, context.getString(R.string.batch_done, undo.size), Snackbar.LENGTH_LONG)
-                .setAction(R.string.undo_action) { undoLastBatchRename() }
-                .also { it.show() }
-        }
-        lastUndoSnackbar = snack
     }
 
     // ---- pieces -----------------------------------------------------------
