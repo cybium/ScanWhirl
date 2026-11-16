@@ -14,8 +14,8 @@ BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
 CAPTIONS = {
-    "01_home": ("Scan to PDF. Offline.", "No ads. No account. Your files stay on your phone."),
-    "02_tools": ("40+ PDF tools", "Merge, compress, convert, sign, protect and more"),
+    "01_home": ("Scan to PDF on your phone", "No ads. No account. Your files stay on your phone."),
+    "02_tools": ("35+ PDF tools", "Merge, compress, convert, sign, protect and more"),
     "04_text_ocr": ("Read text from any page", "English and Hindi, right on your phone"),
     "05_pro": ("Pro: pay once, keep it forever", "No subscription. Works on all your phones."),
     "06_private": ("Hide private info", "Cover phone numbers, emails and ID numbers before you share"),
