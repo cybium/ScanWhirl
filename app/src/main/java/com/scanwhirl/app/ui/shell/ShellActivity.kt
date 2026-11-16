@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.shell
 
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
@@ -421,10 +422,21 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private fun scroll(child: View): ScrollView = scrolls.getOrPut(child) {
         ScrollView(this).apply {
             isFillViewport = true
-            // D: the nav bar + the scan disc's overhang are not part of the page,
-            // but the last row must clear the disc when scrolled to the end.
+            // The dock is a sibling under the page, so a hard clip at the fold looks
+            // like the last row was sliced. Padding equal to the dock (measured, not
+            // a magic number) lets that row scroll fully above the disc.
             clipToPadding = false
-            setPadding(0, 0, 0, SwStyle.dp(this@ShellActivity, 112f))
+            setPadding(0, 0, 0, dockClearancePx())
+            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                val pad = dockClearancePx()
+                if (v.paddingBottom != pad) {
+                    v.post {
+                        if (v.paddingBottom != dockClearancePx()) {
+                            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, dockClearancePx())
+                        }
+                    }
+                }
+            }
             addView(
                 child,
                 ViewGroup.LayoutParams(
@@ -432,6 +444,48 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 )
             )
         }
+    }
+
+    /**
+     * How far the last row must sit above the viewport bottom so it clears the dock.
+     * The nav host's laid-out height already holds the bar and the scan disc; the
+     * bar's own bottom margin is the breathing room under that. Read from the dock
+     * views so a resize cannot clip the last row again. Zero while the keyboard
+     * has hidden the dock.
+     */
+    internal fun dockClearancePx(): Int {
+        if (!::navHost.isInitialized || !navHost.isVisible) return 0
+        val bar = findViewById<View>(R.id.swShellNav)
+        val hostH = when {
+            navHost.height > 0 -> navHost.height
+            (navHost.layoutParams?.height ?: 0) > 0 -> navHost.layoutParams.height
+            else -> SwStyle.dp(this, 100f)
+        }
+        val margin = (bar?.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin
+            ?: SwStyle.dp(this, 12f)
+        return hostH + margin + discOverlapPx()
+    }
+
+    /** How many pixels the scan disc is drawn above the page. Zero while it sits in the nav host. */
+    private fun discOverlapPx(): Int {
+        if (navHost.height <= 0 || contentHost.height <= 0) return 0
+        val disc = findViewById<View>(R.id.swNavScan) ?: return 0
+        val root = navHost.parent as? View ?: return 0
+        val discTop = offsetIn(disc, root)
+        val contentBottom = offsetIn(contentHost, root) + contentHost.height
+        return (contentBottom - discTop).coerceAtLeast(0)
+    }
+
+    private fun offsetIn(view: View, ancestor: View): Int {
+        var y = 0
+        var current: View? = view
+        while (current != null && current !== ancestor) {
+            y += current.top
+            val parent = current.parent as? View ?: break
+            y -= parent.scrollY
+            current = parent
+        }
+        return y
     }
 
     private val scrolls = mutableMapOf<View, ScrollView>()
@@ -442,6 +496,24 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         contentHost.addView(
             view,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        // 24dp (sw_space_6) fade into the page ink, so a card at the fold dissolves
+        // instead of being sliced on the dock. Not clickable: touches pass through.
+        contentHost.addView(
+            View(this).apply {
+                tag = DOCK_FADE
+                isClickable = false
+                isFocusable = false
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(Color.TRANSPARENT, SwStyle.color(this@ShellActivity, R.color.rv_bg))
+                )
+            },
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                resources.getDimensionPixelSize(R.dimen.sw_space_6)
+            ).apply { gravity = Gravity.BOTTOM }
         )
         lastShown = view
     }
@@ -994,6 +1066,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         /** Opens the Pro screen on launch (Settings' Gold option for Free users). */
         const val EXTRA_OPEN_PRO = "open_pro"
+
+        /** Tag of the non-interactive fade painted just above the dock. */
+        const val DOCK_FADE = "swDockFade"
 
         fun intent(context: android.content.Context, docId: String? = null): Intent =
             Intent(context, ShellActivity::class.java).apply {

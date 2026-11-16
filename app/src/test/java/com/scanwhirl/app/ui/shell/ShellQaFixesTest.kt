@@ -432,7 +432,8 @@ class ShellQaFixesTest {
     }
 
     @Test
-    fun `the library list keeps room above the nav bar`() {        DocFixtures.saved(repo, app, pages = 1, name = "Bottom padding")
+    fun `the library list keeps room above the nav bar`() {
+        DocFixtures.saved(repo, app, pages = 1, name = "Bottom padding")
         launch { activity ->
             val list = activity.findViewById<ViewGroup>(R.id.swDocList)
             val need = 90 * activity.resources.displayMetrics.density
@@ -441,5 +442,148 @@ class ShellQaFixesTest {
                 list.paddingBottom >= need
             )
         }
+    }
+
+    /**
+     * The dock is a sibling under the page. After scrolling to the end, the last
+     * row of every tab must sit fully above the scan disc — not sliced on it.
+     */
+    @Test
+    @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
+    fun `the last row of every tab scrolls fully above the dock`() {
+        repeat(8) { DocFixtures.saved(repo, app, pages = 1, name = "Dock clear $it") }
+        launch { activity ->
+            val root = layoutShell(activity)
+            assertClearsDock(activity, root, "Library", expectScroll = true) {
+                val list = activity.findViewById<ViewGroup>(R.id.swDocList)
+                assertTrue("library has cards", list.childCount > 0)
+                list.getChildAt(list.childCount - 1)
+            }
+
+            activity.findViewById<View>(R.id.swNavTools).performClick()
+            idle()
+            layoutShell(activity)
+            assertClearsDock(activity, root, "Tools", expectScroll = true) {
+                val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
+                assertTrue("tools hub has sections", body.childCount > 1)
+                body.getChildAt(body.childCount - 1)
+            }
+
+            activity.findViewById<View>(R.id.swNavVault).performClick()
+            idle()
+            layoutShell(activity)
+            assertClearsDock(activity, root, "Vault", expectScroll = false) {
+                val scroll = tabScroll(activity)
+                lastLaidOutChild(scroll.getChildAt(0) as ViewGroup)
+            }
+
+            activity.findViewById<View>(R.id.swNavMe).performClick()
+            idle()
+            layoutShell(activity)
+            assertClearsDock(activity, root, "Me", expectScroll = false) {
+                val list = activity.findViewById<ViewGroup>(R.id.swMeList)
+                list.getChildAt(list.childCount - 1)
+            }
+        }
+    }
+
+    @Test
+    fun `hindi kit text drops latin letter spacing so matras stay joined`() {
+        val config = android.content.res.Configuration(app.resources.configuration)
+        config.setLocale(java.util.Locale("hi"))
+        val hi = app.createConfigurationContext(config)
+        val hiHeader = com.scanwhirl.app.ui.kit.SwStyle.sectionHeader(hi, "व्यवस्थित करें", 9)
+        val hiLabel = hiHeader.getChildAt(0) as TextView
+        assertEquals("Hindi section header is not letter-spaced", 0f, hiLabel.letterSpacing, 0.001f)
+
+        val enHeader = com.scanwhirl.app.ui.kit.SwStyle.sectionHeader(app, "Organize", 9)
+        val enLabel = enHeader.getChildAt(0) as TextView
+        assertEquals("English section header keeps its tracking", 0.08f, enLabel.letterSpacing, 0.001f)
+    }
+
+    private fun layoutShell(activity: ShellActivity): View {
+        val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)
+        val dm = activity.resources.displayMetrics
+        val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+        val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+        repeat(3) {
+            root.measure(w, h)
+            root.layout(0, 0, dm.widthPixels, dm.heightPixels)
+        }
+        idle()
+        return root
+    }
+
+    private fun tabScroll(activity: ShellActivity): ScrollView {
+        val host = activity.findViewById<ViewGroup>(R.id.swTabContent)
+        return host.getChildAt(0) as ScrollView
+    }
+
+    private fun lastLaidOutChild(group: ViewGroup): View {
+        var last = group.getChildAt(0)
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
+            if (child.height > 0) last = child
+        }
+        return last
+    }
+
+    private fun topIn(view: View, root: View): Int {
+        var y = 0
+        var current: View? = view
+        while (current != null && current !== root) {
+            y += current.top
+            val parent = current.parent as? View ?: break
+            y -= parent.scrollY
+            current = parent
+        }
+        return y
+    }
+
+    private fun assertClearsDock(
+        activity: ShellActivity,
+        root: View,
+        name: String,
+        expectScroll: Boolean,
+        last: () -> View
+    ) {
+        val scroll = tabScroll(activity)
+        val child = scroll.getChildAt(0)
+        val range = (child.height - (scroll.height - scroll.paddingTop - scroll.paddingBottom))
+            .coerceAtLeast(0)
+        scroll.scrollTo(0, range)
+        if (expectScroll) {
+            assertTrue("$name actually scrolls ($range px)", range > 0 && scroll.scrollY > 0)
+        }
+
+        val disc = activity.findViewById<View>(R.id.swNavScan)
+        val dockTop = topIn(disc, root)
+        val row = last()
+        assertTrue("$name last row was laid out", row.height > 0)
+        val rowBottom = topIn(row, root) + row.height
+        assertTrue(
+            "$name last row bottom $rowBottom must be at or above the disc ($dockTop)",
+            rowBottom <= dockTop
+        )
+        assertFalse("$name content may draw in its padding", scroll.clipToPadding)
+
+        val bar = activity.findViewById<View>(R.id.swShellNav)
+        val host = bar.parent as View
+        val margin = (bar.layoutParams as ViewGroup.MarginLayoutParams).bottomMargin
+        assertEquals(
+            "$name padding follows the dock, not a magic number",
+            host.height + margin,
+            scroll.paddingBottom
+        )
+        assertEquals(scroll.paddingBottom, activity.dockClearancePx())
+
+        val fade = (0 until (scroll.parent as ViewGroup).childCount)
+            .map { (scroll.parent as ViewGroup).getChildAt(it) }
+            .first { it.tag == ShellActivity.DOCK_FADE }
+        assertFalse("the fade must not eat taps", fade.isClickable)
+        assertTrue(
+            "$name last row must sit above the fade",
+            rowBottom <= topIn(fade, root)
+        )
     }
 }

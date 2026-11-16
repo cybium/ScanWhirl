@@ -64,7 +64,7 @@ object CategoryPickerSheet {
             text = CategoryRules.label(cat)
             textSize = 15f
             setTextColor(activity.getColor(R.color.text_hologram_hi))
-            letterSpacing = 0.02f
+            letterSpacing = com.scanwhirl.app.ui.kit.SwStyle.tracking(activity, 0.02f)
         }
 
         val check = ImageView(activity).apply {
