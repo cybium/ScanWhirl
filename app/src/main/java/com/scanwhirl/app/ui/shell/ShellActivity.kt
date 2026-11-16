@@ -853,7 +853,21 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     /** A small glass sheet of saved documents; picking runs [onPick]. */
     private fun showDocPicker(onPick: (ScanDocument) -> Unit) {
-        val docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+        // C08: stat only what the sheet needs, off the main thread; the sheet follows when ready.
+        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+            this, getString(R.string.crash_loading_documents)
+        )
+        lifecycleScope.launch {
+            val docs = withContext(Dispatchers.IO) {
+                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            }
+            progress.dismiss()
+            if (isFinishing || isDestroyed) return@launch
+            buildDocPicker(docs, onPick)
+        }
+    }
+
+    private fun buildDocPicker(docs: List<ScanDocument>, onPick: (ScanDocument) -> Unit) {
         if (docs.isEmpty()) {
             SwSheet.builder(this)
                 .setTitle(getString(R.string.tool_pick_document))
