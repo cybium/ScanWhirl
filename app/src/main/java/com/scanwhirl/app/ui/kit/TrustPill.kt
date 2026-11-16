@@ -36,10 +36,15 @@ class TrustPill(context: Context) : AppCompatTextView(context) {
 
     fun set(iconRes: Int, text: CharSequence) {
         this.text = text
-        setCompoundDrawablesRelativeWithIntrinsicBounds(iconRes, 0, 0, 0)
-        compoundDrawableTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.ok_green))
+        // Size the icon BEFORE handing it to the TextView. Setting it with intrinsic bounds and
+        // shrinking it afterwards left a 24dp slot with a 14dp glyph drawn in its top-left corner:
+        // the icon sat high and far from the text.
         val size = SwStyle.dp(context, 14f)
-        compoundDrawablesRelative.forEach { it?.setBounds(0, 0, size, size) }
+        val icon = androidx.appcompat.content.res.AppCompatResources.getDrawable(context, iconRes)?.mutate()
+        icon?.setBounds(0, 0, size, size)
+        setCompoundDrawablesRelative(icon, null, null, null)
+        compoundDrawableTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.ok_green))
+        gravity = android.view.Gravity.CENTER_VERTICAL
     }
 
     companion object {

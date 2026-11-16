@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L1 shell and kit: Hindi. Each value carries a review marker for a native speaker. -->
-    <string name="trust_offline_no_ads"><!-- review -->फ़ोन पर ही · विज्ञापन नहीं</string>
+    <string name="trust_offline_no_ads"><!-- review -->ऑफ़लाइन · विज्ञापन नहीं</string>
     <string name="language_chip_desc"><!-- review -->भाषा बदलें</string>
-    <string name="trust_all_offline"><!-- review -->इंटरनेट की ज़रूरत नहीं</string>
+    <string name="trust_all_offline"><!-- review -->पूरी तरह ऑफ़लाइन</string>
     <string name="trust_no_ads"><!-- review -->कोई विज्ञापन नहीं</string>
     <string name="trust_no_account"><!-- review -->कोई खाता नहीं</string>
-    <string name="trust_offline"><!-- review -->फ़ोन पर ही</string>
+    <string name="trust_offline"><!-- review -->ऑफ़लाइन</string>
 
     <string name="shell_nav_library"><!-- review -->लाइब्रेरी</string>
     <string name="shell_nav_tools"><!-- review -->टूल्स</string>

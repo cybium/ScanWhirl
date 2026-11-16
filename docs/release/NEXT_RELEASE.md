@@ -29,6 +29,7 @@ REPORT.md (LOW), UI_CRITIQUE.md (subjective items rejected by the UI lane).
   matters (safe to ignore).
 
 ## Process lessons
+- OWNER: never use Grok again. Research any model before launching it; do not guess effort levels.
 - Every worker brief must cite `docs/plans/lanes/72_WORKER_BRIEF.md` (gate only, never gradlew,
   gate in foreground). Five local Gradle builds at once killed a worker.
 - Lane gates skip lint; merge one lane at a time and wait for the integration gate (lint runs there).

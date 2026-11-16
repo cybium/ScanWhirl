@@ -11,8 +11,53 @@ anything older under `docs/history/` is not instruction.
   one-time Pro unlock through Play Billing (`scanwhirl_pro`).
 - English and Hindi only. No internet permission: the manifest removes `INTERNET` and
   `ACCESS_NETWORK_STATE`; the app never talks to a server, has no ads and no analytics.
-- Current releases: 1.2.0 (`versionCode 26111501`) on Play closed testing, 1.2.1 (`26111601`) being
-  prepared. Version codes are date based `YYMMDDnn`, defined in `app/build.gradle.kts`.
+- Releases: 1.2.1 (`26111601`) uploaded and accepted on Play closed testing (2026-11-16); 1.2.2
+  (`26111602`) = trust-pill fix. Version codes are date based `YYMMDDnn` in `app/build.gradle.kts`.
+  A code already uploaded to Play can never be reused: every new upload needs the next number.
+
+## LEAD MEMORY (read first; written by the lead after the 2026-11-15/16 sessions, owner-ordered)
+The lead (Opus) repeated these mistakes. Do not repeat them after a context compaction.
+1. **Read the memory before acting**: this section, `docs/plans/lanes/73_ORCHESTRATION_LOG.md`
+   (tail), `docs/plans/lanes/72_WORKER_BRIEF.md`, `docs/release/NEXT_RELEASE.md`. Tools already exist:
+   `tools/gate.ps1` (serialized build; full suite runs in the cloud), `tools/lane-watch.ps1`
+   (30-min watchdog of every lane), `tools/lane-review.ps1` (pre-merge check), `tools/wait-integration.ps1`,
+   `tools/phone.ps1`, `tools/store_frames.py`, `tools/copy_audit.ps1`.
+2. **Lead = boss, not worker.** Delegate with EXACT briefs (files, steps, tap paths, acceptance
+   tests) and verify the result yourself (diff, screenshots, gate line). Take a worker's job only
+   when it is stuck; say so.
+3. **Every worker brief cites 72_WORKER_BRIEF.md**: never run gradlew, only `tools\gate.ps1`, gate in
+   the FOREGROUND with timeout 5400000, never end the turn while a gate waits. Five local Gradle
+   builds at once on this 7.4 GB PC killed a worker.
+4. **Models (owner rules)**: opencode-go = ONLY `deepseek-v4.1-flash#high`. **Never use Grok.**
+   OpenAI: research the model before launching it, never guess an effort level. GPT-6.1 Sol = strict
+   reviewer of risky code (money, data). GPT-6.1 Terra at medium = visual / computer-use / video work.
+   Astra burns the ChatGPT allowance; avoid. DeepSeek = volume work, but never merge its
+   money/data code without a strong reviewer (it introduced billing regressions all tests missed).
+5. **Merge one lane at a time**, wait for the integration cloud gate (lint runs only there) before
+   the next merge. Known runner-flaky tests (ScanEnhanceQuality timing, PageNormalization OOM,
+   ExportHygiene) re-run automatically once when they are the only failures.
+6. **Never claim something is done before it exists and you have looked at it.** Say "not done yet"
+   plainly. Check the actual gate line, the actual file, the actual screenshot.
+7. **Phone**: one user at a time; lock with `C:\Users\Cybium\Desktop\.sw-qa\PHONE_BUSY`. Only
+   `com.scanwhirl.app.demo` / `.test`; never the owner's `com.scanwhirl.app`; never airplane mode /
+   Wi-Fi / data / hotspot; never tap a file-picker preview icon (opens Chrome); never buy.
+   Verified paths: nav y=2214 (Library x130, Tools x315, Vault x760, Me x948); doc dock y=2234
+   (Share 241, Edit 540 = page editor, Text 738, More 938); Hide private info = Tools > search
+   "private" > "Redact" > pick doc > "Hide private info" > Find > Hide selected > Back > Discard;
+   Free/Pro test switch = Me > Settings > scroll > id `switchTestFree` (screen reloads after toggle);
+   language = Home chip "A/अ". Status bar: `am broadcast -a com.android.systemui.demo` (enter,
+   clock 1000, battery 100, network wifi hide + mobile level 4, notifications hidden).
+8. **Store screenshots**: demo app only, fictional docs (`tools/store_samples.py`), Free mode except
+   Pro-only tools, never edit app content to make a screenshot look better (real OCR, even a misread),
+   Pro screenshot = TOP of the Pro screen (logo, pills, 8 tools, "See all N"), NOT the price card.
+   Look at every framed image before reporting.
+9. **Copy**: no long dashes anywhere users read (StringsNoLongDashTest); no false claims (no family
+   sharing; tool counts derived; "Offline" pill wording is the owner's choice); EN + HI always.
+10. **Owner style**: speed AND quality; short answers; no defensive narration; when he says stop,
+   stop; do not start new searches/audits when he asks to finish a release.
+11. **"Kill" means kill**: Stop-Process the worker's shell/gate processes immediately, then send the
+   session "END NOW, run no tools". Never leave a worker in a wait/poll loop (every check burns
+   tokens): end it, and resume the same session ID later when its input is ready.
 - Branches: `master` (main), `integration` (working branch), `lane/<name>` (one task each). Never
   merge a lane into `integration` yourself — the lead merges.
 
