@@ -169,6 +169,7 @@ class VaultStore(
         }
         gate.onSuccess()
         VaultSession.open(key)
+        migrateRestoredLegacy()
         UnlockResult(true, triesLeft = gate.triesLeft())
     }
 
@@ -185,6 +186,7 @@ class VaultStore(
         } ?: return false
         gate.onSuccess()
         VaultSession.open(key)
+        migrateRestoredLegacy()
         true
     }
 
@@ -216,6 +218,7 @@ class VaultStore(
         if (key.size != VaultCrypto.KEY_BYTES) return false
         gate.onSuccess()
         VaultSession.open(key)
+        migrateRestoredLegacy()
         true
     }
 
@@ -415,6 +418,20 @@ class VaultStore(
             }
         }
         moved
+    }
+
+    /**
+     * A Full Backup restored while this Vault was locked keeps the restored legacy-PIN documents
+     * flagged and hidden on purpose: they were hidden by the user, so showing them in the open
+     * library would be worse than waiting. This runs after every successful unlock and moves them
+     * in through [migrateLegacyVault], so the restore sheet's promise ("will move into your Vault
+     * the next time you open it") holds. A phone that still has the old PIN is left to its legacy
+     * Vault screen, and a failure leaves the flags for the next unlock.
+     */
+    private fun migrateRestoredLegacy() {
+        if (hasLegacyPin()) return
+        if (repo.listVaultDocuments().isEmpty()) return
+        runCatching { migrateLegacyVault() }
     }
 
     // ------------------------------------------------------------------

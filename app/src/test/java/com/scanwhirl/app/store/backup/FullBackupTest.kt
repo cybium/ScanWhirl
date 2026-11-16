@@ -191,6 +191,79 @@ class FullBackupTest {
         )
     }
 
+    /**
+     * B1: the legacy 4-digit PIN hash never travels with a backup (it is device state), so a
+     * document that arrives with its `vault.flag` would be invisible to every screen and could
+     * never be opened again: `listDocuments` hides it and no PIN can make the Vault show it.
+     * With no v2 Vault on this phone nothing could ever open it, so it comes back as an ordinary
+     * document and the report says so, with the count.
+     */
+    @Test
+    fun `restored legacy vault documents are listed when this phone has no Vault`() {
+        listOf("doc_legacy", "doc_legacy2").forEach { id ->
+            File(doc(id, "Old vault doc $id"), "vault.flag").writeText("1")
+        }
+        backup.write(out, password, FullBackup.Wrap.PASSWORD)
+        File(docsDir, "doc_legacy").deleteRecursively()
+        File(docsDir, "doc_legacy2").deleteRecursively()
+
+        val repo = ScanRepository(app)
+        val report = backup.restore(out, password)
+
+        assertEquals(2, report.documents)
+        val listed = repo.listDocuments().map { it.id }
+        assertTrue("both restored documents are listed", listed.containsAll(listOf("doc_legacy", "doc_legacy2")))
+        assertFalse("they are no longer flagged as Vault documents", repo.getDocument("doc_legacy")!!.isVaulted)
+        assertTrue(
+            "the report says they are in the library now, with the count: ${report.warnings}",
+            report.warnings.any { it.contains("2 documents that were hidden in your old Vault") }
+        )
+    }
+
+    /**
+     * B1 (privacy): a phone that HAS a v2 Vault but restores while it is locked must not expose
+     * documents the user had hidden. The flags stay, the documents stay invisible, and the next
+     * successful unlock migrates them into the Vault (the same legacy migration the PIN uses).
+     */
+    @Test
+    fun `a locked Vault keeps restored legacy documents hidden until the next unlock`() {
+        File(doc("doc_hidden", "Old hidden doc"), "vault.flag").writeText("1")
+        backup.write(out, password, FullBackup.Wrap.PASSWORD)
+        File(docsDir, "doc_hidden").deleteRecursively()
+
+        // This phone has a v2 Vault, but it is locked when the restore runs.
+        val vault = vaultStore()
+        vault.setup("246810")
+        VaultSession.close()
+
+        val repo = ScanRepository(app)
+        val report = backup.restore(out, password)
+
+        assertEquals(1, report.documents)
+        assertFalse(
+            "a document hidden in the old Vault is never listed in the open library",
+            repo.listDocuments().map { it.id }.contains("doc_hidden")
+        )
+        assertTrue(
+            "it stays in the legacy Vault list until it can be migrated",
+            repo.listVaultDocuments().map { it.id }.contains("doc_hidden")
+        )
+        assertTrue(
+            "the report promises the migration at the next open: ${report.warnings}",
+            report.warnings.any { it.contains("will move into your Vault the next time you open it") }
+        )
+
+        // The next successful unlock migrates it, through the existing legacy path.
+        assertTrue(vault.unlockWithPasscode("246810").ok)
+        assertTrue(
+            "the entry is now encrypted in the Vault",
+            vault.listEntries().map { it.id }.contains("doc_hidden")
+        )
+        assertFalse("the plaintext library copy is purged", File(docsDir, "doc_hidden").exists())
+        assertTrue("nothing is left in the legacy Vault list", repo.listVaultDocuments().isEmpty())
+        assertFalse("and the library still does not show it", repo.listDocuments().map { it.id }.contains("doc_hidden"))
+    }
+
     @Test
     fun `a corrupted backup fails safely`() {
         doc("doc_e", "Fragile")

@@ -61,6 +61,12 @@ object PdfImport {
         /** Larger than [MAX_BYTES]. */
         TOO_LARGE,
 
+        /**
+         * Too large to unlock in memory on this phone. A protected PDF is decrypted whole
+         * before its pages are rendered, so it cannot use the streaming import path.
+         */
+        LOW_MEMORY,
+
         /** More than [MAX_PAGES] pages. */
         TOO_MANY_PAGES,
 

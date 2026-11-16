@@ -32,6 +32,7 @@ class PrivacySweepTest {
 
     @After
     fun tearDown() {
+        PrivacySweep.resetForTests()
         cache.listFiles()?.forEach { it.deleteRecursively() }
     }
 
@@ -64,6 +65,57 @@ class PrivacySweepTest {
         val shared = file("documents/share/Annual Report.pdf")
         PrivacySweep.run(app)
         assertFalse("a shared copy must not survive the process", shared.exists())
+    }
+
+    /**
+     * B9: inserting pages from the camera or the gallery copies normalised JPEGs into
+     * `cacheDir/insert_<id>/`; cancelling the insert used to leave the whole folder behind.
+     */
+    @Test
+    fun `insert page copies are removed on a cold start`() {
+        val page = file("insert_abcd1234/page_000.jpg", ByteArray(2048) { 5 })
+        PrivacySweep.run(app)
+        assertFalse("the copied page must not survive the process", page.exists())
+        assertFalse(File(cache, "insert_abcd1234").exists())
+    }
+
+    /**
+     * B2: a backup or a restore killed halfway leaves the plaintext archive (and, for a restore,
+     * the decrypted document tree) in the cache. Both use `fullbackup-<id>.tmp`, `restore-<id>.tmp`
+     * and `restore-<id>/`, none of which the sweep knew about.
+     */
+    @Test
+    fun `interrupted backup and restore temp files are removed on a cold start`() {
+        val archive = file("fullbackup-abcd1234.tmp", ByteArray(4096) { 1 })
+        val decrypted = file("restore-abcd1234.tmp", ByteArray(4096) { 2 })
+        val tree = file("restore-abcd1234/documents/doc1/scan.pdf", ByteArray(4096) { 3 })
+
+        PrivacySweep.run(app)
+
+        listOf(archive, decrypted, tree).forEach {
+            assertFalse("still there: ${it.absolutePath}", it.exists())
+        }
+        assertFalse("the whole restore tree is gone", File(cache, "restore-abcd1234").exists())
+    }
+
+    @Test
+    fun `a backup or restore running in this process keeps its own cache files`() {
+        // The real guard reads the job marker FullBackup holds while write()/restore() run.
+        assertFalse("nothing is running outside a backup", PrivacySweep.backupRunning())
+        PrivacySweep.backupRunning = { true }
+
+        val archive = file("fullbackup-abcd1234.tmp", ByteArray(64) { 1 })
+        val decrypted = file("restore-abcd1234.tmp", ByteArray(64) { 2 })
+        val tree = file("restore-abcd1234/documents/doc1/scan.pdf", ByteArray(64) { 3 })
+        val finishedArchive = file("fullbackup/ScanWhirl-2026-11-16.0010.swbackup", ByteArray(64) { 4 })
+        val otherTemp = file("decrypted-abc.pdf", ByteArray(64) { 5 })
+
+        PrivacySweep.run(app)
+
+        listOf(archive, decrypted, tree, finishedArchive).forEach {
+            assertTrue("a running job must keep ${it.name}", it.exists())
+        }
+        assertFalse("unrelated plaintext is still swept", otherTemp.exists())
     }
 
     @Test

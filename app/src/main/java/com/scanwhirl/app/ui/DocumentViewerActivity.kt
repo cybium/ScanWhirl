@@ -735,6 +735,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     internal fun insertFiles(files: List<File>, position: Int) {
         val id = docId ?: return
         insertHere = null
+        // Picked camera/gallery pages live in `cacheDir/insert_<id>`: once the draft has copied
+        // them they are plaintext copies of user pages, so the folder goes with them (B9).
+        val tempDir = files.firstOrNull()?.parentFile?.takeIf { it.name.startsWith("insert_") }
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) { repo.draftInsertPages(id, files, position) }
@@ -750,6 +753,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                     getString(R.string.page_op_failed, e.message),
                     Toast.LENGTH_LONG
                 ).show()
+            } finally {
+                tempDir?.deleteRecursively()
             }
         }
     }
