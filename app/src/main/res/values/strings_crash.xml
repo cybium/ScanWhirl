@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Crash/ANR lane: progress text for work moved off the main thread. -->
+<resources>
+    <!-- C01: while a locked scan's preview PDF is built off the main thread. -->
+    <string name="crash_preview_building">Preparing the preview…</string>
+    <!-- C02: while the Vault passcode key is derived off the main thread. -->
+    <string name="crash_vault_working">Securing your Vault…</string>
+    <!-- C05: while folder/tag writes are applied off the main thread. -->
+    <string name="crash_library_updating">Updating the library…</string>
+    <!-- C07/C08: while a tool screen or picker loads the document list off the main thread. -->
+    <string name="crash_loading_documents">Loading documents…</string>
+</resources>
