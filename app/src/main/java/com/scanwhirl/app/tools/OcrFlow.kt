@@ -53,6 +53,9 @@ class OcrFlow(
             } catch (e: Exception) {
                 progress.dismiss()
                 showFailure(e)
+            } catch (_: OutOfMemoryError) {
+                progress.dismiss()
+                showOutOfMemory()
             } finally {
                 host.workEnded()
             }
@@ -83,6 +86,9 @@ class OcrFlow(
             } catch (e: Exception) {
                 progress.dismiss()
                 showFailure(e)
+            } catch (_: OutOfMemoryError) {
+                progress.dismiss()
+                showOutOfMemory()
             } finally {
                 host.workEnded()
             }
@@ -113,10 +119,17 @@ class OcrFlow(
             } catch (e: Exception) {
                 progress.dismiss()
                 showFailure(e)
+            } catch (_: OutOfMemoryError) {
+                progress.dismiss()
+                showOutOfMemory()
             } finally {
                 host.workEnded()
             }
         }
+    }
+
+    private fun showOutOfMemory() {
+        Toast.makeText(activity, activity.getString(R.string.crash_ocr_memory), Toast.LENGTH_LONG).show()
     }
 
     /** M06: "recognition unavailable" is explained, not shown as a raw ML Kit error. */

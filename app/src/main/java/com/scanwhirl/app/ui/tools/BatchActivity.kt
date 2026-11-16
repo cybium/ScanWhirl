@@ -30,6 +30,9 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
@@ -53,7 +56,7 @@ import java.io.File
 class BatchActivity : BaseActivity() {
 
     private lateinit var repo: ScanRepository
-    private lateinit var docs: List<ScanDocument>
+    private var docs: List<ScanDocument> = emptyList()
     private val selected = LinkedHashSet<String>()
     private var query = ""
 
@@ -80,13 +83,21 @@ class BatchActivity : BaseActivity() {
             finish()
             return
         }
-        docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
         val incoming = intent.getStringArrayListExtra(EXTRA_DOC_IDS).orEmpty()
-        selected += incoming.filter { id -> docs.any { it.id == id } }
         setContentView(buildRoot())
         renderList()
-        if (incoming.isNotEmpty() && selected.isNotEmpty()) {
-            listHost.post { showActionSheet() }
+        // C07: the chooser is on screen while the library is stat'd off the main thread.
+        lifecycleScope.launch {
+            val fresh = withContext(Dispatchers.IO) {
+                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            }
+            if (isFinishing || isDestroyed) return@launch
+            docs = fresh
+            selected += incoming.filter { id -> docs.any { it.id == id } }
+            renderList()
+            if (incoming.isNotEmpty() && selected.isNotEmpty()) {
+                listHost.post { showActionSheet() }
+            }
         }
     }
 

@@ -76,6 +76,12 @@ object OcrEngine {
 
     data class WordsResult(val page: OcrPage, val words: List<WordBox>)
 
+    /**
+     * Longest side of the bitmap handed to ML Kit. A 6 MP page is a 24 MB ARGB bitmap before
+     * the recognizer's own copy; 2048 px keeps the cost bounded on 2 GB phones (C06).
+     */
+    private const val OCR_MAX_DIM = 2048
+
     // ------------------------------------------------------------------
     // Test seams (never set in production)
     // ------------------------------------------------------------------
@@ -109,8 +115,7 @@ object OcrEngine {
         val rawPages = if (reader != null) {
             language.scripts.map { script -> reader(page, script) }
         } else {
-            val bitmap = BitmapFactory.decodeFile(page.path)
-                ?: throw IllegalStateException("Unreadable page")
+            val bitmap = ImageTools.decodeSampledFile(page, OCR_MAX_DIM)
             val rotation = exifRotation(page)
             try {
                 language.scripts.map { script -> mlKit(bitmap, script, rotation) }
@@ -128,8 +133,7 @@ object OcrEngine {
      */
     suspend fun recognizeWords(page: File): WordsResult = withContext(Dispatchers.IO) {
         require(page.exists() && page.length() > 0L) { "Page is empty" }
-        val bitmap = BitmapFactory.decodeFile(page.path)
-            ?: throw IllegalStateException("Unreadable page")
+        val bitmap = ImageTools.decodeSampledFile(page, OCR_MAX_DIM)
         val rotation = exifRotation(page)
         try {
             val recognizer = OcrScriptRecognizers.create(OcrScript.LATIN)
@@ -180,8 +184,7 @@ object OcrEngine {
         language: OcrLanguage = OcrLanguage.ENGLISH
     ): String = withContext(Dispatchers.IO) {
         require(bytes.isNotEmpty()) { "Image is empty" }
-        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            ?: throw IllegalStateException("Unreadable image")
+        val bitmap = ImageTools.decodeSampled(bytes, OCR_MAX_DIM)
         try {
             recognizeBitmap(bitmap, language)
         } finally {

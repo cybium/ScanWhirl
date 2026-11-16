@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Crash/ANR lane: progress text for work moved off the main thread. -->
+<resources>
+    <!-- C01: while a locked scan's preview PDF is built off the main thread. -->
+    <string name="crash_preview_building"><!-- review -->प्रीव्यू तैयार किया जा रहा है…</string>
+    <!-- C02: while the Vault passcode key is derived off the main thread. -->
+    <string name="crash_vault_working"><!-- review -->आपका वॉल्ट सुरक्षित किया जा रहा है…</string>
+    <!-- C05: while folder/tag writes are applied off the main thread. -->
+    <string name="crash_library_updating"><!-- review -->लाइब्रेरी अपडेट की जा रही है…</string>
+    <!-- C07/C08: while a tool screen or picker loads the document list off the main thread. -->
+    <string name="crash_loading_documents"><!-- review -->दस्तावेज़ लोड हो रहे हैं…</string>
+    <!-- C06: OCR ran out of memory for a page. -->
+    <string name="crash_ocr_memory"><!-- review -->इस स्कैन को पढ़ने के लिए पर्याप्त मेमोरी नहीं है। दूसरे ऐप बंद करके फिर कोशिश करें।</string>
+</resources>

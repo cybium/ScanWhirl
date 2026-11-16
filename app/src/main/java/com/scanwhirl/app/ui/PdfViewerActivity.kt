@@ -19,6 +19,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.scanwhirl.app.R
@@ -26,6 +27,8 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityPdfViewerBinding
 import com.scanwhirl.app.databinding.ItemPdfPageBinding
 import com.scanwhirl.app.util.ShareUtils
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -73,6 +76,10 @@ class PdfViewerActivity : BaseActivity() {
 
     private val pagerAdapter = PagerAdapter()
 
+    /** C01: the off-main preview build and its progress sheet. */
+    private var loadProgress: com.scanwhirl.app.ui.kit.SwProgress? = null
+    private var previewJob: kotlinx.coroutines.Job? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityPdfViewerBinding.inflate(layoutInflater)
@@ -85,6 +92,66 @@ class PdfViewerActivity : BaseActivity() {
             binding.pdfPager.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         }
 
+        binding.toolbar.setNavigationOnClickListener { handleBack() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = handleBack()
+        })
+        binding.btnZoomClose.setOnClickListener { closeZoom() }
+
+        binding.pdfPager.layoutManager = LinearLayoutManager(this)
+        binding.pdfPager.adapter = pagerAdapter
+        binding.pdfPager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) = updateIndicator()
+        })
+
+        startOpen(savedInstanceState)
+    }
+
+    /**
+     * C01: resolve the document first, build a locked-scan preview PDF **off the main thread**,
+     * then lay the reader out. The preview is cached by document id + a page fingerprint, so a
+     * rotation or a re-open reuses it instead of re-encoding every page.
+     */
+    private fun startOpen(savedInstanceState: Bundle?) {
+        val docId = intent.getStringExtra(EXTRA_DOC_ID)
+        val repository = (application as ScanWhirlApp).repository
+        val doc = docId?.let { repository.getDocument(it) }
+        val unknownPassword = docId != null &&
+            repository.protectionState(docId) == com.scanwhirl.app.util.PdfProtection.State.UNKNOWN_PASSWORD
+        val needsPreview = doc != null && (doc.isLocked || unknownPassword) && doc.pageFiles.isNotEmpty()
+        if (!needsPreview) {
+            afterOpen(savedInstanceState)
+            return
+        }
+        val target = previewFile(doc!!)
+        val stamp = File(cacheDir, "preview_${doc.id}.fp")
+        val fingerprint = pageFingerprint(doc.pageFiles)
+        if (target.isFile && target.length() > 0L && stamp.isFile && stamp.readText() == fingerprint) {
+            afterOpen(savedInstanceState)
+            return
+        }
+        // Visible work: the first frame is the reader chrome, not a frozen window.
+        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+            this, getString(R.string.crash_preview_building)
+        )
+        loadProgress = progress
+        previewJob = lifecycleScope.launch {
+            val ok = previewDeferred(doc, target, stamp, fingerprint).await()
+            progress.dismiss()
+            loadProgress = null
+            if (isFinishing || isDestroyed) return@launch
+            if (!ok) {
+                Toast.makeText(
+                    this@PdfViewerActivity, R.string.pdf_viewer_failed, Toast.LENGTH_LONG
+                ).show()
+                finish()
+                return@launch
+            }
+            afterOpen(savedInstanceState)
+        }
+    }
+
+    private fun afterOpen(savedInstanceState: Bundle?) {
         if (!openPdf()) {
             finish()
             return
@@ -94,19 +161,7 @@ class PdfViewerActivity : BaseActivity() {
         com.scanwhirl.app.util.SecureView.applyForDocument(this, window, privateDoc)
 
         binding.toolbar.title = title
-        binding.toolbar.setNavigationOnClickListener { handleBack() }
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = handleBack()
-        })
-        binding.btnZoomClose.setOnClickListener { closeZoom() }
-
-        binding.pdfPager.layoutManager = LinearLayoutManager(this)
-        binding.pdfPager.adapter = pagerAdapter
         pagerAdapter.submit(pageCount)
-
-        binding.pdfPager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) = updateIndicator()
-        })
 
         val docId = intent.getStringExtra(EXTRA_DOC_ID)
         val repo = (application as ScanWhirlApp).repository
@@ -168,6 +223,14 @@ class PdfViewerActivity : BaseActivity() {
         }
     }
 
+    /** Where the locked/Vault preview PDF lives (one per document, reused across recreates). */
+    private fun previewFile(doc: com.scanwhirl.app.model.ScanDocument): File =
+        File(cacheDir, "preview_${doc.id}.pdf")
+
+    /** Names, sizes and mtimes: any page edit or re-filter changes it, nothing else does. */
+    private fun pageFingerprint(pages: List<File>): String =
+        pages.joinToString("|") { "${it.name}:${it.length()}:${it.lastModified()}" }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         val f = find ?: return
@@ -206,6 +269,12 @@ class PdfViewerActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        loadProgress?.dismiss()
+        loadProgress = null
+        // The build itself runs in a process-wide scope so a rotation can join it; only this
+        // activity's wait is cancelled.
+        previewJob?.cancel()
+        previewJob = null
         find?.shutdown()
         find = null
         renderExecutor.shutdownNow()
@@ -254,8 +323,10 @@ class PdfViewerActivity : BaseActivity() {
                 val unknownPassword = (application as ScanWhirlApp).repository.protectionState(docId) ==
                     com.scanwhirl.app.util.PdfProtection.State.UNKNOWN_PASSWORD
                 val file = if ((doc.isLocked || unknownPassword) && doc.pageFiles.isNotEmpty()) {
-                    val preview = File(cacheDir, "preview_${doc.id}.pdf")
-                    com.scanwhirl.app.util.PdfGenerator.imagesToPdf(doc.pageFiles, preview)
+                    // C01: startOpen built (or reused) this cache copy off the main thread; the
+                    // descriptor itself is cheap. A missing preview is an error, never a rebuild here.
+                    val preview = previewFile(doc)
+                    if (!preview.isFile || preview.length() == 0L) throw NoPdfException(R.string.pdf_missing)
                     preview
                 } else {
                     doc.pdfFile
@@ -611,6 +682,57 @@ class PdfViewerActivity : BaseActivity() {
         /** Test seam: how an opened descriptor becomes pages. */
         @androidx.annotation.VisibleForTesting
         internal var pagesFactory: (ParcelFileDescriptor) -> PdfPages = { RendererPages(it) }
+
+        /** Test seam: how a locked-scan preview PDF is produced (must run off the main thread). */
+        @androidx.annotation.VisibleForTesting
+        internal var previewBuilder: (List<File>, File) -> Unit = { pages, out ->
+            com.scanwhirl.app.util.PdfGenerator.imagesToPdf(pages, out)
+        }
+
+        /**
+         * C01: one build per document + page fingerprint, process-wide, so a rotation while the
+         * progress sheet is up joins the running job instead of re-encoding every page again.
+         */
+        private val previewJobs =
+            java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Boolean>>()
+        private val previewScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+        )
+
+        private fun previewDeferred(
+            doc: com.scanwhirl.app.model.ScanDocument,
+            out: File,
+            stamp: File,
+            fingerprint: String
+        ): kotlinx.coroutines.Deferred<Boolean> {
+            val key = "${doc.id}:$fingerprint"
+            previewJobs[key]?.let { return it }
+            val job = previewScope.async {
+                try {
+                    out.parentFile?.mkdirs()
+                    val tmp = File(out.parentFile, out.name + ".build")
+                    tmp.delete()
+                    previewBuilder(doc.pageFiles, tmp)
+                    if (!tmp.isFile || tmp.length() == 0L) {
+                        tmp.delete()
+                        return@async false
+                    }
+                    out.delete()
+                    if (!tmp.renameTo(out)) {
+                        tmp.delete()
+                        return@async false
+                    }
+                    stamp.writeText(fingerprint)
+                    true
+                } catch (_: Throwable) {
+                    false
+                } finally {
+                    previewJobs.remove(key)
+                }
+            }
+            previewJobs[key] = job
+            return job
+        }
 
         fun intent(context: Context, docId: String, title: String): Intent =
             Intent(context, PdfViewerActivity::class.java)
