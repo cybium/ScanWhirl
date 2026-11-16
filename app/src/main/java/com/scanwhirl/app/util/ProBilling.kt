@@ -60,8 +60,28 @@ object ProBilling {
         object Finishing : State()
         object None : State()
         object Pending : State()
+
+        /** A Buy is in flight. Screens disable the button; a new subscriber sees this on replay. */
+        object Busy : State()
         data class Failed(val message: String) : State()
     }
+
+    /**
+     * The product offer a Buy query just returned. [token] identifies that answer so the launch
+     * uses this object, never a shared field a later prefetch can overwrite.
+     * Store-country / account currency changes with the same locale are a known limit: the cache
+     * is keyed only by the locale captured when the request was issued.
+     */
+    class Offer(
+        val price: String,
+        val token: String,
+        internal val details: ProductDetails? = null
+    )
+
+    enum class LaunchResult { STARTED, CANCELLED, ALREADY_OWNED, FAILED }
+
+    /** Which operation last published a state. Restore's [State.None] is "nothing to restore". */
+    enum class Op { NONE, BUY, RESTORE, STARTUP }
 
     /** The billing seam: [PlayBilling] in the app, a fake in tests. */
     interface Gateway {
@@ -69,6 +89,24 @@ object ProBilling {
         fun connect(onReady: (Boolean) -> Unit)
         fun price(onPrice: (String?) -> Unit)
         fun launch(activity: Activity?)
+
+        /**
+         * The offer from this query alone. Default wraps [price] so older fakes keep working.
+         * The real client attaches the [ProductDetails] it just received; launch must use that.
+         */
+        fun queryOffer(onOffer: (Offer?) -> Unit) {
+            price { text -> onOffer(text?.let { Offer(it, it) }) }
+        }
+
+        /**
+         * Open the sheet with [offer] from this Buy's own query. Default keeps the old
+         * [launch] and reports [LaunchResult.STARTED]; a throw still propagates.
+         */
+        fun launch(activity: Activity?, offer: Offer): LaunchResult {
+            launch(activity)
+            return LaunchResult.STARTED
+        }
+
         /** `null` = the query failed; an empty list = a real answer with nothing owned. */
         fun queryPurchases(onResult: (List<Owned>?) -> Unit)
         fun acknowledge(purchase: Owned, onDone: (Boolean) -> Unit)
@@ -112,19 +150,116 @@ object ProBilling {
     @Volatile
     private var buyInFlight = false
 
+    /** True from the moment Buy starts until a terminal state. Finishing does not clear it. */
+    @Volatile
+    private var buyOpen = false
+
+    private val subscribers = mutableListOf<(State) -> Unit>()
+    private var latest: State = State.None
+    private var opListener: ((State) -> Unit)? = null
+    private var lastOp: Op = Op.NONE
+    private var listenerInstalled = false
+    private var appContext: Context? = null
+
     private val mainThread: Handler by lazy { Handler(Looper.getMainLooper()) }
+
+    /**
+     * Screens subscribe on the main thread in onStart and drop the returned handle in onStop.
+     * The first delivery is a replay of [latest], so a recreated screen catches an in-flight Buy.
+     */
+    fun subscribe(listener: (state: State, replay: Boolean) -> Unit): () -> Unit {
+        val wrapped = object : (State) -> Unit {
+            var seen = false
+            override fun invoke(state: State) {
+                val replay = !seen
+                seen = true
+                listener(state, replay)
+            }
+        }
+        fun add() {
+            subscribers += wrapped
+            wrapped(latest)
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) add() else mainThread.post { add() }
+        return { onMain { subscribers.remove(wrapped) } }
+    }
+
+    internal fun lastOperation(): Op = lastOp
 
     /**
      * Runs [block] on the main thread. Work that is already on main runs immediately, so callers
      * on the UI thread keep their synchronous behaviour; a Play callback on a worker thread is
      * posted. Every public state delivery and every UI touch goes through here.
      */
-    private fun gateway(context: Context): Gateway =
-        gateway ?: gatewayFactory(context.applicationContext).also { gateway = it }
-
-    internal fun onMain(block: () -> Unit) {
-        if (Looper.myLooper() == Looper.getMainLooper()) block() else mainThread.post(block)
+    private fun gateway(context: Context): Gateway {
+        val app = context.applicationContext
+        appContext = app
+        return gateway ?: gatewayFactory(app).also {
+            gateway = it
+            // One PurchasesUpdatedListener for the process. Queries must never clear it (R2).
+            if (!listenerInstalled) {
+                listenerInstalled = true
+                it.setListener { event -> onMain { handleStoreEvent(app, event) } }
+            }
+        }
     }
+
+    /**
+     * Runs [block] on the main thread. The body is inside the posted runnable, so a throw
+     * in a Play callback cannot escape the looper or leave Buy latched (R5).
+     */
+    internal fun onMain(block: () -> Unit) {
+        val safe = {
+            try {
+                block()
+            } catch (t: Throwable) {
+                if (buyOpen) endBuy(State.Failed(playMessage()))
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) safe() else mainThread.post(safe)
+    }
+
+    private fun playMessage(): String =
+        appContext?.getString(R.string.pro_error_play) ?: "Play Store is not available."
+
+    private fun deliver(state: State) {
+        latest = state
+        opListener?.invoke(state)
+        subscribers.toList().forEach { runCatching { it(state) } }
+    }
+
+    private fun endBuy(state: State) {
+        if (state is State.Finishing) {
+            if (buyOpen) deliver(state)
+            return
+        }
+        if (!buyOpen) return
+        buyOpen = false
+        buyInFlight = false
+        deliver(state)
+        if (lastOp == Op.BUY) opListener = null
+    }
+
+    private fun Activity.canLaunchBilling(): Boolean {
+        if (isFinishing || isDestroyed) return false
+        val owner = this as? androidx.lifecycle.LifecycleOwner ?: return true
+        return owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    }
+
+    private fun handleStoreEvent(app: Context, event: Event) {
+        buyController(app).handle(event)
+    }
+
+    private var buyHandler: Controller? = null
+
+    private fun buyController(app: Context): Controller =
+        buyHandler ?: Controller(app, gateway(app), testBuild = false, post = { onMain(it) }) { state ->
+            if (buyOpen) {
+                if (state is State.Finishing) deliver(state) else endBuy(state)
+            } else if (state is State.Owned) {
+                deliver(state)
+            }
+        }.also { buyHandler = it }
 
     private fun localeTag(context: Context): String =
         context.resources.configuration.locales[0]?.toLanguageTag().orEmpty()
@@ -133,11 +268,15 @@ object ProBilling {
     fun cachedPrice(context: Context): String? =
         if (localeTag(context) == lastPriceLocale) lastPrice else null
 
-    /** Central publication point for both the start-up prefetch and the buy-time query. */
-    private fun publishPrice(context: Context, text: String?) {
+    /**
+     * Publish only when the locale captured at request time is still the current one.
+     * An answer that arrives after a language change is not relabelled as the new locale (R6).
+     */
+    private fun publishPrice(app: Context, requestLocale: String, text: String?) {
         if (text == null) return
+        if (requestLocale != localeTag(app)) return
         lastPrice = text
-        lastPriceLocale = localeTag(context)
+        lastPriceLocale = requestLocale
     }
 
     /**
@@ -152,6 +291,7 @@ object ProBilling {
     /** Shows Play's localized price when it can be fetched; [onPrice] gets null otherwise. */
     fun price(context: Context, onPrice: (String?) -> Unit) {
         val app = context.applicationContext
+        val requestLocale = localeTag(context)
         val request = ++priceRequest
         val client = try {
             gateway(app)
@@ -162,15 +302,24 @@ object ProBilling {
         try {
             client.connect { ok ->
                 onMain {
-                    if (!ok) {
-                        onPrice(null)
-                        return@onMain
-                    }
-                    client.price { text ->
-                        onMain {
-                            if (request == priceRequest) publishPrice(app, text)
-                            onPrice(text)
+                    try {
+                        if (!ok) {
+                            onPrice(null)
+                            return@onMain
                         }
+                        client.queryOffer { offer ->
+                            onMain {
+                                try {
+                                    val still = request == priceRequest && requestLocale == localeTag(app)
+                                    if (still) publishPrice(app, requestLocale, offer?.price)
+                                    onPrice(if (still) offer?.price else null)
+                                } catch (t: Throwable) {
+                                    onPrice(null)
+                                }
+                            }
+                        }
+                    } catch (t: Throwable) {
+                        onPrice(null)
                     }
                 }
             }
@@ -191,110 +340,175 @@ object ProBilling {
     internal fun buy(activity: Activity, testBuild: Boolean, onState: (State) -> Unit) {
         // Test builds are Pro unless QA forced Free; there is nothing to buy and no store to ask.
         if (testBuild) {
-            onMain { onState(State.Owned) }
+            onMain {
+                lastOp = Op.BUY
+                opListener = onState
+                deliver(State.Owned)
+                opListener = null
+            }
             return
         }
         onMain {
-            // A double tap must not install a second controller or open a second billing flow.
-            if (buyInFlight) return@onMain
-            buyInFlight = true
-            val context = activity.applicationContext
-            val client = try {
-                gateway(context)
-            } catch (t: Throwable) {
-                buyInFlight = false
-                onState(State.Failed(context.getString(R.string.pro_error_play)))
-                return@onMain
-            }
-            var over = false
-            fun finish(state: State) {
-                if (over) return
-                over = true
-                buyInFlight = false
-                client.setListener(null)
-                // A destroyed instance must not be handed a sheet; the next visible screen asks again.
-                if (activity.isFinishing || activity.isDestroyed) return
-                onState(state)
-            }
-            val controller = Controller(context, client, testBuild, { block -> onMain(block) }) { state ->
-                if (state is State.Finishing) {
-                    if (!activity.isFinishing && !activity.isDestroyed) onState(state)
-                } else {
-                    finish(state)
-                }
-            }
             try {
-                client.setListener { event -> onMain { controller.handle(event) } }
+                // A double tap must not open a second billing flow. The listener stays the one
+                // installed with the client; this call does not replace it (R2).
+                if (buyInFlight || buyOpen) return@onMain
+                buyInFlight = true
+                buyOpen = true
+                lastOp = Op.BUY
+                opListener = onState
+                latest = State.Busy
+                subscribers.toList().forEach { runCatching { it(State.Busy) } }
+                val app = activity.applicationContext
+                val requestLocale = localeTag(activity)
+                val client = try {
+                    gateway(app)
+                } catch (t: Throwable) {
+                    endBuy(State.Failed(app.getString(R.string.pro_error_play)))
+                    return@onMain
+                }
                 client.connect { ok ->
                     onMain {
-                        if (!ok) {
-                            finish(State.Failed(context.getString(R.string.pro_error_play)))
-                            return@onMain
-                        }
-                        // Never rely on the launch-time query: it may have failed (Play busy,
-                        // offline) and the cached details would then make "Unlock Pro" say "not
-                        // available" for the whole session. Ask again now, and only open the sheet
-                        // when the product really exists.
-                        val request = ++priceRequest
-                        client.price { text ->
-                            onMain {
-                                if (request == priceRequest) publishPrice(context, text)
-                                when {
-                                    activity.isFinishing || activity.isDestroyed ->
-                                        finish(State.None)
-                                    text == null -> finish(
-                                        State.Failed(context.getString(R.string.pro_error_product))
-                                    )
-                                    else -> try {
-                                        client.launch(activity)
+                        try {
+                            if (!ok) {
+                                endBuy(State.Failed(app.getString(R.string.pro_error_play)))
+                                return@onMain
+                            }
+                            val request = ++priceRequest
+                            client.queryOffer { offer ->
+                                onMain {
+                                    try {
+                                        if (offer != null && request == priceRequest &&
+                                            requestLocale == localeTag(app)
+                                        ) {
+                                            publishPrice(app, requestLocale, offer.price)
+                                        }
+                                        // The Activity is used only here, and only if it is resumed (R3).
+                                        if (!activity.canLaunchBilling()) {
+                                            endBuy(State.None)
+                                            return@onMain
+                                        }
+                                        if (offer == null) {
+                                            endBuy(State.Failed(app.getString(R.string.pro_error_product)))
+                                            return@onMain
+                                        }
+                                        when (client.launch(activity, offer)) {
+                                            LaunchResult.STARTED -> Unit
+                                            LaunchResult.CANCELLED -> endBuy(State.None)
+                                            LaunchResult.FAILED ->
+                                                endBuy(State.Failed(app.getString(R.string.pro_error_play)))
+                                            LaunchResult.ALREADY_OWNED -> reconcileOwned(app, client)
+                                        }
                                     } catch (t: Throwable) {
-                                        finish(State.Failed(context.getString(R.string.pro_error_play)))
+                                        endBuy(State.Failed(app.getString(R.string.pro_error_play)))
                                     }
                                 }
                             }
+                        } catch (t: Throwable) {
+                            endBuy(State.Failed(app.getString(R.string.pro_error_play)))
                         }
                     }
                 }
             } catch (t: Throwable) {
-                finish(State.Failed(context.getString(R.string.pro_error_play)))
+                endBuy(State.Failed(activity.applicationContext.getString(R.string.pro_error_play)))
+            }
+        }
+    }
+
+    /**
+     * ITEM_ALREADY_OWNED must end the Buy on every path, including a failed or empty re-query (R4).
+     */
+    private fun reconcileOwned(app: Context, client: Gateway) {
+        val startGeneration = generation
+        client.queryPurchases { owned ->
+            onMain {
+                try {
+                    val mine = owned?.filter {
+                        it.productId == PRODUCT_ID && it.state == PurchaseState.PURCHASED
+                    }
+                    when {
+                        owned == null || mine.isNullOrEmpty() ->
+                            endBuy(State.Failed(app.getString(R.string.pro_error_purchase)))
+                        else -> buyController(app).applyOwned(mine, startGeneration, silent = false)
+                    }
+                } catch (t: Throwable) {
+                    endBuy(State.Failed(app.getString(R.string.pro_error_play)))
+                }
             }
         }
     }
 
     /** "Restore purchase": anything owned unlocks Pro (and is acknowledged). */
-    fun restore(context: Context, onState: (State) -> Unit) {
+    fun restore(context: Context, onState: (State) -> Unit) =
+        restore(context, com.scanwhirl.app.BuildConfig.TEST_BUILD, onState)
+
+    /**
+     * Release restore, with the test-build shortcut exposed so a unit test can drive the real
+     * query. Outcomes are delivered to [onState] and to every subscriber (R1).
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun restore(context: Context, testBuild: Boolean, onState: (State) -> Unit) {
         val app = context.applicationContext
-        if (com.scanwhirl.app.BuildConfig.TEST_BUILD) {
-            onMain { onState(if (ProGate.isPro(app)) State.Owned else State.None) }
+        if (testBuild) {
+            onMain {
+                lastOp = Op.RESTORE
+                opListener = onState
+                deliver(if (ProGate.isPro(app)) State.Owned else State.None)
+                opListener = null
+            }
             return
         }
         onMain {
-            val client = try {
-                gateway(app)
-            } catch (t: Throwable) {
-                onState(State.Failed(app.getString(R.string.pro_error_play)))
-                return@onMain
-            }
-            val controller = Controller(app, client, testBuild = false, post = { block -> onMain(block) }) { }
             try {
+                lastOp = Op.RESTORE
+                opListener = onState
+                val client = try {
+                    gateway(app)
+                } catch (t: Throwable) {
+                    deliver(State.Failed(app.getString(R.string.pro_error_play)))
+                    opListener = null
+                    return@onMain
+                }
+                // A restore query must not replace the purchase listener (R2).
+                val controller = Controller(
+                    app, client, testBuild = false, post = { block -> onMain(block) }
+                ) { state ->
+                    deliver(state)
+                    if (state !is State.Finishing) opListener = null
+                }
                 client.connect { ok ->
                     onMain {
-                        if (!ok) {
-                            onState(State.Failed(app.getString(R.string.pro_error_play)))
-                            return@onMain
-                        }
-                        val startGeneration = generation
-                        client.queryPurchases { owned ->
-                            onMain {
-                                controller.applyOwned(owned, startGeneration, silent = false)
-                                // The restore sheet reports its own outcome; release the client.
-                                client.setListener(null)
+                        try {
+                            if (!ok) {
+                                deliver(State.Failed(app.getString(R.string.pro_error_play)))
+                                opListener = null
+                                return@onMain
                             }
+                            val startGeneration = generation
+                            client.queryPurchases { owned ->
+                                onMain {
+                                    try {
+                                        if (owned == null) {
+                                            deliver(State.Failed(app.getString(R.string.pro_error_play)))
+                                            opListener = null
+                                        } else {
+                                            controller.applyOwned(owned, startGeneration, silent = false)
+                                        }
+                                    } catch (t: Throwable) {
+                                        deliver(State.Failed(app.getString(R.string.pro_error_play)))
+                                        opListener = null
+                                    }
+                                }
+                            }
+                        } catch (t: Throwable) {
+                            deliver(State.Failed(app.getString(R.string.pro_error_play)))
+                            opListener = null
                         }
                     }
                 }
             } catch (t: Throwable) {
-                onState(State.Failed(app.getString(R.string.pro_error_play)))
+                deliver(State.Failed(app.getString(R.string.pro_error_play)))
+                opListener = null
             }
         }
     }
@@ -308,6 +522,13 @@ object ProBilling {
     fun refreshOwned(context: Context) {
         // Test builds are Pro by design; they never need to talk to Play on start-up.
         if (com.scanwhirl.app.BuildConfig.TEST_BUILD) return
+        refreshOwned(context, testBuild = false)
+    }
+
+    /** Release start-up query, exposed so a test can overlap it with Buy (R2). */
+    @androidx.annotation.VisibleForTesting
+    internal fun refreshOwned(context: Context, testBuild: Boolean) {
+        if (testBuild) return
         val app = context.applicationContext
         onMain {
             if (checkedOnStart) return@onMain
@@ -321,16 +542,24 @@ object ProBilling {
             try {
                 client.connect { ok ->
                     onMain {
-                        if (!ok) {
-                            client.close()
-                        } else {
-                            val startGeneration = generation
-                            client.queryPurchases { owned ->
-                                onMain {
-                                    controller.applyOwned(owned, startGeneration, silent = true)
-                                    client.setListener(null)
+                        try {
+                            if (!ok) {
+                                if (!buyOpen) client.close()
+                            } else {
+                                val startGeneration = generation
+                                client.queryPurchases { owned ->
+                                    onMain {
+                                        try {
+                                            // Silent, and it must not clear the purchase listener (R2).
+                                            controller.applyOwned(owned, startGeneration, silent = true)
+                                        } catch (t: Throwable) {
+                                            // A failed snapshot never changes Pro.
+                                        }
+                                    }
                                 }
                             }
+                        } catch (t: Throwable) {
+                            // Retried on the next process start; a failed query never changes Pro.
                         }
                     }
                 }
@@ -353,6 +582,14 @@ object ProBilling {
         priceRequest = 0
         generation = 0
         buyInFlight = false
+        buyOpen = false
+        subscribers.clear()
+        latest = State.None
+        opListener = null
+        lastOp = Op.NONE
+        listenerInstalled = false
+        buyHandler = null
+        appContext = null
         gatewayFactory = { PlayBilling(it) }
     }
 
@@ -494,7 +731,12 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
         .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
         .setListener { result, purchases ->
             when (result.responseCode) {
-                BillingClient.BillingResponseCode.OK -> purchases.orEmpty().forEach { dispatch(it) }
+                BillingClient.BillingResponseCode.OK -> {
+                    val list = purchases.orEmpty()
+                    // An OK update with nothing usable must not leave Buy latched.
+                    if (list.isEmpty()) listener?.invoke(ProBilling.Event.Cancelled)
+                    else list.forEach { dispatch(it) }
+                }
                 BillingClient.BillingResponseCode.USER_CANCELED ->
                     listener?.invoke(ProBilling.Event.Cancelled)
                 else -> listener?.invoke(
@@ -543,6 +785,10 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
     }
 
     override fun price(onPrice: (String?) -> Unit) {
+        queryOffer { onPrice(it?.price) }
+    }
+
+    override fun queryOffer(onOffer: (ProBilling.Offer?) -> Unit) {
         val params = QueryProductDetailsParams.newBuilder()
             .setProductList(
                 listOf(
@@ -559,24 +805,29 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
             } else {
                 null
             }
+            // Kept only so a legacy launch(activity) still has something. Buy never reads it (R7).
             details = product
-            // Billing 8 one-time products can carry several purchase options; take the first offer
-            // from the list and fall back to the single-offer getter.
-            onPrice(
-                product?.oneTimePurchaseOfferDetailsList?.firstOrNull()?.formattedPrice
-                    ?: product?.oneTimePurchaseOfferDetails?.formattedPrice
+            val formatted = product?.oneTimePurchaseOfferDetailsList?.firstOrNull()?.formattedPrice
+                ?: product?.oneTimePurchaseOfferDetails?.formattedPrice
+            onOffer(
+                if (product == null || formatted == null) null
+                else ProBilling.Offer(formatted, product.productId, product)
             )
         }
     }
 
     override fun launch(activity: Activity?) {
-        val detail = details ?: run {
-            listener?.invoke(
-                ProBilling.Event.Failed(context.getString(R.string.pro_error_product))
-            )
+        val cached = details
+        if (cached == null) {
+            listener?.invoke(ProBilling.Event.Failed(context.getString(R.string.pro_error_product)))
             return
         }
-        val target = activity ?: return
+        launch(activity, ProBilling.Offer("", cached.productId, cached))
+    }
+
+    override fun launch(activity: Activity?, offer: ProBilling.Offer): ProBilling.LaunchResult {
+        val detail = offer.details ?: return ProBilling.LaunchResult.FAILED
+        val target = activity ?: return ProBilling.LaunchResult.FAILED
         val flow = runCatching {
             client().launchBillingFlow(
                 target,
@@ -591,22 +842,14 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
                     .build()
             )
         }.getOrElse {
-            listener?.invoke(
-                ProBilling.Event.Failed(context.getString(R.string.pro_error_play))
-            )
-            return
+            return ProBilling.LaunchResult.FAILED
         }
-        when (flow.responseCode) {
-            BillingClient.BillingResponseCode.OK -> Unit
-            BillingClient.BillingResponseCode.USER_CANCELED ->
-                listener?.invoke(ProBilling.Event.Cancelled)
-            // Already bought on this account: hand the real purchases over so Pro can unlock.
-            BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> queryPurchases { owned ->
-                owned.orEmpty().forEach { listener?.invoke(ProBilling.Event.Purchased(it)) }
-            }
-            else -> listener?.invoke(
-                ProBilling.Event.Failed(context.getString(R.string.pro_error_purchase))
-            )
+        return when (flow.responseCode) {
+            BillingClient.BillingResponseCode.OK -> ProBilling.LaunchResult.STARTED
+            BillingClient.BillingResponseCode.USER_CANCELED -> ProBilling.LaunchResult.CANCELLED
+            // The manager re-queries and ends the Buy even when that re-query is empty (R4).
+            BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> ProBilling.LaunchResult.ALREADY_OWNED
+            else -> ProBilling.LaunchResult.FAILED
         }
     }
 
