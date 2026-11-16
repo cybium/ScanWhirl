@@ -237,6 +237,22 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         library.revealDocument(docId)
     }
 
+    private var billingUnsub: (() -> Unit)? = null
+
+    override fun onStart() {
+        super.onStart()
+        // Replay lands first: a recreated screen catches Busy/Owned without a second sheet.
+        billingUnsub = com.scanwhirl.app.util.ProBilling.subscribe { state, replay ->
+            if (isFinishing || isDestroyed) return@subscribe
+            if (replay) {
+                setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+                if (state == com.scanwhirl.app.util.ProBilling.State.Owned) syncProState()
+                return@subscribe
+            }
+            showBillingState(state)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         syncProState()
@@ -261,6 +277,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     }
 
     override fun onStop() {
+        billingUnsub?.invoke()
+        billingUnsub = null
         // Endless motion must not follow the user onto another screen.
         findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.stop(it) }
         super.onStop()
@@ -511,12 +529,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private fun startBilling() {
         // One in-flight purchase: a double tap must not open two Play sheets.
+        // The outcome is delivered to the onStart subscriber, not a callback that
+        // would keep this Activity alive after rotation.
         if (buying || com.scanwhirl.app.util.ProBilling.isPurchaseInFlight()) return
         setBuying(true)
-        com.scanwhirl.app.util.ProBilling.buy(this) { state ->
-            if (isFinishing || isDestroyed) return@buy
-            showBillingState(state)
-        }
+        com.scanwhirl.app.util.ProBilling.buy(this) { }
     }
 
     private fun setBuying(busy: Boolean) {
@@ -525,18 +542,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     }
 
     private fun restoreBilling() {
-        com.scanwhirl.app.util.ProBilling.restore(this) { state ->
-            if (isFinishing || isDestroyed) return@restore
-            if (state == com.scanwhirl.app.util.ProBilling.State.None) {
-                SwSheet.builder(this)
-                    .setTitle(getString(R.string.pro_restore_title))
-                    .setMessage(getString(R.string.pro_restore_none))
-                    .setPrimary(R.string.sheet_got_it)
-                    .build().show()
-            } else {
-                showBillingState(state)
-            }
-        }
+        // Outcome reaches the subscriber (R1). None from a restore is "nothing to restore".
+        com.scanwhirl.app.util.ProBilling.restore(this) { }
     }
 
     /** One short sheet per outcome; a cancel stays silent. */
@@ -557,7 +564,20 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
             com.scanwhirl.app.util.ProBilling.State.Finishing ->
                 Toast.makeText(this, R.string.pro_finishing, Toast.LENGTH_SHORT).show()
-            com.scanwhirl.app.util.ProBilling.State.None -> setBuying(false)
+            com.scanwhirl.app.util.ProBilling.State.Busy -> setBuying(true)
+            com.scanwhirl.app.util.ProBilling.State.None -> {
+                setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+                if (proOpen &&
+                    com.scanwhirl.app.util.ProBilling.lastOperation() ==
+                    com.scanwhirl.app.util.ProBilling.Op.RESTORE
+                ) {
+                    SwSheet.builder(this)
+                        .setTitle(getString(R.string.pro_restore_title))
+                        .setMessage(getString(R.string.pro_restore_none))
+                        .setPrimary(R.string.sheet_got_it)
+                        .build().show()
+                }
+            }
             is com.scanwhirl.app.util.ProBilling.State.Failed -> {
                 setBuying(false)
                 SwSheet.builder(this)

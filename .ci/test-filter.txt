@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.ProBillingTest,com.scanwhirl.app.util.ProBillingRaceTest,com.scanwhirl.app.ui.shell.ProPriceTest
