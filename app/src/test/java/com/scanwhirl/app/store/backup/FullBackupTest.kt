@@ -2,6 +2,7 @@ package com.scanwhirl.app.store.backup
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.vault.FakeVaultKeys
 import com.scanwhirl.app.store.vault.VaultAuthException
@@ -388,6 +389,35 @@ class FullBackupTest {
         assertNotNull("the restored draft must follow the renamed document", draft)
         assertTrue("its inserted page must survive", draft!!.entries.any { it.source == null })
         assertFalse("no draft may be left under the old id", File(app.filesDir, "drafts/doc_draft").exists())
+    }
+
+    /**
+     * B6: a document that is both in the Vault and restored into the library (a same-phone round
+     * trip) used to be moved to Trash and purged by the startup recovery: the restored document
+     * silently disappeared again. The encrypted entry must only win when it is the newer copy.
+     */
+    @Test
+    fun `startup recovery keeps a restored document whose id is also a Vault entry`() {
+        doc("doc_x", "Passport", pages = 2)
+        backup.write(out, password, FullBackup.Wrap.PASSWORD)
+        val vault = vaultStore()
+        vault.setup("246810")
+        vault.addDocument("doc_x")
+        assertNull("the plaintext is in the Vault only", ScanRepository(app).getDocument("doc_x"))
+        VaultSession.close()
+
+        assertEquals(1, backup.restore(out, password).documents)
+        assertTrue("the restore put the document back", File(docsDir, "doc_x").isDirectory)
+
+        ScanWhirlApp.from(app).startupRecovery()
+
+        val repo = ScanRepository(app)
+        assertNotNull("the restored document must survive recovery", repo.getDocument("doc_x"))
+        assertTrue(
+            "and stay visible in the library",
+            repo.listDocuments().map { it.id }.contains("doc_x")
+        )
+        assertTrue("the Vault entry is untouched", File(vaultDir, "doc_x").isDirectory)
     }
 
     private fun vaultStore(iterations: Int = 2_000): VaultStore = VaultStore(

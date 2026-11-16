@@ -506,7 +506,12 @@ class VaultStore(
 
         entryDirs().forEach { dir ->
             val id = dir.name
-            if (File(repo.docsDir, id).exists()) {
+            val plain = File(repo.docsDir, id)
+            // A document restored from a backup can share its id with a Vault entry (same-phone
+            // round trip). The encrypted entry only wins when it is the newer copy: a document
+            // restored after the entry was published is the user's fresh copy and must not be
+            // purged (B6). An interrupted add publishes the entry last, so it still wins.
+            if (plain.exists() && dir.lastModified() >= plain.lastModified()) {
                 try {
                     val key = repo.moveToTrash(id)
                     if (key != null) repo.deleteFromTrash(key)
@@ -603,7 +608,11 @@ class VaultStore(
         val key = requireKey()
         val sourceManifest = readManifest(source, oldKey)
         val target = File(vaultDir, sourceManifest.id)
-        if (!isSafeEntryId(sourceManifest.id) || target.exists()) {
+        // A library document with this id is the restored, newer copy of the same document: never
+        // publish a second copy that startup recovery would then prefer (B6).
+        if (!isSafeEntryId(sourceManifest.id) || target.exists() ||
+            File(repo.docsDir, sourceManifest.id).exists()
+        ) {
             return RestoredEntry(null, null, true)
         }
         val taken = entryDirs().mapNotNull { dir ->

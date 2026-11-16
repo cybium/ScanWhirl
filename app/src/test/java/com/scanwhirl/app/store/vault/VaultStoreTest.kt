@@ -2,6 +2,7 @@ package com.scanwhirl.app.store.vault
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
@@ -240,8 +241,7 @@ class VaultStoreTest {
     }
 
     @Test
-    fun `process death mid-add leaves the original document intact and no half entry`() {
-        val id = DocFixtures.saved(repo, app, pages = 2, name = "Bank statement")
+    fun `process death mid-add leaves the original document intact and no half entry`() {        val id = DocFixtures.saved(repo, app, pages = 2, name = "Bank statement")
         val before = snapshot(File(app.filesDir, "documents/$id"))
         val store = store()
         store.setup("246810")
@@ -264,9 +264,41 @@ class VaultStoreTest {
         assertFalse("the abandoned staging folder is cleaned", hasStagingFolder())
     }
 
+    /**
+     * B5: the add workflow publishes the encrypted entry, then moves the plaintext to Trash and
+     * purges it. A death in between is documented to be finished by [VaultStore.recover], which
+     * nothing called, so the document existed twice for ever. The cold-start path must run it.
+     */
     @Test
-    fun `a legacy four-digit PIN unlocks once and the legacy library migrates`() {
-        Prefs.setVaultPin(app, "1234")
+    fun `the startup path finishes an add that died after its entry was published`() {
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Passport")
+        val store = store()
+        store.setup("246810")
+        val probe = Faults.dieAtOp("vault:published")
+        try {
+            store.addDocument(id)
+            fail("simulated process death expected")
+        } catch (_: SimulatedProcessDeath) {
+        }
+        assertTrue(probe.fired)
+        Faults.resetAll()
+        VaultSession.close() // a new process: the Vault key is gone
+
+        assertTrue("the encrypted entry is published", hasPublishedEntry(id))
+        assertNotNull("the plaintext original is still there", repo.getDocument(id))
+
+        ScanWhirlApp.from(app).startupRecovery()
+
+        assertNull("the plaintext original is purged", repo.getDocument(id))
+        assertTrue("exactly one copy remains, in the Vault", hasPublishedEntry(id))
+        assertTrue(
+            "no plaintext Trash copy outlives the Vault",
+            repo.listTrash().none { it.originalId == id }
+        )
+    }
+
+    @Test
+    fun `a legacy four-digit PIN unlocks once and the legacy library migrates`() {        Prefs.setVaultPin(app, "1234")
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Old private")
         repo.setVaulted(id, true)
         val store = store()
