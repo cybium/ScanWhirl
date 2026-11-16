@@ -2,7 +2,6 @@ package com.scanwhirl.app.store.backup
 
 import android.content.Context
 import com.scanwhirl.app.BuildConfig
-import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.vault.VaultAuthException
 import com.scanwhirl.app.store.vault.VaultCrypto
@@ -106,10 +105,6 @@ class FullBackup(
                 "That is not a Vault recovery code"
             }
         }
-        withActiveJob { writeWhileActive(target, secret, wrap) }
-    }
-
-    private fun writeWhileActive(target: File, secret: String, wrap: Wrap) {
         val plain = File(context.cacheDir, "fullbackup-${UUID.randomUUID().toString().take(8)}.tmp")
         try {
             val vaultKey = vaultKeyFor(secret, wrap)
@@ -243,10 +238,6 @@ class FullBackup(
                 else "This backup needs the Vault recovery code"
             )
         }
-        return withActiveJob { restoreWhileActive(source, secret, header) }
-    }
-
-    private fun restoreWhileActive(source: File, secret: String, header: Header): Report {
         val key = secretKey(secret, header.wrap, header.salt, header.iterations)
         val plain = File(context.cacheDir, "restore-${UUID.randomUUID().toString().take(8)}.tmp")
         val staging = File(context.cacheDir, "restore-${UUID.randomUUID().toString().take(8)}")
@@ -439,6 +430,8 @@ class FullBackup(
             .mapNotNull { d -> File(d, "meta.txt").takeIf { it.isFile }?.let { nameOf(it) } }
             .toMutableSet()
         val restored = staging.resolve("documents")
+        /** Old id -> new id for documents a name conflict forced to be renamed. */
+        val renamed = HashMap<String, String>()
         restored.listFiles { f -> f.isDirectory }?.sortedBy { it.name }?.forEach { dir ->
             val id = dir.name
             if (!isSafeId(id)) { skipped++; return@forEach }
@@ -457,39 +450,11 @@ class FullBackup(
             if (dir.renameTo(File(docsDir, targetId))) {
                 documents++
                 existingNames.add(if (targetId == id) name else "$name (restored)")
+                // The draft folder is copied under the new id too, so a page that exists only
+                // there (an inserted camera page) is not thrown away by the next start (B8).
+                if (targetId != id) renamed[id] = targetId
             } else {
                 skipped++
-            }
-        }
-
-        // 1b. Legacy Vault flags (B1). `vault_pin_sha256` is device state and deliberately never
-        //     travels with a backup, so a restored `vault.flag` would hide its document from every
-        //     screen with no PIN that could open it: unreachable, not restored. Follow the path the
-        //     app already has for legacy documents (VaultStore.migrateLegacyVault):
-        //       - a phone that still has the old PIN keeps its flags: its legacy Vault screen can
-        //         open and migrate them;
-        //       - the v2 Vault is set up and unlocked: migrate them into it now;
-        //       - the v2 Vault is set up but locked: KEEP the flags (these documents were hidden by
-        //         the user; exposing them in the open library would be a privacy regression) and
-        //         migrate them on the next successful unlock (VaultStore);
-        //       - no v2 Vault on this phone: nothing could ever open them, so clear the flag and
-        //         say plainly that they are in the library now.
-        val legacyFlagged = legacyVaultFlagged()
-        if (legacyFlagged.isNotEmpty() && !vault.hasLegacyPin()) {
-            when {
-                !vault.isSetUp() -> {
-                    warnings.add(quantity(R.plurals.backup_legacy_vault_visible, legacyFlagged.size))
-                    clearLegacyVaultFlags()
-                }
-                vault.isUnlocked() -> {
-                    runCatching { vault.migrateLegacyVault() }
-                    val remaining = legacyVaultFlagged()
-                    if (remaining.isNotEmpty()) {
-                        // A migration failure keeps them hidden; the next unlock retries it.
-                        warnings.add(quantity(R.plurals.backup_legacy_vault_pending, remaining.size))
-                    }
-                }
-                else -> warnings.add(quantity(R.plurals.backup_legacy_vault_pending, legacyFlagged.size))
             }
         }
 
@@ -536,10 +501,21 @@ class FullBackup(
             target.mkdirs()
             from.walkTopDown().filter { it.isFile }.forEach { file ->
                 val relative = file.relativeTo(from).invariantSeparatorsPath
-                val to = File(target, relative)
+                // A draft folder follows the document it belongs to, even when a name conflict
+                // made the restore publish it under a new id (B8).
+                val parts = relative.split('/', limit = 2)
+                val newId = if (name == "drafts") renamed[parts[0]] else null
+                val to = if (newId == null) {
+                    File(target, relative)
+                } else {
+                    File(File(target, newId), parts.getOrElse(1) { "" })
+                }
                 if (to.exists()) return@forEach
                 to.parentFile?.mkdirs()
-                if (file.renameTo(to)) extras++
+                if (file.renameTo(to)) {
+                    extras++
+                    if (newId != null && to.name == "draft.txt") rewriteDraftBase(to, newId)
+                }
             }
         }
 
@@ -570,6 +546,16 @@ class FullBackup(
         return Report(documents, skipped, vaultEntries, vaultReencrypted, extras, vaultLocked, warnings)
     }
 
+    /** Points a copied draft manifest at the id the document was actually published under. */
+    private fun rewriteDraftBase(manifest: File, baseId: String) {
+        runCatching {
+            val lines = manifest.readLines()
+            if (lines.none { it.startsWith("base=") }) return
+            val rewritten = lines.map { if (it.startsWith("base=")) "base=$baseId" else it }
+            Durable.atomicWriteText(manifest, rewritten.joinToString("\n") + "\n")
+        }
+    }
+
     private fun nameOf(meta: File): String = try {
         meta.readLines().firstOrNull()?.takeIf { it.isNotBlank() } ?: meta.parentFile?.name.orEmpty()
     } catch (_: IOException) {
@@ -586,22 +572,6 @@ class FullBackup(
     private fun isSafeId(id: String): Boolean =
         id.isNotEmpty() && id.length <= 64 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
 
-    /** Documents still flagged as legacy Vault items in the library. */
-    private fun legacyVaultFlagged(): List<File> =
-        docsDir.listFiles { f -> f.isDirectory && File(f, VAULT_FLAG).isFile }.orEmpty().toList()
-
-    /** One warning sentence with its count (Arabic digits, English/Hindi plural rules). */
-    private fun quantity(id: Int, count: Int): String =
-        context.resources.getQuantityString(id, count, count)
-
-    /**
-     * Drops the legacy flag from documents nothing can open any more. The content stays in the
-     * library; only the "hide me" marker goes, so the document is reachable again.
-     */
-    private fun clearLegacyVaultFlags() {
-        legacyVaultFlagged().forEach { File(it, VAULT_FLAG).delete() }
-    }
-
     companion object {
         const val MIN_PASSWORD = 10
         const val PREF_LAST_BACKUP = "full_backup_last_at"
@@ -614,26 +584,6 @@ class FullBackup(
         private const val MIN_VERSION = 1
         private const val ENTRY = 1
         internal const val VAULT_KEY_ENTRY = "vault-key.bin"
-        private const val VAULT_FLAG = "vault.flag"
-
-        /**
-         * How many backup writes/restores this process is running. The cold-start privacy sweep
-         * never deletes the cache files of a running job (`fullbackup-<id>.tmp`,
-         * `restore-<id>.tmp`, `restore-<id>/`), so a sweep fired while one is active cannot
-         * break it.
-         */
-        private val activeJobs = java.util.concurrent.atomic.AtomicInteger(0)
-
-        internal val isRunning: Boolean get() = activeJobs.get() > 0
-
-        private fun <T> withActiveJob(block: () -> T): T {
-            activeJobs.incrementAndGet()
-            try {
-                return block()
-            } finally {
-                activeJobs.decrementAndGet()
-            }
-        }
         private const val END = 0
         private const val BUFFER = 64 * 1024
         private const val MAX_ENTRIES = 200_000

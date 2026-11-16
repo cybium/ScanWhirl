@@ -45,8 +45,7 @@ class DraftEngineTest {
     }
 
     @Test
-    fun `draft edits never change the base document`() = runBlocking {
-        val id = DocFixtures.saved(repo, app, pages = 4)
+    fun `draft edits never change the base document`() = runBlocking {        val id = DocFixtures.saved(repo, app, pages = 4)
         DocFixtures.withOcr(repo, id)
         val d0 = digest(id)
 
@@ -150,8 +149,13 @@ class DraftEngineTest {
         assertEquals(id, result.document.id)
         assertEquals(3, result.document.pageFiles.size)
         assertArrayEquals(oldMeta, File(docDir(id), "meta.txt").readBytes())
-        val previous = repo.listTrash().filter { it.previousToken != null && it.originalId == id }
+        val previous = repo.listTrash().filter { it.previousVersion && it.originalId == id }
         assertEquals("exactly one previous version in Trash", 1, previous.size)
+        assertEquals(
+            "a completed Replace no longer blocks the 30-day sweep",
+            null,
+            previous.single().previousToken
+        )
         val restored = repo.restoreFromTrash(result.trashKey)
         assertEquals("the previous version restores byte-identically", before, digest(restored.id))
         assertFalse("the draft must be gone after Replace", draftDir(id).exists())
@@ -366,6 +370,56 @@ class DraftEngineTest {
             "inserted pages must live in the target's draft, got $inserted",
             inserted.all { it.path.contains("drafts${File.separator}$target") }
         )
+    }
+
+    /**
+     * B4: a published draft carries `ocr_pending`, but the queue file is authoritative once it
+     * exists, so nothing ever indexed the new page: the row said "Reading text…" for ever and the
+     * searchable-PDF refresh never ran. Both draft publishes must enqueue the document.
+     */
+    @Test
+    fun `Save as new and Replace queue text recognition for the published document`() = runBlocking {
+        val id = DocFixtures.saved(repo, app, pages = 3)
+        // The queue file exists on any phone that has saved a scan before; this document was
+        // already indexed, and it does not name the document that is about to be published.
+        repo.ocrStore.clearPending(id)
+        assertFalse(repo.ocrStore.pendingQueue().contains(id))
+
+        repo.draftRotate(id, 0)
+        val copy = repo.saveDraftAsNew(id, "Edited copy", null)
+        assertTrue(
+            "Save as new must queue the new document, queue=${repo.ocrStore.pendingQueue()}",
+            repo.ocrStore.pendingQueue().contains(copy.id)
+        )
+
+        repo.draftRotate(id, 1)
+        val replaced = repo.replaceWithDraft(id)
+        assertTrue(
+            "Replace must re-queue the document, queue=${repo.ocrStore.pendingQueue()}",
+            repo.ocrStore.pendingQueue().contains(replaced.document.id)
+        )
+    }
+
+    /**
+     * B7: every "Replace original" leaves the previous version in Trash with `previous=`, which
+     * `recoverTrash` reads as "an interrupted Replace owns this, never expire it". A completed
+     * Replace must hand the entry back to the 30-day window.
+     */
+    @Test
+    fun `a completed Replace's previous version still expires after 30 days`() = runBlocking {
+        val id = DocFixtures.saved(repo, app, pages = 3)
+        repo.draftDelete(id, 0)
+        val result = repo.replaceWithDraft(id)
+        val entry = File(repo.trashDir, result.trashKey)
+        assertTrue("the previous version is in Trash", entry.exists())
+
+        val later = System.currentTimeMillis() + ScanRepository.TRASH_RETENTION_MS + 60_000
+        assertEquals(
+            "the 30-day sweep must expire a completed Replace's previous version",
+            1,
+            repo.recoverTrash(now = later)
+        )
+        assertFalse(entry.exists())
     }
 
     private suspend fun widths(id: String): List<Int> =

@@ -228,7 +228,7 @@ class TrashActivity : BaseActivity() {
         fun bind(item: ScanRepository.TrashedDocument) {
             val doc = item.document
             // PM-2.2c: a version moved aside by "Replace original" says so in the row title.
-            b.trashName.text = if (item.previousToken != null) {
+            b.trashName.text = if (item.previousVersion) {
                 getString(R.string.trash_previous_version, doc.name)
             } else {
                 doc.name

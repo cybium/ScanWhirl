@@ -103,17 +103,10 @@ class ScanRepository(private val context: Context) {
         /** Free-space probe (advisory only); replaceable in tests. */
         @Volatile internal var usableSpace: (File) -> Long = ::probeUsableSpace
 
-        /**
-         * The in-memory decrypt step of a protected-PDF import. Replaceable in tests so the
-         * heap-exhaustion path can be exercised without allocating 100 MB in the JVM.
-         */
-        @Volatile internal var decryptPdf: (ByteArray, String) -> ByteArray = PdfDecryptor::decrypt
-
         internal fun resetTestSeams() {
             usableSpace = ::probeUsableSpace
             trashFault = {}
             importFault = {}
-            decryptPdf = PdfDecryptor::decrypt
         }
 
         /** An import staging folder untouched this long belongs to an import that died. */
@@ -124,6 +117,9 @@ class ScanRepository(private val context: Context) {
 
         /** Written into a Trash entry after its move: `v1 / original id / trashedAt`. */
         internal const val TRASH_MARKER = "trashed.txt"
+
+        /** Replaces `previous=<token>` once the Replace that moved an entry has published (B7). */
+        internal const val PREVIOUS_VERSION_MARKER = "version=previous"
 
         /**
          * How long a Trash entry stays restorable. The UI promises 30 days (`shell_trash_note`);
@@ -1001,13 +997,15 @@ class ScanRepository(private val context: Context) {
         get() = DraftStore(context.filesDir)
 
     /** A document in Trash. [key] is its Trash entry; [originalId] the library id it had.
-     *  [previousToken] names the publish staging folder that Replace moved here (PM-2.2b). */
+     *  [previousToken] names the publish staging folder that Replace moved here (PM-2.2b);
+     *  [previousVersion] marks a row a completed Replace moved aside, for the row title (B7). */
     data class TrashedDocument(
         val key: String,
         val originalId: String,
         val trashedAt: Long,
         val document: ScanDocument,
-        val previousToken: String? = null
+        val previousToken: String? = null,
+        val previousVersion: Boolean = false
     )
 
     /** Thrown when a legacy Vault item is asked to go to Trash; it never does. */
@@ -1087,7 +1085,9 @@ class ScanRepository(private val context: Context) {
         val trashedAt = marker?.getOrNull(2)?.toLongOrNull() ?: dir.lastModified()
         val previousToken = marker?.firstOrNull { it.startsWith("previous=") }
             ?.removePrefix("previous=")?.takeIf { it.isNotBlank() }
-        return TrashedDocument(dir.name, originalId, trashedAt, doc, previousToken)
+        val previousVersion = previousToken != null ||
+            marker?.any { it == PREVIOUS_VERSION_MARKER } == true
+        return TrashedDocument(dir.name, originalId, trashedAt, doc, previousToken, previousVersion)
     }
 
     /**
@@ -1157,7 +1157,15 @@ class ScanRepository(private val context: Context) {
             }
             trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.forEach { dir ->
                 val trashed = trashedIn(dir) ?: return@forEach
-                if (trashed.previousToken == null && now - trashed.trashedAt >= TRASH_RETENTION_MS) {
+                // A Replace that published (its base is back in the library) owns this entry no
+                // more: drop the marker so the 30-day window applies. A Replace that died before
+                // the publish has no base, keeps its marker, and is rolled forward instead.
+                var token = trashed.previousToken
+                if (token != null && File(docsDir, trashed.originalId).exists()) {
+                    finishReplaceMarker(dir)
+                    token = null
+                }
+                if (token == null && now - trashed.trashedAt >= TRASH_RETENTION_MS) {
                     if (dir.deleteRecursively()) {
                         finished++
                         dropDerivedCaches(trashed.originalId)
@@ -1169,8 +1177,25 @@ class ScanRepository(private val context: Context) {
         return finished
     }
 
-    private fun freeTrashKey(id: String): String {
-        if (!File(trashDir, id).exists()) return id
+    /**
+     * Hands a previous version back to the ordinary Trash rules: the Replace that moved it has
+     * published, so the entry is the user's "previous version" (the row title says so) but it is
+     * no longer an interrupted operation that [recoverOperations] must keep for ever (B7).
+     */
+    private fun finishReplaceMarker(dir: File) {
+        synchronized(TRASH_LOCK) {
+            val marker = File(dir, TRASH_MARKER)
+            if (!marker.isFile) return
+            val lines = runCatching { marker.readLines() }.getOrNull() ?: return
+            if (lines.none { it.startsWith("previous=") }) return
+            val rewritten = lines.map {
+                if (it.startsWith("previous=")) PREVIOUS_VERSION_MARKER else it
+            }
+            runCatching { Durable.atomicWriteText(marker, rewritten.joinToString("\n") + "\n") }
+        }
+    }
+
+    private fun freeTrashKey(id: String): String {        if (!File(trashDir, id).exists()) return id
         var n = 2
         while (File(trashDir, "$id$TRASH_KEY_SEP$n").exists()) n++
         return "$id$TRASH_KEY_SEP$n"
@@ -1753,10 +1778,8 @@ class ScanRepository(private val context: Context) {
      * then rendered through the normal [importPdfAsScan] path, so the new document is a regular
      * ScanWhirl scan (and the original PDF is untouched).
      *
-     * Throws [PdfDecryptor.WrongPassword] for a wrong password, [PdfDecryptor.Unsupported] for
-     * formats this offline decoder cannot open, and [PdfImport.ImportException] (`LOW_MEMORY`) for
-     * a file this phone cannot hold in memory while it decrypts: a [OutOfMemoryError] would be an
-     * `Error` and kill the process, so it is reported as that normal failure instead.
+     * Throws [PdfDecryptor.WrongPassword] for a wrong password and [PdfDecryptor.Unsupported]
+     * for formats this offline decoder cannot open.
      */
     suspend fun importProtectedPdfAsScan(
         uri: Uri,
@@ -1765,28 +1788,9 @@ class ScanRepository(private val context: Context) {
     ): ScanDocument = withContext(Dispatchers.IO) {
         val clean = File(context.cacheDir, "decrypted-${UUID.randomUUID()}.pdf")
         try {
-            PdfImport.withSeekableCopy(context, uri) { fd, size ->
-                // The whole file is held in memory to be decrypted (and copied twice more
-                // inside PdfDecryptor), so a file the heap cannot carry is refused before it
-                // is read instead of throwing an OutOfMemoryError that kills the process.
-                if (size > PdfDecryptor.maxInMemoryBytes()) {
-                    throw PdfImport.ImportException(
-                        PdfImport.Reason.LOW_MEMORY,
-                        "This protected PDF is too large to unlock in memory"
-                    )
-                }
-                try {
-                    val raw = ParcelFileDescriptor.AutoCloseInputStream(fd.dup()).use { it.readBytes() }
-                    Durable.writeFile(clean, decryptPdf(raw, password))
-                } catch (e: OutOfMemoryError) {
-                    // An Error, so the callers' `catch (e: Exception)` would miss it: report the
-                    // same friendly failure a too-large file gets, with nothing published.
-                    throw PdfImport.ImportException(
-                        PdfImport.Reason.LOW_MEMORY,
-                        "This protected PDF is too large to unlock in memory",
-                        e
-                    )
-                }
+            PdfImport.withSeekableCopy(context, uri) { fd, _ ->
+                val raw = ParcelFileDescriptor.AutoCloseInputStream(fd.dup()).use { it.readBytes() }
+                Durable.writeFile(clean, PdfDecryptor.decrypt(raw, password))
             }
             importPdfAsScan(Uri.fromFile(clean), name)
         } finally {
@@ -3376,6 +3380,10 @@ class ScanRepository(private val context: Context) {
             synchronized(DRAFT_LOCK) { drafts.discard(id) }
             File(File(docsDir, copy.id), OpStaging.SEAL).delete()
         }
+        // The published copy carries `ocr_pending`, but the queue file is authoritative once it
+        // exists: without this the id never reaches the indexer and the row says "Reading text…"
+        // for ever (B4).
+        runCatching { ocrStore.markPending(copy.id) }
         copy
     }
 
@@ -3409,8 +3417,13 @@ class ScanRepository(private val context: Context) {
         synchronized(DRAFT_LOCK) { drafts.discard(id) }
         File(File(docsDir, published.id), OpStaging.SEAL).delete()
         dropDerivedCaches(id)
+        // The replaced pages carry no text: enqueue the document so the queue file knows it (B4).
+        runCatching { ocrStore.markPending(published.id) }
         val trashKey = listTrash()
             .firstOrNull { it.originalId == id && it.previousToken != null }?.key.orEmpty()
+        // The Replace finished, so the previous version is an ordinary Trash entry and must fall
+        // under the 30-day window instead of living for ever (B7).
+        if (trashKey.isNotEmpty()) finishReplaceMarker(File(trashDir, trashKey))
         ReplaceResult(published, trashKey)
     }
 

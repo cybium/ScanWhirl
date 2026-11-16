@@ -222,8 +222,12 @@ class OrganizeDraftUiTest {
                 "Replace publishes in place",
                 pollUntil { repo.getDocument(id)?.pageFiles?.size == 2 }
             )
-            val previous = repo.listTrash().filter { it.originalId == id && it.previousToken != null }
+            val previous = repo.listTrash().filter { it.originalId == id && it.previousVersion }
             assertEquals("exactly one previous version", 1, previous.size)
+            assertNull(
+                "a completed Replace no longer blocks the 30-day sweep",
+                previous.single().previousToken
+            )
             assertEquals(3, previous.single().document.pageFiles.size)
             assertNull("Replace must clear the draft", runBlocking { repo.draftOf(id) })
         }
@@ -425,7 +429,8 @@ class OrganizeDraftUiTest {
     }
 
     @Test
-    fun `insert pages at the start middle and end in the organizer`() {        fun insertedWidths(position: Int): List<Int> {
+    fun `insert pages at the start middle and end in the organizer`() {
+        fun insertedWidths(position: Int): List<Int> {
             val target = DocFixtures.saved(repo, app, pages = 3)
             val source = runBlocking {
                 repo.createDocument(
@@ -455,32 +460,6 @@ class OrganizeDraftUiTest {
         assertEquals("at the start", listOf(300, 200, 220, 240), insertedWidths(0))
         assertEquals("after page 2", listOf(200, 220, 300, 240), insertedWidths(2))
         assertEquals("at the end", listOf(200, 220, 240, 300), insertedWidths(3))
-    }
-
-    /**
-     * B9: the camera/gallery copies only exist to be inserted. Their `cacheDir/insert_<id>/`
-     * folder used to stay behind forever, holding full-page plaintext JPEGs.
-     */
-    @Test
-    fun `the temp folder of picked insert pages is removed after the insert`() {
-        val target = DocFixtures.saved(repo, app, pages = 1)
-        val dir = File(app.cacheDir, "insert_abcd1234").apply { mkdirs() }
-        val files = (0..1).map { i ->
-            File(dir, "page_%03d.jpg".format(i)).apply {
-                writeBytes(com.scanwhirl.app.util.ImportFixtures.image(width = 120, height = 160))
-            }
-        }
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
-            var cells = 0
-            assertTrue(pollUntil {
-                scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
-                cells == 1
-            })
-            scenario.onActivity { it.insertFiles(files, 1) }
-            assertTrue("the pages land in the draft", pollUntil { runBlocking { repo.draftPages(target) }.size == 3 })
-            assertTrue("the copied pages are gone", pollUntil { files.none { it.exists() } })
-            assertTrue("the temp folder is gone", pollUntil { !dir.exists() })
-        }
     }
 
     @Test

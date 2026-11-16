@@ -25,26 +25,6 @@ object PdfDecryptor {
     class Unsupported(message: String) : IOException(message)
 
     /**
-     * Largest protected PDF this phone can decrypt in memory, in bytes.
-     *
-     * [decrypt] needs the whole file at once and holds roughly five copies of it (the raw
-     * bytes, an ISO-8859-1 `String` at 2 bytes per character, the output stream, and one
-     * stream-sized copy per object), so a file may claim at most an eighth of the app's
-     * maximum heap. Without this gate a 40-60 MB bank statement on a 3 GB phone throws an
-     * [OutOfMemoryError], which kills the process instead of showing a message.
-     */
-    fun maxInMemoryBytes(heapBytes: Long = maxHeap()): Long =
-        (heapBytes / HEAP_COPIES).coerceIn(MIN_IN_MEMORY_BYTES, PdfImport.MAX_BYTES)
-
-    /** The heap the gate reads; replaceable in tests. */
-    @Volatile
-    internal var maxHeap: () -> Long = { Runtime.getRuntime().maxMemory() }
-
-    internal fun resetForTests() {
-        maxHeap = { Runtime.getRuntime().maxMemory() }
-    }
-
-    /**
      * Returns a decrypted copy of [raw]. Throws [WrongPassword] when neither the user nor the
      * owner password opens it, and [Unsupported] when the encryption or PDF shape is not handled.
      */
@@ -178,10 +158,4 @@ object PdfDecryptor {
             hex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
         }
     }
-
-    /** Copies of the file [decrypt] holds at its peak (see [maxInMemoryBytes]). */
-    private const val HEAP_COPIES = 8L
-
-    /** Never refuse a file this small, whatever the heap reports. */
-    private const val MIN_IN_MEMORY_BYTES = 1L shl 20
 }
