@@ -44,6 +44,7 @@ import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
 import com.scanwhirl.app.util.AppLanguage
 import com.scanwhirl.app.util.BatchRename
+import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.ProGate
@@ -84,6 +85,7 @@ class LibraryScreen(
     lateinit var docList: LinearLayout
 
     private val chipRow: LinearLayout
+    private var chipScroll: View? = null
     private val emptyView: LinearLayout
     private val listHeader: LinearLayout
     private val countLabel: TextView
@@ -198,12 +200,27 @@ class LibraryScreen(
             showSortSheet()
         }
         addView(recentHeader)
+        // The category chips scroll like the folder chips: five or more chips are wider than a
+        // 320-360dp phone, and a plain LinearLayout squeezed the trailing ones to zero width.
         chipRow = LinearLayout(context).apply {
+            id = R.id.swChipRow
             orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             val pad = SwStyle.dp(context, 18f)
             setPadding(pad, 0, pad, 0)
         }
-        addView(chipRow)
+        chipScroll = HorizontalScrollView(context).apply {
+            id = R.id.swChipScroll
+            isHorizontalScrollBarEnabled = false
+            addView(
+                chipRow,
+                android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+        addView(chipScroll)
         addView(SwStyle.spacer(context, 6f))
 
         val selectBar = selectionBar()
@@ -909,7 +926,12 @@ class LibraryScreen(
 
     private fun pickLanguage() {
         val tags = listOf(AppLanguage.ENGLISH, AppLanguage.HINDI)
-        val checked = if (AppLanguage.showingHindi(context)) 1 else 0
+        // Same source as Settings: AppCompat's application locales first (also covers a
+        // language set from Android's per-app language screen), then our saved tag.
+        val current = AppLanguage.currentTag(context)
+        val checked = tags.indexOf(current).let {
+            if (it >= 0) it else if (AppLanguage.showingHindi(context)) 1 else 0
+        }
         com.scanwhirl.app.ui.kit.SwSheet.builder(context)
             .setTitle(R.string.language_chip_title)
             .setOptions(tags.map { AppLanguage.label(it) }, checked) { which, _ ->
@@ -1357,7 +1379,7 @@ class LibraryScreen(
             SwStyle.text(context, 12f, SwStyle.color(context, R.color.cyan_dim), bold = true).apply {
                 id = R.id.swQuickAddTitle
                 text = context.getString(R.string.quick_add_tools).uppercase(Locale.getDefault())
-                letterSpacing = 0.08f
+                letterSpacing = SwStyle.tracking(context, 0.08f)
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         )
@@ -1420,7 +1442,7 @@ class LibraryScreen(
         entries += null to context.getString(R.string.home_chip_all, docs.size)
         for (cat in CategoryRules.ALL) {
             val count = counts[cat] ?: 0
-            if (count > 0) entries += cat to context.getString(R.string.home_chip_category, CategoryRules.label(cat), count)
+            if (count > 0) entries += cat to context.getString(R.string.home_chip_category, CategoryLabels.display(context, cat), count)
         }
         for ((key, label) in entries) {
             val active = key == category
@@ -1639,7 +1661,7 @@ class LibraryScreen(
         quickRow2.isVisible = !searching && !firstRun && quickRow2.childCount > 0
         quickAddGrid.isVisible = quickEditing && !searching
         recentHeader?.isVisible = !searching && !firstRun
-        chipRow.isVisible = !searching && !firstRun && docs.isNotEmpty()
+        chipScroll?.isVisible = !searching && !firstRun && docs.isNotEmpty()
         listHeader.isVisible = !searching && !firstRun
     }
 

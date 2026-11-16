@@ -36,10 +36,8 @@ import kotlinx.coroutines.withContext
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
-import com.scanwhirl.app.ui.shell.ProScreen
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.ImageTools
-import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
@@ -78,8 +76,11 @@ class BatchActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
-        if (!ProGate.isPro(this)) {
-            showProScreen()
+        // Batch tools is a Pro tool. The registry and the launcher gate the normal path; a direct
+        // internal intent must land on the same shell offer (with real billing), never a local Pro
+        // screen whose Buy/Restore only said "billing is not switched on".
+        if (!com.scanwhirl.app.ui.kit.ProOffer.require(this)) {
+            finish()
             return
         }
         val incoming = intent.getStringArrayListExtra(EXTRA_DOC_IDS).orEmpty()
@@ -98,31 +99,6 @@ class BatchActivity : BaseActivity() {
                 listHost.post { showActionSheet() }
             }
         }
-    }
-
-    // ---- Pro gate ---------------------------------------------------------
-
-    private fun showProScreen() {
-        val screen = ProScreen(this, object : ProScreen.Callbacks {
-            override fun onClose() = finish()
-            override fun onBuy() = showBillingSoon()
-            override fun onRestore() = showBillingSoon()
-            override fun onSeeAllProTools() {
-                startActivity(ShellActivity.intent(this@BatchActivity))
-                finish()
-            }
-        })
-        setContentView(screen)
-        screen.applySystemBarsPadding()
-    }
-
-    private fun showBillingSoon() {
-        SwSheet.builder(this)
-            .setTitle(R.string.pro_unlock)
-            .setMessage(R.string.pro_buy_coming)
-            .setPrimary(R.string.sheet_got_it)
-            .build()
-            .show()
     }
 
     // ---- chooser ----------------------------------------------------------

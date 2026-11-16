@@ -103,10 +103,17 @@ class ScanRepository(private val context: Context) {
         /** Free-space probe (advisory only); replaceable in tests. */
         @Volatile internal var usableSpace: (File) -> Long = ::probeUsableSpace
 
+        /**
+         * The in-memory decrypt step of a protected-PDF import. Replaceable in tests so the
+         * heap-exhaustion path can be exercised without allocating 100 MB in the JVM.
+         */
+        @Volatile internal var decryptPdf: (ByteArray, String) -> ByteArray = PdfDecryptor::decrypt
+
         internal fun resetTestSeams() {
             usableSpace = ::probeUsableSpace
             trashFault = {}
             importFault = {}
+            decryptPdf = PdfDecryptor::decrypt
         }
 
         /** An import staging folder untouched this long belongs to an import that died. */
@@ -1746,8 +1753,10 @@ class ScanRepository(private val context: Context) {
      * then rendered through the normal [importPdfAsScan] path, so the new document is a regular
      * ScanWhirl scan (and the original PDF is untouched).
      *
-     * Throws [PdfDecryptor.WrongPassword] for a wrong password and [PdfDecryptor.Unsupported]
-     * for formats this offline decoder cannot open.
+     * Throws [PdfDecryptor.WrongPassword] for a wrong password, [PdfDecryptor.Unsupported] for
+     * formats this offline decoder cannot open, and [PdfImport.ImportException] (`LOW_MEMORY`) for
+     * a file this phone cannot hold in memory while it decrypts: a [OutOfMemoryError] would be an
+     * `Error` and kill the process, so it is reported as that normal failure instead.
      */
     suspend fun importProtectedPdfAsScan(
         uri: Uri,
@@ -1756,9 +1765,28 @@ class ScanRepository(private val context: Context) {
     ): ScanDocument = withContext(Dispatchers.IO) {
         val clean = File(context.cacheDir, "decrypted-${UUID.randomUUID()}.pdf")
         try {
-            PdfImport.withSeekableCopy(context, uri) { fd, _ ->
-                val raw = ParcelFileDescriptor.AutoCloseInputStream(fd.dup()).use { it.readBytes() }
-                Durable.writeFile(clean, PdfDecryptor.decrypt(raw, password))
+            PdfImport.withSeekableCopy(context, uri) { fd, size ->
+                // The whole file is held in memory to be decrypted (and copied twice more
+                // inside PdfDecryptor), so a file the heap cannot carry is refused before it
+                // is read instead of throwing an OutOfMemoryError that kills the process.
+                if (size > PdfDecryptor.maxInMemoryBytes()) {
+                    throw PdfImport.ImportException(
+                        PdfImport.Reason.LOW_MEMORY,
+                        "This protected PDF is too large to unlock in memory"
+                    )
+                }
+                try {
+                    val raw = ParcelFileDescriptor.AutoCloseInputStream(fd.dup()).use { it.readBytes() }
+                    Durable.writeFile(clean, decryptPdf(raw, password))
+                } catch (e: OutOfMemoryError) {
+                    // An Error, so the callers' `catch (e: Exception)` would miss it: report the
+                    // same friendly failure a too-large file gets, with nothing published.
+                    throw PdfImport.ImportException(
+                        PdfImport.Reason.LOW_MEMORY,
+                        "This protected PDF is too large to unlock in memory",
+                        e
+                    )
+                }
             }
             importPdfAsScan(Uri.fromFile(clean), name)
         } finally {

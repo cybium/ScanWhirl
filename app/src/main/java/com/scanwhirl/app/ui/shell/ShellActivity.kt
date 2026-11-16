@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.shell
 
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
@@ -70,6 +71,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private var tab = Tab.LIBRARY
     private var proOpen = false
+    private var proRequest = 0
+    private var buying = false
     private var lastProState: Boolean? = null
     private var lastShown: View? = null
 
@@ -192,10 +195,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             override fun onTrash() = startActivity(TrashActivity.intent(this@ShellActivity))
             override fun onAbout() = showAbout()
         })
-        // Play's localized price replaces the hard-coded one when the store answers.
-        com.scanwhirl.app.util.ProBilling.price(this) { price ->
-            if (price != null) runOnUiThread { proScreen?.setPrice(price) }
-        }
+        // Play's localized price: this query only fills ProBilling's cache. No Pro screen exists
+        // yet, and the callback may arrive before or after one does, so it must never touch UI.
+        com.scanwhirl.app.util.ProBilling.prefetchPrice(this)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -236,6 +238,27 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         library.revealDocument(docId)
     }
 
+    private var billingUnsub: (() -> Unit)? = null
+
+    override fun onStart() {
+        super.onStart()
+        // Replay lands first: a recreated screen catches Busy/Owned without a second sheet.
+        billingUnsub = com.scanwhirl.app.util.ProBilling.subscribe { state, replay ->
+            if (isFinishing || isDestroyed) return@subscribe
+            if (replay) {
+                setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+                if (state == com.scanwhirl.app.util.ProBilling.State.Owned) {
+                    syncProState()
+                    // A purchase that finished while this screen was stopped (behind Play's sheet,
+                    // or before a rotation) must not leave a Free paywall on screen: redraw it.
+                    if (proOpen && com.scanwhirl.app.util.ProGate.isPro(this)) showPro()
+                }
+                return@subscribe
+            }
+            showBillingState(state)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         syncProState()
@@ -260,6 +283,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     }
 
     override fun onStop() {
+        billingUnsub?.invoke()
+        billingUnsub = null
         // Endless motion must not follow the user onto another screen.
         findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.stop(it) }
         super.onStop()
@@ -421,10 +446,21 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private fun scroll(child: View): ScrollView = scrolls.getOrPut(child) {
         ScrollView(this).apply {
             isFillViewport = true
-            // D: the nav bar + the scan disc's overhang are not part of the page,
-            // but the last row must clear the disc when scrolled to the end.
+            // The dock is a sibling under the page, so a hard clip at the fold looks
+            // like the last row was sliced. Padding equal to the dock (measured, not
+            // a magic number) lets that row scroll fully above the disc.
             clipToPadding = false
-            setPadding(0, 0, 0, SwStyle.dp(this@ShellActivity, 112f))
+            setPadding(0, 0, 0, dockClearancePx())
+            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                val pad = dockClearancePx()
+                if (v.paddingBottom != pad) {
+                    v.post {
+                        if (v.paddingBottom != dockClearancePx()) {
+                            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, dockClearancePx())
+                        }
+                    }
+                }
+            }
             addView(
                 child,
                 ViewGroup.LayoutParams(
@@ -432,6 +468,48 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 )
             )
         }
+    }
+
+    /**
+     * How far the last row must sit above the viewport bottom so it clears the dock.
+     * The nav host's laid-out height already holds the bar and the scan disc; the
+     * bar's own bottom margin is the breathing room under that. Read from the dock
+     * views so a resize cannot clip the last row again. Zero while the keyboard
+     * has hidden the dock.
+     */
+    internal fun dockClearancePx(): Int {
+        if (!::navHost.isInitialized || !navHost.isVisible) return 0
+        val bar = findViewById<View>(R.id.swShellNav)
+        val hostH = when {
+            navHost.height > 0 -> navHost.height
+            (navHost.layoutParams?.height ?: 0) > 0 -> navHost.layoutParams.height
+            else -> SwStyle.dp(this, 100f)
+        }
+        val margin = (bar?.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin
+            ?: SwStyle.dp(this, 12f)
+        return hostH + margin + discOverlapPx()
+    }
+
+    /** How many pixels the scan disc is drawn above the page. Zero while it sits in the nav host. */
+    private fun discOverlapPx(): Int {
+        if (navHost.height <= 0 || contentHost.height <= 0) return 0
+        val disc = findViewById<View>(R.id.swNavScan) ?: return 0
+        val root = navHost.parent as? View ?: return 0
+        val discTop = offsetIn(disc, root)
+        val contentBottom = offsetIn(contentHost, root) + contentHost.height
+        return (contentBottom - discTop).coerceAtLeast(0)
+    }
+
+    private fun offsetIn(view: View, ancestor: View): Int {
+        var y = 0
+        var current: View? = view
+        while (current != null && current !== ancestor) {
+            y += current.top
+            val parent = current.parent as? View ?: break
+            y -= parent.scrollY
+            current = parent
+        }
+        return y
     }
 
     private val scrolls = mutableMapOf<View, ScrollView>()
@@ -442,6 +520,24 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         contentHost.addView(
             view,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        // 24dp (sw_space_6) fade into the page ink, so a card at the fold dissolves
+        // instead of being sliced on the dock. Not clickable: touches pass through.
+        contentHost.addView(
+            View(this).apply {
+                tag = DOCK_FADE
+                isClickable = false
+                isFocusable = false
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(Color.TRANSPARENT, SwStyle.color(this@ShellActivity, R.color.rv_bg))
+                )
+            },
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                resources.getDimensionPixelSize(R.dimen.sw_space_6)
+            ).apply { gravity = Gravity.BOTTOM }
         )
         lastShown = view
     }
@@ -477,69 +573,97 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     fun showPro() {
         proOpen = true
-        proScreen = ProScreen(this, object : ProScreen.Callbacks {
+        val request = ++proRequest
+        val screen = ProScreen(this, object : ProScreen.Callbacks {
             override fun onClose() = closePro()
             override fun onBuy() = startBilling()
             override fun onRestore() = restoreBilling()
             override fun onSeeAllProTools() = showTab(Tab.TOOLS)
         }, active = com.scanwhirl.app.util.ProGate.isPro(this))
-        setContent(scroll(proScreen))
+        proScreen = screen
+        // Play's localized price: the launch-time query usually finishes before this screen
+        // exists, so apply the cached answer now and refresh it on this exact instance.
+        com.scanwhirl.app.util.ProBilling.cachedPrice(this)?.let { screen.setPrice(it) }
+        // A purchase may still be in flight after a rotation; keep its Buy row disabled.
+        screen.setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+        setContent(scroll(screen))
         paintNav()
+        com.scanwhirl.app.util.ProBilling.price(this) { price ->
+            // An older response (or a screen that is gone) must not overwrite this one.
+            if (price != null && request == proRequest && proOpen &&
+                !isFinishing && !isDestroyed
+            ) {
+                screen.setPrice(price)
+            }
+        }
     }
 
     private fun closePro() {
         proOpen = false
+        proRequest++
         showTab(tab)
     }
 
     private fun startBilling() {
-        com.scanwhirl.app.util.ProBilling.buy(this) { state -> showBillingState(state) }
+        // One in-flight purchase: a double tap must not open two Play sheets.
+        // The outcome is delivered to the onStart subscriber, not a callback that
+        // would keep this Activity alive after rotation.
+        if (buying || com.scanwhirl.app.util.ProBilling.isPurchaseInFlight()) return
+        setBuying(true)
+        com.scanwhirl.app.util.ProBilling.buy(this) { }
+    }
+
+    private fun setBuying(busy: Boolean) {
+        buying = busy
+        if (::proScreen.isInitialized) proScreen.setBuying(busy)
     }
 
     private fun restoreBilling() {
-        com.scanwhirl.app.util.ProBilling.restore(this) { state ->
-            if (state == com.scanwhirl.app.util.ProBilling.State.None) {
-                SwSheet.builder(this)
-                    .setTitle(getString(R.string.pro_restore_title))
-                    .setMessage(getString(R.string.pro_restore_none))
-                    .setPrimary(R.string.sheet_got_it)
-                    .build().show()
-            } else {
-                showBillingState(state)
-            }
-        }
+        // Outcome reaches the subscriber (R1). None from a restore is "nothing to restore".
+        com.scanwhirl.app.util.ProBilling.restore(this) { }
     }
 
     /** One short sheet per outcome; a cancel stays silent. */
     private fun showBillingState(state: com.scanwhirl.app.util.ProBilling.State) {
         when (state) {
             com.scanwhirl.app.util.ProBilling.State.Owned -> {
+                setBuying(false)
                 Toast.makeText(this, R.string.pro_unlocked, Toast.LENGTH_SHORT).show()
                 showPro()
             }
-            com.scanwhirl.app.util.ProBilling.State.Pending -> SwSheet.builder(this)
-                .setTitle(getString(R.string.pro_pending_title))
-                .setMessage(getString(R.string.pro_pending))
-                .setPrimary(R.string.sheet_got_it)
-                .build().show()
+            com.scanwhirl.app.util.ProBilling.State.Pending -> {
+                setBuying(false)
+                SwSheet.builder(this)
+                    .setTitle(getString(R.string.pro_pending_title))
+                    .setMessage(getString(R.string.pro_pending))
+                    .setPrimary(R.string.sheet_got_it)
+                    .build().show()
+            }
             com.scanwhirl.app.util.ProBilling.State.Finishing ->
                 Toast.makeText(this, R.string.pro_finishing, Toast.LENGTH_SHORT).show()
-            com.scanwhirl.app.util.ProBilling.State.None -> Unit
-            is com.scanwhirl.app.util.ProBilling.State.Failed -> SwSheet.builder(this)
-                .setTitle(getString(R.string.pro_purchase_title))
-                .setMessage(state.message)
-                .setPrimary(R.string.sheet_got_it)
-                .build().show()
+            com.scanwhirl.app.util.ProBilling.State.Busy -> setBuying(true)
+            com.scanwhirl.app.util.ProBilling.State.None -> {
+                setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+                if (proOpen &&
+                    com.scanwhirl.app.util.ProBilling.lastOperation() ==
+                    com.scanwhirl.app.util.ProBilling.Op.RESTORE
+                ) {
+                    SwSheet.builder(this)
+                        .setTitle(getString(R.string.pro_restore_title))
+                        .setMessage(getString(R.string.pro_restore_none))
+                        .setPrimary(R.string.sheet_got_it)
+                        .build().show()
+                }
+            }
+            is com.scanwhirl.app.util.ProBilling.State.Failed -> {
+                setBuying(false)
+                SwSheet.builder(this)
+                    .setTitle(getString(R.string.pro_purchase_title))
+                    .setMessage(state.message)
+                    .setPrimary(R.string.sheet_got_it)
+                    .build().show()
+            }
         }
-    }
-
-    private fun showBillingSoon() {
-        SwSheet.builder(this)
-            .setTitle(getString(R.string.pro_unlock))
-            .setMessage(getString(R.string.pro_buy_coming))
-            .setPrimary(R.string.sheet_got_it)
-            .build()
-            .show()
     }
 
     private fun showAbout() {
@@ -994,6 +1118,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         /** Opens the Pro screen on launch (Settings' Gold option for Free users). */
         const val EXTRA_OPEN_PRO = "open_pro"
+
+        /** Tag of the non-interactive fade painted just above the dock. */
+        const val DOCK_FADE = "swDockFade"
 
         fun intent(context: android.content.Context, docId: String? = null): Intent =
             Intent(context, ShellActivity::class.java).apply {

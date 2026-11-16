@@ -470,7 +470,10 @@ class OcrEditorActivity : BaseActivity() {
         chip(row2, R.id.btnToWord, R.drawable.ic_sym_description, R.string.ocr_to_word_pro, weight = 1.45f)
             .apply { labelView.setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(this@OcrEditorActivity, R.color.gold_pro_primary)) }
             .setOnClickListener {
-                // v2 UI: 08_text_ocr — the real To Word tool, not an info sheet.
+                // v2 UI: 08_text_ocr — the real To Word tool, not an info sheet. It is Pro, and
+                // this Context overload does not pass through ToolHost.launchTool's gate, so the
+                // offer is required here; ToolSetupActivity has the registry-driven backstop.
+                if (!com.scanwhirl.app.ui.kit.ProOffer.require(this)) return@setOnClickListener
                 com.scanwhirl.app.ui.tools.ToolLaunch.start(this, "to_word")
             }
         actions.addView(row1)

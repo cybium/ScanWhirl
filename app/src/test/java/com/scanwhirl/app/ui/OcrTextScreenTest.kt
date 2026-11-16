@@ -100,6 +100,34 @@ class OcrTextScreenTest {
     }
 
     @Test
+    fun `Free - To Word opens the Pro offer instead of the Word tool`() {
+        com.scanwhirl.app.util.ProGate.setPro(app, false)
+        com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
+        try {
+            launch { activity ->
+                activity.findViewById<View>(R.id.btnToWord).performClick()
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                val started = shadowOf(activity).nextStartedActivity
+                assertNotNull("To Word is never a dead tap", started)
+                assertEquals(
+                    "Free lands on the shell's Pro screen, not the Pro tool setup",
+                    com.scanwhirl.app.ui.shell.ShellActivity::class.java.name,
+                    started.component?.className
+                )
+                assertTrue(
+                    "the shell is asked to open Pro",
+                    started.getBooleanExtra(
+                        com.scanwhirl.app.ui.shell.ShellActivity.EXTRA_OPEN_PRO,
+                        false
+                    )
+                )
+            }
+        } finally {
+            com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
+        }
+    }
+
+    @Test
     fun `all four action chips are on screen, To Word included`() {
         launch { activity ->
             for (id in listOf(R.id.btnCopy, R.id.btnShare, R.id.btnSave, R.id.btnToWord)) {

@@ -148,6 +148,12 @@ class StampEditorActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Backstop: this screen is the whole Pro Edit & sign suite. Whichever caller opened it
+        // (the reader dock, a future flow), a Free build gets the Pro offer and no editor.
+        if (!com.scanwhirl.app.ui.kit.ProOffer.require(this)) {
+            finish()
+            return
+        }
         binding = ActivityStampEditorBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.root.applySystemBarsPadding()

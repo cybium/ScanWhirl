@@ -167,6 +167,7 @@
     <string name="cat_label_forms"><!-- review -->फ़ॉर्म</string>
     <string name="cat_label_ids"><!-- review -->आईडी</string>
     <string name="cat_label_other"><!-- review -->अन्य</string>
+    <string name="cat_label_unsorted"><!-- review -->बिना श्रेणी</string>
     <string name="cat_label_receipts"><!-- review -->रसीदें</string>
     <string name="cat_label_study"><!-- review -->पढ़ाई</string>
     <string name="clear_selection"><!-- review -->चयन हटाएँ</string>
@@ -308,7 +309,7 @@
     <string name="resize_dpi"><!-- review -->DPI</string>
     <string name="resize_failed"><!-- review -->आकार नहीं बदला जा सका: %1$s</string>
     <string name="resize_file_info"><!-- review -->%1$s · %2$s · %3$d × %4$d px</string>
-    <string name="resize_invalid_size"><!-- review -->सही आकार डालें (1–12000 px)</string>
+    <string name="resize_invalid_size"><!-- review -->सही आकार डालें (1 से 12000 px)</string>
     <string name="resize_invalid_target"><!-- review -->आकार डालें, जैसे 500 KB या 3 MB</string>
     <string name="resize_keep_original"><!-- review -->सब रीसेट करें</string>
     <string name="resize_keep_ratio"><!-- review -->अनुपात वही रखें</string>

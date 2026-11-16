@@ -9,8 +9,9 @@ package com.scanwhirl.app.util
  * [classify] guesses from the document name first (as always), then from OCR
  * text when the name says nothing. A guess is honest: name keywords win
  * outright; OCR must produce **≥ 2 keyword hits with a clear winner** or the
- * answer is [UNSORTED]. Display never invents a second name — everyone calls
- * [label] (rule R9, N4).
+ * answer is [UNSORTED]. The stored values below are English on purpose (they live
+ * in `meta.txt`) and never change; every screen shows a translated name through
+ * [CategoryLabels.display].
  *
  * `meta.txt` compatibility: line 3 holds the category; only values accepted
  * by [isValid] are ever written, and old documents missing/invalid on line 3
@@ -64,8 +65,8 @@ object CategoryRules {
     fun isValid(category: String): Boolean = category in ALL_WITH_UNSORTED
 
     /**
-     * The one display name for a stored value (R9/N4): the value itself.
-     * `label("Receipts") == "Receipts"` — no second naming system.
+     * The stored value itself, for compatibility and for values this build does not know.
+     * User-visible text goes through [CategoryLabels.display] instead.
      */
     fun label(category: String): String = category
 

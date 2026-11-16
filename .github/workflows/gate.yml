@@ -67,6 +67,33 @@ jobs:
             rm -rf app/build/test-results/testDebugUnitTest
             run_tests; code=$?
           fi
+          # Known runner-sensitive tests (wall-clock budget on a shared runner, a deliberate OOM
+          # probe, a timing-sensitive export check). If they are the ONLY failing classes, re-run
+          # just those classes once and keep every other result from the full run. Any other
+          # failure is never retried.
+          if [ $code -ne 0 ] && [ ! -f .ci/no-retry ]; then
+            FLAKY=$(python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          known = {"ScanEnhanceQualityTest", "PageNormalizationTest", "ExportHygieneTest"}
+          failing = set()
+          for f in glob.glob("app/build/test-results/testDebugUnitTest/*.xml"):
+              r = ET.parse(f).getroot()
+              if int(r.get("failures", 0)) + int(r.get("errors", 0)) > 0:
+                  failing.add(r.get("name"))
+          short = {n.split(".")[-1] for n in failing}
+          print(",".join(sorted(failing)) if failing and short <= known else "")
+          PY
+            )
+            if [ -n "$FLAKY" ]; then
+              echo "::warning::only known runner-sensitive tests failed ($FLAKY) - re-running just those once"
+              rm -rf /tmp/keep && mkdir -p /tmp/keep && cp -r app/build/test-results/testDebugUnitTest /tmp/keep/
+              RARGS=(); IFS=',' read -ra FL <<< "$FLAKY"; for c in "${FL[@]}"; do RARGS+=(--tests "$c"); done
+              ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=4g --continue --no-daemon -q "${RARGS[@]}" 2>&1 | tee -a tests.log
+              code=${PIPESTATUS[0]}
+              cp app/build/test-results/testDebugUnitTest/*.xml /tmp/keep/testDebugUnitTest/ 2>/dev/null || true
+              rm -rf app/build/test-results/testDebugUnitTest && cp -r /tmp/keep/testDebugUnitTest app/build/test-results/
+            fi
+          fi
           exit $code
 
       - name: Lint

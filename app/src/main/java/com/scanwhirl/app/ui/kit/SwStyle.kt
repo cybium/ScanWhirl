@@ -11,6 +11,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.scanwhirl.app.R
+import com.scanwhirl.app.util.AppLanguage
 
 /**
  * v2 UI: 01_home_A — shared paint for the kit. Colours and radii come from
@@ -85,9 +86,17 @@ object SwStyle {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
         setTextColor(textColor)
         typeface = SwType.of(context, if (bold) SwType.BOLD else SwType.REGULAR)
-        this.letterSpacing = letterSpacing
+        // Latin tracking pulls Devanagari matras off their base letters. Hindi keeps 0.
+        this.letterSpacing = tracking(context, letterSpacing)
         includeFontPadding = false
     }
+
+    /**
+     * Em tracking for kit labels. English keeps the requested value; Hindi is always 0
+     * so a section header or chip does not break matras the way Latin small-caps tracking does.
+     */
+    fun tracking(context: Context, em: Float): Float =
+        if (em == 0f || AppLanguage.showingHindi(context)) 0f else em
 
     /** 40dp round icon tap target with a 24dp tinted glyph. */
     fun iconButton(context: Context, iconRes: Int, tint: Int): android.widget.ImageButton =
