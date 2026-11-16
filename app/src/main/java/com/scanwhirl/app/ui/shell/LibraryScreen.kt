@@ -1328,7 +1328,7 @@ class LibraryScreen(
             SwStyle.text(context, 12f, SwStyle.color(context, R.color.cyan_dim), bold = true).apply {
                 id = R.id.swQuickAddTitle
                 text = context.getString(R.string.quick_add_tools).uppercase(Locale.getDefault())
-                letterSpacing = 0.08f
+                letterSpacing = SwStyle.tracking(context, 0.08f)
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         )
