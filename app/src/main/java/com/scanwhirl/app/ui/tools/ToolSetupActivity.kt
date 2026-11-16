@@ -63,7 +63,10 @@ class ToolSetupActivity : BaseActivity() {
 
     private lateinit var repo: ScanRepository
     private lateinit var tool: SwTool
+    private var toolId = ""
     private var docs: List<ScanDocument> = emptyList()
+    /** False until the first library listing arrives (C07: the layout is up first). */
+    private var docsLoaded = false
 
     /** Selected source documents, in tap order (Merge keeps this order). */
     private val selected = LinkedHashSet<String>()
@@ -108,23 +111,44 @@ class ToolSetupActivity : BaseActivity() {
             return
         }
         tool = found
-        docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
-        docs.firstOrNull()?.let { selected += it.id }
-        nameText = if (id == "duplicate" || id == "merge" || id == "zip") {
-            ""
-        } else {
-            docs.firstOrNull()?.name.orEmpty()
-        }
+        toolId = id
+        nameText = ""
+        // C07: draw the screen first, then stat the library off the main thread.
         setContentView(buildRoot())
         render()
+        loadDocs(firstLoad = true)
     }
 
     override fun onResume() {
         super.onResume()
         if (!::tool.isInitialized) return
-        docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
-        selected.retainAll { id -> docs.any { it.id == id } }
-        render()
+        loadDocs(firstLoad = false)
+    }
+
+    /**
+     * C07: `listDocuments` stats every page of every document. It runs in the caller's lifecycle
+     * scope on IO; the setup chrome is already on screen while it works.
+     */
+    private fun loadDocs(firstLoad: Boolean) {
+        lifecycleScope.launch {
+            val fresh = withContext(Dispatchers.IO) {
+                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            }
+            if (isFinishing || isDestroyed || !::tool.isInitialized) return@launch
+            docs = fresh
+            if (firstLoad) {
+                docs.firstOrNull()?.let { selected += it.id }
+                nameText = if (toolId == "duplicate" || toolId == "merge" || toolId == "zip") {
+                    ""
+                } else {
+                    docs.firstOrNull()?.name.orEmpty()
+                }
+            } else {
+                selected.retainAll { id -> docs.any { it.id == id } }
+            }
+            docsLoaded = true
+            render()
+        }
     }
 
     // ---- layout -----------------------------------------------------------
