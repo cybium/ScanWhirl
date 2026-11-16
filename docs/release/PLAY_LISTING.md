@@ -14,7 +14,9 @@ billing (the next release AAB does).
    - Purchase option: **Buy** (one-time, non-consumable)
    - Price: **₹100** (India). Click "Set prices" > let Play convert for other countries, then round as you like.
    - Tax category: **Digital app sales** (default).
-   - Age rating (per-product field, if shown): **Everyone** (it is a feature unlock).
+   - Product icon (optional): the gold ScanWhirl mark on navy, no text (Play forbids text/promotions on it).
+   - Age rating (per-product field, shown in some US states): **Everyone** / the lowest option (it is a feature unlock).
+   - Payment location restriction: none.
    - **Activate** the product AND make sure its **purchase option is Active**. If the purchase option is
      inactive, the app shows "The Pro product is not available yet."
 4. **No family sharing**: Google Play does not share in-app purchases through Family Library (and Family
