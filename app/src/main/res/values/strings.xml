@@ -676,7 +676,6 @@
     <string name="import_failed_page">Couldn’t read page %1$d (of %2$d), so nothing was imported. The PDF may be damaged.</string>
     <string name="import_failed_empty">This PDF has no pages, so nothing was imported.</string>
     <string name="import_failed_too_large">This PDF is larger than %1$d MB. Split it into smaller PDFs and import those.</string>
-    <string name="import_failed_low_memory">This password-protected PDF is too big for this phone’s memory to unlock. Split it into smaller PDFs and import those.</string>
     <string name="import_failed_too_many">This PDF has %1$d pages; the most ScanWhirl imports at once is %2$d. Split it first.</string>
     <string name="import_failed_no_space">Not enough free storage, so nothing was added. Free some space and try again.</string>
     <string name="import_failed_no_access">ScanWhirl cannot read this file any more. It may have moved or lost its permission.</string>

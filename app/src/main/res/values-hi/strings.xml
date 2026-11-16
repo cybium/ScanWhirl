@@ -627,8 +627,6 @@
     <string name="import_failed_page">%2$d में से पेज %1$d पढ़ा नहीं जा सका, इसलिए कुछ भी इम्पोर्ट नहीं हुआ। PDF शायद खराब है।</string>
     <string name="import_failed_empty">इस PDF में कोई पेज नहीं है, इसलिए कुछ भी इम्पोर्ट नहीं हुआ।</string>
     <string name="import_failed_too_large">यह PDF %1$d MB से बड़ी है। इसे छोटी PDF में बाँटकर इम्पोर्ट करें।</string>
-    <!-- review -->
-    <string name="import_failed_low_memory">यह पासवर्ड-सुरक्षित PDF इस फ़ोन की मेमोरी से खोलने के लिए बहुत बड़ी है। इसे छोटी PDF में बाँटकर इम्पोर्ट करें।</string>
     <string name="import_failed_too_many">इस PDF में %1$d पेज हैं। ScanWhirl एक बार में %2$d पेज तक इम्पोर्ट करता है, इसलिए पहले इसे छोटी PDF में बाँटें।</string>
     <string name="import_failed_no_space">इस PDF को इम्पोर्ट करने के लिए फ़ोन में पर्याप्त जगह नहीं है। कुछ भी नहीं जोड़ा गया। कुछ जगह खाली करके फिर से कोशिश करें।</string>
     <string name="import_failed_no_access">ScanWhirl अब यह फ़ाइल नहीं पढ़ सकता। शायद इसे हटाया या डिलीट किया गया, या इसकी अनुमति हटा दी गई। फ़ाइल पिकर से इसे फिर से चुनें।</string>

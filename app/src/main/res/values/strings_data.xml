@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Data-safety strings (lane/data-fixes): restore and protected-PDF import failures. -->
+<resources>
+    <string name="backup_warn_legacy_vault">Some documents that were in the old PIN Vault were restored as ordinary documents, because the old PIN cannot travel with a backup.</string>
+    <string name="import_failed_low_memory">This password-protected PDF is too big for this phone’s memory to unlock. Split it into smaller PDFs and import those.</string>
+</resources>

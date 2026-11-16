@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Data-safety strings (lane/data-fixes): restore and protected-PDF import failures. -->
+<resources>
+    <!-- review -->
+    <string name="backup_warn_legacy_vault">पुराने पिन वॉल्ट में रहे कुछ दस्तावेज़ सामान्य दस्तावेज़ों के रूप में वापस आए, क्योंकि पुराना पिन बैकअप के साथ नहीं आ सकता।</string>
+    <!-- review -->
+    <string name="import_failed_low_memory">यह पासवर्ड-सुरक्षित PDF इस फ़ोन की मेमोरी से खोलने के लिए बहुत बड़ी है। इसे छोटी PDF में बाँटकर इम्पोर्ट करें।</string>
+</resources>

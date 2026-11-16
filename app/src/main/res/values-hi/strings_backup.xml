@@ -63,8 +63,6 @@
         <item quantity="other">%1$d वॉल्ट दस्तावेज़ इस वॉल्ट में फिर से एन्क्रिप्ट हुए।</item>
     </plurals>
     <string name="backup_vault_locked">वॉल्ट फ़ाइलें वापस नहीं आईं। वॉल्ट खोलें और फिर से वापस लाएँ।</string>
-    <!-- review -->
-    <string name="backup_warn_legacy_vault">पुराने पिन वॉल्ट में रहे कुछ दस्तावेज़ सामान्य दस्तावेज़ों के रूप में वापस आए, क्योंकि पुराना पिन बैकअप के साथ नहीं आ सकता।</string>
     <string name="backup_vault_reason">वॉल्ट खोलें ताकि बैकअप के वॉल्ट दस्तावेज़ इसमें वापस आ सकें।</string>
     <string name="backup_wrong_secret">गलत पासवर्ड या रिकवरी कोड। कुछ नहीं बदला।</string>
     <string name="backup_not_a_backup">यह ScanWhirl बैकअप नहीं है, या फ़ाइल खराब है।</string>
