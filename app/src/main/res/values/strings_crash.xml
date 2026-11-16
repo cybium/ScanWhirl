@@ -9,4 +9,6 @@
     <string name="crash_library_updating">Updating the library…</string>
     <!-- C07/C08: while a tool screen or picker loads the document list off the main thread. -->
     <string name="crash_loading_documents">Loading documents…</string>
+    <!-- C06: OCR ran out of memory for a page. -->
+    <string name="crash_ocr_memory">Not enough memory to read this scan. Close other apps and try again.</string>
 </resources>

@@ -186,6 +186,10 @@ class OcrIndexer(
                     // Page unreadable: key stays absent ("not read"), never stored as empty text.
                     failedPages++
                     if (OcrEngine.isUnavailable(e)) unavailable = true
+                } catch (_: OutOfMemoryError) {
+                    // C06: a 24 MB page plus the recognizer's copy can exhaust a 2 GB phone.
+                    // Count the page as unread and keep indexing the rest; never kill the app.
+                    failedPages++
                 }
                 done++
             }
@@ -223,6 +227,8 @@ class OcrIndexer(
                 throw e
             } catch (_: Exception) {
                 // Page-level failures are counted inside indexNow; nothing to do here.
+            } catch (_: OutOfMemoryError) {
+                // C06: the consumer must survive a page that could not be decoded.
             } finally {
                 mutex.withLock {
                     inFlight.remove(docId)
