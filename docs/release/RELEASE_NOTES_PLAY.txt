@@ -1,20 +1,20 @@
 <en-US>
 New in 1.2.1:
-• Pick your own quick tools on Home (up to 12)
-• Hide private info: find and cover phone numbers, emails, ID and card numbers before you share
-• Encrypted backup of every scan, the Vault and your settings in one file
-• Scan Enhance: Auto, Colour boost, Grey and B&W that keeps photos readable
-• ID cards on A4 or Letter
-• ScanWhirl Pro: one-time purchase, no subscription
-• Bigger buttons, clearer text and many fixes
+• Hindi fixed everywhere, plus an A/अ language switch on Home
+• Hide private info never calls a page clean when it could not read it
+• Safer Pro purchase and Restore
+• Faster Vault unlock and locked scans, fewer freezes and crashes
+• Backup restore keeps hidden Vault documents hidden
+• Category chips no longer disappear on small phones
+• Honest wording: no false family-sharing promise
 </en-US>
 <hi-IN>
 1.2.1 में नया:
-• होम पर अपने क्विक टूल खुद चुनें (12 तक)
-• निजी जानकारी छिपाएँ: शेयर करने से पहले फ़ोन नंबर, ईमेल, आईडी और कार्ड नंबर ढकें
-• सभी स्कैन, वॉल्ट और सेटिंग्स का एक एन्क्रिप्टेड बैकअप
-• स्कैन एन्हांस: ऑटो, कलर बूस्ट, ग्रे और ब्लैक-व्हाइट
-• आईडी कार्ड A4 या Letter पर
-• ScanWhirl Pro: एक बार खरीदें, कोई सब्सक्रिप्शन नहीं
-• बड़े बटन, साफ़ टेक्स्ट और कई सुधार
+• पूरे ऐप में हिंदी ठीक की गई, और होम पर A/अ भाषा बटन
+• निजी जानकारी छिपाएँ अब बिना पढ़े किसी पेज को साफ़ नहीं बताता
+• Pro खरीद और रीस्टोर ज़्यादा भरोसेमंद
+• वॉल्ट और लॉक स्कैन तेज़ खुलते हैं, ऐप कम अटकता और बंद होता है
+• बैकअप रीस्टोर के बाद छिपे वॉल्ट दस्तावेज़ छिपे ही रहते हैं
+• छोटे फ़ोन पर कैटेगरी बटन अब गायब नहीं होते
+• सच्ची जानकारी: फ़ैमिली शेयरिंग का गलत वादा हटाया
 </hi-IN>
