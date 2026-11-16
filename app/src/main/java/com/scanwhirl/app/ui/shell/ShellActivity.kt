@@ -71,6 +71,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private var tab = Tab.LIBRARY
     private var proOpen = false
+    private var proRequest = 0
+    private var buying = false
     private var lastProState: Boolean? = null
     private var lastShown: View? = null
 
@@ -193,10 +195,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             override fun onTrash() = startActivity(TrashActivity.intent(this@ShellActivity))
             override fun onAbout() = showAbout()
         })
-        // Play's localized price replaces the hard-coded one when the store answers.
-        com.scanwhirl.app.util.ProBilling.price(this) { price ->
-            if (price != null) runOnUiThread { proScreen?.setPrice(price) }
-        }
+        // Play's localized price: this query only fills ProBilling's cache. No Pro screen exists
+        // yet, and the callback may arrive before or after one does, so it must never touch UI.
+        com.scanwhirl.app.util.ProBilling.prefetchPrice(this)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -237,6 +238,27 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         library.revealDocument(docId)
     }
 
+    private var billingUnsub: (() -> Unit)? = null
+
+    override fun onStart() {
+        super.onStart()
+        // Replay lands first: a recreated screen catches Busy/Owned without a second sheet.
+        billingUnsub = com.scanwhirl.app.util.ProBilling.subscribe { state, replay ->
+            if (isFinishing || isDestroyed) return@subscribe
+            if (replay) {
+                setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+                if (state == com.scanwhirl.app.util.ProBilling.State.Owned) {
+                    syncProState()
+                    // A purchase that finished while this screen was stopped (behind Play's sheet,
+                    // or before a rotation) must not leave a Free paywall on screen: redraw it.
+                    if (proOpen && com.scanwhirl.app.util.ProGate.isPro(this)) showPro()
+                }
+                return@subscribe
+            }
+            showBillingState(state)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         syncProState()
@@ -261,6 +283,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     }
 
     override fun onStop() {
+        billingUnsub?.invoke()
+        billingUnsub = null
         // Endless motion must not follow the user onto another screen.
         findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.stop(it) }
         super.onStop()
@@ -549,69 +573,97 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     fun showPro() {
         proOpen = true
-        proScreen = ProScreen(this, object : ProScreen.Callbacks {
+        val request = ++proRequest
+        val screen = ProScreen(this, object : ProScreen.Callbacks {
             override fun onClose() = closePro()
             override fun onBuy() = startBilling()
             override fun onRestore() = restoreBilling()
             override fun onSeeAllProTools() = showTab(Tab.TOOLS)
         }, active = com.scanwhirl.app.util.ProGate.isPro(this))
-        setContent(scroll(proScreen))
+        proScreen = screen
+        // Play's localized price: the launch-time query usually finishes before this screen
+        // exists, so apply the cached answer now and refresh it on this exact instance.
+        com.scanwhirl.app.util.ProBilling.cachedPrice(this)?.let { screen.setPrice(it) }
+        // A purchase may still be in flight after a rotation; keep its Buy row disabled.
+        screen.setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+        setContent(scroll(screen))
         paintNav()
+        com.scanwhirl.app.util.ProBilling.price(this) { price ->
+            // An older response (or a screen that is gone) must not overwrite this one.
+            if (price != null && request == proRequest && proOpen &&
+                !isFinishing && !isDestroyed
+            ) {
+                screen.setPrice(price)
+            }
+        }
     }
 
     private fun closePro() {
         proOpen = false
+        proRequest++
         showTab(tab)
     }
 
     private fun startBilling() {
-        com.scanwhirl.app.util.ProBilling.buy(this) { state -> showBillingState(state) }
+        // One in-flight purchase: a double tap must not open two Play sheets.
+        // The outcome is delivered to the onStart subscriber, not a callback that
+        // would keep this Activity alive after rotation.
+        if (buying || com.scanwhirl.app.util.ProBilling.isPurchaseInFlight()) return
+        setBuying(true)
+        com.scanwhirl.app.util.ProBilling.buy(this) { }
+    }
+
+    private fun setBuying(busy: Boolean) {
+        buying = busy
+        if (::proScreen.isInitialized) proScreen.setBuying(busy)
     }
 
     private fun restoreBilling() {
-        com.scanwhirl.app.util.ProBilling.restore(this) { state ->
-            if (state == com.scanwhirl.app.util.ProBilling.State.None) {
-                SwSheet.builder(this)
-                    .setTitle(getString(R.string.pro_restore_title))
-                    .setMessage(getString(R.string.pro_restore_none))
-                    .setPrimary(R.string.sheet_got_it)
-                    .build().show()
-            } else {
-                showBillingState(state)
-            }
-        }
+        // Outcome reaches the subscriber (R1). None from a restore is "nothing to restore".
+        com.scanwhirl.app.util.ProBilling.restore(this) { }
     }
 
     /** One short sheet per outcome; a cancel stays silent. */
     private fun showBillingState(state: com.scanwhirl.app.util.ProBilling.State) {
         when (state) {
             com.scanwhirl.app.util.ProBilling.State.Owned -> {
+                setBuying(false)
                 Toast.makeText(this, R.string.pro_unlocked, Toast.LENGTH_SHORT).show()
                 showPro()
             }
-            com.scanwhirl.app.util.ProBilling.State.Pending -> SwSheet.builder(this)
-                .setTitle(getString(R.string.pro_pending_title))
-                .setMessage(getString(R.string.pro_pending))
-                .setPrimary(R.string.sheet_got_it)
-                .build().show()
+            com.scanwhirl.app.util.ProBilling.State.Pending -> {
+                setBuying(false)
+                SwSheet.builder(this)
+                    .setTitle(getString(R.string.pro_pending_title))
+                    .setMessage(getString(R.string.pro_pending))
+                    .setPrimary(R.string.sheet_got_it)
+                    .build().show()
+            }
             com.scanwhirl.app.util.ProBilling.State.Finishing ->
                 Toast.makeText(this, R.string.pro_finishing, Toast.LENGTH_SHORT).show()
-            com.scanwhirl.app.util.ProBilling.State.None -> Unit
-            is com.scanwhirl.app.util.ProBilling.State.Failed -> SwSheet.builder(this)
-                .setTitle(getString(R.string.pro_purchase_title))
-                .setMessage(state.message)
-                .setPrimary(R.string.sheet_got_it)
-                .build().show()
+            com.scanwhirl.app.util.ProBilling.State.Busy -> setBuying(true)
+            com.scanwhirl.app.util.ProBilling.State.None -> {
+                setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+                if (proOpen &&
+                    com.scanwhirl.app.util.ProBilling.lastOperation() ==
+                    com.scanwhirl.app.util.ProBilling.Op.RESTORE
+                ) {
+                    SwSheet.builder(this)
+                        .setTitle(getString(R.string.pro_restore_title))
+                        .setMessage(getString(R.string.pro_restore_none))
+                        .setPrimary(R.string.sheet_got_it)
+                        .build().show()
+                }
+            }
+            is com.scanwhirl.app.util.ProBilling.State.Failed -> {
+                setBuying(false)
+                SwSheet.builder(this)
+                    .setTitle(getString(R.string.pro_purchase_title))
+                    .setMessage(state.message)
+                    .setPrimary(R.string.sheet_got_it)
+                    .build().show()
+            }
         }
-    }
-
-    private fun showBillingSoon() {
-        SwSheet.builder(this)
-            .setTitle(getString(R.string.pro_unlock))
-            .setMessage(getString(R.string.pro_buy_coming))
-            .setPrimary(R.string.sheet_got_it)
-            .build()
-            .show()
     }
 
     private fun showAbout() {

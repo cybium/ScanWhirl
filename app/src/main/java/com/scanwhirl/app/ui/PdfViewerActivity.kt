@@ -377,14 +377,18 @@ class PdfViewerActivity : BaseActivity() {
         findViewById<View>(R.id.readerDockSign).setOnClickListener {
             val doc = dockDoc
             if (doc != null) {
-                // L5: a saved scan opens the stamp editor armed with Sign.
-                startActivity(
-                    com.scanwhirl.app.ui.stamp.StampEditorActivity.intent(
-                        this,
-                        doc.id,
-                        com.scanwhirl.app.ui.stamp.StampEditorActivity.TOOL_SIGN
+                // L5: a saved scan opens the stamp editor armed with Sign — a Pro entry point
+                // outside the shell, so Free gets the Pro screen (the same offer as the hub),
+                // never the editor itself.
+                if (com.scanwhirl.app.ui.kit.ProOffer.require(this)) {
+                    startActivity(
+                        com.scanwhirl.app.ui.stamp.StampEditorActivity.intent(
+                            this,
+                            doc.id,
+                            com.scanwhirl.app.ui.stamp.StampEditorActivity.TOOL_SIGN
+                        )
                     )
-                )
+                }
             } else {
                 // An external PDF is not a library document: save/import it first.
                 com.scanwhirl.app.ui.kit.ToolRegistry.byId("sign")?.let {

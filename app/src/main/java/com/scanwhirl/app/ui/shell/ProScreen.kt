@@ -14,6 +14,7 @@ import androidx.core.view.doOnPreDraw
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwType
+import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.TrustPill
 
 /**
@@ -192,7 +193,7 @@ class ProScreen(
         addView(
             SwStyle.text(context, 14f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
                 id = R.id.swProMore
-                text = context.getString(R.string.pro_more_tools, 18)
+                text = context.getString(R.string.pro_more_tools, ToolRegistry.proCount())
                 gravity = Gravity.CENTER
                 isClickable = true
                 background = SwStyle.rounded(
@@ -423,6 +424,16 @@ class ProScreen(
      */
     fun setPrice(text: String) {
         findViewById<android.widget.TextView>(R.id.swProPrice)?.text = text
+    }
+
+    /**
+     * One purchase at a time: while Play is answering, the Buy row is disabled and greyed so a
+     * double tap cannot open a second billing flow. [ShellActivity] re-enables it on every
+     * terminal outcome (and a recreated screen starts disabled while the purchase is in flight).
+     */
+    fun setBuying(busy: Boolean) {
+        buyButton.isEnabled = !busy
+        buyButton.alpha = if (busy) 0.6f else 1f
     }
 
     /** Pinned price + Unlock row (never scrolls out of view). */

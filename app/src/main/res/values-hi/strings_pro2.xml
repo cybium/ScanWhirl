@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lane/pro-fixes: Play Billing विफलता संदेश. -->
+<resources>
+    <!-- review -->
+    <string name="pro_error_play">इस फ़ोन पर Google Play उपलब्ध नहीं है।</string>
+    <!-- review -->
+    <string name="pro_error_product">Pro उत्पाद अभी उपलब्ध नहीं है।</string>
+    <!-- review -->
+    <string name="pro_error_purchase">खरीद पूरी नहीं हो सकी। फिर से कोशिश करें।</string>
+    <!-- review -->
+    <string name="pro_error_finish">खरीद पूरी करना विफल रहा। “खरीद वापस पाएँ” आज़माएँ।</string>
+</resources>

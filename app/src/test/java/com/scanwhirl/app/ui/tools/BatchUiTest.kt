@@ -17,10 +17,12 @@ import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -72,14 +74,26 @@ class BatchUiTest {
     }
 
     @Test
-    fun `free sees the Pro screen`() {
+    fun `free lands on the shell Pro offer with real billing`() {
         ProGate.setTestOverride(app, false)
-        ActivityScenario.launch<BatchActivity>(BatchActivity.intent(app, emptyList())).use { scenario ->
-            scenario.onActivity { activity ->
-                idle()
-                assertNotNull("Pro screen", activity.findViewById<View>(R.id.swProScreen))
-            }
+        val controller = Robolectric.buildActivity(
+            BatchActivity::class.java,
+            BatchActivity.intent(app, emptyList())
+        ).setup()
+        val activity = controller.get()
+        idle()
+
+        assertTrue("a Free direct Batch intent closes itself", activity.isFinishing)
+        assertNull("no local Pro screen with a dead Buy path", activity.findViewById<View>(R.id.swProScreen))
+        val started = requireNotNull(shadowOf(activity).nextStartedActivity) {
+            "closing Batch must open the Pro offer"
         }
+        assertEquals(ShellActivity::class.java.name, started.component?.className)
+        assertTrue(
+            "the shell shows its Pro screen",
+            started.getBooleanExtra(ShellActivity.EXTRA_OPEN_PRO, false)
+        )
+        controller.pause().stop().destroy()
     }
 
     @Test

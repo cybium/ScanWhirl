@@ -38,10 +38,17 @@ object ProGate {
      * real one-time purchase has been recorded (Play build). The test-build
      * override lets the Free UI be reviewed on a real phone without a second APK.
      */
-    fun isPro(context: Context): Boolean {
+    fun isPro(context: Context): Boolean = isPro(context, com.scanwhirl.app.BuildConfig.TEST_BUILD)
+
+    /**
+     * [isPro] with the build flag exposed, so a unit test can drive the release rule (recorded
+     * purchase only, no override) instead of the test build's "always Pro" default.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun isPro(context: Context, testBuild: Boolean): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return resolveProState(
-            testBuild = com.scanwhirl.app.BuildConfig.TEST_BUILD,
+            testBuild = testBuild,
             override = prefs.getInt(KEY_TEST_OVERRIDE, 0),
             purchased = prefs.getBoolean(KEY, false)
         )

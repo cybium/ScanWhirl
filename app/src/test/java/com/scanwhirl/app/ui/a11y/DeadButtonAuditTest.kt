@@ -72,6 +72,11 @@ class DeadButtonAuditTest {
         val name: String,
         val expectedShown: List<Int> = emptyList(),
         val freshEachClick: Boolean = false,
+        /**
+         * A Pro-only screen. In Free it closes itself and opens the Pro offer instead of drawing
+         * (see `PdfViewerProGateTest`), so there is no Free layout to audit.
+         */
+        val proOnly: Boolean = false,
         val open: () -> Pair<Activity, View>
     )
 
@@ -126,7 +131,7 @@ class DeadButtonAuditTest {
             Screen("Document") { document(pages) },
             Screen("Organize selection") { organizeSelection(pages) },
             Screen("Page editor") { pageEditor(pages) },
-            Screen("Stamp editor") { stampEditor(stamp) },
+            Screen("Stamp editor", proOnly = true) { stampEditor(stamp) },
             Screen("Text screen") { textScreen() }
         )
         assertNoProblems()
@@ -137,7 +142,8 @@ class DeadButtonAuditTest {
         val result = DocFixtures.saved(repo, app, pages = 1, name = "Dead audit result")
         auditBothProStates(
             Screen("Settings", settingsShown) { activityHost(SettingsActivity::class.java, null) },
-            Screen("Tool setup") {
+            // The Pro setup is audited in Pro only: in Free this screen is the Pro offer.
+            Screen("Tool setup", proOnly = true) {
                 activityHost(ToolSetupActivity::class.java, ToolSetupActivity.intent(app, "split"))
             },
             Screen("Tool result") {
@@ -160,7 +166,14 @@ class DeadButtonAuditTest {
             Screen("Protect sheet", freshEachClick = true) { protectSheet() },
             Screen("Unlock sheet", freshEachClick = true) { unlockSheet() },
             Screen("Insert sheet", freshEachClick = true) { insertSheet(sheets) },
-            Screen("Find sheet", freshEachClick = true) { findSheet(sheets) }
+            // The Find sheet lives inside the Pro-only stamp editor: in Free that screen is the
+            // Pro offer, so there is no Free layout to audit.
+            Screen(
+                "Find sheet",
+                expectedShown = listOf(R.id.findChoicePhone),
+                freshEachClick = true,
+                proOnly = true
+            ) { findSheet(sheets) }
         )
         assertNoProblems()
     }
@@ -170,7 +183,10 @@ class DeadButtonAuditTest {
     private fun auditBothProStates(vararg screens: Screen) {
         for (pro in booleanArrayOf(false, true)) {
             ProGate.setTestOverride(app, pro)
-            for (screen in screens) audit(screen)
+            for (screen in screens) {
+                if (screen.proOnly && !pro) continue
+                audit(screen)
+            }
         }
         ProGate.setTestOverride(app, null)
     }
@@ -226,8 +242,10 @@ class DeadButtonAuditTest {
         while (guard++ < 100) {
             val (activity, root) = try {
                 screen.open()
-            } catch (_: Exception) {
-                break
+            } catch (e: Exception) {
+                // Do not swallow it: a fresh screen that cannot be opened is a real finding.
+                problems += "${screen.name}|open :: ${e.message}"
+                return
             }
             idle()
             if (done.isEmpty()) checkExpected(screen, activity, root)
