@@ -139,7 +139,7 @@ class VaultActivityTest {
         setupSheet.need<EditText>(R.id.vaultPasscodeInput).setText("246810")
         setupSheet.need<EditText>(R.id.vaultPasscodeConfirm).setText("246810")
         primary(setupSheet).performClick()
-        idle()
+        assertTrue("setup finishes on a background thread", await { !setupSheet.isShowing })
 
         val recoverySheet = sheet()
         assertEquals("Save this recovery code", recoverySheet.need<TextView>(R.id.swSheetTitle).text)
@@ -178,8 +178,8 @@ class VaultActivityTest {
 
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("000000")
         primary(unlockSheet).performClick()
-        idle()
         val error = unlockSheet.need<TextView>(R.id.vaultUnlockError)
+        assertTrue("the passcode check completes", await { error.isVisible })
         assertTrue(error.isVisible)
         assertEquals("Wrong passcode. 4 tries left.", error.text.toString())
         assertTrue("the sheet stays open", unlockSheet.isShowing)
@@ -188,7 +188,7 @@ class VaultActivityTest {
 
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
         primary(unlockSheet).performClick()
-        idle()
+        assertTrue("the correct passcode unlocks", await { store.isUnlocked() })
         assertTrue(store.isUnlocked())
         assertTrue(activity.need<View>(R.id.vaultBanner).isVisible)
         assertFalse(activity.need<View>(R.id.vaultStatus).isVisible)
@@ -207,8 +207,7 @@ class VaultActivityTest {
         assertEquals("Use recovery code", recoverySheet.need<TextView>(R.id.swSheetTitle).text)
         recoverySheet.need<EditText>(R.id.vaultRestoreCode).setText(setup.recoveryCode)
         primary(recoverySheet).performClick()
-        idle()
-
+        assertTrue("recovery code unlocks", await { store.isUnlocked() })
         assertTrue(store.isUnlocked())
         assertEquals(
             "Unlocked with recovery code · relocks in 2 min",
@@ -350,7 +349,7 @@ class VaultActivityTest {
 
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
         primary(unlockSheet).performClick()
-        idle()
+        assertTrue("the new passcode unlocks", await { store.isUnlocked() })
         assertTrue(store.isUnlocked())
         assertTrue("the passcode unlock offered a new fingerprint wrap", started)
         assertTrue("the Keystore wrap was rebuilt through the prompt", store.canUseBiometric())
@@ -412,7 +411,7 @@ class VaultActivityTest {
         val unlockSheet = sheet()
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
         primary(unlockSheet).performClick()
-        idle()
+        assertTrue("the locked screen unlocks", await { store.isUnlocked() })
         assertTrue(store.isUnlocked())
         assertFalse(activity.need<View>(R.id.vaultLockedPlaceholder).isVisible)
     }

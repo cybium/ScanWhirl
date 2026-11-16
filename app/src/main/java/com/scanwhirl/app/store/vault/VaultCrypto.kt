@@ -46,6 +46,10 @@ object VaultCrypto {
     /** PBKDF2-HMAC-SHA256 work factor from the design (RFC 8018). */
     const val PBKDF2_ITERATIONS = 310_000
 
+    /** Test seam: called at the start of every derivation (thread probe). */
+    @Volatile
+    internal var derivationProbe: (() -> Unit)? = null
+
     /**
      * 32 characters with no look-alikes (no I, O, 0 or 1). 24 characters carry 120 bits.
      */
@@ -82,6 +86,8 @@ object VaultCrypto {
 
     /** PBKDF2-HMAC-SHA256 (API 26+), the design's HMAC-SHA1 fallback on API 24-25. */
     fun deriveKey(secret: String, salt: ByteArray, iterations: Int = PBKDF2_ITERATIONS): ByteArray {
+        // Test seam: the Vault screen must never run this on the main thread (C02).
+        derivationProbe?.invoke()
         val algorithm =
             if (Build.VERSION.SDK_INT >= 26) "PBKDF2WithHmacSHA256" else "PBKDF2WithHmacSHA1"
         val spec = PBEKeySpec(secret.toCharArray(), salt, iterations, 256)

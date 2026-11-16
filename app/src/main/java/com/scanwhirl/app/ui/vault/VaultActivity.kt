@@ -126,6 +126,9 @@ class VaultActivity : BaseActivity() {
     private var autoPrompted = false
     private var fingerprintSetupAsked = false
 
+    /** C02: one passcode/KDF job at a time, so a double tap never derives twice. */
+    private var keyWorkBusy = false
+
     /** Why another screen sent the user here ("Unlock the Vault to save this password."). */
     private var reason: String? = null
 
@@ -723,12 +726,14 @@ class VaultActivity : BaseActivity() {
                 code.length < VaultStore.MIN_PASSCODE_LENGTH || !code.all { it.isDigit() } ->
                     pass.setError(getString(R.string.vault_passcode_short))
                 code != again -> confirm.setError(getString(R.string.vault_passcode_mismatch))
-                else -> {
+                else -> keyWorkOffMain(sheet.primaryButton) {
+                    // setup() seals the SAME key under the passcode and the recovery code with two
+                    // different salts/secrets, so two derivations are inherent; both now run off main.
                     val setup = try {
-                        store.setup(code)
+                        withContext(Dispatchers.Default) { store.setup(code) }
                     } catch (e: Exception) {
                         pass.setError(e.message ?: getString(R.string.vault_passcode_short))
-                        return@setOnClickListener
+                        return@keyWorkOffMain
                     }
                     sheet.dismiss()
                     unlockMethod = UnlockMethod.PASSCODE
@@ -948,29 +953,54 @@ class VaultActivity : BaseActivity() {
     /** The one place a passcode is checked: a failure is always visible, never a silent close. */
     private fun onPasscodeEntered(sheet: SwSheet, pass: PasswordField) {
         attemptedUnlock = true
-        val result = store.unlockWithPasscode(pass.text())
-        if (result.ok) {
-            pass.setError(null)
-            com.scanwhirl.app.ui.kit.SwHaptics.confirm(pass)
-            unlockMethod = UnlockMethod.PASSCODE
-            sheet.dismiss()
-            unlockSheet = null
+        val typed = pass.text()
+        keyWorkOffMain(sheet.primaryButton) {
+            val result = withContext(Dispatchers.Default) { store.unlockWithPasscode(typed) }
+            if (result.ok) {
+                pass.setError(null)
+                com.scanwhirl.app.ui.kit.SwHaptics.confirm(pass)
+                unlockMethod = UnlockMethod.PASSCODE
+                sheet.dismiss()
+                unlockSheet = null
+                render()
+                com.scanwhirl.app.ui.kit.SwMotion.relockRing(lockButton)
+                offerFingerprintSetup()
+                return@keyWorkOffMain
+            }
             render()
-            com.scanwhirl.app.ui.kit.SwMotion.relockRing(lockButton)
-            offerFingerprintSetup()
-            return
-        }
-        render()
-        if (result.pauseMillis > 0) {
-            pass.setError(
-                getString(R.string.vault_unlock_pause, (result.pauseMillis + 999) / 1000)
-            )
-        } else {
-            pass.setError(
-                resources.getQuantityString(
-                    R.plurals.vault_unlock_wrong_left, result.triesLeft, result.triesLeft
+            if (result.pauseMillis > 0) {
+                pass.setError(
+                    getString(R.string.vault_unlock_pause, (result.pauseMillis + 999) / 1000)
                 )
-            )
+            } else {
+                pass.setError(
+                    resources.getQuantityString(
+                        R.plurals.vault_unlock_wrong_left, result.triesLeft, result.triesLeft
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * C02: PBKDF2 (310 000 iterations) runs on a background thread. The sheet's primary is disabled
+     * while it runs and the kit progress sheet explains the wait; [block] resumes on main.
+     */
+    private fun keyWorkOffMain(button: android.view.View, block: suspend () -> Unit) {
+        if (keyWorkBusy) return
+        keyWorkBusy = true
+        button.isEnabled = false
+        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+            this, getString(R.string.crash_vault_working)
+        )
+        lifecycleScope.launch {
+            try {
+                block()
+            } finally {
+                keyWorkBusy = false
+                button.isEnabled = true
+                progress.dismiss()
+            }
         }
     }
 
@@ -986,14 +1016,18 @@ class VaultActivity : BaseActivity() {
         sheet.setPrimary(R.string.vault_unlock_primary)
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
-            if (store.unlockWithRecovery(field.text())) {
-                field.setError(null)
-                unlockMethod = UnlockMethod.RECOVERY
-                sheet.dismiss()
-                render()
-                offerFingerprintSetup()
-            } else {
-                field.setError(getString(R.string.vault_recovery_wrong))
+            val typed = field.text()
+            keyWorkOffMain(sheet.primaryButton) {
+                val ok = withContext(Dispatchers.Default) { store.unlockWithRecovery(typed) }
+                if (ok) {
+                    field.setError(null)
+                    unlockMethod = UnlockMethod.RECOVERY
+                    sheet.dismiss()
+                    render()
+                    offerFingerprintSetup()
+                } else {
+                    field.setError(getString(R.string.vault_recovery_wrong))
+                }
             }
         }
         sheet.show()
@@ -1506,17 +1540,17 @@ class VaultActivity : BaseActivity() {
                 code.length < VaultStore.MIN_PASSCODE_LENGTH || !code.all { it.isDigit() } ->
                     pass.setError(getString(R.string.vault_passcode_short))
                 code != again -> confirm.setError(getString(R.string.vault_passcode_mismatch))
-                else -> {
+                else -> keyWorkOffMain(sheet.primaryButton) {
                     try {
-                        store.changePasscode(code)
+                        withContext(Dispatchers.Default) { store.changePasscode(code) }
                     } catch (e: VaultLockedException) {
                         pass.setError(getString(R.string.vault_unlock_first))
-                        return@setOnClickListener
+                        return@keyWorkOffMain
                     }
                     sheet.dismiss()
                     render()
                     offerFingerprintSetup()
-                    Toast.makeText(this, R.string.vault_passcode_changed, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@VaultActivity, R.string.vault_passcode_changed, Toast.LENGTH_SHORT).show()
                     if (afterRestore) Toast.makeText(
                         this@VaultActivity, R.string.vault_restore_done, Toast.LENGTH_LONG
                     ).show()
