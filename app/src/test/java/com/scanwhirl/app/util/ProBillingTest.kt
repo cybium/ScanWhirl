@@ -2,7 +2,9 @@ package com.scanwhirl.app.util
 
 import android.app.Activity
 import android.app.Application
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.R
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,12 +15,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
  * Billing decisions with a fake that answers **later**, like the real client: the acknowledge
  * callback and the controller's posted decision both go through an explicit queue, so a bug that
- * reads an async result synchronously fails here.
+ * reads an async result synchronously fails here. The queue can also be drained from a worker
+ * thread, which is how Play really answers: every state and every launch must then land on main.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -31,13 +35,18 @@ class ProBillingTest {
         private val queue = ArrayDeque<() -> Unit>()
         val acknowledged = mutableListOf<String>()
         var launches = 0
+        var launchOnMain = false
+        var launchThrows = false
         var purchases: List<ProBilling.Owned>? = emptyList()
         var priceText: String? = "₹100"
         var priceCalls = 0
         var ackResult = true
         var connectResult = true
 
-        override fun setListener(listener: (ProBilling.Event) -> Unit) {
+        /** Deliver queued answers from a worker thread, the way Play does. */
+        var deliverOnWorker = false
+
+        override fun setListener(listener: ((ProBilling.Event) -> Unit)?) {
             eventListener = listener
         }
 
@@ -52,6 +61,8 @@ class ProBillingTest {
 
         override fun launch(activity: Activity?) {
             launches++
+            launchOnMain = Looper.myLooper() == Looper.getMainLooper()
+            if (launchThrows) throw IllegalStateException("launch failed")
         }
 
         override fun queryPurchases(onResult: (List<ProBilling.Owned>?) -> Unit) {
@@ -71,7 +82,15 @@ class ProBillingTest {
 
         /** Runs every queued callback in order (the controller posts its decision to the same queue). */
         fun drain() {
-            while (queue.isNotEmpty()) queue.removeFirst()()
+            if (!deliverOnWorker) {
+                while (queue.isNotEmpty()) queue.removeFirst()()
+                return
+            }
+            val worker = Thread {
+                while (queue.isNotEmpty()) queue.removeFirst()()
+            }
+            worker.start()
+            worker.join()
         }
 
         fun emit(event: ProBilling.Event) = eventListener?.invoke(event)
@@ -274,4 +293,159 @@ class ProBillingTest {
         assertEquals("the purchase sheet opens", 1, gateway.launches)
         assertNull("no failure to report", state)
     }
+
+    /** Play answers on its own thread; the launch and every state must still land on main. */
+    @Test
+    fun `a worker-thread product answer launches the sheet on the main thread`() {
+        val gateway = FakeGateway().apply { deliverOnWorker = true }
+        ProBilling.gatewayFactory = { gateway }
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        var deliveredOnMain = true
+        ProBilling.buy(activity, testBuild = false) {
+            deliveredOnMain = deliveredOnMain && Looper.myLooper() == Looper.getMainLooper()
+        }
+        repeat(10) {
+            gateway.drain()
+            idle()
+        }
+
+        assertEquals("the purchase sheet opens", 1, gateway.launches)
+        assertTrue("launchBillingFlow must run on main", gateway.launchOnMain)
+        assertTrue("no state may reach the UI off main", deliveredOnMain)
+    }
+
+    @Test
+    fun `a worker-thread failure reports Failed on the main thread`() {
+        val gateway = FakeGateway().apply {
+            deliverOnWorker = true
+            priceText = null
+        }
+        ProBilling.gatewayFactory = { gateway }
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        var state: ProBilling.State? = null
+        var deliveredOnMain = true
+        ProBilling.buy(activity, testBuild = false) {
+            state = it
+            deliveredOnMain = deliveredOnMain && Looper.myLooper() == Looper.getMainLooper()
+        }
+        repeat(10) {
+            gateway.drain()
+            idle()
+        }
+
+        assertTrue("the UI hears about the missing product", state is ProBilling.State.Failed)
+        assertTrue("a failure reaches the UI on main", deliveredOnMain)
+        assertEquals("a missing product never opens the sheet", 0, gateway.launches)
+        assertFalse("the failed operation is released", ProBilling.isPurchaseInFlight())
+    }
+
+    @Test
+    fun `a double tap opens one billing flow and a cancel releases the tap`() {
+        val gateway = FakeGateway()
+        ProBilling.gatewayFactory = { gateway }
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val states = mutableListOf<ProBilling.State>()
+
+        ProBilling.buy(activity, testBuild = false) { states += it }
+        ProBilling.buy(activity, testBuild = false) { states += it }
+        gateway.drain()
+
+        assertEquals("one product query for two taps", 1, gateway.priceCalls)
+        assertEquals("one billing sheet for two taps", 1, gateway.launches)
+        assertTrue("the operation is in flight until Play answers", ProBilling.isPurchaseInFlight())
+
+        gateway.emit(ProBilling.Event.Cancelled)
+        assertEquals(listOf(ProBilling.State.None), states)
+        assertFalse("a cancel ends the operation", ProBilling.isPurchaseInFlight())
+
+        ProBilling.buy(activity, testBuild = false) { states += it }
+        gateway.drain()
+        assertEquals("a later tap starts a new operation", 2, gateway.priceCalls)
+    }
+
+    @Test
+    fun `a launch exception is reported and the tap is released`() {
+        val gateway = FakeGateway().apply { launchThrows = true }
+        ProBilling.gatewayFactory = { gateway }
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val states = mutableListOf<ProBilling.State>()
+
+        ProBilling.buy(activity, testBuild = false) { states += it }
+        gateway.drain()
+
+        val failed = states.single()
+        assertTrue(failed is ProBilling.State.Failed)
+        assertEquals(app.getString(R.string.pro_error_play), (failed as ProBilling.State.Failed).message)
+        assertFalse("the failed tap does not stay stuck", ProBilling.isPurchaseInFlight())
+
+        gateway.launchThrows = false
+        ProBilling.buy(activity, testBuild = false) { states += it }
+        gateway.drain()
+        assertEquals("a retry can open the sheet", 2, gateway.launches)
+    }
+
+    @Test
+    fun `a failed first tap can be retried and its buy-time price fills the cache`() {
+        val gateway = FakeGateway().apply { priceText = null }
+        ProBilling.gatewayFactory = { gateway }
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val states = mutableListOf<ProBilling.State>()
+
+        ProBilling.buy(activity, testBuild = false) { states += it }
+        gateway.drain()
+        assertTrue("the first tap reports the missing product", states.single() is ProBilling.State.Failed)
+        assertNull("no price is cached from a failed query", ProBilling.cachedPrice(app))
+
+        gateway.priceText = "$4.99"
+        ProBilling.buy(activity, testBuild = false) { states += it }
+        gateway.drain()
+
+        assertEquals("the retry opens the sheet", 1, gateway.launches)
+        assertEquals(
+            "a buy-time answer is published like the start-up one",
+            "$4.99",
+            ProBilling.cachedPrice(app)
+        )
+    }
+
+    @Test
+    fun `an ownership answer that started before the purchase never revokes Pro`() {
+        val gateway = FakeGateway()
+        val states = mutableListOf<ProBilling.State>()
+        val controller = controller(gateway, testBuild = false, states = states)
+        val staleGeneration = ProBilling.generationForTests() // a query started here
+
+        // The purchase completes first…
+        controller.handle(
+            ProBilling.Event.Purchased(
+                ProBilling.Owned("scanwhirl_pro", acknowledged = true, token = "tok-7")
+            )
+        )
+        assertTrue(purchased())
+        assertTrue("the purchase is newer than the query", ProBilling.generationForTests() > staleGeneration)
+
+        // …and only then does the older, empty snapshot arrive.
+        controller.applyOwned(emptyList(), queryGeneration = staleGeneration, silent = true)
+
+        assertTrue("the fresh purchase must not be revoked by an older answer", purchased())
+    }
+
+    @Test
+    fun `the cached price belongs to the locale Play answered for`() {
+        val gateway = FakeGateway().apply { priceText = "$4.99" }
+        ProBilling.gatewayFactory = { gateway }
+        ProBilling.price(app) { }
+        gateway.drain()
+        assertEquals("$4.99", ProBilling.cachedPrice(app))
+
+        val config = android.content.res.Configuration(app.resources.configuration)
+        config.setLocale(java.util.Locale.FRANCE)
+        val france = app.createConfigurationContext(config)
+        assertNull(
+            "a different locale must not reuse the old currency/format",
+            ProBilling.cachedPrice(france)
+        )
+    }
+
+    private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 }

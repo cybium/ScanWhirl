@@ -426,6 +426,16 @@ class ProScreen(
         findViewById<android.widget.TextView>(R.id.swProPrice)?.text = text
     }
 
+    /**
+     * One purchase at a time: while Play is answering, the Buy row is disabled and greyed so a
+     * double tap cannot open a second billing flow. [ShellActivity] re-enables it on every
+     * terminal outcome (and a recreated screen starts disabled while the purchase is in flight).
+     */
+    fun setBuying(busy: Boolean) {
+        buyButton.isEnabled = !busy
+        buyButton.alpha = if (busy) 0.6f else 1f
+    }
+
     /** Pinned price + Unlock row (never scrolls out of view). */
     private fun stickyBar(): View {
         val bar = LinearLayout(context).apply {

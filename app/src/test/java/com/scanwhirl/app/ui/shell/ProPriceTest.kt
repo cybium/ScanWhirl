@@ -38,7 +38,7 @@ class ProPriceTest {
         var priceCalls = 0
         var launches = 0
 
-        override fun setListener(listener: (ProBilling.Event) -> Unit) = Unit
+        override fun setListener(listener: ((ProBilling.Event) -> Unit)?) = Unit
         override fun connect(onReady: (Boolean) -> Unit) {
             queue.addLast { onReady(true) }
         }
@@ -72,6 +72,26 @@ class ProPriceTest {
     }
 
     private lateinit var gateway: FakeGateway
+
+    /** Answers only when the test says so, so the order of replies can be reversed. */
+    private class ManualGateway : ProBilling.Gateway {
+        val priceWaiters = mutableListOf<(String?) -> Unit>()
+        var launches = 0
+
+        override fun setListener(listener: ((ProBilling.Event) -> Unit)?) = Unit
+        override fun connect(onReady: (Boolean) -> Unit) = onReady(true)
+        override fun price(onPrice: (String?) -> Unit) {
+            priceWaiters += onPrice
+        }
+
+        override fun launch(activity: Activity?) {
+            launches++
+        }
+
+        override fun queryPurchases(onResult: (List<ProBilling.Owned>?) -> Unit) = onResult(emptyList())
+        override fun acknowledge(purchase: ProBilling.Owned, onDone: (Boolean) -> Unit) = onDone(true)
+        override fun close() = Unit
+    }
 
     @Before
     fun setUp() {
@@ -136,6 +156,61 @@ class ProPriceTest {
                 idle()
                 assertEquals(
                     activity.getString(R.string.pro_price),
+                    priceText(activity)
+                )
+            }
+        }
+    }
+
+    /**
+     * The launch-time answer may arrive before the first Pro screen exists (the old crash:
+     * `proScreen` is a lateinit non-null property, so `proScreen?.setPrice` threw). A synchronous
+     * answer during onCreate must be harmless and still reach the screen opened later.
+     */
+    @Test
+    fun `a launch-time answer before Pro exists neither crashes nor is lost`() {
+        val manual = ManualGateway()
+        ProBilling.gatewayFactory = { manual }
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                // onCreate's prefetch is the only waiter so far: answer it with no Pro screen.
+                assertEquals(1, manual.priceWaiters.size)
+                manual.priceWaiters[0]("$4.99")
+                idle()
+                activity.showPro()
+                idle()
+                assertEquals(
+                    "the launch-time price is on the first Pro screen",
+                    "$4.99",
+                    priceText(activity)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `an older price answer cannot overwrite a newer Pro screen`() {
+        val manual = ManualGateway()
+        ProBilling.gatewayFactory = { manual }
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                activity.showPro() // waiter 1
+                activity.findViewById<View>(R.id.swProClose).performClick()
+                idle()
+                activity.showPro() // waiter 2 — the screen that is now showing
+
+                // The newest answer first, then the two obsolete ones in reverse order.
+                manual.priceWaiters[2]("$3.00")
+                idle()
+                manual.priceWaiters[0]("$1.00")
+                manual.priceWaiters[1]("$2.00")
+                idle()
+
+                assertEquals(
+                    "only the current screen's answer may win",
+                    "$3.00",
                     priceText(activity)
                 )
             }
