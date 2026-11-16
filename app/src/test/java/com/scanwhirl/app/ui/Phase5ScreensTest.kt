@@ -609,7 +609,7 @@ class Phase5ScreensTest {
     }
 
     @Test
-    fun `free users see pro pills and land on the pro panel`() {
+    fun `free users see no pro pills and Protect opens the free sheet`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         val id = seedDoc("More sheet free", pages = 1)
         val intent = DocumentViewerActivity.intent(app, id)
@@ -621,21 +621,20 @@ class Phase5ScreensTest {
                 activity.findViewById<View>(R.id.btnMore).performClick()
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("the More sheet must open", sheet)
-                for (pill in listOf(R.id.pillLock)) {
-                    assertTrue("Free sees the PRO pill on $pill",
+                // Protect/Unlock PDF and the Vault row are Free (WP-22-5): no row sells anything.
+                for (pill in listOf(R.id.pillLock, R.id.pillVault)) {
+                    assertFalse("Free sees no PRO pill on $pill",
                         sheet!!.findViewById<View>(pill).isVisible)
                 }
-                // WP-22: the vault row is never Pro (remove is Free, add is
-                // unavailable) — it must not carry a misleading PRO pill.
-                assertFalse("vault row has no PRO pill",
-                    sheet!!.findViewById<View>(R.id.pillVault).isVisible)
-                // D-A: a locked row from Free opens the Pro pitch, not the tool.
+                // WP-22: the row is the real, Free Protect tool, not the old Pro dossier.
                 sheet!!.findViewById<View>(R.id.rowMoreLock).performClick()
-                val panel = ShadowDialog.getLatestDialog()
-                assertNotNull("Free tap must open the Pro panel", panel)
-                assertNotNull("…which is the Pro suite dossier",
-                    panel!!.findViewById<View>(R.id.proDossierStatus))
-                panel.dismiss()
+                val protect = ShadowDialog.getLatestDialog()
+                assertNotNull("the Protect sheet must open", protect)
+                assertNotNull("…and it asks for the real password",
+                    protect!!.findViewById<android.widget.EditText>(R.id.protectPassword))
+                assertNull("…never the old Pro dossier panel",
+                    protect.findViewById<View>(R.id.proDossierStatus))
+                protect.dismiss()
             }
         }
     }

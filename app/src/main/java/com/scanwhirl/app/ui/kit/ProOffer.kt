@@ -18,8 +18,16 @@ import com.scanwhirl.app.util.ProGate
  */
 object ProOffer {
 
+    /**
+     * Test seam: null follows the real build flag; true/false pretends that build so a unit
+     * test can prove the release rule (recorded purchase only) without a release APK.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal var testBuildForTests: Boolean? = null
+
     fun require(activity: Activity): Boolean {
-        if (ProGate.isPro(activity)) return true
+        val testBuild = testBuildForTests ?: com.scanwhirl.app.BuildConfig.TEST_BUILD
+        if (ProGate.isPro(activity, testBuild)) return true
         activity.startActivity(
             Intent(activity, ShellActivity::class.java)
                 .putExtra(ShellActivity.EXTRA_OPEN_PRO, true)

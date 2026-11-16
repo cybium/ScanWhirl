@@ -9,11 +9,14 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.kit.ProOffer
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.ui.stamp.StampEditorActivity
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -51,12 +54,15 @@ class PdfViewerProGateTest {
         PdfViewerActivity.pagesFactory = { FakePages(2) }
         ProGate.setPro(app, false)
         ProGate.setTestOverride(app, null)
+        ProOffer.testBuildForTests = null
     }
 
     @After
     fun tearDown() {
         PdfViewerActivity.pagesFactory = defaultFactory
         ProGate.setTestOverride(app, null)
+        ProGate.setPro(app, false)
+        ProOffer.testBuildForTests = null
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -125,5 +131,69 @@ class PdfViewerProGateTest {
                 )
             }
         }
+    }
+
+    // ---- the real editor, not just the outgoing intent ---------------------
+
+    private fun editorIntent(id: String) = StampEditorActivity.intent(app, id, StampEditorActivity.TOOL_SIGN)
+
+    @Test
+    fun `default TEST_BUILD really creates the stamp editor`() {
+        ProGate.setPro(app, false)
+        ProGate.setTestOverride(app, null)
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
+        ActivityScenario.launch<StampEditorActivity>(editorIntent(id)).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                assertFalse("the editor stays open", activity.isFinishing)
+                assertNotNull(
+                    "the editor's canvas is really on screen",
+                    activity.findViewById<View>(R.id.canvas)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a recorded production purchase opens the editor and survives recreation`() {
+        // Release rule: only the recorded purchase counts (no test override, no test-build default).
+        ProOffer.testBuildForTests = false
+        ProGate.setTestOverride(app, null)
+        ProGate.setPro(app, true)
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
+        ActivityScenario.launch<StampEditorActivity>(editorIntent(id)).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                assertFalse("a recorded purchase opens the editor", activity.isFinishing)
+                assertNotNull(activity.findViewById<View>(R.id.canvas))
+            }
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                idle()
+                assertFalse("recreation keeps the editor of a paying user", activity.isFinishing)
+                assertNotNull(activity.findViewById<View>(R.id.canvas))
+            }
+        }
+    }
+
+    @Test
+    fun `a release build without a recorded purchase refuses the editor`() {
+        ProOffer.testBuildForTests = false
+        ProGate.setTestOverride(app, null)
+        ProGate.setPro(app, false)
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
+        val controller = Robolectric.buildActivity(
+            StampEditorActivity::class.java,
+            editorIntent(id)
+        ).setup()
+        val activity = controller.get()
+        idle()
+
+        assertTrue("the release Free editor closes itself", activity.isFinishing)
+        val started = requireNotNull(shadowOf(activity).nextStartedActivity) {
+            "closing the editor must open the Pro offer"
+        }
+        assertProOffer(started, "release stamp editor backstop")
+        controller.pause().stop().destroy()
     }
 }

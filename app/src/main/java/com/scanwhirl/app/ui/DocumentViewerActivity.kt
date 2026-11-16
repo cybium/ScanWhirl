@@ -998,8 +998,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * Dock "Text" (§4.5): OCR through the shared [OcrFlow] — one home per
-     * action; Free taps land on the Pro panel.
+     * Dock "Text" (§4.5): OCR through the shared [OcrFlow] — one home per action. Text is a
+     * Free tool; only its "To Word" action is Pro and asks for the offer there.
      */
     private fun runTextFlow() {
         val doc = document ?: return
@@ -1010,7 +1010,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      * Dock "More" (§4.5): the single sheet for every secondary action, in
      * exactly three groups. No OCR row (the dock's Text is its entry), no
      * Categorize (the chip is its entry), no save rows (the toolbar's one
-     * download icon is the only export). Locked rows show a PRO pill to Free.
+     * download icon is the only export).
      */
     private fun showMoreSheet() {
         val doc = document ?: return
@@ -1047,11 +1047,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         view.findViewById<android.widget.TextView>(R.id.labelVault).setText(
             if (doc.isVaulted) R.string.btn_vault_unhide else R.string.btn_vault_hide
         )
-        // PRO pills: visible only to Free (D-A); Pro sees no badges. A locked
-        // PDF's row is Unlock (Free, WP-22-5) and the vault row is never Pro
-        // (remove is Free, new additions are unavailable), so neither is badged.
-        // Protect PDF is a free tool (`ToolRegistry` secure group), so its row is never badged
-        // and never opens the old "Pro is not available yet" panel.
+        // PRO pills: none. Protect/Unlock PDF and the Vault row are Free (WP-22-5), so no row in
+        // this sheet sells anything and none opens the old "Pro is not available yet" panel.
         view.findViewById<android.widget.TextView>(R.id.pillLock).isVisible = false
         view.findViewById<android.widget.TextView>(R.id.pillVault).isVisible = false
 
