@@ -11,6 +11,7 @@ import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,9 +49,11 @@ class ProCountTest {
     @Test
     fun `the See all label counts the Pro tools on sale`() {
         val expected = ToolRegistry.proCount()
+        val soonPro = ToolRegistry.all.count { it.pro && it.status == com.scanwhirl.app.ui.kit.ToolStatus.SOON }
+        assertTrue("some Pro tools are only Coming soon (Book pages, Batch rename)", soonPro >= 1)
         assertEquals(
-            "one Pro tool in the catalogue is only Coming soon, so it is not for sale",
-            ToolRegistry.all.count { it.pro } - 1,
+            "Coming-soon Pro tools are not for sale, so they are not counted",
+            ToolRegistry.all.count { it.pro } - soonPro,
             expected
         )
 
