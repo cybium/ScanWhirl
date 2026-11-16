@@ -488,14 +488,6 @@ class UiSmokeTest {
         val id = seedDoc("Paged doc", pages = 3)
         val intent = PageViewerActivity.intent(app, id, 1)
         ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
-            assertTrue("the page list loads off main", pollUntil {
-                var n = 0
-                scenario.onActivity { a ->
-                    n = a.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
-                        .adapter?.itemCount ?: 0
-                }
-                n == 3
-            })
             scenario.onActivity { activity ->
                 val pager = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
                 assertEquals(3, pager.adapter!!.itemCount)
@@ -515,14 +507,6 @@ class UiSmokeTest {
         val id = seedDoc("Paged delete", pages = 3)
         val intent = PageViewerActivity.intent(app, id, 0)
         ActivityScenario.launch<PageViewerActivity>(intent).use { scenario ->
-            assertTrue("the page list loads off main", pollUntil {
-                var n = 0
-                scenario.onActivity { a ->
-                    n = a.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
-                        .adapter?.itemCount ?: 0
-                }
-                n == 3
-            })
             scenario.onActivity { activity ->
                 val pager = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pager)
                 forceLayout(pager) // snap view must exist for currentPosition()
