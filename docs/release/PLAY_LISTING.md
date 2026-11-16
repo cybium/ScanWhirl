@@ -49,7 +49,7 @@ SCAN AND CREATE (FREE)
 • Make PDFs searchable so any PDF app can find words in them
 
 ORGANISE AND OPTIMISE (FREE)
-• Merge PDFs, extract, reorder, insert and duplicate pages
+• Merge PDFs, extract, insert and duplicate pages
 • Compress PDF to fit email and upload limits, resize pages
 • PDF to images, one long image, text export, ZIP export
 • Protect PDF with a password (AES-256) and unlock PDFs you own
@@ -60,7 +60,7 @@ PRO: ONE-TIME PURCHASE, NO SUBSCRIPTION
 • Add text, draw, highlight, stamps, watermark and page numbers
 • Hide private info: find and cover phone numbers, emails, ID numbers and card numbers before you share
 • Convert to Word, Excel and PowerPoint
-• Split by page range, batch tools and batch rename for many files at once
+• Split by page range, batch tools for many files at once
 • Folders and tags, business card scan, QR code scan, archival PDF/A
 Pay once, keep it forever. No subscription. Works on every phone with your Google account.
 
