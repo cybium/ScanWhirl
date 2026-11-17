@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Owner F9: the word between a document name and the split part number
+         ("Contract part 1"). Localised so Hindi says "अनुबंध भाग 1". -->
+    <string name="split_part_word">part</string>
+</resources>

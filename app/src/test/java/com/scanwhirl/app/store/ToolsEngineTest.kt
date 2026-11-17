@@ -100,7 +100,8 @@ class ToolsEngineTest {
 
         val outputs = runBlocking { repo.splitByRange(id, ranges) }
 
-        assertEquals(listOf("Contract - Pages 1-2", "Contract - Page 4"), outputs.map { it.name })
+        // fixui: tiles removed (owner F6/F7/F20) - split parts are "<name> part N" in page order.
+        assertEquals(listOf("Contract part 1", "Contract part 2"), outputs.map { it.name })
         assertEquals(listOf(2, 1), outputs.map { it.pageCount })
         outputs.forEach {
             PdfInvariants.assertI1(repo, it.id)
@@ -141,10 +142,11 @@ class ToolsEngineTest {
         assertEquals("Contract - Compressed (2)", second.name)
 
         val split = runBlocking { repo.splitByRange(first.id, listOf(PageRanges.Span(1, 2))) }
-        assertEquals("Contract - Pages 1-2", split.first().name)
+        // fixui: tiles removed (owner F6/F7/F20) - split parts are "<name> part N".
+        assertEquals("Contract part 1", split.first().name)
 
         val again = runBlocking { repo.splitByRange(first.id, listOf(PageRanges.Span(1, 2))) }
-        assertEquals("Contract - Pages 1-2 (2)", again.first().name)
+        assertEquals("Contract part 1 (2)", again.first().name)
     }
 
     @Test

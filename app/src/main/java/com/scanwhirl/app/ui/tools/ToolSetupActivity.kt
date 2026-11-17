@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
-import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
@@ -22,7 +21,6 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
@@ -37,11 +35,9 @@ import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.protect.UnlockSheet
-import com.scanwhirl.app.util.IdCard
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.PageRanges
-import com.scanwhirl.app.util.PaperSize
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.CancellationException
@@ -55,8 +51,9 @@ import java.util.UUID
  * v2 UI: 03_tools_hub — one setup screen for every L4 tool.
  *
  * The source picker and the option views are built per tool: a ranges field for Split and
- * Extract, format/quality for PDF to images, a target size for Compress, two image pickers for
- * ID card, and so on. Everything is built with the kit (`SwStyle`) on the ink background.
+ * Extract, format/quality for PDF to images, a target size for Compress, and so on. ID card is
+ * not here at all: [IdCardActivity] is its only path. Everything is built with the kit
+ * (`SwStyle`) on the ink background.
  * Running the tool publishes through `ScanRepository` and opens [ToolResultActivity].
  */
 class ToolSetupActivity : BaseActivity() {
@@ -75,8 +72,6 @@ class ToolSetupActivity : BaseActivity() {
     private var quality = 90
     private var level = 1
     private var target: Long? = null
-    private var frontBytes: ByteArray? = null
-    private var backBytes: ByteArray? = null
     private var rangesText = ""
     private var nameText = ""
     private var targetText = ""
@@ -90,16 +85,6 @@ class ToolSetupActivity : BaseActivity() {
     private lateinit var errorView: TextView
     private lateinit var runButton: TextView
     private lateinit var progressOverlay: View
-
-    private val pickFront = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri ?: return@registerForActivityResult
-        readImage(uri) { frontBytes = it; render() }
-    }
-
-    private val pickBack = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri ?: return@registerForActivityResult
-        readImage(uri) { backBytes = it; render() }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -207,11 +192,7 @@ class ToolSetupActivity : BaseActivity() {
         column.removeAllViews()
         column.addView(header())
         column.addView(sectionLabel(getString(R.string.tools_setup_source)))
-        if (tool.id == "id_card") {
-            column.addView(idCardSource())
-        } else {
-            column.addView(documentSource())
-        }
+        column.addView(documentSource())
         column.addView(sectionLabel(getString(R.string.tools_setup_options)))
         optionsHost = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -378,72 +359,6 @@ class ToolSetupActivity : BaseActivity() {
         return list
     }
 
-    private fun idCardSource(): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            id = R.id.toolSetupSource
-        }
-        val side = { label: Int, bytes: ByteArray?, id: Int, pick: () -> Unit ->
-            sideView(label, bytes, id, pick)
-        }
-        row.addView(
-            side(R.string.tools_setup_id_front, frontBytes, R.id.toolSetupFront) { pickFront.launch("image/*") },
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
-            }
-        )
-        row.addView(
-            side(R.string.tools_setup_id_back, backBytes, R.id.toolSetupBack) { pickBack.launch("image/*") },
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = SwStyle.dp(this@ToolSetupActivity, 8f)
-            }
-        )
-        return row
-    }
-
-    /** One picture slot of the ID-card setup (front or back). */
-    private fun sideView(label: Int, bytes: ByteArray?, id: Int, pick: () -> Unit): View =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            val pad = SwStyle.dp(this@ToolSetupActivity, 10f)
-            setPadding(pad, pad, pad, pad)
-            background = SwStyle.card(this@ToolSetupActivity, 16f)
-            isClickable = true
-            isFocusable = true
-            setId(id)
-            setOnClickListener { pick() }
-            addView(
-                ImageView(this@ToolSetupActivity).apply {
-                    setImageResource(R.drawable.ic_sym_add_photo_alternate)
-                    imageTintList = android.content.res.ColorStateList.valueOf(
-                        SwStyle.color(this@ToolSetupActivity, R.color.cyan_primary)
-                    )
-                    bytes?.let { data ->
-                        runCatching {
-                            setImageBitmap(ImageTools.decodeSampled(data, 600))
-                        }
-                    }
-                },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 110f)
-                )
-            )
-            addView(
-                SwStyle.text(
-                    this@ToolSetupActivity,
-                    13f,
-                    SwStyle.color(this@ToolSetupActivity, R.color.text_hologram_mid)
-                ).apply {
-                    text = getString(label)
-                    gravity = Gravity.CENTER
-                },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) }
-            )
-        }
-
     // ---- options ----------------------------------------------------------
 
     private fun buildOptions() {
@@ -459,7 +374,6 @@ class ToolSetupActivity : BaseActivity() {
             "to_powerpoint" -> buildPptxOption()
             "to_excel" -> buildExcelOptions()
             "remove_metadata" -> buildCleanOption()
-            "id_card" -> buildIdCardOption()
             else -> optionsHost.addView(note(getString(R.string.tools_setup_nothing)))
         }
     }
@@ -790,63 +704,6 @@ class ToolSetupActivity : BaseActivity() {
         optionsHost.addView(note(getString(R.string.tools_setup_metadata_note)))
     }
 
-    private fun buildIdCardOption() {
-        optionsHost.addView(note(getString(R.string.tools_setup_id_note)))
-        optionsHost.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
-            text = getString(R.string.tools_id_paper_title)
-            setPadding(0, SwStyle.dp(this@ToolSetupActivity, 8f), 0, SwStyle.dp(this@ToolSetupActivity, 6f))
-        })
-        var paper = IdCardPrefs.paper(this)
-        val a4 = idCardPaperChip(getString(R.string.tools_id_paper_a4))
-        val letter = idCardPaperChip(getString(R.string.tools_id_paper_letter))
-        fun paint() {
-            paintPaperChip(a4, paper == PaperSize.A4)
-            paintPaperChip(letter, paper == PaperSize.LETTER)
-        }
-        a4.setOnClickListener {
-            paper = PaperSize.A4
-            IdCardPrefs.rememberPaper(this, paper)
-            paint()
-        }
-        letter.setOnClickListener {
-            paper = PaperSize.LETTER
-            IdCardPrefs.rememberPaper(this, paper)
-            paint()
-        }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(a4, LinearLayout.LayoutParams(0, SwStyle.dp(this@ToolSetupActivity, 42f), 1f).apply {
-            marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
-        })
-        row.addView(letter, LinearLayout.LayoutParams(0, SwStyle.dp(this@ToolSetupActivity, 42f), 1f))
-        optionsHost.addView(row)
-        paint()
-    }
-
-    private fun idCardPaperChip(text: String): TextView =
-        SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_dim), bold = true).apply {
-            this.text = text
-            gravity = Gravity.CENTER
-            isClickable = true
-            isFocusable = true
-        }
-
-    private fun paintPaperChip(chip: TextView, selected: Boolean) {
-        chip.setTextColor(
-            SwStyle.color(this, if (selected) R.color.cyan_primary else R.color.text_hologram_dim)
-        )
-        chip.background = if (selected) {
-            SwStyle.rounded(
-                this, SwStyle.color(this, R.color.sw_cyan_soft), radiusDp = 12f,
-                stroke = SwStyle.color(this, R.color.cyan_primary)
-            )
-        } else {
-            SwStyle.rounded(
-                this, SwStyle.color(this, R.color.glass_surface), radiusDp = 12f,
-                stroke = SwStyle.color(this, R.color.sw_field_border)
-            )
-        }
-    }
-
     private fun note(text: String): TextView =
         SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
             this.text = text
@@ -1121,16 +978,6 @@ class ToolSetupActivity : BaseActivity() {
                     ?: return fail(getString(R.string.tools_setup_pick_one))
                 execute({ listOf(repo.removeMetadata(doc.id).id) }) { openDocs(it) }
             }
-            "id_card" -> {
-                val front = frontBytes ?: return fail(getString(R.string.tools_setup_need_front))
-                val back = backBytes ?: return fail(getString(R.string.tools_setup_need_back))
-                execute({
-                    val page = withContext(Dispatchers.Default) {
-                        IdCard.compose(front, back, IdCardPrefs.paper(this@ToolSetupActivity))
-                    }
-                    listOf(repo.createDocument(getString(R.string.tools_id_card_name), listOf(page)).id)
-                }) { openDocs(it) }
-            }
             else -> fail(getString(R.string.tools_setup_nothing))
         }
     }
@@ -1208,17 +1055,6 @@ class ToolSetupActivity : BaseActivity() {
                 runButton.isEnabled = true
                 fail(getString(R.string.tools_setup_failed, e.message ?: ""))
             }
-        }
-    }
-
-    private fun readImage(uri: Uri, onRead: (ByteArray) -> Unit) {
-        lifecycleScope.launch {
-            val bytes = withContext(Dispatchers.IO) {
-                runCatching {
-                    contentResolver.openInputStream(uri)?.use { ImageTools.readPageBytes(it) }
-                }.getOrNull()
-            }
-            if (bytes != null) onRead(bytes) else fail(getString(R.string.tools_setup_image_failed))
         }
     }
 

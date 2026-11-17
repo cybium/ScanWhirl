@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Owner F9: Hindi split part word. Values await native review. -->
+    <string name="split_part_word"><!-- review -->भाग</string>
+</resources>

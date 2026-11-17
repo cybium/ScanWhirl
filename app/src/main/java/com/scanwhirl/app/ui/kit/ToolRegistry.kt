@@ -80,17 +80,9 @@ object ToolRegistry {
     )
 
     val all: List<SwTool> = listOf(
-        // Create (8)
+        // Create (5)
         ready("scan", ToolGroup.CREATE, R.string.tool_scan, R.drawable.ic_sym_document_scanner, "scan camera capture photo"),
         ready("id_card", ToolGroup.CREATE, R.string.tool_id_card, R.drawable.ic_sym_badge, "id card front back aadhaar licence", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        // Owner 11-15: Book pages is COMING SOON. Real users scan a whole book (many pages in the
-        // scanner or many photos at once), not one spread at a time; that is a post-launch feature.
-        // The BookPagesActivity + SpineLine engine stay in the code for it.
-        soon(
-            "book_pages", ToolGroup.CREATE, R.string.tool_book_pages, R.drawable.ic_sym_menu_book,
-            "book spread split two page", pro = true, note = R.string.soon_book_pages
-        ),
-        ready("photos_pdf", ToolGroup.CREATE, R.string.tool_photos_pdf, R.drawable.ic_sym_photo_library, "photos gallery images jpg png"),
         ready("import_pdf", ToolGroup.CREATE, R.string.tool_import_pdf, R.drawable.ic_sym_upload_file, "import pdf file open"),
         ready("passport", ToolGroup.CREATE, R.string.tool_passport, R.drawable.ic_sym_travel_explore, "passport crop preset size", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         SwTool(
@@ -105,7 +97,6 @@ object ToolRegistry {
                 }
             }
         ),
-        ready("business_card", ToolGroup.CREATE, R.string.tool_business_card, R.drawable.ic_sym_contacts, "business card contact email phone", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Organize (8)
         ready("merge", ToolGroup.ORGANIZE, R.string.tool_merge, R.drawable.ic_sym_call_merge, "merge join combine together", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
@@ -126,7 +117,6 @@ object ToolRegistry {
                 com.scanwhirl.app.ui.DocumentViewerActivity.openInsertPicker(activity)
             }
         }),
-        ready("duplicate", ToolGroup.ORGANIZE, R.string.tool_duplicate, R.drawable.ic_sym_content_copy, "duplicate copy clone", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = true),
         // Owner 11-16: the Batch rename tool is Coming soon. The pattern + preview + undo sheet
         // exists, but the owner asked for a Coming-soon tile until that entry point is finished.
@@ -137,11 +127,9 @@ object ToolRegistry {
         ),
         ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sym_view_module, "batch many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
-        // Optimize (4)
+        // Optimize (2)
         ready("compress", ToolGroup.OPTIMIZE, R.string.tool_compress, R.drawable.ic_sym_compress, "compress smaller size reduce mb छोटा", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("resize", ToolGroup.OPTIMIZE, R.string.tool_resize, R.drawable.ic_sym_aspect_ratio, "resize dimensions pixels"),
-        ready("enhance", ToolGroup.OPTIMIZE, R.string.tool_enhance, R.drawable.ic_sym_auto_fix_high, "enhance clean clearer filter"),
-        ready("bw", ToolGroup.OPTIMIZE, R.string.tool_bw, R.drawable.ic_sym_tonality, "black white scan document"),
 
         // Convert (8)
         ready("pdf_to_images", ToolGroup.CONVERT, R.string.tool_pdf_to_images, R.drawable.ic_sym_image, "pdf to jpg png images zip", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
