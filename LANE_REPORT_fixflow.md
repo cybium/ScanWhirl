@@ -11,7 +11,38 @@ Last full gate line:
 GATE PASS fixflow tests=1641 failures=0 skipped=0 lint=[skipped]
 ```
 
-(cloud run 44191555120, 8 min; lint is the lead's at merge)
+(cloud run 44200217340, 6 min; lint is the lead's at merge)
+
+## Follow-up fix after the lead's gate report (ScanReviewBackTest / Discard)
+
+The failing test is not about the ML Kit path: `ScanReviewBackTest` launches
+`ScanReviewActivity` directly, presses Back twice and clicks Discard. It asserts the staged folder
+is gone. ScanReviewActivity is still reachable (add pages, photo import, resume), so Discard must
+keep deleting the scan. F22 stays as it is and the test was not touched.
+
+What was wrong in the app: `ScanReviewActivity.onCreate` sets `reviewStateReady` and schedules a
+debounced `PendingScans.queueReviewState(...)`; the write runs on a shared single-thread writer.
+`discard()` did a bare `stagingDir.deleteRecursively()`, so a state write could interleave with the
+recursive delete, leave `review_state.json.tmp` behind and make the folder survive (and later show
+up as an unfinished scan). Under the cloud runner's load that window was hit in 3 of my full runs.
+
+Fix (small, app-side, in the discard path only):
+- `store/PendingScans.kt`: new `discard(dir)` that takes the same `stateIoLock` the writer holds,
+  drops the queued snapshot for that folder, then deletes.
+- `ui/ScanReviewActivity.kt`: `discard()` calls `PendingScans.discard(stagingDir)`.
+
+Both files are outside the original list the brief gave me; the lead's instruction ("fix the APP so
+that path still works, do not weaken the test") required them and nothing else in those files
+changed. Red/green on the class alone: `GATE PASS fixflow tests=1`; then the full suite above.
+
+Evidence that the failure predates my lane: the integration branch run 44186720875 (tests=1628,
+i.e. before any of my 13 new tests) failed with exactly `FAIL ScanReviewBackTest > back from scan
+review asks to discard and keep editing keeps the scan :: ... Discard removes the staged scan`,
+together with `VaultActivityTest > the recovery code unlocks after a forgotten passcode`. That
+second one is a separate pre-existing race (the test reads the vault banner in the same tick the
+store reports unlocked, before the main-thread render); it is not in my files and still occurs
+sporadically on integration. My passes ran `VaultActivityTest` green standalone and in the full
+suite.
 
 ## Done (all 7 items)
 
@@ -101,7 +132,10 @@ both-sides slot) and `the id card gallery opens the android photo picker` (was: 
 `tools/ScanLauncher.kt`, `ui/DocumentViewerActivity.kt` (fresh-import Back prompt),
 new `res/values/strings_fixflow.xml` + `res/values-hi/strings_fixflow.xml` (Hindi values carry
 `<!-- review -->`, no long dashes), plus the three new test files and the two updated
-`IdCardFlowTest` tests. No build file, manifest, repository, id or other string file changed.
+`IdCardFlowTest` tests. No build file, manifest, id or other string file changed.
+
+Plus the two follow-up files the lead asked for: `store/PendingScans.kt` (`discard(dir)`, 10 lines)
+and `ui/ScanReviewActivity.kt` (`discard()` calls it, 2 lines). No other change in either file.
 
 ## For the lead to check on the device / decide
 

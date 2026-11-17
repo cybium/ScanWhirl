@@ -1315,7 +1315,9 @@ class ScanReviewActivity : BaseActivity() {
 
     private fun discard() {
         saved = true // stops any later cleanup concerns; staging is removed now
-        stagingDir.deleteRecursively()
+        // fixflow F22 fallout: a queued review-state write must not leave a file in the folder
+        // and keep a discarded scan visible as "unfinished" (see PendingScans.discard).
+        PendingScans.discard(stagingDir)
         finish()
     }
 

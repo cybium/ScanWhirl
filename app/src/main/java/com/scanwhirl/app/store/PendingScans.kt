@@ -80,6 +80,16 @@ internal object PendingScans {
     fun latestReviewState(dir: File): ReviewState? =
         pendingStateWrites[folderKey(dir)]?.state ?: readReviewState(dir)
 
+    /**
+     * Deletes a staging folder with the review-state writer fenced off, so a queued lifecycle
+     * write can never leave a file behind in a folder the person just discarded (the folder
+     * would then show up again as an unfinished scan). Returns whether the folder is gone.
+     */
+    internal fun discard(dir: File): Boolean = synchronized(stateIoLock) {
+        pendingStateWrites.remove(folderKey(dir))
+        dir.deleteRecursively() || !dir.exists()
+    }
+
     /** No mkdir: a late lifecycle write must never resurrect saved/discarded staging. */
     internal fun writeReviewState(dir: File, state: ReviewState) = synchronized(stateIoLock) {
         if (!dir.isDirectory) throw IOException("Review folder no longer exists")
