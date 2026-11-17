@@ -5,7 +5,7 @@ package com.scanwhirl.app, minSdk 24, JDK 17, Robolectric tests). The lead engin
 merges your work, and reads your final reply. There is no human to answer questions: decide yourself within these rules.
 
 ## Where you work
-- ONLY in your lane folder `C:\Users\Cybium\Desktop\ScanWhirl-<LANE>` (Windows 11, PowerShell 5.1). Use absolute paths,
+- ONLY in your lane folder `C:\Users\Cybium\Desktop\ScanWhirl-HQ\lanes\<LANE>` (Windows 11, PowerShell 5.1). Use absolute paths,
   and give every shell command `workdir` = your lane folder. Never edit files in `C:\Users\Cybium\Desktop\ScanWhirl-HQ\current`
   (the lead's checkout) or another lane's folder; you only RUN `C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\tools\gate.ps1` from there.
 - A previous session of your lane may have left uncommitted work. Start with `git status` and `git log --oneline -5`,
