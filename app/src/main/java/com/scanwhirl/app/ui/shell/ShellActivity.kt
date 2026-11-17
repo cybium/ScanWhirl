@@ -118,10 +118,19 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
         val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
         val uris = scanResult?.pages.orEmpty().mapNotNull { it.imageUri }
+        onScannerPages(uris)
+    }
+
+    /**
+     * F22: Google's scanner already showed the crop, the filters and every page, so its Done
+     * saves straight through [ScanLauncher.saveScanned] and the new document opens. The app's
+     * second review screen (ScanReviewActivity) is no longer part of the camera scan.
+     */
+    internal fun onScannerPages(uris: List<android.net.Uri>) {
         if (uris.isEmpty()) {
             Toast.makeText(this, R.string.scan_no_pages, Toast.LENGTH_SHORT).show()
         } else {
-            scanLauncher.stageAndReview(uris)
+            scanLauncher.saveScanned(uris, openAfterSave = true)
         }
     }
 
@@ -903,7 +912,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     resources.getQuantityString(R.plurals.import_pdf_done, doc.pageCount, doc.pageCount),
                     Toast.LENGTH_SHORT
                 ).show()
-                openDocument(doc.id)
+                // F5/W2: the first Back from this viewer asks whether to keep the import.
+                startActivity(DocumentViewerActivity.intent(this@ShellActivity, doc.id, freshImport = true))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 progress?.dismiss()
                 throw e

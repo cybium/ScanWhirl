@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.tools.IdCardFixFlowTest,com.scanwhirl.app.ui.tools.IdCardFlowTest,com.scanwhirl.app.ui.ImportPdfFixFlowTest,com.scanwhirl.app.ui.ScanDirectFixFlowTest

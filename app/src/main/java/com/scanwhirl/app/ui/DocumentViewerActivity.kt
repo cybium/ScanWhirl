@@ -101,6 +101,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** True once onCreate has finished its async first load. */
     private var firstLoad = false
 
+    /** F5/W2: this viewer is the first look at a just-imported document. */
+    private var freshImport = false
+
+    /** F5/W2: the import question was already asked (Keep or Discard), never ask twice. */
+    private var freshImportAsked = false
+
     /** Not lifecycle-bound: a pending delete must land even during onDestroy. */
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -160,6 +166,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.toolbar.setNavigationOnClickListener { handleEditorBack() }
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        freshImport = intent.getBooleanExtra(EXTRA_FRESH_IMPORT, false)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleEditorBack()
@@ -1229,6 +1236,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     // ------------------------------------------------------------------
 
     private fun handleEditorBack() {
+        // F5/W2: the first Back from a fresh import asks before anything is kept for good.
+        if (freshImport && !freshImportAsked) {
+            askKeepImported()
+            return
+        }
         if ((draft?.changes ?: 0) == 0) {
             finish()
             return
@@ -1240,6 +1252,34 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .setSecondary(R.string.draft_discard) { discardNow() }
             .build()
             .show()
+    }
+
+    /**
+     * F5/W2: an imported PDF is in the library the moment it arrives, so leaving the first look
+     * asks first. Keep leaves it like any other document; Discard deletes exactly this one
+     * document (and its unlocked preview) and nothing else.
+     */
+    private fun askKeepImported() {
+        val id = docId
+        if (id == null) {
+            finish()
+            return
+        }
+        freshImportAsked = true
+        SwSheet.builder(this)
+            .setTitle(R.string.fixflow_import_keep_title)
+            .setMessage(R.string.fixflow_import_keep_msg)
+            .setPrimary(R.string.fixflow_keep) { finish() }
+            .setSecondary(R.string.discard) { discardImported(id) }
+            .build()
+            .show()
+    }
+
+    private fun discardImported(id: String) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { runCatching { repo.deleteDocument(id) } }
+            finish()
+        }
     }
 
     /** `Draft · N pages · K changes`, visible only while K > 0. */
@@ -1520,8 +1560,15 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_INSERT_PAGES = "insert_pages"
 
+        /** F5/W2: this viewer was opened right after an import; the first Back asks first. */
+        private const val EXTRA_FRESH_IMPORT = "fresh_import"
+
         fun intent(context: Context, docId: String): Intent =
             Intent(context, DocumentViewerActivity::class.java).putExtra(EXTRA_DOC_ID, docId)
+
+        /** An import that just landed: Back offers Keep / Discard before anything is deleted. */
+        fun intent(context: Context, docId: String, freshImport: Boolean): Intent =
+            intent(context, docId).putExtra(EXTRA_FRESH_IMPORT, freshImport)
 
         /** Open Organize and immediately offer "Add pages from" (Insert pages tool). */
         fun insertIntent(context: Context, docId: String): Intent =
