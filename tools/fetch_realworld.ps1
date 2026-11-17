@@ -1,6 +1,6 @@
 # Polite download of real-world test photos (Wikimedia Commons, free licences) for QA. Test data only, never shipped.
 # Uses standard thumbnail widths and waits between requests (Wikimedia rate limits).
-param([string]$Out = "C:\Users\Cybium\Desktop\.sw-qa\realworld", [int]$Width = 1920, [int]$DelaySec = 6)
+param([string]$Out = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\realworld", [int]$Width = 1920, [int]$DelaySec = 6)
 $ua = @{ 'User-Agent' = 'ScanWhirlTestFetcher/1.0 (offline app QA; low volume)' }
 New-Item -ItemType Directory -Force $Out | Out-Null
 $files = [ordered]@{}

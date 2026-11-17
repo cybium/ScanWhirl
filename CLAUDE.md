@@ -38,7 +38,7 @@ The lead (Opus) repeated these mistakes. Do not repeat them after a context comp
    ExportHygiene) re-run automatically once when they are the only failures.
 6. **Never claim something is done before it exists and you have looked at it.** Say "not done yet"
    plainly. Check the actual gate line, the actual file, the actual screenshot.
-7. **Phone**: one user at a time; lock with `C:\Users\Cybium\Desktop\.sw-qa\PHONE_BUSY`. Only
+7. **Phone**: one user at a time; lock with `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\PHONE_BUSY`. Only
    `com.scanwhirl.app.demo` / `.test`; never the owner's `com.scanwhirl.app`; never airplane mode /
    Wi-Fi / data / hotspot; never tap a file-picker preview icon (opens Chrome); never buy.
    Verified paths: nav y=2214 (Library x130, Tools x315, Vault x760, Me x948); doc dock y=2234
@@ -130,7 +130,7 @@ Never read, print, copy or move `keystore/`, `keystore.properties` or `local.pro
 - **Phone work:** only install and drive `com.scanwhirl.app.test` or `com.scanwhirl.app.demo`.
   Never uninstall, clear data, force-stop or change settings of the `com.scanwhirl.app` production
   install. Never toggle airplane mode or other device-wide settings. Use `tools/phone.ps1`;
-  screenshots and recordings stay outside the repo (`Desktop\.sw-qa\shots`).
+  screenshots and recordings stay outside the repo (`Desktop\ScanWhirl-HQ\qa\shots`).
 - **Screenshots for the store:** always the `-PdemoBuild` copy, never the production app and never a
   phone with the owner's real library.
 - **Commits:** small and focused, subject `<area>: <what changed>`, one task per commit. Never

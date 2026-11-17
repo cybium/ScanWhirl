@@ -53,7 +53,7 @@ class PdfRobustnessTest {
 
     private fun ownerDir(): File? {
         System.getenv("SW_OWNER_DIR")?.takeIf { it.isNotBlank() }?.let { return File(it) }
-        val dir = File("/mnt/c/Users/Cybium/Desktop/.sw-qa/owner")
+        val dir = File("/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/owner")
         return dir.takeIf {
             File(it, "PDFA_EVAL_ON").isFile || File(it, "L3_PDF_EVAL_ON").isFile
         }

@@ -27,8 +27,8 @@ PM-2.2, PM-2.3, PM-3.1 (protect/unlock) and PM-3.2 in `40_SONNET_TASKS.md`. The 
 ```powershell
 .\gradlew.bat :app:compileDebugKotlin -PtestBuild --no-daemon
 .\gradlew.bat :app:compileDebugUnitTestKotlin -PtestBuild --no-daemon
-wsl -d Ubuntu bash -lc 'cd /mnt/c/Users/Cybium/Desktop/ScanWhirl && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild --no-daemon --continue'
-wsl -d Ubuntu bash -lc 'cd /mnt/c/Users/Cybium/Desktop/ScanWhirl && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild --no-daemon --continue'
+wsl -d Ubuntu bash -lc 'cd /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/current && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild --no-daemon --continue'
+wsl -d Ubuntu bash -lc 'cd /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/current && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild --no-daemon --continue'
 .\gradlew.bat lintDebug -PtestBuild --no-daemon
 ```
 

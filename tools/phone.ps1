@@ -1,8 +1,8 @@
 # Lead phone helper (dot-source it):  . .\tools\phone.ps1
-# Screens and recordings go to C:\Users\Cybium\Desktop\.sw-qa\shots (private, never committed).
+# Screens and recordings go to C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\shots (private, never committed).
 $script:adb = "C:\Users\Cybium\AppData\Local\Android\Sdk\platform-tools\adb.exe"
 $script:ser = "103223137I112880"
-$script:shots = "C:\Users\Cybium\Desktop\.sw-qa\shots"
+$script:shots = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\shots"
 $script:pkg = "com.scanwhirl.app.test"
 New-Item -ItemType Directory -Force $script:shots | Out-Null
 

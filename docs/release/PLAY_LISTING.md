@@ -90,9 +90,9 @@ Where are my files? In ScanWhirl's library on your phone. Save or share any file
 page or Google Sites) and paste the link — required.
 
 ## 3. Graphics
-- App icon 512x512 PNG: `C:\Users\Cybium\Desktop\.sw-qa\store\icon_512.png`
-- Feature graphic 1024x500 PNG: `C:\Users\Cybium\Desktop\.sw-qa\store\feature_1024x500.png`
-- Phone screenshots (2–8, 1080x1920, 9:16): `C:\Users\Cybium\Desktop\.sw-qa\store\screenshots\`
+- App icon 512x512 PNG: `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\store\icon_512.png`
+- Feature graphic 1024x500 PNG: `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\store\feature_1024x500.png`
+- Phone screenshots (2–8, 1080x1920, 9:16): `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\store\screenshots\`
 
 ## 4. Click by click (about 20 minutes)
 1. **Upload**: Play Console > ScanWhirl > Test and release > Testing > **Closed testing** > (create a track

@@ -51,7 +51,7 @@ Common definitions: invariants I1–I12 are in `20_ARCHITECTURE_PLAN.md` §4. Th
 
 **Change, in product terms.** No product behaviour changes.
 
-1. **Run the full suite under Linux** against this same tree: WSL against `/mnt/c/Users/Cybium/Desktop/ScanWhirl` with a Linux JDK 17 and Android SDK, or any Linux runner. Record the totals.
+1. **Run the full suite under Linux** against this same tree: WSL against `/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/current` with a Linux JDK 17 and Android SDK, or any Linux runner. Record the totals.
 2. **Classify every failure** into:
    - **A** host-only (passes on Linux, fails on Windows);
    - **C** stale expectation from the committed UX pass `065294b`;

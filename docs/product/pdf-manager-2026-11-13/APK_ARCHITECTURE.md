@@ -1,6 +1,6 @@
 # APK architecture comparison
 
-Pulled from the installed split APKs on 2026-11-13. The APK artifacts are in `C:\Users\Cybium\Desktop\ScanWhirl_Research_2026-11-13\apk-analysis\`, outside the clean code workspace. This is manifest/dex/native/resource analysis, not source decompilation. Do not copy competitor code or assets; use it only to understand the cost of features.
+Pulled from the installed split APKs on 2026-11-13. The APK artifacts are in `C:\Users\Cybium\Desktop\ScanWhirl-HQ\research\Research_2026-11-13\apk-analysis\`, outside the clean code workspace. This is manifest/dex/native/resource analysis, not source decompilation. Do not copy competitor code or assets; use it only to understand the cost of features.
 
 ## Installed sizes
 

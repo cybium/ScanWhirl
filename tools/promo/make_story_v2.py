@@ -12,7 +12,7 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 from make_promo import background
 
-ROOT = Path('/mnt/c/Users/Cybium/Desktop/.sw-qa/promo_v2')
+ROOT = Path('/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/promo_v2')
 FF = imageio_ffmpeg.get_ffmpeg_exe()
 FONT = str(ROOT/'fonts/NotoSansDevanagari-Bold.ttf')
 CAPTIONS = {

@@ -72,7 +72,7 @@ The owner answered on 2026-11-13. **Every question the owner did not answer take
 
 ```text
 ROLE: You are a careful Android investigator. You only observe, run read-only commands, and write ONE report.
-WORKSPACE: C:\Users\Cybium\Desktop\ScanWhirl (Windows 11, PowerShell 5.1, JDK 17, Android SDK at
+WORKSPACE: C:\Users\Cybium\Desktop\ScanWhirl-HQ\current (Windows 11, PowerShell 5.1, JDK 17, Android SDK at
 C:\Users\Cybium\AppData\Local\Android\Sdk). adb = C:\Users\Cybium\AppData\Local\Android\Sdk\platform-tools\adb.exe
 (not on PATH). One phone is connected: Infinix X6711, Android 14 / API 34, serial 103223137I112880, test app
 package com.scanwhirl.app.test. The phone is a freshly reset test device.
@@ -96,7 +96,7 @@ DS-1  TEST BASELINE (INV-1)
     Parse app/build/test-results/testDebugUnitTest/*.xml. Record totals: tests, failures, skipped.
  b) Linux run: check `wsl -l -v`. If a distro exists, check inside WSL for JDK 17 (`java -version`) and an
     Android SDK (`echo $ANDROID_HOME`). If both exist, run the same Gradle task from
-    /mnt/c/Users/Cybium/Desktop/ScanWhirl using ./gradlew. If either is missing, DO NOT install anything.
+    /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/current using ./gradlew. If either is missing, DO NOT install anything.
     Write "Linux run not possible: <reason>" and give the exact install steps the owner would need.
  c) For EVERY failing test, a table row: class, test name, first line of the failure message, and a bucket:
       A = host file-replace / FileProvider-path error ("Could not replace", "Could not publish",

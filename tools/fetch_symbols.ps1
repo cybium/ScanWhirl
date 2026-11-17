@@ -1,5 +1,5 @@
 # Downloads official Material Symbols Rounded (Apache 2.0) SVGs and converts them to Android vector drawables.
-# Usage: powershell -File tools\fetch_symbols.ps1 -Out C:\Users\Cybium\Desktop\.sw-assets\symbols -Names a,b,c
+# Usage: powershell -File tools\fetch_symbols.ps1 -Out C:\Users\Cybium\Desktop\ScanWhirl-HQ\assets\symbols -Names a,b,c
 # Name forms: "name" (outlined), "name:fill" (filled variant), "target=source" (file ic_sym_target from symbol source).
 param([Parameter(Mandatory = $true)][string]$Out, [Parameter(Mandatory = $true)][string[]]$Names)
 $Names = @($Names | ForEach-Object { $_ -split ',' } | Where-Object { $_ })

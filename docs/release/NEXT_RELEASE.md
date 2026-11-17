@@ -2,7 +2,7 @@
 
 Owner rule for 1.2.1 (2026-11-16): fix already-reported bugs only, no new features. Everything below
 was found or decided during the 1.2.1 night shift and is deliberately NOT in 1.2.1.
-Source reports live in `C:\Users\Cybium\Desktop\.sw-qa\night\` and `.sw-qa\qa_tools\` (private).
+Source reports live in `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\night\` and `.sw-qa\qa_tools\` (private).
 
 ## Features shown as "Coming soon" in 1.2.1 (build properly next)
 - **Batch rename** (Pro): the tile opened a selection bar with no rename action. `util/BatchRename.kt`

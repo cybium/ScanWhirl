@@ -87,7 +87,7 @@
 ### Start-here prompt for Sonnet 5.5 High (10 lines)
 
 ```
-You are implementing ScanWhirl's PDF Tools in C:\Users\Cybium\Desktop\ScanWhirl (branch clean-workspace-2026-11-13).
+You are implementing ScanWhirl's PDF Tools in C:\Users\Cybium\Desktop\ScanWhirl-HQ\current (branch clean-workspace-2026-11-13).
 Read docs/plans/pdf-manager/00_DECISIONS.md, 40_SONNET_TASKS.md, 20_ARCHITECTURE_PLAN.md §1,§3-§5, and docs/audit/2026-11-13/PDF_TOOLS_STATUS.md.
 Implement one task card at a time in the card order given, starting with PM-0.1b; do not skip Slice 0.
 Each card: re-confirm cited lines with search, change only what the card says, add its tests, keep invariants I1–I12 green.

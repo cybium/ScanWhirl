@@ -8,7 +8,7 @@ go through **queues** (`tools/gate.ps1`, `tools/phone.ps1`), because this PC has
 
 | Lane | Folder | Branch | Owns (only this lane edits these) |
 |---|---|---|---|
-| L1 Shell & look | `C:\Users\Cybium\Desktop\ScanWhirl-L1` | `lane/L1-shell` | `ui/kit/**` (new), `ui/shell/**` (new), `ui/MainActivity.kt`, `res/layout/activity_main.xml`, `res/values/colors.xml`, `themes.xml`, `dimens_v2.xml`, `res/font/**`, `res/drawable/ic_sym_*`, `ui/PdfViewerActivity.kt` (dock), `ui/OcrEditorActivity.kt` (restyle), `ui/SettingsActivity.kt` |
+| L1 Shell & look | `C:\Users\Cybium\Desktop\ScanWhirl-HQ\lanes\L1` | `lane/L1-shell` | `ui/kit/**` (new), `ui/shell/**` (new), `ui/MainActivity.kt`, `res/layout/activity_main.xml`, `res/values/colors.xml`, `themes.xml`, `dimens_v2.xml`, `res/font/**`, `res/drawable/ic_sym_*`, `ui/PdfViewerActivity.kt` (dock), `ui/OcrEditorActivity.kt` (restyle), `ui/SettingsActivity.kt` |
 | L2 Vault | `...\ScanWhirl-L2` | `lane/L2-vault` | `store/vault/**`, `ui/vault/**` (new); legacy `tools/VaultFlow.kt` (migration only) |
 | L3 Protect PDF | `...\ScanWhirl-L3` | `lane/L3-protect` | `util/PdfAes.kt` (new), `util/PdfEncryptor.kt`, `util/PdfProtection.kt`, `util/PdfVerifier.kt`, `ui/protect/**` (new), `tools/LockFlow.kt` |
 | L4 Tools engine | `...\ScanWhirl-L4` | `lane/L4-tools` | `store/OpStaging.kt`, `ScanRepository` tool functions (merge/extract/compress/duplicate/create/split/convert), `util/DocxWriter.kt`, `util/LongImage.kt`, `util/PageRanges.kt` (new), `ui/tools/**` (new), `tools/MergeFlow.kt`, `tools/CompressFlow.kt` |
@@ -29,7 +29,7 @@ go through **queues** (`tools/gate.ps1`, `tools/phone.ps1`), because this PC has
    - Every behaviour gets a Robolectric test written first (red), then the code (green). Use the existing seams (`Faults`, `DocFixtures`, `PdfInvariants`, `OpFaults`).
    - Never `@Ignore`, delete or loosen a data-safety test.
    - UI-shape tests (tile counts, sheet contents) that encode the **old** UI may be rewritten to the new UI. Each rewrite gets a comment `// v2 UI: <mockup>`.
-4. **Gate:** `powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane L<n>`. It queues, runs the Linux unit suite and lint for your worktree, and prints `GATE PASS` or `GATE FAIL`. Commit only after `GATE PASS`.
+4. **Gate:** `powershell -File C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\tools\gate.ps1 -Lane L<n>`. It queues, runs the Linux unit suite and lint for your worktree, and prints `GATE PASS` or `GATE FAIL`. Commit only after `GATE PASS`.
 5. **Commit often** on your branch (`git add -A; git commit -m "L<n>: ..."`). **Never push, merge into another lane, rebase, reset or force anything.** The lead merges.
 6. **Do not touch** `app/build.gradle.kts`, versions, signing, `keystore/`, `local.properties`, or another lane's files.
 7. **Phone** (optional, end of a feature): `powershell -File ...\tools\phone.ps1 -Lane L<n> -Run "<your adb commands>"` holds the phone queue. Install with `adb install -r app\build\outputs\apk\debug\app-debug.apk`. If install fails on signatures, `adb uninstall com.scanwhirl.app.test` is allowed (test data, owner approved).
@@ -85,7 +85,7 @@ go through **queues** (`tools/gate.ps1`, `tools/phone.ps1`), because this PC has
     - an independent decrypt in the test (re-implement algorithm 2.B in the test, as `PdfEncryptorTest` does for RC4);
     - a Unicode password;
     - lock guards from PM-3.1b still green.
-  - **Host check:** `wsl -d Ubuntu --cd /tmp -- python3 /mnt/c/Users/Cybium/Desktop/ScanWhirl/tools/pdfcheck.py <pdf> <password>` must print `needs_password: True`, `right_password_opens: True`, `wrong_password_opens: False`. Paste the output in `LANE_REPORT.md`.
+  - **Host check:** `wsl -d Ubuntu --cd /tmp -- python3 /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/current/tools/pdfcheck.py <pdf> <password>` must print `needs_password: True`, `right_password_opens: True`, `wrong_password_opens: False`. Paste the output in `LANE_REPORT.md`.
 - **Phase B:** Protect sheet (`05_protect_pdf`), unlock sheet (`09_unlock_sheet`: tries, cooldown, Vault-password button hidden until L2 merges), Change password, Unlock PDF tool for device PDFs (ScanWhirl-made ones).
 
 ### L4 Tools engine

@@ -9,7 +9,7 @@ Session 2026-11-15, lane L4. Harness: `app/src/test/java/com/scanwhirl/app/perf/
   and geometry for every page. Page images are **64×96 JPEGs (~2 KB)** so the run stays under a
   couple of minutes; this measures *count-bound* work well and *byte-bound* work only weakly.
 - The same harness runs modest sizes (40 docs / 80 pages / 30-page merge) on every gate; the
-  300/500 run is gated by `C:\Users\Cybium\Desktop\.sw-qa\owner\EVAL_ON` and writes
+  300/500 run is gated by `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\owner\EVAL_ON` and writes
   `PERF_BEFORE.txt` / `PERF_AFTER.txt` next to this file.
 - Times are the best of 3 runs (1 run for the destructive/publish operations). They are **not
   phone timings**: phone storage is 5-20× slower and real pages are 100-1000× larger.

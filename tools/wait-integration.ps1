@@ -1,6 +1,6 @@
 # Waits (up to 45 min) for the cloud gate run of the current integration HEAD and prints its result.
 $gh = "C:\Program Files\GitHub CLI\gh.exe"
-$sha = git -C C:\Users\Cybium\Desktop\ScanWhirl rev-parse integration
+$sha = git -C C:\Users\Cybium\Desktop\ScanWhirl-HQ\current rev-parse integration
 $env:GH_TOKEN = (("protocol=https`nhost=github.com`n`n" | git credential fill 2>$null) | Where-Object { $_ -like 'password=*' }) -replace '^password=', ''
 $deadline = (Get-Date).AddMinutes(45); $run = $null
 while ((Get-Date) -lt $deadline) {

@@ -1,7 +1,7 @@
 """Independent check of a protected PDF with PyMuPDF (not ScanWhirl code).
 
 Usage (from PowerShell):
-  wsl -d Ubuntu --cd /tmp -- python3 /mnt/c/Users/Cybium/Desktop/ScanWhirl/tools/pdfcheck.py <pdf path in /mnt/c/...> <password>
+  wsl -d Ubuntu --cd /tmp -- python3 /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/current/tools/pdfcheck.py <pdf path in /mnt/c/...> <password>
 """
 import sys
 

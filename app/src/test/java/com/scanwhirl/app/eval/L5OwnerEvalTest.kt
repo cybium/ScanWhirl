@@ -23,7 +23,7 @@ import kotlin.math.min
 
 /**
  * Owner evaluation (not part of normal gates): runs only when the **lane's own** flag
- * `C:\Users\Cybium\Desktop\.sw-qa\owner\L5_EVAL_ON` exists (never the shared EVAL_ON, which other
+ * `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\owner\L5_EVAL_ON` exists (never the shared EVAL_ON, which other
  * lanes delete mid-run). It never copies or commits the owner's private samples; it reads them in
  * place and writes previews to `…\.sw-qa\owner\out\L5\`. A skip is printed, so a silent early
  * return cannot look like a pass.
@@ -34,8 +34,8 @@ import kotlin.math.min
 class L5OwnerEvalTest {
 
     private val ownerRoots = listOf(
-        File("/mnt/c/Users/Cybium/Desktop/.sw-qa/owner"),
-        File("C:/Users/Cybium/Desktop/.sw-qa/owner")
+        File("/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/owner"),
+        File("C:/Users/Cybium/Desktop/ScanWhirl-HQ/qa/owner")
     )
 
     private fun root(): File? = ownerRoots.firstOrNull { File(it, "L5_EVAL_ON").isFile }

@@ -1,7 +1,7 @@
 # Dot-source from the repository root. Only the fictional demo package is used.
 . "$PSScriptRoot\..\phone.ps1"
 $script:pkg = 'com.scanwhirl.app.demo'
-$script:promo = 'C:\Users\Cybium\Desktop\.sw-qa\promo'
+$script:promo = 'C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\promo'
 New-Item -ItemType Directory -Force "$script:promo\raw" | Out-Null
 
 function Begin-PromoClip([string]$name, [int]$seconds = 30) {

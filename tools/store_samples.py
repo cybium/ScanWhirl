@@ -1,5 +1,5 @@
 """Fictional sample documents for Play Store screenshots (no real people, numbers or brands).
-Usage (WSL): python3 tools/store_samples.py /mnt/c/Users/Cybium/Desktop/.sw-qa/store/samples
+Usage (WSL): python3 tools/store_samples.py /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/store/samples
 """
 import os
 import sys

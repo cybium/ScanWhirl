@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path('/mnt/c/Users/Cybium/Desktop/.sw-qa/promo_v2')
+ROOT = Path('/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/promo_v2')
 ROOT.mkdir(exist_ok=True)
 LINES = {
     'en': ('en-IN-NeerjaExpressiveNeural', [
@@ -48,7 +48,7 @@ def music():
 def card():
     im = Image.new('RGB', (1080, 1920), '#091014')
     d = ImageDraw.Draw(im)
-    icon = Image.open('/mnt/c/Users/Cybium/Desktop/ScanWhirl/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png').convert('RGBA').resize((260,260))
+    icon = Image.open('/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/current/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png').convert('RGBA').resize((260,260))
     im.paste(icon, (410, 420), icon)
     font = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
     dev = str(ROOT/'fonts/NotoSansDevanagari-Bold.ttf')

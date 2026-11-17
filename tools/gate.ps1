@@ -1,6 +1,6 @@
 # Gate for one lane worktree, serialized across all lanes (this PC has 7.4 GB RAM: one Gradle build at a time).
-# Usage:  powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane L3 [-Tests "com.scanwhirl.app.util.PdfAesTest"] [-Lint]
-#   -Lane main   = the main checkout (C:\Users\Cybium\Desktop\ScanWhirl)
+# Usage:  powershell -File C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\tools\gate.ps1 -Lane L3 [-Tests "com.scanwhirl.app.util.PdfAesTest"] [-Lint]
+#   -Lane main   = the main checkout (C:\Users\Cybium\Desktop\ScanWhirl-HQ\current)
 #   -Tests       = run only matching tests (red/green loop)
 #   -Lint        = also run Android lint (slow, ~10 min; the lead runs it at merge time, lanes need not)
 # The queue is first-come-first-served; it prints your place in line every minute. Waiting is normal: do not cancel.
@@ -14,7 +14,7 @@ param(
     [switch]$Local    # force the full suite on this PC instead of the cloud
 )
 $ErrorActionPreference = "Continue"
-$root = if ($Lane -eq "main") { "C:\Users\Cybium\Desktop\ScanWhirl" } else { "C:\Users\Cybium\Desktop\ScanWhirl-$Lane" }
+$root = if ($Lane -eq "main") { "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current" } else { "C:\Users\Cybium\Desktop\ScanWhirl-HQ\lanes\$Lane" }
 if (-not (Test-Path "$root\gradlew")) { Write-Output "GATE FAIL: no worktree at $root"; exit 2 }
 $wslRoot = "/mnt/c" + (($root.Substring(2)) -replace '\\', '/')
 
@@ -23,7 +23,7 @@ $wslRoot = "/mnt/c" + (($root.Substring(2)) -replace '\\', '/')
 # pushes it to ci/<lane>, waits for the GitHub Actions "gate" run on that exact commit, prints its verdict.
 # -Tests runs: local when the PC's build slot is free (fastest, ~1 min); CLOUD when anyone is building or queued
 # (no waiting in line). Evals on the owner's private files always stay local (the cloud cannot see them).
-$lockDirPeek = "C:\Users\Cybium\Desktop\.sw-locks"
+$lockDirPeek = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\locks"
 $slotBusy = $false
 if (Test-Path "$lockDirPeek\build.lock") {
     try { $p = [IO.File]::Open("$lockDirPeek\build.lock", 'Open', 'Read', 'ReadWrite'); $p.Close() } catch { $slotBusy = $true }
@@ -51,7 +51,7 @@ if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
     git -C $root read-tree HEAD
     git -C $root add -A -- . ':!60_CORE_ENGINE_GUIDE.md' ':!LANE_BLOCKED.md' 2>$null
     # Always run the lead's current workflow, even if the lane has not merged it yet.
-    $wf = "C:\Users\Cybium\Desktop\ScanWhirl\.github\workflows\gate.yml"
+    $wf = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\.github\workflows\gate.yml"
     $blob = git -C $root hash-object -w $wf
     git -C $root update-index --add --cacheinfo "100644,$blob,.github/workflows/gate.yml"
     $ciBranch = "ci/$Lane"
@@ -98,7 +98,7 @@ if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
 }
 
 # ---- queue ----
-$lockDir = "C:\Users\Cybium\Desktop\.sw-locks"; New-Item -ItemType Directory -Force $lockDir | Out-Null
+$lockDir = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\locks"; New-Item -ItemType Directory -Force $lockDir | Out-Null
 $lock = Join-Path $lockDir "build.lock"
 $holderFile = Join-Path $lockDir "holder.txt"
 $qDir = Join-Path $lockDir "queue"; New-Item -ItemType Directory -Force $qDir | Out-Null

@@ -98,6 +98,6 @@ class PdfASamplesTest {
     }
 
     companion object {
-        const val QA_DIR = "/mnt/c/Users/Cybium/Desktop/.sw-qa/owner"
+        const val QA_DIR = "/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/owner"
     }
 }

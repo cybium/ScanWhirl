@@ -1,6 +1,6 @@
 ﻿"""Play one-time product icon for ScanWhirl Pro: the in-app gold brand mark (ic_brand_mark_gold.xml,
 same geometry as the launcher icon) on the launcher's opaque full-bleed ground. No text.
-Usage (WSL): python3 tools/store_product_icon.py /mnt/c/Users/Cybium/Desktop/.sw-qa/store/product_pro_512.png
+Usage (WSL): python3 tools/store_product_icon.py /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/store/product_pro_512.png
 """
 import sys
 

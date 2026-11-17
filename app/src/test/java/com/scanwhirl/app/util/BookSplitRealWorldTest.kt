@@ -74,6 +74,6 @@ class BookSplitRealWorldTest {
     }
 
     private companion object {
-        const val QA = "/mnt/c/Users/Cybium/Desktop/.sw-qa"
+        const val QA = "/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa"
     }
 }

@@ -6,8 +6,8 @@ merges your work, and reads your final reply. There is no human to answer questi
 
 ## Where you work
 - ONLY in your lane folder `C:\Users\Cybium\Desktop\ScanWhirl-<LANE>` (Windows 11, PowerShell 5.1). Use absolute paths,
-  and give every shell command `workdir` = your lane folder. Never edit files in `C:\Users\Cybium\Desktop\ScanWhirl`
-  (the lead's checkout) or another lane's folder; you only RUN `C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1` from there.
+  and give every shell command `workdir` = your lane folder. Never edit files in `C:\Users\Cybium\Desktop\ScanWhirl-HQ\current`
+  (the lead's checkout) or another lane's folder; you only RUN `C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\tools\gate.ps1` from there.
 - A previous session of your lane may have left uncommitted work. Start with `git status` and `git log --oneline -5`,
   read `LANE_REPORT_<LANE>.md` (or an old `LANE_REPORT.md`), and continue that work (review it, finish it) rather than starting over.
 
@@ -30,18 +30,18 @@ run locally (recognised by the test NAME). `-Local` is DISABLED for the full sui
 
 ### Local details (red/green with -Tests)
 - Red/green loop on one test class:
-  `powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane <LANE> -Tests "com.scanwhirl.app.<pkg>.<Class>"`
-- Full gate before every commit: `powershell -File C:\Users\Cybium\Desktop\ScanWhirl\tools\gate.ps1 -Lane <LANE>`
+  `powershell -File C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\tools\gate.ps1 -Lane <LANE> -Tests "com.scanwhirl.app.<pkg>.<Class>"`
+- Full gate before every commit: `powershell -File C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\tools\gate.ps1 -Lane <LANE>`
 - ALWAYS run the gate in the FOREGROUND with a shell timeout of 5400000 ms (90 min). NEVER run it in the background and
   NEVER end your turn while a gate is waiting: ending your turn ends your session and the lead must restart you.
   It may wait in line; that is normal, never cancel it.
   Your first build is ~3 min (cold), later ones ~1 min. The last line says GATE PASS or GATE FAIL.
 - Never run gradle yourself (no gradlew, no assemble): only through the gate.
 
-## Evals on private test data (C:\Users\Cybium\Desktop\.sw-qa\)
-- Gate evals with YOUR OWN flag file `C:\Users\Cybium\Desktop\.sw-qa\owner\<LANE>_EVAL_ON` — never a shared `EVAL_ON`
+## Evals on private test data (C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\)
+- Gate evals with YOUR OWN flag file `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\owner\<LANE>_EVAL_ON` — never a shared `EVAL_ON`
   (another lane deleting it makes your eval skip silently and "pass").
-- Robolectric runs under WSL: write outputs to `/mnt/c/Users/Cybium/Desktop/.sw-qa/...` (Windows paths do not work).
+- Robolectric runs under WSL: write outputs to `/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/...` (Windows paths do not work).
 - Every eval prints `EVAL RAN: <n> -> <output dir>`; the lead checks file timestamps before accepting numbers.
 - Evals run LOCALLY with `-Tests`; in the cloud they must return early and pass. Never commit the private files.
 

@@ -26,21 +26,21 @@ import kotlin.system.measureNanoTime
 /**
  * Scan Enhance 2.0 owner evaluation — page-only, readable size.
  *
- * Runs only when `/mnt/c/Users/Cybium/Desktop/.sw-qa/owner/L4_EVAL_ON` exists. Uses the owner's
+ * Runs only when `/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/owner/L4_EVAL_ON` exists. Uses the owner's
  * photos only (camera, downloads), crops each to the page/card box in `owner/enh_crops.txt`, and
  * writes one labelled side-by-side per photo plus a 100%-zoom text strip:
  *
  *   <out>/<name>_compare.jpg   original-crop | Auto | Colour boost | B&W   (each panel 900 px)
  *   <out>/<name>_zoom.jpg      the same four at 1:1 on a text region
  *
- * Output: `/mnt/c/Users/Cybium/Desktop/.sw-qa/owner/out/L4enh/`. No photo is copied or committed.
+ * Output: `/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/owner/out/L4enh/`. No photo is copied or committed.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class ScanEnhancePreviewEvalTest {
 
-    private val qa = File("/mnt/c/Users/Cybium/Desktop/.sw-qa")
+    private val qa = File("/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa")
     private val owner = File(qa, "owner")
     private val flag = File(owner, "L4_EVAL_ON")
     private val enabled: Boolean get() = flag.isFile

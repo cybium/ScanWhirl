@@ -97,7 +97,7 @@ and signed with the owner's upload key (`docs/release/LAUNCH_CHECKLIST.md`).
 ## Install
 
 ```
-adb install -r C:\Users\Cybium\Desktop\ScanWhirl-L2\app\build\outputs\apk\release\app-release.apk
+adb install -r C:\Users\Cybium\Desktop\ScanWhirl-HQ\lanes\L2\app\build\outputs\apk\release\app-release.apk
 ```
 
 (the artifact of run 43674515074 is also downloadable as CI artifact `release-apk`).

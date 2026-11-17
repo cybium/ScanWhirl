@@ -7,11 +7,11 @@ $warn = @()
 
 # Every lane worktree (ScanWhirl-<lane>), not just L1-L5: night lanes are named data/ui/pro/... .
 # Lanes whose branch is fully merged and idle > 6 h are listed once, without warnings.
-$lanes = @(git -C C:\Users\Cybium\Desktop\ScanWhirl worktree list --porcelain 2>$null |
+$lanes = @(git -C C:\Users\Cybium\Desktop\ScanWhirl-HQ\current worktree list --porcelain 2>$null |
     Where-Object { $_ -match '^worktree (.+ScanWhirl-([^/\\]+))$' } | ForEach-Object { $Matches[2] })
 $idle = @()
 foreach ($n in $lanes) {
-    $p = "C:\Users\Cybium\Desktop\ScanWhirl-$n"
+    $p = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\lanes\$n"
     if (-not (Test-Path $p)) { continue }
     $ahead = [int](git -C $p rev-list --count "integration..HEAD" 2>$null)
     $lastTouch = (Get-ChildItem "$p\app\src", "$p\docs", "$p\tools" -Recurse -File -ErrorAction SilentlyContinue |
@@ -47,7 +47,7 @@ Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
         "  {0,3} min  {1}" -f $age, ($_.CommandLine -replace '.*gate.ps1', 'gate')
         if ($age -ge 40) { $warn += "gate process running $age min: $($_.CommandLine -replace '.*gate.ps1','gate')" }
     }
-$lock = "C:\Users\Cybium\Desktop\.sw-locks"
+$lock = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\locks"
 "  build slot: " + (Get-Content "$lock\holder.txt" -ErrorAction SilentlyContinue)
 Get-ChildItem "$lock\queue" -Filter *.t -ErrorAction SilentlyContinue | ForEach-Object {
     $parts = $_.BaseName.Split('_'); $age = [int]($now - [datetime][long]$parts[0]).TotalMinutes
@@ -55,7 +55,7 @@ Get-ChildItem "$lock\queue" -Filter *.t -ErrorAction SilentlyContinue | ForEach-
     if ($age -ge 20) { $warn += "$($parts[1]) waiting in the local queue $age min" }
 }
 "--- eval flags"
-Get-ChildItem C:\Users\Cybium\Desktop\.sw-qa\owner, C:\Users\Cybium\Desktop\.sw-qa\realworld -Filter *EVAL_ON -ErrorAction SilentlyContinue |
+Get-ChildItem C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\owner, C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\realworld -Filter *EVAL_ON -ErrorAction SilentlyContinue |
     ForEach-Object { "  {0} ({1} min old)" -f $_.Name, [int]($now - $_.LastWriteTime).TotalMinutes
         if ($_.Name -eq 'EVAL_ON') { $warn += "shared EVAL_ON flag exists (lanes must use <LANE>_EVAL_ON)" } }
 
@@ -79,7 +79,7 @@ if ($json) {
 }
 
 "--- integration"
-"  " + (git -C C:\Users\Cybium\Desktop\ScanWhirl log -1 --format="%h %s" integration)
+"  " + (git -C C:\Users\Cybium\Desktop\ScanWhirl-HQ\current log -1 --format="%h %s" integration)
 
 "=== WARNINGS: $($warn.Count)"
 $warn | ForEach-Object { "  ! $_" }

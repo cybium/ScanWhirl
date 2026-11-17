@@ -1,6 +1,6 @@
 # Lead verdicts: QA run2 (build 435e0f3), screenshots looked at by the lead
 
-Source: `C:\Users\Cybium\Desktop\.sw-qa\run2\*.png` (55 shots, all viewed). FIX = sent to the named lane.
+Source: `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\run2\*.png` (55 shots, all viewed). FIX = sent to the named lane.
 
 | Screen / sheet | Shot | Verdict |
 |---|---|---|

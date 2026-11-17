@@ -314,8 +314,8 @@ Free-user testing switch verified ON after recording (it was observed OFF when f
 ## Reproduce (WSL)
 
 ```
-python3 tools/promo/review_raw.py /mnt/c/Users/Cybium/Desktop/.sw-qa/promo
-python3 tools/promo/make_promo.py --root /mnt/c/Users/Cybium/Desktop/.sw-qa/promo --store /mnt/c/Users/Cybium/Desktop/.sw-qa/store
+python3 tools/promo/review_raw.py /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/promo
+python3 tools/promo/make_promo.py --root /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/promo --store /mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/store
 ```
 
 Requires Pillow and imageio_ffmpeg. Output media and intermediate files stay outside the repository. verification.json records sizes, dimensions, pixel format, frame rate and duration. contact_9x16.png samples the final encoded file every 0.5 seconds; contact_4x5.png is an extra review deliverable.

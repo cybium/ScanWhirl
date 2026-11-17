@@ -8,7 +8,7 @@ from pathlib import Path
 import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path('/mnt/c/Users/Cybium/Desktop/.sw-qa/promo_v2')
+ROOT = Path('/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/promo_v2')
 FF = imageio_ffmpeg.get_ffmpeg_exe()
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 

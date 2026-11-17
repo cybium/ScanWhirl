@@ -106,8 +106,8 @@ class PerfHarnessTest {
     // ------------------------------------------------------------------
 
     private fun ownerRoots() = listOf(
-        File("/mnt/c/Users/Cybium/Desktop/.sw-qa/owner"),
-        File("C:/Users/Cybium/Desktop/.sw-qa/owner")
+        File("/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/qa/owner"),
+        File("C:/Users/Cybium/Desktop/ScanWhirl-HQ/qa/owner")
     )
 
     private fun buildLibrary() {
@@ -189,7 +189,7 @@ class PerfHarnessTest {
 
     private fun repoRoot(): File {
         // The gate builds in a WSL mirror; write the measured table back to the real worktree.
-        val worktree = File("/mnt/c/Users/Cybium/Desktop/ScanWhirl-L4")
+        val worktree = File("/mnt/c/Users/Cybium/Desktop/ScanWhirl-HQ/lanes/L4")
         if (worktree.isDirectory) return worktree
         val cwd = File(System.getProperty("user.dir") ?: ".")
         return if (cwd.name == "app") cwd.parentFile ?: cwd else cwd

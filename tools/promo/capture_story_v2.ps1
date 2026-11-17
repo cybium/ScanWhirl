@@ -1,11 +1,11 @@
 # Record approved demo-app shots only, after the build owner releases the phone.
 # Run from PowerShell; footage remains outside git.
 $ErrorActionPreference = 'Stop'
-$lock = 'C:\Users\Cybium\Desktop\.sw-qa\PHONE_BUSY'
+$lock = 'C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\PHONE_BUSY'
 if ((Get-Content $lock -Raw).Trim() -ne 'terra: recording') { throw 'Phone lock not owned by this capture.' }
 . "$PSScriptRoot\..\phone.ps1"
 $script:pkg = 'com.scanwhirl.app.demo'
-$raw = 'C:\Users\Cybium\Desktop\.sw-qa\promo_v2\raw_final'
+$raw = 'C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\promo_v2\raw_final'
 New-Item -ItemType Directory -Force $raw | Out-Null
 
 function Begin-StoryClip([string]$name, [int]$seconds) {
