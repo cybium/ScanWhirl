@@ -129,14 +129,16 @@ class IdCardFlowTest {
 
     // ---- flow -------------------------------------------------------------
 
+    // fixflow: owner bug W6 - a front-only card now has one layout only (the front on its own
+    // page), because "both sides on one page" cannot be filled without a back side.
     @Test
-    fun `front only creates one A4 page with the front on top`() {
+    fun `front only creates one page with the front on its own page`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.acceptCapture(IdCardActivity.Side.FRONT, jpeg(Color.RED))
                 // "Add the back side?" → Front only (a quiet action in the sheet body).
                 clickSheetText(R.string.tools_id_front_only)
-                // Layout → remembered default: both sides on one page (primary).
+                // Layout → the only layout left: the front on one page.
                 clickSheet(R.id.swSheetPrimary)
             }
             assertTrue("the card document is created", waitUntil { repo.listDocuments().isNotEmpty() })
@@ -144,10 +146,10 @@ class IdCardFlowTest {
 
         val doc = newestDoc()
         assertEquals("front only is one page", 1, doc.pageCount)
-        val top = pageColor(doc.id, 0, IdCard.WIDTH / 2, (IdCard.frontRect().centerY()).toInt())
-        val bottom = pageColor(doc.id, 0, IdCard.WIDTH / 2, (IdCard.backRect().centerY()).toInt())
-        assertColor(Color.RED, top)
-        assertColor(Color.WHITE, bottom)
+        val centre = pageColor(doc.id, 0, IdCard.WIDTH / 2, IdCard.singleRect().centerY().toInt())
+        val top = pageColor(doc.id, 0, IdCard.WIDTH / 2, 80)
+        assertColor(Color.RED, centre)
+        assertColor(Color.WHITE, top)
         assertEquals(1, repo.listDocuments().size)
     }
 
@@ -258,10 +260,12 @@ class IdCardFlowTest {
         assertTrue(repo.listDocuments().isEmpty())
     }
 
+    // fixflow: owner bug W4 - "Pick from gallery" opens Android's photo picker directly now; the
+    // Google camera scanner (launchGalleryCrop) is no longer part of this button.
     @Test
-    fun `the id card gallery goes through the shared scanner crop`() {
-        var started = false
-        com.scanwhirl.app.tools.GalleryCrop.startOverride = { started = true; true }
+    fun `the id card gallery opens the android photo picker`() {
+        var scannerStarted = false
+        com.scanwhirl.app.tools.GalleryCrop.startOverride = { scannerStarted = true; true }
         try {
             ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
                 scenario.onActivity {
@@ -269,9 +273,12 @@ class IdCardFlowTest {
                     val dialog = requireNotNull(ShadowDialog.getLatestDialog())
                     dialog.findViewById<View>(R.id.swSheetSecondary).performClick()
                     idle()
+                    val picker = shadowOf(it).nextStartedActivityForResult
+                    assertNotNull("Pick from gallery opens the photo picker", picker)
+                    assertEquals("image/*", picker.intent.type)
                 }
             }
-            assertTrue("ID card gallery must open launchGalleryCrop", started)
+            assertTrue("the Google camera scanner must not be involved", !scannerStarted)
         } finally {
             com.scanwhirl.app.tools.GalleryCrop.startOverride = null
         }
