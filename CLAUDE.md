@@ -15,80 +15,35 @@ anything older under `docs/history/` is not instruction.
   (`26111602`) = trust-pill fix. Version codes are date based `YYMMDDnn` in `app/build.gradle.kts`.
   A code already uploaded to Play can never be reused: every new upload needs the next number.
 
-## LEAD MEMORY (read first; written by the lead after the 2026-11-15/16 sessions, owner-ordered)
-The lead (Opus) repeated these mistakes. Do not repeat them after a context compaction.
-1. **Read the memory before acting**: this section, `docs/plans/lanes/73_ORCHESTRATION_LOG.md`
-   (tail), `docs/plans/lanes/72_WORKER_BRIEF.md`, `docs/release/NEXT_RELEASE.md`. Tools already exist:
-   `tools/gate.ps1` (serialized build; full suite runs in the cloud), `tools/lane-watch.ps1`
-   (30-min watchdog of every lane), `tools/lane-review.ps1` (pre-merge check), `tools/wait-integration.ps1`,
-   `tools/phone.ps1`, `tools/store_frames.py`, `tools/copy_audit.ps1`.
-2. **Lead = boss, not worker.** Delegate with EXACT briefs (files, steps, tap paths, acceptance
-   tests) and verify the result yourself (diff, screenshots, gate line). Take a worker's job only
-   when it is stuck; say so.
-3. **Every worker brief cites 72_WORKER_BRIEF.md**: never run gradlew, only `tools\gate.ps1`, gate in
-   the FOREGROUND with timeout 5400000, never end the turn while a gate waits. Five local Gradle
-   builds at once on this 7.4 GB PC killed a worker.
-4. **Models (owner rules)**: opencode-go = ONLY `deepseek-v4.1-flash#high`. **Never use Grok.**
-   OpenAI: research the model before launching it, never guess an effort level. GPT-6.1 Sol = strict
-   reviewer of risky code (money, data). GPT-6.1 Terra at medium = visual / computer-use / video work.
-   Astra burns the ChatGPT allowance; avoid. DeepSeek = volume work, but never merge its
-   money/data code without a strong reviewer (it introduced billing regressions all tests missed).
-5. **Merge one lane at a time**, wait for the integration cloud gate (lint runs only there) before
-   the next merge. Known runner-flaky tests (ScanEnhanceQuality timing, PageNormalization OOM,
-   ExportHygiene) re-run automatically once when they are the only failures.
-6. **Never claim something is done before it exists and you have looked at it.** Say "not done yet"
-   plainly. Check the actual gate line, the actual file, the actual screenshot.
-7. **Phone**: one user at a time; lock with `C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\PHONE_BUSY`. Only
-   `com.scanwhirl.app.demo` / `.test`; never the owner's `com.scanwhirl.app`; never airplane mode /
-   Wi-Fi / data / hotspot; never tap a file-picker preview icon (opens Chrome); never buy.
-   Verified paths: nav y=2214 (Library x130, Tools x315, Vault x760, Me x948); doc dock y=2234
-   (Share 241, Edit 540 = page editor, Text 738, More 938); Hide private info = Tools > search
-   "private" > "Redact" > pick doc > "Hide private info" > Find > Hide selected > Back > Discard;
-   Free/Pro test switch = Me > Settings > scroll > id `switchTestFree` (screen reloads after toggle);
-   language = Home chip "A/अ". Status bar: `am broadcast -a com.android.systemui.demo` (enter,
-   clock 1000, battery 100, network wifi hide + mobile level 4, notifications hidden).
-8. **Store screenshots**: demo app only, fictional docs (`tools/store_samples.py`), Free mode except
-   Pro-only tools, never edit app content to make a screenshot look better (real OCR, even a misread),
-   Pro screenshot = TOP of the Pro screen (logo, pills, 8 tools, "See all N"), NOT the price card.
-   Look at every framed image before reporting.
-9. **Copy**: no long dashes anywhere users read (StringsNoLongDashTest); no false claims (no family
-   sharing; tool counts derived; "Offline" pill wording is the owner's choice); EN + HI always.
-10. **Owner style**: speed AND quality; short answers; no defensive narration; when the owner says
-   stop, stop; do not start new searches/audits when the owner asks to finish a release. When the
-   owner asks for one word, answer in one word. Legal/policy answers: cite the rule, never guess.
-11. **"Kill" means kill**: Stop-Process the worker's shell/gate processes immediately, then send the
-   session "END NOW, run no tools". Never leave a worker in a wait/poll loop (every check burns
-   tokens): end it, and resume the same session ID later when its input is ready.
-12. **Roles (owner order 2026-11-17)**: the owner is the GUIDE, the lead is the LEAD. The plan is the
-   lead's and its flaws are the lead's. The lead may and must criticise owner decisions when they
-   are wrong: say what, why, and what the lead does instead, then go with the best idea.
-13. **Direction change (2026-11-17)**: ScanWhirl moves to a NEW test app built one feature at a time,
-   each 100% complete before the next. The app WILL use the internet (owner found fatal flaws in
-   offline-only: purchases, analytics for a new app). Feature 1 = our own scanner. Process per
-   feature: design interface + navigation -> criticise -> rework -> only then code. No phone:
-   emulators (Google Play system images), heavy work on GitHub cloud runners. Check current library
-   docs (docs MCP) before writing code; never rely on memory for APIs. The scanner must be our own
-   code: no copied proprietary code (see the scanner plan for the clean-room rule).
-   Plan of record: `docs/plans/NEXT_APP_PLAN.md` (read it first). MCPs: `context7` (library docs),
-   `mobile` (emulators; NEVER its paid remote devices), `google-docs` (needs owner's API key).
-15. **Workspace (2026-11-17)**: everything lives in `C:\Users\Cybium\Desktop\ScanWhirl-HQ\`:
-   `current\` (this repo, 1.2.x), `next\` (new app, private repo `cybium/scanwhirl-next`), `lanes\`
-   (future worktrees), `qa\` (was .sw-qa; real-clip benchmark in `qa\recordings\`), `locks\`,
-   `assets\`, `research\`, `promo\`, `privacy-site\`. Desktop `Others` + shortcuts are the owner's:
-   never touch. Old lane work is on GitHub (`lane/*`, `park/stash-0`, `park/stash-1`). Local MCPs
-   must use `cwd: "~"` (a process inside a folder locks it on Windows).
-16. **Owner's phone privacy (2026-11-18 incident)**: a stray `adb pull /sdcard/` copied the owner's
-   whole phone storage to the PC (deleted again; Defender flagged a cracked APK from it). NEVER pull
-   or list whole folders from the owner's phone: only exact files the lead itself created. Never
-   touch the owner's apps/files without an explicit yes. Infinix X6711: rear camera has a hardware-
-   looking line fault (dotted vertical lines, moving, worse at high gain): use it for UI tests, not
-   as the scanner-quality reference (Redmi 10 Prime planned for that).
-14. **Worker rules (learned 2026-11-17)**: every task ends with a scope block listing the only files
-   it may touch; a script checks `git diff --name-only` against that list (no judging by eye);
-   DeepSeek gets 1-3 file tasks with the test given; reviewers are fresh-context, read-only, with a
-   closed defect list; an ambiguous owner reply is NOT approval; max 2 workers at once.
-- Branches: `master` (main), `integration` (working branch), `lane/<name>` (one task each). Never
-  merge a lane into `integration` yourself — the lead merges.
+## LEAD MEMORY (read first; keep it short: only rules that change behaviour)
+1. **Roles**: owner = guide, lead = lead. The plan and its flaws are the lead's. Criticise owner
+   decisions when wrong (what, why, what instead), then go with the best idea. An ambiguous reply is
+   not approval.
+2. **Style**: speed and quality; short answers; no defensive narration; one word when asked; "stop"
+   means stop; legal/policy answers cite the rule. Never claim done before looking at the result.
+3. **Direction (2026-11-17)**: ScanWhirl Next (`..\next`, private repo `cybium/scanwhirl-next`), one
+   feature at a time, each 100% complete; it uses the internet. Per feature: design interface +
+   navigation (local web skeleton) -> criticise -> rework -> owner approves -> code. Plan of record:
+   `docs/plans/NEXT_APP_PLAN.md`. Feature 1 = our own scanner, clean-room (no copied proprietary code).
+   This repo (1.2.x) = maintenance only; its details are in `docs/release/OLD_APP_NOTES.md`.
+4. **APIs**: check the `context7` / `google-docs` MCPs before writing code; never trust memory.
+5. **Devices**: Infinix X6711 over USB adb = app/UI testing (its rear camera has a hardware line
+   fault). Redmi 10 Prime = scanner recordings and scanner quality. Emulators via the `mobile` MCP
+   (never its paid remote devices). Google cloud real devices only for final sign-off (free-trial
+   credit ends ~2027-02-15; never upgrade to paid). Lock `ScanWhirl-HQ\qa\PHONE_BUSY`; only our own
+   packages; pull only files the lead created.
+6. **Workers**: opencode-go = only `deepseek-v4.1-flash#high`; never Grok; research any OpenAI model
+   first (Sol = reviewer of money/data code, Terra medium = visual work; avoid Astra). Briefs list the
+   exact files (a script checks `git diff --name-only`), DeepSeek gets 1-3 file tasks with the test,
+   reviewers are fresh-context and read-only with a defect list, max 2 workers. "Kill" = Stop-Process
+   + "END NOW"; never leave a worker in a wait loop.
+7. **Builds**: PC has 7.4 GB RAM: heavy builds and tests run on GitHub Actions; never Gradle and an
+   emulator at once. One merge at a time, wait for the cloud gate.
+8. **Copy**: no long dashes in user-facing text; no false claims; English + Hindi.
+9. **Workspace**: `C:\Users\Cybium\Desktop\ScanWhirl-HQ\` (current, next, lanes, qa, locks, assets,
+   research, promo, privacy-site). Desktop `Others` and shortcuts are the owner's. Local MCPs use
+   `cwd: "~"`. Old lane work is on GitHub (`lane/*`, `park/*`).
+- Branches here: `master`, `integration` (working), `lane/<name>`; only the lead merges.
 
 ## Read before editing
 
