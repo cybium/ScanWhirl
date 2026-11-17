@@ -18,7 +18,7 @@ testers and the Play listing carry over. Feature 1 is our own scanner.
 |---|---|---|
 | Download scanner apps and reverse engineer them | **Black-box study only**: run them on the emulator, record what they do (when they lock, how they guide, timings, edge cases). No decompiling of their code. | Decompiling and copying their algorithms is exactly what causes the copyright strikes the owner wants to avoid (point 7), and their licences forbid it. Behaviour, ideas and published papers are free to learn from; their code is not. |
 | Understand OCR engines, build our own | **Own the scanner, license the OCR.** OCR stays Google ML Kit text recognition (free, on-device, commercial use allowed, Latin + Devanagari). | A competitive OCR engine is a multi-year research project. Users judge us on capture: finding the page fast, a steady outline, a clean result. That's where our own engine pays off. |
-| Never use my phone, only emulators | **Emulators for UI and flow; recorded real video for the detector; cloud real devices for sign-off.** | Both earlier scanners passed synthetic tests and failed on the real phone. An emulator camera is not a real camera (no blur, glare, noise, shaky hands). Fix: record ~30 short real videos ONCE (owner, with the phone's normal camera app, not our app), replay them on the PC and on GitHub on every change, and score them. Final check of each feature: Firebase Test Lab real devices (cloud), not the owner's phone. |
+| Never use my phone, only emulators | **Emulators for UI and flow; recorded real video for the detector; cloud real devices for sign-off.** | Both earlier scanners passed synthetic tests and failed on the real phone. An emulator camera is not a real camera (no blur, glare, noise, shaky hands). Fix: record ~30 short real videos ONCE (owner, with the phone's normal camera app, not our app), replay them on the PC and on GitHub on every change, and score them. Final check of each feature: Google's Developer Device Platform ("Device Run", successor of Firebase Test Lab, which shuts down 2027-09-30) real devices in the cloud, not the owner's phone. |
 | Reverse engineer to fix flicker | Flicker is a **tracking** problem, not an algorithm-secret problem (see section 4). | A steady outline comes from temporal filtering, lock/unlock hysteresis and analysing at a sane frame size. Diagnosis of our old code is in section 4.1. |
 
 ## 3. Workspace and tooling
@@ -109,7 +109,7 @@ reworked before any code (section 5).
 4. **Rework** -> owner approves the design in words (Status: approved in the design file).
 5. **Spec + tasks**: each task lists the exact files it may touch and its acceptance test.
 6. **Code**: engine first (benchmark green), then UI.
-7. **Verify**: CI green, emulator flows recorded, Firebase Test Lab real devices, lead looks at
+7. **Verify**: CI green, emulator flows recorded, Developer Device Platform real devices, lead looks at
    every screenshot. Then the definition-of-done checklist.
 
 ## 6. What we change in how the lead runs workers (learned from others)
@@ -142,6 +142,14 @@ Flash in OpenCode (DeepSeek drifts on long, loose runs and needs tight boundarie
 0. Workspace (desktop, worktrees, new repo, CI skeleton) -> 1. empty app: one Scan button, CI green
 -> 2. scanner research -> 3. scanner design + critique + rework + owner approval -> 4. benchmark
 recordings + harness -> 5. engine -> 6. scanner UI -> 7. cloud real-device sign-off.
+
+## 11. Google Cloud free-trial credit (~Rs 28.5k, 90 days from 2026-11-17; checked in Google docs 2026-11-18)
+- Real-device tests: Developer Device Platform / Test Lab, $5 per physical device-hour, $1 per virtual
+  (promo rates until 2027-04-30). The credit covers it: about 60 physical device-hours. Used for each
+  feature's sign-off on several low-end phones.
+- Purchase verification backend later (Cloud Run + Play Developer API + real-time notifications): small cost.
+- NOT possible on the free trial: GPUs (Compute Engine, Vertex AI). A trained scanner model would train on CPU.
+- Never upgrade the trial to a paid account without the owner's yes. Set a budget alert first.
 
 ## 9. Decisions needed from the owner
 1. **Desktop move** (section 3): go?
