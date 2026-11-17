@@ -229,7 +229,8 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word (chips). -->
+    <!-- v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word (chips).
+         Owner F8: roomy chip rows: 8dp gaps inside a row, 12dp between the rows (in code). -->
     <LinearLayout
         android:id="@+id/ocrActions"
         android:layout_width="match_parent"

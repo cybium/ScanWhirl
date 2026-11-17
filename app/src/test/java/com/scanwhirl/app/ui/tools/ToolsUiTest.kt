@@ -51,8 +51,10 @@ class ToolsUiTest {
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
 
+    // fixui: tiles removed (owner F6/F7/F20) - business_card and duplicate no longer have a
+    // tile. The activities stay for their own flows/tests; the tile-launch promise is gone.
     private val l4Tools = listOf(
-        "id_card", "business_card", "passport", "merge", "split", "extract", "duplicate",
+        "id_card", "passport", "merge", "split", "extract",
         "compress", "pdf_to_images", "long_image", "to_word", "to_powerpoint", "to_excel", "zip",
         "remove_metadata"
     )
@@ -115,10 +117,6 @@ class ToolsUiTest {
                 "id_card" -> assertEquals(
                     "$id must open the ID card capture flow",
                     IdCardActivity::class.java.name, started.component?.className
-                )
-                "business_card" -> assertEquals(
-                    "$id must open the business card flow",
-                    BusinessCardActivity::class.java.name, started.component?.className
                 )
                 else -> {
                     assertEquals(

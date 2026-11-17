@@ -23,6 +23,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -214,27 +215,10 @@ class BookPagesActivityTest {
         }
     }
 
+    // fixui: tiles removed (owner F6/F7/F20) - the Book pages tile left the catalogue. The
+    // activity stays for a post-launch entry point, but no tile can open a half-built screen.
     @Test
-    fun `Book pages is Coming soon (owner 11-15) and never opens a half-built screen`() {
-        val tool = ToolRegistry.byId("book_pages")
-        assertNotNull("the catalogue still lists Book pages", tool)
-        assertEquals(ToolStatus.SOON, tool!!.status)
-        val host = RecordingHost(app)
-        tool.launch(host, tool)
-        assertEquals("the tile starts nothing", null, host.started)
-        assertTrue("the tile shows Coming soon", host.soon)
-    }
-
-    /** A ToolHost that is also a Context (the shell is one), recording what the tile starts. */
-    private class RecordingHost(base: Context) : ContextWrapper(base), ToolHost {
-        var started: Intent? = null
-
-        override fun startActivity(intent: Intent) {
-            started = intent
-        }
-
-        override fun open(tool: SwTool) = throw AssertionError("Book pages must open its screen")
-        var soon = false
-        override fun comingSoon(tool: SwTool) { soon = true }
+    fun `Book pages is gone from the catalogue`() {
+        assertNull("the catalogue no longer lists Book pages", ToolRegistry.byId("book_pages"))
     }
 }

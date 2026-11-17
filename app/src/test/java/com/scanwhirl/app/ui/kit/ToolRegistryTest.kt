@@ -38,12 +38,16 @@ class ToolRegistryTest {
             ToolRegistry.all.count { it.pro && it.status != ToolStatus.SOON },
             ToolRegistry.proCount()
         )
-        assertEquals(17, ToolRegistry.proCount())
+        assertEquals(16, ToolRegistry.proCount())
     }
 
+    // fixui: tiles removed (owner F6/F7/F20) - Book pages, Photos to PDF, Business card,
+    // Duplicate, Enhance and B&W left the catalogue: 43 - 6 = 37 tiles (35 READY, 2 Coming soon).
     @Test
-    fun `catalogue holds all 43 tools, each id once`() {
-        assertEquals(43, ToolRegistry.all.size)
+    fun `catalogue holds all 37 tools, each id once`() {
+        assertEquals(37, ToolRegistry.all.size)
+        assertEquals(35, ToolRegistry.all.count { it.status == ToolStatus.READY })
+        assertEquals(2, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         assertEquals(
             "duplicate tool ids",
             ToolRegistry.all.size,
@@ -52,8 +56,8 @@ class ToolRegistryTest {
     }
 
     @Test
-    fun `eighteen tools are Pro`() {
-        assertEquals(19, ToolRegistry.all.count { it.pro })
+    fun `seventeen tools are Pro`() {
+        assertEquals(17, ToolRegistry.all.count { it.pro })
     }
 
     @Test
