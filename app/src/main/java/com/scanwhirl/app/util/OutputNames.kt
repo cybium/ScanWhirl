@@ -26,6 +26,9 @@ object OutputNames {
             "|pages?\\s*\\d+(?:\\s*-\\s*\\d+)?)\\s*\\)?$"
     )
 
+    /** Owner F9: a split part's old name ended in "part 2" (Hindi "भाग 2"). That is stripped too. */
+    private val PART_SUFFIX = Regex("(?i)\\s*(?:-\\s*)?(?:part|भाग)\\s*\\d+$")
+
     /**
      * @param baseName the name a previous tool produced (or the document's own name).
      * @param toolLabel the short label of the tool now writing, e.g. "Compressed", "Pages 2-3".
@@ -37,8 +40,30 @@ object OutputNames {
         toolLabel: String,
         existingNames: Collection<String>
     ): String {
+        val base = cleanBase(baseName)
+        val label = toolLabel.trim().replace(Regex("\\s+"), " ").ifBlank { "Copy" }
+        return unique("$base - $label", existingNames)
+    }
+
+    /**
+     * Owner F9: a split output is "<document name> part 1", "<name> part 2", ... in page order.
+     * [partWord] is localised by the caller (Hindi: "भाग"). A name that a previous split already
+     * gave a part suffix is cleaned first, so parts never stack.
+     */
+    fun forSplitPart(
+        baseName: String,
+        part: Int,
+        existingNames: Collection<String>,
+        partWord: String = "part"
+    ): String {
+        val base = PART_SUFFIX.replace(cleanBase(baseName), "").trim().ifBlank { "Scan" }
+        val word = partWord.trim().replace(Regex("\\s+"), " ").ifBlank { "part" }
+        return unique("$base $word ${part.coerceAtLeast(1)}", existingNames)
+    }
+
+    /** Trims, collapses spaces and strips every tool suffix a previous run stacked. */
+    private fun cleanBase(baseName: String): String {
         var base = baseName.trim().replace(Regex("\\s+"), " ")
-        // Strip every suffix a previous run stacked, outermost last.
         while (true) {
             val match = SUFFIX.find(base) ?: break
             if (match.range.last != base.lastIndex) break
@@ -46,9 +71,11 @@ object OutputNames {
             if (stripped.isEmpty()) break
             base = stripped
         }
-        if (base.isEmpty()) base = baseName.trim().ifBlank { "Scan" }
-        val label = toolLabel.trim().replace(Regex("\\s+"), " ").ifBlank { "Copy" }
-        val candidate = "$base - $label"
+        return if (base.isEmpty()) baseName.trim().ifBlank { "Scan" } else base
+    }
+
+    /** Appends " (2)", " (3)", ... until the name is free (case-insensitive). */
+    private fun unique(candidate: String, existingNames: Collection<String>): String {
         val taken = existingNames.map { it.trim().lowercase(Locale.ROOT) }.toSet()
         if (candidate.lowercase(Locale.ROOT) !in taken) return candidate
         var n = 2

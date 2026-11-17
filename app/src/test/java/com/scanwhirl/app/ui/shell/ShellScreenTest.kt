@@ -104,16 +104,18 @@ class ShellScreenTest {
         }
     }
 
-    // v2 UI: 03_tools_hub (43 tools: Mask Aadhaar folded into Redact's Find; the Hindi tile folds into Read text).
+    // v2 UI: 03_tools_hub (37 tools after fixui removed Book pages, Photos to PDF, Business card,
+    // Duplicate, Enhance and B&W: owner F6/F7/F20. Mask Aadhaar folded into Redact's Find; the
+    // Hindi tile folds into Read text).
     @Test
-    fun `the tools hub holds all 43 tiles and every tile is wired`() {
+    fun `the tools hub holds all 37 tiles and every tile is wired`() {
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val tiles = ToolsHubScreen.tiles(body)
-            assertEquals(43, tiles.size)
-            assertEquals(43, tiles.mapNotNull { it.tool?.id }.toSet().size)
+            assertEquals(37, tiles.size)
+            assertEquals(37, tiles.mapNotNull { it.tool?.id }.toSet().size)
             for (tile in tiles) {
                 assertTrue("${tile.tool?.id} has no tap action", tile.hasOnClickListeners())
             }

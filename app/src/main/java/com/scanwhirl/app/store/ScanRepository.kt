@@ -2672,11 +2672,15 @@ class ScanRepository(private val context: Context) {
             ranges.forEach {
                 require(it.from in 1..doc.pageFiles.size && it.to <= doc.pageFiles.size) { "No such page" }
             }
-            ranges.map { span ->
+            // Owner F9: parts are "<document name> part 1", "part 2", ... in page order.
+            ranges.sortedBy { it.from }.mapIndexed { index, span ->
                 val chosen = span.indices().map { doc.pageFiles[it] }
-                val label = PageRanges.label(span)
-                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
-                val name = OutputNames.forTool(doc.name, label, existingDocumentNames())
+                val name = OutputNames.forSplitPart(
+                    doc.name,
+                    index + 1,
+                    existingDocumentNames(),
+                    context.getString(com.scanwhirl.app.R.string.split_part_word)
+                )
                 buildAndPublish(name, doc.category, chosen.sumOf { it.length() }) { staging ->
                     chosen.forEachIndexed { i, f -> stagePageCopy(f, staging, i) }
                 }
