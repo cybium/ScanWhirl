@@ -33,7 +33,8 @@ anything older under `docs/history/` is not instruction.
    fault). Redmi 10 Prime = scanner recordings and scanner quality. Emulators via the `mobile` MCP
    (never its paid remote devices). Google cloud real devices only for final sign-off (free-trial
    credit ends ~2027-02-15; never upgrade to paid). Lock `ScanWhirl-HQ\qa\PHONE_BUSY`; only our own
-   packages; pull only files the lead created.
+   packages; pull only files the lead created; check the focused app before every screenshot and look
+   at screenshots before committing them.
 6. **Workers**: opencode-go = only `deepseek-v4.1-flash#high`; never Grok; research any OpenAI model
    first (Sol = reviewer of money/data code, Terra medium = visual work; avoid Astra). Briefs list the
    exact files (a script checks `git diff --name-only`), DeepSeek gets 1-3 file tasks with the test,
