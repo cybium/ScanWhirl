@@ -77,6 +77,12 @@ The lead (Opus) repeated these mistakes. Do not repeat them after a context comp
    `assets\`, `research\`, `promo\`, `privacy-site\`. Desktop `Others` + shortcuts are the owner's:
    never touch. Old lane work is on GitHub (`lane/*`, `park/stash-0`, `park/stash-1`). Local MCPs
    must use `cwd: "~"` (a process inside a folder locks it on Windows).
+16. **Owner's phone privacy (2026-11-18 incident)**: a stray `adb pull /sdcard/` copied the owner's
+   whole phone storage to the PC (deleted again; Defender flagged a cracked APK from it). NEVER pull
+   or list whole folders from the owner's phone: only exact files the lead itself created. Never
+   touch the owner's apps/files without an explicit yes. Infinix X6711: rear camera has a hardware-
+   looking line fault (dotted vertical lines, moving, worse at high gain): use it for UI tests, not
+   as the scanner-quality reference (Redmi 10 Prime planned for that).
 14. **Worker rules (learned 2026-11-17)**: every task ends with a scope block listing the only files
    it may touch; a script checks `git diff --name-only` against that list (no judging by eye);
    DeepSeek gets 1-3 file tasks with the test given; reviewers are fresh-context, read-only, with a
