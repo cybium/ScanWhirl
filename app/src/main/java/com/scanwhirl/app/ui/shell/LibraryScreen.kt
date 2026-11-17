@@ -1464,6 +1464,12 @@ class LibraryScreen(
                 )
                 isClickable = true
                 setOnClickListener {
+                    if (key == null && category == null) {
+                        // H8 (found on device): with everything already shown, the "All"
+                        // chip was a dead tap. It opens the category choice instead.
+                        showCategoryFilterSheet()
+                        return@setOnClickListener
+                    }
                     category = if (key == category) null else key
                     renderChips()
                     renderDocs()
@@ -1475,6 +1481,36 @@ class LibraryScreen(
                     .apply { marginEnd = SwStyle.dp(context, 8f) }
             )
         }
+    }
+
+    /**
+     * H8: the category choice behind Home's "All" chip, so tapping the active chip does
+     * something: the same categories the rail filters by, plus "All categories" to clear.
+     */
+    private fun showCategoryFilterSheet() {
+        val counts = docs.groupingBy { it.category }.eachCount()
+        val keys: List<String?> = listOf(null) + CategoryRules.ALL
+        val labels = keys.map { key ->
+            if (key == null) {
+                context.getString(R.string.home_filter_all_documents)
+            } else {
+                context.getString(
+                    R.string.home_chip_category,
+                    CategoryLabels.display(context, key),
+                    counts[key] ?: 0
+                )
+            }
+        }
+        SwSheet.builder(context)
+            .setTitle(R.string.home_filter_category_title)
+            .setOptions(labels, keys.indexOf(category)) { which, _ ->
+                category = keys[which.coerceIn(0, keys.lastIndex)]
+                renderChips()
+                renderDocs()
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
     }
 
     private fun computeVisible(
