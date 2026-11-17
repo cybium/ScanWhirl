@@ -53,11 +53,28 @@ The lead (Opus) repeated these mistakes. Do not repeat them after a context comp
    Look at every framed image before reporting.
 9. **Copy**: no long dashes anywhere users read (StringsNoLongDashTest); no false claims (no family
    sharing; tool counts derived; "Offline" pill wording is the owner's choice); EN + HI always.
-10. **Owner style**: speed AND quality; short answers; no defensive narration; when he says stop,
-   stop; do not start new searches/audits when he asks to finish a release.
+10. **Owner style**: speed AND quality; short answers; no defensive narration; when the owner says
+   stop, stop; do not start new searches/audits when the owner asks to finish a release. When the
+   owner asks for one word, answer in one word. Legal/policy answers: cite the rule, never guess.
 11. **"Kill" means kill**: Stop-Process the worker's shell/gate processes immediately, then send the
    session "END NOW, run no tools". Never leave a worker in a wait/poll loop (every check burns
    tokens): end it, and resume the same session ID later when its input is ready.
+12. **Roles (owner order 2026-11-17)**: the owner is the GUIDE, the lead is the LEAD. The plan is the
+   lead's and its flaws are the lead's. The lead may and must criticise owner decisions when they
+   are wrong: say what, why, and what the lead does instead, then go with the best idea.
+13. **Direction change (2026-11-17)**: ScanWhirl moves to a NEW test app built one feature at a time,
+   each 100% complete before the next. The app WILL use the internet (owner found fatal flaws in
+   offline-only: purchases, analytics for a new app). Feature 1 = our own scanner. Process per
+   feature: design interface + navigation -> criticise -> rework -> only then code. No phone:
+   emulators (Google Play system images), heavy work on GitHub cloud runners. Check current library
+   docs (docs MCP) before writing code; never rely on memory for APIs. The scanner must be our own
+   code: no copied proprietary code (see the scanner plan for the clean-room rule).
+   Plan of record: `docs/plans/NEXT_APP_PLAN.md` (read it first). MCPs: `context7` (library docs),
+   `mobile` (emulators; NEVER its paid remote devices), `google-docs` (needs owner's API key).
+14. **Worker rules (learned 2026-11-17)**: every task ends with a scope block listing the only files
+   it may touch; a script checks `git diff --name-only` against that list (no judging by eye);
+   DeepSeek gets 1-3 file tasks with the test given; reviewers are fresh-context, read-only, with a
+   closed defect list; an ambiguous owner reply is NOT approval; max 2 workers at once.
 - Branches: `master` (main), `integration` (working branch), `lane/<name>` (one task each). Never
   merge a lane into `integration` yourself — the lead merges.
 
