@@ -132,7 +132,10 @@ Flash in OpenCode (DeepSeek drifts on long, loose runs and needs tight boundarie
 6. **Lean**: one lead + at most 2 workers at once (RAM, and elaborate multi-agent setups cost more
    for similar quality). The lead never waits in a loop on a worker.
 
-## 6b. Owner decisions 2026-11-18 (PROVISIONAL until research lands)
+## 6b. Owner decisions 2026-11-18: LOCKED after research (offline by default; Pro one-time ₹499 with a
+Play price experiment ₹299/₹499/₹999 later). Gate: a license-tester purchase must succeed on a build with
+INTERNET stripped (Play Billing 6-9 pulls transport-backend-cct, which declares INTERNET for diagnostics).
+Original provisional notes:
 - Stay offline, no Google sign-in (Play Billing works without INTERNET; Play Console vitals for crashes;
   Drive backup via the system file picker). Research: `next/docs/research/ONLINE_VS_OFFLINE.md`.
 - Pro = one-time purchase. Price ₹100 is being re-checked: our 2026-11-13 data shows the Indian band at
