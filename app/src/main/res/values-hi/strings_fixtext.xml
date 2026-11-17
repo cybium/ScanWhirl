@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lane fixtext: Hindi values for the device-bug fixes. -->
+    <string name="protect_passwords_mismatch"><!-- review -->पासवर्ड मेल नहीं खाते</string>
+    <string name="home_filter_category_title"><!-- review -->श्रेणी से छाँटें</string>
+    <string name="home_filter_all_documents"><!-- review -->सभी श्रेणियाँ</string>
+</resources>
