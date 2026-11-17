@@ -28,6 +28,7 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
+import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.shell.ShellActivity
@@ -49,6 +50,9 @@ import java.util.zip.ZipOutputStream
  * One screen for a new document copy and for an exported file: Open, Share, Save (the system
  * Save-as picker), Show in library and Undo. Undo removes only the copy this run created; the
  * source document is never touched. Built with the kit on the ink background.
+ *
+ * F1/W3: the ID card result is already saved the moment the layout is chosen, so that flow shows
+ * Keep (done) and Discard instead of Save and Undo, and Back asks "Discard this ID card?" first.
  */
 class ToolResultActivity : BaseActivity() {
 
@@ -67,6 +71,9 @@ class ToolResultActivity : BaseActivity() {
     private var toolId = ""
     private var note: String? = null
 
+    /** F1: the ID card flow's own result actions (Keep / Discard). */
+    private val idCardFlow: Boolean get() = toolId == "id_card"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
@@ -79,6 +86,12 @@ class ToolResultActivity : BaseActivity() {
         saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(mime)) { uri ->
             uri ?: return@registerForActivityResult
             saveTo(uri)
+        }
+        if (idCardFlow) {
+            // F1/W3: leaving an already-saved card asks first; Discard deletes exactly this card.
+            onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = confirmDiscardIdCard()
+            })
         }
         setContentView(buildRoot())
         render()
@@ -106,7 +119,7 @@ class ToolResultActivity : BaseActivity() {
             layoutParams = LinearLayout.LayoutParams(
                 SwStyle.dp(this@ToolResultActivity, 48f), SwStyle.dp(this@ToolResultActivity, 48f)
             )
-            setOnClickListener { finish() }
+            setOnClickListener { handleBack() }
         })
         bar.addView(
             SwStyle.text(this, 22f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
@@ -173,6 +186,24 @@ class ToolResultActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
 
+        if (idCardFlow) {
+            // F1/W3: the card is already saved, so there is nothing to Save and nothing to Undo.
+            // Two clear actions: Keep (done) and Discard (delete this one card).
+            column.addView(
+                button(getString(R.string.fixflow_keep), tag = TAG_KEEP, primary = true) { finish() },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
+            )
+            column.addView(
+                button(getString(R.string.discard), tag = TAG_DISCARD) { discardIdCard() },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+            )
+            return root
+        }
+
         column.addView(
             button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true) { open() },
             LinearLayout.LayoutParams(
@@ -208,11 +239,18 @@ class ToolResultActivity : BaseActivity() {
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
         }
 
-    private fun button(text: String, id: Int, primary: Boolean = false, onClick: () -> Unit): TextView =
+    private fun button(
+        text: String,
+        id: Int = View.NO_ID,
+        tag: String? = null,
+        primary: Boolean = false,
+        onClick: () -> Unit
+    ): TextView =
         SwStyle.text(this, 15f, SwStyle.color(
             this, if (primary) R.color.sw_disc_ink else R.color.text_hologram_hi
         ), bold = true).apply {
-            this.id = id
+            if (id != View.NO_ID) this.id = id
+            if (tag != null) this.tag = tag
             this.text = text
             gravity = Gravity.CENTER
             maxLines = 2
@@ -549,6 +587,39 @@ class ToolResultActivity : BaseActivity() {
         }
     }
 
+    // ---- ID card: Keep / Discard (F1/W3) ----------------------------------
+
+    private fun handleBack() {
+        if (idCardFlow) confirmDiscardIdCard() else finish()
+    }
+
+    /** Back on a saved ID card asks before anything is deleted. */
+    private fun confirmDiscardIdCard() {
+        if (undone) {
+            finish()
+            return
+        }
+        SwSheet.builder(this)
+            .setTitle(R.string.fixflow_id_discard_title)
+            .setMessage(R.string.fixflow_id_discard_msg)
+            .setPrimary(R.string.discard) { discardIdCard() }
+            .setSecondary(R.string.fixflow_keep)
+            .build()
+            .show()
+    }
+
+    /** Deletes exactly the card this run created (and its preview); nothing else is touched. */
+    private fun discardIdCard() {
+        if (undone) return
+        undone = true
+        val docs = docIds.toList()
+        docIds.clear()
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { docs.forEach { runCatching { repo.deleteDocument(it) } } }
+            if (!isFinishing && !isDestroyed) finish()
+        }
+    }
+
     private fun fail(message: String) {
         errorView.text = message
         errorView.isVisible = true
@@ -573,6 +644,10 @@ class ToolResultActivity : BaseActivity() {
         private const val EXTRA_FILES = "files"
         private const val EXTRA_MIME = "mime"
         private const val EXTRA_NOTE = "note"
+
+        /** F1: view tags for the ID card's two actions (no new ids needed). */
+        const val TAG_KEEP = "fixflow:id_card_keep"
+        const val TAG_DISCARD = "fixflow:id_card_discard"
 
         fun intent(
             context: Context,

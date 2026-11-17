@@ -2,10 +2,8 @@ package com.scanwhirl.app.ui.tools
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -15,8 +13,8 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -26,7 +24,6 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.tools.launchGalleryCrop
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -39,20 +36,25 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * v2 UI: 03_tools_hub — the ID card tool the way people actually use it.
  *
  * 1. Opening the tool starts Google's document scanner (the same ML Kit scanner as Scan, page
- *    limit 1, which crops the card) for the FRONT side.
+ *    limit 1, which crops the card) for the FRONT side, or the Android photo picker for a card
+ *    that is already on the phone (one image, no scanner in the way).
  * 2. After the front, an `SwSheet` asks "Add the back side?" with Scan back side / Front only;
- *    a gallery picker is offered for each side so the tool also works without a camera.
+ *    the gallery picker is offered for the back too.
  * 3. An `SwSheet` asks for the layout: both sides on one A4 page (front top, back bottom, real
- *    ID-1 proportions) or each side on its own page. The choice is remembered.
+ *    ID-1 proportions) or each side on its own page. A front-only card only gets the layout
+ *    that makes sense for one side. The choice is remembered.
  * 4. The document is published through `ScanRepository.createDocument` and the result screen
- *    (Open · Share · Save · Show in library · Undo) opens.
+ *    opens with Keep (done) and Discard; Discard, or Back there, deletes that one document.
  *
- * Cancelling any step (the scanner, a sheet, leaving the screen) creates nothing.
+ * Closing a step with Back leaves the whole flow to Home with nothing saved (owner bugs F1/W7);
+ * a cancelled camera returns to this screen and never re-opens the capture sheet (X1). The
+ * captured sides survive rotation and process death through a small cache copy (X2).
  */
 class IdCardActivity : BaseActivity() {
 
@@ -64,10 +66,21 @@ class IdCardActivity : BaseActivity() {
     private var pendingSide = Side.FRONT
     private var creating = false
 
+    /**
+     * True while our own code moves the flow on to the next step (a sheet button, "Front only").
+     * A sheet that closes for any other reason (Back, outside tap, the close icon) is the user
+     * leaving the flow, so the screen finishes and nothing is saved (F1/W7).
+     */
+    private var movingOn = false
+
     private lateinit var frontPreview: ImageView
     private lateinit var backPreview: ImageView
     private lateinit var errorView: TextView
     private lateinit var progress: View
+
+    /** Tests: fake the camera launch (the ML Kit scanner cannot run under Robolectric). */
+    @Volatile
+    internal var captureOverride: ((Side) -> Boolean)? = null
 
     private val scanner = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -85,14 +98,75 @@ class IdCardActivity : BaseActivity() {
         }
     }
 
+    /**
+     * F1/W4: "Pick from gallery" is the Android photo picker itself, one image, so the card photo
+     * is two taps away instead of Google's scanner plus its own gallery import (W4).
+     */
+    private val photoPicker = registerForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri == null) onCaptureCancelled() else readImage(uri, pendingSide)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
         setContentView(buildRoot())
-        // The first step is always the choice sheet: people without a good camera angle can use
-        // the gallery, and the camera opens only when they ask for it.
-        showFrontSheet()
+        if (savedInstanceState == null) {
+            clearCapturedState()
+            // The first step is always the choice sheet: people without a good camera angle can
+            // use the gallery, and the camera opens only when they ask for it.
+            showFrontSheet()
+        } else {
+            // X2: rotation or process death must not re-ask for the sides that are already in.
+            restoreCapturedState(savedInstanceState)
+            render()
+            when {
+                back != null -> showLayoutSheet()
+                front != null -> showBackSheet()
+                else -> showFrontSheet()
+            }
+        }
     }
+
+    // ---- kept across recreation (X2) --------------------------------------
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        keepCapturedState()
+        outState.putBoolean(KEY_HAS_STATE, true)
+        outState.putInt(KEY_PENDING_SIDE, pendingSide.ordinal)
+    }
+
+    /**
+     * The two captures live in a small cache copy so a recreated screen (rotation, process death)
+     * keeps them without pushing a multi-megabyte JPEG through the saved-state Bundle.
+     */
+    private fun keepCapturedState() {
+        runCatching {
+            val dir = capturedStateDir().apply { mkdirs() }
+            front?.let { File(dir, FRONT_FILE).writeBytes(it) }
+                ?: File(dir, FRONT_FILE).delete()
+            back?.let { File(dir, BACK_FILE).writeBytes(it) }
+                ?: File(dir, BACK_FILE).delete()
+        }
+    }
+
+    private fun restoreCapturedState(state: Bundle) {
+        if (!state.getBoolean(KEY_HAS_STATE, false)) return
+        pendingSide = if (state.getInt(KEY_PENDING_SIDE, 0) == Side.BACK.ordinal) Side.BACK else Side.FRONT
+        runCatching {
+            val dir = capturedStateDir()
+            front = File(dir, FRONT_FILE).takeIf { it.isFile }?.readBytes()
+            back = File(dir, BACK_FILE).takeIf { it.isFile }?.readBytes()
+        }
+    }
+
+    private fun clearCapturedState() {
+        runCatching { capturedStateDir().deleteRecursively() }
+    }
+
+    private fun capturedStateDir(): File = File(cacheDir, STATE_DIR)
 
     // ---- screen -----------------------------------------------------------
 
@@ -247,6 +321,7 @@ class IdCardActivity : BaseActivity() {
     /** Opens the same Google ML Kit document scanner Scan uses, limited to one page. */
     private fun scan(side: Side) {
         pendingSide = side
+        if (captureOverride?.invoke(side) == true) return
         val options = GmsDocumentScannerOptions.Builder()
             .setGalleryImportAllowed(false)
             .setScannerMode(
@@ -271,18 +346,18 @@ class IdCardActivity : BaseActivity() {
 
     private fun pickFromGallery(side: Side) {
         pendingSide = side
-        launchGalleryCrop(
-            activity = this,
-            maxPages = 1,
-            onResult = { uris ->
-                val uri = uris.firstOrNull()
-                if (uri == null) onCaptureCancelled() else readImage(uri, side)
-            }
+        photoPicker.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
         )
     }
 
-    private fun onCaptureCancelled() {
-        if (pendingSide == Side.FRONT) showFrontSheet() else showBackSheet()
+    /**
+     * W4/X1: a cancelled camera or picker puts the person back on the ID card screen (the step
+     * the capture was opened from) with the side slots ready for another try. It never re-opens
+     * the capture sheet, which made Back in the scanner look ignored.
+     */
+    internal fun onCaptureCancelled() {
+        render()
     }
 
     private fun readImage(uri: Uri, side: Side) {
@@ -321,22 +396,51 @@ class IdCardActivity : BaseActivity() {
 
     // ---- sheets -----------------------------------------------------------
 
+    /**
+     * A sheet is one step of the flow. Closing it with Back (or the close icon, or an outside tap)
+     * leaves the flow with nothing saved, so one Back from any step before the result reaches
+     * Home (F1/W7). Steps that move on set [movingOn] first.
+     */
+    private fun showSheet(sheet: SwSheet) {
+        sheet.setOnDismissListener {
+            val moved = movingOn
+            movingOn = false
+            if (!moved && !creating && !isFinishing && !isDestroyed && !isChangingConfigurations) {
+                finish()
+            }
+        }
+        sheet.show()
+    }
+
     private fun showFrontSheet() {
-        SwSheet.builder(this)
-            .setTitle(R.string.tools_id_front_title)
-            .setMessage(R.string.tools_id_front_msg)
-            .setPrimary(R.string.tools_id_scan_camera) { scan(Side.FRONT) }
-            .setSecondary(R.string.tools_id_pick_gallery) { pickFromGallery(Side.FRONT) }
-            .build()
-            .show()
+        showSheet(
+            SwSheet.builder(this)
+                .setTitle(R.string.tools_id_front_title)
+                .setMessage(R.string.tools_id_front_msg)
+                .setPrimary(R.string.tools_id_scan_camera) {
+                    movingOn = true
+                    scan(Side.FRONT)
+                }
+                .setSecondary(R.string.tools_id_pick_gallery) {
+                    movingOn = true
+                    pickFromGallery(Side.FRONT)
+                }
+                .build()
+        )
     }
 
     private fun showBackSheet() {
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.tools_id_back_title)
             .setMessage(R.string.tools_id_back_msg)
-            .setPrimary(R.string.tools_id_scan_camera) { scan(Side.BACK) }
-            .setSecondary(R.string.tools_id_pick_gallery) { pickFromGallery(Side.BACK) }
+            .setPrimary(R.string.tools_id_scan_camera) {
+                movingOn = true
+                scan(Side.BACK)
+            }
+            .setSecondary(R.string.tools_id_pick_gallery) {
+                movingOn = true
+                pickFromGallery(Side.BACK)
+            }
             .build()
         val frontOnly = SwStyle.text(
             this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true
@@ -346,15 +450,21 @@ class IdCardActivity : BaseActivity() {
             minimumHeight = SwStyle.dp(this@IdCardActivity, 44f)
             isClickable = true
             setOnClickListener {
+                movingOn = true
                 sheet.dismiss()
                 showLayoutSheet()
             }
         }
         sheet.setContent(frontOnly)
-        sheet.show()
+        showSheet(sheet)
     }
 
     private fun showLayoutSheet() {
+        // W6: with no back side there is nothing to put on a second half of the page.
+        if (back == null) {
+            showFrontOnlyLayoutSheet()
+            return
+        }
         val remembered = IdCardPrefs.layout(this)
         val other = if (remembered == IdCardPrefs.Layout.ONE_PAGE) {
             IdCardPrefs.Layout.OWN_PAGES
@@ -372,9 +482,38 @@ class IdCardActivity : BaseActivity() {
             .setSecondary(
                 if (other == IdCardPrefs.Layout.ONE_PAGE) R.string.tools_id_layout_one
                 else R.string.tools_id_layout_own
-            ) { create(other, IdCardPrefs.paper(this)) }
+            ) { create(other, chosenPaper) }
             .build()
 
+        sheet.setContent(paperRow(chosenPaper) { chosenPaper = it })
+        sheet.setPrimary(
+            if (remembered == IdCardPrefs.Layout.ONE_PAGE) R.string.tools_id_layout_one
+            else R.string.tools_id_layout_own
+        ) { create(remembered, chosenPaper) }
+        showSheet(sheet)
+    }
+
+    /**
+     * W6: front only, so the single meaningful layout is the front on its own page. "Both sides
+     * on one page" is not offered at all because there is no back side to place.
+     */
+    private fun showFrontOnlyLayoutSheet() {
+        var chosenPaper = IdCardPrefs.paper(this)
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.tools_id_layout_title)
+            .setMessage(R.string.fixflow_id_layout_front_only_msg)
+            .build()
+        sheet.setContent(paperRow(chosenPaper) { chosenPaper = it })
+        sheet.setPrimary(R.string.fixflow_id_layout_front_page) {
+            // The layout was not a choice here, so the remembered layout is left alone.
+            create(IdCardPrefs.Layout.OWN_PAGES, chosenPaper, rememberLayout = false)
+        }
+        showSheet(sheet)
+    }
+
+    /** The paper chips under a layout sheet; [onPick] gets every new choice. */
+    private fun paperRow(initial: PaperSize, onPick: (PaperSize) -> Unit): View {
+        var chosenPaper = initial
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
             text = getString(R.string.tools_id_paper_title)
@@ -386,8 +525,8 @@ class IdCardActivity : BaseActivity() {
             paintPaperChip(a4, chosenPaper == PaperSize.A4)
             paintPaperChip(letter, chosenPaper == PaperSize.LETTER)
         }
-        a4.setOnClickListener { chosenPaper = PaperSize.A4; paint() }
-        letter.setOnClickListener { chosenPaper = PaperSize.LETTER; paint() }
+        a4.setOnClickListener { chosenPaper = PaperSize.A4; paint(); onPick(chosenPaper) }
+        letter.setOnClickListener { chosenPaper = PaperSize.LETTER; paint(); onPick(chosenPaper) }
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row.addView(a4, LinearLayout.LayoutParams(0, SwStyle.dp(this@IdCardActivity, 42f), 1f).apply {
             marginEnd = SwStyle.dp(this@IdCardActivity, 8f)
@@ -395,15 +534,7 @@ class IdCardActivity : BaseActivity() {
         row.addView(letter, LinearLayout.LayoutParams(0, SwStyle.dp(this@IdCardActivity, 42f), 1f))
         content.addView(row)
         paint()
-        sheet.setContent(content)
-        sheet.setPrimary(
-            if (remembered == IdCardPrefs.Layout.ONE_PAGE) R.string.tools_id_layout_one
-            else R.string.tools_id_layout_own
-        ) {
-            IdCardPrefs.rememberPaper(this, chosenPaper)
-            create(remembered, chosenPaper)
-        }
-        sheet.show()
+        return content
     }
 
     private fun paperChip(text: String): TextView =
@@ -431,7 +562,11 @@ class IdCardActivity : BaseActivity() {
         }
     }
 
-    private fun create(layout: IdCardPrefs.Layout, paper: PaperSize) {
+    private fun create(
+        layout: IdCardPrefs.Layout,
+        paper: PaperSize,
+        rememberLayout: Boolean = true
+    ) {
         if (creating) return
         val frontBytes = front ?: return
         val backBytes = back
@@ -440,10 +575,10 @@ class IdCardActivity : BaseActivity() {
         errorView.isVisible = false
         lifecycleScope.launch {
             try {
-                IdCardPrefs.remember(this@IdCardActivity, layout)
+                if (rememberLayout) IdCardPrefs.remember(this@IdCardActivity, layout)
                 IdCardPrefs.rememberPaper(this@IdCardActivity, paper)
                 val pages = withContext(Dispatchers.IO) {
-                    if (layout == IdCardPrefs.Layout.ONE_PAGE) {
+                    if (layout == IdCardPrefs.Layout.ONE_PAGE && backBytes != null) {
                         listOf(IdCard.compose(frontBytes, backBytes, paper))
                     } else {
                         val list = mutableListOf(IdCard.composeSingle(frontBytes, paper))
@@ -455,6 +590,7 @@ class IdCardActivity : BaseActivity() {
                     repo.createDocument(getString(R.string.tools_id_card_name), pages)
                 }
                 progress.isVisible = false
+                clearCapturedState()
                 startActivity(ToolResultActivity.intent(this@IdCardActivity, "id_card", docIds = listOf(doc.id)))
                 finish()
             } catch (e: CancellationException) {
@@ -473,6 +609,12 @@ class IdCardActivity : BaseActivity() {
     }
 
     companion object {
+        private const val STATE_DIR = "id_card_state"
+        private const val FRONT_FILE = "front.jpg"
+        private const val BACK_FILE = "back.jpg"
+        private const val KEY_HAS_STATE = "id_card_has_state"
+        private const val KEY_PENDING_SIDE = "id_card_pending_side"
+
         fun intent(context: Context): Intent = Intent(context, IdCardActivity::class.java)
     }
 }

@@ -164,11 +164,14 @@ class ScanLauncher(
      * durable staging folder and the same verified save transaction as Review's Save, and
      * Home then shows the new document at the top with Undo.
      *
+     * F22: the Home scanner opens the saved document right after the save
+     * ([openAfterSave]); the photos import keeps the M08 behaviour (Home shows the new card).
+     *
      * Pages are copied byte for byte (no decode here): the save transaction validates and
      * normalises each one anyway, so doing it twice only cost time. If the save fails, the
      * staged pages are kept and Review opens on them, so nothing scanned is lost.
      */
-    fun saveScanned(uris: List<Uri>) {
+    fun saveScanned(uris: List<Uri>, openAfterSave: Boolean = false) {
         val progress = host.showProgress(R.string.review_saving)
         activity.lifecycleScope.launch {
             val t0 = SystemClock.elapsedRealtime()
@@ -189,6 +192,9 @@ class ScanLauncher(
                 ScanWhirlApp.from(activity).indexer.enqueue(doc.id)
                 HomeReveal.request(doc.id)
                 host.scanSaved(doc, note)
+                if (openAfterSave) {
+                    activity.startActivity(DocumentViewerActivity.intent(activity, doc.id))
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
