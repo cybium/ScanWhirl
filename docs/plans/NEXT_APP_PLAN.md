@@ -1,7 +1,9 @@
 # ScanWhirl Next: lead plan (2026-11-17)
 
 Owner = guide, lead = lead (CLAUDE.md rule 12). This plan is the lead's; its flaws are the lead's.
-Status: DRAFT, waiting for the owner's go on the 4 decisions in section 9.
+Status: APPROVED by the owner 2026-11-17 (all 4 decisions in section 9: go). Desktop moved, repo
+`cybium/scanwhirl-next` created, shot list at `ScanWhirl-HQ\qa\recordings\SHOT_LIST.md`,
+Google docs MCP waiting for the owner's API key.
 
 ## 1. Goal
 

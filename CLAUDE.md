@@ -71,6 +71,12 @@ The lead (Opus) repeated these mistakes. Do not repeat them after a context comp
    code: no copied proprietary code (see the scanner plan for the clean-room rule).
    Plan of record: `docs/plans/NEXT_APP_PLAN.md` (read it first). MCPs: `context7` (library docs),
    `mobile` (emulators; NEVER its paid remote devices), `google-docs` (needs owner's API key).
+15. **Workspace (2026-11-17)**: everything lives in `C:\Users\Cybium\Desktop\ScanWhirl-HQ\`:
+   `current\` (this repo, 1.2.x), `next\` (new app, private repo `cybium/scanwhirl-next`), `lanes\`
+   (future worktrees), `qa\` (was .sw-qa; real-clip benchmark in `qa\recordings\`), `locks\`,
+   `assets\`, `research\`, `promo\`, `privacy-site\`. Desktop `Others` + shortcuts are the owner's:
+   never touch. Old lane work is on GitHub (`lane/*`, `park/stash-0`, `park/stash-1`). Local MCPs
+   must use `cwd: "~"` (a process inside a folder locks it on Windows).
 14. **Worker rules (learned 2026-11-17)**: every task ends with a scope block listing the only files
    it may touch; a script checks `git diff --name-only` against that list (no judging by eye);
    DeepSeek gets 1-3 file tasks with the test given; reviewers are fresh-context, read-only, with a
