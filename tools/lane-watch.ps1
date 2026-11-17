@@ -8,7 +8,7 @@ $warn = @()
 # Every lane worktree (ScanWhirl-<lane>), not just L1-L5: night lanes are named data/ui/pro/... .
 # Lanes whose branch is fully merged and idle > 6 h are listed once, without warnings.
 $lanes = @(git -C C:\Users\Cybium\Desktop\ScanWhirl-HQ\current worktree list --porcelain 2>$null |
-    Where-Object { $_ -match '^worktree (.+ScanWhirl-([^/\\]+))$' } | ForEach-Object { $Matches[2] })
+    Where-Object { $_ -match '^worktree (.+[/\\]ScanWhirl-HQ[/\\]lanes[/\\]([^/\\]+))$' } | ForEach-Object { $Matches[2] })
 $idle = @()
 foreach ($n in $lanes) {
     $p = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\lanes\$n"
@@ -77,6 +77,22 @@ if ($json) {
     $runs | Where-Object { $_.status -ne 'completed' -and ([datetime]$_.createdAt).ToLocalTime() -lt $now.AddMinutes(-30) } |
         ForEach-Object { $warn += "cloud run $($_.databaseId) on $($_.headBranch) running > 30 min" }
 }
+
+"--- phone"
+$adbx = "C:\Users\Cybium\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+$dev = (& $adbx devices 2>$null | Select-String '103223137I112880\s+device')
+if (-not $dev) { "  phone NOT connected"; if (Test-Path "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\PHONE_BUSY") { $warn += "phone disconnected while PHONE_BUSY exists" } }
+else {
+    $win = & $adbx -s 103223137I112880 shell dumpsys window 2>$null
+    $locked = [bool]($win | Select-String 'isKeyguardShowing=true')
+    "  locked: $locked | focus: " + (($win | Select-String 'mCurrentFocus') -join ' ').Trim()
+    if ($locked) { $warn += "phone is LOCKED (phone worker blocked)" }
+}
+"  PHONE_BUSY: " + (Get-Content "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\PHONE_BUSY" -ErrorAction SilentlyContinue)
+$hunt = Get-ChildItem "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\hunt", "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\screenmap" -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '_aborted' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($hunt) { $hm = [int]($now - $hunt.LastWriteTime).TotalMinutes; "  phone worker last output: $hm min ago ($($hunt.Name))"
+    if ($hm -ge 30 -and (Test-Path "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\PHONE_BUSY")) { $warn += "phone worker produced nothing for $hm min" } }
 
 "--- integration"
 "  " + (git -C C:\Users\Cybium\Desktop\ScanWhirl-HQ\current log -1 --format="%h %s" integration)
