@@ -143,6 +143,9 @@ object StampPrompts {
             .setContent(pad)
             .setPrimary(R.string.stamp_signature_save)
             .build()
+        // Owner F14: the pad owns the gesture area. The sheet never drags away under a downward
+        // stroke; it closes only through its X or Save.
+        sheet.lockDrag()
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
             if (pad.isEmpty()) {

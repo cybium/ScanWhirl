@@ -1,0 +1,67 @@
+package com.scanwhirl.app.ui.kit
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Owner F6 / F7 / F20: the tiles that did nothing are removed from the catalogue, not hidden
+ * behind "Coming soon". Book pages, Photos to PDF, Business card, Duplicate and the two
+ * Optimise tiles that only re-opened the viewer (Enhance, B&W) are gone; every other tool stays.
+ */
+class TilesFixUiTest {
+
+    private val removed = listOf(
+        "book_pages", "photos_pdf", "business_card", "duplicate", "enhance", "bw"
+    )
+
+    @Test
+    fun `the removed tiles are not in the catalogue at all`() {
+        for (id in removed) {
+            assertNull("$id must be gone from the catalogue", ToolRegistry.byId(id))
+        }
+        val ids = ToolRegistry.all.map { it.id }
+        for (id in removed) {
+            assertTrue("$id is still listed", id !in ids)
+        }
+    }
+
+    @Test
+    fun `every other tool is still there`() {
+        val kept = listOf(
+            "scan", "id_card", "import_pdf", "passport", "qr_code",
+            "merge", "split", "extract", "organize_pages", "insert_pages", "folders",
+            "batch_rename", "batch_tools",
+            "compress", "resize",
+            "pdf_to_images", "long_image", "to_word", "to_powerpoint", "to_excel", "to_text",
+            "zip", "searchable_pdf", "pdfa",
+            "sign", "add_text", "draw", "highlight", "watermark", "page_numbers", "stamp", "redact",
+            "protect", "unlock", "vault", "remove_metadata", "read_text"
+        )
+        for (id in kept) {
+            assertNotNull("$id must stay in the catalogue", ToolRegistry.byId(id))
+        }
+    }
+
+    @Test
+    fun `no group is left empty by the removals`() {
+        for ((group, tools) in ToolRegistry.grouped()) {
+            assertTrue("$group is empty", tools.isNotEmpty())
+        }
+        assertTrue(ToolRegistry.byGroup(ToolGroup.CREATE).size >= 5)
+        assertTrue(ToolRegistry.byGroup(ToolGroup.ORGANIZE).size >= 8)
+        assertEquals(2, ToolRegistry.byGroup(ToolGroup.OPTIMIZE).size)
+    }
+
+    @Test
+    fun `the derived counts match the shipped catalogue`() {
+        // Owner F6/F7/F20 removed six tiles from the 43-tool catalogue.
+        assertEquals(37, ToolRegistry.all.size)
+        assertEquals(35, ToolRegistry.all.count { it.status == ToolStatus.READY })
+        assertEquals("two tiles are still Coming soon", 2, ToolRegistry.all.count { it.status == ToolStatus.SOON })
+        assertEquals("Business card was the only Pro tile removed from sale", 16, ToolRegistry.proCount())
+        assertEquals(17, ToolRegistry.all.count { it.pro })
+    }
+}

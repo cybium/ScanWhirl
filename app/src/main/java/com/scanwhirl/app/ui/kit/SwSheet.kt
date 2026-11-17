@@ -356,6 +356,19 @@ class SwSheet private constructor(
         dialog.show()
     }
 
+    /**
+     * Owner F14: a sheet whose content is a drawing surface must not move under a stroke.
+     * Dragging, hiding, Back and an outside tap are all disabled; it closes only through its
+     * own X ([closeButton]) or its primary (Done) button. Call before [show].
+     */
+    fun lockDrag(): SwSheet = apply {
+        dialog.behavior.isDraggable = false
+        dialog.behavior.isHideable = false
+        dialog.setCancelable(false)
+        // A grab bar that cannot drag is a lie: hide it.
+        view.findViewById<View>(R.id.swSheetGrab)?.isVisible = false
+    }
+
     fun dismiss() = dialog.dismiss()
 
     /** Secret fields: hide this window from screenshots, recents and casting. */

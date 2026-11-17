@@ -436,7 +436,9 @@ class OcrEditorActivity : BaseActivity() {
 
         // v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word as chips,
         // on two rows so To Word is always visible (never hidden in a scroller).
+        // Owner F8: chips keep an 8dp gap, the rows 12dp, and every chip a 48dp touch target.
         val actions = binding.ocrActions
+        val chipGap = com.scanwhirl.app.ui.kit.SwStyle.dp(this, 8f)
         fun chip(row: LinearLayout, id: Int, icon: Int, label: Int, pro: Boolean = false, weight: Float = 1f): com.scanwhirl.app.ui.kit.SwChip {
             val chip = com.scanwhirl.app.ui.kit.SwChip(this).apply {
                 this.id = id
@@ -450,11 +452,16 @@ class OcrEditorActivity : BaseActivity() {
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     weight
                 ).apply {
-                    marginEnd = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 8f)
+                    marginEnd = chipGap
                 }
             )
             com.scanwhirl.app.ui.A11yTargets.fixChip(chip)
             return chip
+        }
+        // The last chip on a row has no trailing gap: its edge lines up with the pane.
+        fun sealRow(row: LinearLayout) {
+            val last = row.getChildAt(row.childCount - 1) ?: return
+            (last.layoutParams as? LinearLayout.LayoutParams)?.marginEnd = 0
         }
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -476,8 +483,14 @@ class OcrEditorActivity : BaseActivity() {
                 if (!com.scanwhirl.app.ui.kit.ProOffer.require(this)) return@setOnClickListener
                 com.scanwhirl.app.ui.tools.ToolLaunch.start(this, "to_word")
             }
-        actions.addView(row1)
-        actions.addView(row2)
+        actions.addView(row1, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        actions.addView(row2, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 12f) })
+        sealRow(row1)
+        sealRow(row2)
         setupModeSwitch()
         updateWordCount()
         updateUndoRedoState()
