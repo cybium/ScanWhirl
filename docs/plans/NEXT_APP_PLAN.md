@@ -132,7 +132,17 @@ Flash in OpenCode (DeepSeek drifts on long, loose runs and needs tight boundarie
 6. **Lean**: one lead + at most 2 workers at once (RAM, and elaborate multi-agent setups cost more
    for similar quality). The lead never waits in a loop on a worker.
 
-## 7. Internet: consequences to handle (not features yet)
+## 6b. Owner decisions 2026-11-18 (PROVISIONAL until research lands)
+- Stay offline, no Google sign-in (Play Billing works without INTERNET; Play Console vitals for crashes;
+  Drive backup via the system file picker). Research: `next/docs/research/ONLINE_VS_OFFLINE.md`.
+- Pro = one-time purchase. Price ₹100 is being re-checked: our 2026-11-13 data shows the Indian band at
+  ₹750-₹4,250/yr and a ₹1,350 lifetime (ad removal only); that research recommended ₹1,499 one-time.
+  Research: `next/docs/research/PRICING_DATA.md`.
+- Library = real PDFs in `Documents/ScanWhirl/`.
+- ID templates: Aadhaar, PAN, Driving licence, Voter ID, Passport (lead keeps "Other card" in the design
+  for business/student cards, for the owner to veto).
+
+## 7. Internet: consequences to handle (superseded if 6b "offline" is confirmed)
 - The "Offline" trust pill and every "no internet" claim must go; Data safety and the privacy policy
   must be rewritten before the internet build ships.
 - Purchases: Play Billing + server-side verification later; decided in its own feature.
