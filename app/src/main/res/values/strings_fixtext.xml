@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lane fixtext: device-bug fixes (hunt H3/H5/H8 and follow-ups). -->
+    <string name="protect_passwords_mismatch">Passwords don\'t match</string>
+    <string name="home_filter_category_title">Filter by category</string>
+    <string name="home_filter_all_documents">All categories</string>
+</resources>
