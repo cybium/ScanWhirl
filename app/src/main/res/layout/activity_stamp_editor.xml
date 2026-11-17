@@ -118,44 +118,50 @@
             android:paddingVertical="@dimen/sw_space_1" />
     </HorizontalScrollView>
 
+    <!-- Audit item 8: the hint gets its own line under the two action labels,
+         so Hindi (2.4x English) never squeezes it into ~80dp. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:paddingHorizontal="@dimen/sw_space_3"
         android:paddingTop="2dp">
 
-        <TextView
-            android:id="@+id/deleteMark"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:enabled="false"
-            android:gravity="center"
-            android:minWidth="72dp"
-            android:paddingHorizontal="@dimen/sw_space_3"
-            android:text="@string/stamp_delete"
-            android:textSize="14sp" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/findRedactions"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:gravity="center"
-            android:minWidth="72dp"
-            android:paddingHorizontal="@dimen/sw_space_2"
-            android:text="@string/find_button"
-            android:textColor="@color/cyan_primary"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
+            <TextView
+                android:id="@+id/deleteMark"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:enabled="false"
+                android:gravity="center"
+                android:minWidth="72dp"
+                android:paddingHorizontal="@dimen/sw_space_3"
+                android:text="@string/stamp_delete"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/findRedactions"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:gravity="center"
+                android:minWidth="72dp"
+                android:paddingHorizontal="@dimen/sw_space_2"
+                android:text="@string/find_button"
+                android:textColor="@color/cyan_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/selectionHint"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/sw_space_3"
-            android:layout_weight="1"
             android:text="@string/stamp_no_selection"
             android:textColor="@color/text_hologram_dim"
             android:textSize="12sp" />

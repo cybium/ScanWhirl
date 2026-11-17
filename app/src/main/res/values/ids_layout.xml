@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- layout lane: ids for the Home category chip ribbon (audit item 5). -->
+    <item name="swChipScroll" type="id" />
+    <item name="swChipRow" type="id" />
+</resources>

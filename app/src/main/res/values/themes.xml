@@ -164,6 +164,7 @@
         <item name="android:paddingBottom">6dp</item>
         <item name="android:textSize">12sp</item>
         <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
         <item name="android:textColor">@color/text_hologram_hi</item>
         <item name="iconTint">@color/cyan_primary</item>
         <item name="iconGravity">textTop</item>
