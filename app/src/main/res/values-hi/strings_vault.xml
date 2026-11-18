@@ -52,9 +52,9 @@
     <string name="vault_recovery_once"><!-- review -->रिकवरी कोड और यह फ़ोन दोनों खोने पर कोई इन फ़ाइलों को नहीं खोल सकता, हम भी नहीं।</string>
     <string name="vault_recovery_copy_warning"><!-- review -->इस कोड वाला कोई भी आपका बैकअप खोल सकता है। इसे ऑफ़लाइन रखें।</string>
     <string name="vault_recovery_save_file"><!-- review -->फ़ाइल में सहेजें</string>
-    <string name="vault_recovery_file_name"><!-- review -->ScanWhirl Vault recovery code.txt</string>
     <string name="vault_recovery_file_done"><!-- review -->रिकवरी कोड आपकी चुनी फ़ाइल में सहेजा गया</string>
-    <string name="vault_recovery_file_failed"><!-- review -->फ़ाइल सहेज नहीं सके: %1$s</string>
+    <string name="vault_recovery_file_failed"><!-- review -->कोड सहेजा नहीं गया। फ़ाइल में सहेजें दबाकर दूसरी जगह चुनें।</string>
+    <string name="vault_recovery_code_lost"><!-- review -->कोड सहेजा नहीं गया। फिर से फ़ाइल में सहेजें दबाएँ।</string>
     <string name="vault_recovery_saved"><!-- review -->मैंने सँभाल लिया</string>
     <string name="vault_confirm_title"><!-- review -->4 अक्षर लिखें</string>
     <string name="vault_confirm_note"><!-- review -->सेटअप पूरा करने के लिए अपने रिकवरी कोड के पहले 4 अक्षर लिखें।</string>
