@@ -218,6 +218,24 @@
                 android:value="true" />
         </service>
 
+        <!-- C1 #10: Android 11+ has the photo picker built in; on API 19-29 the system only gets it
+             from the backported Play services module. This entry asks Play services to install that
+             module with the app. Without it PickVisualMedia (IdCard) falls back to
+             ACTION_OPEN_DOCUMENT. It adds no permission (the app is offline by design).
+             https://developer.android.com/training/data-storage/shared/photopicker -->
+        <service
+            android:name="com.google.android.gms.metadata.ModuleDependencies"
+            android:enabled="false"
+            android:exported="false"
+            tools:ignore="MissingClass">
+            <intent-filter>
+                <action android:name="com.google.android.gms.metadata.MODULE_DEPENDENCIES" />
+            </intent-filter>
+            <meta-data
+                android:name="photopicker_activity:0:required"
+                android:value="" />
+        </service>
+
         <!-- PM-1.5: the app has no INTERNET permission, so ask Google Play to install the unbundled
              ML Kit text-recognition (Latin) and code-scanner modules together with the app, instead of
              on first use. (Devanagari OCR is bundled in the APK; the document scanner is a Play services module.) -->
