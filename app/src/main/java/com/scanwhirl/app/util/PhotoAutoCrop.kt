@@ -17,9 +17,22 @@ object PhotoAutoCrop {
     /** [bytes] are the (cropped) photo; [cropped] is false when they are the input, unchanged. */
     class Result(val bytes: ByteArray, val cropped: Boolean)
 
+    /**
+     * A quad with every corner within 5% of a frame border is the frame, not a page: the
+     * detector found no page edge and fell back to the strongest gradients at the edges of the
+     * photo. Cropping it would trim a pointless ~3% border (and hide the honest "no page edge
+     * found" state), so the photo is returned untouched instead.
+     */
+    internal fun isFrameFit(pts: FloatArray): Boolean = (0 until 4).all { c ->
+        val x = pts[c * 2]
+        val y = pts[c * 2 + 1]
+        minOf(x, 1f - x, y, 1f - y) < 0.05f
+    }
+
     fun crop(bytes: ByteArray): Result {
         if (bytes.isEmpty()) return Result(bytes, false)
         val quad = runCatching { Deskew.detectQuad(bytes) }.getOrNull() ?: return Result(bytes, false)
+        if (isFrameFit(quad.pts)) return Result(bytes, false)
         val warped = runCatching { Deskew.warp(bytes, quad) }.getOrNull() ?: return Result(bytes, false)
         return Result(warped, warped !== bytes)
     }
