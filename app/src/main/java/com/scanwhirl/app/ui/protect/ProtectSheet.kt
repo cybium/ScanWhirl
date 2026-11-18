@@ -61,11 +61,11 @@ object ProtectSheet {
         dialog.setContentView(root)
         dialog.window?.setDimAmount(0.85f)
         com.scanwhirl.app.util.SecureView.apply(dialog.window)
-        // The app is edge-to-edge, so the window does not resize for the keyboard: the sheet
-        // consumes the IME inset itself as bottom padding on the scroll container. The sheet is
-        // always expanded (never collapsed), so the focused field and the primary button can be
-        // scrolled above the keyboard.
-        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        // H4: the app is edge-to-edge, so the window itself must resize for the keyboard as
+        // well; the sheet then consumes any IME inset BELOW that resize as padding on the
+        // scroll container, so the focused field and the primary button stay above the
+        // keyboard on every API level (pre-30 only reports the IME through a resize).
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         dialog.setOnShowListener {
             dialog.behavior.isFitToContents = false
             dialog.behavior.skipCollapsed = true
@@ -156,9 +156,18 @@ object ProtectSheet {
 
         fun refresh() {
             renderStrength(activity, password.text.toString(), meters, strength)
-            val matches = ProtectPassword.matches(password.text.toString(), confirm.text.toString())
+            val typed = password.text.toString()
+            val repeated = confirm.text.toString()
+            val matches = ProtectPassword.matches(typed, repeated)
             check.visibility = if (matches) View.VISIBLE else View.GONE
-            val enabled = ProtectPassword.accepts(password.text.toString()) && matches
+            // H3 (found on device): two different passwords made the action do nothing at all.
+            // The mismatch is now explained under the confirm field while the person types.
+            confirm.error = if (repeated.isNotEmpty() && !matches) {
+                activity.getString(R.string.protect_passwords_mismatch)
+            } else {
+                null
+            }
+            val enabled = ProtectPassword.accepts(typed) && matches
             shareButton.isEnabled = enabled
             saveButton.isEnabled = enabled
             // A disabled MaterialButton keeps full alpha and still looks tappable; grey it out
@@ -202,7 +211,12 @@ object ProtectSheet {
         onProtect: (String, Boolean, Boolean) -> Unit
     ) {
         val text = password.text.toString()
-        if (!ProtectPassword.accepts(text) || !ProtectPassword.matches(text, confirm.text.toString())) return
+        if (!ProtectPassword.matches(text, confirm.text.toString())) {
+            // H3: say why nothing happened instead of silently returning.
+            confirm.error = confirm.context.getString(R.string.protect_passwords_mismatch)
+            return
+        }
+        if (!ProtectPassword.accepts(text)) return
         val rememberIt = rememberAvailable && remember.isChecked
         dialog.dismiss()
         onProtect(text, rememberIt, share)

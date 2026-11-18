@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -105,6 +106,8 @@ class OcrEditorActivity : BaseActivity() {
         // Edge-to-edge: let the system insets (nav bar, IME) be applied to the
         // root view so content never lands under the gesture bar or keyboard.
         binding.root.applySystemBarsPadding()
+        // N1: opening the text screen is reading, not typing: no keyboard, top of the page.
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN)
 
         repo = ScanRepository(this)
 
@@ -597,7 +600,10 @@ class OcrEditorActivity : BaseActivity() {
         applyingHistory = true
         editText.setText(pageTexts[key] ?: "")
         applyingHistory = false
-        editText.setSelection(editText.text.length)
+        // N1 (found on device): a page opened with the cursor at its last character
+        // scrolled the text box to the bottom, so people read the end first. A page
+        // being read starts at its first line; a tap still moves the cursor.
+        editText.setSelection(0)
         updatePageTabs()
         updateWordCount()
         updateUndoRedoState()
@@ -805,50 +811,9 @@ class OcrEditorActivity : BaseActivity() {
     private fun saveCurrent(finishAfterSave: Boolean = false) {
         if (saving) return
         val text = editText.text.toString()
-        if (docId != null) {
-            // Persist every page whose text differs from originalTexts, in one
-            // rewrite, then update originals for exactly the pages written.
-            val changedPages = pageTexts.filter { (k, v) -> v != (originalTexts[k] ?: "") }
-            if (changedPages.isNotEmpty()) {
-                saving = true
-                findViewById<View>(R.id.btnSave).isEnabled = false
-                lifecycleScope.launch {
-                    try {
-                        withContext(NonCancellable + Dispatchers.IO) {
-                            checkNotNull(repo.updateOcrPages(docId!!, changedPages.toMap())) {
-                                "Document no longer exists"
-                            }
-                        }
-                        for ((key, value) in changedPages) {
-                            originalTexts = originalTexts + (key to value)
-                        }
-                        // Typed text for an unread page is now that page's stored text.
-                        if (unreadKeys.removeAll(changedPages.keys)) setupPageTabs()
-                        recomputeDirty()
-                        updateWordCount()
-                        updateStatus()
-                        Toast.makeText(this@OcrEditorActivity, R.string.ocr_saved, Toast.LENGTH_SHORT).show()
-                        if (finishAfterSave && !isDirty) finish()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Toast.makeText(this@OcrEditorActivity,
-                            getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG).show()
-                    } finally {
-                        saving = false
-                        findViewById<View>(R.id.btnSave).isEnabled = true
-                    }
-                }
-            } else if (finishAfterSave) {
-                finish()
-            } else {
-                // v2 UI: 08_text_ocr — the Save .txt chip always answers, even with no edits.
-                com.google.android.material.snackbar.Snackbar.make(
-                    binding.root,
-                    R.string.ocr_nothing_to_save,
-                    com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
-                ).show()
-            }
+        val id = docId
+        if (id != null) {
+            saveDocumentTxt(id, finishAfterSave)
         } else {
             // Temp mode: save as .txt via DownloadSaver (M06 transaction).
             val title = docTitle ?: "Document"
@@ -860,6 +825,126 @@ class OcrEditorActivity : BaseActivity() {
             }
         }
     }
+
+    /**
+     * H5/H6: in a document-backed editor "Save .txt" writes the OCR text as
+     * "<doc name> - text.txt" (UTF-8) into Documents/ScanWhirl, exactly like the
+     * temporary-text export. The corrected text is stored on the document first so
+     * search keeps finding it; the "edited" marker is cleared only after the .txt
+     * write succeeded. A failed write is reported and the edits stay in the editor.
+     */
+    private fun saveDocumentTxt(id: String, finishAfterSave: Boolean) {
+        val changedPages = pageTexts.filter { (k, v) -> v != (originalTexts[k] ?: "") }
+        val title = docTitle ?: getString(R.string.ocr_screen_title)
+        val fileName = "${sanitizeTitle(title)} - text.txt"
+        if (saving) return
+        saving = true
+        findViewById<View>(R.id.btnSave).isEnabled = false
+        lifecycleScope.launch {
+            // 1. Keep the corrected text searchable in the document. This never needs
+            //    storage permission, so a permission prompt cannot lose an edit.
+            try {
+                if (changedPages.isNotEmpty()) {
+                    withContext(NonCancellable + Dispatchers.IO) {
+                        checkNotNull(repo.updateOcrPages(id, changedPages.toMap())) {
+                            "Document no longer exists"
+                        }
+                    }
+                    // Typed text for an unread page is now that page's stored text.
+                    if (unreadKeys.removeAll(changedPages.keys)) setupPageTabs()
+                    updateStatus()
+                }
+            } catch (e: CancellationException) {
+                finishSaveAttempt()
+                throw e
+            } catch (e: Exception) {
+                finishSaveAttempt()
+                Toast.makeText(
+                    this@OcrEditorActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+            // 2. Write the .txt (and ask for storage permission only if the OS refuses it).
+            writeDocumentTxt(fileName, finishAfterSave)
+        }
+    }
+
+    /** The `.txt` half of [saveDocumentTxt]; the document text is already stored. */
+    private fun writeDocumentTxt(fileName: String, finishAfterSave: Boolean, retried: Boolean = false) {
+        lifecycleScope.launch {
+            try {
+                val saved = withContext(NonCancellable + Dispatchers.IO) {
+                    DownloadSaver.saveText(this@OcrEditorActivity, renderAllPages(), fileName)
+                }
+                // Only now is the file really there: clear the "edited" marker.
+                originalTexts = pageTexts.toMap()
+                isDirty = false
+                updateWordCount()
+                updateStatus()
+                val message = when {
+                    !saved.created -> getString(R.string.export_already_saved, saved.name)
+                    saved.keptEarlier -> getString(R.string.export_saved_new_copy, saved.name)
+                    else -> getString(R.string.text_saved_docs, saved.name)
+                }
+                com.scanwhirl.app.util.SavedSnackbar.show(
+                    binding.root,
+                    message,
+                    onOpen = { com.scanwhirl.app.util.PdfOpener.open(this@OcrEditorActivity, saved.uri) },
+                    onUndo = null
+                )
+                Toast.makeText(this@OcrEditorActivity, message, Toast.LENGTH_LONG).show()
+                finishSaveAttempt()
+                // The sheet asked to close only after the save landed. On a failure the
+                // error above says the .txt could not be written; the document text is
+                // already stored, so the edits are never lost either way.
+                if (finishAfterSave) finish()
+            } catch (e: CancellationException) {
+                finishSaveAttempt()
+                throw e
+            } catch (e: Exception) {
+                if (!retried && needsStoragePermission() &&
+                    Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED
+                ) {
+                    // Pre-Android-10 public storage: ask, then retry the same write.
+                    withStoragePermission(
+                        action = { writeDocumentTxt(fileName, finishAfterSave, retried = true) },
+                        onDenied = {
+                            reportTxtFailure(e)
+                            finishSaveAttempt()
+                        }
+                    )
+                } else {
+                    reportTxtFailure(e)
+                    finishSaveAttempt()
+                    // The sheet asked to close after its save. The error above says the
+                    // .txt could not be written; the document text is already stored, so
+                    // the edits are not lost.
+                    if (finishAfterSave) finish()
+                }
+            }
+        }
+    }
+
+    private fun reportTxtFailure(e: Exception) {
+        Toast.makeText(
+            this,
+            getString(R.string.text_save_failed, e.message ?: e.javaClass.simpleName),
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    private fun finishSaveAttempt() {
+        saving = false
+        findViewById<View>(R.id.btnSave).isEnabled = true
+    }
+
+    /** Before Android 10 the public Documents folder needs the storage permission. */
+    private fun needsStoragePermission(): Boolean =
+        Build.VERSION.SDK_INT < 29 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
 
     /**
      * M06: writes [text] to Documents/ScanWhirl/[fileName] with the export
@@ -910,22 +995,32 @@ class OcrEditorActivity : BaseActivity() {
     }
 
     private var pendingExport: (() -> Unit)? = null
+    private var pendingDenied: (() -> Unit)? = null
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) pendingExport?.invoke()
-            else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
+            val action = pendingExport
+            val denied = pendingDenied
             pendingExport = null
+            pendingDenied = null
+            if (granted) {
+                action?.invoke()
+            } else {
+                Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
+                denied?.invoke()
+            }
         }
 
-    /** Before Android 10 the public Documents folder needs the storage permission. */
-    private fun withStoragePermission(action: () -> Unit) {
-        val granted = Build.VERSION.SDK_INT >= 29 ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) {
+    /**
+     * Before Android 10 the public Documents folder needs the storage permission.
+     * [onDenied] lets a caller release its own in-progress state when the person
+     * refuses; the temporary-text save keeps the old behaviour of just saying so.
+     */
+    private fun withStoragePermission(onDenied: (() -> Unit)? = null, action: () -> Unit) {
+        if (!needsStoragePermission()) {
             action()
         } else {
             pendingExport = action
+            pendingDenied = onDenied
             permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }

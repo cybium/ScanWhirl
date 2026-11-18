@@ -216,6 +216,21 @@ class ToolSetupActivity : BaseActivity() {
         column.addView(runButton, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 54f)
         ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 18f) })
+        applyRunEnabled()
+    }
+
+    /**
+     * H13 (found on device): Merge's Continue looked ready with one document selected and
+     * tapping it only produced an error. It is now visibly disabled (greyed, no ripple)
+     * until two documents are picked; the sheet's own note already says two are needed.
+     * Other tools keep their existing validation (their errors explain the rest).
+     */
+    private fun applyRunEnabled() {
+        if (!::runButton.isInitialized) return
+        val ready = tool.id != "merge" || selected.size >= 2
+        runButton.isEnabled = ready
+        runButton.isClickable = ready
+        runButton.alpha = if (ready) 1f else DISABLED_ALPHA
     }
 
     private fun header(): View {
@@ -1064,6 +1079,8 @@ class ToolSetupActivity : BaseActivity() {
 
     companion object {
         private const val EXTRA_TOOL_ID = "tool_id"
+        /** Material's disabled alpha: a disabled button at full alpha still looks tappable. */
+        private const val DISABLED_ALPHA = 0.38f
         private const val DOCX_MIME =
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         private const val PPTX_MIME =
