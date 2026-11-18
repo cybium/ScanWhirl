@@ -4,9 +4,13 @@ import android.app.Activity
 import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentProvider
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.database.Cursor
 import android.net.Uri
+import android.os.Bundle
 import android.os.Looper
 import android.view.View
 import android.widget.EditText
@@ -114,8 +118,7 @@ class FixCopyTest {
     private fun <T : View> BottomSheetDialog.need(id: Int): T = findViewById<View>(id) as T
 
     /** Drives the real setup sheet until the one-time recovery code is on screen. */
-    private fun reachRecoveryCode(activity: VaultActivity): BottomSheetDialog {
-        idle()
+    private fun reachRecoveryCode(activity: VaultActivity): BottomSheetDialog {        idle()
         val setupSheet = ShadowDialog.getLatestDialog() as BottomSheetDialog
         setupSheet.need<EditText>(R.id.vaultPasscodeInput).setText("246810")
         setupSheet.need<EditText>(R.id.vaultPasscodeConfirm).setText("246810")
@@ -128,6 +131,29 @@ class FixCopyTest {
             recovery.need<TextView>(R.id.swSheetTitle).text.toString()
         )
         return recovery
+    }
+
+    private fun sheet(): BottomSheetDialog {
+        idle()
+        val dialog = ShadowDialog.getLatestDialog()
+        assertNotNull("a sheet should be showing", dialog)
+        return dialog as BottomSheetDialog
+    }
+
+    /** The message of the top-most sheet, or null when no sheet carries one. */
+    private fun latestSheetMessage(): String? {
+        val dialog = ShadowDialog.getLatestDialog() as? BottomSheetDialog ?: return null
+        val view = dialog.findViewById<View>(R.id.swSheetMessage) as? TextView ?: return null
+        return view.text?.toString()
+    }
+
+    /** Taps "Save as file" and returns the picker's request code with its intent. */
+    private fun tapSave(activity: VaultActivity): Pair<Int, Intent> {
+        sheet().need<TextView>(R.id.vaultRecoveryCopy).performClick()
+        idle()
+        val started = shadowOf(activity).peekNextStartedActivityForResult()
+        assertNotNull("the system picker starts", started)
+        return started!!.requestCode to started.intent
     }
 
     @Test
@@ -151,6 +177,10 @@ class FixCopyTest {
         assertTrue(
             "the offline warning stays",
             activity.getString(R.string.vault_recovery_copy_warning).contains("Keep it offline")
+        )
+        assertTrue(
+            "the recovery sheet has its own window, so it needs FLAG_SECURE too",
+            com.scanwhirl.app.util.SecureView.isSecure(recovery.window!!)
         )
 
         action.performClick()
@@ -199,6 +229,149 @@ class FixCopyTest {
         assertEquals("$code\n$instruction\n", text)
         assertEquals("only the code and one line of instruction", 2, text.trimEnd('\n').lines().size)
         assertFalse("no long dashes in the saved file", text.contains("\u2014") || text.contains("\u2013"))
+    }
+
+    @Test
+    fun `the save control is a 48 dp focusable target like the other Vault rows`() {
+        controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
+        val activity = controller!!.get()
+        val recovery = reachRecoveryCode(activity)
+
+        val action = recovery.need<TextView>(R.id.vaultRecoveryCopy)
+        val density = activity.resources.displayMetrics.density
+        assertTrue(
+            "the save control needs a 48 dp touch target, was ${action.minimumHeight}px",
+            action.minimumHeight >= (48 * density).toInt()
+        )
+        assertTrue("the save control must be focusable", action.isFocusable)
+        assertTrue("the save control must be clickable", action.isClickable)
+    }
+
+    @Test
+    fun `a rotation while the picker is open still writes the code`() {
+        controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
+        val activity = controller!!.get()
+        val recovery = reachRecoveryCode(activity)
+        val code = recovery.need<TextView>(R.id.vaultRecoveryCode).text.toString()
+        val request = tapSave(activity)
+
+        // Rotation: the activity is recreated, the system picker stays open.
+        controller!!.recreate()
+        idle()
+        val recreated = controller!!.get()
+
+        val out = ByteArrayOutputStream()
+        val uri = Uri.parse(recoveryFile)
+        shadowOf(app.contentResolver).registerOutputStream(uri, out)
+        shadowOf(recreated).callOnActivityResult(
+            request.first,
+            Activity.RESULT_OK,
+            Intent().setData(uri)
+        )
+        assertTrue("the code survives the rotation and is written", await { out.size() > 0 })
+        assertEquals(
+            "$code\n${app.getString(R.string.vault_recovery_copy_warning)}\n",
+            out.toString("UTF-8")
+        )
+    }
+
+    @Test
+    fun `process death while the picker is open deletes the empty file and says so`() {
+        controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
+        val activity = controller!!.get()
+        reachRecoveryCode(activity)
+        val request = tapSave(activity)
+
+        // Process death: a fresh activity from the saved state, with no in-memory holder.
+        val state = Bundle()
+        controller!!.saveInstanceState(state).pause().stop().destroy()
+        controller = Robolectric.buildActivity(VaultActivity::class.java).create(state).start().resume()
+        val fresh = controller!!.get()
+        idle()
+
+        val provider = Robolectric.setupContentProvider(
+            RecordingDocumentsProvider::class.java,
+            "com.scanwhirl.app.test"
+        ) as RecordingDocumentsProvider
+        val out = ByteArrayOutputStream()
+        val uri = Uri.parse(recoveryFile)
+        shadowOf(app.contentResolver).registerOutputStream(uri, out)
+
+        shadowOf(fresh).callOnActivityResult(
+            request.first,
+            Activity.RESULT_OK,
+            Intent().setData(uri)
+        )
+
+        val deleted = await {
+            provider.calls.any { it.first == "android:deleteDocument" && it.second == uri }
+        }
+        assertTrue(
+            "the empty document the picker created is deleted: ${provider.calls}",
+            deleted
+        )
+        assertEquals("nothing is written without the code", 0, out.size())
+        assertTrue(
+            "the user is told the code was not saved, was: ${latestSheetMessage()}",
+            await {
+                latestSheetMessage() == app.getString(R.string.vault_recovery_code_lost)
+            }
+        )
+    }
+
+    @Test
+    fun `cancelling the picker writes nothing and says nothing`() {
+        controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
+        val activity = controller!!.get()
+        val recovery = reachRecoveryCode(activity)
+        val request = tapSave(activity)
+
+        val out = ByteArrayOutputStream()
+        shadowOf(app.contentResolver).registerOutputStream(Uri.parse(recoveryFile), out)
+
+        shadowOf(activity).callOnActivityResult(request.first, Activity.RESULT_CANCELED, null)
+        idle()
+
+        assertEquals("a cancelled picker writes nothing", 0, out.size())
+        val latest = ShadowDialog.getLatestDialog() as BottomSheetDialog
+        assertEquals(
+            "no error sheet for a cancel",
+            "Save this recovery code",
+            latest.need<TextView>(R.id.swSheetTitle).text.toString()
+        )
+        assertTrue("the recovery sheet is still there", recovery.isShowing)
+    }
+
+    @Test
+    fun `a write failure shows a clear message and does not crash`() {
+        controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
+        val activity = controller!!.get()
+        reachRecoveryCode(activity)
+        val request = tapSave(activity)
+
+        // The stream itself fails (a full disk, a revoked provider): the write must fail cleanly.
+        val target = Uri.parse("content://nothing/written.txt")
+        shadowOf(app.contentResolver).registerOutputStream(
+            target,
+            object : java.io.OutputStream() {
+                override fun write(b: Int) {
+                    throw java.io.IOException("no space left")
+                }
+            }
+        )
+        shadowOf(activity).callOnActivityResult(
+            request.first,
+            Activity.RESULT_OK,
+            Intent().setData(target)
+        )
+
+        val expected = app.getString(R.string.vault_recovery_file_failed)
+        assertTrue(
+            "the failure message comes from the string resource, was: ${latestSheetMessage()}",
+            await { latestSheetMessage() == expected }
+        )
+        assertFalse("no raw exception text", expected.contains("Exception") || expected.contains(":"))
+        assertFalse("the activity is still there", activity.isFinishing)
     }
 
     @Test
@@ -261,5 +434,42 @@ class FixCopyTest {
         return Regex("<string\\s+name=\"([^\"]+)\"[^>]*>(.*?)</string>", RegexOption.DOT_MATCHES_ALL)
             .findAll(xml)
             .associate { it.groupValues[1] to it.groupValues[2].trim() }
+    }
+
+    /** Records what `DocumentsContract.deleteDocument` asks the provider to do. */
+    class RecordingDocumentsProvider : ContentProvider() {
+        val calls = mutableListOf<Pair<String, Uri?>>()
+
+        override fun onCreate(): Boolean = true
+        override fun query(
+            uri: Uri,
+            projection: Array<String>?,
+            selection: String?,
+            selectionArgs: Array<String>?,
+            sortOrder: String?
+        ): Cursor? = null
+
+        override fun getType(uri: Uri): String? = null
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<String>?): Int {
+            calls += "delete" to uri
+            return 1
+        }
+
+        override fun update(
+            uri: Uri,
+            values: ContentValues?,
+            selection: String?,
+            selectionArgs: Array<String>?
+        ): Int = 0
+
+        override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
+            val target = extras?.keySet()?.firstNotNullOfOrNull { key ->
+                @Suppress("DEPRECATION")
+                extras.get(key) as? Uri
+            }
+            calls += method to target
+            return Bundle().apply { putBoolean("result", true) }
+        }
     }
 }
