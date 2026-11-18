@@ -588,8 +588,13 @@ class ToolResultActivity : BaseActivity() {
     private fun undo() {
         if (undone) return
         undone = true
-        val docs = docIds.toList()
         val outs = files.toList()
+        // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
+        // generated file is an export whose docIds are inputs, not copies. No tool legitimately
+        // creates that shape — document copies pass docIds only, exports pass files only — and
+        // deleteDocument permanently purges (no Trash). Undo therefore removes the generated
+        // files and keeps the document: the safe direction for an unknown caller.
+        val docs = if (outs.isEmpty()) docIds.toList() else emptyList()
         docIds.clear()
         files.clear()
         lifecycleScope.launch {
