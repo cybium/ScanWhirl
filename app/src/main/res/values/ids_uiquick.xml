@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- uiquick: the Home quick-tool grid is five columns per row, so the 12-tool custom
+         limit needs a third row (the first two keep their long-standing ids). -->
+    <item name="swQuickRow3" type="id" />
+</resources>

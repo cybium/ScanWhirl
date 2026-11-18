@@ -218,7 +218,7 @@ abstract class ToolsLookBase {
     }
 
     @Test
-    fun `tool labels fit two lines and are never clipped or ellipsized`() {
+    fun `tool labels fit two lines and are never clipped or overflowing`() {
         for (scale in listOf(1.0f, 1.3f)) {
             RuntimeEnvironment.setFontScale(scale)
             toolsTab { _, body ->
@@ -241,8 +241,13 @@ abstract class ToolsLookBase {
                     val avail = label.width - label.totalPaddingLeft - label.totalPaddingRight
                     if (layout.lineCount > 2) bad += "${label.text}: ${layout.lineCount} lines"
                     for (line in 0 until layout.lineCount) {
-                        if (layout.getEllipsisCount(line) != 0) bad += "${label.text}: ellipsized"
-                        if (layout.getLineWidth(line) > avail + 0.5f) {
+                        // v2 UI: 03_tools_hub - a Hindi title that needs a third line ends in
+                        // "…" (END) on line two; anything earlier would hide the tool's name.
+                        if (layout.getEllipsisCount(line) != 0 && (line != 1 || layout.lineCount != 2)) {
+                            bad += "${label.text}: ellipsized on line $line"
+                        }
+                        // getLineMax ignores the trailing wrap whitespace, which is never drawn.
+                        if (layout.getLineMax(line) > avail + 0.5f) {
                             bad += "${label.text}: line $line overflows ($avail)"
                         }
                     }
@@ -261,7 +266,7 @@ abstract class ToolsLookBase {
     }
 
     @Test
-    fun `quick tool labels stay whole inside their six columns`() {
+    fun `quick tool labels stay whole inside their five columns`() {
         for (scale in listOf(1.0f, 1.3f)) {
             RuntimeEnvironment.setFontScale(scale)
             ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
@@ -275,9 +280,15 @@ abstract class ToolsLookBase {
                         val label = tile.labelView
                         val layout = label.layout ?: continue
                         val avail = label.width - label.totalPaddingLeft - label.totalPaddingRight
-                        if (layout.lineCount != 1) bad += "${label.text}: ${layout.lineCount} lines"
+                        // v2 UI: 01_home_A - five columns: a label may use two lines (11sp
+                        // floor), never a third, never a line wider than the column.
+                        if (layout.lineCount > 2 || layout.lineCount < 1) bad += "${label.text}: ${layout.lineCount} lines"
                         if (layout.getEllipsisCount(0) != 0) bad += "${label.text}: ellipsized"
-                        if (layout.getLineWidth(0) > avail + 0.5f) bad += "${label.text}: wider than its column"
+                        for (line in 0 until layout.lineCount) {
+                            if (layout.getLineMax(line) > avail + 0.5f) {
+                                bad += "${label.text}: line $line wider than its column"
+                            }
+                        }
                         if (layout.height + label.totalPaddingTop + label.totalPaddingBottom > label.height + 1) {
                             bad += "${label.text}: clipped"
                         }
