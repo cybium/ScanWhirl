@@ -163,9 +163,15 @@ object SavedSnackbar {
      * The old path built an ACTION_VIEW and wrapped it in a chooser: when no installed app
      * handled the type the chooser still started and showed nothing, so the button looked dead
      * (and a user's second tap landed on the screen's Save button, which is why the export
-     * re-ran as "Already saved, unchanged"). Now the targets are asked first, the real file is
-     * shared with read permission (content URI; a `file://` export becomes a FileProvider URI),
-     * and when nothing can open it the phone says so instead.
+     * re-ran as "Already saved, unchanged"). Now the real file is shared with read permission
+     * (content URI; a `file://` export becomes a FileProvider URI) and handed straight to the
+     * platform, which says so itself (ActivityNotFoundException) when nothing can open it.
+     *
+     * fixopen (judge C1 #15): never call queryIntentActivities here. Since Android 11 (API 30)
+     * package visibility filtering hides installed viewers (this app declares no `<queries>` and
+     * must not ask for QUERY_ALL_PACKAGES), so the query answers "nothing" and Open claimed no
+     * app could open a file that a viewer was installed for. startActivity is not filtered by
+     * package visibility; the try/catch below is the honest check.
      */
     internal fun openExported(activity: Activity, saved: Uri, name: String) {
         val mime = mimeFor(name)
@@ -188,9 +194,8 @@ object SavedSnackbar {
             // Some viewers only take the URI from the clip data.
             clipData = ClipData.newUri(activity.contentResolver, name, target)
         }
-        if (activity.packageManager.queryIntentActivities(view, 0).isEmpty()) {
-            return cannotOpen(activity)
-        }
+        // fixopen (judge C1 #15): no queryIntentActivities precheck — see above. Ask the platform
+        // and let it refuse, which is also the only signal that is not hidden by package visibility.
         try {
             activity.startActivity(view)
         } catch (_: ActivityNotFoundException) {
