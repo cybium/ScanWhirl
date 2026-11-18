@@ -14,7 +14,10 @@ Source: R2 UX_PRINCIPLES -> CRITIC_R2_UX -> JUDGE_RESEARCH §2/§4 (next/docs/re
    one-in/one-out library operation whose original goes to Trash and can be restored; show that, plus a persistent
    Undo/restore on the result; changing the choice never reruns the tool. **Keep both** is the default for Merge,
    Split, multi-input/output, external sources, or anything without proven rollback. Never trash several inputs
-   automatically. Back/Open/Share/process death never bypass rollback.
+   automatically. Back/Open/Share/process death never bypass rollback. Proven rollback means phase-specific
+   acceptance tests for replace, restore and restore after process death on the storage this phase actually writes,
+   including Back/Open/Share exits; if those fail or are absent, default Keep both for that operation until proven
+   (JUDGE_WHY §5A).
 4. **Phase 3 before Phase 4:** the result screen ships its visual + Replace/Keep work in phase 3 but KEEPS "Save to
    Documents" until phase 4 makes the library real files. No "already saved as a file" wording before that is true.
 5. **Numbers** (sizes) appear at once, no counting animation.

@@ -12,10 +12,14 @@ Status: DECIDED for design; final copy waits for the Pro inventory (below).
 2. **Free forever:** unlimited scan/import, OCR read/select/copy/search, merge, password protect, clean watermark-free
    export, offline, Hindi, no ads/account, **single-document compress-to-target incl. 20/50/100/200 KB presets**
    (Pro may only sell BATCH compress). **Basic folders are free** (the new Home shows them).
+   Status (JUDGE_WHY §5C): single-document target compression is free today; the 20/50/100/200 KB chips are committed
+   free UI work for phase 5, not shipped. Until built, describe levels or a typed target; never guarantee a target.
 3. **Moment:** a Pro tool tile says "Pro · 1 free use". Before the first run it says, word for word:
    "Your first use includes a full-quality save, free and without a watermark. Further uses of this tool need Pro
    ({Play price}, one payment). No automatic charge." Buttons: **Try free** / **Not now**. The gate shows BEFORE the
-   second run, never after work is done. After a successful core export: at most one small dismissible invitation.
+   second run, never after work is done. After a successful core export, at most one small dismissible inline
+   invitation may appear below the outcome and Open. Never on the user's first export, never on failed/partial
+   output, never as a blocking or extra step (JUDGE_WHY §5B).
 4. **Paywall screen:** Pro purchase (Play's localized price), **Continue free**, **Restore purchase**, a short list of
    what stays free. Nothing preselected; no live ratings (offline).
 5. **Price framing:** "{Play price} once. No subscription." India control ₹499; Play price experiment ₹299 vs ₹499
