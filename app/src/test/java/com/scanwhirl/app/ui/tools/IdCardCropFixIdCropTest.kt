@@ -441,53 +441,74 @@ class IdCardCropFixIdCropTest {
     @Test
     fun `Back while the crop is saving leaves the side empty and shows no error`() {
         val photo = photoOfCardOnTable()
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
         val encoded = CountDownLatch(1)
         var encodedBytes: ByteArray? = null
         var settled: Boolean? = null
-        launch().use { scenario ->
-            pickPhoto(scenario, photo)
-            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+        try {
+            launch().use { scenario ->
+                pickPhoto(scenario, photo)
+                assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
 
-            scenario.onActivity { current ->
-                // Tests: the worker finished AND the main-thread accept/abandon decision ran.
-                current.cropEncodeFinishedForTest = { bytes ->
-                    encodedBytes = bytes
-                    encoded.countDown()
+                scenario.onActivity { current ->
+                    // The encode is held in flight by a test-only gate, so Back is guaranteed to
+                    // arrive while the save is still running instead of racing the main-thread
+                    // accept/abandon decision.
+                    current.cropEncodeGate = {
+                        held.countDown()
+                        release.await(15, TimeUnit.SECONDS)
+                    }
+                    // Tests: the worker finished AND the main-thread accept/abandon decision ran.
+                    current.cropEncodeFinishedForTest = { bytes ->
+                        encodedBytes = bytes
+                        encoded.countDown()
+                    }
+                    current.cropSaveSettledForTest = { accepted -> settled = accepted }
+                    // Crop and save starts the JPEG encode, then Back arrives before it finishes.
+                    current.findViewById<View>(R.id.toolCropApply).performClick()
                 }
-                current.cropSaveSettledForTest = { accepted -> settled = accepted }
-                // Crop and save starts the JPEG encode, then Back arrives before it finishes.
-                current.findViewById<View>(R.id.toolCropApply).performClick()
-                current.onBackPressedDispatcher.onBackPressed()
-            }
-            assertTrue(
-                "the abandoned encode really finished",
-                encoded.await(15, TimeUnit.SECONDS)
-            )
-            assertNotNull("the encode still produced bytes (no recycled bitmap)", encodedBytes)
-            // The abandoned continuation really reached its token decision on the main thread.
-            assertTrue("the main-thread decision ran", waitUntil { settled != null })
-            assertEquals("the abandoned save is not accepted", false, settled)
-            idle()
-            assertTrue(
-                "the crop screen closes",
-                waitUntil { activity?.findViewById<View>(R.id.toolCropView) == null }
-            )
-            idle()
-            scenario.onActivity { current ->
-                assertEquals(
-                    "Back returns to the front sheet, not to the next step",
-                    app.getString(R.string.tools_id_front_title),
-                    sheetTitle()
+                assertTrue("the save really is encoding", held.await(15, TimeUnit.SECONDS))
+                assertNull("nothing is decided while the save is in flight", settled)
+
+                scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+                idle()
+                assertNull("Back does not decide the in-flight save", settled)
+                assertTrue(
+                    "the crop screen closes",
+                    waitUntil { activity?.findViewById<View>(R.id.toolCropView) == null }
                 )
-                val error = requireNotNull(current.findViewById<TextView>(R.id.toolIdCardError))
-                assertFalse("no error after Back", error.isVisible)
-                assertFalse("the flow is still open", current.isFinishing)
-                // The next attempt is not blocked by the abandoned save.
-                assertNotNull(
-                    "the side sheet is usable again",
-                    current.findViewById<View>(R.id.toolIdCardFront)
+
+                // Only now does the abandoned save finish encoding.
+                release.countDown()
+                assertTrue(
+                    "the abandoned encode really finished",
+                    encoded.await(15, TimeUnit.SECONDS)
                 )
+                assertNotNull("the encode still produced bytes (no recycled bitmap)", encodedBytes)
+                // The abandoned continuation really reached its token decision on the main thread.
+                assertTrue("the main-thread decision ran", waitUntil { settled != null })
+                assertEquals("the abandoned save is not accepted", false, settled)
+                idle()
+                scenario.onActivity { current ->
+                    assertEquals(
+                        "Back returns to the front sheet, not to the next step",
+                        app.getString(R.string.tools_id_front_title),
+                        sheetTitle()
+                    )
+                    val error = requireNotNull(current.findViewById<TextView>(R.id.toolIdCardError))
+                    assertFalse("no error after Back", error.isVisible)
+                    assertFalse("the flow is still open", current.isFinishing)
+                    // The next attempt is not blocked by the abandoned save.
+                    assertNotNull(
+                        "the side sheet is usable again",
+                        current.findViewById<View>(R.id.toolIdCardFront)
+                    )
+                }
             }
+        } finally {
+            // Never leave the worker thread blocked if an assertion failed before the release.
+            release.countDown()
         }
         assertTrue("nothing was accepted or saved", repo.listDocuments().isEmpty())
         assertTrue("no cached photo is left", stateFiles().isEmpty())

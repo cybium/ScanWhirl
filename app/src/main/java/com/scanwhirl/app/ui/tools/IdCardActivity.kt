@@ -131,6 +131,13 @@ class IdCardActivity : BaseActivity() {
     @Volatile
     internal var cropEncodeFinishedForTest: ((ByteArray?) -> Unit)? = null
 
+    /**
+     * Tests: hold the finished crop encode, so a Back (or Cancel) is guaranteed to reach the
+     * screen while the save is still in flight instead of racing the main-thread decision.
+     */
+    @Volatile
+    internal var cropEncodeGate: (() -> Unit)? = null
+
     /** Tests: the main-thread accept/abandon decision ran (true = the side is accepted). */
     @Volatile
     internal var cropSaveSettledForTest: ((Boolean) -> Unit)? = null
@@ -763,6 +770,9 @@ class IdCardActivity : BaseActivity() {
             val bytes = try {
                 withContext(Dispatchers.IO) {
                     val encoded = runCatching { ImageTools.encodeJpeg(region, 92) }.getOrNull()
+                    // Tests: hold the finished encode so Back during the save is deterministic
+                    // (null in production, like cropPrepareGate/cropReopenGate).
+                    cropEncodeGate?.invoke()
                     // Tests: the encode really finished, even for an abandoned screen.
                     cropEncodeFinishedForTest?.invoke(encoded)
                     encoded
