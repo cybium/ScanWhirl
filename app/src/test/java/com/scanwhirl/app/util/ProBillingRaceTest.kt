@@ -275,12 +275,11 @@ class ProBillingRaceTest {
     }
 
     /**
-     * Judge research §3 item 5: ITEM_ALREADY_OWNED means the account owns Pro, so it unlocks on
-     * every path. A failed or empty confirming query must still release Buy and keep the
-     * entitlement (the next foreground reconcile acknowledges the purchase).
+     * fixbilling: critic D1/D2 (lead ruling). ITEM_ALREADY_OWNED with a null or empty re-query
+     * is not an entitlement: Buy is released without unlocking, and the reconcile stays due.
      */
     @Test
-    fun `R4 already-owned with a null or empty re-query releases Buy as a success`() {
+    fun `R4 already-owned with a null or empty re-query releases Buy without unlocking`() {
         gateway.launchResult = ProBilling.LaunchResult.ALREADY_OWNED
         gateway.purchases = null
         val states = mutableListOf<ProBilling.State>()
@@ -288,8 +287,8 @@ class ProBillingRaceTest {
         gateway.releaseNext(); idle()
         gateway.releaseNext(); idle()
         gateway.releasePurchases(); idle()
-        assertEquals(ProBilling.State.Owned, states.last())
-        assertTrue(purchased())
+        assertTrue(states.last() is ProBilling.State.Failed)
+        assertFalse("already owned alone grants nothing", purchased())
         assertFalse(ProBilling.isPurchaseInFlight())
 
         gateway.purchases = emptyList()
@@ -299,7 +298,8 @@ class ProBillingRaceTest {
         gateway.releaseNext(); idle()
         gateway.releasePurchases(); idle()
         assertFalse("a second tap works after the empty re-query", ProBilling.isPurchaseInFlight())
-        assertEquals(ProBilling.State.Owned, states.last())
+        assertTrue(states.last() is ProBilling.State.Failed)
+        assertFalse("an empty answer never unlocks", purchased())
         assertEquals(2, gateway.launched.size)
     }
 

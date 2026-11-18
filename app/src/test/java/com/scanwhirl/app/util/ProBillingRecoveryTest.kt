@@ -311,11 +311,12 @@ class ProBillingRecoveryTest {
     }
 
     /**
-     * Judge §3 item 5: ITEM_ALREADY_OWNED means this account owns Pro, so the Buy is a success
-     * even when the confirming query cannot return the row (Play's cache can lag).
+     * fixbilling: critic D1/D2 (lead ruling). ITEM_ALREADY_OWNED is not an entitlement by
+     * itself: when the confirming query fails nothing unlocks, the Buy is released, and the
+     * next foreground asks again.
      */
     @Test
-    fun `already owned unlocks even when the confirming query fails`() {
+    fun `already owned with a failing query does not unlock and retries on the next foreground`() {
         gateway.launchResult = ProBilling.LaunchResult.ALREADY_OWNED
         gateway.purchases = null
         val states = mutableListOf<ProBilling.State>()
@@ -323,13 +324,63 @@ class ProBillingRecoveryTest {
         ProBilling.buy(activity(), testBuild = false) { states += it }
         gateway.drain()
 
-        assertEquals(ProBilling.State.Owned, states.last())
-        assertTrue("already owned is an unlock, not a purchase error", purchased())
+        assertEquals(
+            app.getString(R.string.pro_error_connection),
+            (states.last() as ProBilling.State.Failed).message
+        )
+        assertFalse("already owned alone grants nothing", purchased())
         assertFalse("the Buy is released", ProBilling.isPurchaseInFlight())
+        assertTrue("nothing to acknowledge", gateway.acknowledged.isEmpty())
+
+        val queriesAfterBuy = gateway.queryCalls
+        gateway.purchases = listOf(paid("owned-token"))
+        refresh(now = 1_000L)
+        gateway.drain()
+        assertEquals(
+            "the unanswered purchase stays due on the next foreground",
+            queriesAfterBuy + 1,
+            gateway.queryCalls
+        )
+        assertTrue("the successful reconcile grants Pro", purchased())
     }
 
+    /**
+     * fixbilling: critic D1/D2 (lead ruling). A PENDING purchase never unlocks and is never
+     * acknowledged; ITEM_ALREADY_OWNED with a pending-only answer shows the pending copy and
+     * keeps the reconcile due.
+     */
     @Test
-    fun `already owned applies and acknowledges the purchase it re-queries`() {
+    fun `already owned with a pending purchase stays locked and unacknowledged`() {
+        gateway.launchResult = ProBilling.LaunchResult.ALREADY_OWNED
+        gateway.purchases = listOf(
+            ProBilling.Owned(
+                "scanwhirl_pro", acknowledged = false, token = "pending-token",
+                state = ProBilling.PurchaseState.PENDING
+            )
+        )
+        val states = mutableListOf<ProBilling.State>()
+
+        ProBilling.buy(activity(), testBuild = false) { states += it }
+        gateway.drain()
+
+        assertEquals(ProBilling.State.Pending, states.last())
+        assertFalse("a pending purchase never unlocks", purchased())
+        assertTrue("a pending purchase is never acknowledged", gateway.acknowledged.isEmpty())
+        assertFalse(ProBilling.isPurchaseInFlight())
+
+        val queriesAfterBuy = gateway.queryCalls
+        refresh(now = 1_000L)
+        gateway.drain()
+        assertEquals(
+            "pending keeps the reconcile due for the next foreground",
+            queriesAfterBuy + 1,
+            gateway.queryCalls
+        )
+    }
+
+    /** fixbilling: critic D1/D2 (lead ruling): unlock only on a PURCHASED row, acknowledge once. */
+    @Test
+    fun `already owned applies and acknowledges a purchased row exactly once`() {
         gateway.launchResult = ProBilling.LaunchResult.ALREADY_OWNED
         gateway.purchases = listOf(paid("owned-token", acknowledged = false))
         val states = mutableListOf<ProBilling.State>()
@@ -340,5 +391,10 @@ class ProBillingRecoveryTest {
         assertEquals(ProBilling.State.Owned, states.last())
         assertEquals("the re-queried purchase is acknowledged", listOf("owned-token"), gateway.acknowledged)
         assertTrue(purchased())
+
+        gateway.purchases = listOf(paid("owned-token", acknowledged = true))
+        refresh(now = 40_000L)
+        gateway.drain()
+        assertEquals("an acknowledged purchase is never acknowledged twice", listOf("owned-token"), gateway.acknowledged)
     }
 }

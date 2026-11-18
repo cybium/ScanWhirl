@@ -483,22 +483,29 @@ object ProBilling {
     }
 
     /**
-     * ITEM_ALREADY_OWNED must end the Buy on every path (R4) and it is a **success**, not a
-     * purchase error (judge §3 item 5): Play has just said this account owns Pro, so even a
-     * failed or empty confirming query keeps the entitlement. A later reconcile acknowledges it.
+     * ITEM_ALREADY_OWNED is **not** an entitlement on its own (critic D1/D2, docs: query after
+     * it and only grant for a PURCHASED purchase). This confirms it and ends the Buy on every
+     * path (R4):
+     * - PURCHASED row: unlock and acknowledge (once) through the normal purchase handling;
+     * - PENDING only: never unlock or acknowledge, show the pending copy, stay due;
+     * - failed or empty answer: never unlock, show the connection copy, stay due so the next
+     *   foreground retries. A known paid entitlement is never revoked here.
      */
     private fun reconcileOwned(app: Context, client: Gateway) {
         val startGeneration = generation
         client.queryPurchases { owned ->
             onMain {
                 try {
-                    val mine = owned?.filter {
-                        it.productId == PRODUCT_ID && it.state == PurchaseState.PURCHASED
-                    }
-                    if (mine.isNullOrEmpty()) {
-                        // No purchase row to acknowledge: keep retrying foreground reconciles.
+                    val mine = owned?.filter { it.productId == PRODUCT_ID }
+                    val bought = mine?.filter { it.state == PurchaseState.PURCHASED }
+                    if (bought.isNullOrEmpty()) {
+                        // No entitlement can be granted from this answer; ask again later.
                         reconcileDue = true
-                        buyController(app).grantOwned()
+                        if (mine != null && mine.any { it.state == PurchaseState.PENDING }) {
+                            buyController(app).handle(Event.Pending)
+                        } else {
+                            endBuy(State.Failed(app.getString(R.string.pro_error_connection)))
+                        }
                     } else {
                         buyController(app).applyOwned(mine, startGeneration, silent = false)
                     }
@@ -811,16 +818,6 @@ object ProBilling {
         }
 
         private fun unlock() {
-            record(true)
-            onState(State.Owned)
-        }
-
-        /**
-         * Play reported ITEM_ALREADY_OWNED: the account owns Pro even though the confirming
-         * query had no row (its cache can lag). Record the entitlement; the next reconcile
-         * acknowledges the purchase once Play returns it.
-         */
-        fun grantOwned() {
             record(true)
             onState(State.Owned)
         }
