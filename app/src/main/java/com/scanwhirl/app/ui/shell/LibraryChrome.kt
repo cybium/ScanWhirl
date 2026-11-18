@@ -9,7 +9,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ScrollView
-import android.widget.TextView
 import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
@@ -179,51 +178,24 @@ class LibraryFastScrollBar(context: Context) : View(context) {
 }
 
 /**
- * uihome: the pinned layer of the Home library — the sticky document count and the
- * fast-scroll bar. It is added to the FrameLayout that hosts the library
- * [ScrollView] (the lane may not edit ShellActivity), so both stay on screen while
- * the list scrolls. It never intercepts a touch outside the scroll bar thumb.
+ * uihome: the pinned layer of the Home library — only the fast-scroll bar.
+ *
+ * The lead's device check rejected a floating count chip: anything drawn over the
+ * list hides the first row's thumbnail and title. The document count stays as
+ * plain text in the list header (inside the ScrollView); this layer holds one
+ * 24dp bar strip at the end edge and nothing else, so no content is covered.
  */
 class LibraryViewportChrome(context: Context) : FrameLayout(context) {
 
-    private val countView: TextView
     private val bar: LibraryFastScrollBar
     private var scrollView: ScrollView? = null
-    private var anchor: View? = null
-    private var countText: CharSequence = ""
 
     init {
         id = R.id.swLibraryChrome
         isClickable = false
         isFocusable = false
         clipChildren = false
-        // The chrome spans the whole content area; only its bar thumb takes touches.
         setWillNotDraw(true)
-
-        countView = SwStyle.text(context, 12f, SwStyle.color(context, R.color.text_hologram_mid), bold = true)
-            .apply {
-                id = R.id.swDocCountSticky
-                setPadding(
-                    SwStyle.dp(context, 10f), SwStyle.dp(context, 4f),
-                    SwStyle.dp(context, 10f), SwStyle.dp(context, 4f)
-                )
-                background = SwStyle.pill(
-                    context,
-                    SwStyle.color(context, R.color.text_hologram_mid),
-                    SwStyle.color(context, R.color.glass_surface_raised),
-                    SwStyle.color(context, R.color.sw_cyan_hair)
-                )
-                isVisible = false
-                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-            }
-        addView(
-            countView,
-            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.TOP or Gravity.START
-                val m = SwStyle.dp(context, 18f)
-                setMargins(m, SwStyle.dp(context, 6f), m, 0)
-            }
-        )
 
         bar = LibraryFastScrollBar(context)
         addView(
@@ -234,10 +206,9 @@ class LibraryViewportChrome(context: Context) : FrameLayout(context) {
         )
     }
 
-    /** Hooks the pinned layer to [scrollView]; [header] is the count row that pins away. */
-    fun attach(scrollView: ScrollView, header: View?) {
+    /** Hooks the bar to [scrollView]; nothing here draws over the rows. */
+    fun attach(scrollView: ScrollView) {
         this.scrollView = scrollView
-        this.anchor = header
         bar.scrollView = scrollView
         scrollView.setOnScrollChangeListener { _, _, _, _, _ -> update() }
         scrollView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> update() }
@@ -256,30 +227,7 @@ class LibraryViewportChrome(context: Context) : FrameLayout(context) {
         update()
     }
 
-    fun setCountText(text: CharSequence) {
-        countText = text
-        update()
-    }
-
     fun update() {
-        val headerShown = anchor?.isShown ?: true
-        val scrolledPastHeader = headerShown && (scrollView?.scrollY ?: 0) > headerTop()
         bar.refresh()
-        countView.text = countText
-        countView.isVisible = bar.isActive && scrolledPastHeader && countText.isNotEmpty()
-    }
-
-    /**
-     * The header's offset inside the scrolled content. Sums the tops up to the
-     * ScrollView; the library is a straight LinearLayout chain, no nested scrollers.
-     */
-    private fun headerTop(): Int {
-        var y = 0
-        var view: View? = anchor
-        while (view != null && view !== scrollView) {
-            y += view.top
-            view = view.parent as? View
-        }
-        return y
     }
 }
