@@ -1,11 +1,12 @@
 # LANE fixinsertcrop — Insert pages > Photos crops the photo before the page gets it
 
-Branch `lane/fixinsertcrop`. Not merged, not pushed. Commits `77681c3`, `43692a8`.
+Branch `lane/fixinsertcrop`. Not merged, not pushed. Commits `77681c3`, `43692a8`,
+`d40d204` (rework after critic), report commit.
 
-Last full gate (cloud run 44271471275, 5 min):
+Last full gate after the rework (cloud run 44275350994, 7 min):
 
 ```
-GATE PASS fixinsertcrop tests=1723 failures=0 skipped=0 lint=[skipped]
+GATE PASS fixinsertcrop tests=1726 failures=0 skipped=0 lint=[skipped]
 ```
 
 Earlier full gate after the first commit (run 44269348213, 9 min):
@@ -87,6 +88,13 @@ Robolectric, NATIVE graphics, `sdk = [35]`; the real flow is driven end to end
    no draft and no `insert_*` folder.
 7. `rotation while the insert position is asked keeps no picked copy` — a recreated viewer with
    no chosen position deletes the batch instead of leaking the photos.
+8. `a confirm tap that lands while the next photo loads is ignored` (rework D1) — stale Confirm
+   during photo 2's load: two unique pages, photo 1 then photo 2.
+9. `rotation while the next photo loads does not reuse the previous frame` (rework D2) — photo 2
+   opens with its own full auto-crop frame, not photo 1's dragged rectangle.
+10. `a viewer recreated while the corner screen is on top inserts at the chosen position`
+    (rework D6) — "After page 1" survives the document screen's recreation; the confirmed photo
+    is inserted at position 1.
 
 Red evidence on the old code (run 44266334779, before `PhotoCropFlowActivity` existed; the
 test then referenced the class only by name so it compiled):
@@ -97,7 +105,62 @@ FAIL InsertPhotosCropFixInsertCropTest > a picked photo opens the corner crop sc
 GATE FAIL fixinsertcrop tests=1 failures=1
 ```
 
-Green: `GATE PASS fixinsertcrop tests=7`, then the full suite above (1723 tests).
+Green: `GATE PASS fixinsertcrop tests=10` after the rework, then the full suite above (1726 tests).
+
+## Rework after critic (commit `d40d204`)
+
+`next/docs/review/CRITIC_fixinsertcrop.md` raised two Medium defects and a missing test.
+Full gate after the rework (cloud run 44275350994, 7 min):
+`GATE PASS fixinsertcrop tests=1726 failures=0 skipped=0 lint=[skipped]`.
+New class after the rework: `GATE PASS fixinsertcrop tests=10`.
+
+### D1 — a Confirm tap while the next photo loads could confirm it twice (Medium-High, fixed)
+
+- `prepare()` now **tears the previous photo's screen down first** (`clearScreen()` removes the
+  overlay, clears the crop view and recycles the old bitmap) and no longer resets `busy`.
+  `busy` stays true from the moment a confirm is accepted until `showCropScreen()` has
+  installed the next photo's screen and its Confirm button, so a tap that lands during the
+  load finds neither a crop view nor an unlocked flow.
+- The confirm captures its own photo: `photoIndex = index` at tap time names the output file
+  and decides the advance; the post-encode checks require the same token, generation and
+  index, so a late result can never be written under a later photo's name.
+- `DocumentViewerActivity` now requires `cropped.size == pendingPhotoCount` (the picked count,
+  saved/restored with the batch) before `insertFiles`: a short batch inserts nothing.
+- Test: `a confirm tap that lands while the next photo loads is ignored` — a new test gate
+  (`PhotoCropFlowActivity.prepareGate`) holds photo 2's preparation, the test taps the stale
+  photo-1 Confirm while it is blocked, releases it, confirms photo 2 and asserts two unique
+  pages in the right order.
+- Red evidence with the old `prepare()` (`busy = false`, no teardown):
+  `a confirm tap that lands while the next photo loads is ignored :: java.lang.AssertionError:
+  photo 1 is the first page: [222, 222, 224] vs [222, 222, 224]` (both pages were photo 1).
+
+### D2 — the saved frame was handed to the next photo (Medium, fixed)
+
+- `onSaveInstanceState` saves the frame together with `KEY_RECT_INDEX`, the photo it was drawn
+  on; while the next photo loads there is no crop view/bitmap, so no frame is attributed to it,
+  and the restore applies a frame only when `KEY_RECT_INDEX == index`.
+- Test: `rotation while the next photo loads does not reuse the previous frame` — drag photo
+  1's top-left corner, confirm, hold photo 2's preparation, `recreate()`, release: photo 2
+  opens with its own auto-crop frame (0, 0, 1, 1) and its own "Photo 2 of 2" header.
+- Red evidence with the old save/restore:
+  `rotation while the next photo loads does not reuse the previous frame :: java.lang.AssertionError:
+  left edge of photo 2's frame expected:<0.0> but was:<0.15>` (photo 1's dragged frame).
+
+### D6 — the reported viewer-recreation position restore is now tested (fixed)
+
+- Test: `a viewer recreated while the corner screen is on top inserts at the chosen position`
+  — choose "After page 1", recreate the document screen while the crop screen is on top, then
+  confirm the photo and deliver its result to the recreated viewer (through the platform
+  `onActivityResult`, i.e. the real `ActivityResult` registry restore): exactly three pages,
+  the confirmed photo at position 1 and the two base pages around it. The claim in the report
+  is therefore backed by a test, not prose.
+- New test hook: `PhotoCropFlowActivity.prepareGate` (static, test-only, reset in `@After`).
+
+### D3 (optional) — the private crop copy is off the main thread
+
+- The ~2400 px `Bitmap.createBitmap`/`copy` for an undragged confirm now happens inside the
+  `Dispatchers.IO` block (recycled in its `finally`, also on cancellation), so the default
+  confirm path allocates nothing large on the main thread.
 
 ## Files touched
 
@@ -150,3 +213,9 @@ Green: `GATE PASS fixinsertcrop tests=7`, then the full suite above (1723 tests)
 6. Camera insert and library-PDF insert must behave exactly as before (no crop screen).
 7. A photo with no clear page edge: the hint must say the edges were not found, and the manual
    drag must still work.
+8. Rework: tap "Crop and add" twice quickly on photo 1 of a 2-photo batch — photo 2 must still
+   appear once, and the two pages must be photo 1 then photo 2 (never the same page twice).
+9. Rework: confirm photo 1 and rotate while photo 2 is still loading — photo 2 must open with
+   its own frame (the whole auto-cropped page), not photo 1's dragged corners.
+10. Rework: choose "After page 1", rotate the document screen while the crop screen is on top,
+    then confirm — the page must land after page 1, not at the end or nowhere.
