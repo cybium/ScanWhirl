@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="fixflow_keep"><!-- review -->रखें</string>
-    <string name="fixflow_id_discard_title"><!-- review -->यह आईडी कार्ड हटाएँ?</string>
-    <string name="fixflow_id_discard_msg"><!-- review -->कार्ड इस फ़ोन में सहेजा जा चुका है। हटाने पर वह और उसकी झलक मिट जाएगी; रखें चुनने पर आप कार्ड पर लौटेंगे।</string>
+    <string name="fixflow_keep">रखें</string>
+    <string name="fixflow_id_discard_title">यह पहचान पत्र हटाएँ?</string>
+    <string name="fixflow_id_discard_msg">पहचान पत्र इस फ़ोन में सहेजा जा चुका है। हटाने पर वह और उसकी झलक मिट जाएगी; रखें चुनने पर आप पहचान पत्र पर लौटेंगे।</string>
 
-    <string name="fixflow_id_layout_front_only_msg"><!-- review -->सामने वाला भाग अपने अलग पेज पर जाएगा।</string>
-    <string name="fixflow_id_layout_front_page"><!-- review -->सामने वाला भाग एक पेज पर</string>
+    <string name="fixflow_id_layout_front_only_msg">सामने वाला भाग अपने अलग पन्ने पर जाएगा।</string>
+    <string name="fixflow_id_layout_front_page">सामने वाला भाग एक पन्ने पर</string>
 
-    <string name="fixflow_import_keep_title"><!-- review -->आयातित दस्तावेज़ रखें?</string>
-    <string name="fixflow_import_keep_msg"><!-- review -->हटाने पर आयातित दस्तावेज़ और उसकी झलक मिट जाएगी। बाकी दस्तावेज़ वैसे ही रहेंगे।</string>
+    <string name="fixflow_import_keep_title">लाया गया दस्तावेज़ रखें?</string>
+    <string name="fixflow_import_keep_msg">हटाने पर लाया गया दस्तावेज़ और उसकी झलक मिट जाएगी। बाकी दस्तावेज़ वैसे ही रहेंगे।</string>
 </resources>

@@ -1,34 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L3 v2 "Book pages" tool. -->
-    <string name="book_title"><!-- review -->पुस्तक पेज</string>
-    <string name="book_hint"><!-- review -->हर दो पेज के फैलाव की एक फ़ोटो चुनें। मोड़ सही न हो तो रेखा खींचें।</string>
-    <string name="book_pick"><!-- review -->फ़ोटो चुनें</string>
-    <string name="book_add"><!-- review -->फ़ोटो जोड़ें</string>
-    <string name="book_create"><!-- review -->दस्तावेज़ बनाएँ</string>
-    <string name="book_loading"><!-- review -->पूर्वावलोकन तैयार हो रहे हैं…</string>
-    <string name="book_splitting"><!-- review -->फैलाव अलग किए जा रहे हैं…</string>
-    <string name="book_spread"><!-- review -->फैलाव %1$d</string>
-    <string name="book_gutter_found"><!-- review -->मोड़ मिला। समायोजित करने के लिए खींचें।</string>
-    <string name="book_gutter_middle"><!-- review -->रेखा जाँचें।</string>
-    <string name="book_gutter_horizontal"><!-- review -->पेज सीधे किए जाएँगे।</string>
-    <string name="book_gutter_moved"><!-- review -->रेखा हाथ से सेट की गई।</string>
-    <string name="book_one_page_note"><!-- review -->एक पेज लगता है।</string>
-    <string name="book_keep_one_page"><!-- review -->एक पेज रखें</string>
-    <string name="book_rotate"><!-- review -->पेज पलटें</string>
-    <string name="book_add_spread"><!-- review -->फैलाव जोड़ें</string>
-    <string name="book_add_spread_note"><!-- review -->स्कैनर किताब के किनारे काटता है; वहाँ कोने ठीक कर सकते हैं।</string>
-    <string name="book_scan_camera"><!-- review -->कैमरे से स्कैन करें</string>
-    <string name="book_from_photos"><!-- review -->फ़ोटो से</string>
-    <string name="book_scanner_fallback"><!-- review -->स्कैनर उपलब्ध नहीं है। इसके बजाय फ़ोटो चुनें।</string>
-    <string name="book_doc_name"><!-- review -->पुस्तक %1$s</string>
+    <string name="book_title">किताब के पन्ने</string>
+    <string name="book_hint">किताब के हर खुले जोड़े की फ़ोटो चुनें, जिसमें दोनों पन्ने दिखें। बीच के मोड़ पर रेखा न हो तो उसे खींचकर ठीक करें।</string>
+    <string name="book_pick">फ़ोटो चुनें</string>
+    <string name="book_add">फ़ोटो जोड़ें</string>
+    <string name="book_create">दस्तावेज़ बनाएँ</string>
+    <string name="book_loading">झलक तैयार हो रही है…</string>
+    <string name="book_splitting">खुले पन्ने अलग किए जा रहे हैं…</string>
+    <string name="book_spread">खुले पन्नों का जोड़ा %1$d</string>
+    <string name="book_gutter_found">मोड़ मिला। ठीक करने के लिए खींचें।</string>
+    <string name="book_gutter_middle">रेखा जाँचें।</string>
+    <string name="book_gutter_horizontal">पन्ने सीधे कर दिए जाएँगे।</string>
+    <string name="book_gutter_moved">रेखा हाथ से लगाई गई।</string>
+    <string name="book_one_page_note">लगता है यह एक ही पन्ना है।</string>
+    <string name="book_keep_one_page">एक ही पन्ना रखें</string>
+    <string name="book_rotate">पन्ने पलटें</string>
+    <string name="book_add_spread">खुले दो पन्ने जोड़ें</string>
+    <string name="book_add_spread_note">स्कैन करते समय किताब के बाहर का हिस्सा कट जाता है; वहीं कोने ठीक कर सकते हैं।</string>
+    <string name="book_scan_camera">कैमरे से स्कैन करें</string>
+    <string name="book_from_photos">फ़ोटो से</string>
+    <string name="book_scanner_fallback">स्कैनर उपलब्ध नहीं है। इसके बजाय फ़ोटो चुनें।</string>
+    <string name="book_doc_name">किताब %1$s</string>
     <plurals name="book_created">
-        <item quantity="one"><!-- review -->%1$d पेज बनाया गया</item>
-        <item quantity="other"><!-- review -->%1$d पेज बनाए गए</item>
+        <item quantity="one">%1$d पन्ना बनाया गया</item>
+        <item quantity="other">%1$d पन्ने बनाए गए</item>
     </plurals>
-    <string name="book_failed"><!-- review -->फ़ोटो अलग नहीं कर सके: %1$s</string>
-    <string name="book_no_images"><!-- review -->अभी कोई फ़ोटो नहीं चुनी गई।</string>
-    <string name="book_read_failed"><!-- review -->उनमें से एक फ़ोटो पढ़ी नहीं जा सकी।</string>
-    <string name="book_preview_desc"><!-- review -->खींची जा सकने वाली रेखा के साथ दो पेज का फैलाव</string>
-    <string name="book_close"><!-- review -->बंद करें</string>
+    <string name="book_failed">फ़ोटो के पन्ने अलग नहीं किए जा सके: %1$s</string>
+    <string name="book_no_images">अभी कोई फ़ोटो नहीं चुनी गई।</string>
+    <string name="book_read_failed">उनमें से एक फ़ोटो पढ़ी नहीं जा सकी।</string>
+    <string name="book_preview_desc">खींची जा सकने वाली रेखा के साथ दो खुले पन्ने</string>
+    <string name="book_close">बंद करें</string>
 </resources>

@@ -413,7 +413,12 @@ class FixCopyTest {
             assertEquals(name, wording, en[name])
             val hindi = hi[name]
             assertNotNull("$name needs a Hindi string", hindi)
-            assertTrue("$name in Hindi must carry the review marker", hindi!!.startsWith("<!-- review -->"))
+            // v2 wording: JUDGE_HINDI.md final glossary — these wordings are reviewed now,
+            // so the "awaiting native review" marker must be gone.
+            assertFalse(
+                "$name in Hindi is reviewed and must not carry a review marker",
+                hindi!!.startsWith("<!-- review -->")
+            )
             for ((lang, text) in listOf("en" to wording, "hi" to hindi)) {
                 assertFalse(
                     "$name ($lang) must not use a long dash",

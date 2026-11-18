@@ -1,50 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Full Backup 2.0: वापसी और बैकअप. -->
+<!-- Full Backup 2.0: वापसी और प्रति सहेजना. -->
 <resources>
-    <string name="me_backup"><!-- review -->बैकअप और रीस्टोर</string>
-    <string name="me_backup_summary">हर स्कैन, वॉल्ट और सेटिंग्स वाली एक एन्क्रिप्टेड फ़ाइल</string>
+    <string name="me_backup">प्रति सहेजना और वापस लाना</string>
+    <string name="me_backup_summary">हर स्कैन, तिजोरी और सेटिंग वाली एक फ़ाइल, जिसे पासवर्ड या कोड के बिना पढ़ा नहीं जा सकता</string>
 
-    <string name="backup_title"><!-- review -->बैकअप और रीस्टोर</string>
-    <string name="backup_explain">हर स्कैन, वॉल्ट, हस्ताक्षर और सेटिंग्स वाली एक एन्क्रिप्टेड फ़ाइल। नए फ़ोन पर वापस लाएँ और सब कुछ अपनी जगह लौट आता है।</string>
-    <string name="backup_never">अभी कोई बैकअप नहीं</string>
-    <string name="backup_today">पिछला बैकअप: आज</string>
-    <string name="backup_one_day">पिछला बैकअप: कल</string>
-    <string name="backup_days_ago">पिछला बैकअप: %1$d दिन पहले</string>
-    <string name="backup_now">अभी बैकअप लें</string>
-    <string name="backup_restore">बैकअप से वापस लाएँ</string>
-    <string name="backup_remind">अगर पिछला बैकअप एक महीने पुराना हो तो याद दिलाएँ</string>
-    <string name="backup_no_internet"><!-- review -->ScanWhirl के पास इंटरनेट की अनुमति नहीं है। जब आप शेयर चुनते हैं तो Google Drive शेयर शीट से खुलता है।</string>
+    <string name="backup_title">प्रति सहेजना और वापस लाना</string>
+    <string name="backup_explain">हर स्कैन, तिजोरी, हस्ताक्षर और सेटिंग वाली एक फ़ाइल, जिसे पासवर्ड या कोड के बिना पढ़ा नहीं जा सकता। नए फ़ोन पर वापस लाएँ और सब कुछ अपनी जगह लौट आता है।</string>
+    <string name="backup_never">अभी कोई प्रति नहीं सहेजी</string>
+    <string name="backup_today">पिछली सहेजी प्रति: आज</string>
+    <string name="backup_one_day">पिछली सहेजी प्रति: कल</string>
+    <string name="backup_days_ago">पिछली सहेजी प्रति: %1$d दिन पहले</string>
+    <string name="backup_now">अभी प्रति सहेजें</string>
+    <string name="backup_restore">सहेजी प्रति से वापस लाएँ</string>
+    <string name="backup_remind">पिछली प्रति एक महीने पुरानी हो तो याद दिलाएँ</string>
+    <string name="backup_no_internet">ScanWhirl के पास इंटरनेट की अनुमति नहीं है। भेजें चुनने पर Google Drive भेजने की सूची से खुलता है।</string>
 
-    <string name="backup_choose">बैकअप सुरक्षित करें</string>
+    <string name="backup_choose">प्रति को सुरक्षित करें</string>
     <string name="backup_choose_note">तय करें कि यह फ़ाइल किससे खुलेगी। वापस लाने के लिए वही चीज़ चाहिए होगी।</string>
-    <string name="backup_use_code">वॉल्ट का रिकवरी कोड</string>
-    <string name="backup_use_password">बैकअप पासवर्ड</string>
+    <string name="backup_use_code">तिजोरी वापस खोलने का कोड</string>
+    <string name="backup_use_password">प्रति का पासवर्ड</string>
     <string name="backup_cancel">रद्द करें</string>
 
-    <string name="backup_code_title">वॉल्ट रिकवरी कोड</string>
-    <string name="backup_code_note">अपना वॉल्ट रिकवरी कोड लिखें। बैकअप इसी से एन्क्रिप्ट होगा, बिना कोड कोई नहीं खोल सकता।</string>
+    <string name="backup_code_title">तिजोरी वापस खोलने का कोड</string>
+    <string name="backup_code_note">अपनी तिजोरी वापस खोलने का कोड लिखें। प्रति इसी कोड से सुरक्षित होगी; इसके बिना कोई उसे पढ़ नहीं सकेगा।</string>
     <string name="backup_code_hint">ABCD EFGH IJKL MNOP QRST UVWX</string>
-    <string name="backup_code_wrong">यह आपका वॉल्ट रिकवरी कोड नहीं है।</string>
-    <string name="backup_continue">आगे बढ़ें</string>
+    <string name="backup_code_wrong">यह आपकी तिजोरी वापस खोलने का कोड नहीं है।</string>
+    <string name="backup_continue">जारी रखें</string>
 
-    <string name="backup_password_title">बैकअप पासवर्ड</string>
-    <string name="backup_password_note">कम से कम %1$d अक्षर। इसे लिख लें: इसके बिना बैकअप नहीं खुलेगा।</string>
-    <string name="backup_password_hint">बैकअप पासवर्ड</string>
+    <string name="backup_password_title">प्रति का पासवर्ड</string>
+    <string name="backup_password_note">कम से कम %1$d अक्षर। इसे लिख लें: इसके बिना प्रति नहीं खुलेगी।</string>
+    <string name="backup_password_hint">प्रति का पासवर्ड</string>
     <string name="backup_password_short">कम से कम %1$d अक्षर रखें।</string>
 
-    <string name="backup_working">बैकअप एन्क्रिप्ट हो रहा है…</string>
-    <string name="backup_failed">बैकअप नहीं लिखा जा सका।</string>
-    <string name="backup_saved"><!-- review -->बैकअप सहेजा गया</string>
-    <string name="backup_ready">बैकअप तैयार</string>
-    <string name="backup_ready_note"><!-- review -->%1$d MB, एन्क्रिप्टेड। फ़ोन में सहेजें या Drive के साथ शेयर करें।</string>
-    <string name="backup_save_device"><!-- review -->फ़ोन में सहेजें</string>
-    <string name="backup_share">शेयर करें</string>
-    <string name="backup_share_title"><!-- review -->बैकअप सहेजें</string>
-    <string name="backup_subject">ScanWhirl बैकअप</string>
+    <string name="backup_working">प्रति को ऐसा बनाया जा रहा है कि पासवर्ड या कोड के बिना उसे पढ़ा न जा सके…</string>
+    <string name="backup_failed">प्रति सहेजी नहीं जा सकी।</string>
+    <string name="backup_saved">प्रति सहेजी गई</string>
+    <string name="backup_ready">प्रति तैयार</string>
+    <string name="backup_ready_note">%1$d MB। पासवर्ड या कोड के बिना पढ़ी नहीं जा सकती। फ़ोन में सहेजें या Drive से भेजें।</string>
+    <string name="backup_save_device">फ़ोन में सहेजें</string>
+    <string name="backup_share">भेजें</string>
+    <string name="backup_share_title">प्रति सहेजें</string>
+    <string name="backup_subject">ScanWhirl प्रति</string>
 
     <string name="backup_restore_go">वापस लाएँ</string>
     <string name="backup_restoring">वापस लाया जा रहा है…</string>
-    <string name="backup_restored">बैकअप वापस आ गया</string>
+    <string name="backup_restored">प्रति वापस आ गई</string>
     <string name="backup_restored_none">कोई नया दस्तावेज़ नहीं।</string>
     <plurals name="backup_restored_docs">
         <item quantity="one">%1$d दस्तावेज़ वापस आया।</item>
@@ -55,16 +55,16 @@
         <item quantity="other">%1$d पहले से थे और छोड़ दिए गए।</item>
     </plurals>
     <plurals name="backup_restored_vault">
-        <item quantity="one">%1$d वॉल्ट फ़ाइल वापस आई।</item>
-        <item quantity="other">%1$d वॉल्ट फ़ाइलें वापस आईं।</item>
+        <item quantity="one">तिजोरी की %1$d फ़ाइल वापस आई।</item>
+        <item quantity="other">तिजोरी की %1$d फ़ाइलें वापस आईं।</item>
     </plurals>
     <plurals name="backup_restored_vault_reencrypted">
-        <item quantity="one">%1$d वॉल्ट दस्तावेज़ इस वॉल्ट में फिर से एन्क्रिप्ट हुआ।</item>
-        <item quantity="other">%1$d वॉल्ट दस्तावेज़ इस वॉल्ट में फिर से एन्क्रिप्ट हुए।</item>
+        <item quantity="one">पुरानी तिजोरी का %1$d दस्तावेज़ इस तिजोरी में फिर से सुरक्षित किया गया, ताकि गुप्त नंबर या कोड के बिना उसे पढ़ा न जा सके।</item>
+        <item quantity="other">पुरानी तिजोरी के %1$d दस्तावेज़ इस तिजोरी में फिर से सुरक्षित किए गए, ताकि गुप्त नंबर या कोड के बिना उन्हें पढ़ा न जा सके।</item>
     </plurals>
-    <string name="backup_vault_locked">वॉल्ट फ़ाइलें वापस नहीं आईं। वॉल्ट खोलें और फिर से वापस लाएँ।</string>
-    <string name="backup_vault_reason">वॉल्ट खोलें ताकि बैकअप के वॉल्ट दस्तावेज़ इसमें वापस आ सकें।</string>
-    <string name="backup_wrong_secret">गलत पासवर्ड या रिकवरी कोड। कुछ नहीं बदला।</string>
-    <string name="backup_not_a_backup">यह ScanWhirl बैकअप नहीं है, या फ़ाइल खराब है।</string>
-    <string name="backup_failed_title">वापस नहीं ला सके</string>
+    <string name="backup_vault_locked">तिजोरी की फ़ाइलें वापस नहीं आईं। तिजोरी खोलें और फिर से वापस लाएँ।</string>
+    <string name="backup_vault_reason">तिजोरी खोलें ताकि बचाकर रखी प्रति में मौजूद तिजोरी के दस्तावेज़ इसमें वापस लाए जा सकें।</string>
+    <string name="backup_wrong_secret">पासवर्ड या कोड ग़लत है। कुछ नहीं बदला।</string>
+    <string name="backup_not_a_backup">यह ScanWhirl की सहेजी प्रति नहीं है, या फ़ाइल खराब है।</string>
+    <string name="backup_failed_title">वापस नहीं लाया जा सका</string>
 </resources>
