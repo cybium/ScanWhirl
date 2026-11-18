@@ -144,6 +144,11 @@
             android:parentActivityName=".ui.shell.ShellActivity" />
 
         <activity
+            android:name=".ui.tools.PhotoCropFlowActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity" />
+
+        <activity
             android:name=".ui.tools.BusinessCardActivity"
             android:exported="false"
             android:parentActivityName=".ui.shell.ShellActivity"

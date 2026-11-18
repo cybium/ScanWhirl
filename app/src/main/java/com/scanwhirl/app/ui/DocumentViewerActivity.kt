@@ -40,6 +40,7 @@ import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.tools.PhotoCropFlowActivity
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
@@ -143,16 +144,96 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private val insertPhotos =
         registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
             if (uris.isEmpty()) return@registerForActivityResult
+            // R1: the batch folder is owned from the moment it exists on disk, not after the
+            // copy returns; a failed or abandoned copy must not leave the picked photos behind.
+            val batch = InsertPhotoBatch(
+                File(cacheDir, "insert_${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+            )
+            pendingPhotoBatch = batch
             lifecycleScope.launch {
-                val files = withContext(Dispatchers.IO) {
-                    runCatching { copyInsertUris(uris) }.getOrNull()
+                val files = try {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            copyInsertUris(uris, batch.dir)
+                        } catch (e: Exception) {
+                            null
+                        } finally {
+                            // The screen may have gone away (Back/rotation/finish) while this
+                            // blocking copy was still running: the worker itself guarantees the
+                            // folder is gone once it has finished writing.
+                            if (batch.abandoned) batch.dir.deleteRecursively()
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    // Cancelled with the screen; the worker's finally did the cleanup.
+                    throw e
                 }
                 if (files.isNullOrEmpty()) {
-                    toast(R.string.insert_none, Toast.LENGTH_SHORT)
-                } else {
-                    askInsertPosition(files)
+                    batch.dir.deleteRecursively()
+                    if (pendingPhotoBatch === batch) pendingPhotoBatch = null
+                    if (!batch.abandoned) toast(R.string.insert_none, Toast.LENGTH_SHORT)
+                    return@launch
                 }
+                if (batch.abandoned || pendingPhotoBatch !== batch) {
+                    // The screen went away before the copy finished: keep nothing.
+                    batch.dir.deleteRecursively()
+                    return@launch
+                }
+                // A8: a picked gallery photo is not a scan. The position is asked here (as
+                // for camera/PDF inserts) but the pages are cropped and confirmed per photo
+                // first; only then does the draft change.
+                askInsertPosition(files, ::startPhotoCrop, onAbandon = {
+                    deleteBatch(batch.dir)
+                    if (pendingPhotoBatch === batch) pendingPhotoBatch = null
+                })
             }
+        }
+
+    /**
+     * R1: one picked-photo batch. [handedOff] means the corner crop flow owns it (the viewer
+     * must never delete it then); [abandoned] means the screen went away while the copies were
+     * still being written, so the copy worker deletes the folder when it finishes.
+     */
+    private class InsertPhotoBatch(val dir: File) {
+        @Volatile var handedOff = false
+        @Volatile var abandoned = false
+    }
+
+    /** Position chosen for the photo batch currently on the corner crop screen. */
+    private var pendingPhotoPosition: Int? = null
+
+    /** How many photos that batch has; every one must come back confirmed. */
+    private var pendingPhotoCount: Int? = null
+
+    /** The picked-photo batch of the flow, from the copy until the draft has it. */
+    private var pendingPhotoBatch: InsertPhotoBatch? = null
+
+    /** Tests: hold the picked-photo copy so a finish/rotation can race it. Null in production. */
+    @Volatile
+    internal var photoCopyGateForTest: ((Int) -> Unit)? = null
+
+    /** Back from the corner screen returns RESULT_CANCELED: the batch inserts nothing (A8). */
+    private val insertPhotoCrop =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val batch = pendingPhotoBatch
+            val position = pendingPhotoPosition
+            val count = pendingPhotoCount
+            pendingPhotoBatch = null
+            pendingPhotoPosition = null
+            pendingPhotoCount = null
+            val cropped = if (result.resultCode == RESULT_OK) {
+                result.data?.getStringArrayListExtra(PhotoCropFlowActivity.EXTRA_CROPPED)
+                    .orEmpty().map(::File).filter { it.isFile }
+            } else {
+                emptyList()
+            }
+            // D1: a batch is inserted only when every picked photo came back confirmed, in one
+            // piece; a short result (an abandoned or failed crop) inserts nothing.
+            if (position == null || count == null || cropped.size != count) {
+                batch?.dir?.deleteRecursively()
+                return@registerForActivityResult
+            }
+            insertFiles(cropped, position)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -167,6 +248,25 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         freshImport = intent.getBooleanExtra(EXTRA_FRESH_IMPORT, false)
+        // A8: a viewer recreated while the corner crop screen was on top still knows where the
+        // confirmed photos go when they come back. A batch whose position was never chosen dies
+        // with the old screen (the question is gone), so its picked copies are not kept.
+        val restoredPosition = savedInstanceState
+            ?.takeIf { it.containsKey(KEY_PHOTO_INSERT_AT) }
+            ?.getInt(KEY_PHOTO_INSERT_AT)
+        val restoredCount = savedInstanceState
+            ?.takeIf { it.containsKey(KEY_PHOTO_COUNT) }
+            ?.getInt(KEY_PHOTO_COUNT)
+        pendingPhotoPosition = restoredPosition
+        pendingPhotoCount = restoredCount
+        pendingPhotoBatch = savedInstanceState?.getString(KEY_PHOTO_DIR)?.let { path ->
+            // Restored means the corner crop flow owns it: this screen must not delete it.
+            InsertPhotoBatch(File(path)).apply { handedOff = true }
+        }
+        if (restoredPosition == null || restoredCount == null) {
+            pendingPhotoBatch?.dir?.deleteRecursively()
+            pendingPhotoBatch = null
+        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleEditorBack()
@@ -259,12 +359,34 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         else -> super.onOptionsItemSelected(item)
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingPhotoPosition?.let { outState.putInt(KEY_PHOTO_INSERT_AT, it) }
+        pendingPhotoCount?.let { outState.putInt(KEY_PHOTO_COUNT, it) }
+        // R1: only a batch the crop flow already owns is worth restoring; a copy in flight is
+        // cancelled by the recreation and cleaned up by its worker.
+        pendingPhotoBatch?.takeIf { it.handedOff }?.dir
+            ?.let { outState.putString(KEY_PHOTO_DIR, it.path) }
+    }
+
     override fun onDestroy() {
         // Leaving the screen makes any pending delete permanent (rule: Undo
         // only lives as long as this screen).
         if (!isChangingConfigurations) {
             commitPendingDelete()
         }
+        // R1: a picked batch is never left behind. A copy still in flight marks the batch
+        // abandoned (its worker deletes the folder when it has finished writing); a batch the
+        // corner crop flow owns is not this screen's to delete.
+        pendingPhotoBatch?.let { batch ->
+            if (!batch.handedOff) {
+                batch.abandoned = true
+                batch.dir.deleteRecursively()
+            }
+        }
+        pendingPhotoBatch = null
+        pendingPhotoPosition = null
+        pendingPhotoCount = null
         super.onDestroy()
     }
 
@@ -669,11 +791,22 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
     }
 
-    /** Copies picked camera/photo URIs into a temp folder of normalised JPEG pages. */
-    private fun copyInsertUris(uris: List<android.net.Uri>): List<File> {
-        val dir = File(cacheDir, "insert_${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+    /** Copies picked camera/photo URIs into a new temp folder of normalised JPEG pages. */
+    private fun copyInsertUris(uris: List<android.net.Uri>): List<File> =
+        copyInsertUris(
+            uris,
+            File(cacheDir, "insert_${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+        )
+
+    /**
+     * Copies [uris] into [dir] as normalised JPEG pages. The caller owns [dir]: the camera path
+     * creates it here and deletes it after `insertFiles`, the photos path (R1) owns and cleans it
+     * from before the first read.
+     */
+    private fun copyInsertUris(uris: List<android.net.Uri>, dir: File): List<File> {
         val files = ArrayList<File>(uris.size)
         uris.forEachIndexed { index, uri ->
+            photoCopyGateForTest?.invoke(index)
             val bytes = contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
                 ?: throw IllegalArgumentException("Page ${index + 1} could not be read")
             val file = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index))
@@ -683,8 +816,17 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         return files
     }
 
-    /** Position picker: at the start, after page N, or at the end. */
-    private fun askInsertPosition(files: List<File>) {
+    /**
+     * Position picker: at the start, after page N, or at the end. [onReady] receives the chosen
+     * position and the pages to put there; photos hand it to the corner crop flow first (A8),
+     * camera and PDF inserts keep going straight to [insertFiles]. [onAbandon] runs when the
+     * position is never chosen, so a photo batch's picked copies do not stay in the cache.
+     */
+    private fun askInsertPosition(
+        files: List<File>,
+        onReady: (List<File>, Int) -> Unit = { ready, position -> insertFiles(ready, position) },
+        onAbandon: (() -> Unit)? = null
+    ) {
         if (files.isEmpty()) {
             toast(R.string.insert_none, Toast.LENGTH_SHORT)
             return
@@ -692,7 +834,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val here = insertHere
         if (here != null) {
             insertHere = null
-            insertFiles(files, here)
+            onReady(files, here)
             return
         }
         val options = listOf(
@@ -700,21 +842,28 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             getString(R.string.insert_after_page),
             getString(R.string.insert_at_end)
         )
-        SwSheet.builder(this)
+        var movedOn = false
+        val sheet = SwSheet.builder(this)
             .setTitle(R.string.insert_position_title)
             .setOptions(options) { which, _ ->
+                movedOn = true
                 when (which) {
-                    0 -> insertFiles(files, 0)
-                    1 -> promptInsertAfterPage(files)
-                    else -> insertFiles(files, visiblePages.size)
+                    0 -> onReady(files, 0)
+                    1 -> promptInsertAfterPage(files, onReady, onAbandon)
+                    else -> onReady(files, visiblePages.size)
                 }
             }
             .setSecondary(android.R.string.cancel)
             .build()
-            .show()
+        sheet.setOnDismissListener { if (!movedOn) onAbandon?.invoke() }
+        sheet.show()
     }
 
-    private fun promptInsertAfterPage(files: List<File>) {
+    private fun promptInsertAfterPage(
+        files: List<File>,
+        onReady: (List<File>, Int) -> Unit,
+        onAbandon: (() -> Unit)? = null
+    ) {
         val max = visiblePages.size
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.insert_after_page)
@@ -724,17 +873,38 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             )
             .setPrimary(R.string.insert_after_page)
             .build()
+        var movedOn = false
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
             val number = sheet.inputView?.text?.toString()?.toIntOrNull()
             if (number == null || number !in 1..max) {
                 Toast.makeText(this, R.string.insert_page_invalid, Toast.LENGTH_SHORT).show()
             } else {
+                movedOn = true
                 sheet.dismiss()
-                insertFiles(files, number)
+                onReady(files, number)
             }
         }
+        sheet.setOnDismissListener { if (!movedOn) onAbandon?.invoke() }
         sheet.show()
+    }
+
+    /**
+     * A8: a picked gallery photo is not a scan, so it is auto-cropped and its corners confirmed
+     * on the corner crop screen, one photo after another, before the draft is touched. The batch
+     * folder is the picked copies; the crop flow deletes everything if any photo is cancelled.
+     */
+    private fun startPhotoCrop(files: List<File>, position: Int) {
+        val batch = pendingPhotoBatch ?: return
+        batch.handedOff = true
+        pendingPhotoPosition = position
+        pendingPhotoCount = files.size
+        insertPhotoCrop.launch(PhotoCropFlowActivity.intent(this, files))
+    }
+
+    /** A photo batch's cache folder holds plaintext picked photos; it never outlives the flow. */
+    private fun deleteBatch(dir: File) {
+        dir.takeIf { it.name.startsWith("insert_") }?.deleteRecursively()
     }
 
     /** Test seam and the one writer: copied pages enter the draft at [position]. */
@@ -1559,6 +1729,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     companion object {
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_INSERT_PAGES = "insert_pages"
+
+        /** A8: the insert position and cache folder of a photo batch on the corner crop screen. */
+        private const val KEY_PHOTO_INSERT_AT = "insert_photo_position"
+        private const val KEY_PHOTO_COUNT = "insert_photo_count"
+        private const val KEY_PHOTO_DIR = "insert_photo_dir"
 
         /** F5/W2: this viewer was opened right after an import; the first Back asks first. */
         private const val EXTRA_FRESH_IMPORT = "fresh_import"

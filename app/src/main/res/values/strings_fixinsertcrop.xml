@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane fixinsertcrop: photos picked for "Insert pages" are auto-cropped and confirmed before they reach the page. -->
+<resources>
+    <string name="fixinsertcrop_crop_title">Photo %1$d of %2$d</string>
+    <string name="fixinsertcrop_crop_hint">Drag the corners to the edges of the page.</string>
+    <string name="fixinsertcrop_crop_hint_none">Couldn\'t find the page edges. Drag the corners to the page.</string>
+    <string name="fixinsertcrop_crop_apply">Crop and add</string>
+    <string name="fixinsertcrop_crop_failed">Could not open this photo. Pick the photos again.</string>
+</resources>

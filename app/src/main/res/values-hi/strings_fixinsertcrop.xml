@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fixinsertcrop_crop_title"><!-- review -->फ़ोटो %1$d / %2$d</string>
+    <string name="fixinsertcrop_crop_hint"><!-- review -->पेज के किनारों तक कोनों को खींचें।</string>
+    <string name="fixinsertcrop_crop_hint_none"><!-- review -->पेज के किनारे नहीं मिले। कोनों को पेज तक खींचें।</string>
+    <string name="fixinsertcrop_crop_apply"><!-- review -->क्रॉप करके जोड़ें</string>
+    <string name="fixinsertcrop_crop_failed"><!-- review -->यह फ़ोटो खुल नहीं सकी। फ़ोटो दोबारा चुनें।</string>
+</resources>
