@@ -2811,8 +2811,31 @@ class ScanRepository(private val context: Context) {
     ): File = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
-        val text = ocrStore.readText(id)
-        require(text.isNotEmpty()) { "Read the text first, then convert it to Word." }
+        // N2: a document that has not been read yet is not an error here. Word is a text export,
+        // so the pages that have no text are read now with the app's own on-device engine (the
+        // same one the Text screen and OcrIndexer use) and the result is kept, so Text shows it
+        // too and the next export of any kind needs no second pass.
+        val text = ocrStore.readText(id).toMutableMap()
+        val unread = doc.pageFiles.filter { it.name !in text }
+        if (unread.isNotEmpty()) {
+            val language = com.scanwhirl.app.util.OcrLanguageSettings.get(appContext())
+            for (page in unread) {
+                currentCoroutineContext().ensureActive()
+                val result = try {
+                    OcrEngine.recognizeFile(page, language)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Unreadable page: it stays "not read" and exports as an empty page, exactly
+                    // like a page the recognizer found no text on.
+                    continue
+                } catch (_: OutOfMemoryError) {
+                    continue
+                }
+                ocrStore.putPage(id, page.name, result.text, result.page)
+                text[page.name] = result.text
+            }
+        }
         val pages = doc.pageFiles.map { page ->
             (text[page.name] ?: "").lines().dropLastWhile { it.isBlank() }
         }

@@ -1,5 +1,11 @@
 package com.scanwhirl.app.util
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ContentResolver
+import android.content.Intent
+import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -7,6 +13,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
@@ -15,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * T4.7: "Saved to Documents/ScanWhirl" confirmation with Open and, when
@@ -42,10 +52,33 @@ object SavedSnackbar {
             ?: (root.findViewById<View>(R.id.btnShare)?.parent as? View)
         if (dock != null) snackbar.setAnchorView(dock)
         val layout = snackbar.view
-        layout.findViewById<View>(com.google.android.material.R.id.snackbar_text)
-            ?.visibility = View.GONE
+        val stockText = layout.findViewById<View>(com.google.android.material.R.id.snackbar_text)
+        stockText?.visibility = View.GONE
+        // H1/H2: hiding only the stock message left its 48 dp row as dead space above our
+        // actions, which pushed Open/Undo into the screen's bottom corner (over the screen's own
+        // Save button and the system gesture area). The row itself goes too.
+        (stockText?.parent as? View)?.let { stockRow ->
+            if (stockRow.parent === layout) stockRow.visibility = View.GONE
+        }
         val custom = LayoutInflater.from(root.context)
             .inflate(R.layout.snackbar_saved, layout as ViewGroup, false)
+        // H1/H2: the bar is drawn at the very bottom of an edge-to-edge screen; its actions must
+        // stay above the navigation/gesture inset, or a tap meant for Open/Undo lands on the
+        // screen's bottom buttons (that is what re-ran the save on the phone).
+        val basePadding = custom.paddingBottom
+        val applyBottomInset = { bottom: Int ->
+            val wanted = basePadding + bottom
+            if (custom.paddingBottom != wanted) {
+                custom.setPadding(custom.paddingLeft, custom.paddingTop, custom.paddingRight, wanted)
+            }
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(layout) { _, insets ->
+            applyBottomInset(insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom)
+            insets
+        }
+        ViewCompat.getRootWindowInsets(root)?.let {
+            applyBottomInset(it.getInsets(WindowInsetsCompat.Type.systemBars()).bottom)
+        }
         custom.findViewById<TextView>(R.id.snackMessage).text = message
         custom.findViewById<View>(R.id.snackOpen).setOnClickListener {
             onOpen()
@@ -104,9 +137,11 @@ object SavedSnackbar {
                     }
                     val text = when (result) {
                         DownloadSaver.UndoResult.REMOVED ->
-                            activity.getString(R.string.export_undo_removed, saved.name)
+                            activity.getString(R.string.fixresult_export_removed_docs, saved.name)
                         DownloadSaver.UndoResult.KEPT_CHANGED ->
                             activity.getString(R.string.export_undo_kept_changed, saved.name)
+                        DownloadSaver.UndoResult.NOTHING_CREATED ->
+                            activity.getString(R.string.fixresult_export_undo_nothing)
                         else -> activity.getString(R.string.export_undo_failed, saved.name)
                     }
                     Toast.makeText(app, text, Toast.LENGTH_LONG).show()
@@ -117,8 +152,68 @@ object SavedSnackbar {
         return show(
             root,
             message,
-            onOpen = { PdfOpener.open(activity, saved.uri) },
+            onOpen = { openExported(activity, saved.uri, saved.name) },
             onUndo = onUndo
         )
+    }
+
+    /**
+     * H1: Open must hand the exported file itself to a viewer.
+     *
+     * The old path built an ACTION_VIEW and wrapped it in a chooser: when no installed app
+     * handled the type the chooser still started and showed nothing, so the button looked dead
+     * (and a user's second tap landed on the screen's Save button, which is why the export
+     * re-ran as "Already saved, unchanged"). Now the targets are asked first, the real file is
+     * shared with read permission (content URI; a `file://` export becomes a FileProvider URI),
+     * and when nothing can open it the phone says so instead.
+     */
+    internal fun openExported(activity: Activity, saved: Uri, name: String) {
+        val mime = mimeFor(name)
+        val target = if (saved.scheme == ContentResolver.SCHEME_FILE) {
+            val path = saved.path
+            if (path == null) null else try {
+                FileProvider.getUriForFile(activity, activity.packageName + ".fileprovider", File(path))
+            } catch (_: IllegalArgumentException) {
+                // Android 9 and older: the export is a public Documents file and the app's
+                // FileProvider does not cover that folder, so it cannot be handed out.
+                null
+            }
+        } else {
+            saved
+        }
+        if (target == null) return cannotOpen(activity)
+        val view = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(target, mime)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Some viewers only take the URI from the clip data.
+            clipData = ClipData.newUri(activity.contentResolver, name, target)
+        }
+        if (activity.packageManager.queryIntentActivities(view, 0).isEmpty()) {
+            return cannotOpen(activity)
+        }
+        try {
+            activity.startActivity(view)
+        } catch (_: ActivityNotFoundException) {
+            cannotOpen(activity)
+        } catch (_: SecurityException) {
+            cannotOpen(activity)
+        }
+    }
+
+    private fun cannotOpen(activity: Activity) {
+        Toast.makeText(activity, R.string.fixresult_open_no_app, Toast.LENGTH_LONG).show()
+    }
+
+    /** The type a saved export is opened with, from its own extension. */
+    private fun mimeFor(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+        "pdf" -> "application/pdf"
+        "txt" -> "text/plain"
+        "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        "zip" -> "application/zip"
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        else -> "*/*"
     }
 }
