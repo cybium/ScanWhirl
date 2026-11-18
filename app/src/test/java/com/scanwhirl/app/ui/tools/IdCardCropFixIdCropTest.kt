@@ -72,6 +72,7 @@ class IdCardCropFixIdCropTest {
     @After
     fun tearDown() {
         Faults.resetAll()
+        IdCardActivity.cropReopenGate = null
         activity = null
     }
 
@@ -131,7 +132,10 @@ class IdCardCropFixIdCropTest {
             ?.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
 
     /** Clicks "Pick from gallery" on the open sheet and delivers a photo from the picker. */
-    private fun pickPhoto(scenario: ActivityScenario<IdCardActivity>, photo: File) {
+    private fun pickPhoto(scenario: ActivityScenario<IdCardActivity>, photo: File) =
+        pickPhotoUri(scenario, Uri.fromFile(photo))
+
+    private fun pickPhotoUri(scenario: ActivityScenario<IdCardActivity>, uri: Uri) {
         scenario.onActivity { current ->
             idle()
             val dialog = requireNotNull(ShadowDialog.getLatestDialog()) { "no sheet is open" }
@@ -140,11 +144,46 @@ class IdCardCropFixIdCropTest {
             val request = requireNotNull(shadowOf(current).nextStartedActivityForResult) {
                 "Pick from gallery must open the photo picker"
             }
-            shadowOf(current).receiveResult(
-                request.intent, Activity.RESULT_OK, Intent().setData(Uri.fromFile(photo))
-            )
+            shadowOf(current).receiveResult(request.intent, Activity.RESULT_OK, Intent().setData(uri))
             idle()
         }
+    }
+
+    /** A provider whose photo access is revoked after the first read (R2-2). */
+    class DeniedPhotoProvider : android.content.ContentProvider() {
+        @Volatile
+        var deny = false
+        var photo: File? = null
+
+        override fun onCreate(): Boolean = true
+        override fun getType(uri: Uri): String = "image/jpeg"
+        override fun openFile(uri: Uri, mode: String): android.os.ParcelFileDescriptor {
+            if (deny) throw SecurityException("photo access was revoked")
+            return android.os.ParcelFileDescriptor.open(
+                requireNotNull(photo), android.os.ParcelFileDescriptor.MODE_READ_ONLY
+            )
+        }
+        override fun query(
+            uri: Uri, projection: Array<out String>?, selection: String?,
+            selectionArgs: Array<out String>?, sortOrder: String?
+        ): android.database.Cursor? = null
+        override fun insert(uri: Uri, values: android.content.ContentValues?): Uri? = error("read-only")
+        override fun update(
+            uri: Uri, values: android.content.ContentValues?, selection: String?,
+            selectionArgs: Array<out String>?
+        ): Int = error("read-only")
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int =
+            error("read-only")
+    }
+
+    private fun registerDeniedProvider(photo: File): DeniedPhotoProvider {
+        val provider = DeniedPhotoProvider().apply { this.photo = photo }
+        provider.attachInfo(
+            app,
+            android.content.pm.ProviderInfo().apply { authority = "fixidcrop.photos" }
+        )
+        org.robolectric.shadows.ShadowContentResolver.registerProviderInternal("fixidcrop.photos", provider)
+        return provider
     }
 
     private fun clickSheetText(textRes: Int) {
@@ -404,16 +443,18 @@ class IdCardCropFixIdCropTest {
         val photo = photoOfCardOnTable()
         val encoded = CountDownLatch(1)
         var encodedBytes: ByteArray? = null
+        var settled: Boolean? = null
         launch().use { scenario ->
             pickPhoto(scenario, photo)
             assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
 
             scenario.onActivity { current ->
-                // Tests: the encode tells us it finished, even though the screen is already gone.
+                // Tests: the worker finished AND the main-thread accept/abandon decision ran.
                 current.cropEncodeFinishedForTest = { bytes ->
                     encodedBytes = bytes
                     encoded.countDown()
                 }
+                current.cropSaveSettledForTest = { accepted -> settled = accepted }
                 // Crop and save starts the JPEG encode, then Back arrives before it finishes.
                 current.findViewById<View>(R.id.toolCropApply).performClick()
                 current.onBackPressedDispatcher.onBackPressed()
@@ -423,6 +464,9 @@ class IdCardCropFixIdCropTest {
                 encoded.await(15, TimeUnit.SECONDS)
             )
             assertNotNull("the encode still produced bytes (no recycled bitmap)", encodedBytes)
+            // The abandoned continuation really reached its token decision on the main thread.
+            assertTrue("the main-thread decision ran", waitUntil { settled != null })
+            assertEquals("the abandoned save is not accepted", false, settled)
             idle()
             assertTrue(
                 "the crop screen closes",
@@ -593,33 +637,169 @@ class IdCardCropFixIdCropTest {
     // ---- rework 2: no picked photo stays behind (judge N1) ----
 
     @Test
-    fun `Back during the async reopen closes the crop and removes the cached photo`() {
+    fun `Back before the reopened crop screen appears returns to the sheet and removes the photo`() {
         val photo = photoOfCardOnTable()
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        IdCardActivity.cropReopenGate = {
+            started.countDown()
+            release.await(15, TimeUnit.SECONDS)
+        }
+        try {
+            launch().use { scenario ->
+                pickPhoto(scenario, photo)
+                assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+
+                scenario.recreate()
+                scenario.onActivity { activity = it }
+                assertTrue("the reopen decode is held", waitUntil { started.count == 0L })
+                assertNull(
+                    "the crop screen is definitely not installed yet",
+                    activity!!.findViewById<View>(R.id.toolCropView)
+                )
+                assertTrue("the cached photo waits for the reopen", stateFiles().contains("crop.jpg"))
+
+                // Back while only the pending photo exists: this must be handled by the crop
+                // screen's own Back path, not by finishing the activity.
+                scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+                idle()
+
+                scenario.onActivity { current ->
+                    assertNull(
+                        "the crop screen never appears",
+                        current.findViewById<View>(R.id.toolCropView)
+                    )
+                    assertEquals(
+                        "Back returns to the front sheet",
+                        app.getString(R.string.tools_id_front_title),
+                        sheetTitle()
+                    )
+                    assertFalse("the flow did not leave the ID card screen", current.isFinishing)
+                    assertFalse(
+                        "no progress is stuck",
+                        current.findViewById<View>(R.id.toolSetupProgress).isVisible
+                    )
+                }
+                assertTrue("no cached photo is left", stateFiles().isEmpty())
+            }
+        } finally {
+            release.countDown()
+            IdCardActivity.cropReopenGate = null
+        }
+        assertTrue("nothing was saved", repo.listDocuments().isEmpty())
+    }
+
+    // ---- rework 3: a second recreation during the reopen keeps the frame (judge R2-1) ----
+
+    @Test
+    fun `a second recreation during the reopen keeps the adjusted frame`() {
+        val photo = photoOfCardOnTable()
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val reopenCalls = java.util.concurrent.atomic.AtomicInteger(0)
+        IdCardActivity.cropReopenGate = {
+            // Only the first reopen decode is held; the second instance must finish normally.
+            if (reopenCalls.incrementAndGet() == 1) {
+                started.countDown()
+                release.await(15, TimeUnit.SECONDS)
+            }
+        }
+        try {
+            launch().use { scenario ->
+                pickPhoto(scenario, photo)
+                assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+                var rectBefore = FloatArray(4)
+                scenario.onActivity { current ->
+                    dragTopLeftCorner(current)
+                    rectBefore = normalisedCropRect(current)
+                }
+                assertTrue("the person adjusted the frame", rectBefore[0] > 0.01f && rectBefore[1] > 0.01f)
+
+                scenario.recreate()
+                scenario.onActivity { activity = it }
+                assertTrue("the first reopen decode is held", waitUntil { started.count == 0L })
+                assertNull(
+                    "the first reopened screen has not been published",
+                    activity!!.findViewById<View>(R.id.toolCropView)
+                )
+
+                // R2-1: save/recreate again while the reopen decode is still incomplete.
+                scenario.recreate()
+                scenario.onActivity { activity = it }
+                assertTrue(
+                    "the reopened crop screen appears",
+                    waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null }
+                )
+                scenario.onActivity { current ->
+                    val rectAfter = normalisedCropRect(current)
+                    for (i in 0..3) {
+                        assertEquals(
+                            "adjusted frame part $i after two recreations",
+                            rectBefore[i], rectAfter[i], 0.003f
+                        )
+                    }
+                }
+            }
+        } finally {
+            release.countDown()
+            IdCardActivity.cropReopenGate = null
+        }
+    }
+
+    // ---- rework 3: a restored pick that cannot be read says so (judge R2-2) ----
+
+    @Test
+    fun `a restored pick that can no longer be read says so in the side sheet`() {
+        val photo = photoOfCardOnTable()
+        val provider = registerDeniedProvider(photo)
+        val uri = Uri.parse("content://fixidcrop.photos/card.jpg")
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
         launch().use { scenario ->
-            pickPhoto(scenario, photo)
-            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+            scenario.onActivity { current ->
+                current.cropPrepareGate = {
+                    started.countDown()
+                    release.await(15, TimeUnit.SECONDS)
+                }
+            }
+            pickPhotoUri(scenario, uri)
+            assertTrue("the first read finished and is held", waitUntil { started.count == 0L })
+            provider.deny = true
 
             scenario.recreate()
             scenario.onActivity { activity = it }
-            // Back before the reopened screen has drawn: the pending photo must go with it.
-            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            release.countDown()
+            assertTrue(
+                "the side sheet comes back",
+                waitUntil { sheetTitle() == app.getString(R.string.tools_id_front_title) }
+            )
             idle()
-
             scenario.onActivity { current ->
-                assertNull(
-                    "the crop screen does not come back",
-                    current.findViewById<View>(R.id.toolCropView)
+                val dialog = requireNotNull(ShadowDialog.getLatestDialog())
+                assertEquals(
+                    "the recovery message is part of the active sheet",
+                    app.getString(R.string.fixidcrop_id_photo_gone),
+                    dialog.findViewById<TextView>(R.id.swSheetMessage).text.toString()
                 )
                 assertEquals(
-                    "Back returns to the front sheet",
-                    app.getString(R.string.tools_id_front_title),
-                    sheetTitle()
+                    "the normal scan retry is offered",
+                    app.getString(R.string.tools_id_scan_camera),
+                    dialog.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
                 )
-                assertFalse("the flow did not leave the ID card screen", current.isFinishing)
+                assertEquals(
+                    "the normal pick retry is offered",
+                    app.getString(R.string.tools_id_pick_gallery),
+                    dialog.findViewById<TextView>(R.id.swSheetSecondary).text.toString()
+                )
+                assertNull("no crop screen", current.findViewById<View>(R.id.toolCropView))
+                assertFalse(
+                    "no progress is stuck",
+                    current.findViewById<View>(R.id.toolSetupProgress).isVisible
+                )
             }
-            assertTrue("no cached photo is left", stateFiles().isEmpty())
+            assertTrue("no photo is cached", stateFiles().none { it == "crop.jpg" })
         }
-        assertTrue("nothing was saved", repo.listDocuments().isEmpty())
+        assertTrue("no side was accepted", repo.listDocuments().isEmpty())
     }
 
     @Test
