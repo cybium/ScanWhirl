@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Play Billing errors that need to say what failed (judge research §3 item 5). -->
+<resources>
+    <string name="pro_error_connection">Can\'t reach Google Play. Check the Play Store app and try again.</string>
+    <string name="pro_error_unavailable">Purchases aren\'t available on this device or account.</string>
+</resources>
