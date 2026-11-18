@@ -1116,7 +1116,7 @@ class ToolSetupActivity : BaseActivity() {
                         repo.compressScan(doc.id, quality, maxDim).id
                     }
                     listOf(out)
-                }) { openDocs(it) }
+                }) { openDocs(it, targetBytes = targetBytes) }
             }
             "pdf_to_images" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1224,9 +1224,15 @@ class ToolSetupActivity : BaseActivity() {
         else -> "image/jpeg"
     }
 
-    private fun openDocs(ids: List<String>) {
+    /**
+     * Opens the result for new library documents. [targetBytes] is Compress's wanted size, so the
+     * result can say honestly when that size was not reached (T05).
+     */
+    private fun openDocs(ids: List<String>, targetBytes: Long? = null) {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        startActivity(ToolResultActivity.intent(this, tool.id, docIds = ids))
+        startActivity(
+            ToolResultActivity.intent(this, tool.id, docIds = ids, targetBytes = targetBytes)
+        )
     }
 
     private fun openFiles(files: List<File>, mime: String, note: String? = null) {

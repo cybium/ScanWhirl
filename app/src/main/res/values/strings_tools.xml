@@ -202,7 +202,8 @@
     </plurals>
     <string name="tools_result_open">Open</string>
     <string name="tools_result_share">Share</string>
-    <string name="tools_result_save">Save</string>
+    <string name="tools_result_save">Save as…</string>
+    <string name="tools_result_also_save">Also save in Documents</string>
     <string name="tools_result_library">Show in library</string>
     <string name="tools_result_undo">Undo</string>
     <string name="tools_result_nothing">Nothing was created.</string>
