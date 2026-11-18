@@ -1,192 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- review -->
-    <string name="stamp_not_found"><!-- review -->स्कैन नहीं मिला</string>
-    <!-- review -->
-    <string name="stamp_no_marks"><!-- review -->पहले कोई चिह्न जोड़ें।</string>
-    <!-- review -->
-    <string name="stamp_no_page"><!-- review -->ऐसा कोई पेज नहीं है।</string>
-    <!-- review -->
-    <string name="stamp_copy_failed"><!-- review -->बदली हुई प्रति नहीं खोली जा सकी।</string>
+    <string name="stamp_not_found">स्कैन नहीं मिला</string>
+    <string name="stamp_no_marks">पहले कोई चिह्न जोड़ें।</string>
+    <string name="stamp_no_page">ऐसा कोई पन्ना नहीं है।</string>
+    <string name="stamp_copy_failed">बदली हुई प्रति नहीं खोली जा सकी।</string>
 
-    <!-- review -->
-    <string name="stamp_title"><!-- review -->बदलें और हस्ताक्षर करें</string>
-    <!-- review -->
-    <string name="stamp_tool_signature"><!-- review -->हस्ताक्षर</string>
-    <!-- review -->
-    <string name="stamp_tool_text"><!-- review -->पाठ</string>
-    <!-- review -->
-    <string name="stamp_tool_draw"><!-- review -->आरेखण</string>
-    <!-- review -->
-    <string name="stamp_tool_highlight"><!-- review -->हाइलाइट</string>
-    <!-- review -->
-    <string name="stamp_tool_watermark"><!-- review -->वॉटरमार्क</string>
-    <!-- review -->
-    <string name="stamp_tool_page_numbers"><!-- review -->पेज संख्या</string>
-    <!-- review -->
-    <string name="stamp_tool_stamp"><!-- review -->मोहर</string>
-    <!-- review -->
-    <string name="stamp_tool_redact"><!-- review -->छिपाएँ</string>
-    <!-- review -->
-    <string name="stamp_suggest"><!-- review -->सुझाव</string>
-    <!-- review -->
-    <string name="stamp_undo"><!-- review -->अनडू</string>
-    <!-- review -->
-    <string name="stamp_redo"><!-- review -->फिर से करें</string>
-    <!-- review -->
-    <string name="stamp_delete"><!-- review -->हटाएँ</string>
-    <!-- review -->
-    <string name="stamp_save_copy"><!-- review -->नई प्रति के रूप में सहेजें</string>
-    <!-- review -->
-    <string name="stamp_saving"><!-- review -->प्रति सहेजी जा रही है…</string>
-    <!-- review -->
-    <string name="stamp_saved"><!-- review -->नई प्रति सहेजी गई: %1$s</string>
-    <!-- review -->
-    <string name="stamp_save_failed"><!-- review -->सहेजा नहीं जा सका: %1$s</string>
-    <!-- review -->
-    <string name="stamp_page_indicator"><!-- review -->%1$d / %2$d</string>
-    <!-- review -->
-    <string name="stamp_prev_page"><!-- review -->पिछला पेज</string>
-    <!-- review -->
-    <string name="stamp_next_page"><!-- review -->अगला पेज</string>
-    <!-- review -->
-    <string name="stamp_prev_symbol"><!-- review -->‹</string>
-    <!-- review -->
-    <string name="stamp_next_symbol"><!-- review -->›</string>
-    <!-- review -->
-    <string name="stamp_text_title"><!-- review -->पाठ जोड़ें</string>
-    <!-- review -->
-    <string name="stamp_text_hint"><!-- review -->जोड़ने के लिए पाठ</string>
-    <!-- review -->
-    <string name="stamp_watermark_title"><!-- review -->वॉटरमार्क</string>
-    <!-- review -->
-    <string name="stamp_watermark_hint"><!-- review -->हर पेज पर पाठ</string>
-    <!-- review -->
-    <string name="stamp_watermark_default"><!-- review -->गोपनीय</string>
-    <!-- review -->
-    <string name="stamp_add"><!-- review -->जोड़ें</string>
-    <!-- review -->
-    <string name="stamp_cancel"><!-- review -->रद्द करें</string>
-    <!-- review -->
-    <string name="stamp_badge_title"><!-- review -->मोहर चुनें</string>
-    <!-- review -->
-    <string name="stamp_badge_paid"><!-- review -->भुगतान</string>
-    <!-- review -->
-    <string name="stamp_badge_approved"><!-- review -->स्वीकृत</string>
-    <!-- review -->
-    <string name="stamp_badge_draft"><!-- review -->ड्राफ़्ट</string>
-    <!-- review -->
-    <string name="stamp_badge_received"><!-- review -->प्राप्त</string>
-    <!-- review -->
-    <string name="stamp_badge_self_attested"><!-- review -->स्व-प्रमाणित</string>
-    <!-- review -->
-    <string name="stamp_signature_title"><!-- review -->हस्ताक्षर चुनें</string>
-    <!-- review -->
-    <string name="stamp_signature_new"><!-- review -->नया हस्ताक्षर बनाएँ</string>
-    <!-- review -->
-    <string name="stamp_signature_sheet_title"><!-- review -->अपना हस्ताक्षर बनाएँ</string>
-    <!-- review -->
-    <string name="stamp_signature_save"><!-- review -->हस्ताक्षर सहेजें</string>
-    <!-- review -->
-    <string name="stamp_signature_name"><!-- review -->हस्ताक्षर %1$d</string>
-    <!-- review -->
-    <string name="stamp_signature_empty"><!-- review -->पहले अपना हस्ताक्षर बनाएँ।</string>
-    <!-- review -->
-    <string name="stamp_signature_full"><!-- review -->आप 5 हस्ताक्षर तक रख सकते हैं। नया सहेजने के लिए एक हटाएँ।</string>
-    <!-- review -->
-    <string name="stamp_signature_delete_title"><!-- review -->यह हस्ताक्षर हटाएँ?</string>
-    <!-- review -->
-    <string name="stamp_signature_delete_msg"><!-- review -->%1$s इस फ़ोन से हट जाएगा।</string>
-    <!-- review -->
-    <string name="stamp_import_photo"><!-- review -->फ़ोटो से</string>
-    <!-- review -->
-    <string name="stamp_import_choose"><!-- review -->फ़ोटो चुनें</string>
-    <!-- review -->
-    <string name="stamp_import_camera"><!-- review -->फ़ोटो लें</string>
-    <!-- review -->
-    <string name="stamp_ink_title"><!-- review -->यह स्याही ठीक है?</string>
-    <!-- review -->
-    <string name="stamp_ink_original"><!-- review -->मूल</string>
-    <!-- review -->
-    <string name="stamp_ink_black"><!-- review -->काली</string>
-    <!-- review -->
-    <string name="stamp_ink_blue"><!-- review -->नीली</string>
-    <!-- review -->
-    <string name="stamp_ink_none"><!-- review -->कोई स्याही नहीं मिली। साफ़ फ़ोटो आज़माएँ।</string>
-    <!-- review -->
-    <string name="stamp_ink_save"><!-- review -->सहेजें और लगाएँ</string>
-    <!-- review -->
-    <string name="stamp_my_stamps"><!-- review -->मेरे स्टाम्प</string>
-    <!-- review -->
-    <string name="stamp_stamp_import"><!-- review -->फ़ोटो से स्टाम्प जोड़ें</string>
-    <!-- review -->
-    <string name="stamp_stamp_name"><!-- review -->मेरा स्टाम्प %1$d</string>
-    <!-- review -->
-    <string name="stamp_stamp_full"><!-- review -->आप 10 स्टाम्प तक रख सकते हैं। नया सहेजने के लिए एक हटाएँ।</string>
-    <!-- review -->
-    <!-- review -->
-    <string name="stamp_hint_draw"><!-- review -->एक उँगली से लिखें</string>
-    <!-- review -->
-    <string name="stamp_hint_highlight"><!-- review -->हाइलाइट करने के लिए पाठ पर खींचें</string>
-    <!-- review -->
-    <string name="stamp_hint_redact"><!-- review -->जो छिपाना है उस पर बॉक्स खींचें</string>
-    <!-- review -->
-    <string name="stamp_hint_select"><!-- review -->चिह्न हिलाने के लिए उसे दबाएँ; आकार बदलने के लिए कोने के हैंडल उपयोग करें</string>
-    <!-- review -->
-    <string name="stamp_no_ocr"><!-- review -->इस पेज पर अभी कोई पहचाना गया पाठ नहीं है।</string>
-    <!-- review -->
-    <string name="stamp_no_suggestions"><!-- review -->कोई निजी नंबर नहीं मिला।</string>
-    <!-- review -->
-    <string name="stamp_locked"><!-- review -->यह दस्तावेज़ सुरक्षित है। पहले इसे अनलॉक करें।</string>
-    <!-- review -->
-    <string name="stamp_missing"><!-- review -->यह दस्तावेज़ नहीं खोला जा सका।</string>
-    <!-- review -->
-    <string name="stamp_no_selection"><!-- review -->बदलने के लिए किसी चिह्न को दबाएँ</string>
-    <!-- review -->
-    <string name="stamp_discard_title"><!-- review -->बदलाव छोड़ें?</string>
-    <!-- review -->
-    <string name="stamp_discard_message"><!-- review -->अभी कोई प्रति सहेजी नहीं गई है।</string>
-    <!-- review -->
-    <string name="stamp_discard"><!-- review -->छोड़ें</string>
-    <!-- review -->
-    <string name="stamp_keep_editing"><!-- review -->संपादन जारी रखें</string>
-    <!-- review -->
-    <string name="stamp_choose_document"><!-- review -->दस्तावेज़ चुनें</string>
-    <!-- review -->
-    <string name="stamp_no_documents"><!-- review -->बदलने के लिए कोई अनलॉक दस्तावेज़ नहीं है। पहले स्कैन या इम्पोर्ट करें।</string>
-    <!-- review -->
-    <string name="stamp_text_required"><!-- review -->पहले पाठ लिखें।</string>
-    <!-- review -->
-    <string name="stamp_pro_message"><!-- review -->हस्ताक्षर, पाठ जोड़ें, चित्र बनाएँ, हाइलाइट, वॉटरमार्क, पेज संख्याएँ, स्टाम्प और रिडैक्ट Pro का हिस्सा हैं (एक बार खरीदें)। बिलिंग अभी चालू नहीं है, इसलिए टेस्ट बिल्ड में Pro टूल्स मुफ़्त रहते हैं।</string>
-    <!-- review -->
-    <string name="stamp_redact_warn_title"><!-- review -->रिडैक्शन स्थायी है</string>
-    <!-- review -->
-    <string name="stamp_redact_warn_message"><!-- review -->छिपाए गए पाठ और पिक्सेल नई प्रति से हमेशा के लिए हट जाते हैं। मूल दस्तावेज़ नहीं बदलता।</string>
-    <!-- review -->
-    <string name="stamp_redact_warn_save"><!-- review -->रिडैक्ट की गई प्रति सहेजें</string>
+    <string name="stamp_title">बदलें और हस्ताक्षर करें</string>
+    <string name="stamp_tool_signature">हस्ताक्षर</string>
+    <string name="stamp_tool_text">लिखें</string>
+    <string name="stamp_tool_draw">हाथ से लकीरें बनाएँ</string>
+    <string name="stamp_tool_highlight">रंग से उभारें</string>
+    <string name="stamp_tool_watermark">हल्की छाप लगाएँ</string>
+    <string name="stamp_tool_page_numbers">पन्नों पर नंबर डालें</string>
+    <string name="stamp_tool_stamp">मोहर लगाएँ</string>
+    <string name="stamp_tool_redact">निजी जानकारी छिपाएँ</string>
+    <string name="stamp_suggest">सुझाव</string>
+    <string name="stamp_undo">वापस लाएँ</string>
+    <string name="stamp_redo">फिर से करें</string>
+    <string name="stamp_delete">हटाएँ</string>
+    <string name="stamp_save_copy">नई फ़ाइल बनाकर सहेजें</string>
+    <string name="stamp_saving">प्रति सहेजी जा रही है…</string>
+    <string name="stamp_saved">नई प्रति सहेजी गई: %1$s</string>
+    <string name="stamp_save_failed">सहेजा नहीं जा सका: %1$s</string>
+    <string name="stamp_page_indicator">%1$d / %2$d</string>
+    <string name="stamp_prev_page">पिछला पन्ना</string>
+    <string name="stamp_next_page">अगला पन्ना</string>
+    <string name="stamp_prev_symbol">‹</string>
+    <string name="stamp_next_symbol">›</string>
+    <string name="stamp_text_title">लिखें</string>
+    <string name="stamp_text_hint">जोड़ने के लिए शब्द</string>
+    <string name="stamp_watermark_title">हल्की छाप लगाएँ</string>
+    <string name="stamp_watermark_hint">हर पन्ने पर लिखा हुआ</string>
+    <string name="stamp_watermark_default">गोपनीय</string>
+    <string name="stamp_add">जोड़ें</string>
+    <string name="stamp_cancel">रद्द करें</string>
+    <string name="stamp_badge_title">मोहर चुनें</string>
+    <string name="stamp_badge_paid">भुगतान हुआ</string>
+    <string name="stamp_badge_approved">स्वीकृत</string>
+    <string name="stamp_badge_draft">मसौदा</string>
+    <string name="stamp_badge_received">प्राप्त</string>
+    <string name="stamp_badge_self_attested">स्व-प्रमाणित</string>
+    <string name="stamp_signature_title">हस्ताक्षर चुनें</string>
+    <string name="stamp_signature_new">नया हस्ताक्षर बनाएँ</string>
+    <string name="stamp_signature_sheet_title">अपना हस्ताक्षर बनाएँ</string>
+    <string name="stamp_signature_save">हस्ताक्षर सहेजें</string>
+    <string name="stamp_signature_name">हस्ताक्षर %1$d</string>
+    <string name="stamp_signature_empty">पहले अपना हस्ताक्षर बनाएँ।</string>
+    <string name="stamp_signature_full">आप 5 हस्ताक्षर तक रख सकते हैं। नया सहेजने के लिए एक हटाएँ।</string>
+    <string name="stamp_signature_delete_title">यह हस्ताक्षर हटाएँ?</string>
+    <string name="stamp_signature_delete_msg">%1$s इस फ़ोन से हट जाएगा।</string>
+    <string name="stamp_import_photo">फ़ोटो से</string>
+    <string name="stamp_import_choose">फ़ोटो चुनें</string>
+    <string name="stamp_import_camera">फ़ोटो लें</string>
+    <string name="stamp_ink_title">यह स्याही ठीक है?</string>
+    <string name="stamp_ink_original">मूल</string>
+    <string name="stamp_ink_black">काली</string>
+    <string name="stamp_ink_blue">नीली</string>
+    <string name="stamp_ink_none">कोई स्याही नहीं मिली। साफ़ फ़ोटो आज़माएँ।</string>
+    <string name="stamp_ink_save">सहेजें और लगाएँ</string>
+    <string name="stamp_my_stamps">मेरी मोहरें</string>
+    <string name="stamp_stamp_import">फ़ोटो से मोहर जोड़ें</string>
+    <string name="stamp_stamp_name">मेरी मोहर %1$d</string>
+    <string name="stamp_stamp_full">आप 10 मोहरें तक रख सकते हैं। नई सहेजने के लिए एक हटाएँ।</string>
+    <string name="stamp_hint_draw">एक उँगली से लिखें</string>
+    <string name="stamp_hint_highlight">रंग से उभारने के लिए लिखे हुए पर खींचें</string>
+    <string name="stamp_hint_redact">जो छिपाना है उस पर बॉक्स खींचें</string>
+    <string name="stamp_hint_select">चिह्न हिलाने के लिए उसे दबाएँ; आकार बदलने के लिए कोना खींचें</string>
+    <string name="stamp_no_ocr">इस पन्ने पर अभी कोई पहचाना हुआ लिखा हुआ नहीं है।</string>
+    <string name="stamp_no_suggestions">कोई निजी नंबर नहीं मिला।</string>
+    <string name="stamp_locked">यह दस्तावेज़ सुरक्षित है। पहले इसका ताला खोलें।</string>
+    <string name="stamp_missing">यह दस्तावेज़ नहीं खोला जा सका।</string>
+    <string name="stamp_no_selection">बदलने के लिए किसी चिह्न को दबाएँ</string>
+    <string name="stamp_discard_title">बदलाव न रखें?</string>
+    <string name="stamp_discard_message">अभी कोई प्रति सहेजी नहीं गई है।</string>
+    <string name="stamp_discard">बदलाव न रखें</string>
+    <string name="stamp_keep_editing">बदलाव जारी रखें</string>
+    <string name="stamp_choose_document">दस्तावेज़ चुनें</string>
+    <string name="stamp_no_documents">बदलने के लिए कोई खुला दस्तावेज़ नहीं है। पहले स्कैन करें या फ़ोन में लाएँ।</string>
+    <string name="stamp_text_required">पहले कुछ लिखें।</string>
+    <string name="stamp_pro_message">हस्ताक्षर, लिखना, हाथ से लकीरें बनाना, रंग से उभारना, हल्की छाप, पन्नों पर नंबर, मोहर और निजी जानकारी छिपाना Pro का हिस्सा हैं (एक बार खरीदें)। बिलिंग अभी चालू नहीं है, इसलिए टेस्ट बिल्ड में Pro के सभी काम मुफ़्त रहते हैं।</string>
+    <string name="stamp_redact_warn_title">छिपाई गई जानकारी हमेशा के लिए चली जाएगी</string>
+    <string name="stamp_redact_warn_message">छिपाया गया लिखा हुआ और पिक्सेल नई प्रति से हमेशा के लिए हट जाते हैं। मूल दस्तावेज़ नहीं बदलता।</string>
+    <string name="stamp_redact_warn_save">छिपाई गई जानकारी वाली प्रति सहेजें</string>
     <!-- review: Hide private info (Redact). -->
-    <string name="find_button"><!-- review -->निजी जानकारी छिपाएँ</string>
-    <string name="find_title"><!-- review -->निजी जानकारी छिपाएँ</string>
-    <string name="find_explanation"><!-- review -->चुनें कि क्या छिपाना है। खोजें हर पेज देखकर मिली चीज़ें दिखाता है।</string>
-    <string name="find_choice_phone"><!-- review -->फ़ोन नंबर</string>
-    <string name="find_choice_email"><!-- review -->ईमेल पते</string>
-    <string name="find_choice_id"><!-- review -->आईडी नंबर (आधार, PAN, ड्राइविंग लाइसेंस, पासपोर्ट, VID)</string>
-    <string name="find_choice_cards"><!-- review -->कार्ड और बैंक नंबर (कार्ड, IBAN, खाता नंबर)</string>
-    <string name="find_choice_other"><!-- review -->अन्य नंबर (US SSN)</string>
-    <string name="find_choice_keep4"><!-- review -->आखिरी 4 अंक रखें</string>
-    <string name="find_action"><!-- review -->खोजें</string>
-    <string name="find_scanning"><!-- review -->निजी जानकारी खोजी जा रही है…</string>
-    <string name="find_none"><!-- review -->कोई निजी जानकारी नहीं मिली। आप फिर भी बॉक्स बना सकते हैं।</string>
-    <string name="find_choose_one"><!-- review -->कम से कम एक चीज़ चुनें।</string>
-    <string name="find_hide_selected"><!-- review -->चुनी हुई छिपाएँ</string>
+    <string name="find_button">निजी जानकारी छिपाएँ</string>
+    <string name="find_title">निजी जानकारी छिपाएँ</string>
+    <string name="find_explanation">चुनें कि क्या छिपाना है। खोजें हर पन्ना देखकर मिली चीज़ें दिखाता है।</string>
+    <string name="find_choice_phone">फ़ोन नंबर</string>
+    <string name="find_choice_email">ईमेल पते</string>
+    <string name="find_choice_id">पहचान नंबर (आधार, PAN, ड्राइविंग लाइसेंस, पासपोर्ट, VID)</string>
+    <string name="find_choice_cards">कार्ड और बैंक नंबर (कार्ड, IBAN, खाता नंबर)</string>
+    <string name="find_choice_other">अन्य नंबर (US SSN)</string>
+    <string name="find_choice_keep4">आखिरी 4 अंक रखें</string>
+    <string name="find_action">खोजें</string>
+    <string name="find_scanning">निजी जानकारी खोजी जा रही है…</string>
+    <string name="find_none">कोई निजी जानकारी नहीं मिली। आप फिर भी बॉक्स बना सकते हैं।</string>
+    <string name="find_choose_one">कम से कम एक चीज़ चुनें।</string>
+    <string name="find_hide_selected">चुनी हुई छिपाएँ</string>
     <plurals name="find_results_title">
-        <item quantity="one"><!-- review -->%1$d चीज़ मिली</item>
-        <item quantity="other"><!-- review -->%1$d चीज़ें मिलीं</item>
+        <item quantity="one">%1$d चीज़ मिली</item>
+        <item quantity="other">%1$d चीज़ें मिलीं</item>
     </plurals>
     <plurals name="find_applied">
         <item quantity="one">%1$d चीज़ छिपाई गई। बॉक्स जाँचें, फिर सहेजें।</item>
         <item quantity="other">%1$d चीज़ें छिपाई गईं। बॉक्स जाँचें, फिर सहेजें।</item>
     </plurals>
-    <string name="private_info_label"><!-- review -->निजी जानकारी छिपाई गई</string>
-    <string name="private_info_saved"><!-- review -->निजी जानकारी छिपाकर कॉपी सहेजी: %1$s</string>
+    <string name="private_info_label">निजी जानकारी छिपी है</string>
+    <string name="private_info_saved">निजी जानकारी छिपाकर प्रति सहेजी: %1$s</string>
 </resources>
