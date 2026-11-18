@@ -4,6 +4,32 @@ Input: docs/audit/2026-11-18/UI_CRITIQUE.md (A1-A8, S1, C, D), owner flaw list, 
 Rule: evolve THIS app (same brand, same code base, same users), not a new one. Every phase ships a test APK the owner
 tries on the phone before the next phase starts.
 
+## 0. Research rulings (2026-11-18; SUPERSEDE the text below where they conflict)
+Source: R2 UX_PRINCIPLES -> CRITIC_R2_UX -> JUDGE_RESEARCH §2/§4 (next/docs/review/). Pro: docs/release/PRO_PLAN.md.
+1. **Navigation:** four destinations (Library, Tools, Vault, Me) + a separate centre **Scan** action button (kept in
+   the centre where people know it), not a nav-bar item. It opens Create.
+2. **Motion:** no 250 ms cap. Short tap feedback, modest non-blocking surface motion, measured on the Infinix; plain
+   Views animators, no new motion dependency; everything off under "Remove animations" (API 24 compatible).
+3. **Result screen default:** always ask Replace original / Keep both (N3). Preselect **Replace** only for a
+   one-in/one-out library operation whose original goes to Trash and can be restored; show that, plus a persistent
+   Undo/restore on the result; changing the choice never reruns the tool. **Keep both** is the default for Merge,
+   Split, multi-input/output, external sources, or anything without proven rollback. Never trash several inputs
+   automatically. Back/Open/Share/process death never bypass rollback.
+4. **Phase 3 before Phase 4:** the result screen ships its visual + Replace/Keep work in phase 3 but KEEPS "Save to
+   Documents" until phase 4 makes the library real files. No "already saved as a file" wording before that is true.
+5. **Numbers** (sizes) appear at once, no counting animation.
+6. **Cards:** simple tonal separation, no blur shadows; colour roles defined apart from elevation; profile overdraw.
+7. **Language:** one UI language at a time via A/अ ("EN + HI parity" below means this, not bilingual labels).
+8. **Type:** Latin meta >= 12 sp; Hindi body/meta start at >= 14 sp with generous line height, no letter-spacing on
+   Devanagari; at 200 % font size, unclipped text beats the "5-6 documents visible" goal.
+9. **Folders on Home:** a few folder cards + "All folders" + "New folder" (count is a mockup choice, not a limit);
+   folder model in phase 4, Home look in phase 6; no new Folders tab.
+10. **Search:** the visible field stays (collapse on scroll optional after device test).
+11. **Pro marking:** gold always with the word "Pro" or a lock; contrast checked on every surface.
+12. **Phase 4 open question (resolve before storage-a starts):** minSdk 24-28 needs storage permission to write public
+    Documents, but the app's rule is "never prompt" for deletes. Design a compatible approach; no new consent flows
+    (createDeleteRequest etc.) without a new owner decision; files we cannot touch are reported as kept.
+
 ## 1. The idea in one line
 **Documents first, one way to start, one way to finish.** A person opens ScanWhirl and sees their documents; one
 Scan button starts everything; every tool works the same way (pick, set, done); every result says what happened and
