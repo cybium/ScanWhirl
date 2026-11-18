@@ -393,7 +393,7 @@ class BatchActivity : BaseActivity() {
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val target = EditText(this).apply {
             id = R.id.batchTarget
-            hint = getString(R.string.tools_setup_target_hint)
+            hint = getString(R.string.tools_pick_custom_size)
             setHintTextColor(SwStyle.color(this@BatchActivity, R.color.text_hologram_dim))
             setTextColor(SwStyle.color(this@BatchActivity, R.color.text_hologram_hi))
             background = SwStyle.rounded(
@@ -404,21 +404,24 @@ class BatchActivity : BaseActivity() {
             setPadding(pad, pad, pad, pad)
             isSingleLine = true
         }
-        content.addView(target, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@BatchActivity, 48f)
-        ))
-        val chips = listOf(
-            Triple(R.id.batchLevelLight, R.string.tools_setup_level_light, 0),
-            Triple(R.id.batchLevelMedium, R.string.tools_setup_level_medium, 1),
-            Triple(R.id.batchLevelStrong, R.string.tools_setup_level_strong, 2)
+        // v2 UI: 03_tools_setup_picker — the same four levels as the document compress sheet and
+        // the Compress setup page (one row each, so no Hindi label can be squeezed or clipped).
+        val levels = listOf(
+            Triple(R.id.batchLevelBest, R.string.compress_level_low, 0),
+            Triple(R.id.batchLevelBalanced, R.string.compress_level_medium, 1),
+            Triple(R.id.batchLevelSmaller, R.string.compress_level_high, 2),
+            Triple(R.id.batchLevelSmallest, R.string.compress_level_ultra, 3)
         )
         val views = mutableListOf<TextView>()
         fun paint() {
             views.forEachIndexed { i, chip -> paintChip(chip, i == compressLevel) }
         }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        chips.forEachIndexed { i, (id, title, index) ->
+        for ((id, title, index) in levels) {
             val chip = chip(getString(title), id).apply {
+                tag = ToolSetupActivity.CHIP_TAG
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER
                 setOnClickListener {
                     compressLevel = index
                     target.setText("")
@@ -426,13 +429,13 @@ class BatchActivity : BaseActivity() {
                 }
             }
             views += chip
-            row.addView(chip, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 40f), 1f).apply {
-                if (i < 2) marginEnd = SwStyle.dp(this@BatchActivity, 8f)
-            })
+            content.addView(chip, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@BatchActivity, 48f)
+            ).apply { if (index < levels.lastIndex) bottomMargin = SwStyle.dp(this@BatchActivity, 8f) })
         }
-        content.addView(row, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@BatchActivity, 10f) })
+        content.addView(target, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@BatchActivity, 48f)
+        ).apply { topMargin = SwStyle.dp(this@BatchActivity, 4f) })
         paint()
         sheet.setContent(content)
         sheet.setPrimary(R.string.tools_batch_start)
@@ -447,6 +450,7 @@ class BatchActivity : BaseActivity() {
                 val (quality, maxDim) = when (compressLevel) {
                     0 -> 80 to null
                     2 -> 50 to 1600
+                    3 -> 38 to 1200
                     else -> 65 to 2000
                 }
                 start(
