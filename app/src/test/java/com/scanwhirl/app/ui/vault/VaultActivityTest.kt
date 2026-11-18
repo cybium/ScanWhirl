@@ -111,13 +111,27 @@ class VaultActivityTest {
 
     private fun primary(sheet: BottomSheetDialog): View = sheet.need(R.id.swSheetPrimary)
 
+    /**
+     * Drains the main looper and waits up to ~5 s for [condition].
+     *
+     * The passcode/KDF work runs on `Dispatchers.Default` and resumes the activity's
+     * `lifecycleScope` back on the main looper. A single [idle] can therefore see the store
+     * already unlocked (the background thread flipped [VaultStore.isUnlocked]) while the
+     * render that shows the banner/prompt is still queued behind it — slower on a cloud
+     * runner than on the developer PC. Every wait here polls the exact view state the
+     * assertion below reads, not just the store flag, so the assertion stays strict.
+     */
     private fun await(condition: () -> Boolean): Boolean {
-        repeat(150) {
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (true) {
             idle()
             if (condition()) return true
-            Thread.sleep(20)
+            if (System.nanoTime() >= deadline) {
+                idle()
+                return condition()
+            }
+            Thread.sleep(10)
         }
-        return condition()
     }
 
     /** findViewById with an exact type; the platform method is nullable on this SDK. */
@@ -188,7 +202,11 @@ class VaultActivityTest {
 
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
         primary(unlockSheet).performClick()
-        assertTrue("the correct passcode unlocks", await { store.isUnlocked() })
+        // Wait for the render that follows the background derivation, not just the store flag.
+        assertTrue(
+            "the correct passcode unlocks",
+            await { store.isUnlocked() && activity.need<View>(R.id.vaultBanner).isVisible }
+        )
         assertTrue(store.isUnlocked())
         assertTrue(activity.need<View>(R.id.vaultBanner).isVisible)
         assertFalse(activity.need<View>(R.id.vaultStatus).isVisible)
@@ -207,7 +225,15 @@ class VaultActivityTest {
         assertEquals("Use recovery code", recoverySheet.need<TextView>(R.id.swSheetTitle).text)
         recoverySheet.need<EditText>(R.id.vaultRestoreCode).setText(setup.recoveryCode)
         primary(recoverySheet).performClick()
-        assertTrue("recovery code unlocks", await { store.isUnlocked() })
+        // The banner is drawn by the main-thread continuation after the recovery derivation;
+        // reading it in the same tick the store reports unlocked raced the render.
+        assertTrue(
+            "recovery code unlocks",
+            await {
+                store.isUnlocked() &&
+                    activity.need<TextView>(R.id.vaultBanner).isVisible
+            }
+        )
         assertTrue(store.isUnlocked())
         assertEquals(
             "Unlocked with recovery code · relocks in 2 min",
@@ -349,7 +375,12 @@ class VaultActivityTest {
 
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
         primary(unlockSheet).performClick()
-        assertTrue("the new passcode unlocks", await { store.isUnlocked() })
+        // "New fingerprint offered" runs in the main-thread continuation after the derivation
+        // (offerFingerprintSetup right after render), so wait for that prompt, not the store flag.
+        assertTrue(
+            "the new passcode unlocks",
+            await { store.isUnlocked() && started }
+        )
         assertTrue(store.isUnlocked())
         assertTrue("the passcode unlock offered a new fingerprint wrap", started)
         assertTrue("the Keystore wrap was rebuilt through the prompt", store.canUseBiometric())
@@ -411,7 +442,13 @@ class VaultActivityTest {
         val unlockSheet = sheet()
         unlockSheet.need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
         primary(unlockSheet).performClick()
-        assertTrue("the locked screen unlocks", await { store.isUnlocked() })
+        assertTrue(
+            "the locked screen unlocks",
+            await {
+                store.isUnlocked() &&
+                    !activity.need<View>(R.id.vaultLockedPlaceholder).isVisible
+            }
+        )
         assertTrue(store.isUnlocked())
         assertFalse(activity.need<View>(R.id.vaultLockedPlaceholder).isVisible)
     }
