@@ -50,10 +50,14 @@ if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
     $env:GIT_INDEX_FILE = $tmpIndex
     git -C $root read-tree HEAD
     git -C $root add -A -- . ':!60_CORE_ENGINE_GUIDE.md' ':!LANE_BLOCKED.md' 2>$null
-    # Always run the lead's current workflow, even if the lane has not merged it yet.
-    $wf = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\.github\workflows\gate.yml"
-    $blob = git -C $root hash-object -w $wf
-    git -C $root update-index --add --cacheinfo "100644,$blob,.github/workflows/gate.yml"
+    # Always run the lead's current workflow (and the fail-closed verdict script it calls),
+    # even if the lane has not merged them yet.
+    foreach ($rel in @(".github/workflows/gate.yml", "tools/ci/gate_verdict.py", "tools/ci/test_gate_verdict.py")) {
+        $src = Join-Path "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current" $rel
+        if (-not (Test-Path $src)) { continue }
+        $blob = git -C $root hash-object -w $src
+        git -C $root update-index --add --cacheinfo "100644,$blob,$rel"
+    }
     $ciBranch = "ci/$Lane"
     if ($cloudTests) {
         # Single-test cloud run: the filter travels in the snapshot; a separate branch so it never cancels a full run.
@@ -89,6 +93,11 @@ if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
         $verdict = ($lines | Select-Object -Last 1) -replace '^GATE (PASS|FAIL)', "GATE `$1 $Lane"
         Write-Output "cloud: run $($run.databaseId) finished in $minutes min (https://github.com/cybium/ScanWhirl/actions/runs/$($run.databaseId))"
         Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue; Remove-Item Env:GH_TOKEN
+        # Fail closed: a PASS line only counts if the whole GitHub run also concluded 'success'.
+        if ($verdict -match '^GATE PASS' -and $run.conclusion -ne 'success') {
+            $verdict = $verdict -replace '^GATE PASS', 'GATE FAIL'
+            $verdict += " (run concluded '$($run.conclusion)')"
+        }
         Write-Output $verdict
         if ($verdict -match '^GATE PASS') { exit 0 } else { exit 1 }
     }
