@@ -154,7 +154,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                     // A8: a picked gallery photo is not a scan. The position is asked here (as
                     // for camera/PDF inserts) but the pages are cropped and confirmed per photo
                     // first; only then does the draft change.
-                    askInsertPosition(files, ::startPhotoCrop)
+                    pendingPhotoDir = files.firstOrNull()?.parentFile
+                    askInsertPosition(files, ::startPhotoCrop, onAbandon = {
+                        deleteBatch(files)
+                        pendingPhotoDir = null
+                    })
                 }
             }
         }
@@ -199,10 +203,17 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         freshImport = intent.getBooleanExtra(EXTRA_FRESH_IMPORT, false)
         // A8: a viewer recreated while the corner crop screen was on top still knows where the
-        // confirmed photos go when they come back.
-        pendingPhotoPosition = savedInstanceState?.takeIf { it.containsKey(KEY_PHOTO_INSERT_AT) }
+        // confirmed photos go when they come back. A batch whose position was never chosen dies
+        // with the old screen (the question is gone), so its picked copies are not kept.
+        val restoredPosition = savedInstanceState
+            ?.takeIf { it.containsKey(KEY_PHOTO_INSERT_AT) }
             ?.getInt(KEY_PHOTO_INSERT_AT)
+        pendingPhotoPosition = restoredPosition
         pendingPhotoDir = savedInstanceState?.getString(KEY_PHOTO_DIR)?.let(::File)
+        if (restoredPosition == null) {
+            pendingPhotoDir?.deleteRecursively()
+            pendingPhotoDir = null
+        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleEditorBack()
@@ -732,11 +743,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /**
      * Position picker: at the start, after page N, or at the end. [onReady] receives the chosen
      * position and the pages to put there; photos hand it to the corner crop flow first (A8),
-     * camera and PDF inserts keep going straight to [insertFiles].
+     * camera and PDF inserts keep going straight to [insertFiles]. [onAbandon] runs when the
+     * position is never chosen, so a photo batch's picked copies do not stay in the cache.
      */
     private fun askInsertPosition(
         files: List<File>,
-        onReady: (List<File>, Int) -> Unit = { ready, position -> insertFiles(ready, position) }
+        onReady: (List<File>, Int) -> Unit = { ready, position -> insertFiles(ready, position) },
+        onAbandon: (() -> Unit)? = null
     ) {
         if (files.isEmpty()) {
             toast(R.string.insert_none, Toast.LENGTH_SHORT)
@@ -753,23 +766,27 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             getString(R.string.insert_after_page),
             getString(R.string.insert_at_end)
         )
-        SwSheet.builder(this)
+        var movedOn = false
+        val sheet = SwSheet.builder(this)
             .setTitle(R.string.insert_position_title)
             .setOptions(options) { which, _ ->
+                movedOn = true
                 when (which) {
                     0 -> onReady(files, 0)
-                    1 -> promptInsertAfterPage(files, onReady)
+                    1 -> promptInsertAfterPage(files, onReady, onAbandon)
                     else -> onReady(files, visiblePages.size)
                 }
             }
             .setSecondary(android.R.string.cancel)
             .build()
-            .show()
+        sheet.setOnDismissListener { if (!movedOn) onAbandon?.invoke() }
+        sheet.show()
     }
 
     private fun promptInsertAfterPage(
         files: List<File>,
-        onReady: (List<File>, Int) -> Unit
+        onReady: (List<File>, Int) -> Unit,
+        onAbandon: (() -> Unit)? = null
     ) {
         val max = visiblePages.size
         val sheet = SwSheet.builder(this)
@@ -780,16 +797,19 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             )
             .setPrimary(R.string.insert_after_page)
             .build()
+        var movedOn = false
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
             val number = sheet.inputView?.text?.toString()?.toIntOrNull()
             if (number == null || number !in 1..max) {
                 Toast.makeText(this, R.string.insert_page_invalid, Toast.LENGTH_SHORT).show()
             } else {
+                movedOn = true
                 sheet.dismiss()
                 onReady(files, number)
             }
         }
+        sheet.setOnDismissListener { if (!movedOn) onAbandon?.invoke() }
         sheet.show()
     }
 
@@ -802,6 +822,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         pendingPhotoPosition = position
         pendingPhotoDir = files.firstOrNull()?.parentFile
         insertPhotoCrop.launch(PhotoCropFlowActivity.intent(this, files))
+    }
+
+    /** A photo batch's cache folder holds plaintext picked photos; it never outlives the flow. */
+    private fun deleteBatch(files: List<File>) {
+        files.firstOrNull()?.parentFile
+            ?.takeIf { it.name.startsWith("insert_") }
+            ?.deleteRecursively()
     }
 
     /** Test seam and the one writer: copied pages enter the draft at [position]. */

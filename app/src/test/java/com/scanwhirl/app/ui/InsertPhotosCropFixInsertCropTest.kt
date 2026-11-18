@@ -462,6 +462,56 @@ class InsertPhotosCropFixInsertCropTest {
     }
 
     @Test
+    fun `cancelling the insert position keeps no picked copy`() {
+        val target = DocFixtures.saved(repo, app, pages = 1)
+        val photo = photoOfPageOnTable(whitePage)
+        documentViewer(target) { _, viewer ->
+            viewer.startInsertPages()
+            idle()
+            clickSheetOption(1) // "From photos"
+            idle()
+            val pick = requireNotNull(shadowOf(viewer).nextStartedActivityForResult)
+            shadowOf(viewer).receiveResult(pick.intent, Activity.RESULT_OK, photosIntent(photo))
+            assertTrue(
+                "the insert position is asked",
+                waitUntil { sheetTitle() == app.getString(R.string.insert_position_title) }
+            )
+            idle()
+            requireNotNull(
+                ShadowDialog.getLatestDialog()?.findViewById<View>(R.id.swSheetSecondary)
+            ) { "the position sheet has a Cancel" }.performClick()
+            idle()
+
+            assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
+            assertTrue("the picked copies go with the cancelled sheet", insertDirs().isEmpty())
+        }
+    }
+
+    @Test
+    fun `rotation while the insert position is asked keeps no picked copy`() {
+        val target = DocFixtures.saved(repo, app, pages = 1)
+        val photo = photoOfPageOnTable(whitePage)
+        documentViewer(target) { scenario, viewer ->
+            viewer.startInsertPages()
+            idle()
+            clickSheetOption(1) // "From photos"
+            idle()
+            val pick = requireNotNull(shadowOf(viewer).nextStartedActivityForResult)
+            shadowOf(viewer).receiveResult(pick.intent, Activity.RESULT_OK, photosIntent(photo))
+            assertTrue(
+                "the insert position is asked",
+                waitUntil { sheetTitle() == app.getString(R.string.insert_position_title) }
+            )
+
+            scenario.recreate()
+            idle()
+
+            assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
+            assertTrue("the question is gone with the old screen, so are its copies", insertDirs().isEmpty())
+        }
+    }
+
+    @Test
     fun `rotation keeps the current photo and the adjusted corners`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val first = photoOfPageOnTable(whitePage)
