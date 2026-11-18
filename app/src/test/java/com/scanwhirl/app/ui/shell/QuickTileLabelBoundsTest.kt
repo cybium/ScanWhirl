@@ -141,7 +141,7 @@ abstract class QuickTileLabelBoundsBase {
                     idle()
                     val root = layoutRoot(activity)
                     val scaled = activity.resources.displayMetrics.scaledDensity
-                    // Home quick row (six columns), every visible row.
+                    // Home quick row: five columns (the sixth tool wraps to row two).
                     for (id in intArrayOf(R.id.swQuickRow, R.id.swQuickRow2, R.id.swQuickRow3)) {
                         val row = activity.findViewById<ViewGroup>(id)
                         if (!row.isVisible) continue
