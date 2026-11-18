@@ -131,6 +131,10 @@ class IdCardActivity : BaseActivity() {
     @Volatile
     internal var cropEncodeFinishedForTest: ((ByteArray?) -> Unit)? = null
 
+    /** Tests: the main-thread accept/abandon decision ran (true = the side is accepted). */
+    @Volatile
+    internal var cropSaveSettledForTest: ((Boolean) -> Unit)? = null
+
     private val scanner = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
@@ -222,17 +226,19 @@ class IdCardActivity : BaseActivity() {
                 outState.putInt(KEY_CROP_SIDE, cropSide.ordinal)
                 outState.putBoolean(KEY_CROP_DETECTED, cropDetected)
                 // D5(a): the person's adjusted frame, normalised so any preview size restores it.
+                // R2-1: during the async reopen there is no live CropView/bitmap yet, so keep the
+                // rectangle that was restored from the previous state instead of saving nothing.
                 val rect = cropView?.getCropRect()
                 val shown = cropBitmap
-                if (rect != null && shown != null && shown.width > 0 && shown.height > 0) {
-                    outState.putFloatArray(
-                        KEY_CROP_RECT,
-                        floatArrayOf(
-                            rect.left / shown.width, rect.top / shown.height,
-                            rect.right / shown.width, rect.bottom / shown.height
-                        )
+                val savedRect = if (rect != null && shown != null && shown.width > 0 && shown.height > 0) {
+                    floatArrayOf(
+                        rect.left / shown.width, rect.top / shown.height,
+                        rect.right / shown.width, rect.bottom / shown.height
                     )
+                } else {
+                    cropSavedRect
                 }
+                if (savedRect != null) outState.putFloatArray(KEY_CROP_RECT, savedRect)
             } else {
                 File(dir, CROP_FILE).delete()
                 // D5(b): preparation is still running, so keep the pick itself, not its result.
@@ -570,12 +576,14 @@ class IdCardActivity : BaseActivity() {
             progress.isVisible = false
             if (isFinishing || isDestroyed) return@launch
             if (bytes == null) {
-                fail(getString(R.string.tools_setup_image_failed))
+                // R2-2: the restored pick can no longer be read (grant gone, provider denied).
+                // The recovery message goes inside the side sheet that is about to open, so it is
+                // visible and announced, with the normal Scan / Pick actions as the retry.
                 cropPreparing = false
                 cropSourceUri = null
                 cropBack.isEnabled = false
                 render()
-                showCaptureSheet(side)
+                showCaptureSheet(side, R.string.fixidcrop_id_photo_gone)
                 return@launch
             }
             beginCrop(side, bytes)
@@ -597,6 +605,7 @@ class IdCardActivity : BaseActivity() {
         progress.isVisible = true
         lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
+                cropReopenGate?.invoke()
                 runCatching { ImageTools.decodeSampled(bytes, CROP_PREVIEW_DIM) }.getOrNull()
             }
             if (generation != cropGeneration) {
@@ -764,7 +773,11 @@ class IdCardActivity : BaseActivity() {
             }
             // D2: Back or Cancel closed the crop screen while the JPEG was being written. The
             // side must not be accepted afterwards, and nothing is shown to the person.
-            if (token == null || token !== cropOverlay || isFinishing || isDestroyed) return@launch
+            if (token == null || token !== cropOverlay || isFinishing || isDestroyed) {
+                cropSaveSettledForTest?.invoke(false)
+                return@launch
+            }
+            cropSaveSettledForTest?.invoke(true)
             progress.isVisible = false
             cropBusy = false
             if (bytes == null) {
@@ -813,8 +826,8 @@ class IdCardActivity : BaseActivity() {
         runCatching { File(capturedStateDir(), CROP_FILE).delete() }
     }
 
-    private fun showCaptureSheet(side: Side) {
-        if (side == Side.BACK) showBackSheet() else showFrontSheet()
+    private fun showCaptureSheet(side: Side, message: Int? = null) {
+        if (side == Side.BACK) showBackSheet(message) else showFrontSheet(message)
     }
 
     /** Tests: the auto-cropped photo the corner crop screen is showing. */
@@ -857,11 +870,11 @@ class IdCardActivity : BaseActivity() {
         sheet.show()
     }
 
-    private fun showFrontSheet() {
+    private fun showFrontSheet(message: Int? = null) {
         showSheet(
             SwSheet.builder(this)
                 .setTitle(R.string.tools_id_front_title)
-                .setMessage(R.string.tools_id_front_msg)
+                .setMessage(message ?: R.string.tools_id_front_msg)
                 .setPrimary(R.string.tools_id_scan_camera) {
                     movingOn = true
                     scan(Side.FRONT)
@@ -874,10 +887,10 @@ class IdCardActivity : BaseActivity() {
         )
     }
 
-    private fun showBackSheet() {
+    private fun showBackSheet(message: Int? = null) {
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.tools_id_back_title)
-            .setMessage(R.string.tools_id_back_msg)
+            .setMessage(message ?: R.string.tools_id_back_msg)
             .setPrimary(R.string.tools_id_scan_camera) {
                 movingOn = true
                 scan(Side.BACK)
@@ -1064,6 +1077,10 @@ class IdCardActivity : BaseActivity() {
     }
 
     companion object {
+        /** Tests: hold the reopened crop decode so Back or a second recreation happens first. */
+        @Volatile
+        internal var cropReopenGate: (() -> Unit)? = null
+
         private const val STATE_DIR = "id_card_state"
         private const val FRONT_FILE = "front.jpg"
         private const val BACK_FILE = "back.jpg"
