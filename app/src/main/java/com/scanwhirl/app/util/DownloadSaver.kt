@@ -214,6 +214,22 @@ object DownloadSaver {
         savePdfFile(context, bytes, displayName).name
 
     /**
+     * T05-RESULT-SLICE: keeps a copy of any tool result — a document's PDF, a Word/Excel/
+     * PowerPoint/ZIP export or an image — in Documents/ScanWhirl, with exactly the transaction
+     * [savePdfFile] uses: never an overwrite, an identical existing copy reports
+     * [Outcome.ALREADY_SAVED], and [undoSave] removes only a copy this save created.
+     *
+     * [displayName] is sanitised like every other export name (one of the file-name characters a
+     * phone cannot store is replaced); when it carries no extension the source's own is added, so
+     * the copy in Files can still be opened by tapping it.
+     */
+    fun saveFile(context: Context, source: File, displayName: String, mime: String): SavedFile {
+        var name = sanitize(displayName.ifBlank { source.name })
+        if (!name.contains('.') && source.extension.isNotBlank()) name += ".${source.extension}"
+        return export(context, { FileInputStream(source) }, name, documents(mime))
+    }
+
+    /**
      * Writes plain text into Documents/ScanWhirl as a `.txt` file with the same
      * transaction as PDFs. The [displayName] is sanitised and forced to end in
      * `.txt` ("Document" when blank).

@@ -46,6 +46,7 @@
     <item name="toolResultOpen" type="id" />
     <item name="toolResultShare" type="id" />
     <item name="toolResultSave" type="id" />
+    <item name="toolResultAlsoSave" type="id" />
     <item name="toolResultLibrary" type="id" />
     <item name="toolResultUndo" type="id" />
     <item name="toolResultPreview" type="id" />

@@ -30,8 +30,10 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.shell.ShellActivity
+import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OfficeFileCounts
+import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
@@ -45,16 +47,20 @@ import java.util.zip.ZipOutputStream
 /**
  * v2 UI: 03_tools_hub — the result of every L4 tool.
  *
- * One screen for a new document copy and for an exported file: Open, Share, Save (the system
- * Save-as picker), Show in library and Undo. Undo removes only the copy this run created; the
- * source document is never touched. Built with the kit on the ink background.
+ * One screen for a new document copy and for an exported file: Open, "Also save in Documents"
+ * (one tap into Documents/ScanWhirl), Share, Save as… (the system Save-as picker), Show in library
+ * and Undo. Undo removes only the copy this run created; the source document is never touched.
+ * Compress also says so when the produced size is still above the size the person asked for.
+ * Built with the kit on the ink background.
  *
  * F1/W3: the ID card result is already saved the moment the layout is chosen, so that flow shows
- * Keep (done) and Discard instead of Save and Undo, and Back asks "Discard this ID card?" first.
+ * Keep (done) and Discard instead of the save and undo actions, and Back asks "Discard this ID
+ * card?" first.
  */
 class ToolResultActivity : BaseActivity() {
 
     private lateinit var repo: ScanRepository
+    private lateinit var rootView: View
     private lateinit var toolName: String
     private var docIds: MutableList<String> = mutableListOf()
     private var files: MutableList<File> = mutableListOf()
@@ -69,6 +75,9 @@ class ToolResultActivity : BaseActivity() {
     private var toolId = ""
     private var note: String? = null
 
+    /** T05: the size Compress was asked for, so the result can say it was not reached. */
+    private var targetBytes: Long? = null
+
     /** F1: the ID card flow's own result actions (Keep / Discard). */
     private val idCardFlow: Boolean get() = toolId == "id_card"
 
@@ -81,6 +90,7 @@ class ToolResultActivity : BaseActivity() {
         files = intent.getStringArrayListExtra(EXTRA_FILES)?.map { File(it) }?.toMutableList() ?: mutableListOf()
         mime = intent.getStringExtra(EXTRA_MIME) ?: defaultMime()
         note = intent.getStringExtra(EXTRA_NOTE)
+        targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
         saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(mime)) { uri ->
             uri ?: return@registerForActivityResult
             saveTo(uri)
@@ -91,7 +101,8 @@ class ToolResultActivity : BaseActivity() {
                 override fun handleOnBackPressed() = confirmDiscardIdCard()
             })
         }
-        setContentView(buildRoot())
+        rootView = buildRoot()
+        setContentView(rootView)
         render()
         // v2 UI: 74_motion — the one success moment call for every tool result.
         com.scanwhirl.app.ui.kit.SwMotion.success(this)
@@ -222,6 +233,15 @@ class ToolResultActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
         )
+        // T05-RESULT-SLICE: one tap keeps a copy in Documents for the person's own files app and
+        // USB, for a document result and for an exported file alike. The system Save-as picker
+        // stays next to Share for choosing another place.
+        column.addView(
+            button(getString(R.string.tools_result_also_save), R.id.toolResultAlsoSave) { alsoSave() },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+        )
         column.addView(
             rowOf(
                 button(getString(R.string.tools_result_share), R.id.toolResultShare) { share() },
@@ -313,7 +333,7 @@ class ToolResultActivity : BaseActivity() {
             if (showSizes) {
                 line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
             }
-            applySummary(line)
+            applySummary(line, bytes)
             previewPreview(docs.first().pageFiles.firstOrNull())
         } else if (files.isNotEmpty()) {
             val bytes = files.sumOf { it.length() }
@@ -326,7 +346,7 @@ class ToolResultActivity : BaseActivity() {
             if (showSizes) {
                 line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
             }
-            applySummary(line)
+            applySummary(line, bytes)
             val first = files.first()
             if (isTypedFile(first)) {
                 showFileCard(first)
@@ -342,8 +362,23 @@ class ToolResultActivity : BaseActivity() {
         }
     }
 
-    private fun applySummary(line: String) {
-        summary.text = if (note.isNullOrBlank()) line else "$line\n$note"
+    private fun applySummary(line: String, producedBytes: Long? = null) {
+        summary.text = buildString {
+            append(line)
+            if (!note.isNullOrBlank()) append("\n").append(note)
+            targetMiss(producedBytes)?.let { append("\n").append(it) }
+        }
+    }
+
+    /**
+     * T05-RESULT-SLICE: Compress only, and only when the produced file is still bigger than the
+     * size the person asked for. "Met" says nothing, and no other tool ever has a target.
+     */
+    private fun targetMiss(producedBytes: Long?): String? {
+        if (toolId != "compress") return null
+        val target = targetBytes ?: return null
+        if (producedBytes == null || producedBytes <= target) return null
+        return getString(R.string.compress_target_missed, StatusLine.formatBytes(target))
     }
 
     /** True for the generated Office/ZIP results that have no page to render. */
@@ -506,6 +541,53 @@ class ToolResultActivity : BaseActivity() {
         saveAs.launch(name)
     }
 
+    /**
+     * T05-RESULT-SLICE: "Also save in Documents" — the one-tap copy into Documents/ScanWhirl,
+     * with the export transaction's rules (see [DownloadSaver]) and the same confirmation the
+     * export result screen uses: Saved / Already saved / "a new copy, the earlier file was kept",
+     * and an Undo that removes only the copy this save created.
+     */
+    private fun alsoSave() {
+        val source = sourceForSave() ?: return fail(getString(R.string.tools_result_nothing))
+        if (!source.isFile || source.length() == 0L) {
+            return fail(getString(R.string.tools_result_nothing))
+        }
+        val name = suggestedName() ?: source.name
+        val type = saveMimeFor(name)
+        // A single document result is that document's own PDF, so the copy is recorded against
+        // it like any other export of it (delete-with-document then knows the copy).
+        val docId = docIds.singleOrNull()
+        lifecycleScope.launch {
+            try {
+                val saved = withContext(Dispatchers.IO) {
+                    DownloadSaver.saveFile(this@ToolResultActivity, source, name, type).also { copy ->
+                        if (docId != null) {
+                            try {
+                                repo.addExport(docId, copy)
+                            } catch (_: Exception) {
+                                // A failure to record the copy must not turn a finished save into a failure.
+                            }
+                        }
+                    }
+                }
+                SavedSnackbar.showExport(
+                    this@ToolResultActivity, rootView, saved, R.string.result_saved_documents, docId
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                fail(getString(R.string.tools_result_save_failed, e.message ?: ""))
+            }
+        }
+    }
+
+    /** The type the Documents copy is indexed with: a document's PDF, a ZIP, or the result's own. */
+    private fun saveMimeFor(name: String): String = when {
+        docIds.size == 1 -> "application/pdf"
+        name.endsWith(".zip", ignoreCase = true) -> "application/zip"
+        else -> mime
+    }
+
     private fun suggestedName(): String? = when {
         docIds.size == 1 -> (docIds.firstOrNull()?.let { repo.getDocument(it)?.name } ?: toolName) + ".pdf"
         docIds.size > 1 -> "$toolName.zip"
@@ -665,6 +747,9 @@ class ToolResultActivity : BaseActivity() {
         private const val EXTRA_MIME = "mime"
         private const val EXTRA_NOTE = "note"
 
+        /** T05: Compress's wanted size in bytes (absent or 0 = no target). */
+        private const val EXTRA_TARGET = "target_bytes"
+
         /** F1: view tags for the ID card's two actions (no new ids needed). */
         const val TAG_KEEP = "fixflow:id_card_keep"
         const val TAG_DISCARD = "fixflow:id_card_discard"
@@ -679,12 +764,15 @@ class ToolResultActivity : BaseActivity() {
             docIds: List<String> = emptyList(),
             files: List<File> = emptyList(),
             mime: String? = null,
-            note: String? = null
+            note: String? = null,
+            /** T05: what Compress was asked to reach, so a miss can be said out loud. */
+            targetBytes: Long? = null
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
             .putStringArrayListExtra(EXTRA_FILES, ArrayList(files.map { it.path }))
             .putExtra(EXTRA_MIME, mime)
             .putExtra(EXTRA_NOTE, note)
+            .apply { if (targetBytes != null && targetBytes > 0L) putExtra(EXTRA_TARGET, targetBytes) }
     }
 }
