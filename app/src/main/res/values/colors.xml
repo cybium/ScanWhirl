@@ -133,4 +133,5 @@
     <color name="file_xlsx">#3FE07C</color>
     <color name="file_pptx">#FF9A4D</color>
     <color name="file_zip">#A9B6BE</color>
+    <color name="file_pdf">#FF6E6E</color>
 </resources>

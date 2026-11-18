@@ -130,6 +130,9 @@ class MeScreen(
             background = SwStyle.card(context, 18f)
             isClickable = true
             isFocusable = true
+            // M7 (device sweep 2026-11-19): the visible label lives on child TextViews, so the
+            // clickable node TalkBack focused had no name. The row now carries its own words.
+            contentDescription = if (summary.isBlank()) title else "$title, $summary"
             val pad = SwStyle.dp(context, 14f)
             setPadding(pad, pad, pad, pad)
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {

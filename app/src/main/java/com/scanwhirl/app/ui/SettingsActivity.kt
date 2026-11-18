@@ -119,6 +119,31 @@ class SettingsActivity : BaseActivity() {
         if (com.scanwhirl.app.BuildConfig.TEST_BUILD) addTestFreeRow()
 
         updateSummaries()
+
+        // M7 (device sweep 2026-11-19): every tappable row carries its own name, so the node a
+        // screen reader focuses is never an unnamed box — even when the row's label TextView is
+        // scrolled out of the list (the 336x11dp strip the sweep caught at the top of Settings).
+        nameRowsForTalkBack()
+    }
+
+    /** Rows whose label lives on child TextViews: the clickable node owns the words instead. */
+    private fun nameRowsForTalkBack() {
+        val rows = listOf(
+            R.id.rowFont, R.id.rowLanguage, R.id.rowOcrLanguage, R.id.rowViewer, R.id.rowPrivacy
+        )
+        for (id in rows) {
+            val row = findViewById<android.view.View>(id) ?: continue
+            val words = mutableListOf<String>()
+            fun collect(v: android.view.View) {
+                if (v.visibility != android.view.View.VISIBLE) return
+                if (v is android.widget.TextView) {
+                    v.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { words += it }
+                }
+                if (v is android.view.ViewGroup) for (i in 0 until v.childCount) collect(v.getChildAt(i))
+            }
+            collect(row)
+            if (words.isNotEmpty()) row.contentDescription = words.joinToString(", ")
+        }
     }
 
     /** L2: one compact row under the app language, built here so L1's layout stays untouched. */
