@@ -1,3 +1,5 @@
+> **STATUS HISTORICAL (banner added 2026-11-19).** Says the new app lives in next/; reversed on 2026-11-18 (DECISIONS PRD-002). Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # Old app (1.2.x) working notes
 
 Read only when working on the 1.2.x app in this repo. The new app lives in `ScanWhirl-HQ\next`.

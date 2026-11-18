@@ -1,3 +1,5 @@
+> **STATUS HISTORICAL / UI v2 (banner added 2026-11-19).** Its Home quick tools, neon look and tool counts were replaced by UI_PLAN §0/§0b and IDENTITY; the mockup does NOT win over code. Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # 70 — ScanWhirl v2 app design (screens, tools, security)
 
 Lead engineer: Opus, 2026-11-14. **This is the target the lanes build.** Pictures: `mockups/*.png` (rendered from

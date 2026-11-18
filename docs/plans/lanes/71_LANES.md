@@ -1,3 +1,5 @@
+> **STATUS HISTORICAL (banner added 2026-11-19).** Five-worker v2 mechanics; lint now runs on every full lane gate. Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # 71 — Parallel lanes (wave 1)
 
 Lead engineer: Opus. Design target: `docs/design/2026-11-14/70_APP_DESIGN.md` + `mockups/*.png`.

@@ -1,3 +1,5 @@
+> **STATUS TEMPLATE ONLY (banner added 2026-11-19).** 2026-11-15 snapshot with obsolete steps. Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # ScanWhirl launch checklist (Google Play)
 
 > **Snapshot, 15 November 2026.** This checklist was written before 1.2.0 went to closed testing:

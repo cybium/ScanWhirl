@@ -1,3 +1,5 @@
+> **STATUS HISTORICAL (banner added 2026-11-19).** Old orchestration log. Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # 73 — Orchestration log (lead's record of running workers)
 
 The lead (Opus) runs the lane workers itself as background subagents (model `opencode-go/deepseek-v4.1-flash#high`,

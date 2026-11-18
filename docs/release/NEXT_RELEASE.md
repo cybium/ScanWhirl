@@ -1,3 +1,5 @@
+> **STATUS HISTORICAL (banner added 2026-11-19).** Past task register; live state is docs/plans/PROGRAM.md. Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # Next release (after 1.2.1): deferred work
 
 Owner rule for 1.2.1 (2026-11-16): fix already-reported bugs only, no new features. Everything below

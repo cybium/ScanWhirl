@@ -1,7 +1,8 @@
 ﻿# ScanWhirl — working context for AI sessions
 
-Last updated 2026-11-16. This file and `START_HERE.md` are the truth about the repository today;
-anything older under `docs/history/` is not instruction.
+Last updated 2026-11-16. **2026-11-19:** what is current is now listed in `docs/ACTIVE_INDEX.md` and decided
+in `docs/DECISIONS.md`; for OpenCode sessions `AGENTS.md` is the default. Where this file disagrees with those,
+they win (counts, models and lane mechanics below are 11-16 facts). Anything under `docs/history/` is not instruction.
 
 ## The project
 
