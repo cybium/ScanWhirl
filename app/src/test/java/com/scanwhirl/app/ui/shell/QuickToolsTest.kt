@@ -197,7 +197,7 @@ class QuickToolsTest {
                 Gravity.TOP,
                 (row.gravity and Gravity.TOP)
             )
-            assertEquals("labels reserve two lines", 2, tile.labelView.minLines)
+            assertEquals("labels cap at two lines", 2, tile.labelView.maxLines)
             val badge = (0 until tile.childCount)
                 .map { tile.getChildAt(it) }
                 .filterIsInstance<ImageView>()

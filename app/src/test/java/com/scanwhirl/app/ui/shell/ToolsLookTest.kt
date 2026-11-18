@@ -133,7 +133,13 @@ abstract class ToolsLookBase {
             "the icon group is centred in the tile",
             abs(tile.iconSlot.left - (tile.width - tile.iconSlot.right)) <= 1
         )
-        assertTrue("the tile is at least 104dp tall", tile.height / density >= 104f)
+        // Content-sized: 12dp + 48dp + 8dp + label + 8dp, with no fixed minimum height.
+        assertEquals("no fixed minimum height", 0, tile.minimumHeight)
+        val expected = dp(12f + 48f + 8f + 8f) + (tile.labelView.layout?.height ?: 0)
+        assertTrue(
+            "the tile is content-sized (${tile.height / density}dp, expected ${expected / density}dp)",
+            abs(tile.height - expected) <= dp(1f)
+        )
     }
 
     @Test
@@ -181,9 +187,9 @@ abstract class ToolsLookBase {
             for (tile in tiles) {
                 assertTrue("${tile.tool?.id} must do something", tile.hasOnClickListeners())
             }
-            // The normal grid is four columns at 1.0x on a 360dp screen.
+            // The normal grid is five columns at 1.0x on a 360dp screen.
             val firstRow = (body.getChildAt(0) as ViewGroup).getChildAt(1) as ViewGroup
-            assertEquals("four columns at 1.0x", 4, firstRow.childCount)
+            assertEquals("five columns at 1.0x", 5, firstRow.childCount)
         }
     }
 
@@ -221,7 +227,7 @@ abstract class ToolsLookBase {
                 val firstRow = (body.getChildAt(0) as ViewGroup).getChildAt(1) as ViewGroup
                 assertEquals(
                     "columns at ${scale}x",
-                    if (scale >= 1.25f) 3 else 4,
+                    if (scale >= 1.25f) 3 else 5,
                     firstRow.childCount
                 )
                 val bad = mutableListOf<String>()
@@ -310,3 +316,82 @@ class ToolsLookTest : ToolsLookBase()
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "hi-w360dp-h740dp-xhdpi")
 class ToolsLookHindiTest : ToolsLookBase()
+
+/**
+ * v2 UI: 03_tools_hub — lead visual check 2026-11-18: the Tools tab wasted vertical space
+ * (a ~125dp tile row and an empty band in each card), so a phone screen showed ~9 tools.
+ * A tile is now exactly its content (12dp + 48dp square + 8dp + label + 8dp) and the cards
+ * are tightly spaced.
+ */
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+class ToolsDensityTest {
+
+    private lateinit var app: Application
+
+    @Before
+    fun setUp() {
+        app = ApplicationProvider.getApplicationContext()
+        val repo = ScanRepository(app)
+        ProGate.setPro(app, false)
+        ProGate.setTestOverride(app, null)
+        DocFixtures.saved(repo, app, pages = 1, name = "Density doc")
+        RuntimeEnvironment.setFontScale(1.0f)
+    }
+
+    @After
+    fun tearDown() {
+        RuntimeEnvironment.setFontScale(1.0f)
+        ProGate.setTestOverride(app, null)
+    }
+
+    @Test
+    fun `the first tools screen is dense enough to show thirteen tiles`() {
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                shadowOf(Looper.getMainLooper()).idle()
+                activity.findViewById<View>(R.id.swNavTools).performClick()
+                shadowOf(Looper.getMainLooper()).idle()
+
+                val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)
+                val dm = activity.resources.displayMetrics
+                val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+                val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+                repeat(2) { root.measure(w, h); root.layout(0, 0, dm.widthPixels, dm.heightPixels) }
+
+                // The tab content stops where the bottom dock starts (780 - 100dp dock).
+                val content = activity.findViewById<View>(R.id.swTabContent)
+                val visible = mutableListOf<String>()
+                val bad = mutableListOf<String>()
+                for (tile in ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))) {
+                    val rect = Rect(0, 0, tile.width, tile.height)
+                    (root as ViewGroup).offsetDescendantRectToMyCoords(tile, rect)
+                    if (rect.top >= content.top && rect.bottom <= content.bottom) {
+                        visible += tile.tool?.id.orEmpty()
+                    }
+                    val label = tile.labelView
+                    val layout = label.layout ?: continue
+                    if (layout.lineCount > 2) bad += "${label.text}: ${layout.lineCount} lines"
+                    for (line in 0 until layout.lineCount) {
+                        if (layout.getEllipsisCount(line) != 0) bad += "${label.text}: ellipsized"
+                    }
+                    if (layout.height + label.totalPaddingTop + label.totalPaddingBottom >
+                        label.height + 1
+                    ) {
+                        bad += "${label.text}: clipped"
+                    }
+                }
+                // 13 is the ceiling at 360x780: the fourth card's row starts at ~816dp, so a
+                // 14th tile needs a shorter screen chrome or dock. Anything above 13 (a
+                // taller phone, a smaller dock) still passes.
+                assertTrue(
+                    "at least 13 tiles fit the first screen, saw ${visible.size}: " +
+                        "${visible.joinToString(",")}; labels=${bad.joinToString(" | ")}",
+                    visible.size >= 13
+                )
+                assertTrue("labels stay whole: ${bad.joinToString(" | ")}", bad.isEmpty())
+            }
+        }
+    }
+}
