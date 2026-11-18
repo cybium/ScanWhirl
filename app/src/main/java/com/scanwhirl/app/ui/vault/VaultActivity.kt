@@ -93,6 +93,12 @@ class VaultActivity : BaseActivity() {
         /** Extra: why another screen sent the user here (shown above the passcode field). */
         const val EXTRA_REASON = "vault_reason"
 
+        /**
+         * Saved state: only the non-secret fact that the four-character recovery check was owed
+         * when the process stopped. The one-time code itself is never persisted.
+         */
+        private const val KEY_CONFIRM_OWED = "vault_recovery_check_owed"
+
         private const val TAG = "VaultActivity"
 
         fun intent(context: Context, reason: String? = null): Intent =
@@ -148,31 +154,51 @@ class VaultActivity : BaseActivity() {
      * clipboard history and ignores the sensitive flag, so a clip can resurface minutes later;
      * the only safe escape is a file the user picks.
      *
-     * The code is handed to the picker through [pendingRecovery], which lives only in memory and
-     * is retained across configuration changes (rotation). It is never written to a Bundle,
-     * Intent extra, preference or any file other than the one the user picks.
+     * The code is handed to the picker through [recoveryFlow]'s pending slot, which lives only in
+     * memory and is retained across configuration changes (rotation). It is never written to a
+     * Bundle, Intent extra, preference or any file other than the one the user picks.
      */
     private val saveRecoveryCode = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain")
     ) { uri -> handleRecoverySaveResult(uri) }
 
     /**
-     * The one-time code waiting for the picker while the system UI is on top. Recreated with the
-     * activity but replaced by the retained instance on a configuration change, so a rotation keeps
-     * the code and a process death loses it (by design; see [handleRecoverySaveResult]).
+     * The one-time recovery-code flow's state. It lives only in memory (retained across a
+     * configuration change through [onRetainCustomNonConfigurationInstance]) and is never written
+     * to a Bundle, Intent extra, preference or file:
+     *
+     * - [pendingCode] waits for the system file picker the user opened;
+     * - [code] is the one-time code on screen;
+     * - [confirmCode] is the code whose four-character check is still owed;
+     * - [migrateLegacy] is the protected action the check gates (moving old PIN files in).
+     *
+     * A real process death drops all of it, so the flow cannot be finished without the check.
      */
-    private class PendingRecoveryCode(var code: String? = null)
+    private class RecoveryFlow {
+        var pendingCode: String? = null
+        var code: String? = null
+        var confirmCode: String? = null
+        var migrateLegacy: Boolean = false
 
-    private var pendingRecovery = PendingRecoveryCode()
+        fun clearSecrets() {
+            pendingCode = null
+            code = null
+            confirmCode = null
+            migrateLegacy = false
+        }
+    }
 
-    override fun onRetainCustomNonConfigurationInstance(): Any = pendingRecovery
+    private var recoveryFlow = RecoveryFlow()
+
+    override fun onRetainCustomNonConfigurationInstance(): Any = recoveryFlow
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Rotation: keep the pending code that the open file picker belongs to. A Bundle is never
-        // used for it (the code must not be persisted), so process death correctly leaves nothing.
-        pendingRecovery = lastCustomNonConfigurationInstance as? PendingRecoveryCode
-            ?: PendingRecoveryCode()
+        // Rotation: keep the one-time code and the check it still owes. A Bundle is never used
+        // for the code (it must not be persisted), so a process death correctly leaves nothing.
+        val retained = lastCustomNonConfigurationInstance as? RecoveryFlow
+        recoveryFlow = retained ?: RecoveryFlow()
+        val checkOwedBeforeRecreation = savedInstanceState?.getBoolean(KEY_CONFIRM_OWED) == true
         // Security audit: the Vault shows secrets (recovery code, passcodes, private file
         // names). FLAG_SECURE blocks screenshots/screen recording and blanks the recents card.
         com.scanwhirl.app.util.SecureView.apply(window)
@@ -186,6 +212,24 @@ class VaultActivity : BaseActivity() {
         root.applySystemBarsPadding()
         render()
         maybePromptOnOpen()
+        // The check must not disappear with the activity: a configuration change restores the
+        // exact sheet; a real process death cannot (the code is gone) and is answered instead.
+        restoreRecoveryFlow(wasOwed = checkOwedBeforeRecreation && retained == null)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // A flag only: whether the check is owed. Never the code, a passcode or a file name.
+        outState.putBoolean(
+            KEY_CONFIRM_OWED,
+            recoveryFlow.code != null || recoveryFlow.confirmCode != null
+        )
+    }
+
+    override fun onDestroy() {
+        // Leaving the Vault screen (not a rotation) drops the in-memory one-time code at once.
+        if (isFinishing) recoveryFlow.clearSecrets()
+        super.onDestroy()
     }
 
     override fun onStart() {
@@ -725,6 +769,51 @@ class VaultActivity : BaseActivity() {
         }
     }
 
+    /**
+     * Puts the one-time recovery-code flow back after a recreation, so the four-character check
+     * cannot be skipped by turning the phone. The code lives only in memory:
+     *
+     * - a configuration change restores the exact sheet (code display or the check);
+     * - after a real process death there is nothing to check against ([wasOwed]), so the flow is
+     *   never marked finished and the protected action does not run: the user is offered a new
+     *   code (which goes through the same four-character check again), or told to unlock first
+     *   when a fresh process left the Vault locked.
+     */
+    private fun restoreRecoveryFlow(wasOwed: Boolean) {
+        if (!store.isSetUp()) return
+        val confirm = recoveryFlow.confirmCode
+        val code = recoveryFlow.code
+        when {
+            confirm != null -> showConfirmRecovery(confirm, recoveryFlow.migrateLegacy)
+            code != null -> showRecoveryCode(code, recoveryFlow.migrateLegacy)
+            wasOwed -> offerNewRecoveryCode()
+        }
+    }
+
+    /**
+     * The check was owed when the process died, and the one-time code died with it. Nothing can
+     * be verified, so the flow is not treated as finished: a new code is generated (when the
+     * Vault is open) and its four-character check is asked again. A locked Vault is told plainly
+     * instead, because it cannot generate a code until it is unlocked.
+     */
+    private fun offerNewRecoveryCode() {
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.vault_new_recovery_title)
+            .setMessage(R.string.vault_new_recovery_note)
+            .setSecondary(R.string.vault_not_now)
+            .build()
+        if (store.isUnlocked()) {
+            sheet.setPrimary(R.string.vault_recovery_make_new) {
+                runCatching { store.changeRecoveryCode() }
+                    .onSuccess { showRecoveryCode(it, migrateLegacy = false) }
+                    .onFailure { showUnlock() }
+            }
+        } else {
+            sheet.setPrimary(R.string.sheet_got_it)
+        }
+        sheet.secure().show()
+    }
+
     // ------------------------------------------------------------------
     // Setup and recovery
     // ------------------------------------------------------------------
@@ -746,6 +835,9 @@ class VaultActivity : BaseActivity() {
             .setContent(content)
             .setSecondary(R.string.vault_cancel)
             .build()
+        // It accepts the new passcode: this dialog has its own window, so the activity's
+        // FLAG_SECURE does not cover it.
+        sheet.secure()
         sheet.setPrimary(R.string.vault_setup_primary)
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
@@ -779,6 +871,11 @@ class VaultActivity : BaseActivity() {
     }
 
     private fun showRecoveryCode(code: String, migrateLegacy: Boolean) {
+        // The flow is retained in memory so a rotation brings this exact sheet (and the check it
+        // leads to) back; nothing about it is saved to disk.
+        recoveryFlow.code = code
+        recoveryFlow.confirmCode = null
+        recoveryFlow.migrateLegacy = migrateLegacy
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val codeView = SwStyle.text(
             this, 20f, SwStyle.color(this, R.color.cyan_primary), bold = true, letterSpacing = 0.06f
@@ -844,6 +941,11 @@ class VaultActivity : BaseActivity() {
     }
 
     private fun showConfirmRecovery(code: String, migrateLegacy: Boolean) {
+        // The check is owed from here on: a rotation restores this sheet instead of dropping it,
+        // and the protected action below runs only from a correct entry.
+        recoveryFlow.code = null
+        recoveryFlow.confirmCode = code
+        recoveryFlow.migrateLegacy = migrateLegacy
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val field = codeField(R.string.vault_confirm_hint, R.id.vaultRecoveryInput, maxLength = 4)
         content.addView(field)
@@ -852,6 +954,7 @@ class VaultActivity : BaseActivity() {
             .setMessage(R.string.vault_confirm_note)
             .setContent(content)
             .build()
+        sheet.secure()
         sheet.setPrimary(R.string.vault_finish)
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
@@ -861,6 +964,10 @@ class VaultActivity : BaseActivity() {
                 return@setOnClickListener
             }
             field.setError(null)
+            // The check passed: the flow is finished, so a later rotation cannot ask again or
+            // repeat the protected action.
+            recoveryFlow.confirmCode = null
+            recoveryFlow.migrateLegacy = false
             sheet.dismiss()
             if (migrateLegacy) migrateLegacyAsync() else {
                 render()
@@ -881,6 +988,8 @@ class VaultActivity : BaseActivity() {
             .setMessage(R.string.vault_legacy_note)
             .setContent(content)
             .build()
+        // It accepts the old 4-digit PIN: a secret on this dialog's own window.
+        sheet.secure()
         if (!migrateOnly) {
             sheet.setSecondary(R.string.vault_legacy_skip) { showSetup(migrateLegacy = false) }
         } else {
@@ -952,6 +1061,8 @@ class VaultActivity : BaseActivity() {
             )
             .setContent(content)
             .build()
+        // It accepts the Vault passcode: secure this dialog's own window.
+        sheet.secure()
         recoveryLink.setOnClickListener {
             sheet.dismiss()
             showRecoveryUnlock()
@@ -1046,6 +1157,8 @@ class VaultActivity : BaseActivity() {
             .setMessage(R.string.vault_recovery_unlock_note)
             .setContent(content)
             .build()
+        // It accepts the recovery code: secure this dialog's own window.
+        sheet.secure()
         sheet.setPrimary(R.string.vault_unlock_primary)
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
@@ -1263,7 +1376,8 @@ class VaultActivity : BaseActivity() {
         }
         val docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
         if (docs.isEmpty()) {
-            SwSheet.note(this, getString(R.string.vault_add_sheet_title), getString(R.string.vault_add_empty)).show()
+            SwSheet.note(this, getString(R.string.vault_add_sheet_title), getString(R.string.vault_add_empty))
+                .secure().show()
             return
         }
         val sheet = SwSheet.builder(this)
@@ -1271,6 +1385,8 @@ class VaultActivity : BaseActivity() {
             .setMessage(R.string.vault_add_sheet_note)
             .setSecondary(R.string.vault_cancel)
             .build()
+        // It lists library document names: private content on this dialog's own window.
+        sheet.secure()
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         docs.take(20).forEach { doc ->
             body.addView(pickRow(doc.name, "${doc.pageCount}") {
@@ -1352,6 +1468,8 @@ class VaultActivity : BaseActivity() {
             }
         }
         sheet.setContent(remove)
+        // It shows a private Vault file name: secure this dialog's own window.
+        sheet.secure()
         sheet.show()
         sheet.view.applySystemBarsPadding(top = false)
     }
@@ -1367,6 +1485,7 @@ class VaultActivity : BaseActivity() {
             }
             .setSecondary(R.string.vault_cancel)
             .build()
+            .secure()
             .show()
     }
 
@@ -1376,7 +1495,8 @@ class VaultActivity : BaseActivity() {
 
     private fun startBackup() {
         if (!store.isSetUp()) {
-            SwSheet.note(this, getString(R.string.vault_backup_button), getString(R.string.vault_backup_requires_setup)).show()
+            SwSheet.note(this, getString(R.string.vault_backup_button), getString(R.string.vault_backup_requires_setup))
+                .secure().show()
             return
         }
         val stamp = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
@@ -1433,6 +1553,8 @@ class VaultActivity : BaseActivity() {
             .setContent(content)
             .setSecondary(R.string.vault_cancel) { file.delete() }
             .build()
+        // It accepts the recovery code of the backup: secure this dialog's own window.
+        sheet.secure()
         sheet.setPrimary(R.string.vault_restore_primary)
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
@@ -1510,6 +1632,9 @@ class VaultActivity : BaseActivity() {
             startBackup()
         })
         sheet.setContent(body)
+        // Vault sheets always get their own FLAG_SECURE: their window sits above the secured
+        // activity and lists private names and actions.
+        sheet.secure()
         sheet.show()
         sheet.view.applySystemBarsPadding(top = false)
     }
@@ -1527,7 +1652,8 @@ class VaultActivity : BaseActivity() {
 
     private fun showRecoveryInfo() {
         if (!store.isSetUp()) {
-            SwSheet.note(this, getString(R.string.vault_recovery_button), getString(R.string.vault_backup_requires_setup)).show()
+            SwSheet.note(this, getString(R.string.vault_recovery_button), getString(R.string.vault_backup_requires_setup))
+                .secure().show()
             return
         }
         SwSheet.builder(this)
@@ -1543,6 +1669,7 @@ class VaultActivity : BaseActivity() {
             }
             .setSecondary(R.string.vault_cancel)
             .build()
+            .secure()
             .show()
     }
 
@@ -1562,6 +1689,8 @@ class VaultActivity : BaseActivity() {
             .setContent(content)
             .setSecondary(R.string.vault_cancel)
             .build()
+        // It accepts the new passcode: secure this dialog's own window.
+        sheet.secure()
         sheet.setPrimary(R.string.vault_save)
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
@@ -1624,18 +1753,18 @@ class VaultActivity : BaseActivity() {
      * picks a file and only the code plus one warning line is written there.
      */
     private fun startSaveRecoveryCode(code: String) {
-        pendingRecovery.code = code
+        recoveryFlow.pendingCode = code
         saveRecoveryCode.launch(getString(R.string.vault_recovery_file_name))
     }
 
     private fun handleRecoverySaveResult(uri: Uri?) {
         // Cancel: the user picked nothing, so there is nothing to write and nothing to report.
         if (uri == null) {
-            pendingRecovery.code = null
+            recoveryFlow.pendingCode = null
             return
         }
-        val code = pendingRecovery.code
-        pendingRecovery.code = null
+        val code = recoveryFlow.pendingCode
+        recoveryFlow.pendingCode = null
         if (code == null) {
             // The process was killed while the picker was open, so the one-time code is gone (it
             // is never persisted). The picker still created an empty document: remove it and say
@@ -1656,9 +1785,10 @@ class VaultActivity : BaseActivity() {
                 }
                 Toast.makeText(this@VaultActivity, R.string.vault_recovery_file_done, Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                // The message is fixed text; the exception detail stays in logcat and never
-                // contains the code.
-                Log.w(TAG, "saving the recovery code file failed", e)
+                // The exception CLASS only. Its message (and its cause/suppressed entries) can
+                // carry a provider path or a document name, so neither the message nor the
+                // throwable is logged; the fixed UI text below is all the user sees.
+                Log.w(TAG, "saving the recovery code file failed: ${e.javaClass.name}")
                 discardAndExplain(uri, R.string.vault_recovery_file_failed)
             }
         }
@@ -1684,6 +1814,7 @@ class VaultActivity : BaseActivity() {
             .setMessage(message)
             .setPrimary(R.string.sheet_got_it) { after?.invoke() }
             .build()
+            .secure()
             .show()
     }
 }
