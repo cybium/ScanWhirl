@@ -144,24 +144,60 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private val insertPhotos =
         registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
             if (uris.isEmpty()) return@registerForActivityResult
+            // R1: the batch folder is owned from the moment it exists on disk, not after the
+            // copy returns; a failed or abandoned copy must not leave the picked photos behind.
+            val batch = InsertPhotoBatch(
+                File(cacheDir, "insert_${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+            )
+            pendingPhotoBatch = batch
             lifecycleScope.launch {
-                val files = withContext(Dispatchers.IO) {
-                    runCatching { copyInsertUris(uris) }.getOrNull()
+                val files = try {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            copyInsertUris(uris, batch.dir)
+                        } catch (e: Exception) {
+                            null
+                        } finally {
+                            // The screen may have gone away (Back/rotation/finish) while this
+                            // blocking copy was still running: the worker itself guarantees the
+                            // folder is gone once it has finished writing.
+                            if (batch.abandoned) batch.dir.deleteRecursively()
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    // Cancelled with the screen; the worker's finally did the cleanup.
+                    throw e
                 }
                 if (files.isNullOrEmpty()) {
-                    toast(R.string.insert_none, Toast.LENGTH_SHORT)
-                } else {
-                    // A8: a picked gallery photo is not a scan. The position is asked here (as
-                    // for camera/PDF inserts) but the pages are cropped and confirmed per photo
-                    // first; only then does the draft change.
-                    pendingPhotoDir = files.firstOrNull()?.parentFile
-                    askInsertPosition(files, ::startPhotoCrop, onAbandon = {
-                        deleteBatch(files)
-                        pendingPhotoDir = null
-                    })
+                    batch.dir.deleteRecursively()
+                    if (pendingPhotoBatch === batch) pendingPhotoBatch = null
+                    if (!batch.abandoned) toast(R.string.insert_none, Toast.LENGTH_SHORT)
+                    return@launch
                 }
+                if (batch.abandoned || pendingPhotoBatch !== batch) {
+                    // The screen went away before the copy finished: keep nothing.
+                    batch.dir.deleteRecursively()
+                    return@launch
+                }
+                // A8: a picked gallery photo is not a scan. The position is asked here (as
+                // for camera/PDF inserts) but the pages are cropped and confirmed per photo
+                // first; only then does the draft change.
+                askInsertPosition(files, ::startPhotoCrop, onAbandon = {
+                    deleteBatch(batch.dir)
+                    if (pendingPhotoBatch === batch) pendingPhotoBatch = null
+                })
             }
         }
+
+    /**
+     * R1: one picked-photo batch. [handedOff] means the corner crop flow owns it (the viewer
+     * must never delete it then); [abandoned] means the screen went away while the copies were
+     * still being written, so the copy worker deletes the folder when it finishes.
+     */
+    private class InsertPhotoBatch(val dir: File) {
+        @Volatile var handedOff = false
+        @Volatile var abandoned = false
+    }
 
     /** Position chosen for the photo batch currently on the corner crop screen. */
     private var pendingPhotoPosition: Int? = null
@@ -169,16 +205,20 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** How many photos that batch has; every one must come back confirmed. */
     private var pendingPhotoCount: Int? = null
 
-    /** The picked-photo cache folder of that batch; deleted after the insert or a cancel. */
-    private var pendingPhotoDir: File? = null
+    /** The picked-photo batch of the flow, from the copy until the draft has it. */
+    private var pendingPhotoBatch: InsertPhotoBatch? = null
+
+    /** Tests: hold the picked-photo copy so a finish/rotation can race it. Null in production. */
+    @Volatile
+    internal var photoCopyGateForTest: ((Int) -> Unit)? = null
 
     /** Back from the corner screen returns RESULT_CANCELED: the batch inserts nothing (A8). */
     private val insertPhotoCrop =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val dir = pendingPhotoDir
+            val batch = pendingPhotoBatch
             val position = pendingPhotoPosition
             val count = pendingPhotoCount
-            pendingPhotoDir = null
+            pendingPhotoBatch = null
             pendingPhotoPosition = null
             pendingPhotoCount = null
             val cropped = if (result.resultCode == RESULT_OK) {
@@ -190,7 +230,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             // D1: a batch is inserted only when every picked photo came back confirmed, in one
             // piece; a short result (an abandoned or failed crop) inserts nothing.
             if (position == null || count == null || cropped.size != count) {
-                dir?.deleteRecursively()
+                batch?.dir?.deleteRecursively()
                 return@registerForActivityResult
             }
             insertFiles(cropped, position)
@@ -219,10 +259,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             ?.getInt(KEY_PHOTO_COUNT)
         pendingPhotoPosition = restoredPosition
         pendingPhotoCount = restoredCount
-        pendingPhotoDir = savedInstanceState?.getString(KEY_PHOTO_DIR)?.let(::File)
+        pendingPhotoBatch = savedInstanceState?.getString(KEY_PHOTO_DIR)?.let { path ->
+            // Restored means the corner crop flow owns it: this screen must not delete it.
+            InsertPhotoBatch(File(path)).apply { handedOff = true }
+        }
         if (restoredPosition == null || restoredCount == null) {
-            pendingPhotoDir?.deleteRecursively()
-            pendingPhotoDir = null
+            pendingPhotoBatch?.dir?.deleteRecursively()
+            pendingPhotoBatch = null
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -320,7 +363,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         super.onSaveInstanceState(outState)
         pendingPhotoPosition?.let { outState.putInt(KEY_PHOTO_INSERT_AT, it) }
         pendingPhotoCount?.let { outState.putInt(KEY_PHOTO_COUNT, it) }
-        pendingPhotoDir?.let { outState.putString(KEY_PHOTO_DIR, it.path) }
+        // R1: only a batch the crop flow already owns is worth restoring; a copy in flight is
+        // cancelled by the recreation and cleaned up by its worker.
+        pendingPhotoBatch?.takeIf { it.handedOff }?.dir
+            ?.let { outState.putString(KEY_PHOTO_DIR, it.path) }
     }
 
     override fun onDestroy() {
@@ -328,12 +374,19 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // only lives as long as this screen).
         if (!isChangingConfigurations) {
             commitPendingDelete()
-            // A8: a photo batch still waiting on the corner crop screen keeps no picked copy.
-            pendingPhotoDir?.deleteRecursively()
-            pendingPhotoDir = null
-            pendingPhotoPosition = null
-            pendingPhotoCount = null
         }
+        // R1: a picked batch is never left behind. A copy still in flight marks the batch
+        // abandoned (its worker deletes the folder when it has finished writing); a batch the
+        // corner crop flow owns is not this screen's to delete.
+        pendingPhotoBatch?.let { batch ->
+            if (!batch.handedOff) {
+                batch.abandoned = true
+                batch.dir.deleteRecursively()
+            }
+        }
+        pendingPhotoBatch = null
+        pendingPhotoPosition = null
+        pendingPhotoCount = null
         super.onDestroy()
     }
 
@@ -738,11 +791,22 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
     }
 
-    /** Copies picked camera/photo URIs into a temp folder of normalised JPEG pages. */
-    private fun copyInsertUris(uris: List<android.net.Uri>): List<File> {
-        val dir = File(cacheDir, "insert_${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+    /** Copies picked camera/photo URIs into a new temp folder of normalised JPEG pages. */
+    private fun copyInsertUris(uris: List<android.net.Uri>): List<File> =
+        copyInsertUris(
+            uris,
+            File(cacheDir, "insert_${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+        )
+
+    /**
+     * Copies [uris] into [dir] as normalised JPEG pages. The caller owns [dir]: the camera path
+     * creates it here and deletes it after `insertFiles`, the photos path (R1) owns and cleans it
+     * from before the first read.
+     */
+    private fun copyInsertUris(uris: List<android.net.Uri>, dir: File): List<File> {
         val files = ArrayList<File>(uris.size)
         uris.forEachIndexed { index, uri ->
+            photoCopyGateForTest?.invoke(index)
             val bytes = contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
                 ?: throw IllegalArgumentException("Page ${index + 1} could not be read")
             val file = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index))
@@ -831,17 +895,16 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      * folder is the picked copies; the crop flow deletes everything if any photo is cancelled.
      */
     private fun startPhotoCrop(files: List<File>, position: Int) {
+        val batch = pendingPhotoBatch ?: return
+        batch.handedOff = true
         pendingPhotoPosition = position
         pendingPhotoCount = files.size
-        pendingPhotoDir = files.firstOrNull()?.parentFile
         insertPhotoCrop.launch(PhotoCropFlowActivity.intent(this, files))
     }
 
     /** A photo batch's cache folder holds plaintext picked photos; it never outlives the flow. */
-    private fun deleteBatch(files: List<File>) {
-        files.firstOrNull()?.parentFile
-            ?.takeIf { it.name.startsWith("insert_") }
-            ?.deleteRecursively()
+    private fun deleteBatch(dir: File) {
+        dir.takeIf { it.name.startsWith("insert_") }?.deleteRecursively()
     }
 
     /** Test seam and the one writer: copied pages enter the draft at [position]. */

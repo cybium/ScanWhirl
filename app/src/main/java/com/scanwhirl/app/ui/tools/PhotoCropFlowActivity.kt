@@ -21,6 +21,7 @@ import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PhotoAutoCrop
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,6 +70,9 @@ class PhotoCropFlowActivity : BaseActivity() {
     /** Invalidates an older preparation/encode when the screen is recreated or cancelled. */
     private var generation = 0
 
+    /** R2: identifies this instance's temporary crop files, so two instances never collide. */
+    private val instanceTag = java.util.UUID.randomUUID().toString().take(8)
+
     private val cropBack = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() = cancelFlow()
     }
@@ -77,6 +81,12 @@ class PhotoCropFlowActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         sources = intent.getStringArrayListExtra(EXTRA_SOURCES).orEmpty().map(::File)
         if (sources.isEmpty() || sources.any { !it.isFile }) {
+            // R3: the cold-start privacy sweep or cache eviction can take the restored picked
+            // files. No view exists yet, so the recovery message is the same toast the failure
+            // path uses; the whole batch is cancelled and cleaned, nothing is inserted.
+            android.widget.Toast.makeText(
+                this, R.string.fixinsertcrop_crop_failed, android.widget.Toast.LENGTH_LONG
+            ).show()
             cancelFlow()
             return
         }
@@ -323,17 +333,43 @@ class PhotoCropFlowActivity : BaseActivity() {
                 return@launch
             }
             val dir = sources.firstOrNull()?.parentFile ?: run { fail(); return@launch }
-            val file = File(dir, String.format(Locale.ROOT, "cropped_%03d.jpg", photoIndex))
-            val written = withContext(Dispatchers.IO) {
-                runCatching { Durable.writeFile(file, encoded) }.isSuccess
+            // R2: an obsolete worker (a destroyed instance whose blocking write outlives the
+            // rotation) must never overwrite or delete the live crop. Each confirm writes its own
+            // temporary file; only the live generation publishes it with a same-folder rename.
+            val temp = File(
+                dir,
+                String.format(
+                    Locale.ROOT, "cropped_%03d_%s_%d.tmp",
+                    photoIndex, instanceTag, tokenGeneration
+                )
+            )
+            val written = try {
+                withContext(Dispatchers.IO) {
+                    beforeWriteForTest?.invoke()
+                    runCatching { Durable.writeFile(temp, encoded) }.isSuccess
+                }
+            } catch (e: CancellationException) {
+                // Left the screen mid-write: this worker's own file only, never the final crop.
+                temp.delete()
+                throw e
+            } finally {
+                afterWriteForTest?.invoke()
             }
             if (tokenGeneration != this@PhotoCropFlowActivity.generation ||
                 photoIndex != index || isFinishing || isDestroyed
             ) {
-                file.delete()
+                temp.delete()
                 return@launch
             }
-            if (!written || !file.isFile) {
+            if (!written || !temp.isFile) {
+                temp.delete()
+                fail()
+                return@launch
+            }
+            val file = File(dir, String.format(Locale.ROOT, "cropped_%03d.jpg", photoIndex))
+            // Live generation only: publish atomically (rename replaces on the same folder).
+            if (!temp.renameTo(file) || !file.isFile) {
+                temp.delete()
                 fail()
                 return@launch
             }
@@ -437,6 +473,14 @@ class PhotoCropFlowActivity : BaseActivity() {
          */
         @Volatile
         internal var prepareGate: ((Int) -> Unit)? = null
+
+        /** Tests: blocks inside the crop write, before the file is opened (R2). */
+        @Volatile
+        internal var beforeWriteForTest: (() -> Unit)? = null
+
+        /** Tests: fires once a crop write attempt has ended, on the worker thread (R2). */
+        @Volatile
+        internal var afterWriteForTest: (() -> Unit)? = null
 
         private const val EXTRA_SOURCES = "source_photos"
         private const val KEY_INDEX = "crop_photo_index"
