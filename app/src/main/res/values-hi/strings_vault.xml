@@ -16,7 +16,7 @@
     </plurals>
     <string name="vault_stats_body">AES-256 · चाबी इस फ़ोन की सुरक्षित जगह में बंद रहती है\nऐप छोड़ते ही तिजोरी पर ताला लग जाता है</string>
     <string name="vault_locked_title">तिजोरी पर ताला है</string>
-    <string name="vault_locked_body">अपनी निजी फ़ाइलें देखने के लिए उँगली का निशान या गुप्त नंबर डालें।</string>
+    <string name="vault_locked_body">अपनी निजी फ़ाइलें देखने के लिए उँगली का निशान लगाएँ या गुप्त नंबर डालें।</string>
     <string name="vault_not_setup_title">आपकी निजी जगह</string>
     <string name="vault_not_setup_body">इस फ़ोन पर फ़ाइलें ऐसे रखने के लिए तिजोरी बनाएँ कि कोड के बिना उन्हें कोई न पढ़ सके। इन्हें सिर्फ़ आप खोल सकते हैं।</string>
     <string name="vault_banner_fingerprint">उँगली के निशान से खुली · 2 मिनट में फिर ताला</string>
@@ -50,7 +50,7 @@
     <string name="vault_recovery_sheet_title">यह कोड सँभालकर रखें</string>
     <string name="vault_recovery_note">गुप्त नंबर भूलने पर यही एकमात्र रास्ता है। यह सिर्फ़ एक बार दिखता है।</string>
     <string name="vault_recovery_once">कोड और यह फ़ोन दोनों खोने पर कोई इन फ़ाइलों को नहीं खोल सकता, हम भी नहीं।</string>
-    <string name="vault_recovery_copy_warning">इस कोड वाला कोई भी आपकी बचाकर रखी प्रति खोल सकता है। इसे बिना इंटरनेट वाली जगह रखें।</string>
+    <string name="vault_recovery_copy_warning">जिसके पास यह कोड है, वह आपकी बचाकर रखी प्रति खोल सकता है। कोड कागज़ पर लिखकर या इंटरनेट से दूर रखें।</string>
     <string name="vault_recovery_save_file">फ़ाइल में सहेजें</string>
     <string name="vault_recovery_file_done">कोड आपकी चुनी फ़ाइल में सहेजा गया</string>
     <string name="vault_recovery_file_failed">कोड सहेजा नहीं गया। “फ़ाइल में सहेजें” दबाकर दूसरी जगह चुनें।</string>
@@ -108,29 +108,29 @@
 
     <string name="vault_open">खोलें</string>
     <string name="vault_remove">तिजोरी से हटाएँ</string>
-    <string name="vault_remove_note">यह कोड से बंद प्रति हमेशा के लिए मिटा देगा। कागज़ात की प्रति पहले ही हट चुकी है।</string>
+    <string name="vault_remove_note">यह सुरक्षित प्रति हमेशा के लिए हटा देगा, जिसे गुप्त नंबर या कोड के बिना पढ़ा नहीं जा सकता। कागज़ात की प्रति पहले ही हट चुकी है।</string>
     <string name="vault_removed">तिजोरी से हटा दिया</string>
     <string name="vault_open_failed">यह दस्तावेज़ नहीं खुल सका: %1$s</string>
 
     <string name="vault_backup_name">ScanWhirl-vault-%1$s.swvault</string>
     <string name="vault_backup_done">बचाकर रखी प्रति सहेजी गई</string>
     <string name="vault_backup_failed">प्रति सहेजी नहीं जा सकी: %1$s</string>
-    <string name="vault_backup_note">प्रति कोड से बंद है। तिजोरी वापस खोलने के कोड के बिना इसे नहीं खोला जा सकता।</string>
+    <string name="vault_backup_note">यह प्रति ऐसे सुरक्षित है कि तिजोरी वापस खोलने के कोड के बिना इसकी फ़ाइलें पढ़ी नहीं जा सकतीं।</string>
     <string name="vault_backup_requires_setup">पहले तिजोरी बनाएँ</string>
     <string name="vault_restore_title">बचाकर रखी प्रति वापस लाएँ</string>
-    <string name="vault_restore_note">इस प्रति वाला तिजोरी वापस खोलने का कोड डालें।</string>
+    <string name="vault_restore_note">तिजोरी वापस खोलने का वह कोड डालें जो इस प्रति से जुड़ा है।</string>
     <string name="vault_restore_primary">वापस लाएँ</string>
     <string name="vault_restore_done">प्रति वापस आ गई। इस फ़ोन पर नया गुप्त नंबर बनाएँ।</string>
     <string name="vault_restore_failed">प्रति वापस नहीं लाई जा सकी: %1$s</string>
-    <string name="vault_restore_busy">वापस लाया जा रहा है…</string>
+    <string name="vault_restore_busy">बचाकर रखी प्रति वापस लाई जा रही है…</string>
 
     <string name="vault_legacy_title">पुरानी PIN वाली तिजोरी</string>
-    <string name="vault_legacy_note">पुरानी फ़ाइलें कोड से बंद तिजोरी में लाने के लिए एक बार पुराना 4 अंकों का PIN डालें।</string>
+    <string name="vault_legacy_note">पुरानी फ़ाइलें ऐसी तिजोरी में लाने के लिए एक बार पुराना 4 अंकों का PIN डालें, जहाँ गुप्त नंबर या कोड के बिना उन्हें पढ़ा न जा सके।</string>
     <string name="vault_legacy_pin_hint">4 अंकों का PIN</string>
     <string name="vault_legacy_wrong">ग़लत PIN</string>
     <string name="vault_legacy_continue">जारी रखें</string>
     <string name="vault_legacy_skip">पुरानी फ़ाइलों के बिना बनाएँ</string>
     <string name="vault_legacy_migrated">%1$d पुरानी फ़ाइलें तिजोरी में आ गईं</string>
-    <string name="vault_legacy_later">पुराना PIN बाद में तिजोरी के विकल्पों से बदला जा सकता है।</string>
+    <string name="vault_legacy_later">पुरानी PIN वाली तिजोरी की फ़ाइलें बाद में तिजोरी के विकल्पों से नई तिजोरी में लाई जा सकती हैं।</string>
     <string name="vault_migrate_legacy">पुरानी PIN फ़ाइलें लाएँ</string>
 </resources>

@@ -144,5 +144,46 @@ vault_recovery_button (रिकवरी कोड → तिजोरी व�
 
 ## Git
 
-- Commits: `6fae206` (glossary + guard test), report commit follows.
+- Commits: `6fae206` (glossary + guard test), `af31b2b` (report hash).
 - Last gate line: `GATE PASS hindi tests=1770 failures=0 skipped=0 lint=[skipped]`
+
+## Rework after Hindi judge
+
+Applied `next/docs/review/JUDGE_HINDI_APPLY.md` (VERDICT FIX FIRST): every one of the 87 problem-table
+corrections is now the judge's correct Hindi, and its systematic patterns were fixed across all files,
+not only the sampled rows. Names, placeholders, escapes and plurals structure are unchanged.
+
+Systematic fixes beyond the table: explained Latin letters in the OCR note; removed लोड / अपडेट / मॉडल /
+टेस्ट बिल्ड / लॉन्च / आइकन / ब्राउज़र / बॉक्स / बिलिंग / नेटवर्क / ड्राइविंग लाइसेंस / मेमोरी / बिज़नेस;
+replaced every "कोड से बंद" encryption shortcut with content protection (password alternative where the
+flow allows); fixed तिजोरी फ़ाइल / तिजोरी दस्तावेज़ compounds with की/के; removed trash "empty/emptied"
+container wording; required introductions added (कागज़ की तस्वीर लेकर PDF बनाएँ, folder explanation,
+पिक्सेल explanation); business cards named as नाम-पते वाला कागज़; ORGANIZE group is व्यवस्थित करें and
+Folders & tags is फ़ोल्डर और पहचान-चिह्न per lead.
+
+Every fixed string name (111):
+
+- `strings.xml` (33): about_message, settings_greeting_summary, pro_status_test, filter_grey, lock_device_msg, lock_source_unlock_device, ocr_copy, ocr_copy_btn, ocr_editor_title, ocr_title, resume_saved_msg, settings_auto_copy_to_documents_summary, settings_searchable_pdf, settings_searchable_pdf_summary, settings_privacy_summary, tool_edit_sub, tool_resize_sub, unlock_pdf_not_ours_title, protection_repair_msg, review_page_loading, review_busy, reader_find_no_text, ocr_unavailable_toast, ocr_status_unavailable, trash_move_failed, trash_empty_action, trash_empty_confirm_title, trash_empty_title, import_failed_no_access, import_failed_read, privacy_open_failed, preview_changed, trash_settings_empty
+- `strings_backup.xml` (8): me_backup_summary, backup_explain, backup_code_note, backup_working, backup_ready_note, backup_restored_vault, backup_restored_vault_reencrypted, backup_vault_reason
+- `strings_book.xml` (3): book_hint, book_spread, book_add_spread_note
+- `strings_crash.xml` (4): crash_vault_working, crash_library_updating, crash_loading_documents, crash_ocr_memory
+- `strings_data.xml` (1): import_failed_low_memory
+- `strings_draft.xml` (1): draft_duplicate
+- `strings_fixbilling.xml` (1): pro_error_unavailable
+- `strings_fixresult.xml` (1): fixresult_export_undo_nothing
+- `strings_l1.xml` (15): tools_group_organize, tools_group_edit, soon_book_pages, soon_folders, pro_buy_coming, me_settings_summary, shell_move_to_trash, quick_max_reached, accent_gold_warning, settings_test_free_summary, tool_folders, pro_feat_folders, tool_business_card, soon_business_card, about_licences_body
+- `strings_l7.xml` (4): find_none_clean, find_unreadable_one, find_unreadable_pages, find_draw_box
+- `strings_ocr.xml` (1): ocr_lang_note
+- `strings_protect.xml` (2): protect_sheet_note, protect_aes_note
+- `strings_qr.xml` (3): qr_scan_body, qr_kind_wifi, qr_field_network
+- `strings_stamp.xml` (8): stamp_hint_redact, stamp_no_ocr, stamp_pro_message, stamp_redact_warn_message, find_explanation, find_choice_id, find_none, find_applied
+- `strings_tools.xml` (18): tools_setup_zip_name, tools_setup_compress_note, tools_setup_word_note, tools_setup_pptx_note, tools_setup_excel_note, tools_import_range_msg, tools_setup_no_text, tools_setup_metadata_note, tools_bc_hint, tools_bc_scan_msg, tools_bc_scan, tools_bc_reading, tools_bc_failed, tools_bc_save_image, tools_bc_contacts_failed, tools_bc_document_name, tools_result_sheets, tools_result_slides
+- `strings_vault.xml` (8): vault_locked_body, vault_recovery_copy_warning, vault_remove_note, vault_backup_note, vault_restore_note, vault_restore_busy, vault_legacy_note, vault_legacy_later
+
+Tests: `HindiGlossaryTermsTest` now also rejects लोड, अपडेट, मॉडल, लॉन्च, आइकन, ब्राउज़र, बॉक्स, बिलिंग,
+नेटवर्क, ड्राइविंग, मेमोरी, टेस्ट, बिज़नेस, "कोड से बंद", "तिजोरी फ़ाइल", "तिजोरी दस्तावेज़".
+`HindiStringsHygieneTest` allows the judge's "A, B, C" letter series (not the English article).
+
+- Last gate (covers HindiGlossaryTermsTest and TextFitTest): `GATE PASS hindi tests=1770 failures=0 skipped=0 lint=[skipped]`
+  (cloud run https://github.com/cybium/ScanWhirl/actions/runs/44297776355).
+

@@ -2,13 +2,13 @@
 <!-- L7: "Hide private info" must never turn a failed read into "nothing found". -->
 <resources>
     <!-- Text was read and no sensitive item matched. -->
-    <string name="find_none_clean">इस पन्ने पर कोई फ़ोन नंबर, ईमेल, पहचान पत्र या कार्ड नंबर नहीं मिला। भेजने से पहले खुद जाँच लें।</string>
+    <string name="find_none_clean">इस पन्ने पर कोई फ़ोन नंबर, इंटरनेट की चिट्ठी का पता, पहचान नंबर या बैंक कार्ड का नंबर नहीं मिला। भेजने से पहले खुद जाँच लें।</string>
     <!-- The page's text could not be read: nothing was checked, so never say it is clean. -->
-    <string name="find_unreadable_one">इस पन्ने का लिखा हुआ पढ़ा नहीं जा सका, इसलिए अपने आप कुछ नहीं मिला। निजी जानकारी को बॉक्स से हाथ से ढकें।</string>
+    <string name="find_unreadable_one">इस पन्ने का लिखा हुआ पढ़ा नहीं जा सका, इसलिए अपने आप कुछ नहीं मिला। चौकोर निशान बनाने वाला काम चुनकर निजी जानकारी खुद ढकें।</string>
     <plurals name="find_unreadable_pages">
-        <item quantity="one">%1$d पन्ने का लिखा हुआ पढ़ा नहीं जा सका, इसलिए वहाँ अपने आप कुछ नहीं मिला। निजी जानकारी को बॉक्स से हाथ से ढकें।</item>
-        <item quantity="other">%1$d पन्नों का लिखा हुआ पढ़ा नहीं जा सका, इसलिए वहाँ अपने आप कुछ नहीं मिला। निजी जानकारी को बॉक्स से हाथ से ढकें।</item>
+        <item quantity="one">%1$d पन्ने का लिखा हुआ पढ़ा नहीं जा सका, इसलिए वहाँ अपने आप कुछ नहीं मिला। चौकोर निशान बनाने वाला काम चुनकर निजी जानकारी खुद ढकें।</item>
+        <item quantity="other">%1$d पन्नों का लिखा हुआ पढ़ा नहीं जा सका, इसलिए वहाँ अपने आप कुछ नहीं मिला। चौकोर निशान बनाने वाला काम चुनकर निजी जानकारी खुद ढकें।</item>
     </plurals>
     <!-- Action on the unreadable-page notice: arm the manual redaction box tool. -->
-    <string name="find_draw_box">खुद बॉक्स बनाएँ</string>
+    <string name="find_draw_box">खुद चौकोर निशान बनाएँ</string>
 </resources>

@@ -64,9 +64,9 @@
     <string name="stamp_stamp_full">आप 10 मोहरें तक रख सकते हैं। नई सहेजने के लिए एक हटाएँ।</string>
     <string name="stamp_hint_draw">एक उँगली से लिखें</string>
     <string name="stamp_hint_highlight">रंग से उभारने के लिए लिखे हुए पर खींचें</string>
-    <string name="stamp_hint_redact">जो छिपाना है उस पर बॉक्स खींचें</string>
+    <string name="stamp_hint_redact">जो छिपाना है उस पर चौकोर निशान खींचें</string>
     <string name="stamp_hint_select">चिह्न हिलाने के लिए उसे दबाएँ; आकार बदलने के लिए कोना खींचें</string>
-    <string name="stamp_no_ocr">इस पन्ने पर अभी कोई पहचाना हुआ लिखा हुआ नहीं है।</string>
+    <string name="stamp_no_ocr">इस पन्ने पर लिखे शब्द अभी पहचाने नहीं गए हैं।</string>
     <string name="stamp_no_suggestions">कोई निजी नंबर नहीं मिला।</string>
     <string name="stamp_locked">यह दस्तावेज़ सुरक्षित है। पहले इसका ताला खोलें।</string>
     <string name="stamp_missing">यह दस्तावेज़ नहीं खोला जा सका।</string>
@@ -78,23 +78,23 @@
     <string name="stamp_choose_document">दस्तावेज़ चुनें</string>
     <string name="stamp_no_documents">बदलने के लिए कोई खुला दस्तावेज़ नहीं है। पहले स्कैन करें या फ़ोन में लाएँ।</string>
     <string name="stamp_text_required">पहले कुछ लिखें।</string>
-    <string name="stamp_pro_message">हस्ताक्षर, लिखना, हाथ से लकीरें बनाना, रंग से उभारना, हल्की छाप, पन्नों पर नंबर, मोहर और निजी जानकारी छिपाना Pro का हिस्सा हैं (एक बार खरीदें)। बिलिंग अभी चालू नहीं है, इसलिए टेस्ट बिल्ड में Pro के सभी काम मुफ़्त रहते हैं।</string>
+    <string name="stamp_pro_message">हस्ताक्षर करना, लिखना और निजी जानकारी छिपाना Pro में मिलते हैं। जाँच के लिए बने ऐप में ये मुफ़्त हैं।</string>
     <string name="stamp_redact_warn_title">छिपाई गई जानकारी हमेशा के लिए चली जाएगी</string>
-    <string name="stamp_redact_warn_message">छिपाया गया लिखा हुआ और पिक्सेल नई प्रति से हमेशा के लिए हट जाते हैं। मूल दस्तावेज़ नहीं बदलता।</string>
+    <string name="stamp_redact_warn_message">छिपाए गए शब्द और तस्वीर के छोटे बिंदु (पिक्सेल) नई प्रति से हमेशा के लिए हट जाते हैं।</string>
     <string name="stamp_redact_warn_save">छिपाई गई जानकारी वाली प्रति सहेजें</string>
     <!-- review: Hide private info (Redact). -->
     <string name="find_button">निजी जानकारी छिपाएँ</string>
     <string name="find_title">निजी जानकारी छिपाएँ</string>
-    <string name="find_explanation">चुनें कि क्या छिपाना है। खोजें हर पन्ना देखकर मिली चीज़ें दिखाता है।</string>
+    <string name="find_explanation">चुनें कि क्या छिपाना है। “खोजें” दबाने पर हर पन्ने में मिली जानकारी दिखाई जाएगी।</string>
     <string name="find_choice_phone">फ़ोन नंबर</string>
     <string name="find_choice_email">ईमेल पते</string>
-    <string name="find_choice_id">पहचान नंबर (आधार, PAN, ड्राइविंग लाइसेंस, पासपोर्ट, VID)</string>
+    <string name="find_choice_id">पहचान नंबर (आधार, PAN, गाड़ी चलाने की अनुमति का कागज़, पासपोर्ट, VID)</string>
     <string name="find_choice_cards">कार्ड और बैंक नंबर (कार्ड, IBAN, खाता नंबर)</string>
     <string name="find_choice_other">अन्य नंबर (US SSN)</string>
     <string name="find_choice_keep4">आखिरी 4 अंक रखें</string>
     <string name="find_action">खोजें</string>
     <string name="find_scanning">निजी जानकारी खोजी जा रही है…</string>
-    <string name="find_none">कोई निजी जानकारी नहीं मिली। आप फिर भी बॉक्स बना सकते हैं।</string>
+    <string name="find_none">कोई निजी जानकारी नहीं मिली। आप फिर भी चौकोर निशान बना सकते हैं।</string>
     <string name="find_choose_one">कम से कम एक चीज़ चुनें।</string>
     <string name="find_hide_selected">चुनी हुई छिपाएँ</string>
     <plurals name="find_results_title">
@@ -102,8 +102,8 @@
         <item quantity="other">%1$d चीज़ें मिलीं</item>
     </plurals>
     <plurals name="find_applied">
-        <item quantity="one">%1$d चीज़ छिपाई गई। बॉक्स जाँचें, फिर सहेजें।</item>
-        <item quantity="other">%1$d चीज़ें छिपाई गईं। बॉक्स जाँचें, फिर सहेजें।</item>
+        <item quantity="one">%1$d चीज़ छिपाई गई। चौकोर निशान जाँचें, फिर सहेजें।</item>
+        <item quantity="other">%1$d चीज़ें छिपाई गईं। चौकोर निशान जाँचें, फिर सहेजें।</item>
     </plurals>
     <string name="private_info_label">निजी जानकारी छिपी है</string>
     <string name="private_info_saved">निजी जानकारी छिपाकर प्रति सहेजी: %1$s</string>

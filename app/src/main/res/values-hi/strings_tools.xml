@@ -18,7 +18,7 @@
     <string name="tools_setup_merge_device">इस फ़ोन की PDF मिलाएँ</string>
     <string name="tools_setup_merge_note">दो या ज़्यादा दस्तावेज़ चुनें। जिस क्रम में चुनेंगे, उसी क्रम में जुड़ेंगे।</string>
     <string name="tools_setup_zip_note">एक ZIP में डालने के लिए दस्तावेज़ चुनें।</string>
-    <string name="tools_setup_zip_name">ScanWhirl सहेजी गई</string>
+    <string name="tools_setup_zip_name">ScanWhirl की फ़ाइलें</string>
     <string name="tools_setup_ranges_hint">1-3, 5, 8-</string>
     <string name="tools_setup_ranges_example">पन्ने लिखें, जैसे 1-3, 5, 8-</string>
     <plurals name="tools_setup_split_preview">
@@ -41,7 +41,7 @@
     <string name="tools_setup_level_medium">बीच का</string>
     <string name="tools_setup_level_strong">ज़्यादा</string>
     <string name="tools_setup_estimate">अनुमानित आकार: %1$s</string>
-    <string name="tools_setup_compress_note">आकार की सीमा हर पन्ने पर लागू होती है। सीमा न हो तो तस्वीर की साफ़ाई से तय होगा।</string>
+    <string name="tools_setup_compress_note">आकार की सीमा हर पन्ने पर लागू होती है। सीमा न दें तो फ़ाइल का आकार इस बात से तय होगा कि तस्वीर कितनी साफ़ रखनी है।</string>
     <string name="tools_setup_name_hint">नाम (चाहें तो)</string>
     <string name="tools_setup_long_calculating">पन्ने मापे जा रहे हैं…</string>
     <plurals name="tools_setup_long_note">
@@ -49,13 +49,13 @@
         <item quantity="other">%1$d तस्वीरें, 1080 px चौड़ी, 16,000 px तक ऊँची।</item>
     </plurals>
     <string name="tools_setup_long_failed">पन्ना बहुत ऊँचा है। पहले छोटा करें।</string>
-    <string name="tools_setup_word_note">हर पंक्ति एक अनुच्छेद; पन्नों के बीच नया पन्ना।</string>
+    <string name="tools_setup_word_note">पहचानी गई हर पंक्ति अलग रहेगी और अगले पन्ने की लिखाई नए पन्ने से शुरू होगी।</string>
     <string name="tools_setup_word_pictures">पन्नों की तस्वीरें जोड़ें</string>
     <string name="tools_setup_word_pictures_note">हर तस्वीर उस पन्ने के लिखे हुए के ऊपर रहती है।</string>
-    <string name="tools_setup_pptx_note">हर पन्ना एक प्रस्तुति पन्ना। पहचाना हुआ लिखा हुआ वक्ता की टिप्पणी में जाता है।</string>
+    <string name="tools_setup_pptx_note">हर पन्ने से प्रस्तुति का एक पन्ना बनता है। पहचाने गए शब्द बोलने वाले के लिए रखी टिप्पणियों में जाते हैं।</string>
     <string name="tools_setup_excel_tables_only">सिर्फ़ तालिकाएँ</string>
     <string name="tools_setup_excel_all_text">सारा लिखा हुआ</string>
-    <string name="tools_setup_excel_note">सहेजे हुए लिखे हुए में तालिकाएँ खोजता है। बाकी पन्ने सादे शब्दों में जाते हैं।</string>
+    <string name="tools_setup_excel_note">सहेजे गए शब्दों में खाने और कतारों वाली जानकारी खोजता है। बाकी पन्नों के सिर्फ़ शब्द रखे जाते हैं।</string>
     <string name="tools_excel_no_table">इस पन्ने पर कोई तालिका नहीं मिली।</string>
     <string name="tools_excel_tables_note">%2$d में से %1$d पन्नों पर तालिकाएँ मिलीं</string>
     <string name="tools_excel_no_tables_title">कोई तालिका नहीं मिली</string>
@@ -67,7 +67,7 @@
     <string name="tools_import_all">सभी लाएँ</string>
     <string name="tools_import_choose_pages">पन्ने चुनें</string>
     <string name="tools_import_range_title">पन्ने चुनें</string>
-    <string name="tools_import_range_msg">फ़ोन में लाने के पन्ने, जैसे 1-20, 45।</string>
+    <string name="tools_import_range_msg">जो पन्ने लाने हैं, उनके नंबर लिखें, जैसे 1-20, 45।</string>
     <string name="tools_import_range_error">पन्ने ऐसे लिखें: 1-20, 45।</string>
     <string name="tools_import_pages">पन्ने फ़ोन में लाएँ</string>
     <string name="tools_import_progress_title">फ़ोन में लाया जा रहा है…</string>
@@ -76,8 +76,8 @@
     <string name="tools_import_cancel_note">रद्द करने पर कुछ नहीं जुड़ेगा।</string>
     <string name="tools_import_no_space">इस PDF को %1$d MB चाहिए और %2$d MB बचेगा। पहले जगह खाली करें।</string>
     <string name="tools_import_low_space_title">जगह कम है</string>
-    <string name="tools_setup_no_text">जिन पन्नों पर कुछ लिखा नहीं है, उन्हें पहले इसी फ़ोन पर पढ़ा जाएगा। इसमें थोड़ा समय लग सकता है।</string>
-    <string name="tools_setup_metadata_note">EXIF और छोटी झलक के बिना साफ़ प्रति। मूल सुरक्षित रहता है।</string>
+    <string name="tools_setup_no_text">जिन पन्नों के शब्द अभी पहचाने नहीं गए हैं, उन्हें पहले इसी फ़ोन पर पढ़ा जाएगा। इसमें थोड़ा समय लग सकता है।</string>
+    <string name="tools_setup_metadata_note">फ़ोटो कब और किससे ली गई जैसी छिपी जानकारी (EXIF) और छोटी झलक के बिना प्रति। मूल फ़ाइल नहीं बदलती।</string>
     <string name="tools_setup_id_note">आगे ऊपर, पीछे नीचे, एक A4 पन्ने पर।</string>
     <string name="tools_setup_id_front">पहचान पत्र का आगे का भाग</string>
     <string name="tools_setup_id_back">पहचान पत्र का पीछे का भाग</string>
@@ -136,12 +136,12 @@
     <string name="tools_id_layout_own">हर भाग अलग पन्ने पर</string>
     <string name="tools_id_failed">पहचान पत्र नहीं बना: %1$s</string>
 
-    <string name="tools_bc_hint">कार्ड स्कैन करें, जानकारी जाँचें, फिर सहेजें।</string>
-    <string name="tools_bc_scan_msg">कार्ड स्कैन करें, या फ़ोटो से चुनें।</string>
-    <string name="tools_bc_scan">कार्ड स्कैन करें</string>
-    <string name="tools_bc_reading">कार्ड पढ़ा जा रहा है…</string>
+    <string name="tools_bc_hint">नाम-पते वाला छोटा कागज़ स्कैन करें, जानकारी जाँचें, फिर सहेजें या भेजें।</string>
+    <string name="tools_bc_scan_msg">नाम-पते वाला छोटा कागज़ स्कैन करें या उसकी फ़ोटो चुनें।</string>
+    <string name="tools_bc_scan">नाम-पते वाला छोटा कागज़ स्कैन करें</string>
+    <string name="tools_bc_reading">नाम-पता पढ़ा जा रहा है…</string>
     <string name="tools_bc_no_text">कुछ लिखा हुआ नहीं मिला। साफ़ फ़ोटो आज़माएँ।</string>
-    <string name="tools_bc_failed">कार्ड नहीं पढ़ा जा सका: %1$s</string>
+    <string name="tools_bc_failed">नाम-पता नहीं पढ़ा जा सका: %1$s</string>
     <string name="tools_bc_name">नाम</string>
     <string name="tools_bc_company">कंपनी</string>
     <string name="tools_bc_job">पद</string>
@@ -151,11 +151,11 @@
     <string name="tools_bc_address">पता</string>
     <string name="tools_bc_save_contact">संपर्क में सहेजें</string>
     <string name="tools_bc_share_vcard">vCard भेजें</string>
-    <string name="tools_bc_save_image">कार्ड की तस्वीर सहेजें</string>
+    <string name="tools_bc_save_image">नाम-पते वाले कागज़ की तस्वीर सहेजें</string>
     <string name="tools_bc_need_name">पहले नाम जोड़ें।</string>
-    <string name="tools_bc_contacts_failed">कोई संपर्क ऐप यह कार्ड नहीं ले सकता।</string>
+    <string name="tools_bc_contacts_failed">कोई संपर्क ऐप यह नाम-पता नहीं ले सकता।</string>
     <string name="tools_bc_vcard_failed">vCard नहीं भेजा जा सका: %1$s</string>
-    <string name="tools_bc_document_name">बिज़नेस कार्ड</string>
+    <string name="tools_bc_document_name">नाम-पते वाला कागज़</string>
 
     <string name="tools_result_done">तैयार</string>
     <string name="tools_result_preview">नतीजे की झलक</string>
@@ -178,12 +178,12 @@
     <string name="tools_result_type_pptx">PPTX</string>
     <string name="tools_result_type_zip">ZIP</string>
     <plurals name="tools_result_sheets">
-        <item quantity="one">%1$d Excel का पन्ना</item>
-        <item quantity="other">%1$d Excel के पन्ने</item>
+        <item quantity="one">Excel का %1$d पन्ना</item>
+        <item quantity="other">Excel के %1$d पन्ने</item>
     </plurals>
     <plurals name="tools_result_slides">
-        <item quantity="one">%1$d प्रस्तुति का पन्ना</item>
-        <item quantity="other">%1$d प्रस्तुति के पन्ने</item>
+        <item quantity="one">प्रस्तुति का %1$d पन्ना</item>
+        <item quantity="other">प्रस्तुति के %1$d पन्ने</item>
     </plurals>
     <plurals name="tools_result_summary_docs">
         <item quantity="one">%1$d दस्तावेज़ · %2$d पन्ना · %3$s</item>

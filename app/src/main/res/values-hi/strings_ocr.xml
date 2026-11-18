@@ -2,7 +2,7 @@
 <resources>
     <!-- L2 OCR language and Hindi text. Hindi values await native review. -->
     <string name="ocr_lang_title">लिखे हुए की भाषा</string>
-    <string name="ocr_lang_note">अंग्रेज़ी लैटिन छपाई पढ़ती है। अंग्रेज़ी + हिंदी दोनों पढ़ती है। हिंदी सिर्फ़ देवनागरी पढ़ती है। भाषा बदलने पर यह दस्तावेज़ फिर पढ़ा जाएगा और बिना सहेजे बदलाव हट जाएँगे।</string>
+    <string name="ocr_lang_note">अंग्रेज़ी चुनने पर A, B, C जैसे अक्षरों में छपे शब्द पढ़े जाते हैं। अंग्रेज़ी + हिंदी चुनने पर ये और हिंदी के अक्षर, दोनों पढ़े जाते हैं। हिंदी चुनने पर सिर्फ़ देवनागरी पढ़ी जाती है। भाषा बदलने पर दस्तावेज़ फिर पढ़ा जाएगा और अभी तक न सहेजे गए बदलाव हट जाएँगे।</string>
     <string name="ocr_lang_english_hindi">अंग्रेज़ी + हिंदी</string>
     <string name="ocr_lang_hindi">हिंदी</string>
     <string name="ocr_lang_saved">लिखे हुए की भाषा सहेजी गई</string>

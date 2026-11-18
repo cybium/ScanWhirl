@@ -4,7 +4,7 @@
     <string name="qr_title">QR कोड</string>
     <string name="qr_close">बंद करें</string>
     <string name="qr_scan_title">QR कोड स्कैन करें</string>
-    <string name="qr_scan_body">खोलने का पता, Wi-Fi नेटवर्क, संपर्क, फ़ोन नंबर, ईमेल या लिखा हुआ पढ़ता है। सब कुछ इसी फ़ोन पर रहता है।</string>
+    <string name="qr_scan_body">खोलने का पता, Wi-Fi यानी बिना तार वाले इंटरनेट की जानकारी, किसी का नाम-पता, फ़ोन नंबर, इंटरनेट की चिट्ठी या लिखे शब्द पढ़ता है। सब कुछ इसी फ़ोन पर रहता है।</string>
     <string name="qr_result_title">पिछला स्कैन</string>
     <string name="qr_scan_button">कोड स्कैन करें</string>
     <string name="qr_scan_again">फिर स्कैन करें</string>
@@ -23,7 +23,7 @@
     <string name="qr_no_contacts">कोई संपर्क ऐप नहीं। कोड की नकल कर ली गई।</string>
 
     <string name="qr_kind_url">खोलने का पता</string>
-    <string name="qr_kind_wifi">Wi-Fi नेटवर्क</string>
+    <string name="qr_kind_wifi">बिना तार वाला इंटरनेट</string>
     <string name="qr_kind_contact">संपर्क</string>
     <string name="qr_kind_phone">फ़ोन नंबर</string>
     <string name="qr_kind_email">ईमेल पता</string>
@@ -31,7 +31,7 @@
     <string name="qr_kind_geo">स्थान</string>
     <string name="qr_kind_text">लिखा हुआ</string>
 
-    <string name="qr_field_network">नेटवर्क</string>
+    <string name="qr_field_network">Wi-Fi का नाम</string>
     <string name="qr_field_password">पासवर्ड</string>
     <string name="qr_field_security">सुरक्षा</string>
     <string name="qr_field_name">नाम</string>
