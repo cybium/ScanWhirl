@@ -1,6 +1,7 @@
 package com.scanwhirl.app.ui.pagegrid
 
 import android.content.Context
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
@@ -269,12 +270,15 @@ class PageGridView @JvmOverloads constructor(
             val current = currentAt(index)
             binding.root.isActivated = current
             binding.currentRing.isVisible = current
-            binding.pageNum.setBackgroundResource(
-                if (current) R.drawable.bg_rv_num_current else R.drawable.bg_chip_void
-            )
+            // v2 UI: 07_reader_dock — page identity lives under the paper, never on top of it:
+            // a mid-grey tabular number that turns accent (and bold) for Review's current page.
+            binding.pageNum.setBackgroundResource(0)
             binding.pageNum.setTextColor(
-                if (current) context.getColor(R.color.rv_on_commit) else 0xFFFFFFFF.toInt()
+                context.getColor(
+                    if (current) R.color.cyan_primary else R.color.text_hologram_mid
+                )
             )
+            binding.pageNum.setTypeface(null, if (current) Typeface.BOLD else Typeface.NORMAL)
             binding.root.contentDescription = context.getString(
                 if (selected) R.string.a11y_page_of_selected else R.string.a11y_page_of,
                 index + 1,

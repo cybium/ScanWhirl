@@ -386,12 +386,15 @@ class Phase5ScreensTest {
                 // Code-set glass face (XML background would be dropped by the card).
                 assertTrue("cell background is the glass ripple",
                     cell.background is android.graphics.drawable.RippleDrawable)
-                // Page badge uses bg_chip_void (12dp corners).
+                // v2 UI: 07_reader_dock — the page number is a label under the paper, not a
+                // chip floating over the page image.
                 val pageNum = cell.findViewById<TextView>(R.id.pageNum)
-                val badge = pageNum.background as? android.graphics.drawable.GradientDrawable
-                assertNotNull("pageNum badge is a shape", badge)
-                assertEquals("badge corners are 12dp",
-                    12f * activity.resources.displayMetrics.density, badge!!.cornerRadius, 0.5f)
+                assertEquals("the number has no chip over the paper", null, pageNum.background)
+                assertEquals(
+                    "the number is mid-grey metadata",
+                    activity.getColor(R.color.text_hologram_mid),
+                    pageNum.currentTextColor
+                )
                 // Selection flows through the drawable's state_selected branch.
                 assertTrue("selected cell reports isSelected", cell.isSelected)
             }
@@ -406,10 +409,10 @@ class Phase5ScreensTest {
         // The doc is recategorised straight after seeding (setCategory is not suspend).
         repo.setCategory(id, com.scanwhirl.app.util.CategoryRules.STUDY)
         val intent = DocumentViewerActivity.intent(app, id)
-        var chip: TextView? = null
+        var label: TextView? = null
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                chip = activity.findViewById(R.id.docCategoryChip)
+                label = activity.findViewById(R.id.docCategoryLabel)
                 // Inset floating glass dock behind the bottom action row.
                 val dock = activity.findViewById<View>(R.id.btnShare).parent as ViewGroup
                 assertTrue("document viewer dock is bg_dock_glass",
@@ -443,18 +446,18 @@ class Phase5ScreensTest {
             }
             // reloadDocument() runs off the main thread; wait for the chip fill-in.
             val shown = pollUntil {
-                chip?.visibility == View.VISIBLE && chip?.text?.toString() == "● Study"
+                label?.visibility == View.VISIBLE && label?.text?.toString() == "Study"
             }
-            // v2 UI: 07_reader_dock — the pill is metadata: sentence case, neutral ink.
-            assertTrue("category chip shows ● Study after reload", shown)
+            // v2 UI: 07_reader_dock — the compact pill is metadata: sentence case, neutral ink.
+            assertTrue("category chip shows Study after reload", shown)
             assertEquals(
                 "the pill label is neutral ink",
                 app.getColor(R.color.text_hologram_mid),
-                chip!!.currentTextColor
+                label!!.currentTextColor
             )
-            // T5.2 (D-H): the chip label is 12sp; v2 keeps it metadata-sized.
+            // v2 UI: 07_reader_dock — 13 sp inside a 32 dp pill.
             val scaled = app.resources.displayMetrics.scaledDensity
-            assertEquals("category chip text is 12sp", 12f * scaled, chip!!.textSize, 0.5f)
+            assertEquals("category chip text is 13sp", 13f * scaled, label!!.textSize, 0.5f)
         }
     }
 
@@ -467,7 +470,7 @@ class Phase5ScreensTest {
         val id = seedDoc("Chip doc")
         repo.setCategory(id, com.scanwhirl.app.util.CategoryRules.STUDY)
         val intent = DocumentViewerActivity.intent(app, id)
-        var chip: TextView? = null
+        var chip: View? = null
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 chip = activity.findViewById(R.id.docCategoryChip)
@@ -497,7 +500,7 @@ class Phase5ScreensTest {
         val id = seedDoc("Chip doc")
         repo.setCategory(id, com.scanwhirl.app.util.CategoryRules.STUDY)
         val intent = DocumentViewerActivity.intent(app, id)
-        var chip: TextView? = null
+        var chip: View? = null
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 chip = activity.findViewById(R.id.docCategoryChip)
@@ -522,7 +525,10 @@ class Phase5ScreensTest {
             assertTrue(
                 "the chip repaints with the new category",
                 // v2 UI: 07_reader_dock — sentence case, not ALL CAPS.
-                pollUntil { chip?.text?.toString() == "● Receipts" }
+                pollUntil {
+                    (chip?.findViewById<TextView>(R.id.docCategoryLabel))?.text?.toString() ==
+                        "Receipts"
+                }
             )
         }
     }

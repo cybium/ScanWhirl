@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2 UI: 07_reader_dock — the category pill is tonal metadata: one soft raised fill,
+     16 dp corners (a pill at 32 dp), no outline and no accent. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="16dp" />
+    <solid android:color="@color/glass_surface_raised" />
+</shape>

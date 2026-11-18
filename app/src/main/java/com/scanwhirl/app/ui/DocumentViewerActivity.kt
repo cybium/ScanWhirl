@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -447,14 +448,17 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.docVaultBadge.isVisible = doc.isVaulted
         // test25 Phase 5C: category tag in the header (recategorise funnels
         // through here too — see promptCategorize()).
-        // v2 UI: 07_reader_dock — metadata is sentence case; the dot alone keeps the
-        // category's colour, the label stays in neutral ink.
-        binding.docCategoryChip.text = categoryChipText(
-            com.scanwhirl.app.util.CategoryLabels.display(this, doc.category),
+        // v2 UI: 07_reader_dock — a compact tonal pill: 8 dp dot in the category's colour,
+        // sentence-case 13 sp label, and a 48 dp tap area around it (never a 48 dp box).
+        binding.docCategoryLabel.text =
+            com.scanwhirl.app.util.CategoryLabels.display(this, doc.category)
+        binding.docCategoryDot.backgroundTintList = android.content.res.ColorStateList.valueOf(
             com.scanwhirl.app.util.CategoryStyle.color(doc.category)
         )
-        binding.docCategoryChip.setTextColor(SwStyle.color(this, R.color.text_hologram_mid))
         binding.docCategoryChip.isVisible = true
+        binding.docCategoryTouch.isVisible = true
+        // Once the pill is laid out, its 32 dp face sits inside a 48 dp tap area.
+        binding.docCategoryTouch.doOnLayout { expandCategoryTouchTarget() }
         refreshGrid()
         updateDraftBar()
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
@@ -502,16 +506,24 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         view.setLineSpacing(0f, 1.1f)
     }
 
-    /** The header pill's text: a coloured category dot and a sentence-case label. */
-    private fun categoryChipText(label: String, dotColor: Int): CharSequence {
-        val text = android.text.SpannableString("● $label")
-        text.setSpan(
-            android.text.style.ForegroundColorSpan(dotColor),
-            0,
-            1,
-            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-        )
-        return text
+    /**
+     * v2 UI: 07_reader_dock — the compact category pill is 32 dp tall while its tap area stays
+     * 48 dp: this TouchDelegate widens the pill's hit rectangle to the whole 48 dp container so
+     * a tap in the empty space around the pill still opens the category picker.
+     */
+    private fun expandCategoryTouchTarget() {
+        val container = binding.docCategoryTouch
+        val chip = binding.docCategoryChip
+        if (container.height <= 0 || chip.width <= 0) return
+        val rect = android.graphics.Rect()
+        chip.getHitRect(rect)
+        val vertical = ((container.height - rect.height()) / 2).coerceAtLeast(0)
+        val horizontal = ((dp(48f) - rect.width()) / 2).coerceAtLeast(0)
+        rect.top -= vertical
+        rect.bottom += vertical
+        rect.left -= horizontal
+        rect.right += horizontal
+        container.touchDelegate = android.view.TouchDelegate(rect, chip)
     }
 
     /** Bytes the document occupies: its PDF, or its pages while no PDF exists. */

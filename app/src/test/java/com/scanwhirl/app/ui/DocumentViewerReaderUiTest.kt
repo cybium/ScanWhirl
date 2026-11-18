@@ -222,23 +222,58 @@ class DocumentViewerReaderUiTest {
     // --- 3. the category pill is calm metadata -----------------------------
 
     @Test
-    fun `folder pill is sentence case, 12 sp and quiet`() {
+    fun `category chip is a compact pill inside a 48 dp touch target`() {
         open(category = CategoryRules.STUDY) { activity ->
-            val chip = activity.findViewById<TextView>(R.id.docCategoryChip)
+            val chip = activity.findViewById<View>(R.id.docCategoryChip)
+            val touch = activity.findViewById<View>(R.id.docCategoryTouch)
+            val label = activity.findViewById<TextView>(R.id.docCategoryLabel)
+            val dot = activity.findViewById<View>(R.id.docCategoryDot)
+            val meta = activity.findViewById<TextView>(R.id.pageCount)
+
             assertEquals(View.VISIBLE, chip.visibility)
-            assertEquals("the pill is sentence case, not ALL CAPS", "● Study", chip.text.toString())
-            assertFalse("the pill must not be all-caps", chip.isAllCaps)
+            assertTrue(
+                "the visible chip is compact (<= 36 dp tall), was ${chip.height}px",
+                chip.height <= dp(36f)
+            )
+            assertTrue(
+                "the visible chip is still a pill (>= 30 dp tall), was ${chip.height}px",
+                chip.height >= dp(30f)
+            )
+            assertTrue(
+                "the tap area is 48 dp tall, was ${touch.height}px",
+                touch.height >= dp(48f)
+            )
+            assertNotNull(
+                "taps outside the compact pill still reach it (TouchDelegate)",
+                touch.touchDelegate
+            )
+            // Same row as the meta line: the two centres line up.
+            val chipY = IntArray(2).also { chip.getLocationOnScreen(it) }[1] + chip.height / 2
+            val metaY = IntArray(2).also { meta.getLocationOnScreen(it) }[1] + meta.height / 2
+            assertTrue(
+                "the chip sits on the meta line (chip $chipY, meta $metaY)",
+                kotlin.math.abs(chipY - metaY) <= dp(4f)
+            )
+
             assertEquals(
-                "the pill stays readable metadata",
-                12f * activity.resources.displayMetrics.scaledDensity,
-                chip.textSize,
+                "the label is sentence case, not ALL CAPS",
+                "Study",
+                label.text.toString()
+            )
+            assertFalse("the label must not be all-caps", label.isAllCaps)
+            assertEquals(
+                "the label is 13 sp",
+                13f * activity.resources.displayMetrics.scaledDensity,
+                label.textSize,
                 0.5f
             )
             assertEquals(
-                "the pill is metadata: neutral ink, not an accent",
+                "the label is metadata: neutral ink",
                 activity.getColor(R.color.text_hologram_mid),
-                chip.currentTextColor
+                label.currentTextColor
             )
+            assertEquals("the dot is 8 dp wide", dp(8f), dot.width)
+            assertEquals("the dot is 8 dp tall", dp(8f), dot.height)
         }
     }
 
@@ -246,16 +281,16 @@ class DocumentViewerReaderUiTest {
     @Config(sdk = [35], qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `Hindi category pill is sentence case too`() {
         open(category = CategoryRules.UNSORTED) { activity ->
-            val chip = activity.findViewById<TextView>(R.id.docCategoryChip)
-            assertEquals(View.VISIBLE, chip.visibility)
+            val label = activity.findViewById<TextView>(R.id.docCategoryLabel)
+            assertEquals(View.VISIBLE, label.visibility)
             assertEquals(
                 "the Hindi pill is the values-hi label, not uppercase",
-                "● " + com.scanwhirl.app.util.CategoryLabels.display(
+                com.scanwhirl.app.util.CategoryLabels.display(
                     activity, CategoryRules.UNSORTED
                 ),
-                chip.text.toString()
+                label.text.toString()
             )
-            assertFalse("the pill must not be all-caps", chip.isAllCaps)
+            assertFalse("the pill must not be all-caps", label.isAllCaps)
         }
     }
 
@@ -326,23 +361,52 @@ class DocumentViewerReaderUiTest {
     }
 
     @Test
-    fun `page badges stay legible`() {
-        open(pages = 12) { activity ->
+    fun `page numbers sit below the paper, never on it`() {
+        open(pages = 4) { activity ->
             val grid = activity.findViewById<PageGridView>(R.id.pageList)
-            val cell = grid.layoutManager?.findViewByPosition(0)
-                ?: requireNotNull(grid.getChildAt(0)) { "the grid has a first cell" }
-            val badge = cell.findViewById<TextView>(R.id.pageNum)
-            assertEquals("1", badge.text.toString())
-            assertTrue(
-                "the badge is at least 12 sp",
-                badge.textSize >= 12f * activity.resources.displayMetrics.scaledDensity - 0.5f
-            )
-            assertEquals(
-                "the badge keeps opaque white ink",
-                0xFFFFFFFF.toInt(),
-                badge.currentTextColor
-            )
-            assertNotNull("the badge sits on its own chip", badge.background)
+            var checked = 0
+            for (i in 0 until grid.childCount) {
+                val cell = grid.getChildAt(i) as? ViewGroup ?: continue
+                val number = cell.findViewById<TextView>(R.id.pageNum)
+                val paper = cell.findViewById<View>(R.id.pageThumb)
+                if (number == null || paper == null) continue
+
+                val paperRect = android.graphics.Rect(0, 0, paper.width, paper.height)
+                cell.offsetDescendantRectToMyCoords(paper, paperRect)
+                val numberRect = android.graphics.Rect(0, 0, number.width, number.height)
+                cell.offsetDescendantRectToMyCoords(number, numberRect)
+
+                assertFalse(
+                    "page number '${number.text}' is drawn over the page image " +
+                        "(number $numberRect, paper $paperRect)",
+                    android.graphics.Rect.intersects(paperRect, numberRect)
+                )
+                assertTrue(
+                    "page number '${number.text}' sits below the paper",
+                    numberRect.top >= paperRect.bottom
+                )
+                assertTrue(
+                    "page number '${number.text}' is centred under its page",
+                    kotlin.math.abs(numberRect.centerX() - paperRect.centerX()) <= dp(2f)
+                )
+                assertEquals("the number is the page position", "${i + 1}", number.text.toString())
+                assertTrue(
+                    "the number is 12-13 sp",
+                    number.textSize >= 12f * activity.resources.displayMetrics.scaledDensity - 0.5f &&
+                        number.textSize <= 13f * activity.resources.displayMetrics.scaledDensity + 0.5f
+                )
+                assertEquals(
+                    "the number is mid-grey, not a floating badge",
+                    activity.getColor(R.color.text_hologram_mid),
+                    number.currentTextColor
+                )
+                assertTrue(
+                    "the number has no chip background over the paper",
+                    number.background == null
+                )
+                checked++
+            }
+            assertTrue("the grid laid out at least one page cell", checked >= 1)
         }
     }
 }

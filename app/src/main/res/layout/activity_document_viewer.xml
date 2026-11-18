@@ -49,24 +49,51 @@
                 android:textColor="@color/text_hologram_mid"
                 android:textSize="13sp" />
 
-            <!-- test25 Phase 5C: additive ID — category tag, filled in reloadDocument().
-                 v2 UI: 07_reader_dock — the folder/category pill is metadata: sentence case,
-                 12 sp, normal weight, no letter spacing, neutral ink (the dot keeps the
-                 category's colour). It stays a 48 dp touch target for the category picker. -->
-            <TextView
-                android:id="@+id/docCategoryChip"
+            <!-- v2 UI: 07_reader_dock — the folder/category pill is metadata: a compact 32 dp
+                 tonal pill (13 sp sentence-case label, 8 dp dot in the category's colour)
+                 centred on the meta line. The 48 dp touch area lives on this transparent
+                 container, so the tap target is big while the visible chip stays small. -->
+            <FrameLayout
+                android:id="@+id/docCategoryTouch"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="48dp"
                 android:layout_marginStart="8dp"
-                android:background="@drawable/bg_chip_void"
-                android:gravity="center"
-                android:letterSpacing="0"
-                android:minHeight="48dp"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="3dp"
-                android:textColor="@color/text_hologram_mid"
-                android:textSize="12sp"
-                android:visibility="gone" />
+                android:clipChildren="false"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/docCategoryChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:background="@drawable/bg_category_chip_tonal"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:minHeight="32dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="6dp"
+                    android:visibility="gone">
+
+                    <View
+                        android:id="@+id/docCategoryDot"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:background="@drawable/bg_category_dot"
+                        android:importantForAccessibility="no" />
+
+                    <TextView
+                        android:id="@+id/docCategoryLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="@color/text_hologram_mid"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/docVaultBadge"
