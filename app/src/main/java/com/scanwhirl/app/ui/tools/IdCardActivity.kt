@@ -102,6 +102,19 @@ class IdCardActivity : BaseActivity() {
     private var cropDetected = true
     private var cropBusy = false
 
+    /**
+     * N1/D5: while the picked photo is being read and prepared its Uri is kept, so a recreation
+     * during preparation re-reads the same photo instead of losing the pick.
+     */
+    private var cropSourceUri: Uri? = null
+    private var cropPreparing = false
+
+    /** The person's adjusted frame (normalised 0..1), restored once the crop screen is shown. */
+    private var cropSavedRect: FloatArray? = null
+
+    /** Invalidates an older preparation/reopen when a newer state starts (or Cancel wins). */
+    private var cropGeneration = 0
+
     private val cropBack = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = cancelCrop()
     }
@@ -109,6 +122,14 @@ class IdCardActivity : BaseActivity() {
     /** Tests: fake the camera launch (the ML Kit scanner cannot run under Robolectric). */
     @Volatile
     internal var captureOverride: ((Side) -> Boolean)? = null
+
+    /** Tests: hold automatic preparation so a recreation can happen while it is in flight. */
+    @Volatile
+    internal var cropPrepareGate: ((Side) -> Unit)? = null
+
+    /** Tests: the crop JPEG finished encoding, even when Back already abandoned the screen. */
+    @Volatile
+    internal var cropEncodeFinishedForTest: ((ByteArray?) -> Unit)? = null
 
     private val scanner = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -133,7 +154,17 @@ class IdCardActivity : BaseActivity() {
     private val photoPicker = registerForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri == null) onCaptureCancelled() else readImage(uri, pendingSide, autoCrop = true)
+        if (uri == null) {
+            onCaptureCancelled()
+        } else {
+            // D5(b): remember the pick before anything is read, so a recreation while the photo
+            // is still being read and prepared can re-read the same Uri.
+            cropPreparing = true
+            cropSourceUri = uri
+            cropSide = pendingSide
+            cropSavedRect = null
+            readImage(uri, pendingSide, autoCrop = true)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -151,8 +182,11 @@ class IdCardActivity : BaseActivity() {
             restoreCapturedState(savedInstanceState)
             render()
             when {
-                // D5: a rotation while the corner screen was open brings that photo back.
+                // D5: a rotation while the corner screen was open brings that photo back, and a
+                // rotation while it was still being prepared re-runs the preparation.
                 cropBytes != null -> reopenCropScreen()
+                cropPreparing && cropSourceUri != null ->
+                    resumeCropPreparation(cropSourceUri!!, cropSide)
                 back != null -> showLayoutSheet()
                 front != null -> showBackSheet()
                 else -> showFrontSheet()
@@ -187,8 +221,26 @@ class IdCardActivity : BaseActivity() {
                 outState.putBoolean(KEY_CROP_PENDING, true)
                 outState.putInt(KEY_CROP_SIDE, cropSide.ordinal)
                 outState.putBoolean(KEY_CROP_DETECTED, cropDetected)
+                // D5(a): the person's adjusted frame, normalised so any preview size restores it.
+                val rect = cropView?.getCropRect()
+                val shown = cropBitmap
+                if (rect != null && shown != null && shown.width > 0 && shown.height > 0) {
+                    outState.putFloatArray(
+                        KEY_CROP_RECT,
+                        floatArrayOf(
+                            rect.left / shown.width, rect.top / shown.height,
+                            rect.right / shown.width, rect.bottom / shown.height
+                        )
+                    )
+                }
             } else {
                 File(dir, CROP_FILE).delete()
+                // D5(b): preparation is still running, so keep the pick itself, not its result.
+                val uri = cropSourceUri
+                if (cropPreparing && uri != null) {
+                    outState.putString(KEY_CROP_SOURCE_URI, uri.toString())
+                    outState.putInt(KEY_CROP_SIDE, cropSide.ordinal)
+                }
             }
         }
     }
@@ -205,6 +257,14 @@ class IdCardActivity : BaseActivity() {
                 if (cropBytes != null) {
                     cropSide = if (state.getInt(KEY_CROP_SIDE, 0) == Side.BACK.ordinal) Side.BACK else Side.FRONT
                     cropDetected = state.getBoolean(KEY_CROP_DETECTED, true)
+                    cropSavedRect = state.getFloatArray(KEY_CROP_RECT)
+                }
+            } else {
+                val source = state.getString(KEY_CROP_SOURCE_URI)
+                if (source != null) {
+                    cropSourceUri = Uri.parse(source)
+                    cropPreparing = true
+                    cropSide = if (state.getInt(KEY_CROP_SIDE, 0) == Side.BACK.ordinal) Side.BACK else Side.FRONT
                 }
             }
         }
@@ -419,6 +479,11 @@ class IdCardActivity : BaseActivity() {
             }
             progress.isVisible = false
             if (bytes == null) {
+                if (autoCrop) {
+                    cropPreparing = false
+                    cropSourceUri = null
+                    cropBack.isEnabled = false
+                }
                 fail(getString(R.string.tools_setup_image_failed))
                 onCaptureCancelled()
             } else if (autoCrop) {
@@ -436,17 +501,32 @@ class IdCardActivity : BaseActivity() {
      * app's existing page normalisation ([PhotoAutoCrop], the same detector behind the page
      * straighten) before the corner screen opens, so the table around the card is not on the
      * paper. Nothing is accepted here; only [applyCrop] hands a side to the flow.
+     *
+     * D5(b): the pick's Uri stays in [cropSourceUri] until the prepared photo is ready, so a
+     * recreation during this work re-reads it ([resumeCropPreparation]) instead of losing it.
      */
     private fun beginCrop(side: Side, bytes: ByteArray) {
+        val generation = ++cropGeneration
+        cropPreparing = true
+        cropSide = side
+        // N1: Back while the photo is being prepared returns to the side sheet (and cleans up),
+        // instead of finishing silently in the middle of the work.
+        cropBack.isEnabled = true
         progress.isVisible = true
         lifecycleScope.launch {
             val prepared = withContext(Dispatchers.IO) {
+                cropPrepareGate?.invoke(side)
                 val oriented = runCatching { ImageTools.normalizeGalleryPhoto(bytes) }.getOrDefault(bytes)
                 runCatching { PhotoAutoCrop.crop(oriented) }
                     .getOrDefault(PhotoAutoCrop.Result(oriented, false))
             }
+            if (generation != cropGeneration) return@launch
             val bitmap = withContext(Dispatchers.IO) {
                 runCatching { ImageTools.decodeSampled(prepared.bytes, CROP_PREVIEW_DIM) }.getOrNull()
+            }
+            if (generation != cropGeneration) {
+                bitmap?.recycle()
+                return@launch
             }
             progress.isVisible = false
             if (isFinishing || isDestroyed || isChangingConfigurations) {
@@ -455,28 +535,73 @@ class IdCardActivity : BaseActivity() {
             }
             if (bitmap == null) {
                 fail(getString(R.string.fixidcrop_id_crop_failed))
+                cropPreparing = false
+                cropSourceUri = null
+                cropBack.isEnabled = false
+                clearCropState()
                 render()
                 showCaptureSheet(side)
                 return@launch
             }
+            cropPreparing = false
+            cropSourceUri = null
             cropBytes = prepared.bytes
             showCropScreen(side, bitmap, prepared.cropped)
         }
     }
 
     /**
+     * D5(b): the screen was recreated while the picked photo was still being read or prepared.
+     * The Uri was saved with the side, so the same photo is read and prepared again here.
+     */
+    private fun resumeCropPreparation(uri: Uri, side: Side) {
+        val generation = ++cropGeneration
+        cropPreparing = true
+        cropSide = side
+        cropBack.isEnabled = true
+        progress.isVisible = true
+        lifecycleScope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openInputStream(uri)?.use { ImageTools.readPageBytes(it) }
+                }.getOrNull()
+            }
+            if (generation != cropGeneration) return@launch
+            progress.isVisible = false
+            if (isFinishing || isDestroyed) return@launch
+            if (bytes == null) {
+                fail(getString(R.string.tools_setup_image_failed))
+                cropPreparing = false
+                cropSourceUri = null
+                cropBack.isEnabled = false
+                render()
+                showCaptureSheet(side)
+                return@launch
+            }
+            beginCrop(side, bytes)
+        }
+    }
+
+    /**
      * D5: the screen was recreated (rotation, process death) while a photo was waiting on the
-     * corner screen. The prepared bytes come back from the cache copy, so the same photo and the
-     * same side are shown again; the frame starts on the full image, which is the confirmed crop.
+     * corner screen. The prepared bytes come back from the cache copy with the same side and the
+     * person's adjusted frame (D5(a)), so the crop continues where it was.
      */
     private fun reopenCropScreen() {
         val bytes = cropBytes ?: return
         val side = cropSide
         val detected = cropDetected
+        val generation = ++cropGeneration
+        // N1: Back during this async reopen must clean up and return to the side sheet.
+        cropBack.isEnabled = true
         progress.isVisible = true
         lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 runCatching { ImageTools.decodeSampled(bytes, CROP_PREVIEW_DIM) }.getOrNull()
+            }
+            if (generation != cropGeneration) {
+                bitmap?.recycle()
+                return@launch
             }
             progress.isVisible = false
             if (isFinishing || isDestroyed) {
@@ -486,6 +611,8 @@ class IdCardActivity : BaseActivity() {
             if (bitmap == null) {
                 clearCropState()
                 cropBytes = null
+                cropSavedRect = null
+                cropBack.isEnabled = false
                 render()
                 showCaptureSheet(side)
                 return@launch
@@ -495,7 +622,11 @@ class IdCardActivity : BaseActivity() {
     }
 
     private fun showCropScreen(side: Side, bitmap: Bitmap, detected: Boolean) {
+        // dismissCropScreen() clears the pending state; this screen is the new owner of it.
+        val savedRect = cropSavedRect
+        val pendingBytes = cropBytes
         dismissCropScreen()
+        cropBytes = pendingBytes
         cropSide = side
         cropDetected = detected
         cropBitmap = bitmap
@@ -580,8 +711,20 @@ class IdCardActivity : BaseActivity() {
         cropOverlay = overlay
         cropView = view
         // Preset: the auto-crop already cut the card out, so the frame starts on its edges and
-        // only needs adjusting when the detection was slightly off.
+        // only needs adjusting when the detection was slightly off. D5(a): a frame the person
+        // adjusted before a recreation comes back exactly as they left it.
         view.setImage(bitmap)
+        savedRect?.let { rect ->
+            if (rect.size == 4 && bitmap.width > 0 && bitmap.height > 0) {
+                view.setCropRect(
+                    android.graphics.RectF(
+                        rect[0] * bitmap.width, rect[1] * bitmap.height,
+                        rect[2] * bitmap.width, rect[3] * bitmap.height
+                    )
+                )
+            }
+        }
+        cropSavedRect = null
         cropBack.isEnabled = true
     }
 
@@ -608,10 +751,17 @@ class IdCardActivity : BaseActivity() {
         progress.bringToFront()
         progress.isVisible = true
         lifecycleScope.launch {
-            val bytes = withContext(Dispatchers.IO) {
-                runCatching { ImageTools.encodeJpeg(region, 92) }.getOrNull()
+            val bytes = try {
+                withContext(Dispatchers.IO) {
+                    val encoded = runCatching { ImageTools.encodeJpeg(region, 92) }.getOrNull()
+                    // Tests: the encode really finished, even for an abandoned screen.
+                    cropEncodeFinishedForTest?.invoke(encoded)
+                    encoded
+                }
+            } finally {
+                // N2: released on cancellation too; the main continuation may never run.
+                region.takeIf { !it.isRecycled }?.recycle()
             }
-            region.recycle()
             // D2: Back or Cancel closed the crop screen while the JPEG was being written. The
             // side must not be accepted afterwards, and nothing is shown to the person.
             if (token == null || token !== cropOverlay || isFinishing || isDestroyed) return@launch
@@ -629,8 +779,12 @@ class IdCardActivity : BaseActivity() {
 
     /** Back / Cancel on the corner screen: nothing is saved and the side sheet comes back. */
     internal fun cancelCrop() {
-        if (cropOverlay == null) return
+        if (cropOverlay == null && cropBytes == null && !cropPreparing) return
         val side = cropSide
+        cropGeneration++
+        cropPreparing = false
+        cropSourceUri = null
+        cropSavedRect = null
         clearCropState()
         dismissCropScreen()
         render()
@@ -638,19 +792,20 @@ class IdCardActivity : BaseActivity() {
     }
 
     private fun dismissCropScreen() {
-        val overlay = cropOverlay ?: return
         cropBack.isEnabled = false
         cropView?.clearImage()
+        val overlay = cropOverlay
         cropOverlay = null
         cropView = null
         cropBytes = null
+        cropSavedRect = null
         cropBitmap?.takeIf { !it.isRecycled }?.recycle()
         cropBitmap = null
         // D2/D9: leave no busy/progress state behind and give the card screen its tree back.
         cropBusy = false
         progress.isVisible = false
         contentScroll.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
-        screenRoot.removeView(overlay)
+        if (overlay != null) screenRoot.removeView(overlay)
     }
 
     /** The prepared photo only lives for the crop screen; the cache copy goes with it. */
@@ -901,6 +1056,10 @@ class IdCardActivity : BaseActivity() {
     override fun onDestroy() {
         cropBitmap?.takeIf { !it.isRecycled }?.recycle()
         cropBitmap = null
+        // N1: the flow really ended (Back, finished task, Home), so no picked card photo may
+        // stay in the cache: crop.jpg, front.jpg and back.jpg all go. A configuration change
+        // (and a system-recreated process) keeps them for the restored screen.
+        if (isFinishing && !isChangingConfigurations) clearCapturedState()
         super.onDestroy()
     }
 
@@ -914,6 +1073,8 @@ class IdCardActivity : BaseActivity() {
         private const val KEY_CROP_PENDING = "id_card_crop_pending"
         private const val KEY_CROP_SIDE = "id_card_crop_side"
         private const val KEY_CROP_DETECTED = "id_card_crop_detected"
+        private const val KEY_CROP_RECT = "id_card_crop_rect"
+        private const val KEY_CROP_SOURCE_URI = "id_card_crop_source_uri"
 
         /** The crop screen never needs more than a phone-width copy of the card. */
         private const val CROP_PREVIEW_DIM = 2400

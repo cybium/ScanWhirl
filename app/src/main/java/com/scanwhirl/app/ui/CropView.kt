@@ -102,6 +102,23 @@ class CropView @JvmOverloads constructor(
     /** Crop rectangle in image pixel coordinates (full image when untouched). */
     fun getCropRect(): RectF = RectF(crop)
 
+    /**
+     * fixidcrop: restores a saved free-crop rectangle (image pixels), clamped to the image. Call
+     * it after [setImage]; a new image resets the frame, so the caller re-applies its own rect.
+     * A preset's aspect ratio is not re-fitted here (this is the manual crop, not a preset).
+     *
+     * Add-only: the Passport preset never calls it, so its behaviour is unchanged.
+     */
+    fun setCropRect(rect: RectF) {
+        val bmp = image ?: return
+        val left = rect.left.coerceIn(0f, bmp.width.toFloat())
+        val top = rect.top.coerceIn(0f, bmp.height.toFloat())
+        val right = rect.right.coerceIn(left, bmp.width.toFloat())
+        val bottom = rect.bottom.coerceIn(top, bmp.height.toFloat())
+        crop.set(left, top, right, bottom)
+        invalidate()
+    }
+
     private fun resetCrop() {
         val bmp = image ?: return
         crop.set(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat())

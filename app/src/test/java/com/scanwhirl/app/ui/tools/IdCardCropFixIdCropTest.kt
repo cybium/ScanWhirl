@@ -11,6 +11,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Looper
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -21,6 +22,8 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.CropView
+import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.util.ImageTools
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -37,6 +40,9 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * fixidcrop: "Pick from gallery" used to put the whole photo (table and all) on the A4 page.
@@ -163,6 +169,50 @@ class IdCardCropFixIdCropTest {
 
     private fun isTableColour(pixel: Int): Boolean =
         Color.blue(pixel) > Color.red(pixel) + 40 && Color.blue(pixel) > Color.green(pixel) + 40
+
+    private fun stateDir(): File = File(app.cacheDir, "id_card_state")
+
+    private fun stateFiles(): List<String> =
+        stateDir().listFiles()?.map { it.name }?.sorted() ?: emptyList()
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    /** The shown frame as fractions of the shown image, so any preview size compares equal. */
+    private fun normalisedCropRect(current: IdCardActivity): FloatArray {
+        val view = requireNotNull(current.findViewById<CropView>(R.id.toolCropView))
+        val bytes = requireNotNull(current.cropScreenBytesForTest())
+        val image = ImageTools.decodeSampled(bytes, 2400)
+        try {
+            val rect = view.getCropRect()
+            return floatArrayOf(
+                rect.left / image.width, rect.top / image.height,
+                rect.right / image.width, rect.bottom / image.height
+            )
+        } finally {
+            image.recycle()
+        }
+    }
+
+    /** Drags the top-left handle in: the frame is no longer the full image. */
+    private fun dragTopLeftCorner(current: IdCardActivity) {
+        val crop = requireNotNull(current.findViewById<CropView>(R.id.toolCropView))
+        val width = SwStyle.dp(current, 300f)
+        val height = SwStyle.dp(current, 300f)
+        crop.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+        )
+        crop.layout(0, 0, width, height)
+        val handle = crop.handlePoints()
+        val x = handle[0]
+        val y = handle[1]
+        val dx = SwStyle.dp(current, 45f).toFloat()
+        val dy = SwStyle.dp(current, 35f).toFloat()
+        crop.onTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, x, y, 0))
+        crop.onTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_MOVE, x + dx, y + dy, 0))
+        crop.onTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, x + dx, y + dy, 0))
+    }
 
     @Test
     fun `a picked photo opens the corner crop screen preset to the auto cropped card`() {
@@ -317,6 +367,12 @@ class IdCardCropFixIdCropTest {
         launch().use { scenario ->
             pickPhoto(scenario, photo)
             assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+            // A recreation first: the cached photo must go when Cancel closes the restored screen.
+            scenario.recreate()
+            scenario.onActivity { activity = it }
+            idle()
+            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+            assertTrue("the restored photo is cached", stateFiles().contains("crop.jpg"))
 
             scenario.onActivity { current ->
                 val crop = requireNotNull(current.findViewById<View>(R.id.toolCropView))
@@ -336,6 +392,7 @@ class IdCardCropFixIdCropTest {
                 app.getString(R.string.tools_id_front_title),
                 sheetTitle()
             )
+            assertTrue("cancel removes the cached photo", stateFiles().isEmpty())
         }
         assertTrue("a cancelled crop saves nothing", repo.listDocuments().isEmpty())
     }
@@ -345,22 +402,32 @@ class IdCardCropFixIdCropTest {
     @Test
     fun `Back while the crop is saving leaves the side empty and shows no error`() {
         val photo = photoOfCardOnTable()
+        val encoded = CountDownLatch(1)
+        var encodedBytes: ByteArray? = null
         launch().use { scenario ->
             pickPhoto(scenario, photo)
             assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
 
             scenario.onActivity { current ->
+                // Tests: the encode tells us it finished, even though the screen is already gone.
+                current.cropEncodeFinishedForTest = { bytes ->
+                    encodedBytes = bytes
+                    encoded.countDown()
+                }
                 // Crop and save starts the JPEG encode, then Back arrives before it finishes.
                 current.findViewById<View>(R.id.toolCropApply).performClick()
                 current.onBackPressedDispatcher.onBackPressed()
             }
+            assertTrue(
+                "the abandoned encode really finished",
+                encoded.await(15, TimeUnit.SECONDS)
+            )
+            assertNotNull("the encode still produced bytes (no recycled bitmap)", encodedBytes)
             idle()
             assertTrue(
                 "the crop screen closes",
                 waitUntil { activity?.findViewById<View>(R.id.toolCropView) == null }
             )
-            // Give the abandoned encode time to finish: it must not accept the side afterwards.
-            Thread.sleep(400)
             idle()
             scenario.onActivity { current ->
                 assertEquals(
@@ -371,20 +438,37 @@ class IdCardCropFixIdCropTest {
                 val error = requireNotNull(current.findViewById<TextView>(R.id.toolIdCardError))
                 assertFalse("no error after Back", error.isVisible)
                 assertFalse("the flow is still open", current.isFinishing)
+                // The next attempt is not blocked by the abandoned save.
+                assertNotNull(
+                    "the side sheet is usable again",
+                    current.findViewById<View>(R.id.toolIdCardFront)
+                )
             }
         }
         assertTrue("nothing was accepted or saved", repo.listDocuments().isEmpty())
+        assertTrue("no cached photo is left", stateFiles().isEmpty())
     }
 
-    // ---- rework: rotation mid-crop keeps the photo (critic D5) ----
+    // ---- rework: rotation mid-crop keeps the photo AND the adjusted frame (D5) ----
 
     @Test
-    fun `rotation during the crop screen keeps the photo and the side`() {
+    fun `rotation keeps the front photo and the adjusted crop frame`() {
         val photo = photoOfCardOnTable()
         launch().use { scenario ->
             pickPhoto(scenario, photo)
             assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
-            val before = requireNotNull(activity!!.cropScreenBytesForTest()).size
+
+            var hashBefore = ""
+            var rectBefore = FloatArray(4)
+            scenario.onActivity { current ->
+                dragTopLeftCorner(current)
+                rectBefore = normalisedCropRect(current)
+                hashBefore = sha256(requireNotNull(current.cropScreenBytesForTest()))
+            }
+            assertTrue(
+                "the person moved the frame off the full image",
+                rectBefore[0] > 0.01f && rectBefore[1] > 0.01f
+            )
 
             scenario.recreate()
             scenario.onActivity { activity = it }
@@ -397,9 +481,13 @@ class IdCardCropFixIdCropTest {
             scenario.onActivity { current ->
                 assertEquals(
                     "the same prepared photo is back",
-                    before,
-                    requireNotNull(current.cropScreenBytesForTest()).size
+                    hashBefore,
+                    sha256(requireNotNull(current.cropScreenBytesForTest()))
                 )
+                val rectAfter = normalisedCropRect(current)
+                for (i in 0..3) {
+                    assertEquals("adjusted crop rect part $i", rectBefore[i], rectAfter[i], 0.003f)
+                }
                 assertNotNull(
                     "the card hint is back",
                     findTextIn(
@@ -407,6 +495,7 @@ class IdCardCropFixIdCropTest {
                         app.getString(R.string.fixidcrop_id_crop_hint)
                     )
                 )
+                assertTrue("the pending photo survives for a further recreation", stateFiles().contains("crop.jpg"))
             }
 
             scenario.onActivity { it.findViewById<View>(R.id.toolCropApply).performClick() }
@@ -414,8 +503,166 @@ class IdCardCropFixIdCropTest {
                 "the kept crop is accepted as the front side",
                 waitUntil { sheetTitle() == app.getString(R.string.tools_id_back_title) }
             )
+            assertTrue("accepting removes the cached photo", stateFiles().none { it == "crop.jpg" })
         }
         assertTrue("nothing was saved before the layout", repo.listDocuments().isEmpty())
+    }
+
+    @Test
+    fun `rotation keeps the back photo and the adjusted crop frame`() {
+        val photo = photoOfCardOnTable()
+        launch().use { scenario ->
+            scenario.onActivity { it.acceptCapture(IdCardActivity.Side.FRONT, jpeg(Color.RED)) }
+            assertTrue(
+                "the back step is asking for the back side",
+                waitUntil { sheetTitle() == app.getString(R.string.tools_id_back_title) }
+            )
+            pickPhoto(scenario, photo)
+            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+
+            var rectBefore = FloatArray(4)
+            var hashBefore = ""
+            scenario.onActivity { current ->
+                dragTopLeftCorner(current)
+                rectBefore = normalisedCropRect(current)
+                hashBefore = sha256(requireNotNull(current.cropScreenBytesForTest()))
+            }
+            assertTrue("the back frame was adjusted", rectBefore[0] > 0.01f && rectBefore[1] > 0.01f)
+
+            scenario.recreate()
+            scenario.onActivity { activity = it }
+            idle()
+            assertTrue(
+                "the back crop screen is still open after recreation",
+                waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null }
+            )
+            scenario.onActivity { current ->
+                assertEquals(
+                    "the same prepared back photo is back",
+                    hashBefore,
+                    sha256(requireNotNull(current.cropScreenBytesForTest()))
+                )
+                val rectAfter = normalisedCropRect(current)
+                for (i in 0..3) {
+                    assertEquals("back crop rect part $i", rectBefore[i], rectAfter[i], 0.003f)
+                }
+            }
+
+            scenario.onActivity { it.findViewById<View>(R.id.toolCropApply).performClick() }
+            assertTrue(
+                "accepting the back side reaches Layout",
+                waitUntil { sheetTitle() == app.getString(R.string.tools_id_layout_title) }
+            )
+        }
+        assertTrue("nothing was saved before the layout", repo.listDocuments().isEmpty())
+    }
+
+    @Test
+    fun `recreation while the photo is being prepared still opens the crop screen`() {
+        val photo = photoOfCardOnTable()
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        launch().use { scenario ->
+            scenario.onActivity { current ->
+                current.cropPrepareGate = {
+                    started.countDown()
+                    release.await(15, TimeUnit.SECONDS)
+                }
+            }
+            pickPhoto(scenario, photo)
+            assertTrue("preparation started", waitUntil { started.count == 0L })
+
+            scenario.recreate()
+            scenario.onActivity { activity = it }
+            release.countDown()
+            idle()
+
+            assertTrue(
+                "the restored screen prepares the same photo again",
+                waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null }
+            )
+            scenario.onActivity { it.findViewById<View>(R.id.toolCropApply).performClick() }
+            assertTrue(
+                "the prepared photo is accepted as the front side",
+                waitUntil { sheetTitle() == app.getString(R.string.tools_id_back_title) }
+            )
+        }
+        assertTrue("nothing was saved before the layout", repo.listDocuments().isEmpty())
+    }
+
+    // ---- rework 2: no picked photo stays behind (judge N1) ----
+
+    @Test
+    fun `Back during the async reopen closes the crop and removes the cached photo`() {
+        val photo = photoOfCardOnTable()
+        launch().use { scenario ->
+            pickPhoto(scenario, photo)
+            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+
+            scenario.recreate()
+            scenario.onActivity { activity = it }
+            // Back before the reopened screen has drawn: the pending photo must go with it.
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            idle()
+
+            scenario.onActivity { current ->
+                assertNull(
+                    "the crop screen does not come back",
+                    current.findViewById<View>(R.id.toolCropView)
+                )
+                assertEquals(
+                    "Back returns to the front sheet",
+                    app.getString(R.string.tools_id_front_title),
+                    sheetTitle()
+                )
+                assertFalse("the flow did not leave the ID card screen", current.isFinishing)
+            }
+            assertTrue("no cached photo is left", stateFiles().isEmpty())
+        }
+        assertTrue("nothing was saved", repo.listDocuments().isEmpty())
+    }
+
+    @Test
+    fun `finishing while the crop is open removes the cached photo`() {
+        val photo = photoOfCardOnTable()
+        launch().use { scenario ->
+            pickPhoto(scenario, photo)
+            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+            scenario.recreate()
+            scenario.onActivity { activity = it }
+            idle()
+            assertTrue(
+                "the crop screen is open again",
+                waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null }
+            )
+            assertTrue("the pending photo is cached", stateFiles().contains("crop.jpg"))
+
+            scenario.onActivity { it.finish() }
+            idle()
+        }
+        assertTrue("finishing removes every cached file", stateFiles().isEmpty())
+    }
+
+    @Test
+    fun `finishing an abandoned flow removes the cached front side too`() {
+        launch().use { scenario ->
+            scenario.onActivity { it.acceptCapture(IdCardActivity.Side.FRONT, jpeg(Color.RED)) }
+            assertTrue(
+                "the back step is asking for the back side",
+                waitUntil { sheetTitle() == app.getString(R.string.tools_id_back_title) }
+            )
+            scenario.recreate()
+            scenario.onActivity { activity = it }
+            idle()
+            assertTrue(
+                "the captured front is cached for the restored screen",
+                stateFiles().contains("front.jpg")
+            )
+
+            scenario.onActivity { it.finish() }
+            idle()
+        }
+        assertTrue("finishing removes the front and back copies", stateFiles().isEmpty())
     }
 
     // ---- rework: a photo with no card edge says so (critic D10) ----
