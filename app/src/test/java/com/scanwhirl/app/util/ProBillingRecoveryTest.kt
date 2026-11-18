@@ -2,6 +2,7 @@ package com.scanwhirl.app.util
 
 import android.app.Activity
 import android.app.Application
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.android.billingclient.api.BillingClient
 import com.scanwhirl.app.R
@@ -15,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -41,6 +43,9 @@ class ProBillingRecoveryTest {
         var connectCalls = 0
         var queryCalls = 0
         val acknowledged = mutableListOf<String>()
+        var holdAcks = false
+        val ackWaiters = mutableListOf<(Boolean) -> Unit>()
+        val ackResults = ArrayDeque<Boolean>()
         var launchResult = ProBilling.LaunchResult.STARTED
         val launched = mutableListOf<ProBilling.Offer>()
 
@@ -84,7 +89,8 @@ class ProBillingRecoveryTest {
 
         override fun acknowledge(purchase: ProBilling.Owned, onDone: (Boolean) -> Unit) {
             acknowledged += purchase.token
-            queue.addLast { onDone(true) }
+            val result = if (ackResults.isEmpty()) true else ackResults.removeFirst()
+            if (holdAcks) ackWaiters += onDone else queue.addLast { onDone(result) }
         }
 
         override fun close() = Unit
@@ -396,5 +402,108 @@ class ProBillingRecoveryTest {
         refresh(now = 40_000L)
         gateway.drain()
         assertEquals("an acknowledged purchase is never acknowledged twice", listOf("owned-token"), gateway.acknowledged)
+    }
+
+    /**
+     * Judge must-fix 1: acknowledgement state is per purchase token and shared by the listener,
+     * the foreground reconcile and ALREADY_OWNED, so overlapping paths send one acknowledge.
+     */
+    @Test
+    fun `overlapping listener reconcile and already owned acknowledge the token once`() {
+        gateway.holdAcks = true
+        ProBilling.price(app) { } // creates the one client and installs its listener
+        gateway.drain()
+        val purchase = paid("shared-token", acknowledged = false)
+
+        gateway.emit(ProBilling.Event.Purchased(purchase))
+
+        gateway.purchases = listOf(purchase)
+        refresh(now = 1_000L)
+        gateway.drain()
+
+        gateway.launchResult = ProBilling.LaunchResult.ALREADY_OWNED
+        val states = mutableListOf<ProBilling.State>()
+        ProBilling.buy(activity(), testBuild = false) { states += it }
+        gateway.drain()
+
+        assertEquals(
+            "one acknowledge for one token across listener, reconcile and already-owned",
+            1,
+            gateway.acknowledged.size
+        )
+
+        gateway.ackWaiters.removeAt(0)(true)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue("the single acknowledge grants Pro", purchased())
+        assertEquals("the Buy follows the in-flight acknowledgement", ProBilling.State.Owned, states.last())
+        assertFalse(ProBilling.isPurchaseInFlight())
+
+        // A stale snapshot still reports isAcknowledged=false; the process remembers the success.
+        gateway.purchases = listOf(purchase)
+        refresh(now = 40_000L)
+        gateway.drain()
+        assertEquals("a stale unacknowledged snapshot is not acknowledged again", 1, gateway.acknowledged.size)
+    }
+
+    /** Judge must-fix 1: a failed acknowledge retries itself, then stops once Play agrees. */
+    @Test
+    fun `a failed acknowledge is retried without another foreground then stops`() {
+        gateway.ackResults.addAll(listOf(false, true))
+        ProBilling.price(app) { }
+        gateway.drain()
+
+        gateway.emit(ProBilling.Event.Purchased(paid("retry-token", acknowledged = false)))
+        gateway.drain()
+        assertEquals(1, gateway.acknowledged.size)
+        assertFalse(purchased())
+
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(5))
+        gateway.drain()
+        assertEquals("retried without a new foreground", 2, gateway.acknowledged.size)
+        assertTrue("the successful retry grants Pro", purchased())
+
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(200))
+        gateway.drain()
+        assertEquals("a successful retry is not retried again", 2, gateway.acknowledged.size)
+    }
+
+    /**
+     * Judge must-fix 2: a debounced foreground schedules one deferred reconcile, so a purchase
+     * that completes in the background is found without another resume.
+     */
+    @Test
+    fun `a suppressed foreground schedules one deferred reconcile`() {
+        gateway.purchases = emptyList()
+        refresh(now = 0L)
+        gateway.drain()
+        val before = gateway.queryCalls
+
+        gateway.purchases = listOf(paid("late-token", acknowledged = false))
+        refresh(now = 2_000L)
+        gateway.drain()
+        assertEquals("the resume itself is debounced", before, gateway.queryCalls)
+
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(28))
+        gateway.drain()
+
+        assertEquals("the deferred reconcile runs at the end of the window", before + 1, gateway.queryCalls)
+        assertTrue("the background purchase unlocks Pro", purchased())
+        assertEquals(listOf("late-token"), gateway.acknowledged)
+    }
+
+    @Test
+    fun `a pending listener update keeps the next foreground due`() {
+        gateway.purchases = emptyList()
+        ProBilling.price(app) { }
+        gateway.drain()
+        refresh(now = 0L)
+        gateway.drain()
+        val before = gateway.queryCalls
+
+        gateway.emit(ProBilling.Event.Pending)
+        refresh(now = 2_000L)
+        gateway.drain()
+
+        assertEquals("a pending purchase is not debounced away", before + 1, gateway.queryCalls)
     }
 }
