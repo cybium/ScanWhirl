@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- uihome: a blank drawable for the row thumbnail while PageThumbLoader decodes.
+     The row paints its own placeholder (first letter + page icon) above it, so the
+     loader must not flash the generic document icon first. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+</shape>
