@@ -164,7 +164,7 @@ class ShellScreenTest {
     }
 
     @Test
-    fun `pro screen shows the one-time price and buy is a Coming soon sheet`() {
+    fun `pro screen shows Play's price line and buy is a Coming soon sheet`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavMe).performClick()
@@ -174,7 +174,8 @@ class ShellScreenTest {
 
             assertTrue(activity.findViewById<View>(R.id.swProScreen).isVisible)
             assertEquals(
-                activity.getString(R.string.pro_price),
+                "no Play price in this test: the line names Google Play, no amount",
+                activity.getString(R.string.pro_price_play),
                 activity.findViewById<TextView>(R.id.swProPrice).text.toString()
             )
             activity.findViewById<View>(R.id.swProBuy).performClick()
