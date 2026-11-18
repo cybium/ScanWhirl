@@ -44,5 +44,11 @@ Status: DECIDED for design; final copy waits for the Pro inventory (below).
   format, or only draw a box? Until it truly removes, it is not marketed as private/safe.
 - Trial counter: local per tool (resettable, accepted: not fraud-proof).
 
+## Entitlement policy (lead ruling 11-18, fixbilling)
+Pro is granted only for a PURCHASED purchase of the Pro product (never PENDING, never on ITEM_ALREADY_OWNED alone).
+A FAILED or DISCONNECTED query never revokes Pro. A SUCCESSFUL ownership query without a PURCHASED Pro purchase is
+Play's authoritative answer (refund, chargeback, other account) and Pro follows it. Every PURCHASED purchase is
+acknowledged exactly once, with automatic bounded retry (unacknowledged purchases are refunded by Play after 3 days).
+
 ## Existing tester product
 The 1.2.x console product at ₹100 stays for current testers until the price experiment starts.
