@@ -24,11 +24,13 @@ import com.scanwhirl.app.R
  *
  *  - a 48dp tonal rounded square (14dp radius) holding a 26dp accent glyph, centred;
  *  - the label below it: 12sp semibold (11sp in the Home quick row), centred on the tile's
- *    own width, at most two lines, breaking on word boundaries and ellipsized (END) only
- *    when two lines are not enough. The label can never be wider than its column and never
- *    draws outside the tile: a centred label whose text layout is wider than its box paints
- *    over its neighbours (lead's 1.2.3-test3 check: the six Hindi quick labels ran together
- *    on one line, and "Batch tools" spilled to the left of its column in the hub);
+ *    own width, two lines (three on Home at 200 % font), breaking on word boundaries. A Home
+ *    quick tile is never ellipsized (T23, owner device sweep 2026-11-19: "Compress" ended in
+ *    "…" at 200 % and "Read text" was dropped); the hub keeps an ellipsis as its last resort.
+ *    The label can never be wider than its column and never draws outside the tile: a centred
+ *    label whose text layout is wider than its box paints over its neighbours (lead's
+ *    1.2.3-test3 check: the six Hindi quick labels ran together on one line, and "Batch
+ *    tools" spilled to the left of its column in the hub);
  *  - the icon + label group centred horizontally, with the tag's band reserved above the
  *    container so tagged and untagged tiles line up;
  *  - the PRO badge (12sp, gold, the word PRO) on the container's top-right corner, clear
@@ -153,8 +155,8 @@ class ToolTile(context: Context) : FrameLayout(context) {
             // (not TOP) keeps the text inside the box even if a font reports odd padding.
             gravity = Gravity.CENTER
             maxLines = 2
-            // With an ellipsis set the layout is clamped to maxLines and a too-long label
-            // ends in "…" instead of painting a third line over the row below.
+            // The hub keeps ellipsis as its last resort; a Home quick tile clears it in
+            // asQuick() so a word is never replaced by "…" (T23 H1/H2).
             ellipsize = android.text.TextUtils.TruncateAt.END
             setLineSpacing(0f, 1f)
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
@@ -226,6 +228,13 @@ class ToolTile(context: Context) : FrameLayout(context) {
      */
     fun asQuick() {
         labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, QUICK_LABEL_SP)
+        // T23-FIX-HOME-200 (H1/H2): a Home quick label is never truncated. On the device at
+        // 200 % "Compress" became "Comp…" and "फ़ाइल छोटी करें" ended in "…" — the owner lost
+        // the one word that names the tool. The tile grows instead.
+        labelView.ellipsize = null
+        // At 200 % a two-word Hindi label needs a third line in a narrow column; a taller
+        // tile is honest, a dropped word is not. Normal sizes keep two.
+        if (resources.configuration.fontScale >= 1.6f) labelView.maxLines = 3
         // A 2dp inset each side: next to five equally tight neighbours a label that fills
         // its column must not touch the one beside it.
         val inset = SwStyle.dp(context, 2f)
