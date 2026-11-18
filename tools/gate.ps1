@@ -91,6 +91,19 @@ if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
     $dl = Join-Path $env:TEMP ("sw-ci-result-" + $Lane + "-" + $PID); Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
     & $gh run download $run.databaseId -R cybium/ScanWhirl -n gate-result -D $dl 2>$null | Out-Null
     $resFile = Join-Path $dl "gate-result.txt"
+    if (-not (Test-Path $resFile)) {
+        # Artifact downloads can be refused (11-19: "Egress is over the account limit"). The Summary step prints the
+        # same lines, so read them from the test job log. Still fail-closed: PASS also needs run conclusion success.
+        $logLines = & $gh run view $run.databaseId -R cybium/ScanWhirl --log 2>$null |
+            Where-Object { $_ -match '^test\s+Summary\s' } |
+            ForEach-Object { ($_ -split 'Z ', 2)[1] } |
+            Where-Object { $_ -match '^(FAIL |LINT |     |REASON |GATE (PASS|FAIL) )' }
+        if ($logLines -and (($logLines | Select-Object -Last 1) -match '^GATE (PASS|FAIL) ')) {
+            New-Item -ItemType Directory -Force $dl | Out-Null
+            $logLines | Set-Content $resFile -Encoding utf8
+            Write-Output "cloud: artifact download refused; verdict read from the run log"
+        }
+    }
     $minutes = [int]((Get-Date) - $started).TotalMinutes
     if (Test-Path $resFile) {
         $lines = Get-Content $resFile
