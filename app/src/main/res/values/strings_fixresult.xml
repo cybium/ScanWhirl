@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- fixresult (H1/H2/H7/N2): the save confirmation's Open/Undo and the export results. -->
+    <!-- H1: the export is saved, but no installed app registered for its type. -->
+    <string name="fixresult_open_no_app">No app on this phone can open this file</string>
+    <!-- H2: Undo removed exactly the copy this save created. -->
+    <string name="fixresult_export_removed_docs">Removed from Documents: %1$s</string>
+    <string name="fixresult_export_undo_nothing">Nothing was saved, so there is nothing to undo</string>
+</resources>

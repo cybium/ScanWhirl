@@ -216,14 +216,23 @@ class ToolResultActivity : BaseActivity() {
                 button(getString(R.string.tools_result_save), R.id.toolResultSave) { save() }
             )
         )
+        val library = button(getString(R.string.tools_result_library), R.id.toolResultLibrary) {
+            showInLibrary()
+        }
+        // H7: an exported file (Word, Excel, PowerPoint, images, ZIP) is not a library document
+        // and the Library can never list it, so "Show in library" went to a screen where the
+        // result was missing. The export lives in the app's own output folder until the user
+        // Saves it somewhere, so the smaller honest change is to drop the button, not to point
+        // it at another empty folder.
+        if (isExportOnlyResult()) library.visibility = View.GONE
         column.addView(
-            rowOf(
-                button(getString(R.string.tools_result_library), R.id.toolResultLibrary) { showInLibrary() },
-                button(getString(R.string.tools_result_undo), R.id.toolResultUndo) { undo() }
-            )
+            rowOf(library, button(getString(R.string.tools_result_undo), R.id.toolResultUndo) { undo() })
         )
         return root
     }
+
+    /** H7: a result made of exported files only (no library document behind it). */
+    private fun isExportOnlyResult(): Boolean = docIds.isEmpty() && files.isNotEmpty()
 
     private fun rowOf(left: TextView, right: TextView): View =
         LinearLayout(this).apply {

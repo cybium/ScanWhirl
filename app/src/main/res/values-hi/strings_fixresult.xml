@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- fixresult: Hindi. Each value carries a review marker for a native speaker. -->
+    <string name="fixresult_open_no_app"><!-- review -->इस फ़ोन पर कोई ऐप इस फ़ाइल को नहीं खोल सकता</string>
+    <string name="fixresult_export_removed_docs"><!-- review -->Documents से हटाया: %1$s</string>
+    <string name="fixresult_export_undo_nothing"><!-- review -->कुछ सेव नहीं हुआ, इसलिए हटाने के लिए कुछ नहीं है</string>
+</resources>
