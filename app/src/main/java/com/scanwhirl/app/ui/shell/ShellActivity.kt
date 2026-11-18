@@ -495,6 +495,20 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         return hostH + margin + discOverlapPx()
     }
 
+    /**
+     * How far the floating dock actually covers the page bottom. The dock is a sibling under the
+     * page, so this is normally zero; a dock that is later drawn over the page returns its real
+     * overlap and the Pro screen's pinned offer lifts by exactly that.
+     */
+    internal fun dockOverlapPx(): Int {
+        if (!::navHost.isInitialized || !navHost.isVisible) return 0
+        if (contentHost.height <= 0 || navHost.height <= 0) return 0
+        val root = navHost.parent as? View ?: return 0
+        val dockTop = offsetIn(navHost, root)
+        val contentBottom = offsetIn(contentHost, root) + contentHost.height
+        return (contentBottom - dockTop).coerceAtLeast(0)
+    }
+
     /** How many pixels the scan disc is drawn above the page. Zero while it sits in the nav host. */
     private fun discOverlapPx(): Int {
         if (navHost.height <= 0 || contentHost.height <= 0) return 0
@@ -591,7 +605,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         com.scanwhirl.app.util.ProBilling.cachedPrice(this)?.let { screen.setPrice(it) }
         // A purchase may still be in flight after a rotation; keep its Buy row disabled.
         screen.setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
-        setContent(scroll(screen))
+        // H3 (device sweep 2026-11-19): the Pro screen owns its own scroll area and pins the price
+        // and Unlock row above the dock, so the offer is readable on entry. It therefore replaces
+        // the shell's generic scroll wrapper instead of sitting inside it.
+        screen.keepClearOfDock { dockOverlapPx() }
+        setContent(screen)
         paintNav()
         com.scanwhirl.app.util.ProBilling.price(this) { price ->
             // An older response (or a screen that is gone) must not overwrite this one.

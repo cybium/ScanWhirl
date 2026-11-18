@@ -177,6 +177,7 @@
     <string name="tools_result_type_xlsx">XLSX</string>
     <string name="tools_result_type_pptx">PPTX</string>
     <string name="tools_result_type_zip">ZIP</string>
+    <string name="tools_result_type_pdf">PDF</string>
     <plurals name="tools_result_sheets">
         <item quantity="one">Excel का %1$d पन्ना</item>
         <item quantity="other">Excel के %1$d पन्ने</item>

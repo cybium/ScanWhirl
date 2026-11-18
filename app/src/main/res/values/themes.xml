@@ -218,6 +218,20 @@
         <item name="android:popupElevation">12dp</item>
     </style>
 
+    <!-- M4 (device sweep 2026-11-19): the framework overflow button measures 40x48dp on the test
+         phone. A 48dp minimum square is the accessibility target; applied only where the overlay
+         below is used, so no other toolbar's spacing changes. -->
+    <style name="Widget.ScanWhirl.ActionButton.Overflow" parent="Widget.AppCompat.ActionButton.Overflow">
+        <item name="android:minWidth">48dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
+    </style>
+
+    <style name="ThemeOverlay.ScanWhirl.Overflow48" parent="">
+        <item name="actionOverflowButtonStyle">@style/Widget.ScanWhirl.ActionButton.Overflow</item>
+    </style>
+
     <!-- test26 T3.4: Home category filter chip (§5.3: 36dp min height, full
          radius, hairline stroke). Checked tint is per-category and applied in
          code (CategoryStyle), because the colour depends on which chip it is. -->

@@ -1340,7 +1340,35 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             sheet.dismiss()
             confirmDelete(doc)
         }
+        // M7 (device sweep 2026-11-19): each row is clickable and its label is a child TextView,
+        // so TalkBack focused a nameless box. The row now carries the words it shows — read after
+        // the labels above are final, because Protect/Unlock, Vault and Delete change with state.
+        for (rowId in listOf(
+            R.id.rowMoreRename, R.id.rowMoreMove, R.id.rowMoreDuplicate, R.id.rowMoreCompress,
+            R.id.rowMoreLock, R.id.rowMoreVault, R.id.rowMoreDelete
+        )) {
+            val row = view.findViewById<android.view.ViewGroup>(rowId) ?: continue
+            val words = firstVisibleText(row)
+            if (words.isNotEmpty()) row.contentDescription = words
+        }
         sheet.show()
+    }
+
+    /** The first visible, non-empty label inside a row: what the row should be announced as. */
+    private fun firstVisibleText(group: android.view.ViewGroup): String {
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
+            if (child.visibility != View.VISIBLE) continue
+            if (child is android.widget.TextView) {
+                val words = child.text?.toString()?.trim().orEmpty()
+                if (words.isNotEmpty()) return words
+            }
+            if (child is android.view.ViewGroup) {
+                val nested = firstVisibleText(child)
+                if (nested.isNotEmpty()) return nested
+            }
+        }
+        return ""
     }
 
     /** More → Organize → Duplicate (§4.5): a copy stays put, Home refreshes. */
