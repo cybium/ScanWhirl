@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fixidcrop_id_crop_title"><!-- review -->कार्ड काटें</string>
+    <string name="fixidcrop_id_crop_hint"><!-- review -->कोनों को कार्ड के किनारों तक खींचें।</string>
+    <string name="fixidcrop_id_crop_apply"><!-- review -->काटें और सहेजें</string>
+    <string name="fixidcrop_id_crop_failed"><!-- review -->यह फ़ोटो नहीं खुल सकी। इसे फिर से चुनें।</string>
+</resources>

@@ -140,18 +140,32 @@ class ToolResultActivity : BaseActivity() {
 
         previewHost = FrameLayout(this).apply {
             id = R.id.toolResultPreviewHost
-            background = SwStyle.rounded(
-                this@ToolResultActivity,
-                SwStyle.color(this@ToolResultActivity, R.color.glass_surface),
-                radiusDp = 16f,
-                stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
-            )
+            // fixidcrop: a white ID card page on a white box had no visible paper edge. The card
+            // page sits on the ink backdrop, inset by a little padding and framed by a thin line,
+            // so the sheet is obvious. Every other tool result keeps its previous preview.
+            if (idCardFlow) {
+                val pad = SwStyle.dp(this@ToolResultActivity, ID_PREVIEW_PADDING_DP)
+                setPadding(pad, pad, pad, pad)
+                background = SwStyle.rounded(
+                    this@ToolResultActivity,
+                    SwStyle.color(this@ToolResultActivity, R.color.void_abyss),
+                    radiusDp = 16f,
+                    stroke = ID_PREVIEW_LINE
+                )
+            } else {
+                background = SwStyle.rounded(
+                    this@ToolResultActivity,
+                    SwStyle.color(this@ToolResultActivity, R.color.glass_surface),
+                    radiusDp = 16f,
+                    stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
+                )
+            }
             clipToOutline = true
         }
         preview = ImageView(this).apply {
             id = R.id.toolResultPreview
             scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundColor(Color.WHITE)
+            if (!idCardFlow) setBackgroundColor(Color.WHITE)
             contentDescription = getString(R.string.tools_result_preview)
         }
         previewHost.addView(preview, FrameLayout.LayoutParams(
@@ -657,6 +671,10 @@ class ToolResultActivity : BaseActivity() {
         /** F1: view tags for the ID card's two actions (no new ids needed). */
         const val TAG_KEEP = "fixflow:id_card_keep"
         const val TAG_DISCARD = "fixflow:id_card_discard"
+
+        /** fixidcrop: the card page's dark preview backdrop (ink fill, 1dp #33FFFFFF line). */
+        private const val ID_PREVIEW_LINE = 0x33FFFFFF
+        private const val ID_PREVIEW_PADDING_DP = 10f
 
         fun intent(
             context: Context,

@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.tools
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
@@ -13,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,12 +27,14 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.BaseActivity
+import com.scanwhirl.app.ui.CropView
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.IdCard
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PaperSize
+import com.scanwhirl.app.util.PhotoAutoCrop
 import com.scanwhirl.app.util.Prefs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +59,11 @@ import java.io.File
  * Closing a step with Back leaves the whole flow to Home with nothing saved (owner bugs F1/W7);
  * a cancelled camera returns to this screen and never re-opens the capture sheet (X1). The
  * captured sides survive rotation and process death through a small cache copy (X2).
+ *
+ * fixidcrop: a photo picked from the gallery is not used as it is. The app's existing automatic
+ * crop (page normalisation) cuts the card out and straightens it, then the Passport-style corner
+ * crop screen shows that card for confirmation. Only the confirmed crop becomes a side; Back or
+ * Cancel there returns to the side sheet and saves nothing.
  */
 class IdCardActivity : BaseActivity() {
 
@@ -77,6 +86,23 @@ class IdCardActivity : BaseActivity() {
     private lateinit var backPreview: ImageView
     private lateinit var errorView: TextView
     private lateinit var progress: View
+    private lateinit var screenRoot: FrameLayout
+
+    /**
+     * fixidcrop: the Passport-style corner crop screen. A photo picked from the gallery is cut
+     * out and straightened by [PhotoAutoCrop] first, then this shows that card so the person can
+     * confirm or adjust the edges. Back or Cancel returns to the side sheet with nothing saved.
+     */
+    private var cropOverlay: FrameLayout? = null
+    private var cropView: CropView? = null
+    private var cropBitmap: Bitmap? = null
+    private var cropSide = Side.FRONT
+    private var cropBytes: ByteArray? = null
+    private var cropBusy = false
+
+    private val cropBack = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() = cancelCrop()
+    }
 
     /** Tests: fake the camera launch (the ML Kit scanner cannot run under Robolectric). */
     @Volatile
@@ -105,13 +131,14 @@ class IdCardActivity : BaseActivity() {
     private val photoPicker = registerForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri == null) onCaptureCancelled() else readImage(uri, pendingSide)
+        if (uri == null) onCaptureCancelled() else readImage(uri, pendingSide, autoCrop = true)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
         setContentView(buildRoot())
+        onBackPressedDispatcher.addCallback(this, cropBack)
         if (savedInstanceState == null) {
             clearCapturedState()
             // The first step is always the choice sheet: people without a good camera angle can
@@ -249,6 +276,7 @@ class IdCardActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         root.applySystemBarsPadding()
+        screenRoot = root
         return root
     }
 
@@ -360,7 +388,7 @@ class IdCardActivity : BaseActivity() {
         render()
     }
 
-    private fun readImage(uri: Uri, side: Side) {
+    private fun readImage(uri: Uri, side: Side, autoCrop: Boolean = false) {
         progress.isVisible = true
         lifecycleScope.launch {
             val bytes = withContext(Dispatchers.IO) {
@@ -372,11 +400,190 @@ class IdCardActivity : BaseActivity() {
             if (bytes == null) {
                 fail(getString(R.string.tools_setup_image_failed))
                 onCaptureCancelled()
+            } else if (autoCrop) {
+                beginCrop(side, bytes)
             } else {
                 acceptCapture(side, bytes)
             }
         }
     }
+
+    // ---- gallery photo: auto-crop, then confirm the corners (fixidcrop) ----
+
+    /**
+     * fixidcrop: a gallery photo is not a scan. It is oriented, cut out and straightened with the
+     * app's existing page normalisation ([PhotoAutoCrop], the same detector behind the page
+     * straighten) before the corner screen opens, so the table around the card is not on the
+     * paper. Nothing is accepted here; only [applyCrop] hands a side to the flow.
+     */
+    private fun beginCrop(side: Side, bytes: ByteArray) {
+        progress.isVisible = true
+        lifecycleScope.launch {
+            val prepared = withContext(Dispatchers.IO) {
+                val oriented = runCatching { ImageTools.normalizeGalleryPhoto(bytes) }.getOrDefault(bytes)
+                runCatching { PhotoAutoCrop.crop(oriented) }
+                    .getOrDefault(PhotoAutoCrop.Result(oriented, false))
+            }
+            val bitmap = withContext(Dispatchers.IO) {
+                runCatching { ImageTools.decodeSampled(prepared.bytes, CROP_PREVIEW_DIM) }.getOrNull()
+            }
+            progress.isVisible = false
+            if (isFinishing || isDestroyed || isChangingConfigurations) {
+                bitmap?.recycle()
+                return@launch
+            }
+            if (bitmap == null) {
+                fail(getString(R.string.fixidcrop_id_crop_failed))
+                render()
+                showCaptureSheet(side)
+                return@launch
+            }
+            cropBytes = prepared.bytes
+            showCropScreen(side, bitmap)
+        }
+    }
+
+    private fun showCropScreen(side: Side, bitmap: Bitmap) {
+        dismissCropScreen()
+        cropSide = side
+        cropBitmap = bitmap
+
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(SwStyle.color(this@IdCardActivity, R.color.void_abyss))
+            isClickable = true
+        }
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(
+                SwStyle.dp(this@IdCardActivity, 18f), SwStyle.dp(this@IdCardActivity, 10f),
+                SwStyle.dp(this@IdCardActivity, 18f), SwStyle.dp(this@IdCardActivity, 18f)
+            )
+        }
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        bar.addView(SwStyle.iconButton(
+            this, R.drawable.ic_sym_arrow_back, SwStyle.color(this, R.color.text_hologram_hi)
+        ).apply {
+            contentDescription = getString(R.string.tools_setup_back)
+            setOnClickListener { cancelCrop() }
+        })
+        bar.addView(
+            SwStyle.text(this, 24f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+                text = getString(R.string.fixidcrop_id_crop_title)
+            },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = SwStyle.dp(this@IdCardActivity, 10f)
+            }
+        )
+        column.addView(bar)
+        column.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+            text = getString(R.string.fixidcrop_id_crop_hint)
+            setLineSpacing(0f, 1.25f)
+            setPadding(0, SwStyle.dp(this@IdCardActivity, 8f), 0, SwStyle.dp(this@IdCardActivity, 10f))
+        })
+
+        // The Passport crop surface, unchanged: four draggable corners and edge handles.
+        val view = CropView(this).apply {
+            id = R.id.toolCropView
+            background = SwStyle.rounded(this@IdCardActivity, 0xFF000000.toInt(), radiusDp = 14f)
+        }
+        column.addView(view, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+        val apply = SwStyle.text(
+            this, 16f, SwStyle.color(this, R.color.sw_disc_ink), bold = true
+        ).apply {
+            id = R.id.toolCropApply
+            text = getString(R.string.fixidcrop_id_crop_apply)
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            background = SwStyle.rounded(
+                this@IdCardActivity, SwStyle.color(this@IdCardActivity, R.color.cyan_primary), radiusDp = 16f
+            )
+            setOnClickListener { applyCrop() }
+        }
+        column.addView(apply, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@IdCardActivity, 54f)
+        ).apply { topMargin = SwStyle.dp(this@IdCardActivity, 14f) })
+
+        overlay.addView(column, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        screenRoot.addView(overlay, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        cropOverlay = overlay
+        cropView = view
+        // Preset: the auto-crop already cut the card out, so the frame starts on its edges and
+        // only needs adjusting when the detection was slightly off.
+        view.setImage(bitmap)
+        cropBack.isEnabled = true
+    }
+
+    private fun applyCrop() {
+        if (cropBusy) return
+        val view = cropView ?: return
+        val source = cropBitmap ?: return
+        val rect = view.getCropRect()
+        if (rect.width() < 1f || rect.height() < 1f) return
+        val left = rect.left.toInt().coerceIn(0, source.width - 1)
+        val top = rect.top.toInt().coerceIn(0, source.height - 1)
+        val width = rect.width().toInt().coerceIn(1, source.width - left)
+        val height = rect.height().toInt().coerceIn(1, source.height - top)
+        val cropped = runCatching { Bitmap.createBitmap(source, left, top, width, height) }.getOrNull()
+            ?: return
+        cropBusy = true
+        val side = cropSide
+        progress.bringToFront()
+        progress.isVisible = true
+        lifecycleScope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                runCatching { ImageTools.encodeJpeg(cropped, 92) }.getOrNull()
+            }
+            // Full-frame crops hand back the source bitmap itself; the screen still owns that one.
+            if (cropped !== source) cropped.recycle()
+            progress.isVisible = false
+            cropBusy = false
+            if (isFinishing || isDestroyed) return@launch
+            if (bytes == null) {
+                fail(getString(R.string.fixidcrop_id_crop_failed))
+                return@launch
+            }
+            dismissCropScreen()
+            acceptCapture(side, bytes)
+        }
+    }
+
+    /** Back / Cancel on the corner screen: nothing is saved and the side sheet comes back. */
+    internal fun cancelCrop() {
+        if (cropOverlay == null) return
+        val side = cropSide
+        dismissCropScreen()
+        render()
+        showCaptureSheet(side)
+    }
+
+    private fun dismissCropScreen() {
+        val overlay = cropOverlay ?: return
+        cropBack.isEnabled = false
+        cropView?.clearImage()
+        cropOverlay = null
+        cropView = null
+        cropBytes = null
+        cropBitmap?.takeIf { !it.isRecycled }?.recycle()
+        cropBitmap = null
+        screenRoot.removeView(overlay)
+    }
+
+    private fun showCaptureSheet(side: Side) {
+        if (side == Side.BACK) showBackSheet() else showFrontSheet()
+    }
+
+    /** Tests: the auto-cropped photo the corner crop screen is showing. */
+    internal fun cropScreenBytesForTest(): ByteArray? = cropBytes
 
     /** A capture arrived (scanner or gallery); also the seam the UI tests drive. */
     internal fun acceptCapture(side: Side, bytes: ByteArray) {
@@ -608,12 +815,21 @@ class IdCardActivity : BaseActivity() {
         errorView.isVisible = true
     }
 
+    override fun onDestroy() {
+        cropBitmap?.takeIf { !it.isRecycled }?.recycle()
+        cropBitmap = null
+        super.onDestroy()
+    }
+
     companion object {
         private const val STATE_DIR = "id_card_state"
         private const val FRONT_FILE = "front.jpg"
         private const val BACK_FILE = "back.jpg"
         private const val KEY_HAS_STATE = "id_card_has_state"
         private const val KEY_PENDING_SIDE = "id_card_pending_side"
+
+        /** The crop screen never needs more than a phone-width copy of the card. */
+        private const val CROP_PREVIEW_DIM = 2400
 
         fun intent(context: Context): Intent = Intent(context, IdCardActivity::class.java)
     }
