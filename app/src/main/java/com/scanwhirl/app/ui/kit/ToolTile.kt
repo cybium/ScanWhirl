@@ -23,15 +23,17 @@ import com.scanwhirl.app.R
  * smaller and lighter than the label under it. A tile is now:
  *
  *  - a 48dp tonal rounded square (14dp radius) holding a 26dp accent glyph, centred;
- *  - the label below it: 12.5sp semibold, two lines, centred (the Home quick row, six
+ *  - the label below it: 12sp semibold, two lines, centred (the Home quick row, six
  *    columns wide, may shrink the label to fit one line, never below 9sp);
  *  - the icon + label group centred horizontally, with the tag's band reserved above the
  *    container so tagged and untagged tiles line up;
  *  - the PRO badge (12sp, gold, the word PRO) on the container's top-right corner, clear
  *    of the glyph and clear of the tile edge.
  *
- * The tag's reserved band is measured from the tag itself, so a larger system font grows
- * the tile instead of pushing the badge off its top edge.
+ * The tile is exactly its content (12dp + 48dp + 8dp + label + 8dp, no fixed minimum): the
+ * lead's 2026-11-18 visual check found the old ~125dp rows wasted a screen of tools. The
+ * tag's band comes out of the 12dp top space, so a larger system font grows the band
+ * instead of pushing the badge off the tile.
  */
 class ToolTile(context: Context) : FrameLayout(context) {
 
@@ -66,7 +68,9 @@ class ToolTile(context: Context) : FrameLayout(context) {
         inner = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            setPadding((2 * d).toInt(), SwStyle.dp(context, 12f), (2 * d).toInt(), SwStyle.dp(context, 10f))
+            // No side padding: the label gets the tile's full width, which keeps a five
+            // column grid's longest word ("Searchable") on one line at 12sp.
+            setPadding(0, SwStyle.dp(context, 12f), 0, SwStyle.dp(context, 8f))
         }
         addView(
             inner,
@@ -99,8 +103,9 @@ class ToolTile(context: Context) : FrameLayout(context) {
 
         // The badge hangs on the container's top-right corner: its bottom edge is 8dp below
         // the container's top, so it never reaches the glyph (which starts 11dp down). The
-        // slot above the container is real layout space, so nothing is drawn out of bounds
-        // (a negative-offset badge was clipped by its container on the device render).
+        // band it needs is real layout space (a negative-offset badge was clipped by its
+        // container), but it is paid for out of the tile's 12dp top space, not on top of it:
+        // a tile is 12 + 48 + 8 + label + 8, nothing more.
         proTag.measure(
             MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
             MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
@@ -144,10 +149,7 @@ class ToolTile(context: Context) : FrameLayout(context) {
             // label inside its two-line box and push it away from the icon.
             gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
             maxLines = 2
-            // Two lines are always reserved so a row of tiles keeps one icon line and one
-            // label line, tagged or not.
-            minLines = 2
-            setLineSpacing(0f, 1.1f)
+            setLineSpacing(0f, 1f)
             // Break at spaces/hyphens only; a single long word shrinks instead
             // of being split mid-word ("To PowerP|oint").
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
@@ -162,9 +164,15 @@ class ToolTile(context: Context) : FrameLayout(context) {
             ).apply { topMargin = SwStyle.dp(context, 8f) }
         )
 
-        // 12dp is the brief's minimum between the tile top and the icon container; the tag
-        // hangs in the extra band above the container, so it never touches the tile edge.
-        minimumHeight = SwStyle.dp(context, 104f)
+        // 12dp is the brief's minimum between the tile top and the icon container; the badge
+        // hangs in that band, so the tile never grows past its content (a bigger font grows
+        // the band instead of clipping the badge).
+        inner.setPadding(
+            0,
+            maxOf(SwStyle.dp(context, 2f), SwStyle.dp(context, 12f) - overhang),
+            0,
+            SwStyle.dp(context, 8f)
+        )
     }
 
     fun bind(tool: SwTool) {
@@ -204,7 +212,7 @@ class ToolTile(context: Context) : FrameLayout(context) {
 
     /**
      * Home quick row: six columns on a 360dp phone, so the column is narrower than the tool
-     * grid. The geometry is the same (48dp container, 26dp glyph, 12.5sp semibold label); the
+     * grid. The geometry is the same (48dp container, 26dp glyph, 12sp semibold label); the
      * label may shrink to fit one line, never below 9sp.
      */
     fun asQuick() {
@@ -295,6 +303,6 @@ class ToolTile(context: Context) : FrameLayout(context) {
 
     private companion object {
         /** The label's ceiling; [asQuick] may shrink it to fit a six-column row. */
-        const val LABEL_SP = 12.5f
+        const val LABEL_SP = 12f
     }
 }

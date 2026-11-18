@@ -46,7 +46,7 @@ class ToolsHubScreen(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val pad = SwStyle.dp(context, 18f)
-            setPadding(pad, SwStyle.dp(context, 10f), pad, SwStyle.dp(context, 6f))
+            setPadding(pad, SwStyle.dp(context, 6f), pad, SwStyle.dp(context, 2f))
         }
         bar.addView(
             SwStyle.text(context, 24f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
@@ -119,7 +119,7 @@ class ToolsHubScreen(
             box,
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)).apply {
                 val m = SwStyle.dp(context, 18f)
-                setMargins(m, SwStyle.dp(context, 8f), m, SwStyle.dp(context, 12f))
+                setMargins(m, SwStyle.dp(context, 4f), m, SwStyle.dp(context, 8f))
             }
         )
 
@@ -178,30 +178,39 @@ class ToolsHubScreen(
         val card = LinearLayout(context).apply {
             orientation = VERTICAL
             background = SwStyle.card(context, 18f)
-            val m = SwStyle.dp(context, 14f)
-            val pad = SwStyle.dp(context, 10f)
-            setPadding(pad, SwStyle.dp(context, 12f), pad, SwStyle.dp(context, 8f))
+            val m = SwStyle.dp(context, 8f)
+            // No side padding: the five 48dp squares keep their own gutters inside the
+            // column, and the widest label ("Searchable") needs the full column. 8dp
+            // top/bottom keeps the card tight but readable; 12dp separates the cards.
+            setPadding(0, SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f))
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                setMargins(m, 0, m, SwStyle.dp(context, 10f))
+                setMargins(m, 0, m, SwStyle.dp(context, 12f))
             }
         }
         val title = if (group != null) context.getString(groupTitle(group)) else context.getString(R.string.tools_title)
         val header = sectionTitle(title)
         val pad = SwStyle.dp(context, 6f)
-        header.setPadding(pad, 0, pad, SwStyle.dp(context, 10f))
+        header.setPadding(pad, 0, pad, SwStyle.dp(context, 8f))
         card.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         // A 4-column grid on a normal phone; wider text gets fewer columns instead of a
         // clipped label (checkable at fontScale 1.3 on a 360dp screen).
         val columns = columns()
         var row: LinearLayout? = null
+        var rows = 0
         for ((index, tool) in tools.withIndex()) {
             if (index % columns == 0) {
                 row = LinearLayout(context).apply {
                     orientation = HORIZONTAL
                     weightSum = columns.toFloat()
                 }
-                card.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+                card.addView(
+                    row,
+                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                        if (rows > 0) topMargin = SwStyle.dp(context, 6f)
+                    }
+                )
+                rows++
             }
             val tile = ToolTile(context)
             tile.id = R.id.swToolTile
@@ -212,7 +221,7 @@ class ToolsHubScreen(
         }
         // Fill the last row so the columns stay aligned.
         while (row != null && row.childCount % columns != 0) {
-            row.addView(View(context), LayoutParams(0, SwStyle.dp(context, 104f), 1f))
+            row.addView(View(context), LayoutParams(0, 0, 1f))
         }
         return card
     }
@@ -224,7 +233,10 @@ class ToolsHubScreen(
     private fun columns(): Int = when {
         resources.configuration.fontScale >= 1.6f -> 2
         resources.configuration.fontScale >= 1.25f -> 3
-        else -> 4
+        // Five columns on a normal phone: the 48dp squares keep ~10dp gutters in a 68dp
+        // column, the widest label ("Searchable", 65dp at 12sp) stays on one line, and the
+        // five-tool Create group no longer leaves an empty second row.
+        else -> 5
     }
 
     /** Sentence case (never ALL CAPS), 16sp semibold: a heading, not a category stamp. */
