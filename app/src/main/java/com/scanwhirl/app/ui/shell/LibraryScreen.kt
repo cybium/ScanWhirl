@@ -124,6 +124,11 @@ class LibraryScreen(
     private var category: String? = null
     private var revealId: String? = null
 
+    // uihome: the pinned layer (sticky count + fast-scroll bar) lives above the
+    // ScrollView that ShellActivity owns; this screen may not edit that activity,
+    // so it installs the overlay into the scroll view's host on attach.
+    private var chrome: LibraryViewportChrome? = null
+
     // L1 performance: never read the library on the main thread.
     private var loadJob: Job? = null
     private var renderJob: Job? = null
@@ -234,6 +239,7 @@ class LibraryScreen(
             setPadding(pad, SwStyle.dp(context, 4f), pad, SwStyle.dp(context, 6f))
         }
         countLabel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true)
+        countLabel.id = R.id.swDocCount
         listHeader.addView(countLabel, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         addView(listHeader)
 
@@ -309,6 +315,46 @@ class LibraryScreen(
         )
 
         buildQuickRow()
+    }
+
+    // ---- pinned library chrome -------------------------------------------
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        installChrome()
+    }
+
+    override fun onDetachedFromWindow() {
+        // The host (ShellActivity's tab content) clears its children on a tab switch.
+        // Drop the scroll listener but never remove a sibling while the host is
+        // iterating its children; installChrome() adopts a surviving overlay.
+        chrome?.release()
+        chrome = null
+        super.onDetachedFromWindow()
+    }
+
+    /**
+     * uihome: installs the sticky count + fast-scroll bar over the library. The
+     * parent ScrollView is created by ShellActivity (not this lane's file), so the
+     * overlay is added to that ScrollView's FrameLayout host.
+     */
+    private fun installChrome() {
+        val scroll = parent as? ScrollView ?: return
+        val host = scroll.parent as? ViewGroup ?: return
+        val pinned = host.findViewById<LibraryViewportChrome>(R.id.swLibraryChrome)
+            ?: LibraryViewportChrome(context).also {
+                host.addView(
+                    it,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
+            }
+        chrome = pinned
+        pinned.attach(scroll, listHeader)
+        pinned.setCountText(countLabel.text)
+        pinned.setDocumentCount(renderedDocs.size)
     }
 
     // ---- public -----------------------------------------------------------
@@ -1380,8 +1426,8 @@ class LibraryScreen(
         quickAddGrid.addView(
             SwStyle.text(context, 12f, SwStyle.color(context, R.color.cyan_dim), bold = true).apply {
                 id = R.id.swQuickAddTitle
-                text = context.getString(R.string.quick_add_tools).uppercase(Locale.getDefault())
-                letterSpacing = SwStyle.tracking(context, 0.08f)
+                text = context.getString(R.string.quick_add_tools)
+                letterSpacing = SwStyle.tracking(context, 0.02f)
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         )
@@ -1658,6 +1704,10 @@ class LibraryScreen(
         countLabel.text = resources.getQuantityString(
             com.scanwhirl.app.R.plurals.list_count, shown.size, shown.size
         )
+        // uihome: the pinned chrome mirrors the count and decides whether the list is
+        // long enough for the fast-scroll bar (>= 12 documents).
+        chrome?.setCountText(countLabel.text)
+        chrome?.setDocumentCount(shown.size)
         val filtering = query.isNotBlank() || folder != null || category != null
         noMatchView.isVisible = shown.isEmpty() && filtering
         if (noMatchView.isVisible) {

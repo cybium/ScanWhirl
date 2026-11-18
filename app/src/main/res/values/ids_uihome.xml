@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- uihome: Home library list craft (large paper thumbnails, fast scroll, sticky count).
+         Kept in its own file so lanes never edit ids_l1.xml / ids.xml. -->
+    <item name="swLibraryChrome" type="id" />
+    <item name="swLibraryFastScroll" type="id" />
+    <item name="swDocCount" type="id" />
+    <item name="swDocCountSticky" type="id" />
+    <item name="swDocThumbPlaceholder" type="id" />
+    <item name="swDocThumbLetter" type="id" />
+    <item name="swDocFolder" type="id" />
+</resources>

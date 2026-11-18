@@ -21,7 +21,12 @@ import com.scanwhirl.app.util.CategoryStyle
 
 /**
  * v2 UI: 01_home_A — a document row: paper thumbnail with the page count,
- * name (+ lock badge), meta, category dot, Share and ⋯.
+ * name (+ lock badge), meta, folder dot, Share and ⋯.
+ *
+ * uihome (VISUAL_AUDIT_A X2): the thumbnail is a real first page at 72×102dp
+ * (page aspect), not a 54dp blank square; a row is at least 88dp tall so the
+ * tile is legible, and a document with no readable page shows its first letter
+ * plus the page icon instead of an empty tile.
  */
 class DocCard(context: Context) : LinearLayout(context) {
 
@@ -36,10 +41,15 @@ class DocCard(context: Context) : LinearLayout(context) {
     val shareButton: ImageButton
     val moreButton: ImageButton
 
+    /** The placeholder page icon and the document's first letter (never a blank tile). */
+    val thumbPlaceholder: ImageView
+    val thumbLetter: TextView
+
     /** The selection check; visible only while the library is selecting this card. */
     val selectionBadge: ImageView
 
     private val thumbFrame: FrameLayout
+    private val thumbPlaceholderGroup: LinearLayout
     private val categoryRow: LinearLayout
     private val actions: LinearLayout
 
@@ -51,13 +61,14 @@ class DocCard(context: Context) : LinearLayout(context) {
         gravity = Gravity.CENTER_VERTICAL
         val d = resources.displayMetrics.density
         background = SwStyle.card(context, 18f)
-        setPadding((10 * d).toInt(), (10 * d).toInt(), (6 * d).toInt(), (10 * d).toInt())
+        setPadding((12 * d).toInt(), (12 * d).toInt(), (6 * d).toInt(), (12 * d).toInt())
+        minimumHeight = SwStyle.dp(context, 88f)
         isClickable = true
         isFocusable = true
         SwMotion.press(this)
 
         thumbFrame = FrameLayout(context).apply {
-            background = SwStyle.rounded(context, SwStyle.color(context, R.color.sw_paper_thumb), radiusDp = 9f)
+            background = SwStyle.rounded(context, SwStyle.color(context, R.color.sw_paper_thumb), radiusDp = 8f)
             clipToOutline = true
         }
         thumbView = ImageView(context).apply {
@@ -67,6 +78,39 @@ class DocCard(context: Context) : LinearLayout(context) {
         }
         thumbFrame.addView(
             thumbView,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        // No page image (locked, unreadable, still being written): a page glyph over the
+        // document's first letter. Never an empty white tile (VISUAL_AUDIT_A X2 / §6.1).
+        thumbPlaceholder = ImageView(context).apply {
+            id = R.id.swDocThumbPlaceholder
+            setImageResource(R.drawable.ic_document)
+            imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.text_hologram_dim))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        thumbLetter = SwStyle.text(context, 24f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
+            id = R.id.swDocThumbLetter
+            gravity = Gravity.CENTER
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        thumbPlaceholderGroup = LinearLayout(context).apply {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER
+            isVisible = false
+        }
+        thumbPlaceholderGroup.addView(
+            thumbPlaceholder,
+            LinearLayout.LayoutParams(SwStyle.dp(context, 20f), SwStyle.dp(context, 20f))
+        )
+        thumbPlaceholderGroup.addView(
+            thumbLetter,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+        thumbFrame.addView(
+            thumbPlaceholderGroup,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
         lockIcon = ImageView(context).apply {
@@ -81,9 +125,9 @@ class DocCard(context: Context) : LinearLayout(context) {
             lockIcon,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
-        pageBadge = SwStyle.text(context, 10f, Color.WHITE, bold = true).apply {
+        pageBadge = SwStyle.text(context, 11f, Color.WHITE, bold = true).apply {
             background = SwStyle.rounded(context, 0xCC0E1316.toInt(), radiusDp = 5f)
-            setPadding((5 * d).toInt(), 0, (5 * d).toInt(), 0)
+            setPadding((6 * d).toInt(), 0, (6 * d).toInt(), 0)
         }
         thumbFrame.addView(
             pageBadge,
@@ -113,8 +157,8 @@ class DocCard(context: Context) : LinearLayout(context) {
         )
         addView(
             thumbFrame,
-            LayoutParams(SwStyle.dp(context, 54f), SwStyle.dp(context, 70f)).apply {
-                marginEnd = (14 * d).toInt()
+            LayoutParams(SwStyle.dp(context, 72f), SwStyle.dp(context, 102f)).apply {
+                marginEnd = (12 * d).toInt()
             }
         )
 
@@ -165,7 +209,9 @@ class DocCard(context: Context) : LinearLayout(context) {
 
         metaView = SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_dim)).apply {
             id = R.id.swDocMeta
-            maxLines = 2
+            // Reflows to three lines at 200% font scale instead of ellipsizing the date away
+            // (the accessibility audit rejects a cut line; the row grows, nothing is lost).
+            maxLines = 3
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         info.addView(
@@ -186,7 +232,7 @@ class DocCard(context: Context) : LinearLayout(context) {
             LayoutParams((8 * d).toInt(), (8 * d).toInt()).apply { marginEnd = (5 * d).toInt() }
         )
         categoryView = SwStyle.text(context, 11f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-            id = R.id.swDocCategory
+            id = R.id.swDocFolder
             minimumHeight = (14 * d).toInt()
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -238,9 +284,20 @@ class DocCard(context: Context) : LinearLayout(context) {
         alpha = if (document.isLocked) 0.92f else 1f
         pageBadge.text = document.pageCount.toString()
         pageBadge.isVisible = document.pageCount > 0
-        categoryView.text = CategoryLabels.display(context, document.category)
+
+        // The row names the folder the document lives in (sentence case, as the person
+        // typed it). An unsorted document still names its library category.
+        val folderName = document.folder?.trim().orEmpty()
+        categoryView.text = if (folderName.isNotEmpty()) {
+            folderName
+        } else {
+            CategoryLabels.display(context, document.category)
+        }
         categoryDot.background = SwStyle.rounded(
-            context, CategoryStyle.color(document.category), radiusDp = 3f
+            context,
+            if (folderName.isNotEmpty()) SwStyle.color(context, R.color.cyan_primary)
+            else CategoryStyle.color(document.category),
+            radiusDp = 3f
         )
         shareButton.setOnClickListener { onShare() }
         moreButton.setOnClickListener { onMore() }
@@ -248,19 +305,47 @@ class DocCard(context: Context) : LinearLayout(context) {
         moreButton.isVisible = true
         selectionBadge.isVisible = false
 
+        thumbView.imageTintList = null
+        thumbView.setImageDrawable(null)
+        thumbView.setBackgroundColor(SwStyle.color(context, R.color.sw_paper_thumb))
         val firstPage = document.pageFiles.firstOrNull()
-        if (firstPage != null && firstPage.exists() && !document.isLocked) {
-            thumbView.imageTintList = null
+        val canShowPage = firstPage != null && firstPage.exists() && !document.isLocked
+        showThumbPlaceholder(if (canShowPage) null else document)
+        if (firstPage != null && canShowPage) {
             runCatching {
+                // Sampled + cached by the shared page-thumb LRU; fitExactly keeps a
+                // 100-document list inside the cache budget (72dp tile, not a 1080p page).
                 com.scanwhirl.app.ui.pagegrid.PageThumbLoader.load(
-                    firstPage, 320, com.scanwhirl.app.util.ScanFilter.ORIGINAL, thumbView
+                    firstPage,
+                    THUMB_TARGET_PX,
+                    com.scanwhirl.app.util.ScanFilter.ORIGINAL,
+                    thumbView,
+                    fitExactly = true,
+                    placeholder = R.drawable.sw_thumb_blank,
+                    onLoaded = { bitmap, _ ->
+                        thumbView.setImageBitmap(bitmap)
+                        showThumbPlaceholder(null)
+                    },
+                    onFailed = { showThumbPlaceholder(document) },
+                    skipStale = true
                 )
             }
         } else {
-            thumbView.setImageDrawable(null)
-            thumbView.setBackgroundColor(
-                SwStyle.color(context, if (document.isLocked) R.color.sw_thumb_locked else R.color.sw_paper_thumb)
-            )
+            com.scanwhirl.app.ui.pagegrid.PageThumbLoader.cancel(thumbView)
+        }
+    }
+
+    /**
+     * Shows the letter + page-glyph placeholder for [document] (null hides it, a real
+     * page is on the tile). The letter is the first character of the name, upper-cased
+     * with Locale.ROOT like a contact avatar.
+     */
+    private fun showThumbPlaceholder(document: ScanDocument?) {
+        val show = document != null
+        thumbPlaceholderGroup.isVisible = show
+        if (show) {
+            val letter = document!!.name.trim().firstOrNull()?.toString().orEmpty()
+            thumbLetter.text = if (letter.isEmpty()) "#" else letter.uppercase()
         }
     }
 
@@ -271,8 +356,11 @@ class DocCard(context: Context) : LinearLayout(context) {
     fun asCompact(): DocCard = apply {
         val d = resources.displayMetrics.density
         setPadding((8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt())
+        minimumHeight = (64 * d).toInt()
         thumbFrame.layoutParams = LayoutParams((40 * d).toInt(), (52 * d).toInt())
             .apply { marginEnd = (12 * d).toInt() }
+        thumbLetter.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
+        thumbPlaceholder.layoutParams = LinearLayout.LayoutParams((12 * d).toInt(), (12 * d).toInt())
         categoryRow.visibility = View.GONE
         actions.visibility = View.GONE
         selectionBadge.visibility = View.GONE
@@ -298,5 +386,13 @@ class DocCard(context: Context) : LinearLayout(context) {
         } else {
             SwStyle.card(context, 18f)
         }
+    }
+
+    companion object {
+        /**
+         * Longest side the row thumbnail is decoded to. The tile is 72×102dp, so even
+         * at 3x it needs 306px; sampling to 320 keeps the shared 24 MB LRU honest.
+         */
+        const val THUMB_TARGET_PX = 320
     }
 }

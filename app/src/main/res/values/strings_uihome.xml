@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- uihome: Home library list. Reader-facing labels only; the document count
+         reuses the existing plurals/list_count. -->
+    <string name="home_fast_scroll">Scroll quickly through documents</string>
+</resources>
