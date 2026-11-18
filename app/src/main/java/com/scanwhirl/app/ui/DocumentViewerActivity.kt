@@ -48,6 +48,7 @@ import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
+import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -79,6 +80,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** The draft's page list (a replacement file where an edit wrote one, else the base page). */
     private var pages: List<java.io.File> = emptyList()
+
+    /** v2 UI: 07_reader_dock — bytes of the document as stored, for the meta line. */
+    private var docBytes = 0L
 
     /** The open page draft, or null. The first page edit creates it; opening writes nothing. */
     private var draft: DraftStore.Draft? = null
@@ -289,7 +293,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
 
         // v2 UI: Organize pages (owner revision) — one clean dock; page work appears only
-        // after a long-press. Dock = Share · Edit · Text · More.
+        // after a long-press. Dock, left to right: Edit · Text · More · Share (work on the
+        // document first, send it away last). The handlers below are the pre-revision ones.
         binding.btnShare.setOnClickListener {
             document?.let { doc ->
                 ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
@@ -304,7 +309,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.btnMore.setOnClickListener { showMoreSheet() }
         // T4.6: the header category chip is tappable now — it opens the
         // category picker (the old "Categorize" list dialog is gone).
-        binding.docCategoryChip.setOnClickListener { promptCategorize() }
+        // v2 UI: 07_reader_dock — the 48 dp container is the tap target; the pill itself is
+        // only 32 dp tall, so the visible chip can stay small and calm.
+        binding.docCategoryTouch.setOnClickListener { promptCategorize() }
         // Selection mode (owner revision): long-press enters it; the top bar counts,
         // closes and selects all; the bottom bar acts on the ticked pages.
         binding.btnSelClose.setOnClickListener { exitSelectMode() }
@@ -335,6 +342,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
         // Checkboxes stay hidden until Select pages is tapped (§4.5, D-D).
         binding.pageList.checkboxesVisible = false
+
+        styleDocTitle()
 
         // First load (off the main thread). Opening a document writes no draft (G14).
         lifecycleScope.launch {
@@ -394,7 +403,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         super.onResume()
         // AppCompat re-syncs the toolbar title from the manifest label during resume;
         // re-apply the document name so it wins.
-        document?.let { binding.toolbar.title = it.name }
+        document?.let {
+            binding.toolbar.title = it.name
+            styleDocTitle()
+        }
         // Returning from the full-screen page view: a draft edit may have been committed.
         if (document != null && firstLoad) {
             lifecycleScope.launch { reloadDocument() }
@@ -430,16 +442,25 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             showDraftUnusable(damage.message ?: getString(R.string.draft_damaged))
         }
         binding.toolbar.title = doc.name
+        styleDocTitle()
+        // v2 UI: 07_reader_dock — the meta line carries the size as well as the page count.
+        docBytes = withContext(Dispatchers.IO) { docSizeBytes(doc) }
         binding.docLockBadge.isVisible = doc.isLocked
         binding.docVaultBadge.isVisible = doc.isVaulted
         // test25 Phase 5C: category tag in the header (recategorise funnels
         // through here too — see promptCategorize()).
-        binding.docCategoryChip.text = "● " +
-            com.scanwhirl.app.util.CategoryLabels.display(this, doc.category).uppercase()
-        binding.docCategoryChip.setTextColor(
+        // v2 UI: 07_reader_dock — a compact tonal pill: 8 dp dot in the category's colour,
+        // sentence-case 13 sp label; the 48 dp container around it is the tap target and
+        // carries the spoken label, so the pill never has to be a 48 dp box.
+        val categoryLabel = com.scanwhirl.app.util.CategoryLabels.display(this, doc.category)
+        binding.docCategoryLabel.text = categoryLabel
+        binding.docCategoryTouch.contentDescription =
+            getString(R.string.doc_category_action, categoryLabel)
+        binding.docCategoryDot.backgroundTintList = android.content.res.ColorStateList.valueOf(
             com.scanwhirl.app.util.CategoryStyle.color(doc.category)
         )
         binding.docCategoryChip.isVisible = true
+        binding.docCategoryTouch.isVisible = true
         refreshGrid()
         updateDraftBar()
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
@@ -456,10 +477,47 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.pageList.submit(visiblePages)
         binding.gridEmpty.isVisible = visiblePages.isEmpty()
         binding.pageList.isVisible = visiblePages.isNotEmpty()
-        binding.pageCount.text =
-            resources.getQuantityString(R.plurals.pages, visiblePages.size, visiblePages.size)
+        // v2 UI: 07_reader_dock — "3 pages · 544 KB", the same shape as a library row.
+        binding.pageCount.text = resources.getQuantityString(
+            R.plurals.viewer_meta,
+            visiblePages.size,
+            visiblePages.size,
+            StatusLine.formatBytes(docBytes)
+        )
         updateSelectionUi()
     }
+
+    /**
+     * v2 UI: 07_reader_dock — the document name is the header's H1: two lines at most, then
+     * an ellipsis. Toolbar builds its own title TextView (single-line by default), so the
+     * view is found once it exists and restyled; later title changes reuse it.
+     */
+    private fun styleDocTitle() {
+        val title = binding.toolbar.title?.toString().orEmpty()
+        if (title.isEmpty()) return
+        val view = (0 until binding.toolbar.childCount)
+            .map { binding.toolbar.getChildAt(it) }
+            .filterIsInstance<android.widget.TextView>()
+            .firstOrNull { it.text?.toString() == title } ?: return
+        view.setSingleLine(false)
+        view.maxLines = 2
+        view.ellipsize = android.text.TextUtils.TruncateAt.END
+        view.setHorizontallyScrolling(false)
+        view.textSize = 18f
+        view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        view.setLineSpacing(0f, 1.1f)
+    }
+
+    /**
+     * v2 UI: 07_reader_dock — the compact category pill is 32 dp tall while its tap area stays
+     * 48 dp: the transparent container around it is the clickable view (and the spoken label),
+     * so a tap in the empty space around the pill still opens the category picker.
+     */
+
+    /** Bytes the document occupies: its PDF, or its pages while no PDF exists. */
+    private fun docSizeBytes(doc: ScanDocument): Long =
+        if (doc.pdfFile.isFile && doc.pdfFile.length() > 0L) doc.pdfFile.length()
+        else doc.pageFiles.sumOf { it.length() }
 
     private fun dp(value: Float): Int = (value * resources.displayMetrics.density).toInt()
 

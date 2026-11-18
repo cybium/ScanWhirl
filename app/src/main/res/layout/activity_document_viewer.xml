@@ -10,10 +10,15 @@
         android:background="@color/sf_appbar"
         app:elevation="0dp">
 
+        <!-- v2 UI: 07_reader_dock — the document name is the screen's one H1 and wraps to
+             two lines before it ellipsises (never a one-line cut). The title is painted in
+             code (DocumentViewerActivity.styleDocTitle) because Toolbar builds its own
+             title TextView; the bar grows only when the name really needs the second line. -->
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
             app:navigationIcon="?attr/homeAsUpIndicator"
             app:titleTextColor="?attr/colorOnSurface" />
     </com.google.android.material.appbar.AppBarLayout>
@@ -38,27 +43,57 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?android:attr/textColorSecondary" />
+                android:ellipsize="end"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/text_hologram_mid"
+                android:textSize="13sp" />
 
-            <!-- test25 Phase 5C: additive ID — category tag, filled in reloadDocument(). -->
-            <!-- test26 T5.2 (D-H): 10sp → 12sp, tappable (T4.6). -->
-            <TextView
-                android:id="@+id/docCategoryChip"
+            <!-- v2 UI: 07_reader_dock — the folder/category pill is metadata: a compact 32 dp
+                 tonal pill (13 sp sentence-case label, 8 dp dot in the category's colour)
+                 centred on the meta line. This 48 dp container is the tap target (it carries
+                 the spoken label), so the target is big while the visible chip stays small. -->
+            <FrameLayout
+                android:id="@+id/docCategoryTouch"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="6dp"
-                android:background="@drawable/bg_chip_void"
-                android:gravity="center"
-                android:letterSpacing="0.08"
-                android:minHeight="48dp"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="3dp"
-                android:textAllCaps="true"
-                android:textColor="@color/cyan_primary"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:clickable="true"
+                android:clipChildren="false"
+                android:focusable="true"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/docCategoryChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:background="@drawable/bg_category_chip_tonal"
+                    android:gravity="center_vertical"
+                    android:minHeight="32dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="6dp"
+                    android:visibility="gone">
+
+                    <View
+                        android:id="@+id/docCategoryDot"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:background="@drawable/bg_category_dot"
+                        android:importantForAccessibility="no" />
+
+                    <TextView
+                        android:id="@+id/docCategoryLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="@color/text_hologram_mid"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/docVaultBadge"
@@ -167,13 +202,18 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <!-- v2 UI: 07_reader_dock — a long document must show that the grid continues: a
+             visible vertical scrollbar (never fading) inside the grid's padding. -->
         <com.scanwhirl.app.ui.pagegrid.PageGridView
             android:id="@+id/pageList"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:clipToPadding="false"
-            android:padding="12dp" />
+            android:fadeScrollbars="false"
+            android:padding="12dp"
+            android:scrollbarStyle="insideInset"
+            android:scrollbars="vertical" />
 
         <!-- PM-2.2c: the draft bar appears after the first page edit. Discard always
              works; the saved document changes only on Save as new or Replace. -->
@@ -335,29 +375,19 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- test26 T5.2 (§4.5/§5.4): the bottom dock is [Share w2][Edit][Text]
-             [More] — four DockItem buttons, weighted 2/1/1/1, no fixed heights.
-             The gold Pro Tools tray, the crown button and the old
-             Delete/Share row are gone (N12: one home per action). -->
+        <!-- v2 UI: 07_reader_dock — one fixed dock order, left to right: Edit · Text · More ·
+             Share. Work on the document first, send it away last. Four equal-width items
+             (weight 1 each), each >= 56 dp tall, 24 dp icon over one 12 sp label. Every
+             action and handler is unchanged; only the order and the spacing are. -->
         <LinearLayout
             android:id="@+id/bottomDock"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="8dp"
+            android:layout_marginHorizontal="4dp"
             android:background="@drawable/bg_dock_glass"
             android:orientation="horizontal"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="6dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnShare"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="2"
-                android:paddingHorizontal="2dp"
-                android:text="@string/share_pdf"
-                app:icon="@drawable/ic_share" />
+            android:paddingHorizontal="4dp"
+            android:paddingVertical="4dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnEdit"
@@ -365,7 +395,9 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:paddingHorizontal="2dp"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                android:paddingHorizontal="0dp"
                 android:text="@string/edit"
                 app:icon="@drawable/ic_edit" />
 
@@ -375,7 +407,9 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:paddingHorizontal="2dp"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                android:paddingHorizontal="0dp"
                 android:text="@string/btn_text"
                 app:icon="@drawable/ic_ocr" />
 
@@ -385,9 +419,23 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:paddingHorizontal="2dp"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                android:paddingHorizontal="0dp"
                 android:text="@string/more"
                 app:icon="@drawable/ic_more" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnShare"
+                style="@style/Widget.ScanWhirl.Button.DockItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                android:paddingHorizontal="0dp"
+                android:text="@string/share_pdf"
+                app:icon="@drawable/ic_share" />
         </LinearLayout>
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
