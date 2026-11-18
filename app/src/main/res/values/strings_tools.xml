@@ -42,7 +42,7 @@
     <string name="tools_setup_level_medium">Medium</string>
     <string name="tools_setup_level_strong">Strong</string>
     <string name="tools_setup_estimate">Estimated size: %1$s</string>
-    <string name="tools_setup_compress_note">A target size fits every page. Without one, quality is used.</string>
+    <string name="tools_setup_compress_note">Choose a level, or type the size you need.</string>
     <string name="tools_setup_name_hint">Name (optional)</string>
     <string name="tools_setup_long_calculating">Measuring the pages…</string>
     <plurals name="tools_setup_long_note">

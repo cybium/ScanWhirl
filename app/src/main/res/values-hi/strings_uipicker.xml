@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- uipicker lane strings (Hindi). Every value carries a review marker. -->
+<!-- uipicker lane strings (Hindi). Wording follows next/docs/review/JUDGE_HINDI.md. -->
 <resources>
-    <string name="tools_pick_choose_doc"><!-- review -->दस्तावेज़ चुनें</string>
-    <string name="tools_pick_custom_size"><!-- review -->लक्ष्य आकार (वैकल्पिक), जैसे 500 KB</string>
+    <string name="tools_pick_choose_doc">दस्तावेज़ चुनें</string>
+    <!-- JUDGE_HINDI "Custom size | अपनी ज़रूरत का आकार (चाहें तो)", example kept inline. -->
+    <string name="tools_pick_custom_size">अपनी ज़रूरत का आकार (चाहें तो), जैसे 500 KB</string>
 </resources>

@@ -167,10 +167,57 @@ class ToolSetupActivity : BaseActivity() {
         column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val pad = SwStyle.dp(this@ToolSetupActivity, 18f)
-            setPadding(pad, SwStyle.dp(this@ToolSetupActivity, 10f), pad, SwStyle.dp(this@ToolSetupActivity, 40f))
+            // The pinned bar covers the bottom of the viewport: the list ends above it, so the
+            // last source row or option is never hidden behind Continue.
+            setPadding(
+                pad,
+                SwStyle.dp(this@ToolSetupActivity, 10f),
+                pad,
+                SwStyle.dp(this@ToolSetupActivity, BAR_CLEARANCE_DP)
+            )
         }
         scroll.addView(column)
         root.addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+        // Pinned action bar: Continue / the tool's action never scrolls away with the list.
+        val bar = LinearLayout(this).apply {
+            id = R.id.toolSetupBar
+            orientation = LinearLayout.VERTICAL
+            val side = SwStyle.dp(this@ToolSetupActivity, 18f)
+            setPadding(side, SwStyle.dp(this@ToolSetupActivity, 10f), side, SwStyle.dp(this@ToolSetupActivity, 12f))
+            setBackgroundColor(0xFF0E1316.toInt())
+            addView(View(this@ToolSetupActivity).apply {
+                setBackgroundColor(SwStyle.color(this@ToolSetupActivity, R.color.sw_cyan_hair))
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 1f)
+            ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 10f) })
+        }
+        errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
+            id = R.id.toolSetupError
+            isVisible = false
+        }
+        bar.addView(errorView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
+        runButton = actionButton(getString(R.string.tools_setup_run), primary = true).apply {
+            id = R.id.toolSetupRun
+            setOnClickListener { run() }
+        }
+        bar.addView(runButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 56f)
+        ))
+        root.addView(bar, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.BOTTOM })
+        // The list's bottom clearance follows the real bar height (it grows while an error line
+        // is shown), so the last row is never covered.
+        bar.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            val h = v.height
+            if (h > 0 && column.paddingBottom != h) {
+                column.setPadding(column.paddingLeft, column.paddingTop, column.paddingRight, h)
+            }
+        }
+
         progressOverlay = buildProgress()
         root.addView(progressOverlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.applySystemBarsPadding()
@@ -217,22 +264,6 @@ class ToolSetupActivity : BaseActivity() {
         }
         buildOptions()
         column.addView(optionsHost)
-
-        errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
-            id = R.id.toolSetupError
-            isVisible = false
-        }
-        column.addView(errorView, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 10f) })
-
-        runButton = actionButton(getString(R.string.tools_setup_run), primary = true).apply {
-            id = R.id.toolSetupRun
-            setOnClickListener { run() }
-        }
-        column.addView(runButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 54f)
-        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 18f) })
         applyRunEnabled()
     }
 
@@ -668,6 +699,9 @@ class ToolSetupActivity : BaseActivity() {
         ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
         paintLevels()
         startEstimate()
+        // A re-render (selection change, onResume) rebuilds the size labels: show the estimates
+        // that are already known instead of waiting for a job that is skipped.
+        updateEstimateLines()
         optionsHost.addView(note(getString(R.string.tools_setup_compress_note)))
     }
 
@@ -1253,6 +1287,8 @@ class ToolSetupActivity : BaseActivity() {
 
     companion object {
         private const val EXTRA_TOOL_ID = "tool_id"
+        /** Room kept at the end of the list for the pinned action bar (before its height is known). */
+        private const val BAR_CLEARANCE_DP = 96f
         /** Every option chip label carries this tag, so a UI test can walk the chips on any tool. */
         const val CHIP_TAG = "swChip"
         /** Material's disabled alpha: a disabled button at full alpha still looks tappable. */

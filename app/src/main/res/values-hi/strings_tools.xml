@@ -41,7 +41,7 @@
     <string name="tools_setup_level_medium"><!-- review -->मध्यम</string>
     <string name="tools_setup_level_strong"><!-- review -->ज़्यादा</string>
     <string name="tools_setup_estimate"><!-- review -->अनुमानित आकार: %1$s</string>
-    <string name="tools_setup_compress_note"><!-- review -->लक्ष्य आकार हर पेज फिट करता है। बिना लक्ष्य गुणवत्ता।</string>
+    <string name="tools_setup_compress_note">स्तर चुनें, या जितना आकार चाहिए वह लिखें।</string>
     <string name="tools_setup_name_hint"><!-- review -->नाम (वैकल्पिक)</string>
     <string name="tools_setup_long_calculating"><!-- review -->पेज मापे जा रहे हैं…</string>
     <plurals name="tools_setup_long_note">
@@ -84,7 +84,7 @@
     <string name="tools_setup_need_front"><!-- review -->कार्ड का आगे का भाग चुनें।</string>
     <string name="tools_setup_need_back"><!-- review -->कार्ड का पीछे का भाग चुनें।</string>
     <string name="tools_setup_image_failed"><!-- review -->यह छवि पढ़ी नहीं जा सकती।</string>
-    <string name="tools_setup_run"><!-- review -->आगे</string>
+    <string name="tools_setup_run">जारी रखें</string>
     <string name="tools_setup_working"><!-- review -->काम चल रहा है…</string>
     <string name="tools_setup_failed"><!-- review -->पूरा नहीं हुआ: %1$s</string>
     <string name="tools_setup_nothing"><!-- review -->इस टूल में विकल्प नहीं हैं।</string>

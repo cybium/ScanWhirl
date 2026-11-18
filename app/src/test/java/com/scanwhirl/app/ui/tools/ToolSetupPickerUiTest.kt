@@ -27,6 +27,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import java.util.Locale
 
 /**
@@ -343,6 +344,193 @@ class ToolSetupPickerUiTest {
                 val scroll = requireNotNull(activity.findViewById<ScrollView>(R.id.toolSetupScroll))
                 assertTrue("the page scrolls vertically", scroll.isVerticalScrollBarEnabled)
                 assertFalse("the scrollbar must not fade away", scroll.isScrollbarFadingEnabled)
+            }
+        }
+    }
+
+    // ---- 6. the action is pinned, not at the end of the list ---------------
+
+    private fun ancestors(view: View): List<View> {
+        val out = mutableListOf<View>()
+        var parent = view.parent as? View
+        while (parent != null) {
+            out += parent
+            parent = parent.parent as? View
+        }
+        return out
+    }
+
+    /** Distance of [view]'s bottom from the bottom of the screen root. */
+    private fun bottomInRoot(activity: Activity, view: View): Int {
+        val content = activity.findViewById<ViewGroup>(android.R.id.content)
+        val root = content.getChildAt(0) ?: content
+        var bottom = view.bottom
+        var parent = view.parent as? View
+        while (parent != null && parent !== root) {
+            bottom += parent.top
+            parent = parent.parent as? View
+        }
+        return bottom
+    }
+
+    @Test
+    fun `the action button is pinned below the list and visible without scrolling`() {
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue("the library is listed", waitUntil { sourceRows(activity).size == 2 })
+                layoutScreen(activity)
+                val run = requireNotNull(activity.findViewById<View>(R.id.toolSetupRun))
+                assertTrue(
+                    "Continue must not live inside the scrolling list",
+                    ancestors(run).none { it.id == R.id.toolSetupScroll }
+                )
+                assertTrue("Continue is on screen", run.isShown && run.height > 0)
+                assertTrue("Continue is 56 dp tall: ${run.height}px", run.height >= dp(activity, 56f))
+
+                val content = activity.findViewById<ViewGroup>(android.R.id.content)
+                val root = content.getChildAt(0) ?: content
+                assertTrue(
+                    "Continue must be reachable without scrolling: bottom ${bottomInRoot(activity, run)}px " +
+                        "of ${root.height}px",
+                    bottomInRoot(activity, run) <= root.height
+                )
+                assertTrue(
+                    "Continue sits in the bottom half, not at the end of the list",
+                    bottomInRoot(activity, run) > root.height * 2 / 3
+                )
+
+                val bar = requireNotNull(activity.findViewById<View>(R.id.toolSetupBar))
+                assertTrue(
+                    "the bar itself must not scroll",
+                    ancestors(bar).none { it.id == R.id.toolSetupScroll }
+                )
+                val scroll = requireNotNull(activity.findViewById<ScrollView>(R.id.toolSetupScroll))
+                val column = scroll.getChildAt(0)
+                assertTrue(
+                    "the list must keep room for the bar: padding ${column.paddingBottom}px, " +
+                        "bar ${bar.height}px",
+                    column.paddingBottom >= bar.height
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `the longest list ends above the pinned bar and the last row stays reachable`() {
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue("the library is listed", waitUntil { sourceRows(activity).size == 2 })
+                layoutScreen(activity)
+                val bar = requireNotNull(activity.findViewById<View>(R.id.toolSetupBar))
+                val scroll = requireNotNull(activity.findViewById<ScrollView>(R.id.toolSetupScroll))
+                // Scroll to the end: the last row's bottom must clear the bar.
+                scroll.scrollTo(0, scroll.getChildAt(0).height)
+                idle()
+                layoutScreen(activity)
+                val last = sourceRows(activity).last()
+                assertTrue(
+                    "the last source row (${bottomInRoot(activity, last)}px) is hidden behind the bar " +
+                        "(top ${bottomInRoot(activity, bar) - bar.height}px)",
+                    bottomInRoot(activity, last) <= bottomInRoot(activity, bar) - bar.height
+                )
+            }
+        }
+    }
+
+    // ---- 7. the compress help line and the glossary ------------------------
+
+    @Test
+    fun `compress explains the level-or-size choice in plain words`() {
+        assertEquals(
+            "Choose a level, or type the size you need.",
+            app.getString(R.string.tools_setup_compress_note)
+        )
+        assertFalse(
+            "the old help line is gone",
+            app.getString(R.string.tools_setup_compress_note).contains("A target size fits every page")
+        )
+        assertEquals(
+            "Custom size (optional), e.g. 500 KB",
+            app.getString(R.string.tools_pick_custom_size)
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "hi-w360dp-h640dp-xhdpi")
+    fun `Hindi labels follow the judged glossary`() {
+        // JUDGE_HINDI: "Custom size | अपनी ज़रूरत का आकार (चाहें तो)"; no वैकल्पिक.
+        assertEquals(
+            "अपनी ज़रूरत का आकार (चाहें तो), जैसे 500 KB",
+            app.getString(R.string.tools_pick_custom_size)
+        )
+        assertEquals("दस्तावेज़ चुनें", app.getString(R.string.tools_pick_choose_doc))
+        assertEquals(
+            "स्तर चुनें, या जितना आकार चाहिए वह लिखें।",
+            app.getString(R.string.tools_setup_compress_note)
+        )
+        // JUDGE_HINDI: "Continue | जारी रखें", distinct from आगे.
+        assertEquals("जारी रखें", app.getString(R.string.tools_setup_run))
+    }
+
+    @Test
+    fun `the custom size hint fits its field at 360 dp in English`() {
+        assertHintFits(R.string.tools_pick_custom_size)
+    }
+
+    @Test
+    @Config(qualifiers = "hi-w360dp-h640dp-xhdpi")
+    fun `the custom size hint fits its field at 360 dp in Hindi`() {
+        assertHintFits(R.string.tools_pick_custom_size)
+    }
+
+    private fun assertHintFits(hintRes: Int) {
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
+            scenario.onActivity { activity ->
+                layoutScreen(activity)
+                val field = requireNotNull(activity.findViewById<EditText>(R.id.toolSetupTarget))
+                val hint = requireNotNull(field.hint).toString()
+                val need = field.paint.measureText(hint)
+                val available = field.width - field.totalPaddingLeft - field.totalPaddingRight
+                assertTrue(
+                    "the hint \"$hint\" needs ${need.toInt()}px but only ${available}px fit",
+                    need <= available + 0.5f
+                )
+            }
+        }
+    }
+
+    // ---- 8. Batch compress says the same four levels -----------------------
+
+    @Test
+    fun `batch compress offers the document sheet's four levels too`() {
+        val ids = repo.listDocuments().map { it.id }
+        ActivityScenario.launch<BatchActivity>(BatchActivity.intent(app, ids)).use { scenario ->
+            assertTrue("the action sheet opens", waitUntil {
+                ShadowDialog.getLatestDialog()?.findViewById<View>(R.id.batchActionCompress) != null
+            })
+            scenario.onActivity { _ ->
+                ShadowDialog.getLatestDialog().findViewById<View>(R.id.batchActionCompress).performClick()
+                idle()
+                val sheet = requireNotNull(ShadowDialog.getLatestDialog())
+                val expected = listOf(
+                    R.string.compress_level_low,
+                    R.string.compress_level_medium,
+                    R.string.compress_level_high,
+                    R.string.compress_level_ultra
+                ).map { app.getString(it) }
+                val shown = mutableListOf<String>()
+                walk(sheet.window!!.decorView) { view ->
+                    if (view is TextView && view.tag == ToolSetupActivity.CHIP_TAG) {
+                        shown += view.text.toString()
+                    }
+                }
+                assertEquals("Batch compress uses the same four levels", expected, shown)
+                for (id in listOf(
+                    R.id.batchLevelBest, R.id.batchLevelBalanced,
+                    R.id.batchLevelSmaller, R.id.batchLevelSmallest
+                )) {
+                    assertNotNull("missing Batch level row $id", sheet.findViewById<View>(id))
+                }
             }
         }
     }
