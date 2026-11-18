@@ -1,3 +1,5 @@
+> **STATUS NEEDS REWRITE (banner added 2026-11-19).** Contains ₹100 setup steps and absolute privacy wording that IDENTITY forbids (DECISIONS MKT-002). Do not paste into Play Console. Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # Play Console: store listing + Pro billing (copy-paste)
 
 ## 1. Google Play billing — what to set up (Monetize with Play)

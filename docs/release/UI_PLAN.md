@@ -37,6 +37,9 @@ Source: R2 UX_PRINCIPLES -> CRITIC_R2_UX -> JUDGE_RESEARCH §2/§4 (next/docs/re
     (createDeleteRequest etc.) without a new owner decision; files we cannot touch are reported as kept.
 
 ## 0b. Approved concept direction (lead, 2026-11-18, after critic + 2 judge rounds)
+Status 2026-11-19 (DECISIONS UX-004): approved as VISUAL direction with a binding condition. JUDGE_concepts_v3
+round 2 ended REVISE because the target-miss result omitted "Also save in Documents"; every Result variant,
+including target miss, must show it until phase 4. Concept approval is not implementation approval.
 Reference renders: next/design/*_v4.html (+ tools_v4), rendered by next/design/render.ps1 (out/ is local only).
 Approved: real ScanWhirl mark (ic_sw_brand_mark) in the header and empty state; papers shown as their real
 thumbnails; Home = search + folders + recent; centre Scan opens Create (Scan + ID card, Passport, QR code PRO +

@@ -1,3 +1,5 @@
+> **STATUS HISTORICAL (banner added 2026-11-19).** Superseded by AGENTS.md plus each task contract. Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # 72 — Worker brief (given to every lane worker by the lead)
 
 You are one of five engineers building ScanWhirl v2, an offline Android document scanner (Kotlin, single module `app`,

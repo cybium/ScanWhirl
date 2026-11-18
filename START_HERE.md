@@ -1,3 +1,5 @@
+> **STATUS HISTORICAL (banner added 2026-11-19).** Describes the repo on 2026-11-16 (1.2.1 era) and points to the v2 design. Current: `docs/ACTIVE_INDEX.md` and `docs/DECISIONS.md`. Kept as evidence; do not follow as instructions.
+
 # Start here
 
 One page of orientation for ScanWhirl. Everything below describes the repository **today**
