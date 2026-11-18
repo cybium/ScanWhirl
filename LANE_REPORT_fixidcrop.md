@@ -2,13 +2,14 @@
 
 Branch `lane/fixidcrop`. Not merged, not pushed. Commit `ddf5b34`.
 
-Last full gate after the rework (cloud run 44233785286, 6 min):
+Last full gate after rework 2 (cloud run 44237271752, 5 min):
 
 ```
-GATE PASS fixidcrop tests=1699 failures=0 skipped=0 lint=[skipped]
+GATE PASS fixidcrop tests=1704 failures=0 skipped=0 lint=[skipped]
 ```
 
-(The first full gate before the rework was `GATE PASS ... tests=1695`, cloud run 44231360968.)
+Earlier: rework 1 `GATE PASS ... tests=1699` (run 44233785286); first pass `GATE PASS ... tests=1695`
+(run 44231360968).
 
 ## Done
 
@@ -54,8 +55,8 @@ GATE PASS fixidcrop tests=1699 failures=0 skipped=0 lint=[skipped]
   cut out of a table photo and straightened (output is the card, not the 1200x900 photo, corners
   are card not table); a photo without a card is byte-identical; a small bright patch is not
   mistaken for a page; the result is exactly the existing `Deskew` warp (no second detector).
-- `app/src/test/java/com/scanwhirl/app/ui/tools/IdCardCropFixIdCropTest.kt` (8 tests: the first 4
-  below plus the 4 rework tests described in "Rework after critic"): picking a
+- `app/src/test/java/com/scanwhirl/app/ui/tools/IdCardCropFixIdCropTest.kt` (13 tests: the first 4
+  below plus the rework tests described in "Rework after critic" and "Rework 2 after judge"): picking a
   photo opens the corner screen preset to the auto-cropped card (frame = whole detected card,
   card hint, Crop and save present, side sheet not yet shown); confirming prints no table colour
   anywhere on the page while the card is there; system Back on the crop screen returns to the
@@ -84,8 +85,10 @@ suite above.
 `ui/tools/IdCardActivity.kt`, `ui/tools/ToolResultActivity.kt` (ID card preview only), new
 `util/PhotoAutoCrop.kt`, new `res/values/strings_fixidcrop.xml` + `res/values-hi/`
 `strings_fixidcrop.xml` (Hindi values start with `<!-- review -->`, no long dashes), the three new
-test files. `CropView.kt` and `ShellActivity.kt` are unchanged (no hook was needed). No build file,
-manifest, id file, LibraryScreen or other lane's file touched.
+test files. `ShellActivity.kt` is unchanged (no hook was needed). Rework 2 adds one add-only public
+method to `ui/CropView.kt` (`setCropRect`, used only by the ID card flow; the Passport preset never
+calls it and CropView's existing code is untouched). No build file, manifest, id file, LibraryScreen
+or other lane's file touched.
 
 ## Strings
 
@@ -159,6 +162,74 @@ GATE PASS fixidcrop tests=1699 failures=0 skipped=0 lint=[skipped]
 - D1's optional "use the whole photo" (the warp drops the original photo, so the frame can only
   trim inward) is a feature, not part of the rework; say if it is wanted.
 
+## Rework 2 after judge (commit `4899616`)
+
+Full gate after rework 2 (cloud run 44237271752, 5 min):
+
+```
+GATE PASS fixidcrop tests=1704 failures=0 skipped=0 lint=[skipped]
+```
+
+### N1 — A picked ID photo could outlive the flow (Med, fixed)
+
+- `onDestroy` deletes the whole `cacheDir/id_card_state` folder when `isFinishing &&
+  !isChangingConfigurations`: `crop.jpg`, `front.jpg` and `back.jpg` all go when the flow really
+  ends. A configuration change (rotation) or a system-recreated process keeps the cache for the
+  restored screen.
+- System Back during the asynchronous reopen is no longer a silent finish: `reopenCropScreen`
+  enables the crop Back callback (`cancelCrop`) before it decodes, and `cancelCrop` now handles a
+  pending crop with no overlay, clearing the cache and returning to the side sheet.
+  `dismissCropScreen` is no longer a no-op when the overlay is absent and always resets busy,
+  progress and the accessibility flag.
+- Tests (each asserts `id_card_state` is empty afterwards):
+  `Back during the async reopen closes the crop and removes the cached photo`,
+  `finishing while the crop is open removes the cached photo`,
+  `finishing an abandoned flow removes the cached front side too`, plus the existing
+  `the crop screen's own Back button returns to the front sheet` now recreates first and checks the
+  cached photo is removed on Cancel.
+- Red evidence with the `onDestroy` cleanup removed: `finishing while the crop is open removes the
+  cached photo :: finishing removes every cached file` and `finishing an abandoned flow removes the
+  cached front side too :: finishing removes the front and back copies`.
+
+### D5(a) — The adjusted crop rectangle survives recreation (Med, fixed)
+
+- New add-only `CropView.setCropRect(RectF)` (clamped to the image, applied after `setImage`); the
+  Passport preset never calls it and no other CropView code changed.
+- The ID card screen saves the person's live crop frame normalised (0..1) in the saved-state Bundle
+  (`id_card_crop_rect`) and reapplies it when the restored crop screen is shown. Works whichever
+  side is being cropped, because the pending crop side is restored with it.
+- Tests: `rotation keeps the front photo and the adjusted crop frame` and `rotation keeps the back
+  photo and the adjusted crop frame` drag the top-left handle in, recreate, and compare all four
+  normalised rect components (not just the image). They also compare SHA-256 of the prepared photo
+  so "same photo" is proven by content, not byte length.
+- Red evidence with the rect restore disabled: `adjusted crop rect part 0 expected:<0.15>
+  but was:<0.0>` for the front and `back crop rect part 0 ...` for the back.
+
+### D5(b) — A pick made while preparation is running survives recreation (Med, fixed)
+
+- The picker callback stores the picked **Uri** and side before reading; `beginCrop` keeps the Uri
+  until the prepared photo is ready. `onSaveInstanceState` persists `id_card_crop_source_uri` while
+  preparation is in flight; `onCreate` re-reads that Uri and re-runs the preparation
+  (`resumeCropPreparation`), then opens the crop screen as normal.
+- Test seam `cropPrepareGate` holds preparation so a recreation really happens mid-flight; the
+  test `recreation while the photo is being prepared still opens the crop screen` recreates while
+  the gate blocks, releases it, and then accepts the front side.
+- Red evidence with the `cropPreparing` restore branch removed: `the restored screen prepares the
+  same photo again`.
+
+### N2 — Encode bitmap released on cancellation (Low, fixed)
+
+- The private crop bitmap is now released in a `finally` around the cancellable `withContext`, so
+  a destroy/recreate during encoding cannot skip `recycle()`.
+- The D2 test no longer sleeps: a new `cropEncodeFinishedForTest` seam reports the real encode end
+  through a `CountDownLatch`, and the test asserts the encode produced bytes (proving no recycled
+  bitmap was read) before checking that Back kept the side empty.
+
+### Overruled / deferred (as instructed)
+
+- D9's accessible corner handles are phase 2 and were not implemented.
+- D3 stays deferred; `ImageTools.kt` was not touched.
+
 ## For the lead to check on the phone
 
 1. ID card → Pick from gallery → a photo of a card lying on a table/desk: the crop screen should
@@ -179,3 +250,7 @@ GATE PASS fixidcrop tests=1699 failures=0 skipped=0 lint=[skipped]
 7. Rework: a photo where no card edge is found must show "Couldn't find the card edges. Drag the
    corners to the card."; TalkBack should read the crop Back button as a 48dp target and must not
    reach the card screen hidden underneath.
+8. Rework 2: drag a corner into place, then rotate - the frame must be exactly where it was, for
+   the front and for the back side. Rotate immediately after picking (while the progress is still
+   up) - the crop screen must still open with the same photo. Backing out of the tool completely
+   must leave no picked photo behind (not visible on the phone; the tests assert the cache).
