@@ -7,10 +7,12 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.text.InputFilter
 import android.text.InputType
 import android.text.TextUtils
 import android.text.format.Formatter
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -43,7 +45,6 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
-import com.scanwhirl.app.util.ClipboardPrivacy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,6 +92,8 @@ class VaultActivity : BaseActivity() {
 
         /** Extra: why another screen sent the user here (shown above the passcode field). */
         const val EXTRA_REASON = "vault_reason"
+
+        private const val TAG = "VaultActivity"
 
         fun intent(context: Context, reason: String? = null): Intent =
             Intent(context, VaultActivity::class.java).apply {
@@ -140,8 +143,36 @@ class VaultActivity : BaseActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) readBackup(uri) }
 
+    /**
+     * Audit S1 (2026-11-18): the recovery code is never copied. A phone keyboard keeps its own
+     * clipboard history and ignores the sensitive flag, so a clip can resurface minutes later;
+     * the only safe escape is a file the user picks.
+     *
+     * The code is handed to the picker through [pendingRecovery], which lives only in memory and
+     * is retained across configuration changes (rotation). It is never written to a Bundle,
+     * Intent extra, preference or any file other than the one the user picks.
+     */
+    private val saveRecoveryCode = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri -> handleRecoverySaveResult(uri) }
+
+    /**
+     * The one-time code waiting for the picker while the system UI is on top. Recreated with the
+     * activity but replaced by the retained instance on a configuration change, so a rotation keeps
+     * the code and a process death loses it (by design; see [handleRecoverySaveResult]).
+     */
+    private class PendingRecoveryCode(var code: String? = null)
+
+    private var pendingRecovery = PendingRecoveryCode()
+
+    override fun onRetainCustomNonConfigurationInstance(): Any = pendingRecovery
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Rotation: keep the pending code that the open file picker belongs to. A Bundle is never
+        // used for it (the code must not be persisted), so process death correctly leaves nothing.
+        pendingRecovery = lastCustomNonConfigurationInstance as? PendingRecoveryCode
+            ?: PendingRecoveryCode()
         // Security audit: the Vault shows secrets (recovery code, passcodes, private file
         // names). FLAG_SECURE blocks screenshots/screen recording and blanks the recents card.
         com.scanwhirl.app.util.SecureView.apply(window)
@@ -770,25 +801,24 @@ class VaultActivity : BaseActivity() {
         content.addView(codeView)
         val warning = SwStyle.text(this, 12f, SwStyle.color(this, R.color.laser_danger), bold = true).apply {
             text = getString(R.string.vault_recovery_copy_warning)
-            isVisible = false
         }
         content.addView(
             warning,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(this@VaultActivity, 8f) }
         )
-        val copy = SwStyle.text(this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+        val save = SwStyle.text(this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+            // The old "Copy code" control lived here; the id is reused so the screen keeps one
+            // obvious save action (audit S1). 48 dp + focusable like optionRow() (critic D8).
             id = R.id.vaultRecoveryCopy
-            text = getString(R.string.vault_recovery_copy)
+            text = getString(R.string.vault_recovery_save_file)
             gravity = Gravity.CENTER
             isClickable = true
-            minimumHeight = SwStyle.dp(this@VaultActivity, 44f)
-            setOnClickListener {
-                copyRecoveryCode(code)
-                warning.isVisible = true
-            }
+            isFocusable = true
+            minimumHeight = SwStyle.dp(this@VaultActivity, 48f)
+            setOnClickListener { startSaveRecoveryCode(code) }
         }
-        content.addView(copy)
+        content.addView(save)
         content.addView(
             SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
                 text = getString(R.string.vault_recovery_once)
@@ -803,6 +833,9 @@ class VaultActivity : BaseActivity() {
             .setMessage(R.string.vault_recovery_note)
             .setContent(content)
             .build()
+        // The recovery code sits in this dialog's own window: it needs FLAG_SECURE too, the
+        // activity window's flag does not cover a separate dialog window.
+        sheet.secure()
         sheet.setPrimary(R.string.vault_recovery_saved) {
             showConfirmRecovery(code, migrateLegacy)
         }
@@ -1586,12 +1619,64 @@ class VaultActivity : BaseActivity() {
             editText.letterSpacing = 0.08f
         }
 
-    private fun copyRecoveryCode(code: String) {
-        // Security audit: a recovery code is a master key. Mark the clip sensitive (Android 13+
-        // hides it from the clipboard preview) and clear it after a minute.
-        ClipboardPrivacy.copy(this, getString(R.string.vault_recovery_button), code, sensitive = true)
-        Toast.makeText(this, R.string.vault_copy_done, Toast.LENGTH_SHORT).show()
+    /**
+     * S1: the recovery code never goes to the clipboard (see [saveRecoveryCode]); the user
+     * picks a file and only the code plus one warning line is written there.
+     */
+    private fun startSaveRecoveryCode(code: String) {
+        pendingRecovery.code = code
+        saveRecoveryCode.launch(getString(R.string.vault_recovery_file_name))
     }
+
+    private fun handleRecoverySaveResult(uri: Uri?) {
+        // Cancel: the user picked nothing, so there is nothing to write and nothing to report.
+        if (uri == null) {
+            pendingRecovery.code = null
+            return
+        }
+        val code = pendingRecovery.code
+        pendingRecovery.code = null
+        if (code == null) {
+            // The process was killed while the picker was open, so the one-time code is gone (it
+            // is never persisted). The picker still created an empty document: remove it and say
+            // what happened instead of leaving a silent empty file.
+            discardAndExplain(uri, R.string.vault_recovery_code_lost)
+            return
+        }
+        writeRecoveryCode(uri, code)
+    }
+
+    private fun writeRecoveryCode(uri: Uri, code: String) {
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val out = contentResolver.openOutputStream(uri)
+                        ?: throw IOException("The chosen file cannot be opened")
+                    out.use { it.write(recoveryFileText(code).toByteArray(Charsets.UTF_8)) }
+                }
+                Toast.makeText(this@VaultActivity, R.string.vault_recovery_file_done, Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                // The message is fixed text; the exception detail stays in logcat and never
+                // contains the code.
+                Log.w(TAG, "saving the recovery code file failed", e)
+                discardAndExplain(uri, R.string.vault_recovery_file_failed)
+            }
+        }
+    }
+
+    /** Deletes the (empty or half-written) document the picker created, then explains why. */
+    private fun discardAndExplain(uri: Uri, messageRes: Int) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { DocumentsContract.deleteDocument(contentResolver, uri) }
+            }
+            showError(getString(messageRes))
+        }
+    }
+
+    /** The whole saved file: the code and one instruction line, nothing else. */
+    internal fun recoveryFileText(code: String): String =
+        VaultCrypto.formatRecoveryCode(code) + "\n" + getString(R.string.vault_recovery_copy_warning) + "\n"
 
     private fun showError(message: String, after: (() -> Unit)? = null) {
         SwSheet.builder(this)

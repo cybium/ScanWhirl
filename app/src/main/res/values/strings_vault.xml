@@ -50,9 +50,12 @@
     <string name="vault_recovery_sheet_title">Save this recovery code</string>
     <string name="vault_recovery_note">This is the only way back if you forget your passcode. It is shown once.</string>
     <string name="vault_recovery_once">If you lose the recovery code and this phone, nobody can open these files, not even us.</string>
-    <string name="vault_recovery_copy">Copy code</string>
     <string name="vault_recovery_copy_warning">Anyone with this code can open your backup. Keep it offline.</string>
-    <string name="vault_copy_done">Recovery code copied</string>
+    <string name="vault_recovery_save_file">Save as file</string>
+    <string name="vault_recovery_file_name" translatable="false">ScanWhirl Vault recovery code.txt</string>
+    <string name="vault_recovery_file_done">Recovery code saved to the file you chose</string>
+    <string name="vault_recovery_file_failed">The code was not saved. Tap Save as file and pick another place.</string>
+    <string name="vault_recovery_code_lost">The code was not saved. Tap Save as file again.</string>
     <string name="vault_recovery_saved">I saved it</string>
     <string name="vault_confirm_title">Type 4 characters</string>
     <string name="vault_confirm_note">Type the first 4 characters of your recovery code to finish.</string>
