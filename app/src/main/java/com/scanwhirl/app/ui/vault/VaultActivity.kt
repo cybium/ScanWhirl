@@ -43,7 +43,6 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
-import com.scanwhirl.app.util.ClipboardPrivacy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -139,6 +138,20 @@ class VaultActivity : BaseActivity() {
     private val openBackup = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) readBackup(uri) }
+
+    /**
+     * Audit S1 (2026-11-18): the recovery code is never copied. A phone keyboard keeps its own
+     * clipboard history and ignores the sensitive flag, so a clip can resurface minutes later;
+     * the only safe escape is a file the user picks.
+     */
+    private val saveRecoveryCode = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) writeRecoveryCode(uri) else recoveryCodeToSave = null
+    }
+
+    /** The one-time code waiting for the picker; null until "Save as file" is tapped. */
+    private var recoveryCodeToSave: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -770,25 +783,23 @@ class VaultActivity : BaseActivity() {
         content.addView(codeView)
         val warning = SwStyle.text(this, 12f, SwStyle.color(this, R.color.laser_danger), bold = true).apply {
             text = getString(R.string.vault_recovery_copy_warning)
-            isVisible = false
         }
         content.addView(
             warning,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(this@VaultActivity, 8f) }
         )
-        val copy = SwStyle.text(this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+        val save = SwStyle.text(this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+            // The old "Copy code" control lived here; the id is reused so the screen keeps one
+            // obvious save action (audit S1).
             id = R.id.vaultRecoveryCopy
-            text = getString(R.string.vault_recovery_copy)
+            text = getString(R.string.vault_recovery_save_file)
             gravity = Gravity.CENTER
             isClickable = true
             minimumHeight = SwStyle.dp(this@VaultActivity, 44f)
-            setOnClickListener {
-                copyRecoveryCode(code)
-                warning.isVisible = true
-            }
+            setOnClickListener { startSaveRecoveryCode(code) }
         }
-        content.addView(copy)
+        content.addView(save)
         content.addView(
             SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
                 text = getString(R.string.vault_recovery_once)
@@ -1586,12 +1597,35 @@ class VaultActivity : BaseActivity() {
             editText.letterSpacing = 0.08f
         }
 
-    private fun copyRecoveryCode(code: String) {
-        // Security audit: a recovery code is a master key. Mark the clip sensitive (Android 13+
-        // hides it from the clipboard preview) and clear it after a minute.
-        ClipboardPrivacy.copy(this, getString(R.string.vault_recovery_button), code, sensitive = true)
-        Toast.makeText(this, R.string.vault_copy_done, Toast.LENGTH_SHORT).show()
+    /**
+     * S1: the recovery code never goes to the clipboard (see [saveRecoveryCode]); the user
+     * picks a file and only the code plus one warning line is written there.
+     */
+    private fun startSaveRecoveryCode(code: String) {
+        recoveryCodeToSave = code
+        saveRecoveryCode.launch(getString(R.string.vault_recovery_file_name))
     }
+
+    private fun writeRecoveryCode(uri: Uri) {
+        val code = recoveryCodeToSave ?: return
+        recoveryCodeToSave = null
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val out = contentResolver.openOutputStream(uri)
+                        ?: throw IOException("The chosen file cannot be opened")
+                    out.use { it.write(recoveryFileText(code).toByteArray(Charsets.UTF_8)) }
+                }
+                Toast.makeText(this@VaultActivity, R.string.vault_recovery_file_done, Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                showError(getString(R.string.vault_recovery_file_failed, e.message ?: ""))
+            }
+        }
+    }
+
+    /** The whole saved file: the code and one instruction line, nothing else. */
+    internal fun recoveryFileText(code: String): String =
+        VaultCrypto.formatRecoveryCode(code) + "\n" + getString(R.string.vault_recovery_copy_warning) + "\n"
 
     private fun showError(message: String, after: (() -> Unit)? = null) {
         SwSheet.builder(this)

@@ -352,9 +352,9 @@
     <string name="ocr_note">Text search works best on printed pages.</string>
     <string name="signal_reading_text">Reading text on your scans</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
-    <string name="settings_auto_enhance_summary">Google processing is on. Off gives a fast, original-looking scan.</string>
+    <string name="settings_auto_enhance_summary">Cleans up scans. Off keeps the photo as taken.</string>
     <string name="settings_searchable_pdf">Make PDFs searchable</string>
-    <string name="settings_searchable_pdf_summary">Hides OCR text so PDF apps can search it.</string>
+    <string name="settings_searchable_pdf_summary">Adds invisible text so other apps can search your PDFs.</string>
     <string name="settings_auto_copy_to_documents">Also save a copy to Documents</string>
     <string name="settings_auto_copy_to_documents_summary">Copies saved to Documents/ScanWhirl.</string>
     <string name="settings_pro_message">ScanWhirl Pro is not available yet.</string>
@@ -397,11 +397,11 @@
     <string name="compress_source_scan">Saved scan</string>
     <string name="compress_source_file">PDF file</string>
     <string name="compress_level_title">Compression level</string>
-    <string name="compress_target_label">...or compress up to a target size (optional)</string>
-    <string name="compress_level_low">Low</string>
-    <string name="compress_level_medium">Medium</string>
-    <string name="compress_level_high">High</string>
-    <string name="compress_level_ultra">Ultra</string>
+    <string name="compress_target_label">Custom size (optional)</string>
+    <string name="compress_level_low">Best quality</string>
+    <string name="compress_level_medium">Balanced</string>
+    <string name="compress_level_high">Smaller</string>
+    <string name="compress_level_ultra">Smallest</string>
     <string name="compress_est_item">%1$s · estimated %2$s</string>
     <string name="compress_estimating">Estimating sizes…</string>
     <string name="compress_pick_scan">Choose a scan to compress</string>
@@ -642,7 +642,7 @@
     <string name="trash_delete_failed">Some items couldn’t be deleted. They are still in Trash.</string>
     <string name="trash_empty_title">Trash is empty</string>
     <string name="trash_empty_body">Items older than 30 days are deleted automatically.</string>
-    <string name="trash_header_note">Restored documents come back complete.</string>
+    <string name="trash_header_note">Restore brings back every page.</string>
     <string name="trash_error_title">Couldn’t open Trash</string>
     <string name="trash_error_body">Your documents weren’t changed. Try again.</string>
     <string name="trash_retry">Try again</string>
