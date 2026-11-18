@@ -637,4 +637,9 @@
     <string name="scan_saved_named">“%1$s” सहेजा गया</string>
     <string name="scan_saved_named_export">“%1$s” सहेजा गया। %2$s</string>
     <string name="scan_save_failed_review">स्कैन सहेजा नहीं जा सका (%1$s)। पन्ने यहाँ सुरक्षित हैं। जाँचकर फिर सहेजें।</string>
+    <!-- T15: camera session reached the page cap. -->
+    <!-- review: the 3 entries below were drafted at T15 - native review pending -->
+    <string name="cap_scan_message">एक स्कैन में %1$d पन्ने हो गए। और पन्ने जोड़ें?</string>
+    <string name="cap_scan_add_more">और जोड़ें</string>
+    <string name="cap_scan_done">हो गया</string>
 </resources>

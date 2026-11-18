@@ -80,7 +80,7 @@ class GalleryCropTest {
             val launcher = ScanLauncher(activity, repo, host(activity), {})
             val camera = launcher.cameraConfig()
             assertFalse("camera scans stay camera-only", camera.galleryImport)
-            assertEquals(30, camera.pageLimit)
+            assertEquals(ScanLauncher.CAMERA_PAGE_LIMIT, camera.pageLimit)
             assertTrue("camera asks for JPEGs", camera.jpeg)
 
             val gallery = GalleryCrop.galleryConfig(activity, 200)

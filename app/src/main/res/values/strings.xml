@@ -686,4 +686,8 @@
     <string name="scan_saved_named">Saved “%1$s”</string>
     <string name="scan_saved_named_export">Saved “%1$s”. %2$s</string>
     <string name="scan_save_failed_review">Couldn’t save the scan (%1$s). Your pages are kept here. Check them and save again.</string>
+    <!-- T15: a camera session returned exactly ScanWhirl's page cap (60). -->
+    <string name="cap_scan_message">You reached %1$d pages in one scan. Add more pages?</string>
+    <string name="cap_scan_add_more">Add more</string>
+    <string name="cap_scan_done">Done</string>
 </resources>
