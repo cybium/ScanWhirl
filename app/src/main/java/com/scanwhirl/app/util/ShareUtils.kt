@@ -41,15 +41,32 @@ object ShareUtils {
             val named = namedCopy(context, page, "${sanitize(docName)} - page ${i + 1}.jpg")
             uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", named))
         }
-        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            type = "image/*"
-            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            val clip = ClipData.newRawUri("pages", uris[0])
-            for (i in 1 until uris.size) clip.addItem(ClipData.Item(uris[i]))
+        val intent = multiShareIntent(context, uris, "image/*")
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
+    }
+
+    /**
+     * The one multi-file share intent. The Android 10+ URI-grant model — and the sharesheet —
+     * follows the intent's ClipData, so ClipData must carry EVERY URI: with only the first one
+     * in it (the old ToolResultActivity bug) most receivers could read the first file and the
+     * rest failed silently (a batch of PDFs shared to WhatsApp arrived as one file). EXTRA_STREAM
+     * keeps the same list, the flag is the read grant only (sharing never needs write).
+     */
+    fun multiShareIntent(
+        context: Context,
+        uris: List<Uri>,
+        type: String,
+        label: CharSequence = "pages"
+    ): Intent {
+        require(uris.isNotEmpty()) { "a multi share needs at least one Uri" }
+        val clip = ClipData.newUri(context.contentResolver, label, uris.first())
+        for (i in 1 until uris.size) clip.addItem(ClipData.Item(uris[i]))
+        return Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            this.type = type
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
             clipData = clip
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
     }
 
     /** Public alias of the private sanitizer for reuse by export jobs. */
@@ -80,14 +97,7 @@ object ShareUtils {
             val named = namedCopy(context, page, "${sanitize(doc.name)} - page ${i + 1}.jpg")
             uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", named))
         }
-        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            type = "image/*"
-            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            val clip = ClipData.newRawUri("pages", uris[0])
-            for (i in 1 until uris.size) clip.addItem(ClipData.Item(uris[i]))
-            clipData = clip
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        val intent = multiShareIntent(context, uris, "image/*")
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
     }
 

@@ -1,8 +1,6 @@
 package com.scanwhirl.app.ui.tools
 
 import android.content.ActivityNotFoundException
-import android.content.ClipData
-import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -497,15 +495,9 @@ class ToolResultActivity : BaseActivity() {
             FileProvider.getUriForFile(this, "$packageName.fileprovider", it)
         }
         if (uris.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            this.type = type
-            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
-            clipData = ClipData(
-                ClipDescription(toolName, arrayOf(type)),
-                ClipData.Item(uris.first())
-            )
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        // fixshare: every Uri must be in ClipData too — the Android 10+ grant model follows it,
+        // so a ClipData with only the first file shared one file from a batch.
+        val intent = ShareUtils.multiShareIntent(this, uris, type, toolName)
         startActivity(Intent.createChooser(intent, getString(R.string.tools_result_share)))
     }
 
