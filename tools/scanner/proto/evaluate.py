@@ -31,6 +31,7 @@ REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 sys.path.insert(0, HERE)
 
 import scannerx as sx  # noqa: E402
+import scannerx_r2 as sx2  # noqa: E402
 
 DATA_ROOT = r"C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\recordings"
 FRAMES = os.path.join(DATA_ROOT, "frames")
@@ -73,7 +74,9 @@ def merge_labels() -> Dict[Tuple[str, int], dict]:
     return rows
 
 
-def predict(clips: List[str], cfg: sx.Config, features_out: Optional[str] = None) -> List[dict]:
+def predict(clips: List[str], cfg, features_out: Optional[str] = None,
+            version: str = "v2") -> List[dict]:
+    detect = sx2.detect_path_r2 if version.startswith("r2") else sx.detect_path
     rows = []
     feats = []
     for clip in clips:
@@ -83,7 +86,7 @@ def predict(clips: List[str], cfg: sx.Config, features_out: Optional[str] = None
         names = sorted((n for n in os.listdir(folder) if n.lower().endswith(".jpg")),
                        key=lambda n: int(os.path.splitext(n)[0]))
         for name in names:
-            det = sx.detect_path(os.path.join(folder, name), cfg)
+            det = detect(os.path.join(folder, name), cfg)
             frame = int(os.path.splitext(name)[0])
             accepted = det.quad is not None and det.confidence >= cfg.accept
             row = {"clip": clip, "frame": frame, "has_quad": 1 if accepted else 0, "ms": round(det.ms, 2)}
@@ -230,7 +233,7 @@ def sweep(score_mod, labels, features_path, clips):
         pred = []
         for row in rows:
             r = dict(row)
-            r["has_quad"] = 1 if (row["has_quad_raw"] == 1 and row["confidence"] >= t) else 0
+            r["has_quad"] = 1 if (str(row["has_quad_raw"]) in ("1", "1.0") and row["confidence"] >= t) else 0
             pred.append(r)
         m = metrics(score_mod, labels, pred, clips)
         out.append((t, m))
@@ -241,7 +244,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", default="v1")
     parser.add_argument("--clips", default="all", help="all|dev|comma list")
-    parser.add_argument("--accept", type=float, default=sx.Config.accept)
+    parser.add_argument("--accept", type=float, default=None)
     parser.add_argument("--test", action="store_true", help="also score the TEST hold-out (budget 3)")
     parser.add_argument("--sweep", action="store_true", help="threshold sweep on DEV")
     parser.add_argument("--features", default="", help="write the DEV feature dump here")
@@ -249,17 +252,21 @@ def main(argv=None) -> int:
     parser.add_argument("--pred-csv", action="store_true", help="write the predictions CSV into the labels folder")
     args = parser.parse_args(argv)
 
+    cfg_cls = sx2.ConfigR2 if args.version.startswith("r2") else sx.Config
     overrides = {}
     for item in args.cfg:
         key, _, value = item.partition("=")
-        current = getattr(sx.Config, key, None)
+        current = getattr(cfg_cls, key, None)
         if isinstance(current, bool):
             overrides[key] = value.lower() in ("1", "true", "yes")
         elif isinstance(current, int):
             overrides[key] = int(value)
         else:
             overrides[key] = float(value)
-    cfg = sx.Config(accept=args.accept, **overrides)
+    cfg_kwargs = dict(overrides)
+    if args.accept is not None:
+        cfg_kwargs["accept"] = args.accept
+    cfg = cfg_cls(**cfg_kwargs)
     print("config:", {k: v for k, v in cfg.__dict__.items() if k not in ("refine_samples",)})
 
     score_mod = load_score_module()
@@ -279,7 +286,7 @@ def main(argv=None) -> int:
 
     t0 = time.perf_counter()
     feats_path = args.features or os.path.join(AUDIT, f"scannerx_features_{args.version}.csv")
-    rows = predict(run_clips, cfg, feats_path)
+    rows = predict(run_clips, cfg, feats_path, version=args.version)
     elapsed = time.perf_counter() - t0
     times = sorted(r["ms"] for r in rows)
     print(f"predicted {len(rows)} frames in {elapsed:.1f}s "
