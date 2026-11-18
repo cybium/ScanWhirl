@@ -753,10 +753,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             Toast.makeText(this, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
             return
         }
-        val intent = Intent(Intent.ACTION_SEND_MULTIPLE)
-            .setType("application/pdf")
-            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // fixshare: no ClipData at all meant the Android 10+ grant followed nothing, so the
+        // receivers could not read the selected PDFs. The helper carries every Uri + read grant.
+        val intent = ShareUtils.multiShareIntent(this, uris, "application/pdf")
         startActivity(Intent.createChooser(intent, getString(R.string.share_pdf)))
     }
 
