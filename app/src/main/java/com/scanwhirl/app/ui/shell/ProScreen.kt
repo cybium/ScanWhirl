@@ -18,9 +18,10 @@ import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.TrustPill
 
 /**
- * v2 UI: 06_pro — gold hero, the promise, eight feature cells, ₹100 one time.
- * The buy button opens a "Coming soon" sheet until billing lands; it is never
- * a dead end.
+ * v2 UI: 06_pro — gold hero, the promise, eight feature cells, Play's price once.
+ * PRC-001: the amount is always Play's localized price. Until Play answers, the price line
+ * says where the price comes from and shows no number (no hardcoded ₹ fallback).
+ * The buy button opens Play Billing; it is never a dead end.
  */
 class ProScreen(
     private val context: Context,
@@ -44,6 +45,8 @@ class ProScreen(
     private lateinit var trustRow: View
     private val featureCells = mutableListOf<View>()
     private lateinit var priceCard: View
+    private lateinit var priceValue: TextView
+    private lateinit var priceSuffix: TextView
     private lateinit var priceWrap: FrameLayout
     private lateinit var buyWrap: FrameLayout
     private var entrancePlayed = false
@@ -227,18 +230,17 @@ class ProScreen(
             orientation = HORIZONTAL
             gravity = Gravity.BOTTOM
         }
-        priceRow.addView(
-            SwStyle.text(context, 30f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
-                id = R.id.swProPrice
-                text = priceLabel()
-            }
-        )
-        priceRow.addView(
-            SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-                text = context.getString(R.string.pro_one_time)
-                setPadding(SwStyle.dp(context, 6f), 0, 0, SwStyle.dp(context, 3f))
-            }
-        )
+        priceValue = SwStyle.text(context, 30f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+            id = R.id.swProPrice
+        }
+        priceRow.addView(priceValue)
+        priceSuffix = SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
+            text = context.getString(R.string.pro_one_time)
+            setPadding(SwStyle.dp(context, 6f), 0, 0, SwStyle.dp(context, 3f))
+        }
+        priceRow.addView(priceSuffix)
+        // Fail closed: no amount until Play answers, never a built-in number.
+        showPrice(null)
         priceText.addView(priceRow)
         priceText.addView(
             SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
@@ -360,8 +362,25 @@ class ProScreen(
 
     private fun onRestorePurchase() = callbacks.onRestore()
 
-    /** Price copy: L2 owns the text. */
-    private fun priceLabel(): CharSequence = context.getString(R.string.pro_price)
+    /**
+     * Price copy: PRC-001 — the amount is only ever Play's localized price. A null/blank answer
+     * (not loaded, billing unavailable, offline) keeps the line on the no-amount placeholder, so
+     * no number is invented and the "one time" mark is not shown next to a missing amount.
+     */
+    fun setPrice(text: String?) {
+        showPrice(text)
+    }
+
+    private fun showPrice(text: String?) {
+        val amount = text?.trim().orEmpty()
+        val known = amount.isNotEmpty()
+        priceValue.text = if (known) amount else context.getString(R.string.pro_price_play)
+        priceValue.setTextSize(
+            android.util.TypedValue.COMPLEX_UNIT_SP,
+            if (known) 30f else 15f
+        )
+        priceSuffix.visibility = if (known) View.VISIBLE else View.GONE
+    }
 
     private fun playEntrance() {
         if (!com.scanwhirl.app.ui.kit.SwMotion.enabled(context)) {
@@ -418,13 +437,6 @@ class ProScreen(
     internal fun titleForTest(): View = titleRow
     internal fun priceWrapForTest(): FrameLayout = priceWrap
     internal fun buyWrapForTest(): FrameLayout = buyWrap
-    /**
-     * Billing: show Play's localized price when the store answers. Only the price text changes;
-     * the rest of the layout is untouched.
-     */
-    fun setPrice(text: String) {
-        findViewById<android.widget.TextView>(R.id.swProPrice)?.text = text
-    }
 
     /**
      * One purchase at a time: while Play is answering, the Buy row is disabled and greyed so a

@@ -104,7 +104,9 @@
     <string name="pro_title_prefix">ScanWhirl </string>
     <string name="pro_title_pro">Pro</string>
     <string name="pro_sub">PDF के सारे काम। आपके फ़ोन पर। हमेशा आपके।</string>
-    <string name="pro_price">₹100</string>
+    <!-- PRC-001: no rupee amount in the app; the price line only says where the price comes from.
+         review: the entry below was written for T13 (agent Hindi) — native review pending -->
+    <string name="pro_price_play">कीमत Google Play पर दिखती है</string>
     <string name="pro_one_time">एक बार</string>
     <string name="pro_price_note">बार-बार भुगतान नहीं। आपके Google खाते वाले हर फ़ोन पर Pro।</string>
     <string name="pro_unlock">Pro चालू करें</string>

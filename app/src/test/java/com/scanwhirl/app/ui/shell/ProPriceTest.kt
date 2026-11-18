@@ -22,8 +22,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * v2 UI: 06_pro — Play's localized price must reach every Pro screen, even when the query
- * finished before the screen existed (the shell fetches it in onCreate). The hard-coded
- * ₹100 is only the fallback while no answer has arrived.
+ * finished before the screen existed (the shell fetches it in onCreate). PRC-001: while no
+ * answer has arrived the price line names Google Play and shows no amount (no ₹ fallback).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -148,14 +148,15 @@ class ProPriceTest {
     }
 
     @Test
-    fun `the hard-coded price is still the fallback before Play answers`() {
+    fun `no amount is shown before Play answers`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 activity.showPro()
                 idle()
                 assertEquals(
-                    activity.getString(R.string.pro_price),
+                    "PRC-001: no built-in amount before Play's price arrives",
+                    activity.getString(R.string.pro_price_play),
                     priceText(activity)
                 )
             }
