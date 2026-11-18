@@ -161,7 +161,9 @@ class ToolTile(context: Context) : FrameLayout(context) {
             // Greedy word wrapping (HIGH_QUALITY let Devanagari lines come out wider than
             // the column, which a centred label paints across its neighbours); a word still
             // wider than the column is broken instead of overflowing.
-            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            // LineBreaker's constant (== Layout.BREAK_STRATEGY_SIMPLE == 0) is a compile-time
+            // int, inlined, so it is safe below API 29; it satisfies lint's WrongConstant check.
+            breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
         }
         inner.addView(
             labelView,

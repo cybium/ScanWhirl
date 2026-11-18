@@ -131,15 +131,23 @@ class PageEditorDraftTest {
                 forceLayout(activity.findViewById(R.id.pager))
                 activity.findViewById<android.view.View>(R.id.btnRotateRight)!!.performClick()
             }
-            assertTrue(pollUntil { runBlocking { repo.draftOf(id) }?.changes == 1 })
-            assertEquals(d0, digest(id))
+            // Flaked 3x on loaded cloud runners (11-18): longer wait + named asserts so the next
+            // failure says which step stalled.
+            assertTrue(
+                "rotate never reached the draft (changes=${runBlocking { repo.draftOf(id) }?.changes})",
+                pollUntil(30_000) { runBlocking { repo.draftOf(id) }?.changes == 1 }
+            )
+            assertEquals("the saved document changed after rotate", d0, digest(id))
 
             scenario.onActivity { activity ->
                 forceLayout(activity.findViewById(R.id.pager))
                 activity.findViewById<android.view.View>(R.id.btnDelete)!!.performClick()
                 activity.commitPendingDelete()
             }
-            assertTrue(pollUntil { runBlocking { repo.draftPages(id) }.size == 2 })
+            assertTrue(
+                "delete never reached the draft (pages=${runBlocking { repo.draftPages(id) }.size})",
+                pollUntil(30_000) { runBlocking { repo.draftPages(id) }.size == 2 }
+            )
             assertEquals("the saved document changed before Save", d0, digest(id))
         }
     }
