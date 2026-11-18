@@ -21,6 +21,7 @@ Limits: max 2 BUILDING lanes at once (7.4 GB PC); read-only research/critic/judg
 ## 3. Current state (update this table, newest first)
 | When | State |
 |---|---|
+| 11-18 08:1x | fixidcrop DONE (ddf5b34/837304b, gate PASS) -> CRITIC running (ses_e1340f8d5ffeTPMZeN93um32rM -> next\docs\review\CRITIC_fixidcrop.md), then JUDGE (Sol), then merge. fixcopy still building. Research running: R1 PRO_VALUE (ses_e1340cd51ffetsh3Pa5CdXTV5x), R2 UX_PRINCIPLES (ses_e1340ad98ffewWlswnjM5wLqnj), C1 docs audit (ses_e13404439ffe7QjjF987Jf6CsP -> next\docs\review\C1_DOCS_AUDIT.md). Workspace index: ScanWhirl-HQ\README.md. Next building lane after fixidcrop merge: `fixinsertcrop` (Insert pages > Photos through PhotoAutoCrop + corner screen). |
 | 11-18 08:0x | Phase 1 running: lanes `fixidcrop` (ses_e135a77cfffea8ukwEU842674x: ID gallery auto-crop + corner crop, page preview backdrop) and `fixcopy` (ses_e134869b9ffewBP8QDcSk1uVg7: S1 recovery code to file, wording C). Merged today: fixui, fixflow, fixtext, fixresult, fixvault, fixhome. Installed on phone: 1.2.3-test (26111801, 4831f20). Next: research R1/R2 + context7 audit C1, then Phase 1 finish (insert-pages photo crop) and Phase 2. |
 
 ## 4. Key files
