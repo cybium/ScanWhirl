@@ -71,6 +71,11 @@ if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
     $parent = git -C $root rev-parse HEAD
     $commit = git -C $root commit-tree $tree -p $parent -m "ci snapshot $Lane $(Get-Date -Format o)"
     if (-not $commit) { Write-Output "GATE FAIL $Lane cloud: could not snapshot the worktree"; exit 2 }
+    # The repo is PUBLIC: screen exactly what this snapshot would publish BEFORE pushing (lead's guard copy).
+    $guardPy = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\tools\ci\prepush_guard.py"
+    if (-not (Test-Path $guardPy)) { Write-Output "GATE FAIL $Lane cloud: pre-push guard missing ($guardPy); nothing pushed"; exit 2 }
+    & python $guardPy --repo $root --commit $commit
+    if ($LASTEXITCODE -ne 0) { Write-Output "GATE FAIL $Lane cloud: pre-push guard blocked the snapshot; nothing pushed"; exit 2 }
     git -C $root push -q -f origin "${commit}:refs/heads/$ciBranch" 2>&1 | Where-Object { $_ -notmatch '^remote:\s*$|^remote: (Create|To create|\s+https)' }
     $env:GH_TOKEN = (("protocol=https`nhost=github.com`n`n" | git credential fill 2>$null) | Where-Object { $_ -like 'password=*' }) -replace '^password=', ''
     Write-Output "cloud: snapshot $($commit.Substring(0,8)) pushed to $ciBranch; waiting for the GitHub run (about 8-12 min, no local queue)"

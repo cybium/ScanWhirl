@@ -36,3 +36,6 @@ docs/audit/*/evidence/
 
 docs/competitive/*/screenshots/
 docs/competitive/*/apk-analysis/
+
+# Python bytecode (tools/ci)
+__pycache__/

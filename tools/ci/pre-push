@@ -1,0 +1,47 @@
+#!/bin/sh
+# ScanWhirl pre-push guard: fails closed before content becomes public.
+#
+# The GitHub repository is public, so every pushed commit is world-readable.
+# This hook feeds each pushed commit to tools/ci/prepush_guard.py and refuses
+# the whole push if any commit is blocked or the guard cannot run.
+#
+# Install (the lead does this, it is not automatic):
+#   copy this file to .git/hooks/pre-push and keep it executable
+#
+# stdin lines are: <local ref> <local sha> <remote ref> <remote sha>
+# Branch deletions (all-zero local sha) are skipped; nothing is published.
+
+status=0
+
+top=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "PREPUSH BLOCK no-worktree (cannot locate repository)" >&2
+    exit 1
+}
+# Always run the LEAD checkout's guard: a lane must not be able to weaken it by editing its own
+# copy, and lanes branched before the guard existed must still be scanned.
+guard="${SCANWHIRL_PREPUSH_GUARD:-C:/Users/Cybium/Desktop/ScanWhirl-HQ/current/tools/ci/prepush_guard.py}"
+
+if [ ! -f "$guard" ]; then
+    echo "PREPUSH BLOCK guard-missing $guard" >&2
+    exit 1
+fi
+
+if command -v python >/dev/null 2>&1; then
+    py=python
+elif command -v python3 >/dev/null 2>&1; then
+    py=python3
+else
+    echo "PREPUSH BLOCK python-not-found (guard cannot run; refusing to push)" >&2
+    exit 1
+fi
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -n "$local_sha" ] || continue
+    case "$local_sha" in
+        *[!0]*) ;;          # real update: scan it
+        *) continue ;;      # all zeros: deletion, nothing to publish
+    esac
+    "$py" "$guard" --repo "$top" --commit "$local_sha" || status=1
+done
+
+exit $status
