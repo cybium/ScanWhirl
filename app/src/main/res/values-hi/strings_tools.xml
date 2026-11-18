@@ -76,7 +76,7 @@
     <string name="tools_import_cancel_note"><!-- review -->रद्द करने पर कुछ नहीं जुड़ेगा।</string>
     <string name="tools_import_no_space"><!-- review -->इस PDF को %1$d MB चाहिए और %2$d MB बचेगा। पहले जगह खाली करें।</string>
     <string name="tools_import_low_space_title"><!-- review -->जगह कम है</string>
-    <string name="tools_setup_no_text"><!-- review -->अभी पाठ नहीं पहचाना। पहले दस्तावेज़ खोलकर पढ़ें।</string>
+    <string name="tools_setup_no_text"><!-- review -->जिन पेजों में टेक्स्ट नहीं है, उन्हें पहले इसी फ़ोन पर पढ़ा जाएगा। इसमें थोड़ा समय लग सकता है।</string>
     <string name="tools_setup_metadata_note"><!-- review -->EXIF और थंबनेल बिना साफ़ प्रति। मूल सुरक्षित।</string>
     <string name="tools_setup_id_note"><!-- review -->आगे ऊपर, पीछे नीचे, एक A4 पेज पर।</string>
     <string name="tools_setup_id_front"><!-- review -->कार्ड का आगे का भाग</string>

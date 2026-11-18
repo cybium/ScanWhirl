@@ -5,4 +5,7 @@
     <cache-path name="cache_docs" path="documents/" />
     <!-- Full Backup 2.0 archives live here until the user saves or shares them. -->
     <cache-path name="backup" path="fullbackup/" />
+    <!-- Android 7-9 only: exports saved to Documents/ScanWhirl are plain files there, so Open/Share needs a
+         content URI for exactly that folder (fixresult H1 follow-up). Android 10+ uses MediaStore URIs. -->
+    <external-path name="documents_scanwhirl" path="Documents/ScanWhirl/" />
 </paths>

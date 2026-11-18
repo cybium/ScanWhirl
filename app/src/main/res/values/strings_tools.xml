@@ -105,7 +105,7 @@
     <string name="tools_import_cancel_note">Cancel stops the import. Nothing is added.</string>
     <string name="tools_import_no_space">This PDF needs %1$d MB and would leave %2$d MB free. Free space first.</string>
     <string name="tools_import_low_space_title">Not enough free space</string>
-    <string name="tools_setup_no_text">No recognised text yet. Open the document and read it first.</string>
+    <string name="tools_setup_no_text">Pages without text are read first, on this phone. This can take a moment.</string>
     <string name="tools_setup_metadata_note">A clean copy without EXIF or thumbnails. The original is kept.</string>
     <string name="tools_setup_id_note">Front on top, back below, on one A4 page.</string>
     <string name="tools_setup_id_front">Front of the card</string>
