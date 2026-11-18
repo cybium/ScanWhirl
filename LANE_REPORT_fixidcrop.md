@@ -2,14 +2,14 @@
 
 Branch `lane/fixidcrop`. Not merged, not pushed. Commit `ddf5b34`.
 
-Last full gate after rework 2 (cloud run 44237271752, 5 min):
+Last full gate after rework 3 (cloud run 44239293607, 6 min):
 
 ```
-GATE PASS fixidcrop tests=1704 failures=0 skipped=0 lint=[skipped]
+GATE PASS fixidcrop tests=1706 failures=0 skipped=0 lint=[skipped]
 ```
 
-Earlier: rework 1 `GATE PASS ... tests=1699` (run 44233785286); first pass `GATE PASS ... tests=1695`
-(run 44231360968).
+Earlier: rework 2 `GATE PASS ... tests=1704` (run 44237271752); rework 1 `tests=1699` (run
+44233785286); first pass `tests=1695` (run 44231360968).
 
 ## Done
 
@@ -55,8 +55,9 @@ Earlier: rework 1 `GATE PASS ... tests=1699` (run 44233785286); first pass `GATE
   cut out of a table photo and straightened (output is the card, not the 1200x900 photo, corners
   are card not table); a photo without a card is byte-identical; a small bright patch is not
   mistaken for a page; the result is exactly the existing `Deskew` warp (no second detector).
-- `app/src/test/java/com/scanwhirl/app/ui/tools/IdCardCropFixIdCropTest.kt` (13 tests: the first 4
-  below plus the rework tests described in "Rework after critic" and "Rework 2 after judge"): picking a
+- `app/src/test/java/com/scanwhirl/app/ui/tools/IdCardCropFixIdCropTest.kt` (15 tests: the first 4
+  below plus the rework tests described in "Rework after critic", "Rework 2 after judge" and
+  "Rework 3 after judge"): picking a
   photo opens the corner screen preset to the auto-cropped card (frame = whole detected card,
   card hint, Crop and save present, side sheet not yet shown); confirming prints no table colour
   anywhere on the page while the card is there; system Back on the crop screen returns to the
@@ -98,6 +99,8 @@ or other lane's file touched.
 - `fixidcrop_id_crop_failed` "Could not open this photo. Choose it again."
 - `fixidcrop_id_crop_hint_none` "Couldn't find the card edges. Drag the corners to the card."
   (rework D10; every string exists in `values-hi` with `<!-- review -->`, no long dashes)
+- `fixidcrop_id_photo_gone` "That photo is no longer available. Pick it again." (rework 3 R2-2; EN +
+  HI with `<!-- review -->`)
 
 ## Rework after critic (commit `c28e25a`)
 
@@ -229,6 +232,57 @@ GATE PASS fixidcrop tests=1704 failures=0 skipped=0 lint=[skipped]
 
 - D9's accessible corner handles are phase 2 and were not implemented.
 - D3 stays deferred; `ImageTools.kt` was not touched.
+
+## Rework 3 after judge (commit `ea39ee3`)
+
+Full gate after rework 3 (cloud run 44239293607, 6 min):
+
+```
+GATE PASS fixidcrop tests=1706 failures=0 skipped=0 lint=[skipped]
+```
+
+### R2-1 — The adjusted frame survived only one recreation (Med, fixed)
+
+- `keepCapturedState` now falls back to the pending `cropSavedRect` when `cropBytes` is set but the
+  fresh `CropView`/preview bitmap has not been reinstalled yet (the async reopen window), instead
+  of saving no rectangle. The next instance restores the same adjusted frame.
+- Test: `a second recreation during the reopen keeps the adjusted frame` drags a corner, recreates,
+  holds the reopen decode with a gate, recreates again before that decode finishes, then compares
+  all four normalised coordinates on the second restored crop screen. Red before the fix:
+  `adjusted frame part 0 after two recreations expected:<0.15> but was:<0.0>`.
+
+### R2-2 — Unreadable restored pick said nothing visible (Low, fixed)
+
+- When the restored pick can no longer be read (SecurityException / null stream, e.g. a photo
+  picker grant that is gone), the recovery message is now the **active side sheet's message**
+  (`fixidcrop_id_photo_gone`), with the normal Scan / Pick actions as the retry; progress is
+  hidden, crop Back is disabled, no crop file exists and no side is accepted. The Activity's
+  `errorView` (behind the modal sheet) is no longer used for this case.
+- Test: `a restored pick that can no longer be read says so in the side sheet` registers a
+  content provider whose `openFile` starts throwing `SecurityException` after the first read,
+  holds preparation, recreates, and asserts the front sheet title, the recovery message inside
+  `swSheetMessage`, the normal primary/secondary actions, no crop screen, no stuck progress and no
+  `crop.jpg`. Red before the fix: `expected:<That photo is no longer available. Pick it again.>
+  but was:<Scan the front, or pick a photo from the gallery.>`.
+
+### Required test determinism (3a / 3b)
+
+- 3a: `Back before the reopened crop screen appears returns to the sheet and removes the photo`
+  now holds the reopened decode with a new static test gate (`IdCardActivity.cropReopenGate`) and
+  asserts there is no crop view before pressing Back, so Back definitely precedes overlay
+  installation. Red with the early-Back enable removed: `Back returns to the front sheet
+  expected:<Front side> but was:<null>` (the activity finished instead of cancelling).
+- 3b: `Back while the crop is saving leaves the side empty and shows no error` keeps the worker
+  encode latch and adds `cropSaveSettledForTest`, invoked **on the main thread after the token
+  decision**; the test waits for that decision (`waitUntil`) and asserts it was "not accepted".
+  Red with the token check removed: `the abandoned save is not accepted expected:<false>
+  but was:<true>`.
+- Both gates are test-only seams; the static reopen gate is reset in `@After`.
+
+### Overruled / deferred (rework 3)
+
+- The destroy-during-encode bitmap-release test is not added (GC-reclaimable, no user impact).
+- D9 and D3 remain deferred by the lead.
 
 ## For the lead to check on the phone
 
