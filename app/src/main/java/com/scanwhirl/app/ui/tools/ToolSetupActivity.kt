@@ -8,6 +8,7 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
+import android.text.TextUtils
 import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
@@ -34,10 +35,12 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
 import com.scanwhirl.app.ui.protect.UnlockSheet
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.PageRanges
+import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.CancellationException
@@ -85,6 +88,10 @@ class ToolSetupActivity : BaseActivity() {
     private lateinit var errorView: TextView
     private lateinit var runButton: TextView
     private lateinit var progressOverlay: View
+
+    /** The four compress rows and the size label inside each (rebuilt with the options). */
+    private val levelRows = mutableListOf<LinearLayout>()
+    private val levelSizes = mutableListOf<TextView>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,14 +155,69 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun buildRoot(): View {
         val root = FrameLayout(this)
-        val scroll = ScrollView(this).apply { id = R.id.toolSetupScroll; isFillViewport = true }
+        // The source list can be longer than the screen: keep its scrollbar visible instead of
+        // letting it fade out, so a long library is obviously scrollable (owner screenshot).
+        val scroll = ScrollView(this).apply {
+            id = R.id.toolSetupScroll
+            isFillViewport = true
+            isVerticalScrollBarEnabled = true
+            isScrollbarFadingEnabled = false
+            scrollBarStyle = View.SCROLLBARS_INSIDE_INSET
+        }
         column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val pad = SwStyle.dp(this@ToolSetupActivity, 18f)
-            setPadding(pad, SwStyle.dp(this@ToolSetupActivity, 10f), pad, SwStyle.dp(this@ToolSetupActivity, 40f))
+            // The pinned bar covers the bottom of the viewport: the list ends above it, so the
+            // last source row or option is never hidden behind Continue.
+            setPadding(
+                pad,
+                SwStyle.dp(this@ToolSetupActivity, 10f),
+                pad,
+                SwStyle.dp(this@ToolSetupActivity, BAR_CLEARANCE_DP)
+            )
         }
         scroll.addView(column)
         root.addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+        // Pinned action bar: Continue / the tool's action never scrolls away with the list.
+        val bar = LinearLayout(this).apply {
+            id = R.id.toolSetupBar
+            orientation = LinearLayout.VERTICAL
+            val side = SwStyle.dp(this@ToolSetupActivity, 18f)
+            setPadding(side, SwStyle.dp(this@ToolSetupActivity, 10f), side, SwStyle.dp(this@ToolSetupActivity, 12f))
+            setBackgroundColor(0xFF0E1316.toInt())
+            addView(View(this@ToolSetupActivity).apply {
+                setBackgroundColor(SwStyle.color(this@ToolSetupActivity, R.color.sw_cyan_hair))
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 1f)
+            ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 10f) })
+        }
+        errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
+            id = R.id.toolSetupError
+            isVisible = false
+        }
+        bar.addView(errorView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
+        runButton = actionButton(getString(R.string.tools_setup_run), primary = true).apply {
+            id = R.id.toolSetupRun
+            setOnClickListener { run() }
+        }
+        bar.addView(runButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 56f)
+        ))
+        root.addView(bar, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.BOTTOM })
+        // The list's bottom clearance follows the real bar height (it grows while an error line
+        // is shown), so the last row is never covered.
+        bar.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            val h = v.height
+            if (h > 0 && column.paddingBottom != h) {
+                column.setPadding(column.paddingLeft, column.paddingTop, column.paddingRight, h)
+            }
+        }
+
         progressOverlay = buildProgress()
         root.addView(progressOverlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.applySystemBarsPadding()
@@ -190,8 +252,10 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun render() {
         column.removeAllViews()
+        levelRows.clear()
+        levelSizes.clear()
         column.addView(header())
-        column.addView(sectionLabel(getString(R.string.tools_setup_source)))
+        column.addView(sectionLabel(getString(R.string.tools_pick_choose_doc)))
         column.addView(documentSource())
         column.addView(sectionLabel(getString(R.string.tools_setup_options)))
         optionsHost = LinearLayout(this).apply {
@@ -200,22 +264,6 @@ class ToolSetupActivity : BaseActivity() {
         }
         buildOptions()
         column.addView(optionsHost)
-
-        errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
-            id = R.id.toolSetupError
-            isVisible = false
-        }
-        column.addView(errorView, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 10f) })
-
-        runButton = actionButton(getString(R.string.tools_setup_run), primary = true).apply {
-            id = R.id.toolSetupRun
-            setOnClickListener { run() }
-        }
-        column.addView(runButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 54f)
-        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 18f) })
         applyRunEnabled()
     }
 
@@ -273,10 +321,15 @@ class ToolSetupActivity : BaseActivity() {
         return bar
     }
 
+    /**
+     * Sentence case, no Latin small-caps tracking (the mockups' section heading). The old
+     * label shouted "SOURCE"/"OPTIONS" in capitals, which the owner read as developer chrome.
+     */
     private fun sectionLabel(text: String): TextView =
-        SwStyle.text(this, 12f, SwStyle.color(this, R.color.text_hologram_mid), bold = true, letterSpacing = 0.08f).apply {
-            this.text = text.uppercase(java.util.Locale.getDefault())
-            setPadding(0, SwStyle.dp(this@ToolSetupActivity, 16f), 0, SwStyle.dp(this@ToolSetupActivity, 8f))
+        SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+            id = R.id.toolSetupSection
+            this.text = text
+            setPadding(0, SwStyle.dp(this@ToolSetupActivity, 20f), 0, SwStyle.dp(this@ToolSetupActivity, 8f))
         }
 
     private fun documentSource(): View {
@@ -294,71 +347,7 @@ class ToolSetupActivity : BaseActivity() {
             return list
         }
         for (doc in docs) {
-            val mark = ImageView(this).apply {
-                setImageResource(R.drawable.ic_sym_check)
-                imageTintList = android.content.res.ColorStateList.valueOf(
-                    SwStyle.color(this@ToolSetupActivity, R.color.cyan_primary)
-                )
-                visibility = if (doc.id in selected) View.VISIBLE else View.INVISIBLE
-                layoutParams = LinearLayout.LayoutParams(
-                    SwStyle.dp(this@ToolSetupActivity, 22f), SwStyle.dp(this@ToolSetupActivity, 22f)
-                ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 10f) }
-            }
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                id = R.id.toolSetupDocRow
-                tag = doc.id
-                isClickable = true
-                isFocusable = true
-                background = if (doc.id in selected) {
-                    SwStyle.gradient(
-                        this@ToolSetupActivity,
-                        SwStyle.color(this@ToolSetupActivity, R.color.glass_surface_raised),
-                        SwStyle.color(this@ToolSetupActivity, R.color.glass_surface),
-                        16f,
-                        SwStyle.color(this@ToolSetupActivity, R.color.cyan_primary)
-                    )
-                } else {
-                    SwStyle.card(this@ToolSetupActivity, 16f)
-                }
-                val pad = SwStyle.dp(this@ToolSetupActivity, 14f)
-                setPadding(pad, pad, pad, pad)
-            }
-            row.addView(mark)
-            row.addView(
-                SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
-                    text = doc.name
-                    maxLines = 2
-                },
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            )
-            row.addView(
-                SwStyle.text(this, 12f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
-                    text = resources.getQuantityString(
-                        R.plurals.tools_setup_doc_meta, doc.pageCount, doc.pageCount,
-                        StatusLine.formatBytes(doc.pdfFile.length())
-                    )
-                }
-            )
-            if (doc.isLocked) {
-                row.addView(
-                    ImageView(this).apply {
-                        setImageResource(R.drawable.ic_sym_lock)
-                        imageTintList = android.content.res.ColorStateList.valueOf(
-                            SwStyle.color(this@ToolSetupActivity, R.color.gold_pro_primary)
-                        )
-                        contentDescription = getString(R.string.tools_setup_locked)
-                    },
-                    LinearLayout.LayoutParams(
-                        SwStyle.dp(this@ToolSetupActivity, 18f), SwStyle.dp(this@ToolSetupActivity, 18f)
-                    ).apply { marginStart = SwStyle.dp(this@ToolSetupActivity, 8f) }
-                )
-            }
-            row.setOnClickListener {
-                if (doc.isLocked) promptUnlock(doc) else choose(doc.id)
-            }
-            list.addView(row, LinearLayout.LayoutParams(
+            list.addView(documentRow(doc), LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
         }
@@ -367,11 +356,145 @@ class ToolSetupActivity : BaseActivity() {
                 text = getString(R.string.tools_setup_merge_device)
                 gravity = Gravity.CENTER
                 isClickable = true
-                minimumHeight = SwStyle.dp(this@ToolSetupActivity, 44f)
+                minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
                 setOnClickListener { startActivity(MergePdfActivity.intent(this@ToolSetupActivity)) }
             })
         }
         return list
+    }
+
+    /**
+     * One source in the chooser: the document's real first page (the library's own thumbnail
+     * loader and cache, sampled off the main thread), name and "3 pages · 544 KB", a lock badge
+     * for a protected file, and a check on the tinted row when it is selected. Rows are 76 dp.
+     */
+    private fun documentRow(doc: ScanDocument): LinearLayout {
+        val selectedHere = doc.id in selected
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            id = R.id.toolSetupDocRow
+            tag = doc.id
+            isClickable = true
+            isFocusable = true
+            minimumHeight = SwStyle.dp(this@ToolSetupActivity, 76f)
+            val pad = SwStyle.dp(this@ToolSetupActivity, 10f)
+            setPadding(pad, pad, pad, pad)
+            background = if (selectedHere) {
+                SwStyle.gradient(
+                    this@ToolSetupActivity,
+                    SwStyle.color(this@ToolSetupActivity, R.color.glass_surface_raised),
+                    SwStyle.color(this@ToolSetupActivity, R.color.glass_surface),
+                    16f,
+                    SwStyle.color(this@ToolSetupActivity, R.color.cyan_primary)
+                )
+            } else {
+                SwStyle.card(this@ToolSetupActivity, 16f)
+            }
+        }
+        // 0: the tick stays the row's first child (the selection, never colour alone).
+        row.addView(
+            ImageView(this).apply {
+                id = R.id.toolSetupDocCheck
+                setImageResource(R.drawable.ic_sym_check)
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    SwStyle.color(this@ToolSetupActivity, R.color.cyan_primary)
+                )
+                visibility = if (selectedHere) View.VISIBLE else View.INVISIBLE
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            },
+            LinearLayout.LayoutParams(
+                SwStyle.dp(this@ToolSetupActivity, 22f), SwStyle.dp(this@ToolSetupActivity, 22f)
+            ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 10f) }
+        )
+        // 1: the first page, at least 56 dp wide, 1:1.414.
+        val thumb = ImageView(this).apply {
+            id = R.id.toolSetupDocThumb
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val thumbFrame = FrameLayout(this).apply {
+            background = SwStyle.rounded(
+                this@ToolSetupActivity,
+                SwStyle.color(this@ToolSetupActivity, R.color.sw_paper_thumb),
+                radiusDp = 8f
+            )
+            clipToOutline = true
+            addView(thumb, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            ))
+        }
+        row.addView(thumbFrame, LinearLayout.LayoutParams(
+            SwStyle.dp(this@ToolSetupActivity, 56f), SwStyle.dp(this@ToolSetupActivity, 79f)
+        ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 12f) })
+
+        // 2: name (two lines, ellipsis) over the page-count and size line.
+        val info = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        info.addView(SwStyle.text(this, 15.5f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+            id = R.id.toolSetupDocName
+            text = doc.name
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+        })
+        info.addView(
+            SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+                id = R.id.toolSetupDocMeta
+                text = resources.getQuantityString(
+                    R.plurals.tools_setup_doc_meta, doc.pageCount, doc.pageCount,
+                    StatusLine.formatBytes(doc.pdfFile.length())
+                )
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 3f) }
+        )
+        row.addView(info, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        // 3: a locked source keeps its lock badge as a direct child of the row.
+        if (doc.isLocked) {
+            row.addView(
+                ImageView(this).apply {
+                    setImageResource(R.drawable.ic_sym_lock)
+                    imageTintList = android.content.res.ColorStateList.valueOf(
+                        SwStyle.color(this@ToolSetupActivity, R.color.gold_pro_primary)
+                    )
+                    contentDescription = getString(R.string.tools_setup_locked)
+                },
+                LinearLayout.LayoutParams(
+                    SwStyle.dp(this@ToolSetupActivity, 18f), SwStyle.dp(this@ToolSetupActivity, 18f)
+                ).apply { marginStart = SwStyle.dp(this@ToolSetupActivity, 8f) }
+            )
+        }
+
+        // A real first page, through the library's shared loader/cache (off the main thread,
+        // sampled, and dropped if the view is re-bound). A locked document shows paper only.
+        val firstPage = doc.pageFiles.firstOrNull()
+        if (firstPage != null && firstPage.exists() && !doc.isLocked) {
+            PageThumbLoader.load(
+                firstPage,
+                (56f * resources.displayMetrics.density * 2).toInt(),
+                ScanFilter.ORIGINAL,
+                thumb,
+                fitExactly = true,
+                skipStale = true
+            )
+        } else {
+            thumb.setImageDrawable(null)
+            thumbFrame.setBackgroundColor(
+                SwStyle.color(this, if (doc.isLocked) R.color.sw_thumb_locked else R.color.sw_paper_thumb)
+            )
+        }
+
+        row.setOnClickListener {
+            if (doc.isLocked) promptUnlock(doc) else choose(doc.id)
+        }
+        return row
     }
 
     // ---- options ----------------------------------------------------------
@@ -449,10 +572,10 @@ class ToolSetupActivity : BaseActivity() {
         jpg.setOnClickListener { format = ScanRepository.ImageExportFormat.JPG; paint(); render() }
         png.setOnClickListener { format = ScanRepository.ImageExportFormat.PNG; paint(); render() }
         chips.addView(jpg, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this, 40f)
+            ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this, 48f)
         ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) })
         chips.addView(png, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this, 40f)
+            ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this, 48f)
         ))
         optionsHost.addView(chips)
         paint()
@@ -496,45 +619,118 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     private fun buildCompressOptions() {
-        optionsHost.addView(field(
-            R.string.tools_setup_target_hint, R.id.toolSetupTarget, targetText,
-            inputType = InputType.TYPE_CLASS_TEXT
-        ) { targetText = it })
+        // The document's compress sheet wording, in the same order: quality first, smallest last.
         val levels = listOf(
-            Triple(getString(R.string.tools_setup_level_light), 0, R.id.toolSetupLevelLight),
-            Triple(getString(R.string.tools_setup_level_medium), 1, R.id.toolSetupLevelMedium),
-            Triple(getString(R.string.tools_setup_level_strong), 2, R.id.toolSetupLevelStrong)
+            CompressLevel(R.string.compress_level_low, 0, R.id.toolSetupLevelBest),
+            CompressLevel(R.string.compress_level_medium, 1, R.id.toolSetupLevelBalanced),
+            CompressLevel(R.string.compress_level_high, 2, R.id.toolSetupLevelSmaller),
+            CompressLevel(R.string.compress_level_ultra, 3, R.id.toolSetupLevelSmallest)
         )
-        val chips = mutableListOf<TextView>()
-        fun paintChips() {
-            chips.forEachIndexed { index, chip -> paintChip(chip, index == level) }
+        levelRows.clear()
+        levelSizes.clear()
+        // Full-width rows, one level per line: Hindi labels ("सबसे अच्छी क्वालिटी") never fit a
+        // three-up chip row at 360 dp, which is what clipped "Mediu / m" on the owner's phone.
+        val stack = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            id = R.id.toolSetupLevels
         }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        for ((title, index, id) in levels) {
-            val view = chip(title, id).apply {
+        for (level in levels) {
+            val check = ImageView(this).apply {
+                id = R.id.toolSetupLevelCheck
+                setImageResource(R.drawable.ic_sym_check)
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    SwStyle.color(this@ToolSetupActivity, R.color.cyan_primary)
+                )
+                visibility = View.INVISIBLE
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            val label = SwStyle.text(
+                this, 14f, SwStyle.color(this, R.color.text_hologram_dim), bold = true
+            ).apply {
+                id = R.id.toolSetupLevelLabel
+                tag = CHIP_TAG
+                text = getString(level.titleRes)
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val size = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+                id = R.id.toolSetupLevelSize
+                maxLines = 1
+                gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            }
+            val row = LinearLayout(this).apply {
+                id = level.id
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                isClickable = true
+                isFocusable = true
+                val pad = SwStyle.dp(this@ToolSetupActivity, 12f)
+                setPadding(pad, 0, pad, 0)
+                background = chipBackground(false)
                 setOnClickListener {
-                    level = index
+                    this@ToolSetupActivity.level = level.index
                     target = null
                     targetText = ""
                     optionsHost.findViewById<EditText>(R.id.toolSetupTarget)?.setText("")
-                    paintChips()
-                    updateEstimateLine()
+                    paintLevels()
                 }
             }
-            chips += view
-            row.addView(view, LinearLayout.LayoutParams(
-                0, SwStyle.dp(this, 40f), 1f
-            ).apply { marginEnd = if (index < 2) SwStyle.dp(this@ToolSetupActivity, 8f) else 0 })
+            row.addView(check, LinearLayout.LayoutParams(
+                SwStyle.dp(this@ToolSetupActivity, 20f), SwStyle.dp(this@ToolSetupActivity, 20f)
+            ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) })
+            row.addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
+            })
+            row.addView(size)
+            levelRows += row
+            levelSizes += size
+            stack.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 48f)
+            ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
         }
-        optionsHost.addView(row)
-        paintChips()
-        val estimate = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
-            id = R.id.toolSetupEstimate
-        }
-        optionsHost.addView(estimate)
+        optionsHost.addView(stack)
+        // The sheet ends with "Custom size"; the setup page does the same.
+        optionsHost.addView(field(
+            R.string.tools_pick_custom_size, R.id.toolSetupTarget, targetText,
+            inputType = InputType.TYPE_CLASS_TEXT
+        ) { targetText = it }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
+        paintLevels()
         startEstimate()
-        updateEstimateLine()
+        // A re-render (selection change, onResume) rebuilds the size labels: show the estimates
+        // that are already known instead of waiting for a job that is skipped.
+        updateEstimateLines()
         optionsHost.addView(note(getString(R.string.tools_setup_compress_note)))
+    }
+
+    private data class CompressLevel(val titleRes: Int, val index: Int, val id: Int)
+
+    /** The selected level: soft cyan fill, cyan border and a check, never colour alone. */
+    private fun paintLevels() {
+        levelRows.forEachIndexed { index, row ->
+            val on = index == level
+            row.isSelected = on
+            row.background = if (on) {
+                SwStyle.rounded(
+                    this,
+                    SwStyle.color(this, R.color.sw_cyan_soft),
+                    radiusDp = 12f,
+                    stroke = SwStyle.color(this, R.color.cyan_primary)
+                )
+            } else {
+                chipBackground(false)
+            }
+            row.findViewById<View>(R.id.toolSetupLevelCheck).visibility =
+                if (on) View.VISIBLE else View.INVISIBLE
+            row.findViewById<TextView>(R.id.toolSetupLevelLabel).setTextColor(
+                SwStyle.color(this, if (on) R.color.cyan_primary else R.color.text_hologram_dim)
+            )
+            row.findViewById<TextView>(R.id.toolSetupLevelSize).setTextColor(
+                SwStyle.color(this, if (on) R.color.text_hologram_mid else R.color.text_hologram_dim)
+            )
+        }
     }
 
     /** The kit chip's selected look: cyan border, soft cyan fill and a check. */
@@ -565,7 +761,7 @@ class ToolSetupActivity : BaseActivity() {
         if (estimatesFor == doc.id) return
         estimatesFor = doc.id
         compressEstimates = null
-        updateEstimateLine()
+        updateEstimateLines()
         lifecycleScope.launch {
             val estimates = withContext(Dispatchers.IO) {
                 runCatching {
@@ -583,22 +779,22 @@ class ToolSetupActivity : BaseActivity() {
             }
             if (estimates != null && selected.firstOrNull() == doc.id) {
                 compressEstimates = estimates
-                updateEstimateLine()
+                updateEstimateLines()
             }
         }
     }
 
-    private fun updateEstimateLine() {
-        val line = optionsHost.findViewById<TextView>(R.id.toolSetupEstimate) ?: return
-        val estimate = compressEstimates?.getOrNull(level)
-        line.text = if (estimate != null) {
-            getString(R.string.tools_setup_estimate, StatusLine.formatBytes(estimate))
-        } else {
-            ""
+    /** Each level's own estimate sits on its row, like the compress sheet's radio list. */
+    private fun updateEstimateLines() {
+        val estimates = compressEstimates
+        levelSizes.forEachIndexed { index, view ->
+            view.text = estimates?.getOrNull(index)?.let { StatusLine.formatBytes(it) }.orEmpty()
         }
     }
 
-    private fun compressLevels(): List<Pair<Int, Int?>> = listOf(80 to null, 65 to 2000, 50 to 1600)
+    /** The four levels of the document compress sheet: (JPEG quality, longest page side). */
+    private fun compressLevels(): List<Pair<Int, Int?>> =
+        listOf(80 to null, 65 to 2000, 50 to 1600, 38 to 1200)
 
     private fun buildNameOption() {
         optionsHost.addView(field(
@@ -705,12 +901,16 @@ class ToolSetupActivity : BaseActivity() {
             excelTablesOnly = false
             paint()
         }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(tables, LinearLayout.LayoutParams(0, SwStyle.dp(this, 40f), 1f).apply {
-            marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
-        })
-        row.addView(all, LinearLayout.LayoutParams(0, SwStyle.dp(this, 40f), 1f))
-        optionsHost.addView(row)
+        // Hindi "सिर्फ़ तालिकाएँ" plus the selected check does not fit a half-width chip at
+        // 360 dp, so the two choices stack full width like the compress levels.
+        val stack = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        stack.addView(tables, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 48f)
+        ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
+        stack.addView(all, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 48f)
+        ))
+        optionsHost.addView(stack)
         paint()
         optionsHost.addView(note(getString(R.string.tools_setup_excel_note)))
     }
@@ -766,11 +966,18 @@ class ToolSetupActivity : BaseActivity() {
         minimumHeight = SwStyle.dp(this@ToolSetupActivity, 52f)
     }
 
+    /**
+     * A single-line option chip. Its label must fit at 360 dp in English and Hindi: no wrap,
+     * no ellipsis, 48 dp tall tap target (the owner's phone clipped "Medium" to "Mediu / m").
+     */
     private fun chip(text: String, id: Int): TextView =
         SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_dim), bold = true).apply {
             this.id = id
+            tag = CHIP_TAG
             this.text = text
             gravity = Gravity.CENTER
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
             setPadding(
                 SwStyle.dp(this@ToolSetupActivity, 10f), 0,
                 SwStyle.dp(this@ToolSetupActivity, 10f), 0
@@ -1000,6 +1207,7 @@ class ToolSetupActivity : BaseActivity() {
     private fun compressLevel(): Pair<Int, Int?> = when (level) {
         0 -> 80 to null
         2 -> 50 to 1600
+        3 -> 38 to 1200
         else -> 65 to 2000
     }
 
@@ -1079,6 +1287,10 @@ class ToolSetupActivity : BaseActivity() {
 
     companion object {
         private const val EXTRA_TOOL_ID = "tool_id"
+        /** Room kept at the end of the list for the pinned action bar (before its height is known). */
+        private const val BAR_CLEARANCE_DP = 96f
+        /** Every option chip label carries this tag, so a UI test can walk the chips on any tool. */
+        const val CHIP_TAG = "swChip"
         /** Material's disabled alpha: a disabled button at full alpha still looks tappable. */
         private const val DISABLED_ALPHA = 0.38f
         private const val DOCX_MIME =

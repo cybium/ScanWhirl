@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- uipicker lane strings: the shared tool setup page's source list and option rows. -->
+<resources>
+    <!-- Sentence-case section heading (was the ALL-CAPS "SOURCE"). -->
+    <string name="tools_pick_choose_doc">Choose a document</string>
+    <!-- The compress sheet's own wording uses a size field; this one keeps the example inline. -->
+    <string name="tools_pick_custom_size">Custom size (optional), e.g. 500 KB</string>
+</resources>

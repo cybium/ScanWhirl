@@ -214,25 +214,36 @@ class ToolsUiTest {
     }
 
     @Test
-    fun `compress level chips show one selected choice and an estimate`() {
+    fun `compress level rows show one selected choice and an estimate`() {
+        // v2 UI: 03_tools_setup_picker — the four compress-sheet levels, each with its size.
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
             scenario.onActivity { activity ->
-                assertTrue("Medium is the default", activity.findViewById<View>(R.id.toolSetupLevelMedium).isSelected)
-                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelLight).isSelected)
-                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelStrong).isSelected)
+                assertTrue("Balanced is the default", activity.findViewById<View>(R.id.toolSetupLevelBalanced).isSelected)
+                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelBest).isSelected)
+                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelSmallest).isSelected)
 
-                activity.findViewById<View>(R.id.toolSetupLevelLight).performClick()
+                activity.findViewById<View>(R.id.toolSetupLevelBest).performClick()
                 idle()
                 assertTrue(
-                    "Light is now the single choice",
-                    activity.findViewById<View>(R.id.toolSetupLevelLight).isSelected
+                    "Best quality is now the single choice",
+                    activity.findViewById<View>(R.id.toolSetupLevelBest).isSelected
                 )
-                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelMedium).isSelected)
-                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelStrong).isSelected)
+                assertFalse(activity.findViewById<View>(R.id.toolSetupLevelBalanced).isSelected)
 
                 assertTrue("the estimate appears", waitUntil {
-                    activity.findViewById<TextView>(R.id.toolSetupEstimate)
-                        ?.text?.toString()?.startsWith("Estimated size:") == true
+                    var shown = false
+                    fun walk(view: View) {
+                        if (view is TextView && view.id == R.id.toolSetupLevelSize &&
+                            view.text.toString().contains("B")
+                        ) {
+                            shown = true
+                        }
+                        if (view is android.view.ViewGroup) {
+                            for (i in 0 until view.childCount) walk(view.getChildAt(i))
+                        }
+                    }
+                    activity.findViewById<View>(R.id.toolSetupLevels)?.let { walk(it) }
+                    shown
                 })
             }
         }

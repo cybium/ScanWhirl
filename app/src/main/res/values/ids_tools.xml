@@ -2,8 +2,14 @@
 <!-- v2 component ids (L4 tools). Kept in the lane's own file so lanes never edit ids.xml. -->
 <resources>
     <item name="toolSetupScroll" type="id" />
+    <item name="toolSetupBar" type="id" />
     <item name="toolSetupSource" type="id" />
     <item name="toolSetupDocRow" type="id" />
+    <item name="toolSetupSection" type="id" />
+    <item name="toolSetupDocCheck" type="id" />
+    <item name="toolSetupDocThumb" type="id" />
+    <item name="toolSetupDocName" type="id" />
+    <item name="toolSetupDocMeta" type="id" />
     <item name="toolSetupOptions" type="id" />
     <item name="toolSetupRanges" type="id" />
     <item name="toolSetupRangePreview" type="id" />
@@ -24,6 +30,14 @@
     <item name="toolSetupLevelLight" type="id" />
     <item name="toolSetupLevelMedium" type="id" />
     <item name="toolSetupLevelStrong" type="id" />
+    <item name="toolSetupLevels" type="id" />
+    <item name="toolSetupLevelLabel" type="id" />
+    <item name="toolSetupLevelSize" type="id" />
+    <item name="toolSetupLevelCheck" type="id" />
+    <item name="toolSetupLevelBest" type="id" />
+    <item name="toolSetupLevelBalanced" type="id" />
+    <item name="toolSetupLevelSmaller" type="id" />
+    <item name="toolSetupLevelSmallest" type="id" />
     <item name="toolSetupEstimate" type="id" />
     <item name="toolSetupExcelTables" type="id" />
     <item name="toolSetupExcelAll" type="id" />
@@ -64,6 +78,10 @@
     <item name="batchLevelLight" type="id" />
     <item name="batchLevelMedium" type="id" />
     <item name="batchLevelStrong" type="id" />
+    <item name="batchLevelBest" type="id" />
+    <item name="batchLevelBalanced" type="id" />
+    <item name="batchLevelSmaller" type="id" />
+    <item name="batchLevelSmallest" type="id" />
     <item name="batchFormatJpg" type="id" />
     <item name="batchFormatPng" type="id" />
     <item name="batchPerDoc" type="id" />
