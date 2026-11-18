@@ -97,8 +97,7 @@ class LibraryScreen(
     private var quickIds: MutableList<String> =
         com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
     private var quickEditing = false
-    private lateinit var quickRow2: LinearLayout
-    private lateinit var quickRow3: LinearLayout
+    private val quickRows = mutableListOf<LinearLayout>()
     private lateinit var quickAddGrid: LinearLayout
     private lateinit var quickEdit: ImageButton
     private lateinit var quickDone: TextView
@@ -181,18 +180,18 @@ class LibraryScreen(
         addView(quickHeader)
         quickRow = quickRowShell().apply { id = R.id.swQuickRow }
         addView(quickRow)
-        quickRow2 = quickRowShell().apply {
-            id = R.id.swQuickRow2
-            isVisible = false
+        quickRows += quickRow
+        // Three row shells always exist so R.id.swQuickRow2/3 stay addressable (tests and
+        // drag targets); only the rows a font scale needs are visible. A fourth row appears
+        // on demand for the 12-tool limit at 3 columns.
+        repeat(2) {
+            val row = quickRowShell().apply {
+                id = if (quickRows.size == 1) R.id.swQuickRow2 else R.id.swQuickRow3
+                isVisible = false
+            }
+            addView(row)
+            quickRows += row
         }
-        addView(quickRow2)
-        // A third row exists only for the 12-tool custom limit (5 + 5 + 2); the shipped six
-        // use the first row and one cell of the second.
-        quickRow3 = quickRowShell().apply {
-            id = R.id.swQuickRow3
-            isVisible = false
-        }
-        addView(quickRow3)
         quickAddGrid = LinearLayout(context).apply {
             id = R.id.swQuickAddGrid
             orientation = VERTICAL
@@ -244,8 +243,9 @@ class LibraryScreen(
         docList = LinearLayout(context).apply {
             id = R.id.swDocList
             orientation = VERTICAL
-            // The last card must clear the nav bar and the scan disc.
-            setPadding(0, 0, 0, SwStyle.dp(context, 96f))
+            // The last card must clear the nav bar and the scan disc (M5: measured against the
+            // real dock, never a smaller magic number).
+            setPadding(0, 0, 0, listBottomInset())
         }
 
         emptyView = LinearLayout(context).apply {
@@ -519,6 +519,8 @@ class LibraryScreen(
             text = label
             setPadding(SwStyle.dp(context, 14f), 0, SwStyle.dp(context, 14f), 0)
             minimumHeight = SwStyle.dp(context, 48f)
+            // M8 (device sweep): "All" measured 44dp wide, under the 48dp touch floor.
+            minimumWidth = SwStyle.dp(context, 48f)
             gravity = Gravity.CENTER
             background = SwStyle.pill(
                 context,
@@ -703,7 +705,7 @@ class LibraryScreen(
             0,
             if (selectionMode) SwStyle.dp(context, 92f) else 0,
             0,
-            SwStyle.dp(context, 96f)
+            listBottomInset()
         )
         if (selectionMode) {
             selectionCount.text = resources.getQuantityString(
@@ -903,12 +905,7 @@ class LibraryScreen(
     // ---- pieces -----------------------------------------------------------
 
     private fun appBar(): View {
-        val row = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val padH = SwStyle.dp(context, 18f)
-            setPadding(padH, SwStyle.dp(context, 10f), padH, SwStyle.dp(context, 6f))
-        }
+        val padH = SwStyle.dp(context, 18f)
         val mark = ImageView(context).apply {
             id = R.id.swBrandMark
             setImageResource(
@@ -917,27 +914,58 @@ class LibraryScreen(
             )
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
+        mark.post { com.scanwhirl.app.ui.kit.SwMotion.rotateBrandOnce(mark) }
+        val wordmark = SwStyle.text(context, 22f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+            text = context.getString(R.string.app_name)
+            typeface = SwType.extraBold(context)
+            letterSpacing = -0.01f
+            // The brand name never breaks: a longer translated pill used to squeeze it
+            // into "ScanWhi / rl" (Hindi). The name keeps its natural width on one line.
+            maxLines = 1
+            isSingleLine = true
+        }
+        val pill = TrustPill.offlineNoAds(context)
+        // H1/H2 (200 % font, device sweep 2026-11-19): with the wordmark at 44sp the trust
+        // pill was laid out past the 360dp edge and its text was cut. At large text the pill
+        // takes its own line under the brand: unclipped beats density (UI_PLAN 0.8).
+        if (resources.configuration.fontScale >= 1.6f) {
+            val column = LinearLayout(context).apply {
+                orientation = VERTICAL
+                gravity = Gravity.START
+                setPadding(padH, SwStyle.dp(context, 10f), padH, SwStyle.dp(context, 6f))
+            }
+            val brandRow = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            brandRow.addView(
+                mark,
+                LayoutParams(SwStyle.dp(context, 32f), SwStyle.dp(context, 32f))
+                    .apply { marginEnd = SwStyle.dp(context, 10f) }
+            )
+            brandRow.addView(wordmark, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+            column.addView(brandRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+            column.addView(
+                pill,
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = SwStyle.dp(context, 6f) }
+            )
+            return column
+        }
+        val row = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(padH, SwStyle.dp(context, 10f), padH, SwStyle.dp(context, 6f))
+        }
         row.addView(
             mark,
             LayoutParams(SwStyle.dp(context, 32f), SwStyle.dp(context, 32f))
                 .apply { marginEnd = SwStyle.dp(context, 10f) }
         )
-        mark.post { com.scanwhirl.app.ui.kit.SwMotion.rotateBrandOnce(mark) }
-        row.addView(
-            SwStyle.text(context, 22f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
-                text = context.getString(R.string.app_name)
-                typeface = SwType.extraBold(context)
-                letterSpacing = -0.01f
-                // The brand name never breaks: a longer translated pill used to squeeze it
-                // into "ScanWhi / rl" (Hindi). The name keeps its natural width on one line.
-                maxLines = 1
-                isSingleLine = true
-            },
-            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-        )
+        row.addView(wordmark, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         row.addView(android.view.View(context), LayoutParams(0, 1, 1f))
         row.addView(
-            TrustPill.offlineNoAds(context).apply { ellipsize = android.text.TextUtils.TruncateAt.END },
+            pill.apply { ellipsize = android.text.TextUtils.TruncateAt.END },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
                 .apply { marginStart = SwStyle.dp(context, 8f) }
         )
@@ -1140,9 +1168,15 @@ class LibraryScreen(
             SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = label
                 gravity = Gravity.CENTER
+                // H1: "Import PDF" at 200 % painted past its tile because the label was
+                // WRAP_CONTENT. It now owns the card's width and wraps between words.
                 maxLines = 2
+                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
+                val inset = SwStyle.dp(context, 4f)
+                setPadding(inset, 0, inset, 0)
             },
-            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 8f) }
         )
         return card
@@ -1325,13 +1359,16 @@ class LibraryScreen(
     }
 
     private fun buildQuickRow() {
-        val rows = listOf(quickRow, quickRow2, quickRow3)
-        for (row in rows) row.removeAllViews()
         quickAddGrid.removeAllViews()
         val tools = quickIds.mapNotNull { ToolRegistry.byId(it) }
             .take(com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS)
         quickIds = tools.map { it.id }.toMutableList()
+        val columns = quickColumns()
+        val rowsNeeded = maxOf(1, (tools.size + columns - 1) / columns)
+        ensureQuickRows(rowsNeeded)
+        val rows = quickRows
         for (row in rows) {
+            row.removeAllViews()
             row.setOnDragListener { _, event ->
                 if (event.action == android.view.DragEvent.ACTION_DROP) {
                     val dragged = event.clipData?.getItemAt(0)?.text?.toString()
@@ -1342,7 +1379,7 @@ class LibraryScreen(
                 true
             }
         }
-        tools.chunked(QUICK_COLUMNS).forEachIndexed { index, rowTools ->
+        tools.chunked(columns).forEachIndexed { index, rowTools ->
             val row = rows.getOrNull(index) ?: return@forEachIndexed
             row.isVisible = true
             for (tool in rowTools) {
@@ -1351,17 +1388,39 @@ class LibraryScreen(
                     LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
                 )
             }
-            // Keep the five-column grid: a short row stays left-aligned instead
-            // of stretching its lone tile across the screen.
-            repeat(QUICK_COLUMNS - rowTools.size) {
+            // Keep the grid: a short row stays left-aligned instead of stretching its lone
+            // tile across the screen.
+            repeat(columns - rowTools.size) {
                 row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             }
         }
         rows.forEachIndexed { index, row ->
-            row.isVisible = tools.size > index * QUICK_COLUMNS
+            row.isVisible = tools.size > index * columns
         }
         if (quickEditing) buildQuickAddGrid()
         updateChrome()
+    }
+
+    /**
+     * H1/H2 (device sweep, 200 % font): five columns on a 360dp phone leave 69dp for a label
+     * that needs ~97dp at 22sp, so "Compress" broke into "Comp"/"ress" and "Read text" was
+     * dropped. Large text gets fewer, wider columns (the tile grows instead of the word
+     * splitting), exactly like the Tools hub.
+     */
+    private fun quickColumns(): Int = when {
+        resources.configuration.fontScale >= 1.6f -> 3
+        resources.configuration.fontScale >= 1.25f -> 4
+        else -> QUICK_COLUMNS
+    }
+
+    /** Rows exist for 5/4/3 columns; the 12-tool limit needs at most four at 3 columns. */
+    private fun ensureQuickRows(count: Int) {
+        while (quickRows.size < count) {
+            val row = quickRowShell()
+            val insertAt = if (::quickAddGrid.isInitialized) indexOfChild(quickAddGrid) else -1
+            if (insertAt >= 0) addView(row, insertAt) else addView(row)
+            quickRows += row
+        }
     }
 
     private fun quickToolTile(tool: SwTool): ToolTile {
@@ -1440,7 +1499,8 @@ class LibraryScreen(
         )
         if (available.isEmpty()) return
         val atLimit = quickIds.size >= com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS
-        for (chunk in available.chunked(QUICK_COLUMNS)) {
+        val columns = quickColumns()
+        for (chunk in available.chunked(columns)) {
             val row = LinearLayout(context).apply {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER
@@ -1479,7 +1539,7 @@ class LibraryScreen(
                 }
                 row.addView(tile, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             }
-            repeat(QUICK_COLUMNS - chunk.size) {
+            repeat(columns - chunk.size) {
                 row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             }
             quickAddGrid.addView(
@@ -1510,6 +1570,7 @@ class LibraryScreen(
                 text = label
                 setPadding(SwStyle.dp(context, 14f), 0, SwStyle.dp(context, 14f), 0)
                 minimumHeight = SwStyle.dp(context, 48f)
+                minimumWidth = SwStyle.dp(context, 48f)
                 gravity = Gravity.CENTER
                 background = SwStyle.pill(
                     context,
@@ -1751,13 +1812,29 @@ class LibraryScreen(
         folderScroll?.isVisible = !searching
         createRow.isVisible = !searching
         quickHeader?.isVisible = !searching && !firstRun
-        for (row in listOf(quickRow, quickRow2, quickRow3)) {
+        for (row in quickRows) {
             row.isVisible = !searching && !firstRun && row.childCount > 0
         }
         quickAddGrid.isVisible = quickEditing && !searching
         recentHeader?.isVisible = !searching && !firstRun
         chipScroll?.isVisible = !searching && !firstRun && docs.isNotEmpty()
         listHeader.isVisible = !searching && !firstRun
+        // M5: keep the list's bottom inset at or above the dock's real height (it grows when
+        // the scan disc rises over the page); never a smaller magic number.
+        val inset = listBottomInset()
+        if (docList.paddingBottom != inset) {
+            docList.setPadding(0, docList.paddingTop, 0, inset)
+        }
+    }
+
+    /**
+     * How far the last row and the count must sit above the viewport bottom so the floating
+     * dock never covers them. Measured from the shell's dock (T23 M5); 96dp is the floor for
+     * hosts without the shell.
+     */
+    private fun listBottomInset(): Int {
+        val dock = (context as? ShellActivity)?.dockClearancePx() ?: 0
+        return maxOf(SwStyle.dp(context, 96f), dock)
     }
 
     private fun metaFor(doc: ScanDocument): String {

@@ -208,11 +208,21 @@ class DocCard(context: Context) : LinearLayout(context) {
         nameRow.addView(lockBadge)
         info.addView(nameRow)
 
-        metaView = SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_dim)).apply {
+        metaView = com.scanwhirl.app.ui.kit.SwStyle.text(
+            context,
+            // UI_PLAN 0.8: Hindi body/meta starts at 14sp; Latin meta at 12.5sp.
+            if (com.scanwhirl.app.util.AppLanguage.showingHindi(context)) 14f else 12.5f,
+            SwStyle.color(context, R.color.text_hologram_dim)
+        ).apply {
             id = R.id.swDocMeta
-            // Lead order (2026-11-18): ONE line, ellipsize end - the tall reflow wasted a row.
-            maxLines = 1
+            // M1 (device sweep): one line ellipsized the date away ("2 pages · 166 KB ·
+            // Yest…"). Two lines keep the whole meta — date last and readable — and at
+            // 200 % font a third line does the same (unclipped beats density, UI_PLAN 0.8).
+            maxLines = if (resources.configuration.fontScale >= 1.6f) 3 else 2
             ellipsize = android.text.TextUtils.TruncateAt.END
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
         }
 
         categoryRow = LinearLayout(context).apply {
@@ -407,9 +417,10 @@ class DocCard(context: Context) : LinearLayout(context) {
 /**
  * uihome: the row's meta line and its folder dot + name.
  *
- * The meta is one line (ellipsize end). The folder sits after it when both fit the
- * text column; otherwise it drops to a second line, never over the meta and never
- * squeezed to nothing (long Hindi titles, 200% font, narrow phones).
+ * The meta is at most two lines (ellipsize end beyond that; M1: the date must stay
+ * readable, so the line wraps at word boundaries instead of cutting "Yest…"). The folder
+ * sits after it when both fit the text column; otherwise it drops to a second line, never
+ * over the meta and never squeezed to nothing (long Hindi titles, 200% font, narrow phones).
  */
 private class MetaLine(context: Context) : ViewGroup(context) {
 
