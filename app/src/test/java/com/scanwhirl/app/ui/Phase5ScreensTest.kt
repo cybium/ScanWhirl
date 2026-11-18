@@ -414,16 +414,18 @@ class Phase5ScreensTest {
                 val dock = activity.findViewById<View>(R.id.btnShare).parent as ViewGroup
                 assertTrue("document viewer dock is bg_dock_glass",
                     sameDrawable(dock.background, R.drawable.bg_dock_glass))
-                val margin = Math.round(8f * activity.resources.displayMetrics.density)
+                // v2 UI: 07_reader_dock — a 4 dp inset leaves all four equal items enough
+                // width for their 12 sp labels in EN and HI.
+                val margin = Math.round(4f * activity.resources.displayMetrics.density)
                 val lp = dock.layoutParams as android.view.ViewGroup.MarginLayoutParams
-                assertEquals("dock is inset 8dp", margin, lp.leftMargin)
-                assertEquals("dock is inset 8dp", margin, lp.rightMargin)
+                assertEquals("dock is inset 4dp", margin, lp.leftMargin)
+                assertEquals("dock is inset 4dp", margin, lp.rightMargin)
 
-                // T5.2 (§5.4): one row of four DockItem buttons, 2/1/1/1 —
-                // Share is the wide one so its label never clips.
+                // v2 UI: 07_reader_dock — one row of four equal DockItem buttons in the
+                // fixed order Edit · Text · More · Share (the document is sent away last).
                 assertEquals("dock is one row of four", 4, dock.childCount)
                 val expectedLabels = listOf(
-                    R.string.share_pdf, R.string.edit, R.string.btn_text, R.string.more
+                    R.string.edit, R.string.btn_text, R.string.more, R.string.share_pdf
                 )
                 for (i in 0 until dock.childCount) {
                     val btn = dock.getChildAt(i)
@@ -436,16 +438,21 @@ class Phase5ScreensTest {
                     assertEquals("button $i is label ${activity.getString(expectedLabels[i])}",
                         activity.getString(expectedLabels[i]), btn.text.toString())
                     val w = (btn.layoutParams as android.widget.LinearLayout.LayoutParams).weight
-                    assertEquals("button $i weight", if (i == 0) 2f else 1f, w, 0f)
+                    assertEquals("button $i weight is equal", 1f, w, 0f)
                 }
             }
             // reloadDocument() runs off the main thread; wait for the chip fill-in.
             val shown = pollUntil {
-                chip?.visibility == View.VISIBLE && chip?.text?.toString() == "● STUDY"
+                chip?.visibility == View.VISIBLE && chip?.text?.toString() == "● Study"
             }
-            assertTrue("category chip shows ● STUDY after reload", shown)
-            assertEquals(com.scanwhirl.app.util.CategoryStyle.COLOR_STUDY, chip!!.currentTextColor)
-            // T5.2 (D-H): the chip label grew 10sp → 12sp.
+            // v2 UI: 07_reader_dock — the pill is metadata: sentence case, neutral ink.
+            assertTrue("category chip shows ● Study after reload", shown)
+            assertEquals(
+                "the pill label is neutral ink",
+                app.getColor(R.color.text_hologram_mid),
+                chip!!.currentTextColor
+            )
+            // T5.2 (D-H): the chip label is 12sp; v2 keeps it metadata-sized.
             val scaled = app.resources.displayMetrics.scaledDensity
             assertEquals("category chip text is 12sp", 12f * scaled, chip!!.textSize, 0.5f)
         }
@@ -514,7 +521,8 @@ class Phase5ScreensTest {
             )
             assertTrue(
                 "the chip repaints with the new category",
-                pollUntil { chip?.text?.toString() == "● RECEIPTS" }
+                // v2 UI: 07_reader_dock — sentence case, not ALL CAPS.
+                pollUntil { chip?.text?.toString() == "● Receipts" }
             )
         }
     }

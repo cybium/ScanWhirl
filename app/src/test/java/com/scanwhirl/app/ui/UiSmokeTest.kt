@@ -430,7 +430,11 @@ class UiSmokeTest {
                 val pageCount = activity.findViewById<android.widget.TextView>(R.id.pageCount)
                 val pages = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList)
                 assertEquals("Viewer doc", toolbar.title)
-                assertEquals("2 pages", pageCount.text.toString())
+                // v2 UI: 07_reader_dock — the meta line carries pages and size.
+                assertTrue(
+                    "meta line is '2 pages · <size>', was '${pageCount.text}'",
+                    Regex("^2 pages · [0-9.]+ (B|KB|MB)$").matches(pageCount.text.toString())
+                )
                 assertEquals(2, pages.adapter!!.itemCount)
             }
         }

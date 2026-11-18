@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Hindi keeps the same "pages · size" shape; "पेज" is uninflected for both quantities.
+         Native review pending (see LANE_REPORT_uiviewer.md). -->
+    <plurals name="viewer_meta">
+        <item quantity="one"><!-- review -->%1$d पेज · %2$s</item>
+        <item quantity="other"><!-- review -->%1$d पेज · %2$s</item>
+    </plurals>
+</resources>

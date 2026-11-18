@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UI_PLAN §0 workflow: the saved-document screen (uiviewer lane). -->
+<resources>
+
+    <!-- The document header's metadata line: "3 pages · 544 KB" (07_reader_dock craft rules:
+         metadata is small and calm, sizes in tabular digits). %1$d is the visible page count,
+         %2$s the formatted file size from StatusLine.formatBytes. -->
+    <plurals name="viewer_meta">
+        <item quantity="one">%1$d page · %2$s</item>
+        <item quantity="other">%1$d pages · %2$s</item>
+    </plurals>
+</resources>
