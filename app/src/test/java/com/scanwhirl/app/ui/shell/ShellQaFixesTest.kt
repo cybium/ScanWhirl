@@ -321,12 +321,14 @@ class ShellQaFixesTest {
                     tile.proTag.isVisible -> tile.proTag
                     else -> null
                 } ?: continue
-                val inner = tile.iconView.parent as View
+                // v2 UI: 03_tools_hub - the badge lives in iconSlot, the glyph in iconBox;
+                // compare both in the slot's coordinates.
+                val box = tile.iconBox
                 val iconRect = Rect(
-                    inner.left + tile.iconView.left,
-                    inner.top + tile.iconView.top,
-                    inner.left + tile.iconView.right,
-                    inner.top + tile.iconView.bottom
+                    box.left + tile.iconView.left,
+                    box.top + tile.iconView.top,
+                    box.left + tile.iconView.right,
+                    box.top + tile.iconView.bottom
                 )
                 val tagRect = Rect(
                     tag.left + tag.translationX.toInt(),

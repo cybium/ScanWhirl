@@ -81,8 +81,11 @@ class ShellProGateTest {
     @Test
     fun `Free - every Pro tile in the Tools hub opens the Pro screen`() {
         ProGate.setTestOverride(app, false)
-        val proIds = ToolRegistry.all.filter { it.pro }.map { it.id }
-        assertEquals("every Pro tool in the catalogue has a tile", com.scanwhirl.app.ui.kit.ToolRegistry.all.count { it.pro }, proIds.size)
+        // v2 UI: 03_tools_hub - a Coming-soon Pro tool is not a hub tile any more (no Soon tiles).
+        val proIds = ToolRegistry.all
+            .filter { it.pro && it.status != com.scanwhirl.app.ui.kit.ToolStatus.SOON }
+            .map { it.id }
+        assertEquals("every Pro tool on sale has a tile", proIds.size, proIds.toSet().size)
 
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
