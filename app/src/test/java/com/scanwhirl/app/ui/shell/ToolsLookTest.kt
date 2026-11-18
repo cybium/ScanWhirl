@@ -310,3 +310,79 @@ class ToolsLookTest : ToolsLookBase()
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "hi-w360dp-h740dp-xhdpi")
 class ToolsLookHindiTest : ToolsLookBase()
+
+/**
+ * v2 UI: 03_tools_hub — lead visual check 2026-11-18: the Tools tab wasted vertical space
+ * (a ~125dp tile row and an empty band in each card), so a phone screen showed ~9 tools.
+ * A tile is now exactly its content (12dp + 48dp square + 8dp + label + 8dp) and the cards
+ * are tightly spaced.
+ */
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+class ToolsDensityTest {
+
+    private lateinit var app: Application
+
+    @Before
+    fun setUp() {
+        app = ApplicationProvider.getApplicationContext()
+        val repo = ScanRepository(app)
+        ProGate.setPro(app, false)
+        ProGate.setTestOverride(app, null)
+        DocFixtures.saved(repo, app, pages = 1, name = "Density doc")
+        RuntimeEnvironment.setFontScale(1.0f)
+    }
+
+    @After
+    fun tearDown() {
+        RuntimeEnvironment.setFontScale(1.0f)
+        ProGate.setTestOverride(app, null)
+    }
+
+    @Test
+    fun `fourteen tool tiles are fully visible on the first tools screen`() {
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                shadowOf(Looper.getMainLooper()).idle()
+                activity.findViewById<View>(R.id.swNavTools).performClick()
+                shadowOf(Looper.getMainLooper()).idle()
+
+                val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)
+                val dm = activity.resources.displayMetrics
+                val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+                val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+                repeat(2) { root.measure(w, h); root.layout(0, 0, dm.widthPixels, dm.heightPixels) }
+
+                // The tab content stops where the bottom dock starts.
+                val content = activity.findViewById<View>(R.id.swTabContent)
+                val visible = mutableListOf<String>()
+                val bad = mutableListOf<String>()
+                for (tile in ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))) {
+                    val rect = Rect(0, 0, tile.width, tile.height)
+                    (root as ViewGroup).offsetDescendantRectToMyCoords(tile, rect)
+                    if (rect.top >= content.top && rect.bottom <= content.bottom) {
+                        visible += tile.tool?.id.orEmpty()
+                    }
+                    val label = tile.labelView
+                    val layout = label.layout ?: continue
+                    if (layout.lineCount > 2) bad += "${label.text}: ${layout.lineCount} lines"
+                    for (line in 0 until layout.lineCount) {
+                        if (layout.getEllipsisCount(line) != 0) bad += "${label.text}: ellipsized"
+                    }
+                    if (layout.height + label.totalPaddingTop + label.totalPaddingBottom >
+                        label.height + 1
+                    ) {
+                        bad += "${label.text}: clipped"
+                    }
+                }
+                assertTrue("labels stay whole: ${bad.joinToString(" | ")}", bad.isEmpty())
+                assertTrue(
+                    "at least 14 tiles fit the first screen (${visible.size} visible: " +
+                        "${visible.joinToString(",")})",
+                    visible.size >= 14
+                )
+            }
+        }
+    }
+}
