@@ -92,8 +92,15 @@ class VaultPasswordsWiringTest {
         return condition()
     }
 
+    /**
+     * A normal, fully set-up Vault: the one-time recovery code's four-character check already
+     * passed (T18). Provisioning alone leaves a non-secret pending marker, which blocks normal
+     * use until the check does pass.
+     */
+    private fun VaultStore.setupConfirmed(passcode: String): VaultStore.Setup =
+        setup(passcode).also { markConfirmationPassed() }
     private fun setUpVault() {
-        assertTrue(vaultStore.setup(passcode).recoveryCode.isNotEmpty())
+        assertTrue(vaultStore.setupConfirmed(passcode).recoveryCode.isNotEmpty())
         assertTrue("setup leaves the Vault unlocked", VaultSession.isUnlocked())
     }
 

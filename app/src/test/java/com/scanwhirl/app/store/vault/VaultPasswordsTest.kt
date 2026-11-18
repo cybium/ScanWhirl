@@ -53,11 +53,18 @@ class VaultPasswordsTest {
         File(app.filesDir, "vault2").deleteRecursively()
     }
 
+    /**
+     * A normal, fully set-up Vault: the one-time recovery code's four-character check already
+     * passed (T18). Provisioning alone leaves a non-secret pending marker, which blocks normal
+     * use until the check does pass.
+     */
+    private fun VaultStore.setupConfirmed(passcode: String): VaultStore.Setup =
+        setup(passcode).also { markConfirmationPassed() }
     private fun file(): File = File(File(app.filesDir, "vault2"), VaultPasswords.FILE_NAME)
 
     @Test
     fun `save get and remove a password keyed by document id`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val passwords = VaultPasswords.of(app)
         val docId = DocFixtures.saved(repo, app, pages = 1, name = "Salary slip")
         val other = DocFixtures.saved(repo, app, pages = 1, name = "Rent agreement")
@@ -81,7 +88,7 @@ class VaultPasswordsTest {
 
     @Test
     fun `unicode passwords survive the round trip`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val passwords = VaultPasswords.of(app)
         passwords.save("doc-1", "पासवर्ड-١٢٣-€")
         assertEquals("पासवर्ड-١٢٣-€", VaultPasswords.of(app).get("doc-1"))
@@ -89,7 +96,7 @@ class VaultPasswordsTest {
 
     @Test
     fun `the password file holds no readable password or document id`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val passwords = VaultPasswords.of(app)
         passwords.save("aadhaar-doc-id", "SecretPassphrase123")
 
@@ -108,7 +115,7 @@ class VaultPasswordsTest {
 
     @Test
     fun `a locked vault refuses to read or write passwords`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         VaultPasswords.of(app).save("doc-1", "pw")
         store.lock()
 
@@ -121,7 +128,7 @@ class VaultPasswordsTest {
 
     @Test
     fun `passwords survive lock and unlock with the passcode`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         VaultPasswords.of(app).save("doc-1", "pw-1234")
         store.lock()
         assertTrue(store.unlockWithPasscode("246810").ok)
@@ -130,7 +137,7 @@ class VaultPasswordsTest {
 
     @Test
     fun `another screen's store handle reads the same passwords while unlocked`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         VaultPasswords.of(app).save("doc-1", "pw-1234")
 
         // The Protect sheet in another screen has no VaultStore of its own: the context is enough.
@@ -145,7 +152,7 @@ class VaultPasswordsTest {
 
     @Test
     fun `a tampered password file fails the GCM tag instead of returning a wrong password`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val passwords = VaultPasswords.of(app)
         passwords.save("doc-1", "pw-1234")
 
@@ -159,7 +166,7 @@ class VaultPasswordsTest {
 
     @Test
     fun `removing the vault removes saved passwords`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         VaultPasswords.of(app).save("doc-1", "pw-1234")
         store.wipeAll()
         assertFalse(file().exists())
@@ -169,7 +176,7 @@ class VaultPasswordsTest {
     @Test
     fun `backup carries remembered passwords and restore returns them`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Insurance policy")
-        val setup = store.setup("246810")
+        val setup = store.setupConfirmed("246810")
         store.addDocument(id)
         VaultPasswords.of(app).save(id, "pw-13579")
 
@@ -191,7 +198,7 @@ class VaultPasswordsTest {
     @Test
     fun `a version 1 backup still restores its documents`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Old backup")
-        val setup = store.setup("246810")
+        val setup = store.setupConfirmed("246810")
         store.addDocument(id)
         VaultPasswords.of(app).save(id, "pw-24680")
 

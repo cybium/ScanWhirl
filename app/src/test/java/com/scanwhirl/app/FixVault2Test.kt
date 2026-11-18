@@ -26,6 +26,7 @@ import com.scanwhirl.app.util.SecureView
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -142,7 +143,13 @@ class FixVault2Test {
     }
 
     private fun titleOf(dialog: BottomSheetDialog): String =
-        dialog.need<TextView>(R.id.swSheetTitle).text.toString()
+        (dialog.findViewById<View>(R.id.swSheetTitle) as? TextView)?.text?.toString().orEmpty()
+
+    /** The newest kit sheet with [title] opened since [before] (progress dialogs have no title). */
+    private fun awaitNewSheetSince(before: Int, title: String): BottomSheetDialog? {
+        await { openedSince(before).any { titleOf(it) == title } }
+        return openedSince(before).lastOrNull { titleOf(it) == title }
+    }
 
     /**
      * The dialogs opened after a recreation. Robolectric keeps the destroyed activity's dialogs
@@ -151,7 +158,10 @@ class FixVault2Test {
      */
     private fun openedSince(before: Int): List<BottomSheetDialog> {
         idle()
-        return ShadowDialog.getShownDialogs().drop(before).map { it as BottomSheetDialog }
+        // A progress sheet has no kit title: keep only the kit sheets this test can inspect.
+        return ShadowDialog.getShownDialogs().drop(before)
+            .mapNotNull { it as? BottomSheetDialog }
+            .filter { it.findViewById<View>(R.id.swSheetTitle) != null }
     }
 
     private fun shownCount(): Int {
@@ -355,8 +365,8 @@ class FixVault2Test {
     }
 
     @Test
-    fun `process recreation cannot finish the check silently and offers a new code`() {
-        reachConfirmationWithLegacyFile("Old protected file")
+    fun `process recreation cannot finish the check silently and asks for a new code`() {
+        val oldCode = reachConfirmationWithLegacyFile("Old protected file")
 
         val before = shownCount()
         val state = Bundle()
@@ -364,24 +374,24 @@ class FixVault2Test {
         controller = Robolectric.buildActivity(VaultActivity::class.java).create(state).start().resume()
         idle()
 
-        val opened = openedSince(before)
-        assertEquals("the lost check must be answered, not ignored", 1, opened.size)
-        val note = opened.last()
-        assertEquals(
-            "the one-time code is gone with the process, so the user is pointed at a new one",
-            app.getString(R.string.vault_new_recovery_title),
-            titleOf(note)
+        // The non-secret pending marker survives the process: a NEW code must be shown.
+        val codeSheet = awaitNewSheetSince(before, "Save this recovery code")
+        assertNotNull("the lost check must be answered with a new code", codeSheet)
+        assertNotEquals(
+            "the old in-memory code is never resurrected",
+            oldCode,
+            codeSheet!!.need<TextView>(R.id.vaultRecoveryCode).text.toString()
         )
         assertTrue(
             "the protected action must not run without the check",
             store.listEntries().isEmpty()
         )
         assertTrue(repo.listVaultDocuments().isNotEmpty())
-        assertSecure(note, "the new-code sheet")
+        assertSecure(codeSheet, "the new-code sheet")
     }
 
     @Test
-    fun `process recreation with a locked Vault offers no dead new-code button`() {
+    fun `process recreation with a locked Vault asks for a new code after unlocking`() {
         reachConfirmationWithLegacyFile("Old protected file")
         store.lock()
 
@@ -391,19 +401,21 @@ class FixVault2Test {
         controller = Robolectric.buildActivity(VaultActivity::class.java).create(state).start().resume()
         idle()
 
-        // A fresh process is locked: the unlock sheet comes first, the note sits on top of it.
+        // A fresh process is locked: only the unlock sheet, never a code.
         val opened = openedSince(before)
-        assertEquals("the lost check is answered on top of the unlock sheet", 2, opened.size)
-        val note = opened.last()
-        assertEquals(app.getString(R.string.vault_new_recovery_title), titleOf(note))
-        assertEquals(
-            "a locked Vault cannot make a code, so the note must not promise one",
-            app.getString(R.string.sheet_got_it),
-            note.need<TextView>(R.id.swSheetPrimary).text.toString()
+        assertEquals("a locked Vault shows only the unlock sheet", 1, opened.size)
+        assertEquals("Unlock Vault", titleOf(opened.last()))
+        assertFalse(
+            "no code may be on screen before authentication",
+            opened.any { titleOf(it) == "Save this recovery code" }
         )
-        assertTrue(
-            "the protected action must not run without the check",
-            repo.listVaultDocuments().isNotEmpty()
+
+        val after = shownCount()
+        opened.last().need<EditText>(R.id.vaultUnlockPasscode).setText("246810")
+        opened.last().need<View>(R.id.swSheetPrimary).performClick()
+        assertNotNull(
+            "after unlocking, the pending setup asks for a new code",
+            awaitNewSheetSince(after, "Save this recovery code")
         )
     }
 
@@ -431,6 +443,7 @@ class FixVault2Test {
     @Test
     fun `the unlock and recovery-code unlock sheets are secure`() {
         store.setup("246810")
+        store.markConfirmationPassed()
         store.lock()
         launch()
 
@@ -457,6 +470,7 @@ class FixVault2Test {
     @Test
     fun `the options sheet and the new passcode sheet are secure`() {
         store.setup("246810")
+        store.markConfirmationPassed()
         val activity = launch()
 
         activity.need<View>(R.id.vaultMore).performClick()
@@ -474,6 +488,7 @@ class FixVault2Test {
     @Test
     fun `the restore sheet is secure`() {
         store.setup("246810")
+        store.markConfirmationPassed()
         val activity = launch()
         activity.need<View>(R.id.vaultMore).performClick()
         idle()
@@ -504,6 +519,7 @@ class FixVault2Test {
     @Test
     fun `the add files sheet is secure because it lists private names`() {
         store.setup("246810")
+        store.markConfirmationPassed()
         val activity = launch()
         activity.need<View>(R.id.vaultAddFiles).performClick()
         idle()

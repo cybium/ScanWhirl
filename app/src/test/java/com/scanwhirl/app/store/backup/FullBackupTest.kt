@@ -74,6 +74,13 @@ class FullBackupTest {
         return dir
     }
 
+    /**
+     * A normal, fully set-up Vault: the one-time recovery code's four-character check already
+     * passed (T18). Provisioning alone leaves a non-secret pending marker, which blocks normal
+     * use until the check does pass.
+     */
+    private fun VaultStore.setupConfirmed(passcode: String): VaultStore.Setup =
+        setup(passcode).also { markConfirmationPassed() }
     private fun b64(s: String): String =
         android.util.Base64.encodeToString(s.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
 
@@ -233,7 +240,7 @@ class FullBackupTest {
 
         // This phone has a v2 Vault, but it is locked when the restore runs.
         val vault = vaultStore()
-        vault.setup("246810")
+        vault.setupConfirmed("246810")
         VaultSession.close()
 
         val repo = ScanRepository(app)
@@ -306,7 +313,7 @@ class FullBackupTest {
     @Test
     fun `vault entries are re-encrypted into an existing vault`() {
         val oldVault = vaultStore()
-        val setup = oldVault.setup("246810")
+        val setup = oldVault.setupConfirmed("246810")
         val docDir = File(docsDir, "doc_vault").apply { mkdirs() }
         File(docDir, "meta.txt").writeText("Bank statement\n${System.currentTimeMillis()}\nOther\n")
         File(docDir, "scan.pdf").writeBytes(ByteArray(4096) { 7 })
@@ -322,7 +329,7 @@ class FullBackupTest {
         // A different phone: new Vault key, same folders.
         File(app.filesDir, "vault2").deleteRecursively()
         val newVault = vaultStore()
-        newVault.setup("135790")
+        newVault.setupConfirmed("135790")
         val onNewPhone = FullBackup(app, newVault)
 
         val report = onNewPhone.restore(out, setup.recoveryCode)
@@ -337,7 +344,7 @@ class FullBackupTest {
     @Test
     fun `a locked vault is skipped with a message and a second restore merges it`() {
         val oldVault = vaultStore()
-        val setup = oldVault.setup("246810")
+        val setup = oldVault.setupConfirmed("246810")
         doc("doc_lib", "Library doc")
         val docDir = File(docsDir, "doc_merge").apply { mkdirs() }
         File(docDir, "meta.txt").writeText("Insurance\n${System.currentTimeMillis()}\nOther\n")
@@ -348,7 +355,7 @@ class FullBackupTest {
 
         File(app.filesDir, "vault2").deleteRecursively()
         val newVault = vaultStore()
-        newVault.setup("135790")
+        newVault.setupConfirmed("135790")
         VaultSession.close()
         val onNewPhone = FullBackup(app, newVault)
         File(docsDir, "doc_merge").deleteRecursively()
@@ -373,7 +380,7 @@ class FullBackupTest {
     @Test
     fun `a tampered vault entry fails safely without publishing`() {
         val oldVault = vaultStore()
-        oldVault.setup("246810")
+        oldVault.setupConfirmed("246810")
         val docDir = File(docsDir, "doc_tamper").apply { mkdirs() }
         File(docDir, "meta.txt").writeText("Tamper me\n${System.currentTimeMillis()}\nOther\n")
         File(docDir, "scan.pdf").writeBytes(ByteArray(1024) { 2 })
@@ -390,7 +397,7 @@ class FullBackupTest {
 
         File(app.filesDir, "vault2").deleteRecursively()
         val newVault = vaultStore()
-        newVault.setup("135790")
+        newVault.setupConfirmed("135790")
         try {
             newVault.restoreEntryFromBackup(source, oldKey)
             fail("a tampered entry was accepted")
@@ -408,7 +415,7 @@ class FullBackupTest {
     @Test
     fun `restoring a large vault entry streams`() {
         val oldVault = vaultStore()
-        val setup = oldVault.setup("246810")
+        val setup = oldVault.setupConfirmed("246810")
         val docDir = File(docsDir, "doc_big_vault").apply { mkdirs() }
         File(docDir, "meta.txt").writeText("Big vault doc\n${System.currentTimeMillis()}\nOther\n")
         val page = ByteArray(4 * 1024 * 1024) { (it % 251).toByte() }
@@ -419,7 +426,7 @@ class FullBackupTest {
 
         File(app.filesDir, "vault2").deleteRecursively()
         val newVault = vaultStore()
-        newVault.setup("135790")
+        newVault.setupConfirmed("135790")
         val before = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
         val report = FullBackup(app, newVault).restore(out, setup.recoveryCode)
         val after = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }

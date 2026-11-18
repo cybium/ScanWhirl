@@ -60,7 +60,24 @@ class VaultStore(
         private const val MANIFEST_VERSION = "v1"
     }
 
-    data class Setup(val recoveryCode: String)
+    data class Setup(val recoveryCode: String) {
+        // LOW (T18 review): a data class toString prints every field. The one-time code must
+        // never appear in a log, a crash report or a debugging screenshot.
+        override fun toString(): String = "Setup(recoveryCode=<redacted>)"
+    }
+
+    /**
+     * A new recovery code that is sealed but NOT written yet (review H2). The old wrap stays
+     * active until [commitRecoveryCode] runs after the four-character check, so abandoning the
+     * flow (or losing this object with the process) can never lock the user out.
+     */
+    class RecoveryReplacement internal constructor(
+        /** Grouped for display ("ABCD EFGH ..."). Shown once, never stored. */
+        val code: String,
+        internal val blob: ByteArray
+    ) {
+        override fun toString(): String = "RecoveryReplacement(code=<redacted>)"
+    }
 
     data class Entry(
         val id: String,
@@ -118,6 +135,16 @@ class VaultStore(
 
     fun isSetUp(): Boolean = File(vaultDir, RECOVERY_FILE).let { it.isFile && it.length() > 0 }
 
+    /**
+     * The non-secret pending-completion marker (review H1): a Vault exists whose one-time
+     * recovery code has not passed its four-character check yet. Authentication and
+     * recovery-code (re)enrollment stay available; normal use and every migration wait.
+     */
+    fun isConfirmationPending(): Boolean = isSetUp() && Prefs.vaultSetupConfirmPending(context)
+
+    /** The four-character check passed for the code that is active now. */
+    fun markConfirmationPassed() = Prefs.setVaultSetupConfirmPending(context, false)
+
     fun isUnlocked(): Boolean = VaultSession.isUnlocked()
 
     /**
@@ -147,6 +174,10 @@ class VaultStore(
         val recoveryBlob = VaultKeyWrap.seal(key, recoveryCode, VaultCrypto.newSalt(), iterations)
 
         Durable.atomicWrite(File(vaultDir, PASSCODE_FILE), passBlob)
+        // Non-secret pending marker BEFORE the "set up" blob: a Vault can never exist with an
+        // unconfirmed recovery code and no marker, even if the process dies right here. It is
+        // cleared only by markConfirmationPassed() after the four-character check.
+        Prefs.setVaultSetupConfirmPending(context, true)
         // Written last: its presence is the "set up" marker.
         Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
         Durable.syncDir(vaultDir)
@@ -230,6 +261,7 @@ class VaultStore(
 
     fun changePasscode(passcode: String) = synchronized(LOCK) {
         val key = requireKey()
+        requireCompleted()
         requireValidPasscode(passcode)
         Durable.atomicWrite(
             File(vaultDir, PASSCODE_FILE),
@@ -237,15 +269,24 @@ class VaultStore(
         )
     }
 
-    /** Issues a new recovery code (the old one stops working). Shown once. */
-    fun changeRecoveryCode(): String = synchronized(LOCK) {
+    /**
+     * Seals a new recovery code without writing it (review H2). The old wrap stays active until
+     * [commitRecoveryCode] runs after the four-character check, so an abandoned flow leaves the
+     * old code working. Allowed while the setup check is pending: this is the (re)enrollment.
+     */
+    fun prepareRecoveryCode(): RecoveryReplacement = synchronized(LOCK) {
         val key = requireKey()
         val code = VaultCrypto.generateRecoveryCode()
-        Durable.atomicWrite(
-            File(vaultDir, RECOVERY_FILE),
+        RecoveryReplacement(
+            VaultCrypto.formatRecoveryCode(code),
             VaultKeyWrap.seal(key, code, VaultCrypto.newSalt(), iterations)
         )
-        VaultCrypto.formatRecoveryCode(code)
+    }
+
+    /** Atomically replaces the recovery wrap with [replacement] (same format, no migration). */
+    fun commitRecoveryCode(replacement: RecoveryReplacement) = synchronized(LOCK) {
+        requireKey()
+        Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), replacement.blob)
     }
 
     // ------------------------------------------------------------------
@@ -277,6 +318,7 @@ class VaultStore(
      */
     fun addDocument(docId: String): Entry = synchronized(LOCK) {
         val key = requireKey()
+        requireCompleted()
         val doc = repo.getDocument(docId) ?: throw IOException("This document no longer exists")
         val src = File(repo.docsDir, docId)
         if (!src.isDirectory) throw IOException("This document no longer exists")
@@ -355,6 +397,7 @@ class VaultStore(
 
     fun openDocument(id: String): Opened = synchronized(LOCK) {
         val key = requireKey()
+        requireCompleted()
         val entryDir = File(vaultDir, id)
         if (!entryDir.isDirectory) throw IOException("This document is not in the Vault")
         val manifest = readManifest(entryDir, key)
@@ -391,6 +434,7 @@ class VaultStore(
     /** Removes the encrypted entry. The plaintext was already purged when it was added. */
     fun removeFromVault(id: String) = synchronized(LOCK) {
         requireKey()
+        requireCompleted()
         entryDir(id).deleteRecursively()
         File(openDir, id).deleteRecursively()
     }
@@ -406,6 +450,9 @@ class VaultStore(
      */
     fun migrateLegacyVault(): Int = synchronized(LOCK) {
         requireKey()
+        // Review H1: a migration is one-way. It never runs while the one-time code's
+        // four-character check is still owed, on the manual path or the automatic one.
+        requireCompleted()
         var moved = 0
         repo.listVaultDocuments().forEach { doc ->
             repo.setVaulted(doc.id, false)
@@ -429,6 +476,9 @@ class VaultStore(
      * Vault screen, and a failure leaves the flags for the next unlock.
      */
     private fun migrateRestoredLegacy() {
+        // Review H1: restored legacy files stay hidden until the current recovery code's check
+        // has passed; a silent migration here would run without the user's acknowledgement.
+        if (isConfirmationPending()) return
         if (hasLegacyPin()) return
         if (repo.listVaultDocuments().isEmpty()) return
         runCatching { migrateLegacyVault() }
@@ -441,6 +491,7 @@ class VaultStore(
     /** Writes a `.swvault` file: encrypted entries plus the key wrapped by the recovery code. */
     fun exportBackup(dest: File): File = synchronized(LOCK) {
         if (!isSetUp()) throw IllegalStateException("Set up the Vault first")
+        requireCompleted()
         val recovery = File(vaultDir, RECOVERY_FILE).readBytes()
         // Remembered PDF passwords travel with the backup (still encrypted under the vault key).
         val extras = listOf(File(vaultDir, VaultPasswords.FILE_NAME)).filter { it.isFile }
@@ -454,6 +505,7 @@ class VaultStore(
      */
     fun importBackup(src: File, recoveryCode: String): List<Entry> = synchronized(LOCK) {
         if (!VaultCrypto.isRecoveryCode(recoveryCode)) throw VaultAuthException("That recovery code is not valid")
+        if (isConfirmationPending()) throw VaultPendingException()
         if (entryDirs().isNotEmpty()) throw IllegalStateException("This Vault already has files in it")
 
         vaultDir.mkdirs()
@@ -560,6 +612,15 @@ class VaultStore(
 
     private fun requireKey(): ByteArray =
         VaultSession.keyOrNull() ?: throw VaultLockedException()
+
+    /**
+     * Review H1: the Vault is not usable while its one-time recovery code's four-character
+     * check is still owed. Only authentication and code (re)enrollment + confirmation are
+     * allowed, so normal use never starts on a code the user may not have written down.
+     */
+    private fun requireCompleted() {
+        if (isConfirmationPending()) throw VaultPendingException()
+    }
 
     private fun requireValidPasscode(passcode: String) {
         require(passcode.length >= MIN_PASSCODE_LENGTH && passcode.all { it.isDigit() }) {
@@ -752,3 +813,9 @@ class VaultStore(
     private fun decode(value: String): String =
         String(Base64.decode(value, Base64.NO_WRAP), Charsets.UTF_8)
 }
+
+/**
+ * The Vault exists but its one-time recovery code has not passed the four-character check yet
+ * (review H1). Normal use and every migration wait; authentication and code re-enrollment work.
+ */
+class VaultPendingException : IllegalStateException("Finish setting up the Vault first")

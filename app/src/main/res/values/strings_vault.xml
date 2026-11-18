@@ -62,6 +62,7 @@
     <string name="vault_confirm_hint">First 4 characters</string>
     <string name="vault_confirm_wrong">That does not match the code</string>
     <string name="vault_finish">Finish setup</string>
+    <string name="vault_pending_note">Finish setting up: type 4 characters of your recovery code.</string>
 
     <string name="vault_unlock_sheet_title">Unlock Vault</string>
     <string name="vault_unlock_note_fingerprint">Use your fingerprint, or enter your passcode.</string>

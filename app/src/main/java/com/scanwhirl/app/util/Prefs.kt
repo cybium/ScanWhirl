@@ -94,6 +94,21 @@ object Prefs {
 
     private const val KEY_VAULT_PIN = "vault_pin_sha256"
 
+    private const val KEY_VAULT_SETUP_CONFIRM_PENDING = "vault_setup_confirm_pending"
+
+    /**
+     * Non-secret marker (T18, POL-002): a recovery code exists on this phone whose
+     * four-character check has not passed yet. Written synchronously with provisioning, so a
+     * kill right after setup cannot lose it; cleared only when the check passes. Never holds
+     * the code, a passcode or a file name.
+     */
+    fun vaultSetupConfirmPending(c: Context): Boolean =
+        sp(c).getBoolean(KEY_VAULT_SETUP_CONFIRM_PENDING, false)
+
+    fun setVaultSetupConfirmPending(c: Context, pending: Boolean) {
+        sp(c).edit().putBoolean(KEY_VAULT_SETUP_CONFIRM_PENDING, pending).commit()
+    }
+
     private const val KEY_AUTO_COPY = "auto_copy_to_documents"
 
     /** T4.7 (N10): also copy the finished PDF into Documents/ScanWhirl. Off by default. */
