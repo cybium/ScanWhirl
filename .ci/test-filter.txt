@@ -1,0 +1,1 @@
+com.scanwhirl.app.tools.CameraPageCapConsistencyTest,com.scanwhirl.app.tools.CameraPageCapTest,com.scanwhirl.app.tools.GalleryCropTest,com.scanwhirl.app.ui.book.BookPagesActivityTest
