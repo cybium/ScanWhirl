@@ -183,8 +183,9 @@ class DocumentViewerReaderUiTest {
     fun `no dock label clips at 360 dp in Hindi`() {
         open { activity ->
             assertEquals(
-                "the Hindi dock label is the existing values-hi string",
-                "शेयर करें",
+                // hindi lane: the judged glossary replaced "शेयर करें" with "भेजें".
+                "the Hindi dock label is the judged glossary word",
+                "भेजें",
                 activity.getString(R.string.share_pdf)
             )
             assertDockLabelsFit(activity)

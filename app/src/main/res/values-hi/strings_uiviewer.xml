@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Hindi keeps the same "pages · size" shape; "पेज" is uninflected for both quantities.
-         Native review pending (see LANE_REPORT_uiviewer.md). -->
+    <!-- Hindi follows the judged glossary (next/docs/review/JUDGE_HINDI.md): page = पन्ना / पन्ने. -->
     <plurals name="viewer_meta">
-        <item quantity="one"><!-- review -->%1$d पेज · %2$s</item>
-        <item quantity="other"><!-- review -->%1$d पेज · %2$s</item>
+        <item quantity="one">%1$d पन्ना · %2$s</item>
+        <item quantity="other">%1$d पन्ने · %2$s</item>
     </plurals>
 </resources>
