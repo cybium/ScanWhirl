@@ -98,7 +98,10 @@ jobs:
 
       - name: Lint
         id: lint
-        if: github.ref == 'refs/heads/integration' || inputs.lint
+        # Lint on integration AND on every full lane gate (ci/<lane>), so a lane cannot report
+        # DONE with a lint error (11-18: uiicons slipped a WrongConstant). Targeted -Tests runs
+        # (ci/<lane>-t) stay fast and skip it.
+        if: github.ref == 'refs/heads/integration' || inputs.lint || (startsWith(github.ref, 'refs/heads/ci/') && !endsWith(github.ref, '-t'))
         continue-on-error: true
         run: ./gradlew :app:lintDebug -PtestBuild --no-daemon -q
 

@@ -18,7 +18,7 @@ Turn 1.2.x into an appealing document app worth paying for (Pro one-time ₹499,
    looked at, EN + HI) before the owner gets an APK.
 Integration gate: pushes cancel the running integration run (concurrency). After a MERGE, do not push doc commits
 until that run completes (commit locally, push after); verdict via gh run list --branch integration.
-Lint: every lane that changes app/src/main runs its LAST full gate with -Lint (integration runs lint and fails on any error; uiicons slipped a WrongConstant error on 11-18).
+Lint: gate.yml now runs lint on every FULL lane gate (ci/<lane>) and on integration; targeted -Tests runs skip it. (11-18: uiicons slipped a WrongConstant error because lane gates never linted.)
 Judge rounds: max 2 per lane. After the 2nd FAIL the lead rules on what is left by real user/data impact (must-fix
 items get one final rework; pure test-completeness asks without user impact are overruled with a reason), then merges
 on a green gate without a 3rd judge round.
