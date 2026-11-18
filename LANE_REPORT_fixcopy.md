@@ -57,17 +57,54 @@ New `app/src/test/java/com/scanwhirl/app/FixCopyTest.kt` (4 tests):
 2. the chosen file is written as exactly `<code>\n<warning>\n` (delivered through
    `ShadowActivity.receiveResult` + a registered output stream);
 3. compression level order/quality mapping + labels (source + strings);
-4. the 8 critique wordings in EN and HI (review marker, no long dash, no "Google"/"Hides").
+4. the 8 critique wordings in EN and HI (review marker, no long dash, no "Google"/"Hides");
+5. the save control is 48 dp and focusable; the recovery sheet window is FLAG_SECURE;
+6. a rotation while the picker is open still writes the code (retained in-memory holder, never in a Bundle);
+7. process death while the picker is open: the fresh activity has no code, so the empty document is
+   deleted (`DocumentsContract.deleteDocument` into a recording provider) and the "code was not saved"
+   sheet is shown, with nothing written;
+8. a cancelled picker writes nothing and shows no error;
+9. a failing output stream shows the fixed failure message (no raw `e.message`) and does not crash.
+Red proof for the rework (temporary local revert, then restored): tests 5-7 failed with 44 dp/not
+focusable, no retained holder, and the silent `return` → `3 failed` before the fix, green after.
 No existing test pinned the old copy behaviour. `TextFitTest` (not owned by this lane) is the only
 existing test affected: it went red on the prescribed auto-enhance sentence and is green again with
 the shortened one — no test was weakened or ignored.
+
+## Rework after critic (CRITIC_fixcopy.md, 2026-11-18)
+Defects fixed in `VaultActivity.kt` (+ vault strings):
+- **D2 (Medium) — rotation / process death while the picker is open.** The pending code now lives in
+  a `PendingRecoveryCode` holder kept only in memory and handed across configuration changes via
+  `onRetainCustomNonConfigurationInstance()` (the "retained holder" the lead ruled for). It is still
+  never in `savedInstanceState`, an Intent extra, prefs or any file except the one the user picks.
+  Cancel (null Uri) stays silent and clears the holder. On a result with a Uri but no code (process
+  death), the empty document the picker created is deleted (`DocumentsContract.deleteDocument`,
+  `runCatching`) and a clear sheet says "The code was not saved. Tap Save as file again."
+  (`vault_recovery_code_lost`, EN + HI).
+- **Write failure:** the message is now a fixed string resource
+  ("The code was not saved. Tap Save as file and pick another place.", `vault_recovery_file_failed`)
+  instead of interpolating `e.message`; the exception goes to logcat (`Log.w`, no code in it), the
+  half-written/empty document is deleted, and the app does not crash.
+- **D8 — accessibility:** the save control is 48 dp tall and `isFocusable = true`, matching `optionRow()`.
+- **Nits:** `vault_recovery_file_name` is `translatable="false"` (Hindi copy removed); the recovery
+  sheet now calls `SwSheet.secure()` (verified: a dialog is its own window, the activity's
+  FLAG_SECURE does not cover it; now asserted in the test). Note for the lead: the Vault's passcode
+  and unlock sheets have the same pre-existing gap and are outside this lane's "recovery-code part"
+  scope.
+- Tests 5-9 added (see above), red-then-green; no other lane file touched.
+- Rework gate lines: `-Tests FixCopyTest` → red `3 failed` on the temporary revert, then
+  `GATE PASS fixcopy tests=9`; wider targeted run (FixCopyTest, VaultActivityTest,
+  AccessibilityAuditTest, TextFitTest, HindiStringsHygieneTest, StringsParityTest) →
+  `GATE PASS fixcopy tests=39`; full gate below.
+- Known residual (pre-existing, outside D2): a rotation also dismisses the recovery sheet, so the
+  "type 4 characters" confirmation can be skipped; the code is still written to the picked file.
 
 ## Gate
 - Red first: `-Tests com.scanwhirl.app.FixCopyTest` → 4 failures (old labels/copy).
 - Green: `-Tests FixCopyTest` → `GATE PASS fixcopy tests=4`; then with `VaultActivityTest`,
   `HindiStringsHygieneTest`, `StringsParityTest` → `GATE PASS fixcopy tests=23`;
   then `FixCopyTest + TextFitTest` → `GATE PASS fixcopy tests=11`.
-- Full gate: `GATE PASS fixcopy tests=1691 failures=0 skipped=0 lint=[skipped]` (cloud run 44235043564).
+- Full gate: `GATE PASS fixcopy tests=1696 failures=0 skipped=0 lint=[skipped]` (cloud run 44238796814, after the critic rework).
 
 ## For the lead / device check
 - On the phone: open Vault → Recovery code → "Save as file" should open the system picker, write a
