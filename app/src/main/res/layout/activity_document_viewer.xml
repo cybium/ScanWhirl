@@ -51,14 +51,16 @@
 
             <!-- v2 UI: 07_reader_dock — the folder/category pill is metadata: a compact 32 dp
                  tonal pill (13 sp sentence-case label, 8 dp dot in the category's colour)
-                 centred on the meta line. The 48 dp touch area lives on this transparent
-                 container, so the tap target is big while the visible chip stays small. -->
+                 centred on the meta line. This 48 dp container is the tap target (it carries
+                 the spoken label), so the target is big while the visible chip stays small. -->
             <FrameLayout
                 android:id="@+id/docCategoryTouch"
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
                 android:layout_marginStart="8dp"
+                android:clickable="true"
                 android:clipChildren="false"
+                android:focusable="true"
                 android:visibility="gone">
 
                 <LinearLayout
@@ -67,8 +69,6 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_vertical"
                     android:background="@drawable/bg_category_chip_tonal"
-                    android:clickable="true"
-                    android:focusable="true"
                     android:gravity="center_vertical"
                     android:minHeight="32dp"
                     android:orientation="horizontal"
