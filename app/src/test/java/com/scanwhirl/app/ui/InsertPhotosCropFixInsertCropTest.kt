@@ -15,6 +15,7 @@ import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
@@ -26,6 +27,7 @@ import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.tools.PhotoCropFlowActivity
 import com.scanwhirl.app.util.ImageTools
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -40,6 +42,8 @@ import org.robolectric.shadows.ShadowDialog
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * fixinsertcrop: "Insert pages > Photos" used to drop the picked gallery photo on the page
@@ -311,6 +315,34 @@ class InsertPhotosCropFixInsertCropTest {
         idle()
     }
 
+    /**
+     * D6: a recreated viewer has no record of the intent it started, so the result goes through
+     * the same {@code onActivityResult} entry point the framework uses (ComponentActivity hands it
+     * to its ActivityResult registry, which restores the pending request code with the activity).
+     * The platform method is protected, hence reflection.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun deliverCropResultTo(
+        viewer: DocumentViewerActivity,
+        requestCode: Int,
+        cropActivity: PhotoCropFlowActivity
+    ) {
+        val method = android.app.Activity::class.java.getDeclaredMethod(
+            "onActivityResult",
+            Int::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType,
+            Intent::class.java
+        )
+        method.isAccessible = true
+        method.invoke(viewer, requestCode, Activity.RESULT_OK, shadowOf(cropActivity).resultIntent)
+        idle()
+    }
+
+    @After
+    fun tearDown() {
+        PhotoCropFlowActivity.prepareGate = null
+    }
+
     @Test
     fun `a picked photo opens the corner crop screen instead of landing on the page`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
@@ -571,5 +603,221 @@ class InsertPhotosCropFixInsertCropTest {
             }
         }
         assertTrue("a cancelled rotation test keeps no picked copy", insertDirs().isEmpty())
+    }
+
+    // ---- rework after critic: D1 (tap during the next load), D2 (frame during that load) ----
+
+    @Test
+    fun `a confirm tap that lands while the next photo loads is ignored`() {
+        val target = DocFixtures.saved(repo, app, pages = 1)
+        val first = photoOfPageOnTable(whitePage)
+        val second = photoOfPageOnTable(greenPage)
+        val gate = CountDownLatch(1)
+        PhotoCropFlowActivity.prepareGate = { index ->
+            if (index == 1) gate.await(10, TimeUnit.SECONDS)
+        }
+        var crop: PhotoCropFlowActivity? = null
+        documentViewer(target) { _, viewer ->
+            val cropIntent = openPhotoBatch(viewer, first, second)
+            launchCrop(cropIntent) { scenario, activity ->
+                crop = activity
+                assertTrue(
+                    "the corner screen shows photo 1",
+                    waitUntil { activity.findViewById<View>(R.id.toolCropView) != null }
+                )
+                var firstScreenApply: View? = null
+                scenario.onActivity { firstScreenApply = it.findViewById(R.id.toolCropApply) }
+                scenario.onActivity { it.findViewById<View>(R.id.toolCropApply).performClick() }
+                assertTrue(
+                    "the flow moved on to photo 2",
+                    waitUntil { activity.currentPhotoIndexForTest() == 1 }
+                )
+                // The old button is stale: photo 2 is still loading (blocked by the gate) and its
+                // screen is not shown. This tap must not confirm anything.
+                scenario.onActivity { firstScreenApply?.performClick() }
+                gate.countDown()
+                confirmPhoto(scenario, activity, 1, 2)
+                assertTrue("the batch finishes", waitUntil { activity.isFinishing })
+                val paths = shadowOf(activity).resultIntent
+                    ?.getStringArrayListExtra(PhotoCropFlowActivity.EXTRA_CROPPED).orEmpty()
+                assertEquals("one confirmed page per picked photo", 2, paths.size)
+                assertEquals("no page is confirmed twice", 2, paths.toSet().size)
+            }
+            deliverCropResult(viewer, cropIntent, requireNotNull(crop))
+            assertTrue(
+                "both pages land in the draft",
+                waitUntil { runBlocking { repo.draftPages(target) }.size == 3 }
+            )
+        }
+        val pages = runBlocking { repo.draftPages(target) }
+        fun averageOf(file: File): IntArray {
+            val bitmap = BitmapFactory.decodeFile(file.path)
+            try {
+                return averageColour(bitmap)
+            } finally {
+                bitmap.recycle()
+            }
+        }
+        val one = averageOf(pages[1])
+        val two = averageOf(pages[2])
+        assertTrue(
+            "photo 1 is the first page: ${one.toList()} vs ${two.toList()}",
+            one[0] > two[0] + 20
+        )
+        assertTrue(
+            "photo 2 is the second page: ${two.toList()}",
+            two[1] > two[0] + 20
+        )
+        assertTrue("the picked copies are gone", insertDirs().isEmpty())
+    }
+
+    @Test
+    fun `rotation while the next photo loads does not reuse the previous frame`() {
+        val target = DocFixtures.saved(repo, app, pages = 1)
+        val first = photoOfPageOnTable(whitePage)
+        val second = photoOfPageOnTable(greenPage)
+        val gate = CountDownLatch(1)
+        PhotoCropFlowActivity.prepareGate = { index ->
+            if (index == 1) gate.await(10, TimeUnit.SECONDS)
+        }
+        documentViewer(target) { _, viewer ->
+            val cropIntent = openPhotoBatch(viewer, first, second)
+            launchCrop(cropIntent) { scenario, activity ->
+                assertTrue(
+                    "the corner screen shows photo 1",
+                    waitUntil { activity.findViewById<View>(R.id.toolCropView) != null }
+                )
+                dragTopLeftCorner(activity)
+                val dragged = normalisedRect(activity)
+                assertTrue("the frame really moved", dragged[0] > 0.05f || dragged[1] > 0.05f)
+
+                scenario.onActivity { it.findViewById<View>(R.id.toolCropApply).performClick() }
+                assertTrue(
+                    "the flow moved on to photo 2",
+                    waitUntil { activity.currentPhotoIndexForTest() == 1 }
+                )
+                var restored: PhotoCropFlowActivity? = null
+                scenario.recreate()
+                scenario.onActivity { restored = it }
+                gate.countDown()
+                val current = requireNotNull(restored)
+                assertTrue(
+                    "photo 2's corner screen comes back after the rotation",
+                    waitUntil {
+                        current.findViewById<View>(R.id.toolCropView) != null &&
+                            current.currentPhotoIndexForTest() == 1
+                    }
+                )
+                assertTrue(
+                    "photo 2 keeps its own header",
+                    texts(current.window.decorView)
+                        .contains(app.getString(R.string.fixinsertcrop_crop_title, 2, 2))
+                )
+                val frame = normalisedRect(current)
+                // Photo 2 was never dragged: its frame is the whole auto-cropped page, not the
+                // frame that was dragged on photo 1.
+                assertEquals("left edge of photo 2's frame", 0f, frame[0], 0.01f)
+                assertEquals("top edge of photo 2's frame", 0f, frame[1], 0.01f)
+                assertEquals("right edge of photo 2's frame", 1f, frame[2], 0.01f)
+                assertEquals("bottom edge of photo 2's frame", 1f, frame[3], 0.01f)
+
+                scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+                assertTrue("Back finishes the flow", waitUntil { current.isFinishing })
+            }
+        }
+        assertTrue("a cancelled batch keeps no picked copy", insertDirs().isEmpty())
+    }
+
+    @Test
+    fun `a viewer recreated while the corner screen is on top inserts at the chosen position`() {
+        val target = DocFixtures.saved(repo, app, pages = 2)
+        val photo = photoOfPageOnTable(greenPage)
+        var crop: PhotoCropFlowActivity? = null
+        var recreated: DocumentViewerActivity? = null
+        documentViewer(target) { scenario, viewer ->
+            viewer.startInsertPages()
+            idle()
+            clickSheetOption(1) // "From photos"
+            idle()
+            val pick = requireNotNull(shadowOf(viewer).nextStartedActivityForResult)
+            shadowOf(viewer).receiveResult(pick.intent, Activity.RESULT_OK, photosIntent(photo))
+            assertTrue(
+                "the insert position is asked",
+                waitUntil { sheetTitle() == app.getString(R.string.insert_position_title) }
+            )
+            clickSheetOption(1) // "After page"
+            assertTrue(
+                "the page number field opens",
+                waitUntil {
+                    runCatching {
+                        ShadowDialog.getLatestDialog()?.findViewById<EditText>(R.id.swSheetInput) != null
+                    }.getOrDefault(false)
+                }
+            )
+            requireNotNull(
+                ShadowDialog.getLatestDialog()?.findViewById<EditText>(R.id.swSheetInput)
+            ).setText("1")
+            requireNotNull(
+                ShadowDialog.getLatestDialog()?.findViewById<View>(R.id.swSheetPrimary)
+            ).performClick()
+            idle()
+
+            var cropIntent: Intent? = null
+            var cropRequestCode = -1
+            assertTrue("the corner crop screen opens", waitUntil {
+                val started = shadowOf(viewer).nextStartedActivityForResult
+                if (started != null) {
+                    cropIntent = started.intent
+                    cropRequestCode = started.requestCode
+                }
+                started != null
+            })
+
+            // Rotation of the document screen while the crop screen is on top. The chosen
+            // position must survive with the recreated screen.
+            scenario.recreate()
+            scenario.onActivity { recreated = it }
+            idle()
+
+            launchCrop(requireNotNull(cropIntent)) { cropScenario, activity ->
+                crop = activity
+                confirmPhoto(cropScenario, activity, 0, 1)
+                assertTrue("the batch finishes", waitUntil { activity.isFinishing })
+            }
+            deliverCropResultTo(
+                requireNotNull(recreated),
+                requireNotNull(cropRequestCode.takeIf { it >= 0 }) {
+                    "the crop flow was started for a result"
+                },
+                requireNotNull(crop)
+            )
+            assertTrue(
+                "the confirmed photo lands after page 1",
+                waitUntil { runBlocking { repo.draftPages(target) }.size == 3 }
+            )
+        }
+
+        val pages = runBlocking { repo.draftPages(target) }
+        fun averageOf(file: File): IntArray {
+            val bitmap = BitmapFactory.decodeFile(file.path)
+            try {
+                return averageColour(bitmap)
+            } finally {
+                bitmap.recycle()
+            }
+        }
+        val inserted = averageOf(pages[1])
+        assertTrue(
+            "the inserted page is the confirmed photo, not a base page: ${inserted.toList()}",
+            inserted[1] > inserted[0] + 20
+        )
+        for (index in listOf(0, 2)) {
+            val base = averageOf(pages[index])
+            assertTrue(
+                "page ${index + 1} is still a base page: ${base.toList()}",
+                base[1] <= base[0] + 20
+            )
+        }
+        assertTrue("the picked copies are gone", insertDirs().isEmpty())
     }
 }

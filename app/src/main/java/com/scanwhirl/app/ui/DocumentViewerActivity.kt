@@ -166,6 +166,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** Position chosen for the photo batch currently on the corner crop screen. */
     private var pendingPhotoPosition: Int? = null
 
+    /** How many photos that batch has; every one must come back confirmed. */
+    private var pendingPhotoCount: Int? = null
+
     /** The picked-photo cache folder of that batch; deleted after the insert or a cancel. */
     private var pendingPhotoDir: File? = null
 
@@ -174,16 +177,19 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val dir = pendingPhotoDir
             val position = pendingPhotoPosition
+            val count = pendingPhotoCount
             pendingPhotoDir = null
             pendingPhotoPosition = null
+            pendingPhotoCount = null
             val cropped = if (result.resultCode == RESULT_OK) {
                 result.data?.getStringArrayListExtra(PhotoCropFlowActivity.EXTRA_CROPPED)
                     .orEmpty().map(::File).filter { it.isFile }
             } else {
                 emptyList()
             }
-            if (position == null || cropped.isEmpty()) {
-                // Back/Cancel on a corner screen: no page from this batch is inserted.
+            // D1: a batch is inserted only when every picked photo came back confirmed, in one
+            // piece; a short result (an abandoned or failed crop) inserts nothing.
+            if (position == null || count == null || cropped.size != count) {
                 dir?.deleteRecursively()
                 return@registerForActivityResult
             }
@@ -208,9 +214,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val restoredPosition = savedInstanceState
             ?.takeIf { it.containsKey(KEY_PHOTO_INSERT_AT) }
             ?.getInt(KEY_PHOTO_INSERT_AT)
+        val restoredCount = savedInstanceState
+            ?.takeIf { it.containsKey(KEY_PHOTO_COUNT) }
+            ?.getInt(KEY_PHOTO_COUNT)
         pendingPhotoPosition = restoredPosition
+        pendingPhotoCount = restoredCount
         pendingPhotoDir = savedInstanceState?.getString(KEY_PHOTO_DIR)?.let(::File)
-        if (restoredPosition == null) {
+        if (restoredPosition == null || restoredCount == null) {
             pendingPhotoDir?.deleteRecursively()
             pendingPhotoDir = null
         }
@@ -309,6 +319,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         pendingPhotoPosition?.let { outState.putInt(KEY_PHOTO_INSERT_AT, it) }
+        pendingPhotoCount?.let { outState.putInt(KEY_PHOTO_COUNT, it) }
         pendingPhotoDir?.let { outState.putString(KEY_PHOTO_DIR, it.path) }
     }
 
@@ -321,6 +332,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             pendingPhotoDir?.deleteRecursively()
             pendingPhotoDir = null
             pendingPhotoPosition = null
+            pendingPhotoCount = null
         }
         super.onDestroy()
     }
@@ -820,6 +832,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      */
     private fun startPhotoCrop(files: List<File>, position: Int) {
         pendingPhotoPosition = position
+        pendingPhotoCount = files.size
         pendingPhotoDir = files.firstOrNull()?.parentFile
         insertPhotoCrop.launch(PhotoCropFlowActivity.intent(this, files))
     }
@@ -1656,6 +1669,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         /** A8: the insert position and cache folder of a photo batch on the corner crop screen. */
         private const val KEY_PHOTO_INSERT_AT = "insert_photo_position"
+        private const val KEY_PHOTO_COUNT = "insert_photo_count"
         private const val KEY_PHOTO_DIR = "insert_photo_dir"
 
         /** F5/W2: this viewer was opened right after an import; the first Back asks first. */

@@ -86,7 +86,9 @@ class PhotoCropFlowActivity : BaseActivity() {
             index = savedInstanceState.getInt(KEY_INDEX, 0).coerceIn(0, sources.lastIndex)
             outputs += savedInstanceState.getStringArrayList(KEY_OUTPUTS).orEmpty()
                 .map(::File).filter { it.isFile }
+            // D2: only the frame drawn on this photo is restored (never the previous photo's).
             savedRect = savedInstanceState.getFloatArray(KEY_RECT)
+                ?.takeIf { savedInstanceState.getInt(KEY_RECT_INDEX, -1) == index }
         }
         prepare(index)
     }
@@ -117,13 +119,18 @@ class PhotoCropFlowActivity : BaseActivity() {
     /**
      * Reads, auto-crops and decodes the photo at [index] off the main thread (sampled decode, so a
      * 12 MP gallery photo is never decoded at full size), then shows its corner screen.
+     *
+     * D1: the previous photo's screen is torn down *before* this work starts and [busy] stays true
+     * until the new screen is fully shown, so a Confirm tap that lands while the next photo loads
+     * cannot re-encode the old bitmap under the new index.
      */
     private fun prepare(index: Int) {
         val generation = ++generation
-        busy = false
+        clearScreen()
         progress.isVisible = true
         lifecycleScope.launch {
             val prepared = withContext(Dispatchers.IO) {
+                prepareGate?.invoke(index)
                 val raw = runCatching { sources[index].readBytes() }.getOrNull()
                 if (raw == null) null else runCatching { PhotoAutoCrop.crop(raw) }
                     .getOrDefault(PhotoAutoCrop.Result(raw, false))
@@ -148,13 +155,24 @@ class PhotoCropFlowActivity : BaseActivity() {
                 decoded.recycle()
                 return@launch
             }
-            bitmap?.takeIf { !it.isRecycled }?.recycle()
             bitmap = decoded
             currentBytes = prepared.bytes
             detected = prepared.cropped
             progress.isVisible = false
             showCropScreen()
         }
+    }
+
+    /** D1: drops the confirmable screen of the previous photo while the next one is prepared. */
+    private fun clearScreen() {
+        val old = overlay
+        overlay = null
+        cropView?.clearImage()
+        cropView = null
+        old?.let { root.removeView(it) }
+        bitmap?.takeIf { !it.isRecycled }?.recycle()
+        bitmap = null
+        currentBytes = null
     }
 
     private fun showCropScreen() {
@@ -254,6 +272,8 @@ class PhotoCropFlowActivity : BaseActivity() {
             )
         }
         savedRect = null
+        // D1: only now, with the new photo's screen complete, may the next Confirm be accepted.
+        busy = false
     }
 
     /** Confirms the frame of the current photo and moves on to the next one (or finishes). */
@@ -261,49 +281,55 @@ class PhotoCropFlowActivity : BaseActivity() {
         if (busy) return
         val view = cropView ?: return
         val source = bitmap ?: return
+        // D1: everything below belongs to the photo on screen now. A tap that arrives after the
+        // flow has moved on is ignored (busy, no crop view) and can never name a later photo.
+        val photoIndex = index
         val rect = view.getCropRect()
         if (rect.width() < 1f || rect.height() < 1f) return
         val left = rect.left.toInt().coerceIn(0, source.width - 1)
         val top = rect.top.toInt().coerceIn(0, source.height - 1)
         val width = rect.width().toInt().coerceIn(1, source.width - left)
         val height = rect.height().toInt().coerceIn(1, source.height - top)
-        // Always a private copy: a full-frame crop hands back the source bitmap itself, and this
-        // screen may recycle it the moment Back closes the screen.
-        val region = runCatching {
-            val cut = Bitmap.createBitmap(source, left, top, width, height)
-            if (cut === source) source.copy(Bitmap.Config.ARGB_8888, false) else cut
-        }.getOrNull() ?: return
         busy = true
         val token = overlay
         val tokenGeneration = generation
         progress.bringToFront()
         progress.isVisible = true
         lifecycleScope.launch {
-            val encoded = try {
-                withContext(Dispatchers.IO) {
+            val encoded = withContext(Dispatchers.IO) {
+                // Always a private copy: a full-frame crop hands back the source bitmap itself,
+                // and this screen may recycle it the moment Back closes the screen. The copy is
+                // made here, off the main thread (D3), and released on cancellation too.
+                val region = runCatching {
+                    val cut = Bitmap.createBitmap(source, left, top, width, height)
+                    if (cut === source) source.copy(Bitmap.Config.ARGB_8888, false) else cut
+                }.getOrNull() ?: return@withContext null
+                try {
                     runCatching { ImageTools.encodeJpeg(region, 95) }.getOrNull()
+                } finally {
+                    region.takeIf { !it.isRecycled }?.recycle()
                 }
-            } finally {
-                region.takeIf { !it.isRecycled }?.recycle()
             }
-            // Back/Cancel won while the JPEG was written: nothing is kept from this photo.
+            // Back/Cancel won, or the flow moved on, while the JPEG was written: nothing is kept
+            // from this photo.
             if (token == null || token !== overlay ||
                 tokenGeneration != this@PhotoCropFlowActivity.generation ||
-                isFinishing || isDestroyed
+                photoIndex != index || isFinishing || isDestroyed
             ) {
                 return@launch
             }
-            busy = false
             if (encoded == null) {
                 fail()
                 return@launch
             }
             val dir = sources.firstOrNull()?.parentFile ?: run { fail(); return@launch }
-            val file = File(dir, String.format(Locale.ROOT, "cropped_%03d.jpg", index))
+            val file = File(dir, String.format(Locale.ROOT, "cropped_%03d.jpg", photoIndex))
             val written = withContext(Dispatchers.IO) {
                 runCatching { Durable.writeFile(file, encoded) }.isSuccess
             }
-            if (generation != this@PhotoCropFlowActivity.generation || isFinishing || isDestroyed) {
+            if (tokenGeneration != this@PhotoCropFlowActivity.generation ||
+                photoIndex != index || isFinishing || isDestroyed
+            ) {
                 file.delete()
                 return@launch
             }
@@ -312,9 +338,11 @@ class PhotoCropFlowActivity : BaseActivity() {
                 return@launch
             }
             outputs += file
-            if (index + 1 < sources.size) {
-                index++
+            if (photoIndex + 1 < sources.size) {
+                index = photoIndex + 1
                 savedRect = null
+                // busy stays true: prepare() clears the old screen and only showCropScreen()
+                // makes the next Confirm live again (D1).
                 prepare(index)
             } else {
                 finishBatch()
@@ -362,6 +390,9 @@ class PhotoCropFlowActivity : BaseActivity() {
         super.onSaveInstanceState(outState)
         outState.putInt(KEY_INDEX, index)
         outState.putStringArrayList(KEY_OUTPUTS, ArrayList(outputs.map { it.path }))
+        // D2: a rectangle is only meaningful for the photo it was drawn on. Once a confirm has
+        // advanced to the next photo the old surface is gone (no cropView/bitmap), so a rotation
+        // in that window must not hand photo N's frame to photo N+1.
         val rect = cropView?.getCropRect()
         val shown = bitmap
         val normalised = if (rect != null && shown != null && shown.width > 0 && shown.height > 0) {
@@ -372,7 +403,10 @@ class PhotoCropFlowActivity : BaseActivity() {
         } else {
             savedRect
         }
-        if (normalised != null) outState.putFloatArray(KEY_RECT, normalised)
+        if (normalised != null) {
+            outState.putFloatArray(KEY_RECT, normalised)
+            outState.putInt(KEY_RECT_INDEX, index)
+        }
     }
 
     override fun onDestroy() {
@@ -397,10 +431,18 @@ class PhotoCropFlowActivity : BaseActivity() {
         /** The confirmed page files, in the order the person confirmed them. */
         const val EXTRA_CROPPED = "cropped_pages"
 
+        /**
+         * Tests: hold the preparation of photo [index] so a Confirm tap or a rotation can race
+         * the load (D1/D2). Null in production.
+         */
+        @Volatile
+        internal var prepareGate: ((Int) -> Unit)? = null
+
         private const val EXTRA_SOURCES = "source_photos"
         private const val KEY_INDEX = "crop_photo_index"
         private const val KEY_OUTPUTS = "crop_photo_outputs"
         private const val KEY_RECT = "crop_photo_rect"
+        private const val KEY_RECT_INDEX = "crop_photo_rect_index"
 
         /** Display/crop copy cap; the prepared page is never larger than the deskew warp. */
         private const val PREVIEW_DIM = 2400
