@@ -36,6 +36,20 @@ Source: R2 UX_PRINCIPLES -> CRITIC_R2_UX -> JUDGE_RESEARCH §2/§4 (next/docs/re
     Documents, but the app's rule is "never prompt" for deletes. Design a compatible approach; no new consent flows
     (createDeleteRequest etc.) without a new owner decision; files we cannot touch are reported as kept.
 
+## 0b. Approved concept direction (lead, 2026-11-18, after critic + 2 judge rounds)
+Reference renders: next/design/*_v4.html (+ tools_v4), rendered by next/design/render.ps1 (out/ is local only).
+Approved: real ScanWhirl mark (ic_sw_brand_mark) in the header and empty state; papers shown as their real
+thumbnails; Home = search + folders + recent; centre Scan opens Create (Scan + ID card, Passport, QR code PRO +
+Import photos, Import PDF); Tools grouped by 7 jobs (Make it smaller / Combine and organise / Sign and mark up PRO /
+Keep it private / Get the text / Change the format / Start something new), max 2 levels; result = what happened +
+measured size + Replace/Keep (Replace applied at once, "Keep both" restores without rerun) + Open/Share + "Also save
+in Documents" (until phase 4) + honest target miss; Me holds Pro, Trash, Settings, Language, Restore purchase,
+About; Trash = Restore per item, Delete in item menu, Empty Trash behind Cancel + destructive confirm.
+PHASE ACCEPTANCE (each implementing lane proves on device, critic + judge): every touch target >= 48 dp incl.
+header back arrows; 200 % font reflow EN + HI; every expanded job page + All folders; 0 / many folders, long
+names; item-menu Delete with confirm; neutral Hindi size copy ("फ़ाइल अब 544 KB" / "पहले: 824 KB") after native
+review; folder creation free (registry); Replace default only with phase-3 rollback tests (§0.3).
+
 ## 1. The idea in one line
 **Documents first, one way to start, one way to finish.** A person opens ScanWhirl and sees their documents; one
 Scan button starts everything; every tool works the same way (pick, set, done); every result says what happened and
