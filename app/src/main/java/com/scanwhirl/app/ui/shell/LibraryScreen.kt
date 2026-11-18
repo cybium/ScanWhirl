@@ -150,7 +150,9 @@ class LibraryScreen(
         orientation = VERTICAL
         sort = com.scanwhirl.app.util.Prefs.librarySort(context)
         setPadding(0, 0, 0, SwStyle.dp(context, 12f))
-        background = SwStyle.rounded(context, SwStyle.color(context, R.color.rv_bg), 0f)
+        // No background: the shell's tinted gradient is the page background. An opaque
+        // rv_bg fill here painted over it from the list down, so Home's tint looked cut
+        // (Tools, Vault and Me already leave their page transparent).
 
         addView(appBar())
         addView(searchBox())
