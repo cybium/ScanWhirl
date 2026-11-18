@@ -341,6 +341,8 @@ class InsertPhotosCropFixInsertCropTest {
     @After
     fun tearDown() {
         PhotoCropFlowActivity.prepareGate = null
+        PhotoCropFlowActivity.beforeWriteForTest = null
+        PhotoCropFlowActivity.afterWriteForTest = null
     }
 
     @Test
@@ -348,11 +350,21 @@ class InsertPhotosCropFixInsertCropTest {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val photo = photoOfPageOnTable(whitePage)
         documentViewer(target) { _, viewer ->
-            openPhotoBatch(viewer, photo)
+            val cropIntent = openPhotoBatch(viewer, photo)
             assertNull(
                 "nothing is inserted before the corners are confirmed",
                 runBlocking { repo.draftOf(target) }
             )
+            // R1: once handed to the crop flow, the batch belongs to it, not to the viewer.
+            assertTrue("the crop flow owns its batch", insertDirs().isNotEmpty())
+            launchCrop(cropIntent) { scenario, activity ->
+                assertTrue(
+                    "the corner screen shows the photo",
+                    waitUntil { activity.findViewById<View>(R.id.toolCropView) != null }
+                )
+                scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+                assertTrue("Back closes the flow", waitUntil { activity.isFinishing })
+            }
         }
         assertTrue("the batch folder is cleaned up", insertDirs().isEmpty())
     }
@@ -819,5 +831,202 @@ class InsertPhotosCropFixInsertCropTest {
             )
         }
         assertTrue("the picked copies are gone", insertDirs().isEmpty())
+    }
+
+    // ---- rework 2 after judge: R1 (copy ownership), R2 (write isolation), R3 (recovery) ----
+
+    @Test
+    fun `a photo that cannot be read leaves no picked copy behind`() {
+        val target = DocFixtures.saved(repo, app, pages = 1)
+        val good = photoOfPageOnTable(whitePage)
+        val missing = File(app.cacheDir, "fixinsertcrop_missing_${System.nanoTime()}.jpg")
+        documentViewer(target) { _, viewer ->
+            viewer.startInsertPages()
+            idle()
+            clickSheetOption(1) // "From photos"
+            idle()
+            val pick = requireNotNull(shadowOf(viewer).nextStartedActivityForResult)
+            shadowOf(viewer).receiveResult(
+                pick.intent, Activity.RESULT_OK, photosIntent(good, missing)
+            )
+            assertTrue(
+                "the half-copied batch is deleted",
+                waitUntil { insertDirs().isEmpty() }
+            )
+            assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
+        }
+    }
+
+    @Test
+    fun `finishing during the picked-photo copy keeps no picked copy`() {
+        val target = DocFixtures.saved(repo, app, pages = 1)
+        val first = photoOfPageOnTable(whitePage)
+        val second = photoOfPageOnTable(greenPage)
+        val copyGate = CountDownLatch(1)
+        val copyStarted = CountDownLatch(1)
+        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target))
+            .use { scenario ->
+                var viewer: DocumentViewerActivity? = null
+                scenario.onActivity {
+                    viewer = it
+                    it.photoCopyGateForTest = { index ->
+                        if (index == 0) {
+                            copyStarted.countDown()
+                            copyGate.await(10, TimeUnit.SECONDS)
+                        }
+                    }
+                }
+                val current = requireNotNull(viewer)
+                assertTrue("the page grid loads", waitUntil {
+                    var count = 0
+                    scenario.onActivity {
+                        count = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList)
+                            .adapter?.itemCount ?: 0
+                    }
+                    count > 0
+                })
+                scenario.onActivity { it.startInsertPages() }
+                idle()
+                clickSheetOption(1) // "From photos"
+                idle()
+                val pick = requireNotNull(shadowOf(current).nextStartedActivityForResult)
+                shadowOf(current).receiveResult(
+                    pick.intent, Activity.RESULT_OK, photosIntent(first, second)
+                )
+                assertTrue("the copy started", waitUntil { copyStarted.count == 0L })
+
+                // The screen goes away while the blocking copy is still writing.
+                scenario.close()
+                copyGate.countDown()
+
+                assertTrue(
+                    "the abandoned copy deletes what it wrote",
+                    waitUntil { insertDirs().isEmpty() }
+                )
+            }
+        assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
+    }
+
+    @Test
+    fun `an obsolete writer cannot overwrite the newly confirmed crop`() {
+        val target = DocFixtures.saved(repo, app, pages = 1)
+        val photo = photoOfPageOnTable(greenPage)
+        val release = CountDownLatch(1)
+        val oldWriteStarted = CountDownLatch(1)
+        val beforeCalls = java.util.concurrent.atomic.AtomicInteger(0)
+        val afterCalls = java.util.concurrent.atomic.AtomicInteger(0)
+        PhotoCropFlowActivity.beforeWriteForTest = {
+            if (beforeCalls.getAndIncrement() == 0) {
+                oldWriteStarted.countDown()
+                release.await(10, TimeUnit.SECONDS)
+            }
+        }
+        PhotoCropFlowActivity.afterWriteForTest = { afterCalls.incrementAndGet() }
+        var expectedWidth = 0
+        var expectedHeight = 0
+        documentViewer(target) { _, viewer ->
+            val cropIntent = openPhotoBatch(viewer, photo)
+            launchCrop(cropIntent) { scenario, activity ->
+                assertTrue(
+                    "the corner screen shows the photo",
+                    waitUntil { activity.findViewById<View>(R.id.toolCropView) != null }
+                )
+                // The old instance confirms a visibly smaller crop and is suspended before its
+                // file is opened.
+                dragTopLeftCorner(activity)
+                scenario.onActivity { it.findViewById<View>(R.id.toolCropApply).performClick() }
+                assertTrue(
+                    "the old writer reached the write",
+                    waitUntil { oldWriteStarted.count == 0L }
+                )
+
+                // Rotate: the new instance restores the photo, and the person confirms the full
+                // page instead of the old dragged frame.
+                var current = activity
+                scenario.recreate()
+                scenario.onActivity { current = it }
+                assertTrue(
+                    "the restored screen shows the photo",
+                    waitUntil {
+                        current.findViewById<View>(R.id.toolCropView) != null &&
+                            current.currentPhotoIndexForTest() == 0
+                    }
+                )
+                val preview = ImageTools.decodeSampled(
+                    requireNotNull(current.shownBytesForTest()), 2400
+                )
+                expectedWidth = preview.width
+                expectedHeight = preview.height
+                preview.recycle()
+                scenario.onActivity {
+                    requireNotNull(it.findViewById<CropView>(R.id.toolCropView)).setCropRect(
+                        RectF(0f, 0f, expectedWidth.toFloat(), expectedHeight.toFloat())
+                    )
+                }
+                scenario.onActivity { current.findViewById<View>(R.id.toolCropApply).performClick() }
+                assertTrue("the new confirmation finishes", waitUntil { current.isFinishing })
+                val result = shadowOf(current).resultIntent
+
+                // Now let the obsolete writer complete: it must not touch the confirmed crop.
+                release.countDown()
+                assertTrue(
+                    "both writers ended",
+                    waitUntil { afterCalls.get() >= 2 }
+                )
+
+                shadowOf(viewer).receiveResult(cropIntent, Activity.RESULT_OK, result)
+                idle()
+            }
+            assertTrue(
+                "the confirmed crop lands in the draft",
+                waitUntil { runBlocking { repo.draftPages(target) }.size == 2 }
+            )
+        }
+        val added = runBlocking { repo.draftPages(target) }.last()
+        val page = BitmapFactory.decodeFile(added.path)
+        try {
+            assertEquals("the page is the newly confirmed crop (width)", expectedWidth, page.width)
+            assertEquals("the page is the newly confirmed crop (height)", expectedHeight, page.height)
+        } finally {
+            page.recycle()
+        }
+    }
+
+    @Test
+    fun `a restored photo that is gone says so and keeps no picked copy`() {
+        val target = DocFixtures.saved(repo, app, pages = 1)
+        val photo = photoOfPageOnTable(whitePage)
+        documentViewer(target) { _, viewer ->
+            val cropIntent = openPhotoBatch(viewer, photo)
+            val controller = org.robolectric.Robolectric
+                .buildActivity(PhotoCropFlowActivity::class.java, cropIntent)
+                .setup()
+            var activity = controller.get()
+            assertTrue(
+                "the corner screen shows the picked photo",
+                waitUntil { activity.findViewById<View>(R.id.toolCropView) != null }
+            )
+            // The cold-start sweep / cache eviction takes the restored picked file.
+            val source = File(insertDirs().single(), "page_000.jpg")
+            assertTrue("the picked copy is on disk", source.isFile)
+            source.delete()
+
+            controller.recreate()
+            activity = controller.get()
+
+            assertTrue("the flow stops", waitUntil { activity.isFinishing })
+            assertEquals(
+                "the recovery message is shown",
+                app.getString(R.string.fixinsertcrop_crop_failed),
+                org.robolectric.shadows.ShadowToast.getTextOfLatestToast()
+            )
+            assertEquals(
+                "the batch is cancelled",
+                Activity.RESULT_CANCELED,
+                shadowOf(activity).resultCode
+            )
+            assertTrue("the batch folder is gone", insertDirs().isEmpty())
+        }
+        assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
     }
 }
