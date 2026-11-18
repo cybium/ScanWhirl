@@ -2,11 +2,13 @@
 
 Branch `lane/fixidcrop`. Not merged, not pushed. Commit `ddf5b34`.
 
-Last full gate (cloud run 44231360968, 6 min):
+Last full gate after the rework (cloud run 44233785286, 6 min):
 
 ```
-GATE PASS fixidcrop tests=1695 failures=0 skipped=0 lint=[skipped]
+GATE PASS fixidcrop tests=1699 failures=0 skipped=0 lint=[skipped]
 ```
+
+(The first full gate before the rework was `GATE PASS ... tests=1695`, cloud run 44231360968.)
 
 ## Done
 
@@ -52,7 +54,8 @@ GATE PASS fixidcrop tests=1695 failures=0 skipped=0 lint=[skipped]
   cut out of a table photo and straightened (output is the card, not the 1200x900 photo, corners
   are card not table); a photo without a card is byte-identical; a small bright patch is not
   mistaken for a page; the result is exactly the existing `Deskew` warp (no second detector).
-- `app/src/test/java/com/scanwhirl/app/ui/tools/IdCardCropFixIdCropTest.kt` (4 tests): picking a
+- `app/src/test/java/com/scanwhirl/app/ui/tools/IdCardCropFixIdCropTest.kt` (8 tests: the first 4
+  below plus the 4 rework tests described in "Rework after critic"): picking a
   photo opens the corner screen preset to the auto-cropped card (frame = whole detected card,
   card hint, Crop and save present, side sheet not yet shown); confirming prints no table colour
   anywhere on the page while the card is there; system Back on the crop screen returns to the
@@ -90,6 +93,71 @@ manifest, id file, LibraryScreen or other lane's file touched.
 - `fixidcrop_id_crop_hint` "Drag the corners to the edges of the card."
 - `fixidcrop_id_crop_apply` "Crop and save"
 - `fixidcrop_id_crop_failed` "Could not open this photo. Choose it again."
+- `fixidcrop_id_crop_hint_none` "Couldn't find the card edges. Drag the corners to the card."
+  (rework D10; every string exists in `values-hi` with `<!-- review -->`, no long dashes)
+
+## Rework after critic (commit `c28e25a`)
+
+Full gate after the rework (cloud run 44233785286, 6 min):
+
+```
+GATE PASS fixidcrop tests=1699 failures=0 skipped=0 lint=[skipped]
+```
+
+### D2 — Back during "Crop and save" could still save the side (Med, fixed)
+
+- `applyCrop` now takes a **token** (`val token = cropOverlay`) before the JPEG encode and, after
+  the IO block, bails with `if (token !== cropOverlay) return@launch` before any state, toast or
+  `acceptCapture`. Back / Cancel therefore wins: the side is never accepted after the screen closed.
+- The encode never reads a bitmap the screen may recycle: the crop region is **always copied into
+  a private bitmap before launching** (`Bitmap.createBitmap` returns the source itself for a
+  full-frame crop, so that case goes through `source.copy(...)`). The copy is encoded on
+  `Dispatchers.IO` and recycled there; the lead's recycled-bitmap exception is gone.
+- `dismissCropScreen` now resets `cropBusy`, hides the progress overlay and restores the card
+  screen's accessibility, so a cancelled save leaves no busy state behind.
+- Test: `IdCardCropFixIdCropTest > Back while the crop is saving leaves the side empty and shows
+  no error` (apply and system Back in the same main-thread turn, then wait for the abandoned
+  encode; the front sheet must still be the sheet, the error view hidden, nothing saved).
+  Red before the fix: the same test failed with `no error after Back` — the recycled-bitmap
+  exception the lead predicted; with only the token it would have failed the sheet assertion.
+
+### D5 — Rotation / process death mid-crop lost the photo (Med, fixed)
+
+- The prepared crop bytes are cached as `id_card_state/crop.jpg` next to `front.jpg`/`back.jpg`
+  and the saved-state Bundle carries `id_card_crop_pending`, `id_card_crop_side` and
+  `id_card_crop_detected` (JPEG bytes never go in the Bundle).
+- `onCreate` with a restored state re-opens the corner crop screen for that photo and side
+  (`reopenCropScreen`, decoded sampled off the main thread); the frame starts on the full image,
+  i.e. the already-detected card. Accepting afterwards works as normal.
+- The cache copy is deleted when the crop is accepted, when the crop screen is cancelled, and on
+  the next fresh open (`clearCapturedState` deletes the whole state folder).
+- Test: `IdCardCropFixIdCropTest > rotation during the crop screen keeps the photo and the side`
+  (recreate mid-crop, the same bytes and card hint come back, Crop and save then reaches the
+  back step). Red before the fix: `the crop screen is still open after recreation`.
+
+### D10 — No-edge fallback said nothing (Low, fixed)
+
+- `PhotoAutoCrop.Result.cropped` is passed through `beginCrop`/`showCropScreen` and persisted with
+  the state. When it is false the crop screen shows the new hint
+  `fixidcrop_id_crop_hint_none` ("Couldn't find the card edges. Drag the corners to the card.")
+  instead of the confident card hint; nothing is accepted until confirm.
+- Test: `a photo without a card edge shows the drag the corners hint` (a flat grey photo shows
+  the fallback hint and not the confident one). Red before the fix: `the fallback hint is shown`.
+
+### D9 — Touch target and the screen behind the overlay (Low, fixed)
+
+- The crop screen's Back button is now 48x48 dp (the kit icon button is 40 dp).
+- While the crop overlay is shown, `contentScroll` (the whole card screen) is
+  `IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS`; `dismissCropScreen` restores `AUTO`.
+- Test: `the crop screen's Back target is 48 dp and the screen behind is hidden` (red before the
+  fix: `the crop Back is at least 48 dp: 40x40`; the accessibility half also red).
+
+### Not done (as instructed)
+
+- D3 (unsampled HEIC fallback in `ImageTools.normalizeGalleryPhoto`) was deferred to a later lane;
+  `ImageTools.kt` and `CropView.kt` were not touched in this rework.
+- D1's optional "use the whole photo" (the warp drops the original photo, so the frame can only
+  trim inward) is a feature, not part of the rework; say if it is wanted.
 
 ## For the lead to check on the phone
 
@@ -105,3 +173,9 @@ manifest, id file, LibraryScreen or other lane's file touched.
    and padding; Keep / Discard and the Back question from fixflow must be unchanged.
 5. Camera scan for the ID card is unchanged (Google shows its own crop); only the gallery pick
    gets this new crop screen.
+6. Rework: tap "Crop and save" and immediately use the system Back gesture - the side sheet must
+   come back and no card side may appear (no error flash). Rotate while the crop screen is open:
+   the same photo and side must still be there, and "Crop and save" must then work.
+7. Rework: a photo where no card edge is found must show "Couldn't find the card edges. Drag the
+   corners to the card."; TalkBack should read the crop Back button as a 48dp target and must not
+   reach the card screen hidden underneath.
