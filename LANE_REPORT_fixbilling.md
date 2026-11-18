@@ -123,3 +123,52 @@ Verification:
   (run 44267148239).
 - Commit `68a0dbf` fixbilling: ITEM_ALREADY_OWNED grants only on a PURCHASED row (critic D1/D2);
   this report update follows.
+
+## Rework 2 after judge (MUST FIX 1-2)
+Judge `JUDGE_fixbilling.md` verdict FAIL: acknowledgement was coordinated only inside one
+snapshot, a failed acknowledge had no retry, and a debounced resume had no timer. Lead ruling
+applied; overruled item 3 (empty successful query still revokes, `record(false)`) was **not**
+changed and its test stays.
+
+MUST FIX 1 - one acknowledgement per token across all entry points (`ProBilling.kt`):
+- `AckLedger` (process-wide, main thread only) keeps per-token in-flight, completed and failure
+  state. `acknowledgeThenUnlock` asks `AckLedger.begin(token)` before sending; a second caller
+  (listener + reconcile + ALREADY_OWNED + restore) coalesces and sends nothing. A success is
+  remembered, so a stale `isAcknowledged=false` snapshot does not re-acknowledge.
+- A failure releases the token (`AckLedger.fail`) and schedules a bounded retry on the main
+  `Handler`: 5 s, 30 s, 120 s (no busy loop), and the next reconcile also retries. A successful
+  retry grants Pro quietly. Entitlement is never cleared while acking. A throwing acknowledge is
+  treated as a failed attempt (token released, retried).
+- Optional item done: `onPurchase` ignores any product other than `PRODUCT_ID`.
+
+MUST FIX 2 - do not lose the only post-background check:
+- When the 30 s debounce suppresses a foreground call, `refreshOwned` schedules exactly one
+  deferred reconcile at the end of the window (`deferredReconcile`, replaced if a newer resume
+  arrives, cancelled when a real reconcile starts). It runs on the handler, so no further
+  resume is needed.
+- `Event.Pending` (listener) and a pending purchase now set `reconcileDue`, so the next
+  foreground is not debounced away.
+- Optional items done: removed the stale "unlock regardless" comment; a failed/empty product
+  query now uses the mapped connection error (`errorText(..., pro_error_product)`).
+
+Tests added (red first, `ProBillingRecoveryTest`):
+- `overlapping listener reconcile and already owned acknowledge the token once` - listener ack
+  held in flight, then reconcile and ALREADY_OWNED for the same token: exactly 1 acknowledge,
+  the in-flight result grants Pro, a later stale snapshot still sends none.
+- `a failed acknowledge is retried without another foreground then stops` - 2 calls total
+  (5 s timer), Pro after success, no further retries within 200 s.
+- `a suppressed foreground schedules one deferred reconcile` - empty success at t=0, purchase
+  completes, resume at t=2 s is debounced, 28 s later the deferred query finds it, unlocks and
+  acknowledges once, with no further resume.
+- `a pending listener update keeps the next foreground due`.
+
+Verification:
+- Red: `GATE FAIL fixbilling tests=44 failures=4` (run 44268951437) - 3 acknowledges instead
+  of 1; no acknowledge retry; no deferred reconcile; pending update did not keep due.
+- Billing classes: `GATE PASS fixbilling tests=44 failures=0 skipped=0` (local `-Tests` run).
+- Full gate (cloud): `GATE PASS fixbilling tests=1704 failures=0 skipped=0 lint=[skipped]`
+  (run 44270097325).
+- Commit `abcb84f` fixbilling: shared per-token acknowledgement ledger with bounded retry,
+  deferred reconcile (judge must-fix 1-2); this report update follows.
+- Earlier summary numbers in this report are superseded by 1704 full-suite tests at this
+  revision; all cloud runs are lane evidence, not independent verification.
