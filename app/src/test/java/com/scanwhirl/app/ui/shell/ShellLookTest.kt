@@ -75,11 +75,13 @@ class ShellLookTest {
     private fun drawableId(view: ImageView): Int = shadowOf(view.drawable).createdFromResId
 
     @Test
-    fun `the six quick tools fit 360dp with one-line labels`() {
+    fun `the six quick tools fit 360dp in five columns with readable labels`() {
         launch { activity ->
             layoutRoot(activity)
             val quick = activity.findViewById<ViewGroup>(R.id.swQuickRow)
-            assertEquals(6, quick.childCount)
+            // v2 UI: 01_home_A - five columns (the sixth tool starts the second row) so a
+            // Hindi label keeps 11sp and two lines instead of shrinking to fit six.
+            assertEquals(LibraryScreen.QUICK_COLUMNS, quick.childCount)
             assertTrue("the row starts on screen", quick.left >= 0)
             assertTrue(
                 "the row ends on screen",
@@ -97,15 +99,17 @@ class ShellLookTest {
                 val label = tile.findViewById<TextView>(R.id.swToolLabel)
                 val l = label.layout
                 assertNotNull("${label.text} is laid out", l)
-                assertEquals("${label.text} stays on one line", 1, l!!.lineCount)
+                assertTrue("${label.text} uses at most two lines", l!!.lineCount <= 2)
                 assertEquals("${label.text} is never ellipsized", 0, l.getEllipsisCount(0))
                 val avail = label.width - label.totalPaddingLeft - label.totalPaddingRight
-                assertTrue(
-                    "${label.text} fits its column (${l.getLineWidth(0)} > $avail)",
-                    l.getLineWidth(0) <= avail + 0.5f
-                )
+                for (line in 0 until l.lineCount) {
+                    assertTrue(
+                        "${label.text} line $line fits its column (${l.getLineWidth(line)} > $avail)",
+                        l.getLineWidth(line) <= avail + 0.5f
+                    )
+                }
             }
-            assertTrue("six equal columns fit the row", sum <= quick.width)
+            assertTrue("the columns fit the row", sum <= quick.width)
         }
     }
 

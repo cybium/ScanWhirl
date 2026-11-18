@@ -23,8 +23,12 @@ import com.scanwhirl.app.R
  * smaller and lighter than the label under it. A tile is now:
  *
  *  - a 48dp tonal rounded square (14dp radius) holding a 26dp accent glyph, centred;
- *  - the label below it: 12sp semibold, two lines, centred (the Home quick row, six
- *    columns wide, may shrink the label to fit one line, never below 9sp);
+ *  - the label below it: 12sp semibold (11sp in the Home quick row), centred on the tile's
+ *    own width, at most two lines, breaking on word boundaries and ellipsized (END) only
+ *    when two lines are not enough. The label can never be wider than its column and never
+ *    draws outside the tile: a centred label whose text layout is wider than its box paints
+ *    over its neighbours (lead's 1.2.3-test3 check: the six Hindi quick labels ran together
+ *    on one line, and "Batch tools" spilled to the left of its column in the hub);
  *  - the icon + label group centred horizontally, with the tag's band reserved above the
  *    container so tagged and untagged tiles line up;
  *  - the PRO badge (12sp, gold, the word PRO) on the container's top-right corner, clear
@@ -33,7 +37,7 @@ import com.scanwhirl.app.R
  * The tile is exactly its content (12dp + 48dp + 8dp + label + 8dp, no fixed minimum): the
  * lead's 2026-11-18 visual check found the old ~125dp rows wasted a screen of tools. The
  * tag's band comes out of the 12dp top space, so a larger system font grows the band
- * instead of pushing the badge off the tile.
+ * instead of pushing the badge off the tile. A two-line label simply grows the tile.
  */
 class ToolTile(context: Context) : FrameLayout(context) {
 
@@ -145,17 +149,19 @@ class ToolTile(context: Context) : FrameLayout(context) {
         ).apply {
             id = R.id.swToolLabel
             typeface = SwType.semibold(context)
-            // Horizontally centred, top aligned: Gravity.CENTER would also centre a one-line
-            // label inside its two-line box and push it away from the icon.
-            gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
+            // Exactly the column, centred on both axes, at most two lines. Gravity.CENTER
+            // (not TOP) keeps the text inside the box even if a font reports odd padding.
+            gravity = Gravity.CENTER
             maxLines = 2
+            // With an ellipsis set the layout is clamped to maxLines and a too-long label
+            // ends in "…" instead of painting a third line over the row below.
+            ellipsize = android.text.TextUtils.TruncateAt.END
             setLineSpacing(0f, 1f)
-            // Break at spaces/hyphens only; a single long word shrinks instead
-            // of being split mid-word ("To PowerP|oint").
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
-            // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
-            //noinspection WrongConstant
-            breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
+            // Greedy word wrapping (HIGH_QUALITY let Devanagari lines come out wider than
+            // the column, which a centred label paints across its neighbours); a word still
+            // wider than the column is broken instead of overflowing.
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
         }
         inner.addView(
             labelView,
@@ -211,47 +217,17 @@ class ToolTile(context: Context) : FrameLayout(context) {
     var host: ToolHost? = null
 
     /**
-     * Home quick row: six columns on a 360dp phone, so the column is narrower than the tool
-     * grid. The geometry is the same (48dp container, 26dp glyph, 12sp semibold label); the
-     * label may shrink to fit one line, never below 9sp.
+     * Home quick row: five columns on a 360dp phone, so the column is narrower than the tool
+     * grid. The geometry is the same (48dp container, 26dp glyph); the label is 11sp and may
+     * use two lines — never smaller, because a 9sp Hindi label both reads badly and ran the
+     * six labels together on the lead's phone (1.2.3-test3).
      */
     fun asQuick() {
-        quick = true
-        inner.setPadding(0, inner.paddingTop, 0, inner.paddingBottom)
-        labelView.setTextSize(
-            TypedValue.COMPLEX_UNIT_PX,
-            LABEL_SP * resources.displayMetrics.scaledDensity
-        )
-        // Six columns on a 360dp phone are narrower than a grid tile; onMeasure fits the
-        // label to the column so a word like "Compress" stays on one line.
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        if (quick) {
-            val avail = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight -
-                inner.paddingLeft - inner.paddingRight -
-                labelView.totalPaddingLeft - labelView.totalPaddingRight
-            fitQuickLabel(avail)
-        }
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-    }
-
-    /** Largest label size in 9..12.5sp that keeps the quick row's label on one line. */
-    private fun fitQuickLabel(availPx: Int) {
-        val text = labelView.text
-        if (availPx <= 0 || text.isNullOrEmpty()) return
-        val scaled = resources.displayMetrics.scaledDensity
-        val minPx = 9f * scaled
-        val paint = android.text.TextPaint(labelView.paint)
-        var size = LABEL_SP * scaled
-        paint.textSize = size
-        while (size > minPx && paint.measureText(text, 0, text.length) > availPx) {
-            size -= 0.5f
-            paint.textSize = size
-        }
-        if (kotlin.math.abs(labelView.textSize - size) > 0.1f) {
-            labelView.setTextSize(TypedValue.COMPLEX_UNIT_PX, size)
-        }
+        labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, QUICK_LABEL_SP)
+        // A 2dp inset each side: next to five equally tight neighbours a label that fills
+        // its column must not touch the one beside it.
+        val inset = SwStyle.dp(context, 2f)
+        labelView.setPadding(inset, 0, inset, 0)
     }
 
     private fun setImageResourceInternal(res: Int) {
@@ -260,9 +236,6 @@ class ToolTile(context: Context) : FrameLayout(context) {
             SwStyle.color(context, if (tool?.status == ToolStatus.SOON) R.color.text_hologram_dim else R.color.cyan_primary)
         )
     }
-
-    /** True once [asQuick] turned this into the Home quick-row tile. */
-    private var quick = false
 
     private fun tagView(context: Context, text: String, gold: Boolean): TextView =
         SwStyle.text(
@@ -302,7 +275,10 @@ class ToolTile(context: Context) : FrameLayout(context) {
     }
 
     private companion object {
-        /** The label's ceiling; [asQuick] may shrink it to fit a six-column row. */
+        /** The label's size in the tool grids (the hub, the stamp editor). */
         const val LABEL_SP = 12f
+
+        /** The Home quick row's floor: never smaller, two lines instead. */
+        const val QUICK_LABEL_SP = 11f
     }
 }

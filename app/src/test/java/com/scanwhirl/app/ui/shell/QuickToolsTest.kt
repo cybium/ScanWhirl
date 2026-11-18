@@ -73,7 +73,7 @@ class QuickToolsTest {
     }
 
     private fun quickTiles(activity: ShellActivity): List<ToolTile> {
-        val rows = listOf(R.id.swQuickRow, R.id.swQuickRow2)
+        val rows = listOf(R.id.swQuickRow, R.id.swQuickRow2, R.id.swQuickRow3)
         return rows.flatMap { id ->
             val row = activity.findViewById<ViewGroup>(id) ?: return@flatMap emptyList()
             (0 until row.childCount).mapNotNull { row.getChildAt(it) as? ToolTile }
@@ -142,7 +142,7 @@ class QuickToolsTest {
     }
 
     @Test
-    fun `the quick row never grows past twelve across two rows`() {
+    fun `the quick row never grows past twelve across three rows`() {
         val twelve = ToolRegistry.all.filter { it.status == ToolStatus.READY }
             .map { it.id }.take(12)
         Prefs.setQuickTools(app, twelve)
@@ -151,9 +151,11 @@ class QuickToolsTest {
         launch { activity, _ ->
             val first = activity.findViewById<ViewGroup>(R.id.swQuickRow)
             val second = activity.findViewById<ViewGroup>(R.id.swQuickRow2)
-            assertEquals("six per row", 6, first.childCount)
-            assertEquals("the second row holds the rest", 6, second.childCount)
+            // v2 UI: 01_home_A - five columns per row, so twelve tools need a third row.
+            assertEquals("five per row", LibraryScreen.QUICK_COLUMNS, first.childCount)
+            assertEquals("the second row holds the next five", LibraryScreen.QUICK_COLUMNS, second.childCount)
             assertTrue("two rows are visible", second.isVisible)
+            assertEquals("all twelve stay reachable", 12, quickTiles(activity).size)
 
             activity.findViewById<View>(R.id.swQuickEdit).performClick()
             idle()
@@ -168,15 +170,17 @@ class QuickToolsTest {
     }
 
     @Test
-    fun `a short second row keeps the six-column grid and stays left aligned`() {
+    fun `a short second row keeps the five-column grid and stays left aligned`() {
         val seven = ToolRegistry.all.filter { it.status == ToolStatus.READY }
             .map { it.id }.take(7)
         Prefs.setQuickTools(app, seven)
         launch { activity, _ ->
             val row2 = activity.findViewById<ViewGroup>(R.id.swQuickRow2)
-            assertEquals("the grid always has six columns", 6, row2.childCount)
+            assertEquals("the grid always has five columns", LibraryScreen.QUICK_COLUMNS, row2.childCount)
             assertTrue("the first cell is the tool", row2.getChildAt(0) is ToolTile)
-            for (i in 1 until 6) {
+            // Seven tools: five on the first row, two on the second, then spacers.
+            assertTrue("the second cell is the tool", row2.getChildAt(1) is ToolTile)
+            for (i in 2 until LibraryScreen.QUICK_COLUMNS) {
                 assertFalse(
                     "the rest are spacers, not a stretched tile",
                     row2.getChildAt(i) is ToolTile

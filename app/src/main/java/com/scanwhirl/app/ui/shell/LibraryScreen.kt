@@ -98,6 +98,7 @@ class LibraryScreen(
         com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
     private var quickEditing = false
     private lateinit var quickRow2: LinearLayout
+    private lateinit var quickRow3: LinearLayout
     private lateinit var quickAddGrid: LinearLayout
     private lateinit var quickEdit: ImageButton
     private lateinit var quickDone: TextView
@@ -178,23 +179,20 @@ class LibraryScreen(
         addView(createBlock())
         quickHeader = quickToolsHeader()
         addView(quickHeader)
-        quickRow = LinearLayout(context).apply {
-            id = R.id.swQuickRow
-            orientation = HORIZONTAL
-            gravity = Gravity.TOP
-            val pad = SwStyle.dp(context, 8f)
-            setPadding(pad, 0, pad, 0)
-        }
+        quickRow = quickRowShell().apply { id = R.id.swQuickRow }
         addView(quickRow)
-        quickRow2 = LinearLayout(context).apply {
+        quickRow2 = quickRowShell().apply {
             id = R.id.swQuickRow2
-            orientation = HORIZONTAL
-            gravity = Gravity.TOP
-            val pad = SwStyle.dp(context, 8f)
-            setPadding(pad, 0, pad, 0)
             isVisible = false
         }
         addView(quickRow2)
+        // A third row exists only for the 12-tool custom limit (5 + 5 + 2); the shipped six
+        // use the first row and one cell of the second.
+        quickRow3 = quickRowShell().apply {
+            id = R.id.swQuickRow3
+            isVisible = false
+        }
+        addView(quickRow3)
         quickAddGrid = LinearLayout(context).apply {
             id = R.id.swQuickAddGrid
             orientation = VERTICAL
@@ -1318,14 +1316,22 @@ class LibraryScreen(
         buildQuickRow()
     }
 
+    /** One quick-tool row: equal columns, flush 8dp gutters, tiles top-aligned. */
+    private fun quickRowShell(): LinearLayout = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        gravity = Gravity.TOP
+        val pad = SwStyle.dp(context, 8f)
+        setPadding(pad, 0, pad, 0)
+    }
+
     private fun buildQuickRow() {
-        quickRow.removeAllViews()
-        quickRow2.removeAllViews()
+        val rows = listOf(quickRow, quickRow2, quickRow3)
+        for (row in rows) row.removeAllViews()
         quickAddGrid.removeAllViews()
         val tools = quickIds.mapNotNull { ToolRegistry.byId(it) }
             .take(com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS)
         quickIds = tools.map { it.id }.toMutableList()
-        listOf(quickRow, quickRow2).forEach { row ->
+        for (row in rows) {
             row.setOnDragListener { _, event ->
                 if (event.action == android.view.DragEvent.ACTION_DROP) {
                     val dragged = event.clipData?.getItemAt(0)?.text?.toString()
@@ -1336,8 +1342,8 @@ class LibraryScreen(
                 true
             }
         }
-        tools.chunked(6).forEachIndexed { index, rowTools ->
-            val row = if (index == 0) quickRow else quickRow2
+        tools.chunked(QUICK_COLUMNS).forEachIndexed { index, rowTools ->
+            val row = rows.getOrNull(index) ?: return@forEachIndexed
             row.isVisible = true
             for (tool in rowTools) {
                 row.addView(
@@ -1345,13 +1351,15 @@ class LibraryScreen(
                     LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
                 )
             }
-            // Keep the six-column grid: a short second row stays left-aligned
-            // instead of stretching its lone tile across the screen.
-            repeat(6 - rowTools.size) {
+            // Keep the five-column grid: a short row stays left-aligned instead
+            // of stretching its lone tile across the screen.
+            repeat(QUICK_COLUMNS - rowTools.size) {
                 row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             }
         }
-        quickRow2.isVisible = tools.size > 6
+        rows.forEachIndexed { index, row ->
+            row.isVisible = tools.size > index * QUICK_COLUMNS
+        }
         if (quickEditing) buildQuickAddGrid()
         updateChrome()
     }
@@ -1432,7 +1440,7 @@ class LibraryScreen(
         )
         if (available.isEmpty()) return
         val atLimit = quickIds.size >= com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS
-        for (chunk in available.chunked(6)) {
+        for (chunk in available.chunked(QUICK_COLUMNS)) {
             val row = LinearLayout(context).apply {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER
@@ -1471,7 +1479,7 @@ class LibraryScreen(
                 }
                 row.addView(tile, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             }
-            repeat(6 - chunk.size) {
+            repeat(QUICK_COLUMNS - chunk.size) {
                 row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             }
             quickAddGrid.addView(
@@ -1743,8 +1751,9 @@ class LibraryScreen(
         folderScroll?.isVisible = !searching
         createRow.isVisible = !searching
         quickHeader?.isVisible = !searching && !firstRun
-        quickRow.isVisible = !searching && !firstRun
-        quickRow2.isVisible = !searching && !firstRun && quickRow2.childCount > 0
+        for (row in listOf(quickRow, quickRow2, quickRow3)) {
+            row.isVisible = !searching && !firstRun && row.childCount > 0
+        }
         quickAddGrid.isVisible = quickEditing && !searching
         recentHeader?.isVisible = !searching && !firstRun
         chipScroll?.isVisible = !searching && !firstRun && docs.isNotEmpty()
@@ -1784,6 +1793,13 @@ class LibraryScreen(
     }
 
     internal companion object {
+        /**
+         * Home quick tools: five columns, so a Hindi label keeps 11sp and two lines on a
+         * 360dp phone (six columns forced 9sp labels that ran together on the lead's phone).
+         * Twelve quick tools therefore use three rows.
+         */
+        internal const val QUICK_COLUMNS = 5
+
         private val isRobolectric =
             android.os.Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
 

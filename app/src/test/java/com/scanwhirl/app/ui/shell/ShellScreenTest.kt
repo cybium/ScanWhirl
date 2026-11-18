@@ -71,7 +71,8 @@ class ShellScreenTest {
             assertEquals(3, (create as android.view.ViewGroup).childCount)
 
             val quick = activity.findViewById<View>(R.id.swQuickRow) as android.view.ViewGroup
-            assertEquals(6, quick.childCount)
+            // v2 UI: 01_home_A - five columns per quick row (the sixth tool wraps).
+            assertEquals(LibraryScreen.QUICK_COLUMNS, quick.childCount)
 
             val docs = activity.findViewById<View>(R.id.swDocList) as android.view.ViewGroup
             assertEquals("two seeded documents", 2, docs.childCount)
