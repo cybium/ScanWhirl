@@ -34,6 +34,7 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowContentResolver
 import org.robolectric.shadows.ShadowToast
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 /**
  * H1 / H2 (BUGS_HUNT, found on the phone with 1.2.2): after "Save to Documents" the snackbar's
@@ -168,6 +169,74 @@ class ExportActionsFixResultTest {
                 "H1/H2: the actions must stay above the 96 px navigation inset, padding=${row.paddingBottom}",
                 row.paddingBottom >= 96
             )
+        }
+    }
+
+    /**
+     * The screen the phone report started from (screen map 013/014): the Compress/Protect result's
+     * own "Save to Documents" bar. Undo must remove that export, and Open must hand it to a
+     * viewer instead of running the save again.
+     */
+    @Test
+    fun `the export result screen undoes and opens the file it saved`() {
+        val out = File(app.cacheDir, "rush_${System.nanoTime()}.pdf").apply {
+            writeBytes("%PDF-1.4\n% fixresult\n".toByteArray())
+        }
+        val intent = ExportResultActivity.intent(
+            app,
+            outputPath = out.path,
+            previewPath = null,
+            mime = "application/pdf",
+            displayName = "Compressed",
+            beforeBytes = 0L,
+            afterBytes = out.length(),
+            width = 0,
+            height = 0,
+            title = null,
+            warning = null
+        )
+        ActivityScenario.launch<ExportResultActivity>(intent).use { scenario ->
+            scenario.onActivity { activity -> activity.findViewById<View>(R.id.btnSaveResult).performClick() }
+            assertTrue("the result screen must save one row", pollUntil { media.scanwhirlPdfs().size == 1 })
+            val firstRow = media.scanwhirlPdfs().single()
+
+            var undo: View? = null
+            assertTrue(
+                "the save confirmation must appear on the result screen",
+                pollUntil {
+                    scenario.onActivity { activity -> undo = activity.findViewById(R.id.snackUndo) }
+                    undo != null
+                }
+            )
+            scenario.onActivity { activity -> undo!!.performClick() }
+            assertTrue("H2: Undo must delete the export", pollUntil { media.rows[firstRow.id] == null })
+            assertTrue("the save itself is reported", out.isFile)
+
+            // Saving again creates a fresh row; its Open must reach a viewer, not the save.
+            scenario.onActivity { activity -> activity.findViewById<View>(R.id.btnSaveResult).performClick() }
+            assertTrue("the second save must create a row", pollUntil { media.scanwhirlPdfs().size == 1 })
+            val secondRow = media.scanwhirlPdfs().single()
+            val secondUri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), secondRow.id)
+            registerViewer(secondUri)
+            var open: View? = null
+            assertTrue(
+                "the second confirmation must appear",
+                pollUntil {
+                    scenario.onActivity { activity -> open = activity.findViewById(R.id.snackOpen) }
+                    open != null
+                }
+            )
+            scenario.onActivity { activity ->
+                drainStarted(activity)
+                open!!.performClick()
+                idle()
+                val started = shadowOf(activity).peekNextStartedActivity()
+                assertNotNull("H1: Open must start a viewer", started)
+                assertEquals(Intent.ACTION_VIEW, started!!.action)
+                assertEquals(secondUri, started.data)
+            }
+            assertEquals("H1: Open must not save again", 1, media.scanwhirlPdfs().size)
+            assertEquals("only the two real saves wrote bytes", 2, media.totalWrites())
         }
     }
 
