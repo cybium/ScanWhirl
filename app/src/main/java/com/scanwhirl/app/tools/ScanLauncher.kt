@@ -49,6 +49,15 @@ class ScanLauncher(
 
     companion object {
         const val PERF_TAG = "ScanPerf"
+
+        /**
+         * T15: pages one camera scan may return. ML Kit documents no maximum (the real limit
+         * is phone memory), so this is ScanWhirl's own ceiling, not Google's. Every page comes
+         * back as a full JPEG that is staged, decoded and paginated, so 60 is what a 2 to 3 GB
+         * phone can hold in one session; anything longer is built with "Add more", which
+         * appends the same document in smaller batches.
+         */
+        internal const val CAMERA_PAGE_LIMIT = 60
     }
 
     /** An unfinished review session and, when its save already committed, that document. */
@@ -153,10 +162,31 @@ class ScanLauncher(
     internal fun cameraConfig(): ScanConfig =
         ScanConfig(
             galleryImport = false,
-            pageLimit = 30,
+            pageLimit = CAMERA_PAGE_LIMIT,
             fullMode = Prefs.autoEnhanceScan(activity),
             jpeg = true
         )
+
+    /** T15: a camera session that came back with exactly the page cap. */
+    internal fun cameraSessionCapped(pageCount: Int): Boolean = pageCount == CAMERA_PAGE_LIMIT
+
+    /**
+     * T15: the session stopped at [CAMERA_PAGE_LIMIT]. The saved document is already verified,
+     * so nothing is at risk here: "Add more" opens the existing add-pages flow
+     * ([DocumentViewerActivity.insertIntent]) on that same document and "Done" simply closes
+     * the sheet, leaving the document saved with the pages it has.
+     */
+    internal fun offerAddMoreAfterCap(docId: String) {
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
+            .setTitle(R.string.scan_saved)
+            .setMessage(activity.getString(R.string.cap_scan_message, CAMERA_PAGE_LIMIT))
+            .setPrimary(R.string.cap_scan_add_more) {
+                activity.startActivity(DocumentViewerActivity.insertIntent(activity, docId))
+            }
+            .setSecondary(R.string.cap_scan_done) { /* the saved document keeps its pages */ }
+            .build()
+            .show()
+    }
 
     /**
      * M08: Google's scanner already offered crop, rotate, filters, retake and add page, so
@@ -192,7 +222,11 @@ class ScanLauncher(
                 ScanWhirlApp.from(activity).indexer.enqueue(doc.id)
                 HomeReveal.request(doc.id)
                 host.scanSaved(doc, note)
-                if (openAfterSave) {
+                // T15: a session that hit the cap stops here instead of opening silently, so
+                // the owner can continue in the same document or keep what they have.
+                if (cameraSessionCapped(uris.size)) {
+                    offerAddMoreAfterCap(doc.id)
+                } else if (openAfterSave) {
                     activity.startActivity(DocumentViewerActivity.intent(activity, doc.id))
                 }
             } catch (e: CancellationException) {
