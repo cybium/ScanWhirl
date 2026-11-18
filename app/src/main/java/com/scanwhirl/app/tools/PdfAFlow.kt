@@ -2,6 +2,7 @@ package com.scanwhirl.app.tools
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -70,16 +71,8 @@ object PdfAFlow {
     private fun create(activity: AppCompatActivity, repo: ScanRepository, doc: ScanDocument) {
         activity.lifecycleScope.launch {
             try {
-                val file = withContext(Dispatchers.IO) { PdfAExport(activity, repo).export(doc.id) }
-                activity.startActivity(
-                    ToolResultActivity.intent(
-                        activity,
-                        toolId = "pdfa",
-                        docIds = listOf(doc.id),
-                        files = listOf(file),
-                        mime = "application/pdf"
-                    )
-                )
+                val file = withContext(Dispatchers.IO) { exportForResult(activity, repo, doc.id) }
+                activity.startActivity(resultIntent(activity, file))
             } catch (e: Exception) {
                 Toast.makeText(
                     activity,
@@ -88,6 +81,45 @@ object PdfAFlow {
                 ).show()
             }
         }
+    }
+
+    /**
+     * T10-FIX-PDFA-UNDO (data loss): the result screen shows the generated PDF/A **file** only.
+     *
+     * Passing the source document id as `docIds` made the result screen name/open/share the
+     * source and, worse, its Undo called `deleteDocument(sourceId)`, which permanently purges
+     * (no Trash): "Save as PDF/A" then "Undo" destroyed the user's original scan. A PDF/A export
+     * creates no library document, so it is an export-only result.
+     */
+    internal fun resultIntent(context: Context, file: File): Intent =
+        ToolResultActivity.intent(
+            context,
+            toolId = "pdfa",
+            files = listOf(file),
+            mime = "application/pdf"
+        )
+
+    /** Writes the PDF/A copy and moves it where Open/Share can hand it over (see below). */
+    internal suspend fun exportForResult(context: Context, repo: ScanRepository, docId: String): File {
+        val exported = PdfAExport(context, repo).export(docId)
+        return publishedCopy(context, exported)
+    }
+
+    /**
+     * Moves the finished PDF/A under `cacheDir/documents/`, the tree the app's FileProvider
+     * registers as "cache_docs". Open and Share hand the result to another app through a
+     * content:// URI, and `cacheDir/pdfa/` has no FileProvider root, so Open/Share threw
+     * "Failed to find configured root" once the result screen described the PDF/A file itself.
+     * A move keeps one copy; the fallback covers a filesystem where rename cannot cross over.
+     * Both cache folders are wiped by the cold-start privacy sweep.
+     */
+    private fun publishedCopy(context: Context, file: File): File {
+        val dir = File(context.cacheDir, "documents/pdfa").apply { mkdirs() }
+        val out = File(dir, file.name)
+        if (file.renameTo(out)) return out
+        file.copyTo(out, overwrite = true)
+        file.delete()
+        return out
     }
 }
 
