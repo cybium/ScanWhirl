@@ -20,7 +20,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
-import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -310,7 +309,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.btnMore.setOnClickListener { showMoreSheet() }
         // T4.6: the header category chip is tappable now — it opens the
         // category picker (the old "Categorize" list dialog is gone).
-        binding.docCategoryChip.setOnClickListener { promptCategorize() }
+        // v2 UI: 07_reader_dock — the 48 dp container is the tap target; the pill itself is
+        // only 32 dp tall, so the visible chip can stay small and calm.
+        binding.docCategoryTouch.setOnClickListener { promptCategorize() }
         // Selection mode (owner revision): long-press enters it; the top bar counts,
         // closes and selects all; the bottom bar acts on the ticked pages.
         binding.btnSelClose.setOnClickListener { exitSelectMode() }
@@ -449,16 +450,17 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // test25 Phase 5C: category tag in the header (recategorise funnels
         // through here too — see promptCategorize()).
         // v2 UI: 07_reader_dock — a compact tonal pill: 8 dp dot in the category's colour,
-        // sentence-case 13 sp label, and a 48 dp tap area around it (never a 48 dp box).
-        binding.docCategoryLabel.text =
-            com.scanwhirl.app.util.CategoryLabels.display(this, doc.category)
+        // sentence-case 13 sp label; the 48 dp container around it is the tap target and
+        // carries the spoken label, so the pill never has to be a 48 dp box.
+        val categoryLabel = com.scanwhirl.app.util.CategoryLabels.display(this, doc.category)
+        binding.docCategoryLabel.text = categoryLabel
+        binding.docCategoryTouch.contentDescription =
+            getString(R.string.doc_category_action, categoryLabel)
         binding.docCategoryDot.backgroundTintList = android.content.res.ColorStateList.valueOf(
             com.scanwhirl.app.util.CategoryStyle.color(doc.category)
         )
         binding.docCategoryChip.isVisible = true
         binding.docCategoryTouch.isVisible = true
-        // Once the pill is laid out, its 32 dp face sits inside a 48 dp tap area.
-        binding.docCategoryTouch.doOnLayout { expandCategoryTouchTarget() }
         refreshGrid()
         updateDraftBar()
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
@@ -508,23 +510,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /**
      * v2 UI: 07_reader_dock — the compact category pill is 32 dp tall while its tap area stays
-     * 48 dp: this TouchDelegate widens the pill's hit rectangle to the whole 48 dp container so
-     * a tap in the empty space around the pill still opens the category picker.
+     * 48 dp: the transparent container around it is the clickable view (and the spoken label),
+     * so a tap in the empty space around the pill still opens the category picker.
      */
-    private fun expandCategoryTouchTarget() {
-        val container = binding.docCategoryTouch
-        val chip = binding.docCategoryChip
-        if (container.height <= 0 || chip.width <= 0) return
-        val rect = android.graphics.Rect()
-        chip.getHitRect(rect)
-        val vertical = ((container.height - rect.height()) / 2).coerceAtLeast(0)
-        val horizontal = ((dp(48f) - rect.width()) / 2).coerceAtLeast(0)
-        rect.top -= vertical
-        rect.bottom += vertical
-        rect.left -= horizontal
-        rect.right += horizontal
-        container.touchDelegate = android.view.TouchDelegate(rect, chip)
-    }
 
     /** Bytes the document occupies: its PDF, or its pages while no PDF exists. */
     private fun docSizeBytes(doc: ScanDocument): Long =

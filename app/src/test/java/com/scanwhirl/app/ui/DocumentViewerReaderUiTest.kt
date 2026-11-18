@@ -243,9 +243,10 @@ class DocumentViewerReaderUiTest {
                 "the tap area is 48 dp tall, was ${touch.height}px",
                 touch.height >= dp(48f)
             )
+            assertTrue("the 48 dp tap area is the clickable view", touch.isClickable)
             assertNotNull(
-                "taps outside the compact pill still reach it (TouchDelegate)",
-                touch.touchDelegate
+                "the tap area carries the spoken label",
+                touch.contentDescription
             )
             // Same row as the meta line: the two centres line up.
             val chipY = IntArray(2).also { chip.getLocationOnScreen(it) }[1] + chip.height / 2
