@@ -43,6 +43,26 @@ class VaultScreen(
         statusView.text = text
     }
 
+    /**
+     * H10 (found on device): the tab only refreshed when the nav bar was tapped, so
+     * coming back from VaultActivity after creating the Vault still said "Not set up
+     * yet". Re-read the real state whenever this tab is shown again.
+     */
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        if (isVisible) refreshStatus()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == VISIBLE) refreshStatus()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        refreshStatus()
+    }
+
     init {
         orientation = VERTICAL
         setPadding(SwStyle.dp(context, 18f), 0, SwStyle.dp(context, 18f), 0)
