@@ -50,6 +50,7 @@ import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
 import com.scanwhirl.app.store.SavedCopyPolicy
 import com.scanwhirl.app.store.SavedReviewConflictException
 import com.scanwhirl.app.store.PendingScans
+import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
@@ -1126,7 +1127,7 @@ class ScanReviewActivity : BaseActivity() {
             )
             // M08: JPEG only — the PDF Google could also encode was never read.
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
-            .setPageLimit(30)
+            .setPageLimit(ScanLauncher.CAMERA_PAGE_LIMIT)
             .build()
         try {
             GmsDocumentScanning.getClient(options)
