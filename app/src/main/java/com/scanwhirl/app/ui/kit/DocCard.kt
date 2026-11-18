@@ -51,6 +51,7 @@ class DocCard(context: Context) : LinearLayout(context) {
     private val thumbFrame: FrameLayout
     private val thumbPlaceholderGroup: LinearLayout
     private val categoryRow: LinearLayout
+    private val metaLine: MetaLine
     private val actions: LinearLayout
 
     var doc: ScanDocument? = null
@@ -157,7 +158,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         )
         addView(
             thumbFrame,
-            LayoutParams(SwStyle.dp(context, 72f), SwStyle.dp(context, 102f)).apply {
+            LayoutParams(SwStyle.dp(context, 64f), SwStyle.dp(context, 90f)).apply {
                 marginEnd = (12 * d).toInt()
             }
         )
@@ -209,16 +210,10 @@ class DocCard(context: Context) : LinearLayout(context) {
 
         metaView = SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_dim)).apply {
             id = R.id.swDocMeta
-            // Reflows to three lines at 200% font scale instead of ellipsizing the date away
-            // (the accessibility audit rejects a cut line; the row grows, nothing is lost).
-            maxLines = 3
+            // Lead order (2026-11-18): ONE line, ellipsize end - the tall reflow wasted a row.
+            maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
-        info.addView(
-            metaView,
-            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = (4 * d).toInt() }
-        )
 
         categoryRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -237,10 +232,22 @@ class DocCard(context: Context) : LinearLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
         }
         categoryRow.addView(categoryView)
-        info.addView(
+
+        // Meta + folder share one line when the folder still fits; on a narrow row or a
+        // long meta the folder drops below instead of squeezing the meta (or drawing over it).
+        metaLine = MetaLine(context)
+        metaLine.addView(
+            metaView,
+            LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        )
+        metaLine.addView(
             categoryRow,
+            LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        )
+        info.addView(
+            metaLine,
             LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = (6 * d).toInt() }
+                .apply { topMargin = (3 * d).toInt() }
         )
 
         addView(info, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -390,9 +397,76 @@ class DocCard(context: Context) : LinearLayout(context) {
 
     companion object {
         /**
-         * Longest side the row thumbnail is decoded to. The tile is 72×102dp, so even
-         * at 3x it needs 306px; sampling to 320 keeps the shared 24 MB LRU honest.
+         * Longest side the row thumbnail is decoded to. The tile is 64×90dp, so even
+         * at 3x it needs 270px; sampling to 320 keeps the shared 24 MB LRU honest.
          */
         const val THUMB_TARGET_PX = 320
+    }
+}
+
+/**
+ * uihome: the row's meta line and its folder dot + name.
+ *
+ * The meta is one line (ellipsize end). The folder sits after it when both fit the
+ * text column; otherwise it drops to a second line, never over the meta and never
+ * squeezed to nothing (long Hindi titles, 200% font, narrow phones).
+ */
+private class MetaLine(context: Context) : ViewGroup(context) {
+
+    private val gap = (6 * resources.displayMetrics.density).toInt()
+    private var stacked = false
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val avail = (MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight).coerceAtLeast(1)
+        val meta = getChildAt(0)
+        val folder = getChildAt(1)
+        val folderShown = folder.visibility != GONE
+
+        meta.measure(
+            MeasureSpec.makeMeasureSpec(avail, MeasureSpec.AT_MOST),
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        )
+        var folderW = 0
+        var folderH = 0
+        if (folderShown) {
+            folder.measure(
+                MeasureSpec.makeMeasureSpec(avail, MeasureSpec.AT_MOST),
+                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+            )
+            folderW = folder.measuredWidth
+            folderH = folder.measuredHeight
+        }
+        stacked = folderShown && meta.measuredWidth + gap + folderW > avail
+
+        val contentH = if (stacked) {
+            meta.measuredHeight + gap + folderH
+        } else {
+            maxOf(meta.measuredHeight, folderH)
+        }
+        setMeasuredDimension(
+            resolveSize(avail + paddingLeft + paddingRight, widthMeasureSpec),
+            resolveSize(contentH + paddingTop + paddingBottom, heightMeasureSpec)
+        )
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val avail = width - paddingLeft - paddingRight
+        val meta = getChildAt(0)
+        val folder = getChildAt(1)
+        val folderShown = folder.visibility != GONE
+
+        meta.layout(
+            paddingLeft, paddingTop,
+            paddingLeft + meta.measuredWidth, paddingTop + meta.measuredHeight
+        )
+        if (!folderShown) return
+        if (stacked) {
+            val top = paddingTop + meta.measuredHeight + gap
+            folder.layout(paddingLeft, top, paddingLeft + folder.measuredWidth, top + folder.measuredHeight)
+        } else {
+            val top = paddingTop + (maxOf(meta.measuredHeight, folder.measuredHeight) - folder.measuredHeight) / 2
+            val left = (paddingLeft + meta.measuredWidth + gap).coerceAtMost(paddingLeft + avail - folder.measuredWidth)
+            folder.layout(left, top, left + folder.measuredWidth, top + folder.measuredHeight)
+        }
     }
 }

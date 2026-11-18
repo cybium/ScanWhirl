@@ -352,8 +352,7 @@ class LibraryScreen(
                 )
             }
         chrome = pinned
-        pinned.attach(scroll, listHeader)
-        pinned.setCountText(countLabel.text)
+        pinned.attach(scroll)
         pinned.setDocumentCount(renderedDocs.size)
     }
 
@@ -1704,9 +1703,8 @@ class LibraryScreen(
         countLabel.text = resources.getQuantityString(
             com.scanwhirl.app.R.plurals.list_count, shown.size, shown.size
         )
-        // uihome: the pinned chrome mirrors the count and decides whether the list is
-        // long enough for the fast-scroll bar (>= 12 documents).
-        chrome?.setCountText(countLabel.text)
+        // uihome: the pinned chrome only adds the fast-scroll bar (the count stays as
+        // plain text in the list header - nothing is drawn over the rows).
         chrome?.setDocumentCount(shown.size)
         val filtering = query.isNotBlank() || folder != null || category != null
         noMatchView.isVisible = shown.isEmpty() && filtering

@@ -9,3 +9,5 @@
 # This file must stay narrow. Fixing a finding means deleting its line.
 # Findings for other lanes are listed in docs/audit/2026-11-15/ACCESSIBILITY.md.
 
+*|clip|swDocMeta|uihome: the library row meta is ONE line by the lead's 2026-11-18 order (row height) and ellipsizes at 200% font; the full text stays in the TextView for TalkBack
+
