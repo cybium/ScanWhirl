@@ -1,12 +1,12 @@
 # LANE fixinsertcrop — Insert pages > Photos crops the photo before the page gets it
 
 Branch `lane/fixinsertcrop`. Not merged, not pushed. Commits `77681c3`, `43692a8`,
-`d40d204` (rework after critic), report commit.
+`d40d204` (rework after critic), `b718f55` (rework 2 after judge), report commit.
 
-Last full gate after the rework (cloud run 44275350994, 7 min):
+Last full gate after rework 2 (cloud run 44278874665, 7 min):
 
 ```
-GATE PASS fixinsertcrop tests=1726 failures=0 skipped=0 lint=[skipped]
+GATE PASS fixinsertcrop tests=1730 failures=0 skipped=0 lint=[skipped]
 ```
 
 Earlier full gate after the first commit (run 44269348213, 9 min):
@@ -95,6 +95,17 @@ Robolectric, NATIVE graphics, `sdk = [35]`; the real flow is driven end to end
 10. `a viewer recreated while the corner screen is on top inserts at the chosen position`
     (rework D6) — "After page 1" survives the document screen's recreation; the confirmed photo
     is inserted at position 1.
+11. `a photo that cannot be read leaves no picked copy behind` (rework 2 R1) — a failing second
+    read deletes the half-copied batch, nothing is inserted.
+12. `finishing during the picked-photo copy keeps no picked copy` (rework 2 R1) — the screen is
+    closed while the gated copy is writing; once the worker finishes, no `insert_*` folder is
+    left.
+13. `an obsolete writer cannot overwrite the newly confirmed crop` (rework 2 R2) — gated old
+    write, rotation, new full-frame confirmation, then the old worker is released: the inserted
+    page is the new confirmation's pixels.
+14. `a restored photo that is gone says so and keeps no picked copy` (rework 2 R3) — recreated
+    screen with the picked file deleted: recovery message, `RESULT_CANCELED`, no batch folder,
+    no draft.
 
 Red evidence on the old code (run 44266334779, before `PhotoCropFlowActivity` existed; the
 test then referenced the class only by name so it compiled):
@@ -162,6 +173,78 @@ New class after the rework: `GATE PASS fixinsertcrop tests=10`.
   `Dispatchers.IO` block (recycled in its `finally`, also on cancellation), so the default
   confirm path allocates nothing large on the main thread.
 
+## Rework 2 after judge (commit `b718f55`)
+
+`next/docs/review/JUDGE_fixinsertcrop.md` verdict FAIL with three accepted must-fix items.
+Full gate after the rework (cloud run 44278874665, 7 min):
+`GATE PASS fixinsertcrop tests=1730 failures=0 skipped=0 lint=[skipped]`.
+New class after the rework: `GATE PASS fixinsertcrop tests=14`.
+
+### R1 — the picked batch is owned before the copy and never leaks (privacy, fixed)
+
+- `DocumentViewerActivity` now creates the `cacheDir/insert_<id>` folder and takes ownership
+  of it (`InsertPhotoBatch`) **before** the first URI is read. The batch carries two flags:
+  `handedOff` (the corner crop flow owns it; this screen must not delete it) and `abandoned`
+  (the screen went away while the blocking copy was still writing).
+- Cleanup is guaranteed on every exit from the copy: a failed read deletes the half-filled
+  folder; a cancelled lifecycle continuation leaves a `finally` in the copy worker itself that
+  deletes the folder after the last write; `onDestroy` (including a rotation) marks a
+  not-yet-handed-off batch abandoned and deletes it; only a batch the crop flow already owns
+  is left alone (it has its own cancel/cleanup path).
+- Tests: `a photo that cannot be read leaves no picked copy behind` (second pick points at a
+  missing file) and `finishing during the picked-photo copy keeps no picked copy` (a new
+  `photoCopyGateForTest` holds the copy, the screen is closed, the worker is released, then no
+  `insert_*` folder remains).
+
+### R2 — an obsolete instance can no longer overwrite the confirmed crop (data, fixed)
+
+- Every confirm writes to a worker-unique file `cropped_<index>_<instanceTag>_<generation>.tmp`
+  in the same folder, and only the **live** generation publishes it with
+  `File.renameTo(cropped_<index>.jpg)` (atomic replace on the same directory). An abandoned
+  worker (destroyed instance whose blocking write outlives a rotation) deletes only its own
+  temporary file: in the cancellation path (`catch CancellationException`) and after the
+  token/index checks; it never touches the final crop or another instance's temp.
+- Test: `an obsolete writer cannot overwrite the newly confirmed crop` — the old instance
+  confirms a dragged (smaller) crop and is suspended inside the write (`beforeWriteForTest`
+  gate); the screen is recreated, the new instance confirms the full auto-crop, its write and
+  rename complete, then the old worker is released (`afterWriteForTest`); the inserted page has
+  exactly the new confirmation's pixel dimensions. Under the old direct-write code the old
+  instance's late write deleted/overwrote the new crop and nothing was inserted.
+
+### R3 — a restored photo that is gone says so (recovery, fixed)
+
+- `PhotoCropFlowActivity.onCreate` no longer cancels silently when the restored cache files
+  are missing: it shows the existing `fixinsertcrop_crop_failed` message ("Could not open this
+  photo. Pick the photos again.") as a toast (safe before any view exists, same as the
+  existing failure path), then cancels and deletes the whole batch.
+- Test: `a restored photo that is gone says so and keeps no picked copy` — the picked file is
+  deleted, the screen is recreated: the message is the latest toast, the result is
+  `RESULT_CANCELED`, no `insert_*` folder remains and no draft is created.
+
+### Red evidence for rework 2
+
+Before the fixes (cleanup removed, direct final-file write, silent early cancel), the same
+class failed 5 of 14:
+
+```
+FAIL ... a photo that cannot be read leaves no picked copy behind :: the half-copied batch is deleted
+FAIL ... finishing during the picked-photo copy keeps no picked copy :: the abandoned copy deletes what it wrote
+FAIL ... an obsolete writer cannot overwrite the newly confirmed crop :: the confirmed crop lands in the draft
+FAIL ... a restored photo that is gone says so and keeps no picked copy :: the recovery message is shown expected:<Could not open this photo. Pick the photos again.> but was:<null>
+FAIL ... rotation while the insert position is asked keeps no picked copy :: the question is gone with the old screen, so are its copies
+```
+
+Green after restoring the fixes: `GATE PASS fixinsertcrop tests=14`, then the full suite
+(1730 tests).
+
+### New test-only seams (no production behaviour)
+
+- `DocumentViewerActivity.photoCopyGateForTest` — instance hook, runs before each picked file is
+  copied.
+- `PhotoCropFlowActivity.beforeWriteForTest` / `afterWriteForTest` — hook before the crop write
+  and after the write attempt (worker/main completion). Both null in production and reset in
+  `@After`.
+
 ## Files touched
 
 - `app/src/main/java/com/scanwhirl/app/ui/DocumentViewerActivity.kt` — insert-photos path only:
@@ -219,3 +302,10 @@ New class after the rework: `GATE PASS fixinsertcrop tests=10`.
    its own frame (the whole auto-cropped page), not photo 1's dragged corners.
 10. Rework: choose "After page 1", rotate the document screen while the crop screen is on top,
     then confirm — the page must land after page 1, not at the end or nowhere.
+11. Rework 2: cancel the photo picker after choosing photos, or leave the document screen while
+    the "Preparing" is still running — no copy of the picked photos may be left in the app cache
+    (not visible on the phone; the tests assert the folder).
+12. Rework 2: confirm a photo, rotate at the same moment, then confirm the rotated screen's
+    frame — the page must be the frame you confirmed last, never the earlier one. Delete the
+    picked file before a rotation (or clear the app cache) — the screen must say "Could not open
+    this photo. Pick the photos again." rather than closing silently.
