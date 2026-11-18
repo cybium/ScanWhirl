@@ -36,10 +36,9 @@ non-consumable INAPP product, app stays offline: no INTERNET permission and no n
   NETWORK_ERROR -> connection copy, BILLING_UNAVAILABLE -> not available copy, USER_CANCELED ->
   silent (`null`), everything else -> existing generic copy. Used by the purchase listener, setup
   failure, restore/query failure and launch (new `LaunchResult.CONNECTION` / `UNAVAILABLE`).
-- `ITEM_ALREADY_OWNED` is now success on both paths (launch result and listener, new
-  `Event.AlreadyOwned`): it runs the reconcile, unlocks (`Controller.grantOwned`) even if the
-  confirming query fails/answers empty, and leaves the reconcile due so the purchase is
-  acknowledged once Play returns the row. A failed query never revokes a known entitlement.
+- `ITEM_ALREADY_OWNED` runs the ownership reconcile on both paths (launch result and listener,
+  new `Event.AlreadyOwned`). **Reworked after critic D1/D2:** it is not an entitlement by itself;
+  see "Rework after critic" below. A failed query never revokes a known entitlement.
 
 Resources (new files)
 - `res/values/strings_fixbilling.xml`: `pro_error_connection` ("Can't reach Google Play. Check the
@@ -54,17 +53,17 @@ through a queue like Play):
 - failed query / failed connection never revoke an unlocked entitlement
 - PENDING -> PURCHASED is acknowledged exactly once on reconcile, never twice
 - successful reconcile is debounced, then queried again after the window
-- ITEM_ALREADY_OWNED with a null or empty confirming query unlocks (old: Failed) and with a
-  purchase row acknowledges it once
+- ITEM_ALREADY_OWNED with a PURCHASED row unlocks and acknowledges exactly once (the initial
+  null/empty success assertions were replaced by critic D1/D2; see the rework section)
 - `Event.AlreadyOwned` from the store listener unlocks
 - response codes map to connection / unavailable / generic / silent strings
 - a failed connection reports the mapped BILLING_UNAVAILABLE message
 - a launch CONNECTION failure says Play cannot be reached
 - the offer token from the priced offer reaches the launch (and `token` is not repurposed)
 
-Updated `ProBillingRaceTest` R4 to the judge's semantics: already-owned with a null/empty
-re-query releases Buy as a **success** (`Owned` + entitlement) instead of `Failed`. No test was
-ignored or weakened for data safety; all other assertions are unchanged.
+Updated `ProBillingRaceTest` R4 (now `// fixbilling: critic D1/D2`): already-owned with a
+null/empty re-query releases Buy without unlocking. No test was ignored or weakened for data
+safety; all other assertions are unchanged.
 
 ## Verification
 - Red run (behaviour tests): `GATE FAIL fixbilling tests=6 failures=3` (run 44236391693).
@@ -84,7 +83,43 @@ ignored or weakened for data safety; all other assertions are unchanged.
   strongly recommended; one-time offer launches require `setOfferToken` from
   `getOneTimePurchaseOfferDetailsList()`; query in `onResume` is the documented way to catch
   pending -> purchased transitions.
-- `ProGate.setPro` still records a local unlock after `ITEM_ALREADY_OWNED` even if the query was
-  unreachable; the next successful reconcile acknowledges the purchase, so the 3-day window is
-  protected but a long offline period is still a risk Play cannot confirm until reconnection.
+- No local unlock is recorded from `ITEM_ALREADY_OWNED` alone any more (critic D1/D2); the
+  3-day acknowledgement window can only start once a PURCHASED row is returned, which is the
+  documented rule.
 - No manifest, dependency, permission or network changes. No device test was run from this lane.
+
+## Rework after critic (FIX FIRST, D1/D2)
+Critic `CRITIC_fixbilling.md` found that `reconcileOwned` called `grantOwned()` whenever the
+confirming query had no PURCHASED row, so `ITEM_ALREADY_OWNED` unlocked Pro with no purchase and
+even on a PENDING-only answer. Lead ruling (D1/D2, Medium) applied:
+
+- `reconcileOwned` no longer grants anything by itself and `Controller.grantOwned()` was removed.
+  It filters the answer for `PRODUCT_ID`:
+  - PURCHASED row -> `Controller.applyOwned(...)` unlocks and acknowledges exactly once (guarded
+    by `acknowledged`);
+  - PENDING only -> no unlock, no acknowledge, `State.Pending` (existing `pro_pending` copy,
+    no new string needed), `reconcileDue` stays set;
+  - query fails or returns nothing -> no unlock, `State.Failed(pro_error_connection)`, Buy
+    released, `reconcileDue` stays set for the next foreground. Known paid entitlements are
+    still never revoked.
+- Applies to the launch path and to `Event.AlreadyOwned` from the store listener; outside a Buy
+  `endBuy` is a no-op, so those paths stay silent while keeping the reconcile due.
+
+Tests (rewritten red first, marked `// fixbilling: critic D1/D2`):
+- `already owned with a failing query does not unlock and retries on the next foreground`
+  (replaces the old success test) - not Pro, no acknowledge, connection copy, next foreground
+  queries and unlocks on a PURCHASED row.
+- `already owned with a pending purchase stays locked and unacknowledged` - `State.Pending`,
+  not Pro, nothing acknowledged, reconcile still due.
+- `already owned applies and acknowledges a purchased row exactly once` - includes a later
+  reconcile with the acknowledged row and asserts no second acknowledge.
+- `ProBillingRaceTest` R4: null/empty re-query releases Buy as `Failed` and never unlocks.
+
+Verification:
+- Red: `GATE FAIL fixbilling tests=40 failures=3` (run 44266226237).
+- Billing classes: `GATE PASS fixbilling tests=40 failures=0 skipped=0 lint=[skipped]`
+  (run 44266663756).
+- Full gate (cloud): `GATE PASS fixbilling tests=1700 failures=0 skipped=0 lint=[skipped]`
+  (run 44267148239).
+- Commit `68a0dbf` fixbilling: ITEM_ALREADY_OWNED grants only on a PURCHASED row (critic D1/D2);
+  this report update follows.
