@@ -26,6 +26,9 @@ Source: R2 UX_PRINCIPLES -> CRITIC_R2_UX -> JUDGE_RESEARCH §2/§4 (next/docs/re
    folder model in phase 4, Home look in phase 6; no new Folders tab.
 10. **Search:** the visible field stays (collapse on scroll optional after device test).
 11. **Pro marking:** gold always with the word "Pro" or a lock; contrast checked on every surface.
+13. **Phase 2 `SwAdjustCorners` must be accessible:** TalkBack can move each corner (accessibility actions /
+    virtual nodes), with a spoken hint when no edge was found. Replaces the canvas-only CropView everywhere
+    (ID card, Passport, Insert pages). Source: JUDGE_fixidcrop D9, lead ruling.
 12. **Phase 4 open question (resolve before storage-a starts):** minSdk 24-28 needs storage permission to write public
     Documents, but the app's rule is "never prompt" for deletes. Design a compatible approach; no new consent flows
     (createDeleteRequest etc.) without a new owner decision; files we cannot touch are reported as kept.
