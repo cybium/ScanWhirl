@@ -22,7 +22,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -96,23 +95,33 @@ class ExportActionsFixResultTest {
         }
     }
 
+    /**
+     * fixopen (judge C1 #15): Open must not ask the package manager first. Since Android 11
+     * (API 30) package visibility filtering hides installed viewers (this app declares no
+     * `<queries>`), so an empty query meant "no app can open this" while a viewer existed.
+     * With no viewer, Open still hands the ACTION_VIEW to the platform; the "no app" toast now
+     * comes from the platform refusing it, pinned in SavedSnackbarFixOpenTest.
+     */
     @Test
-    fun `open says so when no app can open the file`() {
-        launchViewerAndSave("Nothing opens this") { activity, _ ->
+    fun `open asks the platform even when no viewer resolves`() {
+        launchViewerAndSave("Nothing opens this") { activity, rowUri ->
             drainStarted(activity)
             activity.findViewById<View>(R.id.snackOpen).performClick()
             idle()
 
-            assertNull(
-                "H1: with no viewer installed nothing may be started (a chooser is not a viewer)",
-                shadowOf(activity).peekNextStartedActivity()
+            val started = shadowOf(activity).peekNextStartedActivity()
+            assertNotNull(
+                "fixopen: Open must hand the file to the platform instead of stopping at a " +
+                    "package-visibility-filtered query",
+                started
             )
-            val toast = ShadowToast.getTextOfLatestToast().orEmpty()
-            assertTrue(
-                "H1: the user must be told that no app can open the export, got '$toast'",
-                toast.contains("No app on this phone can open this file")
+            assertEquals("fixopen: Open must be an ACTION_VIEW", Intent.ACTION_VIEW, started!!.action)
+            assertEquals(
+                "fixopen: the platform must be asked for the exported file itself",
+                rowUri,
+                started.data
             )
-            assertEquals("Open must never re-run the save", 1, media.totalWrites())
+            assertEquals("fixopen: no precheck may hide the real request", 1, media.totalWrites())
         }
     }
 
