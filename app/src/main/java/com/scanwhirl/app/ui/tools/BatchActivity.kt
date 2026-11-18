@@ -629,19 +629,17 @@ class BatchActivity : BaseActivity() {
             return
         }
         val type = if (files.all { it.name.endsWith(".pdf") }) "application/pdf" else "*/*"
-        val intent = (if (uris.size == 1) {
+        val intent = if (uris.size == 1) {
             Intent(Intent.ACTION_SEND).apply {
                 this.type = type
                 putExtra(Intent.EXTRA_STREAM, uris.first())
+                clipData = ClipData(ClipDescription("ScanWhirl batch", arrayOf(type)), ClipData.Item(uris.first()))
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         } else {
-            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                this.type = type
-                putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
-            }
-        }).apply {
-            clipData = ClipData(ClipDescription("ScanWhirl batch", arrayOf(type)), ClipData.Item(uris.first()))
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // fixshare: every Uri must be in ClipData too — the Android 10+ grant model follows it,
+            // so a ClipData with only the first file shared one file of a batch.
+            ShareUtils.multiShareIntent(this, uris, type, "ScanWhirl batch")
         }
         startActivity(Intent.createChooser(intent, getString(R.string.tools_batch_share_all)))
     }
