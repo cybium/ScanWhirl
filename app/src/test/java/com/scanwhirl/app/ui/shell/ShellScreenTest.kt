@@ -13,6 +13,7 @@ import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
@@ -104,18 +105,19 @@ class ShellScreenTest {
         }
     }
 
-    // v2 UI: 03_tools_hub (37 tools after fixui removed Book pages, Photos to PDF, Business card,
-    // Duplicate, Enhance and B&W: owner F6/F7/F20. Mask Aadhaar folded into Redact's Find; the
-    // Hindi tile folds into Read text).
+    // v2 UI: 03_tools_hub (35 shipped tools after fixui removed Book pages, Photos to PDF,
+    // Business card, Duplicate, Enhance and B&W: owner F6/F7/F20; and after the hub stopped
+    // rendering the two Coming-soon tiles: organize pages, batch rename).
     @Test
-    fun `the tools hub holds all 37 tiles and every tile is wired`() {
+    fun `the tools hub holds every shipped tile and every tile is wired`() {
         scrollActivity { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val tiles = ToolsHubScreen.tiles(body)
-            assertEquals(37, tiles.size)
-            assertEquals(37, tiles.mapNotNull { it.tool?.id }.toSet().size)
+            val shipped = ToolRegistry.all.filter { it.status != ToolStatus.SOON }
+            assertEquals(shipped.size, tiles.size)
+            assertEquals(shipped.size, tiles.mapNotNull { it.tool?.id }.toSet().size)
             for (tile in tiles) {
                 assertTrue("${tile.tool?.id} has no tap action", tile.hasOnClickListeners())
             }
@@ -150,7 +152,10 @@ class ShellScreenTest {
             idle()
             val tiles = ToolsHubScreen.tiles(activity.findViewById<View>(R.id.swToolsBody))
             assertEquals(
-                ToolRegistry.search(activity, "smaller").map { it.id },
+                "the hub lists the ranked hits that actually ship",
+                ToolRegistry.search(activity, "smaller")
+                    .filter { it.status != com.scanwhirl.app.ui.kit.ToolStatus.SOON }
+                    .map { it.id },
                 tiles.mapNotNull { it.tool?.id }
             )
             assertTrue(tiles.any { it.tool?.id == "compress" })

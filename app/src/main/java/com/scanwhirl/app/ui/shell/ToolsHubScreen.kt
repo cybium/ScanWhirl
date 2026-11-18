@@ -17,15 +17,18 @@ import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwTool
+import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.ToolGroup
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
 
 /**
- * v2 UI: 03_tools_hub — every tool, grouped, searchable over titles and
- * keywords. A Soon tile is never a dead tap: it opens the Coming soon sheet.
+ * v2 UI: 03_tools_hub — every shipped tool, grouped, searchable over titles and
+ * keywords. A Coming-soon tool is not shown here at all (UI_PLAN §0b: no Soon
+ * tiles); the catalogue keeps it for the Coming soon sheet.
  */
 class ToolsHubScreen(
     private val context: Context,
@@ -43,7 +46,7 @@ class ToolsHubScreen(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val pad = SwStyle.dp(context, 18f)
-            setPadding(pad, SwStyle.dp(context, 10f), pad, SwStyle.dp(context, 6f))
+            setPadding(pad, SwStyle.dp(context, 6f), pad, SwStyle.dp(context, 2f))
         }
         bar.addView(
             SwStyle.text(context, 24f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
@@ -116,7 +119,7 @@ class ToolsHubScreen(
             box,
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)).apply {
                 val m = SwStyle.dp(context, 18f)
-                setMargins(m, SwStyle.dp(context, 8f), m, SwStyle.dp(context, 12f))
+                setMargins(m, SwStyle.dp(context, 4f), m, SwStyle.dp(context, 8f))
             }
         )
 
@@ -129,21 +132,26 @@ class ToolsHubScreen(
         render("")
     }
 
-    /** Rebuilds the body for [query]; blank shows every group. */
     /** Re-binds every tile after a Free/Pro change; keeps the current search. */
     fun refreshProState() {
         render(searchInput.text?.toString().orEmpty())
     }
 
-    fun render(query: String) {        if (::clearButton.isInitialized) clearButton.isVisible = query.isNotBlank()
+    /** Rebuilds the body for [query]; blank shows every grouped section. */
+    fun render(query: String) {
+        if (::clearButton.isInitialized) clearButton.isVisible = query.isNotBlank()
         body.removeAllViews()
         if (query.isBlank()) {
-            for ((group, tools) in ToolRegistry.grouped()) {
+            // UI_PLAN §0b: no Soon tiles. A group whose tools are all Coming soon is not
+            // rendered at all, so the hub never shows an empty section.
+            for (group in ToolGroup.entries) {
+                val tools = shipped(group)
+                if (tools.isEmpty()) continue
                 body.addView(section(group, tools))
             }
             return
         }
-        val hits = ToolRegistry.search(context, query)
+        val hits = ToolRegistry.search(context, query).filter { it.status != ToolStatus.SOON }
         if (hits.isEmpty()) {
             body.addView(
                 SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_dim)).apply {
@@ -170,42 +178,74 @@ class ToolsHubScreen(
         val card = LinearLayout(context).apply {
             orientation = VERTICAL
             background = SwStyle.card(context, 18f)
-            val m = SwStyle.dp(context, 14f)
-            val pad = SwStyle.dp(context, 10f)
-            setPadding(pad, SwStyle.dp(context, 12f), pad, SwStyle.dp(context, 6f))
+            val m = SwStyle.dp(context, 8f)
+            // No side padding: the five 48dp squares keep their own gutters inside the
+            // column, and the widest label ("Searchable") needs the full column. 8dp
+            // top/bottom keeps the card tight but readable; 12dp separates the cards.
+            setPadding(0, SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f))
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                setMargins(m, 0, m, SwStyle.dp(context, 10f))
+                setMargins(m, 0, m, SwStyle.dp(context, 12f))
             }
         }
         val title = if (group != null) context.getString(groupTitle(group)) else context.getString(R.string.tools_title)
-        val header = SwStyle.sectionHeader(context, title, tools.size)
+        val header = sectionTitle(title)
         val pad = SwStyle.dp(context, 6f)
-        header.setPadding(pad, 0, pad, SwStyle.dp(context, 10f))
+        header.setPadding(pad, 0, pad, SwStyle.dp(context, 8f))
         card.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
+        // A 4-column grid on a normal phone; wider text gets fewer columns instead of a
+        // clipped label (checkable at fontScale 1.3 on a 360dp screen).
+        val columns = columns()
         var row: LinearLayout? = null
+        var rows = 0
         for ((index, tool) in tools.withIndex()) {
-            if (index % 4 == 0) {
+            if (index % columns == 0) {
                 row = LinearLayout(context).apply {
                     orientation = HORIZONTAL
-                    weightSum = 4f
+                    weightSum = columns.toFloat()
                 }
-                card.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+                card.addView(
+                    row,
+                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                        if (rows > 0) topMargin = SwStyle.dp(context, 6f)
+                    }
+                )
+                rows++
             }
             val tile = ToolTile(context)
             tile.id = R.id.swToolTile
             tile.host = host
             tile.bind(tool)
             tile.layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-            tile.minimumHeight = SwStyle.dp(context, 96f)
             row!!.addView(tile)
         }
-        // Fill the last row so four columns stay aligned.
-        while (row != null && row.childCount % 4 != 0) {
-            row.addView(View(context), LayoutParams(0, SwStyle.dp(context, 96f), 1f))
+        // Fill the last row so the columns stay aligned.
+        while (row != null && row.childCount % columns != 0) {
+            row.addView(View(context), LayoutParams(0, 0, 1f))
         }
         return card
     }
+
+    /** A group's tools that actually ship: a Coming-soon tool is never a hub tile. */
+    private fun shipped(group: ToolGroup): List<SwTool> =
+        ToolRegistry.byGroup(group).filter { it.status != ToolStatus.SOON }
+
+    private fun columns(): Int = when {
+        resources.configuration.fontScale >= 1.6f -> 2
+        resources.configuration.fontScale >= 1.25f -> 3
+        // Five columns on a normal phone: the 48dp squares keep ~10dp gutters in a 68dp
+        // column, the widest label ("Searchable", 65dp at 12sp) stays on one line, and the
+        // five-tool Create group no longer leaves an empty second row.
+        else -> 5
+    }
+
+    /** Sentence case (never ALL CAPS), 16sp semibold: a heading, not a category stamp. */
+    private fun sectionTitle(title: String): TextView =
+        SwStyle.text(context, 16f, SwStyle.color(context, R.color.text_hologram_hi)).apply {
+            typeface = SwType.semibold(context)
+            text = title
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
 
     private fun groupTitle(group: ToolGroup): Int = when (group) {
         ToolGroup.CREATE -> R.string.tools_group_create
