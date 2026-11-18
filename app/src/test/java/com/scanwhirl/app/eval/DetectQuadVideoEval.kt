@@ -13,6 +13,7 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
  * scanbench: how well does our own gallery-photo detector (`Deskew.detectQuad`, the only
@@ -46,6 +47,17 @@ import kotlin.math.max
  *    i.e. the quad is the frame. Harmless when the page really fills the frame, a wrong crop
  *    everywhere else;
  *  - ms/frame: median and p90 of the detector call itself (decode + gradient + quad).
+ *
+ * It also writes one row per frame for the ground-truth scorer (`tools/scanner/score.py`),
+ * into the private `qa/recordings/labels/` folder (never committed, never uploaded):
+ *  - `pred_detectquad_raw.csv`: what `Deskew.detectQuad` returned;
+ *  - `pred_photoautocrop.csv`: what the app would actually crop, i.e. the same quad after
+ *    `PhotoAutoCrop`'s frame-fit rejection (a quad with every corner within 5% of a border
+ *    is the frame, not a page, so the app leaves the photo untouched).
+ * Columns: `clip,frame,has_quad,x1,y1,x2,y2,x3,y3,x4,y4,ms` -- corners in SOURCE JPEG pixels
+ * (TL,TR,BR,BL), mapped back from [Deskew.Quad.pts] by multiplying the normalised
+ * coordinates by the frame's decoded width/height (the same mapping `Deskew.warp` uses, so a
+ * score is computed against the geometry the app would actually crop).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -129,6 +141,15 @@ class DetectQuadVideoEval {
             get() = if (expectDocument) 0.0 else detectionPercent
     }
 
+    private data class FrameRow(
+        val clip: String,
+        val frame: Int,
+        val quad: Deskew.Quad?,
+        val width: Int,
+        val height: Int,
+        val ms: Double
+    )
+
     @Test
     fun `detect quad on real phone video frames`() {
         val root = frameRoots.firstOrNull { it.isDirectory }
@@ -150,17 +171,60 @@ class DetectQuadVideoEval {
                 ?.sortedBy { it.name }?.firstOrNull()?.readBytes()?.let { Deskew.detectQuad(it) }
         }
 
-        val results = present.map { runClip(File(root, it.key), it) }
+        val frameRows = ArrayList<FrameRow>()
+        val results = present.map { runClip(File(root, it.key), it, frameRows) }
 
         val text = render(results)
         println(text)
         val target = File(outRoot, "BENCH_detectQuad_data.md")
         target.writeText(text)
         println("WROTE ${target.absolutePath} at ${target.lastModified()}")
+
+        // Per-frame predictions for tools/scanner/score.py. Private folder, local only.
+        val labelsDir = File(outRoot, "labels")
+        writePredictions(File(labelsDir, "pred_detectquad_raw.csv"), frameRows, appFrameFitFilter = false)
+        writePredictions(File(labelsDir, "pred_photoautocrop.csv"), frameRows, appFrameFitFilter = true)
+
         assertTrue("every clip must contribute frames", results.all { it.frames > 0 })
     }
 
-    private fun runClip(dir: File, clip: Clip): ClipResult {
+    /**
+     * Writes the predictions CSV: `clip,frame,has_quad,x1,y1,x2,y2,x3,y3,x4,y4,ms`, corners in
+     * source JPEG pixels (TL,TR,BR,BL). A file that cannot be written is reported and skipped,
+     * never a test failure: the benchmark numbers above must stay usable when the private
+     * folder is read-only or absent (e.g. a fresh checkout on another machine).
+     */
+    private fun writePredictions(target: File, rows: List<FrameRow>, appFrameFitFilter: Boolean) {
+        runCatching {
+            target.parentFile?.mkdirs()
+            val sb = StringBuilder("clip,frame,has_quad,x1,y1,x2,y2,x3,y3,x4,y4,ms\n")
+            for (row in rows) {
+                val quad = row.quad
+                val kept = quad != null && (!appFrameFitFilter || !PhotoAutoCrop.isFrameFit(quad.pts))
+                sb.append(row.clip).append(',').append(row.frame).append(',')
+                if (!kept) {
+                    sb.append('0')
+                    repeat(8) { sb.append(',') }
+                } else {
+                    val pts = quad!!.pts
+                    sb.append("1")
+                    for (c in 0 until 4) {
+                        val x = (pts[c * 2].toDouble() * row.width).roundToInt()
+                        val y = (pts[c * 2 + 1].toDouble() * row.height).roundToInt()
+                        sb.append(',').append(x).append(',').append(y)
+                    }
+                    sb.append(',')
+                }
+                sb.append(String.format(Locale.ROOT, "%.2f", row.ms)).append('\n')
+            }
+            target.writeText(sb.toString())
+            println("WROTE ${target.absolutePath} (${rows.size} rows)")
+        }.onFailure { problem ->
+            println("PREDICTIONS NOT WRITTEN ${target.path}: ${problem.javaClass.simpleName}: ${problem.message}")
+        }
+    }
+
+    private fun runClip(dir: File, clip: Clip, frameRows: MutableList<FrameRow>): ClipResult {
         val frames = dir.listFiles { f -> f.isFile && f.extension.equals("jpg", true) }
             ?.sortedBy { it.nameWithoutExtension.toIntOrNull() ?: Int.MAX_VALUE }
             .orEmpty()
@@ -173,12 +237,23 @@ class DetectQuadVideoEval {
             val bytes = frame.readBytes()
             val size = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, size)
-            dims += max(1, size.outWidth) to max(1, size.outHeight)
+            val width = max(1, size.outWidth)
+            val height = max(1, size.outHeight)
+            dims += width to height
             val started = System.nanoTime()
             val quad = runCatching { Deskew.detectQuad(bytes) }.getOrNull()
-            times += System.nanoTime() - started
+            val elapsed = System.nanoTime() - started
+            times += elapsed
             quads += quad
             if (quad != null) detected++
+            frameRows += FrameRow(
+                clip = clip.key,
+                frame = frame.nameWithoutExtension.toIntOrNull() ?: 0,
+                quad = quad,
+                width = width,
+                height = height,
+                ms = elapsed / 1_000_000.0
+            )
         }
 
         // Jitter between consecutive detected frames, in units of the frame diagonal.
