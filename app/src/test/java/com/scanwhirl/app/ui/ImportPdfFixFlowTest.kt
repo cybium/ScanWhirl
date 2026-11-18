@@ -108,7 +108,9 @@ class ImportPdfFixFlowTest {
         assertNull("the imported document is gone", repo.getDocument(imported))
         assertNotNull("every other document is untouched", repo.getDocument(other))
         assertEquals(1, repo.listDocuments().size)
-        assertTrue("its cache preview is gone too: $caches", caches.none { it.exists() })
+        // The preview cache is deleted asynchronously after the document row: wait for it instead of
+        // racing it (failed once on a slow cloud runner, integration run 44265863059).
+        assertTrue("its cache preview is gone too: $caches", waitUntil { caches.none { it.exists() } })
     }
 
     @Test
