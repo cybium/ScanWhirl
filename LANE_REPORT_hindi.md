@@ -144,5 +144,5 @@ vault_recovery_button (रिकवरी कोड → तिजोरी व�
 
 ## Git
 
-- Commits: `<pending>` (this report is committed with the work).
+- Commits: `6fae206` (glossary + guard test), report commit follows.
 - Last gate line: `GATE PASS hindi tests=1770 failures=0 skipped=0 lint=[skipped]`
