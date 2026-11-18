@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -180,18 +181,13 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         navHost = buildNav()
         root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 100f)))
         setContentView(root)
-        root.applySystemBarsPadding()
-        // v2 UI: 01_home_A — with the keyboard up the nav bar and scan disc must
-        // not float over the chips: hide them and keep the content above the IME.
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
-            val bars = insets.getInsets(
-                androidx.core.view.WindowInsetsCompat.Type.systemBars() or
-                    androidx.core.view.WindowInsetsCompat.Type.displayCutout()
-            )
-            v.setPadding(v.paddingLeft, bars.top, v.paddingRight, bars.bottom)
-            navHost.isVisible =
-                insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom == 0
-            insets
+        // v2 UI: 01_home_A — with the keyboard up the nav bar and scan disc must not
+        // float over the chips. One listener only: the shared helper already keeps the
+        // base padding, the cutout/top inset and max(nav bar, IME) at the bottom, and
+        // hides the dock as its side effect. A second listener here would replace it
+        // (A6 #17: the search field sat behind the keyboard).
+        root.applySystemBarsPadding { insets ->
+            navHost.isVisible = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
         }
 
         library = LibraryScreen(this, this, repo, libraryCallbacks)

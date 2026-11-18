@@ -26,8 +26,15 @@ private val fitted = WeakHashMap<View, Rect>()
  *
  * @param top pad by the status-bar (plus cutout) inset.
  * @param bottom pad by the navigation-bar inset, and the IME when it is taller.
+ * @param onInsets called with the same insets after the padding is applied, for side
+ *   effects that belong to the screen (e.g. hiding a dock while the keyboard is up).
+ *   Do NOT install a second listener on this view: that would replace this one.
  */
-fun View.applySystemBarsPadding(top: Boolean = true, bottom: Boolean = true) {
+fun View.applySystemBarsPadding(
+    top: Boolean = true,
+    bottom: Boolean = true,
+    onInsets: ((WindowInsetsCompat) -> Unit)? = null
+) {
     if (fitted.containsKey(this)) return
     val original = Rect(paddingLeft, paddingTop, paddingRight, paddingBottom)
     fitted[this] = original
@@ -43,6 +50,7 @@ fun View.applySystemBarsPadding(top: Boolean = true, bottom: Boolean = true) {
             original.right,
             original.bottom + if (bottom) maxOf(bars.bottom, ime.bottom) else 0
         )
+        onInsets?.invoke(insets)
         insets
     }
     ViewCompat.requestApplyInsets(this)
