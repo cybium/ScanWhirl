@@ -21,8 +21,9 @@ anything older under `docs/history/` is not instruction.
    not approval.
 2. **Style**: speed and quality; short answers; no defensive narration; one word when asked; "stop"
    means stop; legal/policy answers cite the rule. Never claim done before looking at the result.
-3. **NOW (2026-11-18 03:10, owner)**: fix the REAL app (1.2.x) into a 1.2.3 test APK; web skeleton dropped;
-   ScanWhirl Next ON HOLD. Night state: `ScanWhirl-HQ\MORNING_2026-11-18.md` (read it first).
+3. **NOW (2026-11-18, owner)**: evolve the REAL app (1.2.x) through `docs/release/UI_PLAN.md`; the lead decides
+   UI/UX + Pro value from research; build -> critic -> judge -> lead. **Read `docs/plans/PROGRAM.md` first**
+   (state table, pipeline, running lanes). Web skeleton dropped; ScanWhirl Next ON HOLD.
    **Direction (2026-11-17, on hold)**: ScanWhirl Next (`..\next`, private repo `cybium/scanwhirl-next`), one
    feature at a time, each 100% complete; OFFLINE by default (locked 2026-11-18: no own server, no
    account; Drive via system picker, Play vitals; INTERNET stripped, billing verified by a license-
