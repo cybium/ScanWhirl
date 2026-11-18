@@ -3,5 +3,5 @@
     <!-- fixresult: Hindi. Each value carries a review marker for a native speaker. -->
     <string name="fixresult_open_no_app">इस फ़ोन पर कोई ऐप इस फ़ाइल को नहीं खोल सकता</string>
     <string name="fixresult_export_removed_docs">Documents से हटाया: %1$s</string>
-    <string name="fixresult_export_undo_nothing">कुछ सहेजा नहीं गया, इसलिए वापस लाने के लिए कुछ नहीं है</string>
+    <string name="fixresult_export_undo_nothing">कुछ सहेजा नहीं गया, इसलिए कोई बदलाव वापस नहीं लिया जा सकता</string>
 </resources>

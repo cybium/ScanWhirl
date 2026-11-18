@@ -38,7 +38,7 @@
     <string name="draft_delete_msg">पन्ने बिना सहेजे बदलावों से हट जाएँगे। सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
     <string name="draft_rotate_left">बाएँ घुमाएँ</string>
     <string name="draft_rotate_right">दाएँ घुमाएँ</string>
-    <string name="draft_duplicate">पन्ने की दूसरी प्रति</string>
+    <string name="draft_duplicate">पन्ने की दूसरी प्रति बनाएँ</string>
     <string name="draft_insert_here">यहाँ पन्ने जोड़ें</string>
     <string name="draft_extract_new">नए दस्तावेज़ में निकालें</string>
     <string name="draft_move_to">यहाँ ले जाएँ…</string>

@@ -56,6 +56,13 @@ class HindiGlossaryTermsTest {
         "डाउनलोड", "अपलोड",
         "स्क्रीन",
         "प्रो",
+        // JUDGE_HINDI_APPLY.md systematic list: English left outside the allowed names.
+        "लोड", "अपडेट", "मॉडल", "लॉन्च", "आइकन", "ब्राउज़र", "बॉक्स", "बिलिंग",
+        "नेटवर्क", "ड्राइविंग", "मेमोरी", "टेस्ट", "बिज़नेस",
+        // Encryption must describe protected contents, not a closed screen.
+        "कोड से बंद",
+        // Untranslated compounds the judge flagged.
+        "तिजोरी फ़ाइल", "तिजोरी दस्तावेज़",
     )
 
     /**

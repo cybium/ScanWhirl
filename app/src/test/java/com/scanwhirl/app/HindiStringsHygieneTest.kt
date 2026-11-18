@@ -148,6 +148,9 @@ class HindiStringsHygieneTest {
         s = URL.replace(s, " ")
         s = TEMPLATE_TOKEN.replace(s, " ")
         s = A_TO_Z_RANGE.replace(s, " ")
+        // JUDGE_HINDI_APPLY.md: the OCR language note names the Latin letters as
+        // "A, B, C" — a letter series, not the English article.
+        s = LETTER_SERIES.replace(s, " ")
         for (pattern in LATIN_ALLOWED_PATTERNS) {
             s = pattern.replace(s, " ")
         }
@@ -175,6 +178,7 @@ class HindiStringsHygieneTest {
         val URL = Regex("[A-Za-z0-9.-]+\\.(com|io|org|net)(/\\S*)?")
         val TEMPLATE_TOKEN = Regex("\\{[a-z]+\\}")
         val A_TO_Z_RANGE = Regex("\\b[A-Z]-[A-Z]\\b")
+        val LETTER_SERIES = Regex("(?<![A-Za-z])[A-Z](?:, ?[A-Z])+(?![A-Za-z])")
 
         /**
          * Words that are Latin on purpose beyond the product list: folder names,

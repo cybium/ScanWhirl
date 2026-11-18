@@ -122,13 +122,13 @@
     <string name="empty_no_match_hint">आपके स्कैन में नाम और लिखा हुआ खोजा गया।</string>
     <string name="list_count_category">%2$s में %1$d</string>
     <string name="settings_greeting">स्थिति पंक्ति</string>
-    <string name="settings_greeting_summary">मुख्य पन्ने पर स्थिति पंक्ति दिखाएँ</string>
+    <string name="settings_greeting_summary">मुख्य पन्ने पर हाल बताने वाली पंक्ति दिखाएँ</string>
     <string name="settings_auto_copy_to_documents">Documents में एक प्रति भी सहेजें</string>
     <string name="status_morning">सुप्रभात</string>
     <string name="status_afternoon">शुभ दोपहर</string>
     <string name="status_evening">शुभ संध्या</string>
     <string name="status_night">शुभ रात्रि</string>
-    <string name="pro_status_test">इस टेस्ट बिल्ड में खोला गया</string>
+    <string name="pro_status_test">जाँच के लिए बने इस ऐप में Pro चालू है</string>
     <string name="pro_status_unavailable">अभी उपलब्ध नहीं है</string>
     <string name="pro_panel_note">स्कैन, लिखे हुए की पहचान, खोज, सहेजना, मिलाना और फ़ाइल छोटी करना मुफ़्त हैं और हमेशा मुफ़्त रहेंगे।</string>
     <!-- test26 T5.2 (§4.5 document screen) — machine-translated batch, review at G3. -->
@@ -140,7 +140,7 @@
     <string name="group_organize">क्रम बदलें</string>
     <string name="group_danger">खतरा</string>
     <string name="extracted">%1$d पन्ने एक नए स्कैन में निकाले गए</string>
-    <string name="about_message">ScanWhirl %1$s\n\nअपने कैमरे से दस्तावेज़ स्कैन करें और उन्हें PDF के रूप में सहेजें। सब कुछ आपके फ़ोन पर ही होता है: कोई खाता नहीं, कोई विज्ञापन नहीं, कोई सर्वर नहीं। आपके स्कैन सिर्फ़ आपके फ़ोन पर रहते हैं।\n\nडेवलपर: Cybium (github.com/cybium)\nसहायता: cybiumsupport@gmail.com\nनिजता नीति: cybium.github.io/scanwhirl-privacy</string>
+    <string name="about_message">ScanWhirl %1$s\n\nफ़ोन से कागज़ की तस्वीर लेकर PDF बनाएँ। सब कुछ आपके फ़ोन पर ही होता है: कोई खाता नहीं, कोई विज्ञापन नहीं, कोई सर्वर नहीं। इंटरनेट पर कोई जानकारी नहीं भेजी जाती। आपके स्कैन सिर्फ़ आपके फ़ोन पर रहते हैं।\n\nबनाने वाला: Cybium (github.com/cybium)\nसहायता: cybiumsupport@gmail.com\nनिजता नीति: cybium.github.io/scanwhirl-privacy</string>
     <string name="about_title">ScanWhirl के बारे में</string>
     <string name="add_from_gallery">फ़ोटो से जोड़ें</string>
     <string name="add_pages">पन्ने जोड़ें</string>
@@ -210,15 +210,15 @@
     <string name="filter_clean">साफ़</string>
     <string name="filter_colour">रंग बढ़ाएँ</string>
     <string name="filter_enhance">अपने आप</string>
-    <string name="filter_grey">धूसर</string>
+    <string name="filter_grey">राख जैसा रंग</string>
     <string name="filter_original">मूल</string>
     <string name="filter_title">पन्ने का रंग-रूप</string>
     <string name="last_page_guard">दस्तावेज़ में कम से कम एक पन्ना होना चाहिए। इसके बजाय पूरा दस्तावेज़ हटाएँ।</string>
-    <string name="lock_device_msg">ScanWhirl पहले इस PDF के पन्ने तस्वीरों के रूप में लाता है (लिखा हुआ चुनने लायक नहीं रहता), फिर नई PDF को आपके पासवर्ड से सुरक्षित करता है। अगले पन्ने से ताला लगी फ़ाइल सहेजें या भेजें।</string>
+    <string name="lock_device_msg">ScanWhirl पहले इस PDF के पन्ने तस्वीरों के रूप में लाता है (लिखा हुआ चुनने लायक नहीं रहता), फिर नई PDF को आपके पासवर्ड से सुरक्षित करता है। अगले पन्ने से ताला लगी हुई फ़ाइल सहेजें या भेजें।</string>
     <string name="lock_device_note">पन्ने तस्वीरों के रूप में लाए गए, इसलिए यह PDF तस्वीरों वाली है। जो प्रति आप सहेजते हैं वह पासवर्ड से सुरक्षित होती है।</string>
     <string name="lock_device_title">फ़ोन की PDF पर ताला लगाएँ</string>
     <string name="lock_source_lock_device">फ़ोन की PDF पर ताला लगाएँ</string>
-    <string name="lock_source_unlock_device">ताला लगी PDF फ़ाइल का ताला खोलें</string>
+    <string name="lock_source_unlock_device">पासवर्ड वाली PDF फ़ाइल का ताला खोलें</string>
     <string name="menu_protect_pdf">PDF सुरक्षित करें</string>
     <string name="merge">मिलाएँ</string>
     <string name="merge_action">मिलाएँ</string>
@@ -236,11 +236,11 @@
     <string name="name_hint">दस्तावेज़ का नाम</string>
     <string name="nothing_to_share">भेजने के लिए कुछ नहीं</string>
     <string name="ocr_copied">नकल कर ली; अब दूसरी जगह चिपका सकते हैं</string>
-    <string name="ocr_copy">लिखा हुआ नकल करें</string>
+    <string name="ocr_copy">लिखे हुए की नकल करें</string>
     <string name="ocr_copy_all">सभी पन्नों की नकल करें</string>
-    <string name="ocr_copy_btn">सब कुछ नकल करें</string>
+    <string name="ocr_copy_btn">सबकी नकल करें</string>
     <string name="ocr_discard_btn">बदलाव न रखें</string>
-    <string name="ocr_editor_title">निकाला गया लिखा हुआ</string>
+    <string name="ocr_editor_title">पन्नों से निकाले गए शब्द</string>
     <string name="ocr_empty">इन पन्नों पर कुछ छपा हुआ नहीं मिला।</string>
     <string name="ocr_fix_spaces">खाली स्थान ठीक करें</string>
     <string name="ocr_join_lines">पंक्तियाँ जोड़ें</string>
@@ -255,7 +255,7 @@
     <string name="ocr_share_all">सभी पन्ने भेजें</string>
     <string name="ocr_share_btn">भेजें</string>
     <string name="ocr_share_text">लिखा हुआ भेजें</string>
-    <string name="ocr_title">निकाला गया लिखा हुआ (OCR)</string>
+    <string name="ocr_title">पन्नों से निकाले गए शब्द</string>
     <string name="ocr_undo">वापस लाएँ</string>
     <string name="ocr_redo">फिर से करें</string>
     <string name="ocr_undo_desc">वापस लाएँ</string>
@@ -274,10 +274,10 @@
     <string name="pdf_saved_docs">Documents/ScanWhirl में सहेजा गया: %1$s</string>
     <string name="pdf_viewer_failed">यह PDF नहीं खुल सकी</string>
     <string name="preview">झलक</string>
-    <string name="preview_changed">%1$s पन्ना दिखाया जा रहा है (टेस्ट झलक)</string>
+    <string name="preview_changed">%1$s पन्ना दिखाया जा रहा है (जाँच के लिए)</string>
     <string name="preview_free_ui">मुफ़्त पन्ने की झलक</string>
     <string name="preview_pro_ui">Pro पन्ने की झलक</string>
-    <string name="privacy_open_failed">कोई ब्राउज़र उपलब्ध नहीं</string>
+    <string name="privacy_open_failed">इंटरनेट के पन्ने खोलने वाला कोई ऐप उपलब्ध नहीं</string>
     <string name="pro_feat_crop_sub">पहचान के लिए सही अनुपात के पहले से तय आकार</string>
     <string name="pro_feat_crop_title">पहचान पत्र और पासपोर्ट काटें</string>
     <string name="pro_feat_id_sizes">पहचान पत्र / पासपोर्ट फ़ोटो के आकार</string>
@@ -332,7 +332,7 @@
     <string name="resume_scan_msg">पिछली बार के %1$d बिना सहेजे पन्ने हैं। जारी रखें, या उन्हें हटाएँ?</string>
     <string name="resume_scan_resume">जारी रखें</string>
     <string name="resume_saved_title">स्कैन पहले ही सहेजा जा चुका है</string>
-    <string name="resume_saved_msg">यह स्कैन \"%1$s\" के रूप में पहले ही सहेजा जा चुका है, लेकिन पन्ना पूरा होने से पहले बंद हो गई। सहेजा हुआ दस्तावेज़ खोलें, या बचे हुए पन्ने हटा दें।</string>
+    <string name="resume_saved_msg">यह स्कैन \"%1$s\" नाम से सहेजा जा चुका है। इसे खोलें या बचे हुए पन्ने हटाएँ।</string>
     <string name="resume_saved_open">सहेजा हुआ दस्तावेज़ खोलें</string>
     <string name="resume_saved_remove">बचे हुए पन्ने हटाएँ</string>
     <string name="review_conflict_title">पहले सहेजा जा चुका है</string>
@@ -358,13 +358,13 @@
     <string name="select_pages">चुनें</string>
     <string name="select_pages_first">पहले वे पन्ने चुनें जो आपको चाहिए</string>
     <string name="selected_count">%1$d चुने</string>
-    <string name="settings_auto_copy_to_documents_summary">सहेजी गई प्रति Documents/ScanWhirl में जाती हैं।</string>
+    <string name="settings_auto_copy_to_documents_summary">सहेजी गई प्रतियाँ Documents/ScanWhirl में जाती हैं।</string>
     <string name="settings_auto_enhance">स्कैन अपने आप बेहतर करें</string>
     <string name="settings_auto_enhance_summary">स्कैन साफ़ हो जाते हैं। बंद रखने पर फ़ोटो वैसी ही रहती है जैसी खींची गई थी।</string>
-    <string name="settings_searchable_pdf">PDF में शब्द खोजने लायक बनाएँ</string>
-    <string name="settings_searchable_pdf_summary">अदृश्य लिखा हुआ जोड़ता है ताकि दूसरे ऐप भी आपकी PDF में शब्द खोज सकें।</string>
+    <string name="settings_searchable_pdf">PDF में शब्द खोजने की सुविधा जोड़ें</string>
+    <string name="settings_searchable_pdf_summary">ऐसे शब्द जोड़ता है जो पन्ने पर दिखते नहीं, ताकि दूसरे ऐप भी आपकी PDF में शब्द खोज सकें।</string>
     <string name="settings_privacy">निजता नीति</string>
-    <string name="settings_privacy_summary">निजता नीति आपके ब्राउज़र में खुलेगी</string>
+    <string name="settings_privacy_summary">निजता के नियम इंटरनेट के पन्ने खोलने वाले ऐप में खुलेंगे</string>
     <string name="settings_pro">ScanWhirl Pro</string>
     <string name="settings_pro_message">ScanWhirl Pro अभी उपलब्ध नहीं है।</string>
     <string name="settings_pro_summary">ख़ास सुविधाएँ। Pro अभी उपलब्ध नहीं है।</string>
@@ -383,14 +383,14 @@
     <string name="storage_perm_needed">फ़ाइलें आपके फ़ोन में सहेजी जा सकें, इसके लिए फ़ाइलों की अनुमति दें</string>
     <string name="tool_compress_sub">फ़ाइल छोटी करें (तस्वीर थोड़ी कम साफ़ होगी)</string>
     <string name="tool_edit">बदलें</string>
-    <string name="tool_edit_sub">रंग-रूप, घुमाएँ और काटें</string>
+    <string name="tool_edit_sub">रंग-रूप बदलें, घुमाएँ और काटें</string>
     <string name="tool_merge_sub">PDF को एक में मिलाएँ</string>
-    <string name="tool_resize_sub">तस्वीर का आकार बदलें (पिक्सेल या KB)</string>
+    <string name="tool_resize_sub">तस्वीर का आकार बदलें (पिक्सेल यानी तस्वीर के छोटे बिंदु, या KB में फ़ाइल का आकार)</string>
     <string name="unlock_device_note">ScanWhirl में आपका स्कैन अपना पासवर्ड रखता है; यह सहेजी गई प्रति खुली है। स्कैन से पासवर्ड हटाने के लिए ताला लगाएँ / खोलें → सहेजा स्कैन इस्तेमाल करें।</string>
     <string name="unlock_pdf_done">पासवर्ड हट गया। PDF खुली है</string>
     <string name="unlock_pdf_msg">\"%1$s\" का पासवर्ड डालें:</string>
     <string name="unlock_pdf_not_ours_msg">ScanWhirl सिर्फ़ अपने पासवर्ड हटाता है। यह फ़ाइल नहीं बदली गई।</string>
-    <string name="unlock_pdf_not_ours_title">यह ScanWhirl की ताला लगी PDF नहीं है</string>
+    <string name="unlock_pdf_not_ours_title">इस PDF पर ScanWhirl ने पासवर्ड नहीं लगाया है</string>
     <string name="unlock_pdf_open">खोलें</string>
     <string name="unlock_pdf_remove">हमेशा के लिए ताला खोलें</string>
     <string name="unlock_pdf_title">पासवर्ड से सुरक्षित PDF</string>
@@ -401,7 +401,7 @@
     <string name="unlock_current_pw_title">मौजूदा पासवर्ड</string>
     <string name="password_charset">अंग्रेज़ी अक्षर, अंक और सामान्य चिह्न इस्तेमाल करें। PDF पासवर्ड में इमोजी और हिंदी अक्षर नहीं चलते।</string>
     <string name="protection_repair_title">सुरक्षा ठीक करनी है</string>
-    <string name="protection_repair_msg">“%1$s” पर ताला दिखता है, पर इसकी PDF पर पासवर्ड नहीं है। जो प्रति आप पहले भेज या सहेज चुके हैं, वे इससे नहीं बदलेंगी। इसे फिर से सुरक्षित करने के लिए अपना पासवर्ड डालें।</string>
+    <string name="protection_repair_msg">“%1$s” पर ताला दिखता है, पर इसकी PDF पर पासवर्ड नहीं है। जो प्रतियाँ आप पहले भेज या सहेज चुके हैं, वे इससे नहीं बदलेंगी। इसे फिर से सुरक्षित करने के लिए अपना पासवर्ड डालें।</string>
     <string name="btn_protect_again">फिर से सुरक्षित करें</string>
     <string name="btn_remove_lock">ताला हटाएँ</string>
     <string name="protection_not_now">अभी नहीं</string>
@@ -468,7 +468,7 @@
     <string name="review_next_page">अगला पन्ना</string>
     <string name="review_preview_desc">पन्ना %1$d / %2$d. बड़ा करने और काटने के लिए खोलें।</string>
     <string name="review_page_unreadable">यह पन्ना दिखाया नहीं जा सकता। यह स्कैन में अब भी है।</string>
-    <string name="review_page_loading">पन्ना लोड हो रहा है</string>
+    <string name="review_page_loading">पन्ना खुल रहा है</string>
     <string name="review_order_title">पन्नों का क्रम जाँचें।</string>
     <string name="review_order_body">फ़ोटो गलत क्रम में आ सकती हैं।</string>
     <string name="review_order_ok">क्रम सही है</string>
@@ -479,7 +479,7 @@
     <string name="review_filter_set">पन्ना %1$d: %2$s</string>
     <string name="review_move_title">पन्ना %1$d ले जाएँ</string>
     <string name="review_move_position">स्थान %1$d</string>
-    <string name="review_busy">एक पल, पन्ने अभी अपडेट हो रहे हैं</string>
+    <string name="review_busy">थोड़ा रुकें, पन्नों में बदलाव किए जा रहे हैं</string>
     <plurals name="review_page_count">
         <item quantity="one">%d पन्ना</item>
         <item quantity="other">%d पन्ने</item>
@@ -524,7 +524,7 @@
     <string name="reader_find_none">पहचाने गए लिखे हुए में “%1$s” नहीं मिला।</string>
     <string name="reader_find_partial">%2$d में से %1$d पन्नों पर लिखा हुआ पहचाना गया है; बाकी पन्नों में अभी नहीं ढूँढा जा सकता।</string>
     <string name="reader_find_pending">ScanWhirl अभी इस स्कैन का लिखा हुआ पढ़ रहा है, इसलिए नतीजे बढ़ सकते हैं।</string>
-    <string name="reader_find_no_text">इस स्कैन में अभी कोई पहचाना हुआ लिखा हुआ नहीं है, इसलिए खोज के पास ढूँढने को कुछ नहीं है।</string>
+    <string name="reader_find_no_text">इस स्कैन में लिखे शब्द अभी पहचाने नहीं गए हैं, इसलिए अभी शब्द नहीं खोज सकते।</string>
     <string name="reader_find_external">खोज उन ScanWhirl स्कैन पर चलती है जिनमें लिखा हुआ है। यह PDF आपके फ़ोन से खोली गई है, इसलिए इसका लिखा हुआ यहाँ खोज में शामिल नहीं है।</string>
     <string name="reader_find_out_of_step">इस दस्तावेज़ के पन्ने और इसकी PDF अभी मेल नहीं खाते, इसलिए खोज पन्ना नहीं दिखा सकती।</string>
     <string name="reader_find_note">मिलान पहचाने गए लिखे हुए से आते हैं। पन्ने की तस्वीर पर निशान नहीं लगाया जाता।</string>
@@ -532,8 +532,8 @@
     <string name="reader_find_excerpt_desc">पन्ना %1$d: %2$s. पन्ने पर जाएँ</string>
     <string name="reader_start_changed">खोज के बाद यह दस्तावेज़ बदल गया, इसलिए यह पन्ना 1 पर खुला।</string>
     <!-- M06: honest recognition status in the Text editor. -->
-    <string name="ocr_unavailable_toast">इस फ़ोन पर लिखे हुए की पहचान अभी उपलब्ध नहीं है। Google Play services को लिखे हुए का मॉडल फ़ोन में उतारना होगा (इंटरनेट चाहिए)। बाद में फिर कोशिश करें।</string>
-    <string name="ocr_status_unavailable">इस फ़ोन पर लिखे हुए की पहचान अभी उपलब्ध नहीं है: Google Play services ने लिखे हुए का मॉडल फ़ोन में नहीं उतारा (इंटरनेट चाहिए)। बाद में फिर कोशिश करें, या खुद लिखें।</string>
+    <string name="ocr_unavailable_toast">इस फ़ोन पर लिखे हुए की पहचान अभी उपलब्ध नहीं है। शब्द पहचानने के लिए Google Play services को ज़रूरी जानकारी फ़ोन में उतारनी होगी (इंटरनेट चाहिए)। बाद में फिर कोशिश करें।</string>
+    <string name="ocr_status_unavailable">इस फ़ोन पर लिखे हुए की पहचान अभी उपलब्ध नहीं है: शब्द पहचानने की ज़रूरी जानकारी अभी फ़ोन में नहीं आई है (इंटरनेट चाहिए)। बाद में फिर कोशिश करें, या खुद लिखें।</string>
     <string name="ocr_status_not_read">इन पन्नों से लिखा हुआ पढ़ा नहीं जा सका। फिर कोशिश करें, या खुद लिखें।</string>
     <plurals name="ocr_status_partial">
         <item quantity="one">%2$d में से %1$d पन्ने पर लिखा हुआ पढ़ा गया। नहीं पढ़ा गया: पन्ना %3$s।</item>
@@ -567,7 +567,7 @@
         <item quantity="one">%1$d स्कैन हटाया गया। %2$d को नहीं हटाया जा सका और वह बदला नहीं गया।</item>
         <item quantity="other">%1$d स्कैन हटाए गए। %2$d को नहीं हटाया जा सका और वे बदले नहीं गए।</item>
     </plurals>
-    <string name="trash_move_failed">हटाया नहीं जा सका। कुछ भी नहीं हटा गया।</string>
+    <string name="trash_move_failed">हटाया नहीं जा सका। कुछ भी नहीं हटाया गया।</string>
     <plurals name="trash_restored">
         <item quantity="one">%1$d स्कैन वापस लाया गया</item>
         <item quantity="other">%1$d स्कैन वापस लाए गए</item>
@@ -580,8 +580,8 @@
     <string name="trash_delete_forever_named">%1$s हमेशा के लिए हटाएँ</string>
     <string name="trash_delete_forever_title">हमेशा के लिए हटाएँ?</string>
     <string name="trash_delete_forever_message">“%1$s” और इसके सभी पन्ने, लिखा हुआ और बदलाव इस फ़ोन से हटा दिए जाएँगे। इसे पहले जैसा नहीं किया जा सकता।</string>
-    <string name="trash_empty_action">हटाई गई फ़ाइलें खाली करें</string>
-    <string name="trash_empty_confirm_title">हटाई गई फ़ाइलें खाली करें?</string>
+    <string name="trash_empty_action">हटाई गई सभी फ़ाइलें हमेशा के लिए हटाएँ</string>
+    <string name="trash_empty_confirm_title">हटाई गई सभी फ़ाइलें हमेशा के लिए हटाएँ?</string>
     <plurals name="trash_empty_confirm_message">
         <item quantity="one">%1$d दस्तावेज़ इस फ़ोन से हमेशा के लिए हटा दिया जाएगा। इसे पहले जैसा नहीं किया जा सकता।</item>
         <item quantity="other">%1$d दस्तावेज़ इस फ़ोन से हमेशा के लिए हटा दिए जाएँगे। इन्हें पहले जैसा नहीं किया जा सकता।</item>
@@ -591,7 +591,7 @@
         <item quantity="other">%1$d दस्तावेज़ हमेशा के लिए हटाए गए</item>
     </plurals>
     <string name="trash_delete_failed">कुछ चीज़ें हटाई नहीं जा सकीं। वे अभी भी हटाई गई फ़ाइलों में हैं।</string>
-    <string name="trash_empty_title">हटाई गई फ़ाइलें खाली हैं</string>
+    <string name="trash_empty_title">कोई हटाई गई फ़ाइल नहीं है</string>
     <string name="trash_empty_body">30 दिन से पुराने दस्तावेज़ अपने आप हट जाते हैं।</string>
     <string name="trash_header_note">वापस लाने पर हर पन्ना लौट आता है।</string>
     <string name="trash_error_title">हटाई गई फ़ाइलें नहीं खुल सकीं</string>
@@ -607,7 +607,7 @@
     </plurals>
     <string name="trash_row_meta">%1$s · %2$s को हटाया</string>
     <string name="trash_row_description">%1$s, %2$s</string>
-    <string name="trash_settings_empty">खाली</string>
+    <string name="trash_settings_empty">कोई नहीं</string>
     <string name="settings_library">कागज़ात</string>
     <string name="delete_copies_unproven_note">जिन प्रतियों के लिए ScanWhirl साबित नहीं कर सकता कि वे इस दस्तावेज़ से बनी हैं, वे Documents/ScanWhirl में रहती हैं। आप उन्हें Files ऐप में संभाल सकते हैं।</string>
     <string name="delete_vault_message">तिजोरी की चीज़ें हटाई गई फ़ाइलों में नहीं जातीं। “%1$s” और इसके सभी पन्ने हमेशा के लिए हट जाएँगे।</string>
@@ -630,8 +630,8 @@
     <string name="import_failed_too_large">यह PDF %1$d MB से बड़ी है। इसे छोटी PDF में बाँटकर फ़ोन में लाएँ।</string>
     <string name="import_failed_too_many">इस PDF में %1$d पन्ने हैं। ScanWhirl एक बार में %2$d पन्ने तक लाता है, इसलिए पहले इसे छोटी PDF में बाँटें।</string>
     <string name="import_failed_no_space">इस PDF को फ़ोन में लाने के लिए पर्याप्त जगह नहीं है। कुछ भी नहीं जोड़ा गया। कुछ जगह खाली करके फिर से कोशिश करें।</string>
-    <string name="import_failed_no_access">ScanWhirl अब यह फ़ाइल नहीं पढ़ सकता। शायद इसे हटा दिया गया या इसकी अनुमति हट गई। फ़ाइल चुनने वाले हिस्से से इसे फिर से चुनें।</string>
-    <string name="import_failed_read">फ़ाइल पूरी लोड होने से पहले रुक गई, इसलिए कुछ भी नहीं लाया गया। अगर यह किसी इंटरनेट वाले ऐप में है, तो इसे फ़ोन में उतारें या बिना इंटरनेट उपलब्ध करें, फिर कोशिश करें।</string>
+    <string name="import_failed_no_access">ScanWhirl अब यह फ़ाइल नहीं पढ़ सकता। शायद यह दूसरी जगह ले जाई गई है या इसे पढ़ने की अनुमति नहीं रही। फ़ाइल चुनने वाले हिस्से से इसे फिर से चुनें।</string>
+    <string name="import_failed_read">फ़ाइल पूरी खुलने से पहले रुक गई, इसलिए कुछ भी नहीं लाया गया। अगर यह किसी इंटरनेट वाले ऐप में है, तो इसे फ़ोन में उतारें या बिना इंटरनेट उपलब्ध करें, फिर कोशिश करें।</string>
     <string name="import_failed_save">ScanWhirl लाए गए पन्ने सहेज नहीं सका, इसलिए कुछ भी नहीं जोड़ा गया। फिर से कोशिश करें।</string>
     <!-- M08 -->
     <string name="scan_saved_named">“%1$s” सहेजा गया</string>
