@@ -301,18 +301,8 @@ class SettingsActivity : BaseActivity() {
                 0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f
             )
         )
-        row.addView(
-            android.widget.ImageView(this).apply {
-                setImageResource(R.drawable.ic_sym_chevron_right)
-                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                imageTintList = android.content.res.ColorStateList.valueOf(
-                    com.scanwhirl.app.ui.kit.SwStyle.color(
-                        this@SettingsActivity, R.color.text_hologram_dim
-                    )
-                )
-            },
-            android.widget.LinearLayout.LayoutParams((20 * d).toInt(), (20 * d).toInt())
-        )
+        // H11 (found on device): the row is not wired yet, so it must not carry a
+        // tappable affordance. No chevron, no ripple, no focus: just the coming-soon line.
         val index = parent.indexOfChild(binding.rowFont)
         parent.addView(row, if (index >= 0) index + 1 else parent.childCount)
         updateAccentSummary()
