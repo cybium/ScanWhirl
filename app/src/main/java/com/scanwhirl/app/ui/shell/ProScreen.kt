@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.doOnPreDraw
 import com.scanwhirl.app.R
@@ -38,6 +39,13 @@ class ProScreen(
 
     val buyButton: TextView
 
+    /**
+     * H3 (device sweep 2026-11-19): the hero, the promise and the tool grid scroll, while the
+     * price and "Unlock Pro" stay pinned above the dock. On entry the offer is readable without a
+     * swipe, instead of the price panel peeking out from behind the floating dock.
+     */
+    private val content = LinearLayout(context).apply { orientation = VERTICAL }
+
     private val rings = mutableListOf<View>()
     private lateinit var mark: ImageView
     private lateinit var titleRow: View
@@ -50,6 +58,9 @@ class ProScreen(
     private lateinit var priceWrap: FrameLayout
     private lateinit var buyWrap: FrameLayout
     private var entrancePlayed = false
+
+    /** How far the dock sits below the page bottom; the pinned bar stops above it. */
+    private var dockClearance: (() -> Int)? = null
 
     /** Test seam: the order in which the entrance phases actually ran. */
     internal val entranceSteps = mutableListOf<String>()
@@ -75,7 +86,7 @@ class ProScreen(
                 setOnClickListener { callbacks.onClose() }
             }
         )
-        addView(top, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        content.addView(top, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         val hero = FrameLayout(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 150f))
@@ -104,7 +115,7 @@ class ProScreen(
             FrameLayout.LayoutParams(SwStyle.dp(context, 56f), SwStyle.dp(context, 56f))
                 .apply { gravity = Gravity.CENTER }
         )
-        addView(hero)
+        content.addView(hero)
 
         val title = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -124,14 +135,14 @@ class ProScreen(
                     .apply { marginStart = SwStyle.dp(context, 7f) }
             }
         )
-        addView(title, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        content.addView(title, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         titleRow = title
         subtitle = SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             text = context.getString(if (active) R.string.pro_active_sub else R.string.pro_sub_compact)
             gravity = Gravity.CENTER
             maxLines = 2
         }
-        addView(
+        content.addView(
             subtitle,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 6f) }
@@ -153,7 +164,7 @@ class ProScreen(
                     .apply { marginStart = SwStyle.dp(context, 4f); marginEnd = SwStyle.dp(context, 4f) }
             )
         }
-        addView(
+        content.addView(
             trustRow,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 14f) }
@@ -191,9 +202,9 @@ class ProScreen(
                     .apply { bottomMargin = SwStyle.dp(context, 10f) }
             )
         }
-        addView(feat)
+        content.addView(feat)
 
-        addView(
+        content.addView(
             SwStyle.text(context, 14f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
                 id = R.id.swProMore
                 text = context.getString(R.string.pro_more_tools, ToolRegistry.proCount())
@@ -265,13 +276,6 @@ class ProScreen(
                 )
             )
         }
-        if (!active) addView(
-            priceWrap,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                val m = SwStyle.dp(context, 18f)
-                setMargins(m, SwStyle.dp(context, 10f), m, 0)
-            }
-        )
         buyButton = SwStyle.text(context, 16f, SwStyle.color(context, R.color.sw_on_gold), bold = true).apply {
             id = R.id.swProBuy
             text = context.getString(R.string.pro_unlock)
@@ -293,15 +297,8 @@ class ProScreen(
                 )
             )
         }
-        if (!active) addView(
-            buyWrap,
-            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 54f)).apply {
-                val m = SwStyle.dp(context, 18f)
-                setMargins(m, SwStyle.dp(context, 16f), m, 0)
-            }
-        )
 
-        if (!active) addView(
+        if (!active) content.addView(
             SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
                 text = context.getString(R.string.pro_restore)
                 gravity = Gravity.CENTER
@@ -311,7 +308,31 @@ class ProScreen(
             },
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f))
         )
-        addView(SwStyle.spacer(context, 20f))
+        content.addView(SwStyle.spacer(context, 20f))
+
+        // H3: the offer itself never scrolls away. An active build has no price or Unlock row,
+        // so there it is simply the scrollable page.
+        addView(
+            ScrollView(context).apply {
+                isFillViewport = true
+                clipToPadding = false
+                addView(
+                    content,
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+        )
+        if (!active) {
+            addView(
+                stickyBar(),
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            )
+            applyDockClearance()
+        }
 
         // Every animated part starts in its start state before the first frame.
         // the pinned bar is left alone so it is at the bottom from frame 1.
@@ -446,6 +467,28 @@ class ProScreen(
     fun setBuying(busy: Boolean) {
         buyButton.isEnabled = !busy
         buyButton.alpha = if (busy) 0.6f else 1f
+    }
+
+    /**
+     * H3 (device sweep 2026-11-19): the pinned bar's bottom edge stops at the page bottom, i.e.
+     * exactly above the floating dock. Passed in by the shell so a future dock that really does
+     * cover the page (a non-zero overlap) lifts the bar by that amount, never by a guessed one.
+     */
+    fun keepClearOfDock(overlapPx: () -> Int) {
+        dockClearance = overlapPx
+        applyDockClearance()
+        addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyDockClearance() }
+    }
+
+    private fun applyDockClearance() {
+        val px = dockClearance?.invoke() ?: return
+        if (px == paddingBottom) return
+        // The dock is measured on the same pass as this screen; re-pad after it settles.
+        post {
+            if (px != paddingBottom) {
+                setPadding(paddingLeft, paddingTop, paddingRight, px)
+            }
+        }
     }
 
     /** Pinned price + Unlock row (never scrolls out of view). */

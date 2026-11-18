@@ -17,6 +17,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
+            android:theme="@style/ThemeOverlay.ScanWhirl.Overflow48"
             app:navigationContentDescription="@string/trash_navigate_up"
             app:navigationIcon="?attr/homeAsUpIndicator"
             app:title="@string/trash_title"

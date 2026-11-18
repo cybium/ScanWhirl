@@ -381,15 +381,20 @@ class ToolResultActivity : BaseActivity() {
         return getString(R.string.compress_target_missed, StatusLine.formatBytes(target))
     }
 
-    /** True for the generated Office/ZIP results that have no page to render. */
+    /**
+     * True for the results that have no page to render: the generated Office packages, a ZIP,
+     * and a PDF the person produced (M6: a lone PDF result used to paint an empty white box;
+     * it now gets the same type card as the other file results).
+     */
     private fun isTypedFile(file: File): Boolean =
         file.name.endsWith(".docx") || file.name.endsWith(".xlsx") ||
-            file.name.endsWith(".pptx") || file.name.endsWith(".zip")
+            file.name.endsWith(".pptx") || file.name.endsWith(".zip") ||
+            file.name.endsWith(".pdf", ignoreCase = true)
 
     /**
-     * The file-type card (v2 UI run4a): the Office/ZIP results are real files with no page image,
-     * so the preview area shows a big type badge, the file name, its size and page/sheet/slide
-     * count instead of an empty white rectangle.
+     * The file-type card (v2 UI run4a): the Office/ZIP/PDF results are real files with no page
+     * image, so the preview area shows a big type badge, the file name, its size and
+     * page/sheet/slide count instead of an empty white rectangle.
      */
     private fun showFileCard(file: File) {
         preview.isVisible = false
@@ -399,12 +404,14 @@ class ToolResultActivity : BaseActivity() {
             "docx" -> R.color.file_docx
             "xlsx" -> R.color.file_xlsx
             "pptx" -> R.color.file_pptx
+            "pdf" -> R.color.file_pdf
             else -> R.color.file_zip
         }
         val label = when (extension) {
             "docx" -> R.string.tools_result_type_docx
             "xlsx" -> R.string.tools_result_type_xlsx
             "pptx" -> R.string.tools_result_type_pptx
+            "pdf" -> R.string.tools_result_type_pdf
             else -> R.string.tools_result_type_zip
         }
         val card = LinearLayout(this).apply {
