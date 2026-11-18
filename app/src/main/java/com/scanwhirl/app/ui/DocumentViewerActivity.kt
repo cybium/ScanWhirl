@@ -38,6 +38,7 @@ import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.OcrFlow
+import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.tools.PhotoCropFlowActivity
@@ -825,7 +826,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 }
             )
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
-            .setPageLimit(30)
+            .setPageLimit(ScanLauncher.CAMERA_PAGE_LIMIT)
             .build()
         GmsDocumentScanning.getClient(options).getStartScanIntent(this)
             .addOnSuccessListener { sender ->

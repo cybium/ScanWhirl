@@ -22,6 +22,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
+import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -97,7 +98,7 @@ class BookPagesActivity : BaseActivity() {
             .setGalleryImportAllowed(true)
             .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
-            .setPageLimit(30)
+            .setPageLimit(ScanLauncher.CAMERA_PAGE_LIMIT)
             .build()
         try {
             GmsDocumentScanning.getClient(options)
