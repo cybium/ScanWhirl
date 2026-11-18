@@ -14,6 +14,7 @@ import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -337,6 +338,159 @@ class IdCardCropFixIdCropTest {
             )
         }
         assertTrue("a cancelled crop saves nothing", repo.listDocuments().isEmpty())
+    }
+
+    // ---- rework: a confirm that is abandoned must not save (critic D2) ----
+
+    @Test
+    fun `Back while the crop is saving leaves the side empty and shows no error`() {
+        val photo = photoOfCardOnTable()
+        launch().use { scenario ->
+            pickPhoto(scenario, photo)
+            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+
+            scenario.onActivity { current ->
+                // Crop and save starts the JPEG encode, then Back arrives before it finishes.
+                current.findViewById<View>(R.id.toolCropApply).performClick()
+                current.onBackPressedDispatcher.onBackPressed()
+            }
+            idle()
+            assertTrue(
+                "the crop screen closes",
+                waitUntil { activity?.findViewById<View>(R.id.toolCropView) == null }
+            )
+            // Give the abandoned encode time to finish: it must not accept the side afterwards.
+            Thread.sleep(400)
+            idle()
+            scenario.onActivity { current ->
+                assertEquals(
+                    "Back returns to the front sheet, not to the next step",
+                    app.getString(R.string.tools_id_front_title),
+                    sheetTitle()
+                )
+                val error = requireNotNull(current.findViewById<TextView>(R.id.toolIdCardError))
+                assertFalse("no error after Back", error.isVisible)
+                assertFalse("the flow is still open", current.isFinishing)
+            }
+        }
+        assertTrue("nothing was accepted or saved", repo.listDocuments().isEmpty())
+    }
+
+    // ---- rework: rotation mid-crop keeps the photo (critic D5) ----
+
+    @Test
+    fun `rotation during the crop screen keeps the photo and the side`() {
+        val photo = photoOfCardOnTable()
+        launch().use { scenario ->
+            pickPhoto(scenario, photo)
+            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+            val before = requireNotNull(activity!!.cropScreenBytesForTest()).size
+
+            scenario.recreate()
+            scenario.onActivity { activity = it }
+            idle()
+
+            assertTrue(
+                "the crop screen is still open after recreation",
+                waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null }
+            )
+            scenario.onActivity { current ->
+                assertEquals(
+                    "the same prepared photo is back",
+                    before,
+                    requireNotNull(current.cropScreenBytesForTest()).size
+                )
+                assertNotNull(
+                    "the card hint is back",
+                    findTextIn(
+                        current.window!!.decorView,
+                        app.getString(R.string.fixidcrop_id_crop_hint)
+                    )
+                )
+            }
+
+            scenario.onActivity { it.findViewById<View>(R.id.toolCropApply).performClick() }
+            assertTrue(
+                "the kept crop is accepted as the front side",
+                waitUntil { sheetTitle() == app.getString(R.string.tools_id_back_title) }
+            )
+        }
+        assertTrue("nothing was saved before the layout", repo.listDocuments().isEmpty())
+    }
+
+    // ---- rework: a photo with no card edge says so (critic D10) ----
+
+    @Test
+    fun `a photo without a card edge shows the drag the corners hint`() {
+        val plain = Bitmap.createBitmap(900, 600, Bitmap.Config.ARGB_8888)
+        val photo = try {
+            Canvas(plain).drawColor(Color.rgb(120, 120, 120))
+            val out = ByteArrayOutputStream()
+            plain.compress(Bitmap.CompressFormat.JPEG, 92, out)
+            File(app.cacheDir, "fixidcrop_plain_${System.nanoTime()}.jpg").apply {
+                writeBytes(out.toByteArray())
+            }
+        } finally {
+            plain.recycle()
+        }
+
+        launch().use { scenario ->
+            pickPhoto(scenario, photo)
+            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+            scenario.onActivity { current ->
+                assertNotNull(
+                    "the fallback hint is shown",
+                    findTextIn(
+                        current.window!!.decorView,
+                        app.getString(R.string.fixidcrop_id_crop_hint_none)
+                    )
+                )
+                assertNull(
+                    "the confident hint is not shown",
+                    findTextIn(
+                        current.window!!.decorView,
+                        app.getString(R.string.fixidcrop_id_crop_hint)
+                    )
+                )
+            }
+        }
+        assertTrue("nothing is saved yet", repo.listDocuments().isEmpty())
+    }
+
+    // ---- rework: touch target and the screen behind (critic D9) ----
+
+    @Test
+    fun `the crop screen's Back target is 48 dp and the screen behind is hidden`() {
+        val photo = photoOfCardOnTable()
+        val density = app.resources.displayMetrics.density
+        launch().use { scenario ->
+            pickPhoto(scenario, photo)
+            assertTrue(waitUntil { activity?.findViewById<View>(R.id.toolCropView) != null })
+            scenario.onActivity { current ->
+                val crop = requireNotNull(current.findViewById<View>(R.id.toolCropView))
+                val overlay = crop.parent.parent as ViewGroup
+                val back = requireNotNull(findBackButton(overlay))
+                assertTrue(
+                    "the crop Back is at least 48 dp: ${back.layoutParams.width}x${back.layoutParams.height}",
+                    back.layoutParams.width >= (48 * density).toInt() &&
+                        back.layoutParams.height >= (48 * density).toInt()
+                )
+                assertEquals(
+                    "the card screen behind the crop is out of the accessibility tree",
+                    View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS,
+                    current.contentAccessibilityForTest()
+                )
+            }
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            idle()
+            scenario.onActivity { current ->
+                assertEquals(
+                    "the card screen is reachable again once the crop closes",
+                    View.IMPORTANT_FOR_ACCESSIBILITY_AUTO,
+                    current.contentAccessibilityForTest()
+                )
+            }
+        }
     }
 
     private fun findTextIn(root: View, wanted: String): String? {

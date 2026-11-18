@@ -87,6 +87,7 @@ class IdCardActivity : BaseActivity() {
     private lateinit var errorView: TextView
     private lateinit var progress: View
     private lateinit var screenRoot: FrameLayout
+    private lateinit var contentScroll: ScrollView
 
     /**
      * fixidcrop: the Passport-style corner crop screen. A photo picked from the gallery is cut
@@ -98,6 +99,7 @@ class IdCardActivity : BaseActivity() {
     private var cropBitmap: Bitmap? = null
     private var cropSide = Side.FRONT
     private var cropBytes: ByteArray? = null
+    private var cropDetected = true
     private var cropBusy = false
 
     private val cropBack = object : OnBackPressedCallback(false) {
@@ -149,6 +151,8 @@ class IdCardActivity : BaseActivity() {
             restoreCapturedState(savedInstanceState)
             render()
             when {
+                // D5: a rotation while the corner screen was open brings that photo back.
+                cropBytes != null -> reopenCropScreen()
                 back != null -> showLayoutSheet()
                 front != null -> showBackSheet()
                 else -> showFrontSheet()
@@ -160,22 +164,32 @@ class IdCardActivity : BaseActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        keepCapturedState()
+        keepCapturedState(outState)
         outState.putBoolean(KEY_HAS_STATE, true)
         outState.putInt(KEY_PENDING_SIDE, pendingSide.ordinal)
     }
 
     /**
-     * The two captures live in a small cache copy so a recreated screen (rotation, process death)
-     * keeps them without pushing a multi-megabyte JPEG through the saved-state Bundle.
+     * The captures and the photo waiting on the corner crop screen live in a small cache copy so
+     * a recreated screen (rotation, process death) keeps them without pushing a multi-megabyte
+     * JPEG through the saved-state Bundle (X2, D5).
      */
-    private fun keepCapturedState() {
+    private fun keepCapturedState(outState: Bundle) {
         runCatching {
             val dir = capturedStateDir().apply { mkdirs() }
             front?.let { File(dir, FRONT_FILE).writeBytes(it) }
                 ?: File(dir, FRONT_FILE).delete()
             back?.let { File(dir, BACK_FILE).writeBytes(it) }
                 ?: File(dir, BACK_FILE).delete()
+            val pending = cropBytes
+            if (pending != null) {
+                File(dir, CROP_FILE).writeBytes(pending)
+                outState.putBoolean(KEY_CROP_PENDING, true)
+                outState.putInt(KEY_CROP_SIDE, cropSide.ordinal)
+                outState.putBoolean(KEY_CROP_DETECTED, cropDetected)
+            } else {
+                File(dir, CROP_FILE).delete()
+            }
         }
     }
 
@@ -186,6 +200,13 @@ class IdCardActivity : BaseActivity() {
             val dir = capturedStateDir()
             front = File(dir, FRONT_FILE).takeIf { it.isFile }?.readBytes()
             back = File(dir, BACK_FILE).takeIf { it.isFile }?.readBytes()
+            if (state.getBoolean(KEY_CROP_PENDING, false)) {
+                cropBytes = File(dir, CROP_FILE).takeIf { it.isFile }?.readBytes()
+                if (cropBytes != null) {
+                    cropSide = if (state.getInt(KEY_CROP_SIDE, 0) == Side.BACK.ordinal) Side.BACK else Side.FRONT
+                    cropDetected = state.getBoolean(KEY_CROP_DETECTED, true)
+                }
+            }
         }
     }
 
@@ -199,7 +220,7 @@ class IdCardActivity : BaseActivity() {
 
     private fun buildRoot(): View {
         val root = FrameLayout(this)
-        val scroll = ScrollView(this).apply { isFillViewport = true }
+        contentScroll = ScrollView(this).apply { isFillViewport = true }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val pad = SwStyle.dp(this@IdCardActivity, 18f)
@@ -243,8 +264,8 @@ class IdCardActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@IdCardActivity, 10f) })
 
-        scroll.addView(column)
-        root.addView(scroll, FrameLayout.LayoutParams(
+        contentScroll.addView(column)
+        root.addView(contentScroll, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         progress = FrameLayout(this).apply {
@@ -439,19 +460,53 @@ class IdCardActivity : BaseActivity() {
                 return@launch
             }
             cropBytes = prepared.bytes
-            showCropScreen(side, bitmap)
+            showCropScreen(side, bitmap, prepared.cropped)
         }
     }
 
-    private fun showCropScreen(side: Side, bitmap: Bitmap) {
+    /**
+     * D5: the screen was recreated (rotation, process death) while a photo was waiting on the
+     * corner screen. The prepared bytes come back from the cache copy, so the same photo and the
+     * same side are shown again; the frame starts on the full image, which is the confirmed crop.
+     */
+    private fun reopenCropScreen() {
+        val bytes = cropBytes ?: return
+        val side = cropSide
+        val detected = cropDetected
+        progress.isVisible = true
+        lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                runCatching { ImageTools.decodeSampled(bytes, CROP_PREVIEW_DIM) }.getOrNull()
+            }
+            progress.isVisible = false
+            if (isFinishing || isDestroyed) {
+                bitmap?.recycle()
+                return@launch
+            }
+            if (bitmap == null) {
+                clearCropState()
+                cropBytes = null
+                render()
+                showCaptureSheet(side)
+                return@launch
+            }
+            showCropScreen(side, bitmap, detected)
+        }
+    }
+
+    private fun showCropScreen(side: Side, bitmap: Bitmap, detected: Boolean) {
         dismissCropScreen()
         cropSide = side
+        cropDetected = detected
         cropBitmap = bitmap
 
         val overlay = FrameLayout(this).apply {
             setBackgroundColor(SwStyle.color(this@IdCardActivity, R.color.void_abyss))
             isClickable = true
         }
+        // D9: the card screen under the overlay must not stay in the accessibility tree.
+        contentScroll.importantForAccessibility =
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(
@@ -467,6 +522,9 @@ class IdCardActivity : BaseActivity() {
             this, R.drawable.ic_sym_arrow_back, SwStyle.color(this, R.color.text_hologram_hi)
         ).apply {
             contentDescription = getString(R.string.tools_setup_back)
+            // D9: the kit's icon button is 40dp; the crop screen's Back is a 48dp target.
+            val size = SwStyle.dp(this@IdCardActivity, 48f)
+            layoutParams = LinearLayout.LayoutParams(size, size)
             setOnClickListener { cancelCrop() }
         })
         bar.addView(
@@ -479,7 +537,11 @@ class IdCardActivity : BaseActivity() {
         )
         column.addView(bar)
         column.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
-            text = getString(R.string.fixidcrop_id_crop_hint)
+            // D10: an undetected photo is not silently the same as a detected one.
+            text = getString(
+                if (cropDetected) R.string.fixidcrop_id_crop_hint
+                else R.string.fixidcrop_id_crop_hint_none
+            )
             setLineSpacing(0f, 1.25f)
             setPadding(0, SwStyle.dp(this@IdCardActivity, 8f), 0, SwStyle.dp(this@IdCardActivity, 10f))
         })
@@ -533,25 +595,33 @@ class IdCardActivity : BaseActivity() {
         val top = rect.top.toInt().coerceIn(0, source.height - 1)
         val width = rect.width().toInt().coerceIn(1, source.width - left)
         val height = rect.height().toInt().coerceIn(1, source.height - top)
-        val cropped = runCatching { Bitmap.createBitmap(source, left, top, width, height) }.getOrNull()
-            ?: return
+        // D2/D4: always a private copy. A full-frame crop hands back the source bitmap itself,
+        // and the screen may recycle its bitmap the moment Back closes it; the encode must never
+        // read a recycled (or concurrently recycled) bitmap.
+        val region = runCatching {
+            val cut = Bitmap.createBitmap(source, left, top, width, height)
+            if (cut === source) source.copy(Bitmap.Config.ARGB_8888, false) else cut
+        }.getOrNull() ?: return
         cropBusy = true
+        val token = cropOverlay
         val side = cropSide
         progress.bringToFront()
         progress.isVisible = true
         lifecycleScope.launch {
             val bytes = withContext(Dispatchers.IO) {
-                runCatching { ImageTools.encodeJpeg(cropped, 92) }.getOrNull()
+                runCatching { ImageTools.encodeJpeg(region, 92) }.getOrNull()
             }
-            // Full-frame crops hand back the source bitmap itself; the screen still owns that one.
-            if (cropped !== source) cropped.recycle()
+            region.recycle()
+            // D2: Back or Cancel closed the crop screen while the JPEG was being written. The
+            // side must not be accepted afterwards, and nothing is shown to the person.
+            if (token == null || token !== cropOverlay || isFinishing || isDestroyed) return@launch
             progress.isVisible = false
             cropBusy = false
-            if (isFinishing || isDestroyed) return@launch
             if (bytes == null) {
                 fail(getString(R.string.fixidcrop_id_crop_failed))
                 return@launch
             }
+            clearCropState()
             dismissCropScreen()
             acceptCapture(side, bytes)
         }
@@ -561,6 +631,7 @@ class IdCardActivity : BaseActivity() {
     internal fun cancelCrop() {
         if (cropOverlay == null) return
         val side = cropSide
+        clearCropState()
         dismissCropScreen()
         render()
         showCaptureSheet(side)
@@ -575,7 +646,16 @@ class IdCardActivity : BaseActivity() {
         cropBytes = null
         cropBitmap?.takeIf { !it.isRecycled }?.recycle()
         cropBitmap = null
+        // D2/D9: leave no busy/progress state behind and give the card screen its tree back.
+        cropBusy = false
+        progress.isVisible = false
+        contentScroll.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
         screenRoot.removeView(overlay)
+    }
+
+    /** The prepared photo only lives for the crop screen; the cache copy goes with it. */
+    private fun clearCropState() {
+        runCatching { File(capturedStateDir(), CROP_FILE).delete() }
     }
 
     private fun showCaptureSheet(side: Side) {
@@ -584,6 +664,9 @@ class IdCardActivity : BaseActivity() {
 
     /** Tests: the auto-cropped photo the corner crop screen is showing. */
     internal fun cropScreenBytesForTest(): ByteArray? = cropBytes
+
+    /** Tests: how the card screen behind the crop overlay is exposed to accessibility. */
+    internal fun contentAccessibilityForTest(): Int = contentScroll.importantForAccessibility
 
     /** A capture arrived (scanner or gallery); also the seam the UI tests drive. */
     internal fun acceptCapture(side: Side, bytes: ByteArray) {
@@ -825,8 +908,12 @@ class IdCardActivity : BaseActivity() {
         private const val STATE_DIR = "id_card_state"
         private const val FRONT_FILE = "front.jpg"
         private const val BACK_FILE = "back.jpg"
+        private const val CROP_FILE = "crop.jpg"
         private const val KEY_HAS_STATE = "id_card_has_state"
         private const val KEY_PENDING_SIDE = "id_card_pending_side"
+        private const val KEY_CROP_PENDING = "id_card_crop_pending"
+        private const val KEY_CROP_SIDE = "id_card_crop_side"
+        private const val KEY_CROP_DETECTED = "id_card_crop_detected"
 
         /** The crop screen never needs more than a phone-width copy of the card. */
         private const val CROP_PREVIEW_DIM = 2400
