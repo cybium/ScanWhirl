@@ -91,7 +91,9 @@ class ToolsPluralsTest {
                 val rows = source.children().filterIsInstance<LinearLayout>().filter { it.tag is String }
                 assertEquals(2, rows.size)
                 val meta = rows.associate { row ->
-                    row.tag as String to (row.getChildAt(2) as TextView).text.toString()
+                    // v2 UI: 03_tools_setup_picker — the meta line sits under the name in the
+                    // row's text column (the row now leads with a page thumbnail).
+                    row.tag as String to row.findViewById<TextView>(R.id.toolSetupDocMeta).text.toString()
                 }
                 assertTrue("one-page row: ${meta[one.id]}", meta[one.id]!!.startsWith("1 page · "))
                 assertTrue("two-page row: ${meta[two.id]}", meta[two.id]!!.startsWith("2 pages · "))

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- uipicker lane strings (Hindi). Every value carries a review marker. -->
+<resources>
+    <string name="tools_pick_choose_doc"><!-- review -->दस्तावेज़ चुनें</string>
+    <string name="tools_pick_custom_size"><!-- review -->लक्ष्य आकार (वैकल्पिक), जैसे 500 KB</string>
+</resources>
