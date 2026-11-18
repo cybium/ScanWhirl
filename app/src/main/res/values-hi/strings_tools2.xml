@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- lane/tool-fixes: Coming soon के नोट. -->
 <resources>
-    <!-- review -->
-    <string name="soon_organize_pages">पेजों का क्रम बदलना जल्द आ रहा है।</string>
+    <string name="soon_organize_pages">पन्नों का क्रम बदलना जल्द आ रहा है।</string>
 </resources>

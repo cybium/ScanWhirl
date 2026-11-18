@@ -2,107 +2,98 @@
 <!-- L5 wave 2 Hindi draft: review before release. -->
 <resources>
     <!-- Engine -->
-    <string name="draft_open_refused"><!-- review -->पहले बिना सहेजे पेज बदलावों को सहेजें या हटाएँ।</string>
-    <string name="draft_stale"><!-- review -->ये बदलाव शुरू होने के बाद दस्तावेज़ बदल गया। इन्हें केवल हटाया जा सकता है।</string>
-    <string name="draft_damaged"><!-- review -->ये बिना सहेजे बदलाव खराब हो गए हैं और केवल हटाए जा सकते हैं।</string>
-    <string name="draft_edited_name"><!-- review -->%1$s (बदला गया)</string>
+    <string name="draft_open_refused">पहले बिना सहेजे पन्नों के बदलाव सहेजें या हटाएँ।</string>
+    <string name="draft_stale">ये बदलाव शुरू होने के बाद दस्तावेज़ बदल गया। इन्हें सिर्फ़ हटाया जा सकता है।</string>
+    <string name="draft_damaged">ये बिना सहेजे बदलाव खराब हो गए हैं और सिर्फ़ हटाए जा सकते हैं।</string>
+    <string name="draft_edited_name">%1$s (बदला गया)</string>
 
     <!-- Organize screen -->
-    <string name="draft_header"><!-- review -->ड्राफ़्ट · %1$s · %2$s</string>
-    <!-- review -->
+    <string name="draft_header">अभी सहेजा नहीं · %1$s · %2$s</string>
     <plurals name="draft_pages">
-        <item quantity="one"><!-- review -->%d पेज</item>
-        <item quantity="other"><!-- review -->%d पेज</item>
+        <item quantity="one">%d पन्ना</item>
+        <item quantity="other">%d पन्ने</item>
     </plurals>
-    <!-- review -->
     <plurals name="draft_changes">
-        <item quantity="one"><!-- review -->%d बदलाव</item>
-        <item quantity="other"><!-- review -->%d बदलाव</item>
+        <item quantity="one">%d बदलाव</item>
+        <item quantity="other">%d बदलाव</item>
     </plurals>
-    <string name="draft_save_new"><!-- review -->नई कॉपी के रूप में सहेजें</string>
-    <!-- review -->
-    <string name="draft_bar_discard"><!-- review -->हटाएँ</string>
-    <!-- review -->
-    <string name="draft_bar_replace"><!-- review -->बदलें</string>
-    <!-- review -->
-    <string name="draft_bar_save"><!-- review -->कॉपी सहेजें</string>
-    <string name="draft_replace"><!-- review -->मूल को बदलें</string>
-    <string name="draft_discard"><!-- review -->हटाएँ</string>
-    <string name="draft_keep_editing"><!-- review -->बदलाव जारी रखें</string>
-    <string name="draft_back_title"><!-- review -->बिना सहेजे पेज बदलाव</string>
-    <string name="draft_back_msg"><!-- review -->आपका सहेजा दस्तावेज़ नहीं बदला है। इन बदलावों को नई कॉपी के रूप में सहेजें या हटाएँ।</string>
-    <string name="draft_replace_title"><!-- review -->“%1$s” को बदलें?</string>
-    <string name="draft_replace_msg"><!-- review -->मौजूदा संस्करण ट्रैश में “%1$s (पिछला संस्करण)” के रूप में चला जाएगा। आप उसे वहाँ से वापस ला सकते हैं।</string>
-    <string name="draft_discard_msg"><!-- review -->%1$d पेज बदलाव हटाएँ? सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
-    <string name="draft_saved_new"><!-- review -->“%1$s” के रूप में सहेजा गया</string>
-    <string name="draft_replaced"><!-- review -->बदल दिया गया। पिछला संस्करण ट्रैश में है।</string>
-    <string name="trash_previous_version"><!-- review -->%1$s (पिछला संस्करण)</string>
+    <string name="draft_save_new">नई फ़ाइल बनाकर सहेजें</string>
+    <string name="draft_bar_discard">बदलाव न रखें</string>
+    <string name="draft_bar_replace">पुरानी फ़ाइल की जगह रखें</string>
+    <string name="draft_bar_save">प्रति सहेजें</string>
+    <string name="draft_replace">मूल की जगह रखें</string>
+    <string name="draft_discard">बदलाव न रखें</string>
+    <string name="draft_keep_editing">बदलाव जारी रखें</string>
+    <string name="draft_back_title">अभी सहेजा नहीं</string>
+    <string name="draft_back_msg">आपका सहेजा दस्तावेज़ नहीं बदला है। इन बदलावों को नई फ़ाइल बनाकर सहेजें या बदलाव न रखें।</string>
+    <string name="draft_replace_title">“%1$s” की जगह रखें?</string>
+    <string name="draft_replace_msg">मौजूदा संस्करण हटाई गई फ़ाइलों में “%1$s (पिछला संस्करण)” के रूप में चला जाएगा। आप उसे वहाँ से वापस ला सकते हैं।</string>
+    <string name="draft_discard_msg">%1$d पन्नों के बदलाव हटाएँ? सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
+    <string name="draft_saved_new">“%1$s” के रूप में सहेजा गया</string>
+    <string name="draft_replaced">बदल दिया गया। पिछला संस्करण हटाई गई फ़ाइलों में है।</string>
+    <string name="trash_previous_version">%1$s (पिछला संस्करण)</string>
 
     <!-- Selection mode (owner revision) -->
-    <string name="draft_select_all"><!-- review -->सभी चुनें</string>
-    <string name="draft_delete_msg"><!-- review -->पेज ड्राफ़्ट से हट जाएँगे। सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
-    <string name="draft_rotate_left"><!-- review -->बाएँ घुमाएँ</string>
-    <!-- review -->
-    <string name="draft_rotate_right"><!-- review -->दाएँ घुमाएँ</string>
-    <!-- review -->
-    <string name="draft_duplicate"><!-- review -->पेज की प्रति</string>
-    <!-- review -->
-    <string name="draft_insert_here"><!-- review -->यहाँ पेज जोड़ें</string>
-    <!-- review -->
-    <string name="draft_extract_new"><!-- review -->नए दस्तावेज़ में निकालें</string>
-    <string name="draft_move_to"><!-- review -->यहाँ ले जाएँ…</string>
-    <string name="draft_move_to_hint"><!-- review -->पेज संख्या</string>
-    <string name="draft_move_invalid"><!-- review -->वह पेज मौजूद नहीं है।</string>
+    <string name="draft_select_all">सभी चुनें</string>
+    <string name="draft_delete_msg">पन्ने बिना सहेजे बदलावों से हट जाएँगे। सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
+    <string name="draft_rotate_left">बाएँ घुमाएँ</string>
+    <string name="draft_rotate_right">दाएँ घुमाएँ</string>
+    <string name="draft_duplicate">पन्ने की दूसरी प्रति</string>
+    <string name="draft_insert_here">यहाँ पन्ने जोड़ें</string>
+    <string name="draft_extract_new">नए दस्तावेज़ में निकालें</string>
+    <string name="draft_move_to">यहाँ ले जाएँ…</string>
+    <string name="draft_move_to_hint">पन्ने का नंबर</string>
+    <string name="draft_move_invalid">वह पन्ना मौजूद नहीं है।</string>
     <plurals name="draft_delete_title">
-        <item quantity="one"><!-- review -->%1$d पेज हटाएँ?</item>
-        <item quantity="other"><!-- review -->%1$d पेज हटाएँ?</item>
+        <item quantity="one">%1$d पन्ना हटाएँ?</item>
+        <item quantity="other">%1$d पन्ने हटाएँ?</item>
     </plurals>
 
     <!-- Insert pages (Free, Organize) -->
-    <string name="insert_pages_title"><!-- review -->पेज यहाँ से जोड़ें</string>
-    <string name="insert_from_camera"><!-- review -->कैमरे से स्कैन करें</string>
-    <string name="insert_from_photos"><!-- review -->फ़ोटो</string>
-    <string name="insert_from_document"><!-- review -->दूसरा दस्तावेज़</string>
-    <string name="insert_position_title"><!-- review -->कहाँ जोड़ें?</string>
-    <string name="insert_at_start"><!-- review -->शुरू में</string>
-    <string name="insert_after_page"><!-- review -->पेज के बाद…</string>
-    <string name="insert_at_end"><!-- review -->अंत में</string>
-    <string name="insert_page_hint"><!-- review -->पेज संख्या</string>
-    <string name="insert_page_invalid"><!-- review -->वह पेज मौजूद नहीं है।</string>
-    <string name="insert_none"><!-- review -->कोई पेज नहीं जोड़ा गया।</string>
-    <string name="grid_empty"><!-- review -->अभी कोई पेज नहीं है।</string>
+    <string name="insert_pages_title">यहाँ से पन्ने जोड़ें</string>
+    <string name="insert_from_camera">कैमरे से स्कैन करें</string>
+    <string name="insert_from_photos">फ़ोटो</string>
+    <string name="insert_from_document">दूसरा दस्तावेज़</string>
+    <string name="insert_position_title">कहाँ जोड़ें?</string>
+    <string name="insert_at_start">शुरू में</string>
+    <string name="insert_after_page">पन्ने के बाद…</string>
+    <string name="insert_at_end">अंत में</string>
+    <string name="insert_page_hint">पन्ने का नंबर</string>
+    <string name="insert_page_invalid">वह पन्ना मौजूद नहीं है।</string>
+    <string name="insert_none">कोई पन्ना नहीं जोड़ा गया।</string>
+    <string name="grid_empty">अभी कोई पन्ना नहीं है।</string>
     <plurals name="insert_done">
-        <item quantity="one"><!-- review -->%1$d पेज जोड़ा गया</item>
-        <item quantity="other"><!-- review -->%1$d पेज जोड़े गए</item>
+        <item quantity="one">%1$d पन्ना जोड़ा गया</item>
+        <item quantity="other">%1$d पन्ने जोड़े गए</item>
     </plurals>
 
     <!-- review: accessibility announcements and actions. -->
-    <string name="a11y_page_of"><!-- review -->पेज %1$d / %2$d</string>
-    <string name="a11y_page_of_selected"><!-- review -->पेज %1$d / %2$d, चयनित</string>
-    <string name="a11y_select_page_of"><!-- review -->पेज %1$d / %2$d चुनें</string>
-    <string name="a11y_moved_to"><!-- review -->पेज %1$d / %2$d पर ले जाया गया</string>
-    <string name="a11y_page_image"><!-- review -->पेज %1$d / %2$d</string>
-    <string name="a11y_no_mark_selected"><!-- review -->पेज %1$d / %2$d। कोई निशान नहीं चुना गया।</string>
-    <string name="a11y_mark_selected"><!-- review -->%1$s, पेज %2$d / %3$d पर चयनित</string>
-    <string name="a11y_mark_text"><!-- review -->टेक्स्ट</string>
-    <string name="a11y_mark_signature"><!-- review -->हस्ताक्षर</string>
-    <string name="a11y_mark_picture"><!-- review -->चित्र</string>
-    <string name="a11y_mark_highlight"><!-- review -->हाइलाइट</string>
-    <string name="a11y_mark_badge"><!-- review -->बैज</string>
-    <string name="a11y_mark_redact"><!-- review -->काला किया गया भाग</string>
-    <string name="a11y_mark_ink"><!-- review -->स्याही</string>
-    <string name="a11y_mark_watermark"><!-- review -->वॉटरमार्क</string>
-    <string name="a11y_mark_page_number"><!-- review -->पेज नंबर</string>
-    <string name="a11y_move_left"><!-- review -->बाएँ ले जाएँ</string>
-    <string name="a11y_move_right"><!-- review -->दाएँ ले जाएँ</string>
-    <string name="a11y_move_up"><!-- review -->ऊपर ले जाएँ</string>
-    <string name="a11y_move_down"><!-- review -->नीचे ले जाएँ</string>
-    <string name="a11y_grow"><!-- review -->बड़ा करें</string>
-    <string name="a11y_shrink"><!-- review -->छोटा करें</string>
-    <string name="a11y_rotate_cw"><!-- review -->दक्षिणावर्त घुमाएँ</string>
-    <string name="a11y_rotate_ccw"><!-- review -->वामावर्त घुमाएँ</string>
-    <string name="a11y_delete_mark"><!-- review -->निशान हटाएँ</string>
+    <string name="a11y_page_of">पन्ना %1$d / %2$d</string>
+    <string name="a11y_page_of_selected">पन्ना %1$d / %2$d, चुना गया</string>
+    <string name="a11y_select_page_of">पन्ना %1$d / %2$d चुनें</string>
+    <string name="a11y_moved_to">पन्ना %1$d / %2$d पर ले जाया गया</string>
+    <string name="a11y_page_image">पन्ना %1$d / %2$d</string>
+    <string name="a11y_no_mark_selected">पन्ना %1$d / %2$d। कोई निशान नहीं चुना गया।</string>
+    <string name="a11y_mark_selected">%1$s, पन्ने %2$d / %3$d पर चुना गया</string>
+    <string name="a11y_mark_text">लिखा हुआ</string>
+    <string name="a11y_mark_signature">हस्ताक्षर</string>
+    <string name="a11y_mark_picture">तस्वीर</string>
+    <string name="a11y_mark_highlight">रंग से उभारा भाग</string>
+    <string name="a11y_mark_badge">बैज</string>
+    <string name="a11y_mark_redact">छिपाया गया भाग</string>
+    <string name="a11y_mark_ink">स्याही</string>
+    <string name="a11y_mark_watermark">हल्की छाप</string>
+    <string name="a11y_mark_page_number">पन्ने का नंबर</string>
+    <string name="a11y_move_left">बाएँ ले जाएँ</string>
+    <string name="a11y_move_right">दाएँ ले जाएँ</string>
+    <string name="a11y_move_up">ऊपर ले जाएँ</string>
+    <string name="a11y_move_down">नीचे ले जाएँ</string>
+    <string name="a11y_grow">बड़ा करें</string>
+    <string name="a11y_shrink">छोटा करें</string>
+    <string name="a11y_rotate_cw">दाईं ओर घुमाएँ</string>
+    <string name="a11y_rotate_ccw">बाईं ओर घुमाएँ</string>
+    <string name="a11y_delete_mark">निशान हटाएँ</string>
 
-    <string name="review_name_hint"><!-- review -->नाम</string>
-    <string name="ocr_page_sub_short"><!-- review -->%1$s · %2$d / %3$d</string>
+    <string name="review_name_hint">नाम</string>
+    <string name="ocr_page_sub_short">%1$s · %2$d / %3$d</string>
 </resources>

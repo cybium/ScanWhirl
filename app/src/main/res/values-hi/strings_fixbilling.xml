@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Play Billing errors: connectivity versus unsupported purchases. -->
 <resources>
-    <string name="pro_error_connection"><!-- review -->Google Play से संपर्क नहीं हो पा रहा। Play Store ऐप जाँचें और फिर कोशिश करें।</string>
-    <string name="pro_error_unavailable"><!-- review -->इस डिवाइस या खाते पर खरीदारी उपलब्ध नहीं है।</string>
+    <string name="pro_error_connection">Google Play से संपर्क नहीं हो पा रहा। Play Store ऐप जाँचें और फिर कोशिश करें।</string>
+    <string name="pro_error_unavailable">इस फ़ोन या खाते पर खरीद उपलब्ध नहीं है।</string>
 </resources>

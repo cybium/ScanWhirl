@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="fixidcrop_id_crop_title"><!-- review -->कार्ड काटें</string>
-    <string name="fixidcrop_id_crop_hint"><!-- review -->कोनों को कार्ड के किनारों तक खींचें।</string>
-    <string name="fixidcrop_id_crop_hint_none"><!-- review -->कार्ड के किनारे नहीं मिले। कोनों को कार्ड तक खींचें।</string>
-    <string name="fixidcrop_id_crop_apply"><!-- review -->काटें और सहेजें</string>
-    <string name="fixidcrop_id_crop_failed"><!-- review -->यह फ़ोटो नहीं खुल सकी। इसे फिर से चुनें।</string>
-    <string name="fixidcrop_id_photo_gone"><!-- review -->वह फ़ोटो अब उपलब्ध नहीं है। इसे फिर से चुनें।</string>
+    <string name="fixidcrop_id_crop_title">पहचान पत्र काटें</string>
+    <string name="fixidcrop_id_crop_hint">कोनों को पहचान पत्र के किनारों तक खींचें।</string>
+    <string name="fixidcrop_id_crop_hint_none">पहचान पत्र के किनारे नहीं मिले। कोनों को पहचान पत्र तक खींचें।</string>
+    <string name="fixidcrop_id_crop_apply">काटें और सहेजें</string>
+    <string name="fixidcrop_id_crop_failed">यह फ़ोटो नहीं खुल सकी। इसे फिर से चुनें।</string>
+    <string name="fixidcrop_id_photo_gone">वह फ़ोटो अब उपलब्ध नहीं है। इसे फिर से चुनें।</string>
 </resources>

@@ -1,51 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L2 v2 QR code reader. Hindi values await native review. -->
-    <string name="qr_title"><!-- review -->QR कोड</string>
-    <string name="qr_close"><!-- review -->बंद करें</string>
-    <string name="qr_scan_title"><!-- review -->QR कोड स्कैन करें</string>
-    <string name="qr_scan_body"><!-- review -->लिंक, Wi-Fi नेटवर्क, संपर्क, फ़ोन नंबर, ईमेल या टेक्स्ट पढ़ता है। सब इसी फ़ोन पर रहता है।</string>
-    <string name="qr_result_title"><!-- review -->पिछला स्कैन</string>
-    <string name="qr_scan_button"><!-- review -->कोड स्कैन करें</string>
-    <string name="qr_scan_again"><!-- review -->फिर स्कैन करें</string>
-    <string name="qr_empty_code"><!-- review -->उस कोड में पढ़ने लायक कुछ नहीं था।</string>
-    <string name="qr_scanner_error"><!-- review -->स्कैनर शुरू नहीं हो सका: %1$s</string>
+    <string name="qr_title">QR कोड</string>
+    <string name="qr_close">बंद करें</string>
+    <string name="qr_scan_title">QR कोड स्कैन करें</string>
+    <string name="qr_scan_body">खोलने का पता, Wi-Fi नेटवर्क, संपर्क, फ़ोन नंबर, ईमेल या लिखा हुआ पढ़ता है। सब कुछ इसी फ़ोन पर रहता है।</string>
+    <string name="qr_result_title">पिछला स्कैन</string>
+    <string name="qr_scan_button">कोड स्कैन करें</string>
+    <string name="qr_scan_again">फिर स्कैन करें</string>
+    <string name="qr_empty_code">उस कोड में पढ़ने लायक कुछ नहीं था।</string>
+    <string name="qr_scanner_error">स्कैनर शुरू नहीं हो सका: %1$s</string>
 
-    <string name="qr_open_link"><!-- review -->लिंक खोलें</string>
-    <string name="qr_add_contact"><!-- review -->संपर्क में जोड़ें</string>
-    <string name="qr_call"><!-- review -->कॉल करें</string>
-    <string name="qr_compose_email"><!-- review -->ईमेल लिखें</string>
-    <string name="qr_open_map"><!-- review -->नक्शे में खोलें</string>
-    <string name="qr_copy"><!-- review -->कॉपी करें</string>
-    <string name="qr_share"><!-- review -->शेयर करें</string>
-    <string name="qr_copied"><!-- review -->कॉपी हो गया</string>
-    <string name="qr_no_app"><!-- review -->इस फ़ोन पर कोई ऐप इसे नहीं खोल सकता।</string>
-    <string name="qr_no_contacts"><!-- review -->कोई संपर्क ऐप नहीं। कोड कॉपी कर दिया गया।</string>
+    <string name="qr_open_link">पता खोलें</string>
+    <string name="qr_add_contact">संपर्क में जोड़ें</string>
+    <string name="qr_call">फ़ोन मिलाएँ</string>
+    <string name="qr_compose_email">ईमेल लिखें</string>
+    <string name="qr_open_map">नक्शे में दिखाएँ</string>
+    <string name="qr_copy">नकल करें</string>
+    <string name="qr_share">भेजें</string>
+    <string name="qr_copied">नकल कर ली; अब कहीं भी चिपका सकते हैं</string>
+    <string name="qr_no_app">इस फ़ोन पर कोई ऐप इसे नहीं खोल सकता।</string>
+    <string name="qr_no_contacts">कोई संपर्क ऐप नहीं। कोड की नकल कर ली गई।</string>
 
-    <string name="qr_kind_url"><!-- review -->लिंक</string>
-    <string name="qr_kind_wifi"><!-- review -->Wi-Fi नेटवर्क</string>
-    <string name="qr_kind_contact"><!-- review -->संपर्क</string>
-    <string name="qr_kind_phone"><!-- review -->फ़ोन नंबर</string>
-    <string name="qr_kind_email"><!-- review -->ईमेल पता</string>
-    <string name="qr_kind_sms"><!-- review -->टेक्स्ट संदेश</string>
-    <string name="qr_kind_geo"><!-- review -->स्थान</string>
-    <string name="qr_kind_text"><!-- review -->टेक्स्ट</string>
+    <string name="qr_kind_url">खोलने का पता</string>
+    <string name="qr_kind_wifi">Wi-Fi नेटवर्क</string>
+    <string name="qr_kind_contact">संपर्क</string>
+    <string name="qr_kind_phone">फ़ोन नंबर</string>
+    <string name="qr_kind_email">ईमेल पता</string>
+    <string name="qr_kind_sms">लिखा हुआ संदेश</string>
+    <string name="qr_kind_geo">स्थान</string>
+    <string name="qr_kind_text">लिखा हुआ</string>
 
-    <string name="qr_field_network"><!-- review -->नेटवर्क</string>
-    <string name="qr_field_password"><!-- review -->पासवर्ड</string>
-    <string name="qr_field_security"><!-- review -->सुरक्षा</string>
-    <string name="qr_field_name"><!-- review -->नाम</string>
-    <string name="qr_field_phone"><!-- review -->फ़ोन</string>
-    <string name="qr_field_email"><!-- review -->ईमेल</string>
-    <string name="qr_field_org"><!-- review -->संस्था</string>
-    <string name="qr_field_role"><!-- review -->पद</string>
-    <string name="qr_field_address"><!-- review -->पता</string>
-    <string name="qr_field_message"><!-- review -->संदेश</string>
+    <string name="qr_field_network">नेटवर्क</string>
+    <string name="qr_field_password">पासवर्ड</string>
+    <string name="qr_field_security">सुरक्षा</string>
+    <string name="qr_field_name">नाम</string>
+    <string name="qr_field_phone">फ़ोन</string>
+    <string name="qr_field_email">ईमेल</string>
+    <string name="qr_field_org">संस्था</string>
+    <string name="qr_field_role">पद</string>
+    <string name="qr_field_address">पता</string>
+    <string name="qr_field_message">संदेश</string>
 
-    <string name="qr_recent"><!-- review -->हाल के स्कैन</string>
-    <string name="qr_clear"><!-- review -->साफ़ करें</string>
-    <string name="qr_cleared"><!-- review -->इतिहास साफ़ हो गया</string>
-    <string name="qr_history_meta"><!-- review -->%1$s, %2$s</string>
+    <string name="qr_recent">हाल के स्कैन</string>
+    <string name="qr_clear">साफ़ करें</string>
+    <string name="qr_cleared">पुराने स्कैन साफ़ हो गए</string>
+    <string name="qr_history_meta">%1$s, %2$s</string>
 
-    <string name="qr_pro_message"><!-- review -->QR कोड रीडर Pro का हिस्सा है, बाकी Pro टूल्स की तरह।</string>
+    <string name="qr_pro_message">QR कोड पढ़ना Pro का हिस्सा है, बाकी Pro कामों की तरह।</string>
 </resources>

@@ -12,7 +12,7 @@ import java.io.File
 /**
  * Ensures every user-visible string in `values/strings.xml` has a matching
  * entry in `values-hi/strings.xml`, with identical format specifiers.
- * All Hindi entries carry `<!-- review -->` for native-speaker review.
+ * Hindi entries are reviewed under the JUDGE_HINDI.md final glossary.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
