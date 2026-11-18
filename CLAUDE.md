@@ -1,4 +1,4 @@
-# ScanWhirl — working context for AI sessions
+﻿# ScanWhirl — working context for AI sessions
 
 Last updated 2026-11-16. This file and `START_HERE.md` are the truth about the repository today;
 anything older under `docs/history/` is not instruction.
@@ -41,7 +41,7 @@ anything older under `docs/history/` is not instruction.
 6. **Workers**: opencode-go = only `deepseek-v4.1-flash#high`; never Grok; research any OpenAI model
    first (Sol = reviewer of money/data code, Terra medium = visual work; avoid Astra). Briefs list the
    exact files (a script checks `git diff --name-only`), DeepSeek gets 1-3 file tasks with the test,
-   reviewers are fresh-context and read-only with a defect list. NO lane cap: gates run on GitHub Actions (public repo); only rule = running lanes never share files (PROGRAM.md §2). "Kill" = Stop-Process
+   reviewers are fresh-context and read-only with a defect list. NEVER hand algorithm/engine work (detectors, OCR, image pipelines) to a single DeepSeek lane: design it first or use ML Kit. NO lane cap: gates run on GitHub Actions (public repo); only rule = running lanes never share files (PROGRAM.md §2). "Kill" = Stop-Process
    + "END NOW"; never leave a worker in a wait loop.
 7. **Builds**: PC has 7.4 GB RAM: heavy builds and tests run on GitHub Actions; never Gradle and an
    emulator at once. One merge at a time, wait for the cloud gate.
