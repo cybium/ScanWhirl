@@ -40,6 +40,7 @@ import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.tools.PhotoCropFlowActivity
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
@@ -150,9 +151,39 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 if (files.isNullOrEmpty()) {
                     toast(R.string.insert_none, Toast.LENGTH_SHORT)
                 } else {
-                    askInsertPosition(files)
+                    // A8: a picked gallery photo is not a scan. The position is asked here (as
+                    // for camera/PDF inserts) but the pages are cropped and confirmed per photo
+                    // first; only then does the draft change.
+                    askInsertPosition(files, ::startPhotoCrop)
                 }
             }
+        }
+
+    /** Position chosen for the photo batch currently on the corner crop screen. */
+    private var pendingPhotoPosition: Int? = null
+
+    /** The picked-photo cache folder of that batch; deleted after the insert or a cancel. */
+    private var pendingPhotoDir: File? = null
+
+    /** Back from the corner screen returns RESULT_CANCELED: the batch inserts nothing (A8). */
+    private val insertPhotoCrop =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val dir = pendingPhotoDir
+            val position = pendingPhotoPosition
+            pendingPhotoDir = null
+            pendingPhotoPosition = null
+            val cropped = if (result.resultCode == RESULT_OK) {
+                result.data?.getStringArrayListExtra(PhotoCropFlowActivity.EXTRA_CROPPED)
+                    .orEmpty().map(::File).filter { it.isFile }
+            } else {
+                emptyList()
+            }
+            if (position == null || cropped.isEmpty()) {
+                // Back/Cancel on a corner screen: no page from this batch is inserted.
+                dir?.deleteRecursively()
+                return@registerForActivityResult
+            }
+            insertFiles(cropped, position)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -167,6 +198,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         freshImport = intent.getBooleanExtra(EXTRA_FRESH_IMPORT, false)
+        // A8: a viewer recreated while the corner crop screen was on top still knows where the
+        // confirmed photos go when they come back.
+        pendingPhotoPosition = savedInstanceState?.takeIf { it.containsKey(KEY_PHOTO_INSERT_AT) }
+            ?.getInt(KEY_PHOTO_INSERT_AT)
+        pendingPhotoDir = savedInstanceState?.getString(KEY_PHOTO_DIR)?.let(::File)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleEditorBack()
@@ -259,11 +295,21 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         else -> super.onOptionsItemSelected(item)
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingPhotoPosition?.let { outState.putInt(KEY_PHOTO_INSERT_AT, it) }
+        pendingPhotoDir?.let { outState.putString(KEY_PHOTO_DIR, it.path) }
+    }
+
     override fun onDestroy() {
         // Leaving the screen makes any pending delete permanent (rule: Undo
         // only lives as long as this screen).
         if (!isChangingConfigurations) {
             commitPendingDelete()
+            // A8: a photo batch still waiting on the corner crop screen keeps no picked copy.
+            pendingPhotoDir?.deleteRecursively()
+            pendingPhotoDir = null
+            pendingPhotoPosition = null
         }
         super.onDestroy()
     }
@@ -683,8 +729,15 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         return files
     }
 
-    /** Position picker: at the start, after page N, or at the end. */
-    private fun askInsertPosition(files: List<File>) {
+    /**
+     * Position picker: at the start, after page N, or at the end. [onReady] receives the chosen
+     * position and the pages to put there; photos hand it to the corner crop flow first (A8),
+     * camera and PDF inserts keep going straight to [insertFiles].
+     */
+    private fun askInsertPosition(
+        files: List<File>,
+        onReady: (List<File>, Int) -> Unit = { ready, position -> insertFiles(ready, position) }
+    ) {
         if (files.isEmpty()) {
             toast(R.string.insert_none, Toast.LENGTH_SHORT)
             return
@@ -692,7 +745,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val here = insertHere
         if (here != null) {
             insertHere = null
-            insertFiles(files, here)
+            onReady(files, here)
             return
         }
         val options = listOf(
@@ -704,9 +757,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .setTitle(R.string.insert_position_title)
             .setOptions(options) { which, _ ->
                 when (which) {
-                    0 -> insertFiles(files, 0)
-                    1 -> promptInsertAfterPage(files)
-                    else -> insertFiles(files, visiblePages.size)
+                    0 -> onReady(files, 0)
+                    1 -> promptInsertAfterPage(files, onReady)
+                    else -> onReady(files, visiblePages.size)
                 }
             }
             .setSecondary(android.R.string.cancel)
@@ -714,7 +767,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .show()
     }
 
-    private fun promptInsertAfterPage(files: List<File>) {
+    private fun promptInsertAfterPage(
+        files: List<File>,
+        onReady: (List<File>, Int) -> Unit
+    ) {
         val max = visiblePages.size
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.insert_after_page)
@@ -731,10 +787,21 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 Toast.makeText(this, R.string.insert_page_invalid, Toast.LENGTH_SHORT).show()
             } else {
                 sheet.dismiss()
-                insertFiles(files, number)
+                onReady(files, number)
             }
         }
         sheet.show()
+    }
+
+    /**
+     * A8: a picked gallery photo is not a scan, so it is auto-cropped and its corners confirmed
+     * on the corner crop screen, one photo after another, before the draft is touched. The batch
+     * folder is the picked copies; the crop flow deletes everything if any photo is cancelled.
+     */
+    private fun startPhotoCrop(files: List<File>, position: Int) {
+        pendingPhotoPosition = position
+        pendingPhotoDir = files.firstOrNull()?.parentFile
+        insertPhotoCrop.launch(PhotoCropFlowActivity.intent(this, files))
     }
 
     /** Test seam and the one writer: copied pages enter the draft at [position]. */
@@ -1559,6 +1626,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     companion object {
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_INSERT_PAGES = "insert_pages"
+
+        /** A8: the insert position and cache folder of a photo batch on the corner crop screen. */
+        private const val KEY_PHOTO_INSERT_AT = "insert_photo_position"
+        private const val KEY_PHOTO_DIR = "insert_photo_dir"
 
         /** F5/W2: this viewer was opened right after an import; the first Back asks first. */
         private const val EXTRA_FRESH_IMPORT = "fresh_import"
