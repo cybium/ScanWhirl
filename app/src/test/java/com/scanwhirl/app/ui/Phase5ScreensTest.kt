@@ -473,7 +473,7 @@ class Phase5ScreensTest {
         var chip: View? = null
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                chip = activity.findViewById(R.id.docCategoryChip)
+                chip = activity.findViewById(R.id.docCategoryTouch)
             }
             assertTrue(
                 "chip fills in after reload",
@@ -503,7 +503,7 @@ class Phase5ScreensTest {
         var chip: View? = null
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                chip = activity.findViewById(R.id.docCategoryChip)
+                chip = activity.findViewById(R.id.docCategoryTouch)
             }
             assertTrue(
                 "chip fills in after reload",
