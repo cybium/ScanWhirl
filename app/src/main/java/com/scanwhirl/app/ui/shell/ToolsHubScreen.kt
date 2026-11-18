@@ -106,7 +106,9 @@ class ToolsHubScreen(
         ).apply {
             id = R.id.swToolsClear
             contentDescription = context.getString(R.string.tools_clear_search)
-            layoutParams = LayoutParams(SwStyle.dp(context, 36f), SwStyle.dp(context, 36f))
+            // M2 (device sweep): the visible glyph stays small; the touch target is 48dp.
+            layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
+            setPadding(SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f), SwStyle.dp(context, 12f))
             isVisible = false
             setOnClickListener {
                 searchInput.setText("")

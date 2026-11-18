@@ -128,7 +128,8 @@ class LibraryListCraftTest {
             assertTrue("a row is at least 88dp tall", card.measuredHeight >= dp(88f))
 
             assertEquals("the name wraps at most twice", 2, card.nameView.maxLines)
-            assertEquals("the meta stays on one line", 1, card.metaView.maxLines)
+            // T23 M1 (device sweep): the meta wraps to two lines so the date stays readable.
+            assertTrue("the meta may wrap to two lines", card.metaView.maxLines >= 2)
         }
     }
 
