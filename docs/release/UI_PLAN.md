@@ -47,7 +47,7 @@ asks Replace or Keep; every file is a real file they can find.
 - **Motion with purpose** (all under 250 ms, off when the phone's "remove animations" is on): document card -> viewer
   page grid (shared element), Scan button -> Create sheet, result counter ("824 KB -> 544 KB" counts down), a soft
   haptic on save. This is where ScanWhirl feels different from flat competitor apps.
-- **Words**: say what happened ("Compressed: 824 KB to 544 KB"), never "Done"; plain Hindi and English side by side.
+- **Words**: say what happened ("Compressed: 824 KB to 544 KB"), never "Done"; plain words in English OR Hindi (one language at a time via A/अ, full parity; ruling 7).
 - **Spacing scale** 4/8/12/16/24/32 dp, touch targets >= 48 dp, text >= 12 sp, contrast >= 4.5:1 (fixes D2, D3).
 
 ## 3. The future screens (before -> after)
