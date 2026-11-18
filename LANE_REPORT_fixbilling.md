@@ -170,5 +170,49 @@ Verification:
   (run 44270097325).
 - Commit `abcb84f` fixbilling: shared per-token acknowledgement ledger with bounded retry,
   deferred reconcile (judge must-fix 1-2); this report update follows.
-- Earlier summary numbers in this report are superseded by 1704 full-suite tests at this
-  revision; all cloud runs are lane evidence, not independent verification.
+- Earlier summary numbers in this report are superseded by the latest full-suite count below;
+  all cloud runs are lane evidence, not independent verification.
+
+## Rework 3 (final, judge round 2)
+Judge round 2 accepted the prior work but found three more must-fix items: coalesced operations
+never completed, a successful retry did not reach the live UI, and a queued retry could re-grant
+Pro after a newer authoritative empty answer. Lead accepted all three. Implemented minimally in
+`ProBilling.kt`:
+
+1. Central completion - `AckLedger` now holds a waiter list per token. `acknowledgeThenUnlock`
+   registers every caller (Buy, Restore, listener, reconcile, ALREADY_OWNED) before checking
+   `begin(token)`, so the owner and all coalesced callers receive the outcome from
+   `succeed`/`fail` (`waiters` cleared on delivery). Success grants/terminates each caller;
+   failure reports `pro_error_finish` and releases a waiting Buy. No silent owner can strand a
+   coalesced Buy or Restore.
+2. One observable state - a successful retry runs with `publish = true`, so `record(true)` calls
+   `publishOwned()`: `endBuy(Owned)` when a Buy is open, otherwise `deliver(Owned)` to the
+   existing subscriber/replay mechanism. The live paywall/tiles update without a lifecycle event.
+3. Ownership generation - new `ownershipLost` counter is incremented by every successful
+   ownership query that authoritatively says Pro is not owned (`record(false)`). Normal operations
+   capture it when they start waiting and retries capture it when scheduled; on success a changed
+   counter sends/allows the acknowledgement but skips the grant and the Owned publication.
+   The previous `generation` (grant staleness) is unchanged.
+
+Optional done: `cancelAckRetry(token)` removes the posted retry on confirmed success. The
+pending-only early return is unchanged as instructed.
+
+Tests added/updated (`ProBillingRecoveryTest`):
+- `a coalesced Buy completes when the reconcile acknowledgement finishes` (silent reconcile owns
+  the send; Buy ends Owned when it completes).
+- `a reconcile coalescing onto a Buy acknowledgement reports the result` (opposite ordering).
+- `restore coalescing onto an in-flight acknowledgement completes with Owned`.
+- `an acknowledgement failure releases a coalesced Buy` (failure reaches waiters).
+- retry test now asserts the live subscriber sees `Owned`, not only the preference bit.
+- `a queued retry cannot grant Pro after an authoritative empty answer` (PURCHASED, ack fails,
+  empty query revokes, retry succeeds, Pro stays revoked).
+
+Verification:
+- Red (local `-Tests`): `tests=49 failures=5` - coalesced Buy stayed in flight, failure never
+  reached the waiter, Restore stuck in `Finishing`, subscriber did not see the retry success,
+  queued retry re-granted Pro.
+- Billing classes: `GATE PASS fixbilling tests=49 failures=0 skipped=0` (local `-Tests`).
+- Full gate (cloud): `GATE PASS fixbilling tests=1709 failures=0 skipped=0 lint=[skipped]`
+  (run 44272491265).
+- Commit `8531252` fixbilling: central acknowledgement completion, live retry state,
+  ownership-loss guard (judge round 2); this report update follows.
