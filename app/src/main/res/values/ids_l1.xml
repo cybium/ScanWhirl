@@ -36,6 +36,9 @@
     <item name="swDocShare" type="id" />
     <item name="swDocMore" type="id" />
     <item name="swDocThumb" type="id" />
+    <!-- T28: a search-result row's page evidence (built in code in DocCard). -->
+    <item name="swSearchPage" type="id" />
+    <item name="swSearchSnippet" type="id" />
 
     <item name="swShellNav" type="id" />
     <item name="swNavLibrary" type="id" />
