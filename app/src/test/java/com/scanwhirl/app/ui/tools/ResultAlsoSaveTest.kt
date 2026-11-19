@@ -195,6 +195,132 @@ class ResultAlsoSaveTest {
         )
     }
 
+    // ---- 3b. the screen's own Undo undoes the whole run ------------------
+    //
+    // BUGS_HUNT B2-H1 (phone, build 2 = 1485874c): "Also save in Documents" wrote the copy, its
+    // confirmation was tapped after its six seconds were over, and the file stayed; the screen's
+    // own Undo did not remove it either. The only removal path was that transient bar, so a
+    // person who reads the confirmation and then presses the screen's Undo is left with a copy
+    // they asked to undo. Undo on the result must undo the run — including the Documents copy it
+    // made — however long the person takes, and must never touch a copy this run did not create.
+
+    @Test
+    fun `the result undo removes the Documents copy of a file result after the bar is gone`() {
+        val docx = docxResult()
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "to_word", files = listOf(docx), mime = DOCX_MIME)
+        ).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
+            assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
+            val copy = media.scanwhirlPdfs().single()
+
+            // The phone shape: by the time the person presses Undo, the 6 s confirmation is over.
+            scenario.onActivity { idleFor(7_000) }
+            assertFalse(
+                "the confirmation is over before the screen's Undo is pressed",
+                snackShown(scenario)
+            )
+
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            assertTrue(
+                "B2-H1: the screen's Undo must also remove the copy this result saved ($copy)",
+                pollUntil { media.rows[copy.id] == null }
+            )
+            assertTrue(
+                "and it says the result was undone",
+                pollUntil {
+                    ShadowToast.getTextOfLatestToast().orEmpty()
+                        .contains(app.getString(R.string.tools_result_undone))
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `the result undo removes the Documents copy of a document result and keeps a person's own file`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
+        // A file the person put in Documents themselves: no undo may touch it.
+        val other = media.addRow(
+            "Earlier.pdf", "earlier".toByteArray(), owner = null,
+            relPath = android.os.Environment.DIRECTORY_DOCUMENTS
+        )
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "split", docIds = listOf(id))
+        ).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
+            assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
+            val copy = media.scanwhirlPdfs().single()
+            // A person presses the screen's Undo once the save is done — that is when the copy
+            // is known to the screen (the confirmation has appeared).
+            assertTrue("the save is finished", pollUntil { snackShown(scenario) })
+
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            assertTrue(
+                "the copy this run saved is removed with the run (toast='${ShadowToast.getTextOfLatestToast()}')",
+                pollUntil { media.rows[copy.id] == null }
+            )
+            assertNotNull("a file the person already had is never touched", media.rows[other.id])
+        }
+        assertNull("the run's own document is undone", repo.getDocument(id))
+    }
+
+    @Test
+    fun `a copy that was already there is never removed by the result undo`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
+        val pdf = requireNotNull(repo.getDocument(id)).pdfFile
+        // An identical copy the app itself saved earlier: this run created nothing.
+        val earlier = media.addRow(
+            "Rent receipt.pdf", pdf.readBytes(), owner = app.packageName,
+            relPath = "${android.os.Environment.DIRECTORY_DOCUMENTS}/ScanWhirl"
+        )
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "split", docIds = listOf(id))
+        ).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
+            assertTrue(
+                "the identical copy is reported as already saved",
+                pollUntil { snackMessageOf(scenario) == app.getString(R.string.export_already_saved, "Rent receipt.pdf") }
+            )
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            assertTrue(
+                "the run is undone",
+                pollUntil {
+                    ShadowToast.getTextOfLatestToast().orEmpty()
+                        .contains(app.getString(R.string.tools_result_undone))
+                }
+            )
+            assertNotNull(
+                "B2-H1: a copy this run did not create must survive its Undo",
+                media.rows[earlier.id]
+            )
+        }
+    }
+
+    @Test
+    fun `a copy that changed after saving is kept and the screen says so`() {
+        val docx = docxResult()
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "to_word", files = listOf(docx), mime = DOCX_MIME)
+        ).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
+            assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
+            val copy = media.scanwhirlPdfs().single()
+            // Someone edited the copy after this save: it is no longer provably ours.
+            copy.file.writeBytes("edited after saving".toByteArray())
+            assertTrue("the save is finished", pollUntil { snackShown(scenario) })
+
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            assertTrue(
+                "an edited copy is kept and the screen says why",
+                pollUntil {
+                    ShadowToast.getTextOfLatestToast().orEmpty()
+                        .contains(app.getString(R.string.export_undo_kept_changed, copy.name))
+                }
+            )
+            assertNotNull("the edited copy stays where the person can find it", media.rows[copy.id])
+        }
+    }
+
     // ---- 4. saving twice makes no duplicate -------------------------------
 
     @Test
@@ -425,6 +551,16 @@ class ResultAlsoSaveTest {
         var message: String? = null
         scenario.onActivity { message = snackMessage(it) }
         return message
+    }
+
+    /** True while the save confirmation (the bar with Undo) is actually on screen. */
+    private fun snackShown(scenario: ActivityScenario<ToolResultActivity>): Boolean {
+        var shown = false
+        scenario.onActivity { activity ->
+            val undo = activity.findViewById<View>(R.id.snackUndo)
+            shown = undo != null && undo.isShown
+        }
+        return shown
     }
 
     private fun drainStarted(activity: android.app.Activity) {
