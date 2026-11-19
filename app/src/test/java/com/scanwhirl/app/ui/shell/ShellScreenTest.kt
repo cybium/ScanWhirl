@@ -115,7 +115,8 @@ class ShellScreenTest {
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
-            val tiles = ToolsHubScreen.tiles(body)
+            openAllToolsDoors(activity)
+            val tiles = ToolsHubScreen.rows(body)
             val shipped = ToolRegistry.all.filter { it.status != ToolStatus.SOON }
             assertEquals(shipped.size, tiles.size)
             assertEquals(shipped.size, tiles.mapNotNull { it.tool?.id }.toSet().size)
@@ -133,7 +134,8 @@ class ShellScreenTest {
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
-            val tile = ToolsHubScreen.tiles(body).first { it.tool?.id == "pdfa" }
+            openAllToolsDoors(activity)
+            val tile = ToolsHubScreen.rows(body).first { it.tool?.id == "pdfa" }
             tile.performClick()
             idle()
             val dialog = ShadowDialog.getLatestDialog()
@@ -151,7 +153,7 @@ class ShellScreenTest {
             idle()
             activity.findViewById<EditText>(R.id.swToolsSearch).setText("smaller")
             idle()
-            val tiles = ToolsHubScreen.tiles(activity.findViewById<View>(R.id.swToolsBody))
+            val tiles = ToolsHubScreen.rows(activity.findViewById<View>(R.id.swToolsBody))
             assertEquals(
                 "the hub lists the ranked hits that actually ship",
                 ToolRegistry.search(activity, "smaller")

@@ -18,17 +18,28 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.SwType
-import com.scanwhirl.app.ui.kit.ToolGroup
 import com.scanwhirl.app.ui.kit.ToolHost
+import com.scanwhirl.app.ui.kit.ToolJob
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolRow
 import com.scanwhirl.app.ui.kit.ToolStatus
-import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
+import com.scanwhirl.app.util.ProGate
 
 /**
- * v2 UI: 03_tools_hub — every shipped tool, grouped, searchable over titles and
- * keywords. A Coming-soon tool is not shown here at all (UI_PLAN §0b: no Soon
- * tiles); the catalogue keeps it for the Coming soon sheet.
+ * UI_PLAN §0b / tools_v4 — the Tools tab answers "what do I want done?".
+ *
+ * The seven approved jobs come first (Make it smaller / Combine and organise / Sign and mark
+ * up / Keep it private / Get the text / Change the format / Start something new), each one a
+ * card of full-width [ToolRow]s. "Make it smaller" is first and names Compress, so making a
+ * file smaller no longer means decoding "Optimize".
+ *
+ * Membership and every number are derived from [ToolRegistry.jobs]; a job with more rows than
+ * [PREVIEW_ROWS] offers one "All N tools" door that opens the rest in place (the same row
+ * rendering as every other job, no third level). A Coming-soon tool is never rendered.
+ *
+ * Search reuses the existing ranking and draws the same rows, so "Searchable PDF" reads in
+ * full instead of the old five-column "…".
  */
 class ToolsHubScreen(
     private val context: Context,
@@ -38,6 +49,9 @@ class ToolsHubScreen(
     val searchInput: EditText
     private lateinit var clearButton: ImageButton
     val body: LinearLayout
+
+    /** Jobs whose full list is shown after their "All N tools" door is tapped. */
+    private val expandedJobs = LinkedHashSet<ToolJob>()
 
     init {
         orientation = VERTICAL
@@ -51,7 +65,7 @@ class ToolsHubScreen(
         bar.addView(
             SwStyle.text(context, 24f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(R.string.tools_title)
-                typeface = com.scanwhirl.app.ui.kit.SwType.extraBold(context)
+                typeface = SwType.extraBold(context)
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
@@ -129,30 +143,28 @@ class ToolsHubScreen(
             id = R.id.swToolsBody
             orientation = VERTICAL
         }
-        addView(body)
+        addView(body, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         render("")
     }
 
-    /** Re-binds every tile after a Free/Pro change; keeps the current search. */
+    /** Re-binds after a Free/Pro change; keeps the current search. */
     fun refreshProState() {
         render(searchInput.text?.toString().orEmpty())
     }
 
-    /** Rebuilds the body for [query]; blank shows every grouped section. */
+    /** Rebuilds the body for [query]; blank shows the seven jobs. */
     fun render(query: String) {
         if (::clearButton.isInitialized) clearButton.isVisible = query.isNotBlank()
         body.removeAllViews()
         if (query.isBlank()) {
-            // UI_PLAN §0b: no Soon tiles. A group whose tools are all Coming soon is not
-            // rendered at all, so the hub never shows an empty section.
-            for (group in ToolGroup.entries) {
-                val tools = shipped(group)
+            for ((job, tools) in ToolRegistry.jobs()) {
                 if (tools.isEmpty()) continue
-                body.addView(section(group, tools))
+                body.addView(jobCard(job, tools))
             }
             return
         }
+        // The existing ranking stays; a Coming-soon tool still has no row anywhere.
         val hits = ToolRegistry.search(context, query).filter { it.status != ToolStatus.SOON }
         if (hits.isEmpty()) {
             body.addView(
@@ -166,7 +178,7 @@ class ToolsHubScreen(
             )
             return
         }
-        body.addView(section(null, hits))
+        body.addView(resultsCard(hits))
     }
 
     /** v2 UI: 03_tools_hub — entering the tab from the nav starts from the full catalogue. */
@@ -176,96 +188,175 @@ class ToolsHubScreen(
         if (::clearButton.isInitialized) clearButton.isVisible = false
     }
 
-    private fun section(group: ToolGroup?, tools: List<SwTool>): View {
-        val card = LinearLayout(context).apply {
-            orientation = VERTICAL
-            background = SwStyle.card(context, 18f)
-            val m = SwStyle.dp(context, 8f)
-            // No side padding: the five 48dp squares keep their own gutters inside the
-            // column, and the widest label ("Searchable") needs the full column. 8dp
-            // top/bottom keeps the card tight but readable; 12dp separates the cards.
-            setPadding(0, SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f))
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                setMargins(m, 0, m, SwStyle.dp(context, 12f))
-            }
-        }
-        val title = if (group != null) context.getString(groupTitle(group)) else context.getString(R.string.tools_title)
-        val header = sectionTitle(title)
-        val pad = SwStyle.dp(context, 6f)
-        header.setPadding(pad, 0, pad, SwStyle.dp(context, 8f))
-        card.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-
-        // A 4-column grid on a normal phone; wider text gets fewer columns instead of a
-        // clipped label (checkable at fontScale 1.3 on a 360dp screen).
-        val columns = columns()
-        var row: LinearLayout? = null
-        var rows = 0
-        for ((index, tool) in tools.withIndex()) {
-            if (index % columns == 0) {
-                row = LinearLayout(context).apply {
-                    orientation = HORIZONTAL
-                    weightSum = columns.toFloat()
-                }
-                card.addView(
-                    row,
-                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                        if (rows > 0) topMargin = SwStyle.dp(context, 6f)
-                    }
-                )
-                rows++
-            }
-            val tile = ToolTile(context)
-            tile.id = R.id.swToolTile
-            tile.host = host
-            tile.bind(tool)
-            tile.layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-            row!!.addView(tile)
-        }
-        // Fill the last row so the columns stay aligned.
-        while (row != null && row.childCount % columns != 0) {
-            row.addView(View(context), LayoutParams(0, 0, 1f))
+    /** One job: its heading, its rows, and one "All N tools" door when the job is longer. */
+    private fun jobCard(job: ToolJob, tools: List<SwTool>): View {
+        val card = card()
+        card.addView(jobHeader(context.getString(job.title), job.pro))
+        card.addView(headRule())
+        val expanded = expandedJobs.contains(job)
+        val shown = if (expanded || tools.size <= PREVIEW_ROWS) tools else tools.take(PREVIEW_ROWS)
+        for (tool in shown) card.addView(row(tool))
+        if (tools.size > PREVIEW_ROWS) {
+            card.addView(door(job, tools.size, expanded))
         }
         return card
     }
 
-    /** A group's tools that actually ship: a Coming-soon tool is never a hub tile. */
-    private fun shipped(group: ToolGroup): List<SwTool> =
-        ToolRegistry.byGroup(group).filter { it.status != ToolStatus.SOON }
-
-    private fun columns(): Int = when {
-        resources.configuration.fontScale >= 1.6f -> 2
-        resources.configuration.fontScale >= 1.25f -> 3
-        // Five columns on a normal phone: the 48dp squares keep ~10dp gutters in a 68dp
-        // column, the widest label ("Searchable", 65dp at 12sp) stays on one line, and the
-        // five-tool Create group no longer leaves an empty second row.
-        else -> 5
+    /** Search results: the same full-width rows, under one honest "Results" heading. */
+    private fun resultsCard(hits: List<SwTool>): View {
+        val card = card()
+        card.addView(jobHeader(context.getString(R.string.tools_search_results), false))
+        card.addView(headRule())
+        for (tool in hits) card.addView(row(tool))
+        return card
     }
 
-    /** Sentence case (never ALL CAPS), 16sp semibold: a heading, not a category stamp. */
-    private fun sectionTitle(title: String): TextView =
-        SwStyle.text(context, 16f, SwStyle.color(context, R.color.text_hologram_hi)).apply {
-            typeface = SwType.semibold(context)
-            text = title
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+    private fun card(): LinearLayout = LinearLayout(context).apply {
+        orientation = VERTICAL
+        background = SwStyle.card(context, 18f)
+        setPadding(
+            SwStyle.dp(context, 4f), SwStyle.dp(context, 4f),
+            SwStyle.dp(context, 4f), SwStyle.dp(context, 6f)
+        )
+        val m = SwStyle.dp(context, 8f)
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            setMargins(m, 0, m, SwStyle.dp(context, 12f))
         }
+    }
 
-    private fun groupTitle(group: ToolGroup): Int = when (group) {
-        ToolGroup.CREATE -> R.string.tools_group_create
-        ToolGroup.ORGANIZE -> R.string.tools_group_organize
-        ToolGroup.OPTIMIZE -> R.string.tools_group_optimize
-        ToolGroup.CONVERT -> R.string.tools_group_convert
-        ToolGroup.EDIT -> R.string.tools_group_edit
-        ToolGroup.SECURE -> R.string.tools_group_secure
-        ToolGroup.TEXT -> R.string.tools_group_text
+    /** Sentence case (never ALL CAPS), 16sp semibold, with the job's Pro word in Free builds. */
+    private fun jobHeader(title: String, proJob: Boolean): View {
+        val header = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(SwStyle.dp(context, 8f), SwStyle.dp(context, 6f), SwStyle.dp(context, 8f), SwStyle.dp(context, 2f))
+            minimumHeight = SwStyle.dp(context, 44f)
+        }
+        header.addView(
+            SwStyle.text(context, 16f, SwStyle.color(context, R.color.text_hologram_hi)).apply {
+                typeface = SwType.semibold(context)
+                text = title
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            },
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        )
+        if (proJob && !ProGate.isPro(context)) {
+            header.addView(proChip(), LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        }
+        return header
+    }
+
+    private fun headRule(): View = View(context).apply {
+        setBackgroundColor(SwStyle.color(context, R.color.sw_cyan_hair))
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 1).apply {
+            val m = SwStyle.dp(context, 8f)
+            setMargins(m, SwStyle.dp(context, 2f), m, SwStyle.dp(context, 2f))
+        }
+    }
+
+    private fun proChip(): TextView = SwStyle.text(
+        context,
+        PRO_TAG_SP,
+        SwStyle.color(context, R.color.gold_pro_primary),
+        bold = true,
+        letterSpacing = 0.06f
+    ).apply {
+        text = context.getString(R.string.badge_pro)
+        maxLines = 1
+        ellipsize = null
+        setPadding(
+            SwStyle.dp(context, 6f), SwStyle.dp(context, 1f),
+            SwStyle.dp(context, 6f), SwStyle.dp(context, 1f)
+        )
+        background = SwStyle.pill(
+            context,
+            SwStyle.color(context, R.color.gold_pro_primary),
+            SwStyle.color(context, R.color.gold_pro_glow),
+            SwStyle.color(context, R.color.gold_tile_border)
+        )
+    }
+
+    private fun row(tool: SwTool): ToolRow = ToolRow(context).apply {
+        host = this@ToolsHubScreen.host
+        bind(tool)
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+    }
+
+    /**
+     * The one door to the rest of a long job. The count is the job's own derived size, never
+     * a typed number; the door opens in place so the tab stays two levels deep.
+     */
+    private fun door(job: ToolJob, count: Int, expanded: Boolean): View {
+        val label = if (expanded) {
+            context.getString(R.string.tools_job_fewer)
+        } else {
+            context.getString(R.string.tools_job_all, count)
+        }
+        val door = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            tag = TAG_JOB_DOOR
+            isClickable = true
+            isFocusable = true
+            minimumHeight = SwStyle.dp(context, 48f)
+            val pad = SwStyle.dp(context, 8f)
+            setPadding(pad, pad, pad, pad)
+            background = SwStyle.rounded(context, android.graphics.Color.TRANSPARENT, radiusDp = 12f)
+            foreground = android.graphics.drawable.RippleDrawable(
+                ColorStateList.valueOf(SwStyle.color(context, R.color.sw_cyan_soft)),
+                null,
+                SwStyle.rounded(context, android.graphics.Color.WHITE, radiusDp = 12f)
+            )
+            contentDescription = label
+            setOnClickListener {
+                if (expanded) expandedJobs.remove(job) else expandedJobs.add(job)
+                render(searchInput.text?.toString().orEmpty())
+            }
+        }
+        door.addView(
+            SwStyle.text(context, 14f, SwStyle.color(context, R.color.cyan_dim)).apply {
+                typeface = SwType.semibold(context)
+                text = label
+            },
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        )
+        door.addView(
+            ImageView(context).apply {
+                setImageResource(R.drawable.ic_sym_chevron_right)
+                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_dim))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            },
+            LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f))
+        )
+        return door
     }
 
     companion object {
-        /** Every tile in the hub, in catalogue order (tests walk them). */
-        fun tiles(root: View): List<ToolTile> {
-            val found = mutableListOf<ToolTile>()
-            fun walk(v: View) {
-                if (v is ToolTile) found += v
-                if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        /** Rows shown before a job offers its "All N tools" door. */
+        const val PREVIEW_ROWS = 3
+
+        /** Tag of the "All N tools" door, so tests can open it without a private id. */
+        const val TAG_JOB_DOOR = "swToolsJobDoor"
+
+        private const val PRO_TAG_SP = 12f
+
+        /** Every tool row in the hub, in screen order (tests walk them). */
+        fun rows(root: View): List<ToolRow> {
+            val found = mutableListOf<ToolRow>()
+            fun walk(view: View) {
+                if (view is ToolRow) found += view
+                if (view is ViewGroup) for (i in 0 until view.childCount) walk(view.getChildAt(i))
+            }
+            walk(root)
+            return found
+        }
+
+        /** The "All N tools" doors currently rendered (tests open them). */
+        fun doors(root: View): List<View> {
+            val found = mutableListOf<View>()
+            fun walk(view: View) {
+                if (view.tag == TAG_JOB_DOOR) found += view
+                if (view is ViewGroup) for (i in 0 until view.childCount) walk(view.getChildAt(i))
             }
             walk(root)
             return found

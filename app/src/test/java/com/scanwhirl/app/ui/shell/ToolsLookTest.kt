@@ -12,7 +12,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.kit.ToolGroup
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
@@ -173,77 +172,65 @@ abstract class ToolsLookBase {
     }
 
     @Test
-    fun `the tools tab renders no Coming soon tile and every tile has an action`() {
+    fun `the tools tab renders no Coming soon tile and every row has an action`() {
         toolsTab { _, body ->
-            val tiles = ToolsHubScreen.tiles(body)
-            assertTrue("the hub renders tiles", tiles.isNotEmpty())
-            val soon = tiles.filter { it.tool?.status == ToolStatus.SOON }
-            assertTrue("no Coming soon tile in the hub: ${soon.map { it.tool?.id }}", soon.isEmpty())
-            assertEquals(
-                "every shipped tool has a tile",
-                ToolRegistry.all.count { it.status != ToolStatus.SOON },
-                tiles.size
-            )
-            for (tile in tiles) {
-                assertTrue("${tile.tool?.id} must do something", tile.hasOnClickListeners())
+            val rows = ToolsHubScreen.rows(body)
+            assertTrue("the hub renders rows", rows.isNotEmpty())
+            val soon = rows.filter { it.tool?.status == ToolStatus.SOON }
+            assertTrue("no Coming soon row in the hub: ${soon.map { it.tool?.id }}", soon.isEmpty())
+            for (row in rows) {
+                assertTrue("${row.tool?.id} must do something", row.hasOnClickListeners())
             }
-            // The normal grid is five columns at 1.0x on a 360dp screen.
-            val firstRow = (body.getChildAt(0) as ViewGroup).getChildAt(1) as ViewGroup
-            assertEquals("five columns at 1.0x", 5, firstRow.childCount)
+            // A row is the full width of its job card, not a column in a grid.
+            for (row in rows) {
+                assertEquals(
+                    "row ${row.tool?.id} fills its card",
+                    (row.parent as View).width,
+                    row.width
+                )
+            }
         }
     }
 
     @Test
-    fun `section headings are sentence case 16sp and never ALL CAPS`() {
+    fun `job headings are sentence case 16sp and never ALL CAPS`() {
         toolsTab { _, body ->
             val headers = (0 until body.childCount).mapNotNull { index ->
-                ((body.getChildAt(index) as? ViewGroup)?.getChildAt(0) as? TextView)
+                ((body.getChildAt(index) as? ViewGroup)?.getChildAt(0) as? ViewGroup)
+                    ?.getChildAt(0) as? TextView
             }
-            val expected = ToolGroup.entries.map { app.getString(groupTitle(it)) }
-            assertEquals("one heading per group", expected, headers.map { it.text.toString() })
+            val expected = ToolRegistry.jobs().map { app.getString(it.first.title) }
+            assertEquals("one heading per job", expected, headers.map { it.text.toString() })
             for ((index, header) in headers.withIndex()) {
                 val text = header.text.toString()
-                assertEquals(
-                    "the heading is not case-shifted",
-                    expected[index],
-                    text
-                )
+                assertEquals("the heading is not case-shifted", expected[index], text)
                 if (Locale.getDefault().language == "en") {
                     assertNotEquals("a heading is never ALL CAPS", text.uppercase(Locale.ROOT), text)
                 }
                 val sp = header.textSize / scaledDensity
-                assertTrue("${text} is a 16sp heading, was $sp", sp >= 15.4f && sp <= 16.6f)
+                assertTrue("$text is a 16sp heading, was $sp", sp >= 15.4f && sp <= 16.6f)
             }
         }
     }
 
     @Test
-    fun `tool labels fit two lines and are never clipped or overflowing`() {
+    fun `tool rows keep whole labels at 100 and 130 percent`() {
         for (scale in listOf(1.0f, 1.3f)) {
             RuntimeEnvironment.setFontScale(scale)
             toolsTab { _, body ->
-                // Proves the scale reached the screen: 1.3x narrows the grid to three
-                // columns so the bigger labels keep their two lines.
-                val firstRow = (body.getChildAt(0) as ViewGroup).getChildAt(1) as ViewGroup
-                assertEquals(
-                    "columns at ${scale}x",
-                    if (scale >= 1.25f) 3 else 5,
-                    firstRow.childCount
-                )
                 val bad = mutableListOf<String>()
-                for (tile in ToolsHubScreen.tiles(body)) {
-                    val label = tile.labelView
+                for (row in ToolsHubScreen.rows(body)) {
+                    val label = row.labelView
                     val layout = label.layout
                     if (layout == null) {
                         bad += "${label.text}: never laid out"
                         continue
                     }
                     val avail = label.width - label.totalPaddingLeft - label.totalPaddingRight
-                    if (layout.lineCount > 2) bad += "${label.text}: ${layout.lineCount} lines"
+                    if (layout.lineCount < 1) bad += "${label.text}: no line"
                     for (line in 0 until layout.lineCount) {
-                        // v2 UI: 03_tools_hub - a Hindi title that needs a third line ends in
-                        // "…" (END) on line two; anything earlier would hide the tool's name.
-                        if (layout.getEllipsisCount(line) != 0 && (line != 1 || layout.lineCount != 2)) {
+                        // B4: a row has the full width, so no label is ever cut with "…".
+                        if (layout.getEllipsisCount(line) != 0) {
                             bad += "${label.text}: ellipsized on line $line"
                         }
                         // getLineMax ignores the trailing wrap whitespace, which is never drawn.
@@ -255,10 +242,10 @@ abstract class ToolsLookBase {
                         bad += "${label.text}: clipped (${layout.height}px in ${label.height}px)"
                     }
                     val sp = label.textSize / scaledDensity
-                    if (sp < 12f || sp > 13f) bad += "${label.text}: label ${sp}sp"
+                    if (sp < 14.4f || sp > 15.6f) bad += "${label.text}: label ${sp}sp"
                 }
                 assertTrue(
-                    "labels at ${scale}x on 360dp: ${bad.joinToString(" | ")}",
+                    "row labels at ${scale}x on 360dp: ${bad.joinToString(" | ")}",
                     bad.isEmpty()
                 )
             }
@@ -306,16 +293,6 @@ abstract class ToolsLookBase {
             }
         }
     }
-
-    private fun groupTitle(group: ToolGroup): Int = when (group) {
-        ToolGroup.CREATE -> R.string.tools_group_create
-        ToolGroup.ORGANIZE -> R.string.tools_group_organize
-        ToolGroup.OPTIMIZE -> R.string.tools_group_optimize
-        ToolGroup.CONVERT -> R.string.tools_group_convert
-        ToolGroup.EDIT -> R.string.tools_group_edit
-        ToolGroup.SECURE -> R.string.tools_group_secure
-        ToolGroup.TEXT -> R.string.tools_group_text
-    }
 }
 
 @org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
@@ -329,10 +306,10 @@ class ToolsLookTest : ToolsLookBase()
 class ToolsLookHindiTest : ToolsLookBase()
 
 /**
- * v2 UI: 03_tools_hub — lead visual check 2026-11-18: the Tools tab wasted vertical space
- * (a ~125dp tile row and an empty band in each card), so a phone screen showed ~9 tools.
- * A tile is now exactly its content (12dp + 48dp square + 8dp + label + 8dp) and the cards
- * are tightly spaced.
+ * B4-TOOLS — the first Tools screen used to waste a 125dp tile row and show ~9 tiles. It now
+ * starts with the job a person most often wants ("Make it smaller", with Compress named) and
+ * uses full-width 56dp rows; the point of this check is that the first job is readable without
+ * scrolling and no label is cut.
  */
 @org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -358,7 +335,7 @@ class ToolsDensityTest {
     }
 
     @Test
-    fun `the first tools screen is dense enough to show thirteen tiles`() {
+    fun `the first tools screen starts with Make it smaller and names Compress`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 shadowOf(Looper.getMainLooper()).idle()
@@ -373,17 +350,24 @@ class ToolsDensityTest {
 
                 // The tab content stops where the bottom dock starts (780 - 100dp dock).
                 val content = activity.findViewById<View>(R.id.swTabContent)
+                val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
+                val firstHeader = ((body.getChildAt(0) as ViewGroup).getChildAt(0) as ViewGroup)
+                    .getChildAt(0) as TextView
+                assertEquals(
+                    app.getString(R.string.tools_job_smaller),
+                    firstHeader.text.toString()
+                )
+
                 val visible = mutableListOf<String>()
                 val bad = mutableListOf<String>()
-                for (tile in ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))) {
-                    val rect = Rect(0, 0, tile.width, tile.height)
-                    (root as ViewGroup).offsetDescendantRectToMyCoords(tile, rect)
+                for (row in ToolsHubScreen.rows(body)) {
+                    val rect = Rect(0, 0, row.width, row.height)
+                    (root as ViewGroup).offsetDescendantRectToMyCoords(row, rect)
                     if (rect.top >= content.top && rect.bottom <= content.bottom) {
-                        visible += tile.tool?.id.orEmpty()
+                        visible += row.tool?.id.orEmpty()
                     }
-                    val label = tile.labelView
+                    val label = row.labelView
                     val layout = label.layout ?: continue
-                    if (layout.lineCount > 2) bad += "${label.text}: ${layout.lineCount} lines"
                     for (line in 0 until layout.lineCount) {
                         if (layout.getEllipsisCount(line) != 0) bad += "${label.text}: ellipsized"
                     }
@@ -393,13 +377,10 @@ class ToolsDensityTest {
                         bad += "${label.text}: clipped"
                     }
                 }
-                // 13 is the ceiling at 360x780: the fourth card's row starts at ~816dp, so a
-                // 14th tile needs a shorter screen chrome or dock. Anything above 13 (a
-                // taller phone, a smaller dock) still passes.
                 assertTrue(
-                    "at least 13 tiles fit the first screen, saw ${visible.size}: " +
+                    "Compress and Resize are visible in the first job without scrolling, saw " +
                         "${visible.joinToString(",")}; labels=${bad.joinToString(" | ")}",
-                    visible.size >= 13
+                    visible.containsAll(listOf("compress", "resize"))
                 )
                 assertTrue("labels stay whole: ${bad.joinToString(" | ")}", bad.isEmpty())
             }
