@@ -707,6 +707,46 @@ abstract class DocumentWorkspaceBase {
             )
         }
     }
+
+    /**
+     * A document that stops being protected (the user takes it out of the Vault or unlocks it)
+     * must come back whole: the reason disappears, the buttons work again, and no stale
+     * "take it out of the Vault first" words stay in what TalkBack reads.
+     */
+    @Test
+    fun `a document that becomes usable again loses the reason and the stale words`() {
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Vault doc")
+        repo.setVaulted(id, true)
+        open(id) { activity, _ ->
+            assertFalse(
+                "Compress starts disabled in the Vault",
+                buttonOf(activity, R.id.btnCompress).isEnabled
+            )
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    repo.setVaulted(id, false)
+                }
+            }
+            activity.refreshList()
+            assertTrue(
+                "the panel comes back when the document is usable again",
+                pollUntil {
+                    buttonOf(activity, R.id.btnCompress).isEnabled &&
+                        !activity.findViewById<TextView>(R.id.actionPanelReason).isShown
+                }
+            )
+            assertEquals(
+                "no Vault reason is left in Compress's spoken label",
+                activity.getString(R.string.tool_compress),
+                buttonOf(activity, R.id.btnCompress).contentDescription?.toString()
+            )
+            assertEquals(
+                "Sign speaks only its own label again",
+                activity.getString(R.string.tool_sign),
+                buttonOf(activity, R.id.btnSign).contentDescription?.toString()
+            )
+        }
+    }
 }
 
 /** 360 dp phone, English. */
