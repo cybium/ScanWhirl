@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
@@ -31,6 +32,7 @@ import kotlinx.coroutines.withContext
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.TrashActions
 import com.scanwhirl.app.ui.kit.DocCard
 import com.scanwhirl.app.ui.kit.SwChip
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -792,16 +794,25 @@ class LibraryScreen(
         sheet.show()
     }
 
+    /**
+     * T27-FIX-TRASH (data loss): the sheet says "You can restore it for 30 days", so a
+     * selected document moves to Trash (Undo restores it) instead of being purged.
+     */
     private fun confirmDeleteSelection() {
         val ids = selected.toList()
         SwSheet.builder(context)
             .setTitle(context.getString(R.string.sel_delete_title, ids.size))
             .setMessage(R.string.shell_trash_note)
             .setPrimary(R.string.shell_move_to_trash) {
-                ioWrite({ ids.forEach { repo.deleteDocument(it) } }) {
+                ioWrite({ TrashActions.moveAll(repo, ids) }) { moved ->
                     exitSelection()
                     reload()
-                    Toast.makeText(context, context.getString(R.string.shell_moved_to_trash), Toast.LENGTH_SHORT).show()
+                    val activity = context as? AppCompatActivity
+                    if (activity != null) {
+                        TrashActions.showMoved(activity, this, null, moved) { reload() }
+                    } else if (moved.keys.isEmpty()) {
+                        Toast.makeText(context, R.string.trash_move_failed, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
             .setSecondary(R.string.sheet_cancel)
