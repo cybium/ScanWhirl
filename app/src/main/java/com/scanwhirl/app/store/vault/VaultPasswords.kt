@@ -3,6 +3,7 @@ package com.scanwhirl.app.store.vault
 import android.content.Context
 import android.util.Base64
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.Prefs
 import java.io.File
 
 /**
@@ -22,7 +23,10 @@ import java.io.File
  *  - `VaultPasswords.of(context).remove(docId)` when the protection is removed;
  *  - `has(docId)` decides whether "Use password saved in Vault" is offered at all;
  *  - [VaultLockedException] means the Vault is locked (ask the user to unlock it);
- *  - [VaultAuthException] means the stored blob was changed or belongs to another key.
+ *  - [VaultAuthException] means the stored blob was changed or belongs to another key;
+ *  - [VaultPendingException] means the Vault's one-time recovery code has not passed its
+ *    four-character check yet: nothing is stored or returned under that unfinished key
+ *    (review VAULT-F1), so a retry after the setup finishes simply saves it.
  *
  * The Vault is process-wide ([VaultSession]), so any screen may use this class without
  * holding a `VaultStore` of its own.
@@ -31,6 +35,8 @@ class VaultPasswords private constructor(context: Context) {
 
     companion object {
         const val FILE_NAME = "passwords.bin"
+        private const val VAULT_DIR = "vault2"
+        private const val RECOVERY_FILE = "recovery.bin"
 
         private const val HEADER = "v1"
         private val LOCK = Any()
@@ -66,41 +72,63 @@ class VaultPasswords private constructor(context: Context) {
     private val context: Context = context.applicationContext
 
     private val file: File
-        get() = File(File(this.context.filesDir, "vault2"), FILE_NAME)
+        get() = File(File(this.context.filesDir, VAULT_DIR), FILE_NAME)
+
+    /**
+     * Review VAULT-F1: `setup()` unlocks the Vault before the one-time recovery code has passed
+     * its four-character check, so [VaultSession] alone said "unlocked" for a Vault that is not
+     * finished. Nothing may be written or handed back under that key, hence the marker check.
+     * Fail closed on an unreadable state: refuse rather than store a password under a setup
+     * whose state cannot be read.
+     */
+    private fun pending(): Boolean = runCatching {
+        File(File(this.context.filesDir, VAULT_DIR), RECOVERY_FILE)
+            .let { it.isFile && it.length() > 0 } && Prefs.vaultSetupConfirmPending(this.context)
+    }.getOrDefault(true)
 
     private fun key(): ByteArray = VaultSession.keyOrNull() ?: throw VaultLockedException()
 
-    /** Stores (or replaces) the password for [documentId]. Requires an unlocked Vault. */
+    /** Stores (or replaces) the password for [documentId]. Requires a finished, unlocked Vault. */
     fun save(documentId: String, password: String) {
         require(documentId.isNotBlank()) { "A document id is required" }
         require(password.isNotEmpty()) { "A password is required" }
         synchronized(LOCK) {
+            // The lock is reported first (callers open the Unlock screen for it); an unfinished
+            // setup is refused after that, so no password is stored under a key that is not final.
             val current = key()
+            if (pending()) throw VaultPendingException()
             val entries = read(current)
             entries[documentId] = password
             write(entries, current)
         }
     }
 
-    /** The saved password for [documentId], or null when none is saved. Requires an unlocked Vault. */
+    /** The saved password for [documentId], or null when none is saved. Requires a finished, unlocked Vault. */
     fun get(documentId: String): String? = synchronized(LOCK) {
-        read(key())[documentId]
+        val current = key()
+        if (pending()) return@synchronized null
+        read(current)[documentId]
     }
 
-    /** True when a password is saved for [documentId]. Requires an unlocked Vault. */
+    /** True when a password is saved for [documentId]. Requires a finished, unlocked Vault. */
     fun has(documentId: String): Boolean = get(documentId) != null
 
-    /** Removes the saved password; true when one was there. Requires an unlocked Vault. */
+    /** Removes the saved password; true when one was there. Requires a finished, unlocked Vault. */
     fun remove(documentId: String): Boolean = synchronized(LOCK) {
         val current = key()
+        if (pending()) return@synchronized false
         val entries = read(current)
         if (entries.remove(documentId) == null) return@synchronized false
         write(entries, current)
         true
     }
 
-    /** How many passwords are saved. Requires an unlocked Vault. */
-    fun count(): Int = synchronized(LOCK) { read(key()).size }
+    /** How many passwords are saved. Requires a finished, unlocked Vault. */
+    fun count(): Int = synchronized(LOCK) {
+        val current = key()
+        if (pending()) return@synchronized 0
+        read(current).size
+    }
 
     // ------------------------------------------------------------------
 

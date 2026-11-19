@@ -64,6 +64,9 @@
     <string name="vault_pending_note">बनाना पूरा करें: अपने कोड के पहले 4 अक्षर लिखें।</string>
     <string name="vault_code_stale">यह तिजोरी बदल गई है। कोड का चरण फिर से शुरू करें।</string>
     <string name="vault_finish_failed">बनाना पूरा नहीं हो सका। फिर कोशिश करें।</string>
+    <!-- VAULT-F1: बनाना अधूरा रहने पर बचाकर रखी प्रति और बहाली। -->
+    <string name="vault_pending_backup_omitted">तिजोरी बनाना अभी पूरा नहीं हुआ, इसलिए इस बचाकर रखी प्रति में तिजोरी की फ़ाइलें नहीं हैं। बनाना पूरा करके फिर से बचाकर रखी प्रति बनाएँ।</string>
+    <string name="vault_pending_restore_deferred">तिजोरी बनाना अभी पूरा नहीं हुआ, इसलिए तिजोरी की फ़ाइलें बहाल नहीं हुईं। बनाना पूरा करके यह प्रति फिर से बहाल करें।</string>
 
     <string name="vault_unlock_sheet_title">तिजोरी खोलें</string>
     <string name="vault_unlock_note_fingerprint">अपनी उँगली का निशान लगाएँ, या गुप्त नंबर डालें।</string>
