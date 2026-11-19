@@ -1,0 +1,1 @@
+com.scanwhirl.app.HindiGlossaryTermsTest,com.scanwhirl.app.ui.tools.CompressResultHindiWordingTest,com.scanwhirl.app.ui.tools.CompressResultHonestyHiTest,com.scanwhirl.app.ui.tools.ResultAlsoSaveTest
