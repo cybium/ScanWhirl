@@ -2,6 +2,7 @@ package com.scanwhirl.app.corpus
 
 import android.app.Application
 import android.content.ContextWrapper
+import android.content.pm.ProviderInfo
 import android.graphics.Color
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
@@ -31,6 +32,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowContentResolver
 import java.awt.image.BufferedImage
 import java.io.File
 import java.io.InputStream
@@ -50,6 +52,7 @@ import kotlin.math.roundToInt
 @Config(sdk = [35], application = Application::class)
 class CorpusToolsTest {
     private class Mismatch(message: String) : AssertionError(message)
+    private class NeedsDevice(message: String) : Exception(message)
     private fun verify(ok: Boolean, detail: String) { if (!ok) throw Mismatch(detail) }
     private fun equal(expected: Any?, actual: Any?, label: String) =
         verify(expected == actual, "$label: expected $expected; actual $actual")
@@ -57,14 +60,16 @@ class CorpusToolsTest {
     private data class Case(val id: String, val paths: List<String>, val expected: String)
     private enum class Status { PASS, FAIL, ERROR, DEVICE_ONLY }
     private data class Artifact(val name: String, val sha: String, val bytes: Long)
+    private data class PerInput(val status: Status, val detail: String, val trace: String, val artifacts: List<Artifact>)
     private data class Row(
-        val tool: String, val input: String, val status: Status, val settings: String,
+        val tool: String, val input: String, val sourceSha: String, val status: Status, val settings: String,
         val expected: String, val detail: String, val trace: String, val ms: Long,
         val artifacts: List<Artifact>
     )
 
     private lateinit var corpus: File
     private lateinit var output: File
+    private lateinit var expectedHashes: Map<String, String>
     private var hostImportProblem: Throwable? = null
     private val rows = mutableListOf<Row>()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
@@ -100,6 +105,7 @@ class CorpusToolsTest {
         }
         val repo = ScanRepository(context)
         val artifacts = mutableListOf<Artifact>()
+        val perInput = mutableListOf<PerInput>()
         var detail = ""
         var settings = "Prepare fresh test Library fixture; import all pages"
         var usedIndependentStaging = false
@@ -165,6 +171,13 @@ class CorpusToolsTest {
             .listFiles { f -> f.isFile && f.extension == "pdf" }!!.sortedBy { it.name }
             .map { it.relativeTo(corpus).invariantSeparatorsPath },
             "Reject as damaged/empty without publishing a document; a recoverable PDF must open with all original pages.")
+        val shaCell = Regex(",([a-f0-9]{64}),\\d+,")
+        expectedHashes = File(corpus, "SOURCES.csv").useLines { lines ->
+            lines.drop(1).mapNotNull { row ->
+                val hash = shaCell.find(row)?.groupValues?.get(1) ?: return@mapNotNull null
+                row.substringBefore(',').removeSurrounding("\"") to hash
+            }.toMap()
+        }
         val csv = File(output, "results.csv")
         val report = File(output, "RESULTS.md")
         report.writeText("# Corpus run in progress\n\nRevision `$revision`, started ${Instant.now()}.\n")
@@ -174,7 +187,7 @@ class CorpusToolsTest {
         } catch (e: LinkageError) {
             hostImportProblem = e
         } catch (e: PdfImport.ImportException) {
-            if (generateSequence<Throwable>(e) { it.cause }.any {
+            if (e.reason == PdfImport.Reason.EMPTY || generateSequence<Throwable>(e) { it.cause }.any {
                     it is LinkageError || it.stackTrace.any { frame -> frame.className.startsWith("android.graphics.pdf.") }
                 }) hostImportProblem = e
         } finally {
@@ -182,7 +195,7 @@ class CorpusToolsTest {
         }
         var finished = false
         csv.bufferedWriter().use { writer ->
-            writer.appendLine("tool,input,status,settings,expected,detail,stack_head,elapsed_ms,outputs,sha256,bytes")
+            writer.appendLine("tool,input,input_sha256,status,settings,expected,detail,stack_head,elapsed_ms,outputs,sha256,bytes")
             try {
                 for (case in cases) {
                     val ids = if (case.id in grouped) listOf(case.paths) else case.paths.map(::listOf)
@@ -190,7 +203,7 @@ class CorpusToolsTest {
                         for (row in exercise(case, paths)) {
                             rows += row
                             writer.appendLine(listOf(
-                                row.tool, row.input, row.status.name.replace('_', '-'), row.settings, row.expected,
+                                row.tool, row.input, row.sourceSha, row.status.name.replace('_', '-'), row.settings, row.expected,
                                 row.detail, row.trace, row.ms.toString(), row.artifacts.joinToString(";") { it.name },
                                 row.artifacts.joinToString(";") { it.sha }, row.artifacts.joinToString(";") { it.bytes.toString() }
                             ).joinToString(",") { "\"${it.replace("\"", "\"\"")}\"" })
@@ -218,6 +231,10 @@ class CorpusToolsTest {
         var status = Status.PASS
         var trace = ""
         try {
+            for ((index, path) in paths.withIndex()) {
+                val expected = expectedHashes[path] ?: error("No SOURCES.csv SHA-256 for $path")
+                check(expected == before[index]) { "Fixture differs from SOURCES.csv: $path" }
+            }
             val steps = deviceSteps(case.id) ?: if (case.id == "unlock" && files.single().name in
                 setOf("aes256_owner_only.pdf", "aes256_print_denied.pdf")) {
                 "Tools > Unlock PDF > Device file. Choose the owner-only fixture; check no open-password prompt, " +
@@ -232,6 +249,10 @@ class CorpusToolsTest {
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: NeedsDevice) {
+            status = Status.DEVICE_ONLY
+            fixture.settings += "; ${e.message}"
+            fixture.detail = "No device result."
         } catch (e: LinkageError) {
             status = Status.ERROR
             fixture.detail = "Host linkage error: ${e.javaClass.simpleName}: ${e.message}"
@@ -256,9 +277,10 @@ class CorpusToolsTest {
         }
         val ms = (System.nanoTime() - start) / 1_000_000
         return paths.mapIndexed { i, path ->
-            val outputs = if (case.id == "batch_tools" && fixture.artifacts.size == paths.size)
-                listOf(fixture.artifacts[i]) else fixture.artifacts.toList()
-            Row(case.id, path, status, fixture.settings, case.expected, fixture.detail, trace, ms, outputs)
+            val individual = if (status == Status.PASS) fixture.perInput.getOrNull(i) else null
+            Row(case.id, path, before[i], individual?.status ?: status, fixture.settings, case.expected,
+                listOf(fixture.detail, individual?.detail.orEmpty()).filter { it.isNotBlank() }.joinToString(" "),
+                individual?.trace ?: trace, ms, individual?.artifacts ?: fixture.artifacts.toList())
         }
     }
 
@@ -284,7 +306,11 @@ class CorpusToolsTest {
                 equal(doc.id, repo.listDocuments().single().id, "published document")
                 // First image is what the Library thumbnail decodes; compare actual page content.
                 Loader.loadPDF(f).use { original ->
-                    similar(PDFRenderer(original).renderImage(0, 0.55f), image(doc.pageFiles.first()), "first-page thumbnail")
+                    val renderer = PDFRenderer(original).apply { isSubsamplingAllowed = true }
+                    for ((index, file) in doc.pageFiles.withIndex()) {
+                        similar(renderer.renderImage(index, 0.55f), image(file),
+                            if (index == 0) "first-page thumbnail" else "imported page ${index + 1}")
+                    }
                 }
             }
             "import_pdf_negative" -> {
@@ -339,8 +365,26 @@ class CorpusToolsTest {
                 equal(ids, items.map { it.docId }, "batch result order")
                 verify(!items[5].ok && !items[5].reason.isNullOrBlank(), "missing document not reported")
                 for ((item, doc) in items.filterIndexed { i, _ -> i != 5 }.zip(docs)) {
-                    verify(item.ok, "${doc.name}: ${item.reason}")
-                    pdf(requireNotNull(repo.getDocument(requireNotNull(item.outputId))), doc.pageCount)
+                    val index = artifacts.size
+                    var itemStatus = Status.PASS
+                    var itemTrace = ""
+                    var itemDetail: String
+                    try {
+                        verify(item.ok, "batch rejected document: ${item.reason}")
+                        val result = requireNotNull(repo.getDocument(requireNotNull(item.outputId)))
+                        pdf(result, doc.pageCount)
+                        itemDetail = "Measured ${doc.pdfFile.length()} → ${result.pdfFile.length()} bytes."
+                        equal(doc.pageFiles.size, result.pageFiles.size, "batch output page count")
+                    } catch (e: Mismatch) {
+                        itemStatus = Status.FAIL
+                        itemDetail = e.message.orEmpty()
+                        itemTrace = e.stackTraceToString().lineSequence().take(10).joinToString("\n")
+                    } catch (e: Exception) {
+                        itemStatus = Status.ERROR
+                        itemDetail = "${e.javaClass.simpleName}: ${e.message}"
+                        itemTrace = e.stackTraceToString().lineSequence().take(10).joinToString("\n")
+                    }
+                    perInput += PerInput(itemStatus, itemDetail, itemTrace, artifacts.drop(index))
                 }
                 equal(original, docs.map { sha(it.pdfFile) }, "batch originals")
                 detail = "Shared scenario time; PDF output mapped to each successful input. Result UI not exercised."
@@ -726,11 +770,19 @@ class CorpusToolsTest {
                     // The editor export is a device flow; exercise the production save path with its
                     // page-ordered repository values rather than writing the file ourselves.
                     val text = doc.pageFiles.mapNotNull { repo.ocrDoc(doc.id)[it.name] }.joinToString("\n")
-                    verify(text.isNotBlank(), "no vector text available to seed editor export")
-                    val saved = DownloadSaver.saveText(context, text, "Corpus text.txt")
+                    if (text.isBlank()) throw NeedsDevice("Open fixture > Text > Read (choose source language) > Export text. Check output is UTF-8 and nonempty, or the app explains why it could not read text.")
                     val emitted = out("export.txt")
-                    context.contentResolver.openInputStream(saved.uri)!!.use { input ->
-                        emitted.outputStream().use { input.copyTo(it) }
+                    val media = FakeMediaStore().also {
+                        it.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
+                        ShadowContentResolver.registerProviderInternal("media", it)
+                    }
+                    try {
+                        val saved = DownloadSaver.saveText(context, text, "Corpus text.txt")
+                        context.contentResolver.openInputStream(saved.uri)!!.use { stream ->
+                            emitted.outputStream().use { stream.copyTo(it) }
+                        }
+                    } finally {
+                        media.close()
                     }
                     record(emitted)
                     val readback = Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(emitted.readBytes())).toString()
@@ -945,6 +997,7 @@ class CorpusToolsTest {
     private fun summary(finished: Boolean): String = buildString {
         appendLine("# ScanWhirl corpus results")
         appendLine("\nRevision `$revision`; completed all rows: $finished. Generated ${Instant.now()}.")
+        appendLine("Matrix SHA-256: `${sha(File(corpus, "TOOL_MATRIX.md"))}`.")
         hostImportProblem?.let { error ->
             val cause = generateSequence(error) { it.cause }.last()
             appendLine("\nAndroid import probe could not run: `${cause.javaClass.simpleName}: ${cause.message}`. " +
