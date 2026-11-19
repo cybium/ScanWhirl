@@ -5,17 +5,17 @@ New in 1.2.3:
 • Every tool result can also be saved in Documents
 • One scan holds 60 pages, with Add more pages
 • Search shows the page and finds older documents
-• Word reads columns; sideways PowerPoint pages turn upright
-• Calmer Home and Tools, clearer large text, safer Vault
+• Sideways PowerPoint pages now turn upright
+• Clearer large text and a safer Vault
 </en-US>
 <hi-IN>
 1.2.3 में नया:
-• अब "हटाएँ" करने पर दस्तावेज़ 30 दिन तक हटाई गई फ़ाइलों में रहता है, वापस लाया जा सकता है
+• "हटाई गई फ़ाइलों में भेजें" के बाद दस्तावेज़ 30 दिन तक वहीं रहता है और वापस लाया जा सकता है
 • PDF/A बनाने के बाद "वापस लाएँ" आपकी मूल फ़ाइल नहीं हटाता
 • हर टूल का नतीजा कागज़ात में भी सहेजा जा सकता है
 • एक स्कैन में 60 पन्ने, "और पन्ने जोड़ें" के साथ
 • खोज पन्ना संख्या दिखाती है और पुराने दस्तावेज़ भी ढूँढती है
-• Word में स्तंभ ठीक पढ़े जाते हैं; PowerPoint के तिरछे पन्ने सीधे होते हैं
-• होम और टूल्स शांत, बड़े अक्षर साफ़, तिजोरी ज़्यादा सुरक्षित
+• PowerPoint के तिरछे पन्ने अब सीधे होते हैं
+• बड़े अक्षर ज़्यादा साफ़, तिजोरी ज़्यादा सुरक्षित
 </hi-IN>
-Hindi above is a draft: needs a native Hindi review before it is pasted into Play. This line is not part of the notes.
+Lead correction 2026-11-19: removed "Word reads columns" (the two-column fix is NOT in 1.2.3; build 6 phone check F2 failed) and "Calmer Home and Tools" (that redesign is 1.2.4). Hindi Trash line now uses the app's button wording. This line is not part of the notes.
