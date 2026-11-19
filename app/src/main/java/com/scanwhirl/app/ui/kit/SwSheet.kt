@@ -118,12 +118,17 @@ class SwSheet private constructor(
                 context, SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f
             )
             minHeight = (54 * density).toInt()
+            // SAFE-UNLOCK-CONSENT a11y: a 54dp fixed height cut a two-line primary at 200% font
+            // ("Remove password and continue" needed 163px, had 108px). minHeight keeps the
+            // 54dp look at 100%; the button now grows with its label.
+            val padV = (8 * density).toInt()
+            setPadding(0, padV, 0, padV)
             isVisible = false
         }
         root.addView(
             primaryButton,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, (54 * density).toInt()
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = (16 * density).toInt() }
         )
 

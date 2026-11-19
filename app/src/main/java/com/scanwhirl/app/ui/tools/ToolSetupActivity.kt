@@ -1028,8 +1028,8 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     /**
-     * A locked source is not a dead end: L3's Unlock sheet takes the password, the document is
-     * unlocked in place, and the same row becomes the selection so the tool can continue.
+     * A locked source is not a dead end: L3's Unlock sheet takes the password, then the user
+     * is told what removing the protection does before anything is changed.
      */
     private fun promptUnlock(doc: ScanDocument) {
         UnlockSheet.show(
@@ -1040,7 +1040,28 @@ class ToolSetupActivity : BaseActivity() {
         )
     }
 
+    /**
+     * SAFE-UNLOCK-CONSENT: a right password only proves the file opens. Removing its password
+     * changes the copy in the library for good, so that is a separate, explicit yes. Cancel,
+     * Back and an outside tap leave the document encrypted and this row unselected; only the
+     * primary button reaches [removeProtectionAndSelect].
+     */
     private fun unlockAndSelect(doc: ScanDocument, password: String) {
+        SwSheet.builder(this)
+            .setTitle(R.string.tools_setup_unlock_consent_title)
+            .setMessage(
+                getString(R.string.tools_setup_unlock_consent_body, getString(tool.title))
+            )
+            .setPrimary(R.string.tools_setup_unlock_consent_primary) {
+                removeProtectionAndSelect(doc, password)
+            }
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+            .show()
+    }
+
+    /** Runs only after the explicit yes: unlocks the library copy and picks it for the tool. */
+    private fun removeProtectionAndSelect(doc: ScanDocument, password: String) {
         progressOverlay.isVisible = true
         lifecycleScope.launch {
             try {
