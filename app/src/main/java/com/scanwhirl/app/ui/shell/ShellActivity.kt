@@ -37,6 +37,7 @@ import com.scanwhirl.app.ui.OcrEditorActivity
 import com.scanwhirl.app.ui.SettingsActivity
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.TrashActivity
+import com.scanwhirl.app.ui.TrashActions
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -271,6 +272,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // unlocks, and a refund locks Pro again (release builds only).
         com.scanwhirl.app.util.ProBilling.refreshOwned(this)
         if (::library.isInitialized) library.reload()
+        // T27-FIX-TRASH: a move made on the document screen closed that screen; its
+        // "Moved to Trash" Undo is shown here, on the next resume.
+        TrashActions.takePending()?.let { showMovedNotice(it) }
         // The scan disc breathes only while this screen is in front.
         findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.breathe(it) }
     }
@@ -867,18 +871,33 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         sheet.show()
     }
 
+    /**
+     * T27-FIX-TRASH (data loss): the sheet promises "You can restore it for 30 days",
+     * so it must move the document to Trash, never purge it. Undo (TrashActions)
+     * restores it; exported copies in Documents/ScanWhirl are untouched.
+     */
     private fun confirmTrash(doc: ScanDocument) {
         SwSheet.builder(this)
             .setTitle(getString(R.string.shell_trash_title, doc.name))
-            .setMessage(getString(R.string.shell_trash_note))
+            .setMessage(R.string.shell_trash_note)
             .setPrimary(R.string.shell_move_to_trash) {
-                repo.deleteDocument(doc.id)
-                library.reload()
-                Toast.makeText(this, R.string.shell_moved_to_trash, Toast.LENGTH_SHORT).show()
+                lifecycleScope.launch {
+                    val moved = withContext(Dispatchers.IO) {
+                        TrashActions.moveAll(repo, listOf(doc.id))
+                    }
+                    library.reload()
+                    showMovedNotice(moved)
+                }
             }
             .setSecondary(R.string.sheet_cancel)
             .build()
             .show()
+    }
+
+    /** The "Moved to Trash" snackbar with Undo, anchored above the nav bar. */
+    private fun showMovedNotice(moved: TrashActions.Moved) {
+        val root = findViewById<View>(android.R.id.content) ?: return
+        TrashActions.showMoved(this, root, navHost, moved) { library.reload() }
     }
 
     // ---- Import -----------------------------------------------------------
