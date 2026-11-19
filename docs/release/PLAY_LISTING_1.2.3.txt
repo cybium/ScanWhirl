@@ -10,7 +10,7 @@ Scan and create
 • Scan with the camera, up to 60 pages in one scan; edges are detected and the page is cropped
 • Import a PDF, or add photos from your gallery as pages
 • ID card: front and back on one A4 or Letter page, or one page per side
-• Passport photo: crop to the 35 x 45 mm size
+• Passport photo: crop to the 35 x 45 passport shape
 • Improve a scan with Auto, Colour boost, Grey or Black and white
 • Read text (OCR) in English and Devanagari; copy, share or save it as .txt
 • Add recognised text to a PDF so it can be searched
@@ -24,7 +24,7 @@ Organise and prepare
 • Make a copy without hidden metadata
 
 Keep and protect
-• Save any tool result to your library as well
+• Also save any tool result in your phone's Documents folder
 • Vault: files encrypted on this phone, opened with fingerprint, face or passcode
 • Encrypted backup: one file with your library, Vault and settings, saved where you choose
 
@@ -33,7 +33,7 @@ Pro tools are marked Pro; free tools stay free.
 • Sign a PDF: save your signature, then place it on any page
 • Add text, draw, highlight, stamps, watermark, page numbers
 • Hide private info: find phone numbers, emails, ID numbers and card numbers, then cover them. The exported copy has those pixels and that text removed. The original stays in your library until you replace it.
-• Convert to Word, Excel or PowerPoint. Word reads two-column pages column by column. PowerPoint slides are page pictures with the recognised text in the notes; in Excel, check columns before sorting.
+• Convert to Word, Excel or PowerPoint. PowerPoint slides are page pictures with the recognised text in the notes; in Excel, check columns before sorting.
 • Split by page range; batch tools for many documents at once, including one ZIP
 • Folders and tags; QR code reading
 • Save a PDF/A-2b copy for archiving
