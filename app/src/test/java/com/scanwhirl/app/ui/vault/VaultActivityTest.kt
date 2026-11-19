@@ -96,6 +96,13 @@ class VaultActivityTest {
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
+    /**
+     * A normal, fully set-up Vault: the one-time recovery code's four-character check already
+     * passed (T18). Provisioning alone leaves a non-secret pending marker, which blocks normal
+     * use until the check does pass.
+     */
+    private fun VaultStore.setupConfirmed(passcode: String): VaultStore.Setup =
+        setup(passcode).also { markConfirmationPassed() }
     private fun launch(): VaultActivity {
         controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
         idle()
@@ -181,7 +188,7 @@ class VaultActivityTest {
 
     @Test
     fun `wrong passcode shows the tries left and keeps the sheet open`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val activity = launch()
 
         activity.need<View>(R.id.vaultLock).performClick()
@@ -214,7 +221,7 @@ class VaultActivityTest {
 
     @Test
     fun `the recovery code unlocks after a forgotten passcode`() {
-        val setup = store.setup("246810")
+        val setup = store.setupConfirmed("246810")
         store.lock()
         val activity = launch()
 
@@ -243,7 +250,7 @@ class VaultActivityTest {
 
     @Test
     fun `fingerprint unlock starts the prompt once and opens the vault`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
@@ -265,7 +272,7 @@ class VaultActivityTest {
 
     @Test
     fun `the fingerprint button is offered with its icon and retries after a cancel`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
@@ -297,7 +304,7 @@ class VaultActivityTest {
 
     @Test
     fun `a failed manual fingerprint falls back to the passcode sheet and stays locked`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         VaultActivity.biometricStatusOverride = BiometricManager.BIOMETRIC_SUCCESS
@@ -326,7 +333,7 @@ class VaultActivityTest {
 
     @Test
     fun `no fingerprint option when biometrics are not enrolled`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         for (status in listOf(
@@ -355,7 +362,7 @@ class VaultActivityTest {
 
     @Test
     fun `an invalidated keystore key asks for the passcode then offers a new fingerprint`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.completeKeystoreWrap(store.beginKeystoreWrap())
         store.lock()
         keys.invalidate()
@@ -389,7 +396,7 @@ class VaultActivityTest {
     @Test
     fun `add files encrypts a library document and shows it in the private list`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Aadhaar card")
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val activity = launch()
 
         activity.need<View>(R.id.vaultAddFiles).performClick()
@@ -415,7 +422,7 @@ class VaultActivityTest {
     @Test
     fun `one page reads as one page, not one pages`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Receipt")
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val activity = launch()
 
         activity.need<View>(R.id.vaultAddFiles).performClick()
@@ -431,7 +438,7 @@ class VaultActivityTest {
 
     @Test
     fun `the locked screen says what is behind Private files`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.lock()
         val activity = launch()
         assertTrue(
@@ -455,7 +462,7 @@ class VaultActivityTest {
 
     @Test
     fun `another screen can say why it sent the user to unlock`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.lock()
         controller = Robolectric.buildActivity(
             VaultActivity::class.java,
@@ -471,7 +478,7 @@ class VaultActivityTest {
 
     @Test
     fun `backup asks for a swvault file with the system picker`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val activity = launch()
         activity.need<View>(R.id.vaultBackupButton).performClick()
         idle()
@@ -487,7 +494,7 @@ class VaultActivityTest {
 
     @Test
     fun `the vault relocks itself after two minutes in the background`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val activity = launch()
         assertTrue(activity.need<View>(R.id.vaultBanner).isVisible)
 
@@ -504,7 +511,7 @@ class VaultActivityTest {
 
     @Test
     fun `recovery and backup buttons keep one line and their icons at narrow widths`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         RuntimeEnvironment.setFontScale(1.3f)
         try {
             val activity = launch()
@@ -547,7 +554,7 @@ class VaultActivityTest {
 
     @Test
     fun `the vault window blocks screenshots and blanks the recents card`() {
-        store.setup("246810")
+        store.setupConfirmed("246810")
         val activity = launch()
         assertTrue(
             "FLAG_SECURE must be set on the Vault window",

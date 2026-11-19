@@ -227,6 +227,13 @@ class PdfViewerActivity : BaseActivity() {
     private fun previewFile(doc: com.scanwhirl.app.model.ScanDocument): File =
         File(cacheDir, "preview_${doc.id}.pdf")
 
+    /** True when [file] is a decrypted Vault copy (`cacheDir/vault_open/...`). */
+    private fun isVaultOpenCopy(file: File): Boolean = try {
+        file.canonicalFile.startsWith(File(cacheDir, "vault_open").canonicalFile)
+    } catch (e: Exception) {
+        false
+    }
+
     /** Names, sizes and mtimes: any page edit or re-filter changes it, nothing else does. */
     private fun pageFingerprint(pages: List<File>): String =
         pages.joinToString("|") { "${it.name}:${it.length()}:${it.lastModified()}" }
@@ -338,6 +345,12 @@ class PdfViewerActivity : BaseActivity() {
                 val file = File(path)
                 if (!file.exists() || file.length() == 0L) throw NoPdfException(R.string.pdf_missing)
                 title = title.ifBlank { file.nameWithoutExtension }
+                // Review H4: a Vault PDF travels as a decrypted cache copy. It is private by
+                // the intent marker set only by the Vault, and by its location as a second
+                // line of defence, so FLAG_SECURE never depends on the screenshot preference.
+                privateDoc = privateDoc ||
+                    intent.getBooleanExtra(EXTRA_PRIVATE, false) ||
+                    isVaultOpenCopy(file)
                 ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             }
             data != null -> {
@@ -672,6 +685,12 @@ class PdfViewerActivity : BaseActivity() {
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_PATH = "pdf_path"
         private const val EXTRA_TITLE = "pdf_title"
+
+        /**
+         * Review H4: set only by the Vault when it opens a decrypted private copy. It forces
+         * FLAG_SECURE on the reader window regardless of the user's screenshot preference.
+         */
+        const val EXTRA_PRIVATE = "pdf_private"
         private const val EXTRA_START_PAGE = "start_page"
         private const val EXTRA_START_KEY = "start_page_key"
         private const val EXTRA_FIND_QUERY = "find_query"
@@ -772,6 +791,13 @@ class PdfViewerActivity : BaseActivity() {
             Intent(context, PdfViewerActivity::class.java)
                 .putExtra(EXTRA_PATH, path)
                 .putExtra(EXTRA_TITLE, title)
+
+        /**
+         * Review H4: the Vault route. Marks the window private so a decrypted Vault copy is
+         * never screenshot-able, whatever the "Block screenshots of documents" setting says.
+         */
+        fun privateFileIntent(context: Context, path: String, title: String): Intent =
+            fileIntent(context, path, title).putExtra(EXTRA_PRIVATE, true)
 
         /** Opens any content-Uri PDF (device tab / picked file). */
         fun uriIntent(context: Context, uri: String, title: String): Intent =

@@ -61,6 +61,13 @@ class VaultStoreTest {
         app.getSharedPreferences("scanwhirl_prefs", 0).edit().clear().commit()
     }
 
+    /**
+     * A normal, fully set-up Vault: the one-time recovery code's four-character check already
+     * passed (T18). Provisioning alone leaves a non-secret pending marker, which blocks normal
+     * use until the check does pass.
+     */
+    private fun VaultStore.setupConfirmed(passcode: String): VaultStore.Setup =
+        setup(passcode).also { markConfirmationPassed() }
     private fun store(): VaultStore = VaultStore(
         context = app,
         repo = repo,
@@ -74,7 +81,7 @@ class VaultStoreTest {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Aadhaar card")
         val original = snapshot(File(app.filesDir, "documents/$id"))
         val store = store()
-        val setup = store.setup("246810")
+        val setup = store.setupConfirmed("246810")
 
         assertEquals(24, VaultCrypto.normalizeRecoveryCode(setup.recoveryCode).length)
         assertTrue(store.isUnlocked())
@@ -102,7 +109,7 @@ class VaultStoreTest {
     @Test
     fun `a wrong recovery code fails and the right one opens the vault`() {
         val store = store()
-        val setup = store.setup("135790")
+        val setup = store.setupConfirmed("135790")
         store.lock()
 
         assertFalse(store.unlockWithRecovery("AAAAAAAAAAAAAAAAAAAAAAAA"))
@@ -115,7 +122,7 @@ class VaultStoreTest {
     @Test
     fun `the biometric challenge opens the vault only when the cipher completes`() {
         val store = store()
-        store.setup("246810")
+        store.setupConfirmed("246810")
         assertFalse("a fresh setup has no fingerprint wrap yet", store.canUseBiometric())
 
         assertTrue(store.completeKeystoreWrap(store.beginKeystoreWrap()))
@@ -136,7 +143,7 @@ class VaultStoreTest {
         // the upgrade (old alias), and no password list. Everything else is the same format.
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Old private document")
         val previous = store()
-        val setup = previous.setup("135790")
+        val setup = previous.setupConfirmed("135790")
         previous.addDocument(id)
         previous.lock()
 
@@ -161,7 +168,7 @@ class VaultStoreTest {
     fun `an invalidated keystore key falls back to the passcode and a new wrap is created`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Passport")
         val store = store()
-        store.setup("246810")
+        store.setupConfirmed("246810")
         assertTrue(store.completeKeystoreWrap(store.beginKeystoreWrap()))
         store.addDocument(id)
         store.lock()
@@ -188,7 +195,7 @@ class VaultStoreTest {
     fun `a tampered encrypted byte fails the GCM tag and leaves no decrypted copy`() {
         val id = DocFixtures.saved(repo, app, pages = 2)
         val store = store()
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.addDocument(id)
 
         val entryDir = File(app.filesDir, "vault2/$id")
@@ -205,7 +212,7 @@ class VaultStoreTest {
     fun `no page or PDF plaintext exists anywhere under filesDir vault2`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val store = store()
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.addDocument(id)
 
         val vault2 = File(app.filesDir, "vault2")
@@ -217,7 +224,7 @@ class VaultStoreTest {
     @Test
     fun `a wrong passcode counts through the five-try lockout and the right one resumes`() {
         val store = store()
-        store.setup("246810")
+        store.setupConfirmed("246810")
         store.lock()
 
         repeat(4) {
@@ -244,7 +251,7 @@ class VaultStoreTest {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Bank statement")
         val before = snapshot(File(app.filesDir, "documents/$id"))
         val store = store()
-        store.setup("246810")
+        store.setupConfirmed("246810")
 
         val probe = Faults.dieAtOp("vault:verified")
         try {
@@ -275,7 +282,7 @@ class VaultStoreTest {
         assertTrue(store.verifyLegacyPin("1234"))
         assertFalse(store.verifyLegacyPin("9999"))
 
-        store.setup("246810")
+        store.setupConfirmed("246810")
         assertEquals(1, store.migrateLegacyVault())
         assertNull(repo.getDocument(id))
         assertEquals(listOf(id), store.listEntries().map { it.id })
@@ -285,10 +292,10 @@ class VaultStoreTest {
     @Test
     fun `a passcode must be six or more digits and setup happens once`() {
         val store = store()
-        assertThrows(IllegalArgumentException::class.java) { store.setup("12345") }
-        assertThrows(IllegalArgumentException::class.java) { store.setup("12345a") }
-        store.setup("123456")
-        assertThrows(IllegalStateException::class.java) { store.setup("654321") }
+        assertThrows(IllegalArgumentException::class.java) { store.setupConfirmed("12345") }
+        assertThrows(IllegalArgumentException::class.java) { store.setupConfirmed("12345a") }
+        store.setupConfirmed("123456")
+        assertThrows(IllegalStateException::class.java) { store.setupConfirmed("654321") }
     }
 
     @Test
@@ -296,7 +303,7 @@ class VaultStoreTest {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Medical report")
         val original = snapshot(File(app.filesDir, "documents/$id"))
         val store = store()
-        val setup = store.setup("246810")
+        val setup = store.setupConfirmed("246810")
         store.addDocument(id)
 
         val backup = File(app.cacheDir, "test.swvault")
