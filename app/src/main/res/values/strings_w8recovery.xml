@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UI-W8 (lane 8, recovery surfaces): Trash result honesty, the Backup screen's own Back
+     control, and the difference between "Backup ready" (cached) and "Saved to <location>"
+     (the bytes reached the chosen destination). -->
+<resources>
+    <string name="backup_back">Back</string>
+    <string name="backup_saved_to">Saved to %1$s</string>
+    <string name="backup_saved_name_unknown">the location you chose</string>
+    <string name="backup_share_unconfirmed">The backup file went to the app you chose. ScanWhirl cannot confirm it was saved there.</string>
+
+    <string name="trash_deleted_partial">Deleted %1$d of %2$d.</string>
+    <plurals name="trash_still_in_trash">
+        <item quantity="one">%1$d is still in Trash.</item>
+        <item quantity="other">%1$d are still in Trash.</item>
+    </plurals>
+    <plurals name="trash_cleanup_pending">
+        <item quantity="one">%1$d removal is not finished. ScanWhirl finishes it the next time it starts.</item>
+        <item quantity="other">%1$d removals are not finished. ScanWhirl finishes them the next time it starts.</item>
+    </plurals>
+</resources>
