@@ -615,7 +615,14 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         } else {
             SpannableString(sign)
         }
-        binding.btnSign.contentDescription = if (free) "$sign, $pro" else sign
+        binding.btnSign.contentDescription = signSpokenLabel()
+    }
+
+    /** What TalkBack says for Sign in the build's real state ("Sign, Pro" while Free). */
+    private fun signSpokenLabel(): String {
+        val sign = getString(R.string.tool_sign)
+        return if (ProGate.isPro(this)) sign
+        else "$sign, ${getString(R.string.doc_action_pro)}"
     }
 
     /** The sheet's own reason for a document no tool may read (null when it is usable). */
@@ -643,7 +650,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             button.alpha = if (blocked) 0.45f else 1f
             button.contentDescription = when {
                 blocked -> "$label. $reason"
-                button.id == R.id.btnSign -> binding.btnSign.contentDescription
+                button.id == R.id.btnSign -> signSpokenLabel()
                 else -> label
             }
         }
