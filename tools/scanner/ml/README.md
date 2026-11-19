@@ -1,8 +1,48 @@
-# Scanner X ML data tooling (research lane, CPU only)
+# Scanner X ML tooling (research lane, CPU only)
 
-Isolated data-preparation code for a possible on-device paper-segmentation experiment.
-It does **not** touch the shipping scanner, the app's permissions, the network or any cloud
-service, and it does not replace Google ML Kit. Nothing here is a trained model.
+Isolated data-preparation **and training** code for a possible on-device paper-segmentation
+experiment. It does **not** touch the shipping scanner, the app's permissions, the network or
+any cloud service, and it does not replace Google ML Kit.
+
+Two stages live here:
+
+1. **Data / labelling** (`build_own_dataset.py`, `synth.py`, `mlcommon.py`) — decides what a
+   frame means and writes the private pools.
+2. **Model** (this task, ML-003-TRAIN-V1) — a tiny from-scratch segmenter:
+   `model.py`, `data_ml.py`, `postprocess.py`, `infer.py`, `train.py`, `evaluate_ml.py`,
+   `export_onnx.py`, `report_gallery.py`, tested by `test_ml_model.py`.
+
+Nothing in stage 2 is wired into the Android app, and no trained weight is committed.
+
+## Model stage at a glance
+
+| file | job |
+| --- | --- |
+| `model.py` | `TinyPageNet`: depthwise-separable U-Net, 256x256 in, 128x128 mask logits + one presence logit, ~0.39 M params, no pretrained weights |
+| `data_ml.py` | letterbox transform (aspect kept, pad right/bottom), same transform applied to image and mask during augmentation, manifest loader, synthetic pool builder |
+| `postprocess.py` | presence gate -> largest component -> area/wall rejection -> hull -> maximum-area inscribed quad -> TL,TR,BR,BL |
+| `infer.py` | one inference path shared by training, evaluation and the gallery |
+| `train.py` | 50/50 real/synthetic batches, mask BCE+Dice (manifest weight), presence BCE, selection on VAL only |
+| `evaluate_ml.py` | writes predictions in `score.py` format, runs the **unchanged** judge for shipped / r2 / trained model on identical frames; `--sweep` selects thresholds on VAL |
+| `export_onnx.py` | opset-17 export plus an onnxruntime parity check (fails above 1e-4 logit difference) |
+| `report_gallery.py` | 4-panel visual report (original, ground truth, r2, trained model) + offline `index.html`, failures first |
+
+Commands (private workspace, never Git):
+
+```powershell
+$py = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\scannerx-ml\.venv\Scripts\python.exe"
+cd tools\scanner\ml
+& $py data_ml.py --n 3200 --seed 20261119        # synthetic pool, deterministic
+& $py train.py --run-id ml003_v1 --epochs 40     # writes runs\ml003_v1\
+& $py evaluate_ml.py --run-id ml003_v1 --sweep   # VAL-only threshold choice
+& $py evaluate_ml.py --run-id ml003_v1 --split val
+& $py export_onnx.py --run-id ml003_v1
+& $py -m unittest test_ml_model
+```
+
+The TEST hold-out (9 clips + the 9 third-party web stills) may be scored **twice, ever**;
+`evaluate_ml.py` refuses `--split test|web` without `--test` and appends every such run to
+`qa\scannerx-ml\runs\test_runs.log` with the weight SHA256.
 
 ## Policy (from AGENTS.md and the Scanner X roadmap)
 
