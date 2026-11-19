@@ -1653,10 +1653,16 @@ class MainActivity : BaseActivity(), HomeHost {
 
     /** Legacy Vault: permanent delete inside the authenticated Vault (T4.8 box, M07 proof rules). */
     private fun confirmVaultDelete(ids: List<String>) {
-        val plan = ids.mapNotNull { repo.getDocument(it) }
-            .map { it to DeleteExports.copiesFor(repo, it.id) }
-        val total = plan.sumOf { it.second.size }
-        val body = DeleteExports.dialogBody(this, total)
+        val plan = ids.mapNotNull { repo.getDocument(it) }.map { doc ->
+            Triple(
+                doc,
+                DeleteExports.copiesFor(repo, doc.id),
+                DeleteExports.unprovenFor(repo, doc.id)
+            )
+        }
+        val copies = plan.flatMap { it.second }.distinctBy { it.uri }
+        val unproven = plan.flatMap { it.third }.distinct()
+        val body = DeleteExports.dialogBody(this, copies, unproven)
         val box: android.widget.CheckBox? = body.findViewById(R.id.deleteCopiesBox)
         val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(if (ids.size == 1) R.string.delete_title else R.string.delete_selected_title)
@@ -1673,8 +1679,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 ids.forEach { repo.deleteDocument(it) } // never blocked by copy removal
                 if (selectionMode) setSelectionMode(false)
                 refreshList()
-                if (box?.isChecked == true && total > 0) {
-                    val copies = plan.flatMap { it.second }.distinctBy { it.uri }
+                if (box?.isChecked == true && copies.isNotEmpty()) {
                     lifecycleScope.launch {
                         // M06: removal re-reads each copy to prove it is still ours.
                         val (removed, failed) = withContext(Dispatchers.IO) {

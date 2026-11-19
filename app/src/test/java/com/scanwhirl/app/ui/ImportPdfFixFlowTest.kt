@@ -1,6 +1,7 @@
 package com.scanwhirl.app.ui
 
 import android.app.Application
+import android.content.pm.ProviderInfo
 import android.os.Looper
 import android.view.View
 import android.widget.TextView
@@ -10,6 +11,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.util.FakeMediaStore
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,6 +25,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowContentResolver
 import org.robolectric.shadows.ShadowDialog
 import java.io.File
 
@@ -39,14 +42,22 @@ class ImportPdfFixFlowTest {
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
 
+    private lateinit var media: FakeMediaStore
+
     @Before
     fun setUp() {
         Faults.resetAll()
+        // T44: the viewer's save-to-Documents goes through MediaStore, exactly like the phone.
+        media = FakeMediaStore().also { provider ->
+            provider.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
+            ShadowContentResolver.registerProviderInternal("media", provider)
+        }
     }
 
     @After
     fun tearDown() {
         Faults.resetAll()
+        media.close()
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -97,7 +108,8 @@ class ImportPdfFixFlowTest {
                     dialog.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
                 )
                 assertEquals(
-                    app.getString(R.string.discard),
+                    "T44: the destructive answer names the import, not a generic discard",
+                    app.getString(R.string.fixflow_import_discard),
                     dialog.findViewById<TextView>(R.id.swSheetSecondary).text.toString()
                 )
                 dialog.findViewById<View>(R.id.swSheetSecondary).performClick()
@@ -134,6 +146,72 @@ class ImportPdfFixFlowTest {
             })
         }
         assertNotNull("Keep keeps the imported document", repo.getDocument(imported))
+    }
+
+    /**
+     * T44 (phone build 5): the import viewer offered "Discard" even after the user had saved a copy
+     * of the document into Documents/ScanWhirl, and Discard deleted the library document the copy
+     * was recorded against. An import the user has acted on is theirs: Back just closes.
+     */
+    @Test
+    fun `an import the user saved to Documents is kept on Back, with no delete question`() {
+        val imported = DocFixtures.saved(repo, app, pages = 2, name = "Saved import")
+        ActivityScenario.launch<DocumentViewerActivity>(
+            DocumentViewerActivity.intent(app, imported, freshImport = true)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+            }
+            assertTrue(
+                "the saved copy is recorded for this import",
+                waitUntil { repo.exportRecordsOf(imported).isNotEmpty() }
+            )
+            var finishing = false
+            scenario.onActivity { activity ->
+                activity.onBackPressedDispatcher.onBackPressed()
+                idle()
+                finishing = activity.isFinishing
+            }
+            assertTrue("Back closes the viewer", finishing)
+            assertNull(
+                "no Keep/Discard question once the user saved a copy",
+                ShadowDialog.getLatestDialog()?.takeIf { it.isShowing }
+            )
+        }
+        assertNotNull("the import stays in the library", repo.getDocument(imported))
+        assertEquals("its saved copy stays too", 1, media.scanwhirlPdfs().size)
+    }
+
+    /**
+     * T44: the untouched-import question must name what the destructive answer does. Its old label
+     * was the generic "Discard" ("don't keep changes" in Hindi), which reads like dropping edits.
+     */
+    @Test
+    fun `the untouched import question names the delete, not a generic discard`() {
+        val imported = DocFixtures.saved(repo, app, pages = 1, name = "Fresh import")
+        ActivityScenario.launch<DocumentViewerActivity>(
+            DocumentViewerActivity.intent(app, imported, freshImport = true)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.onBackPressedDispatcher.onBackPressed()
+                idle()
+                val dialog = requireNotNull(ShadowDialog.getLatestDialog()) { "no keep question" }
+                assertEquals(
+                    app.getString(R.string.fixflow_import_keep_title),
+                    dialog.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
+                )
+                assertEquals(
+                    "the destructive answer says it deletes the import",
+                    app.getString(R.string.fixflow_import_discard),
+                    dialog.findViewById<TextView>(R.id.swSheetSecondary)?.text?.toString()
+                )
+                assertEquals(
+                    "and it never uses the generic Discard wording",
+                    false,
+                    app.getString(R.string.fixflow_import_discard) == app.getString(R.string.discard)
+                )
+            }
+        }
     }
 
     @Test

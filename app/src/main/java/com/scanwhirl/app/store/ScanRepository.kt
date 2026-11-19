@@ -1140,6 +1140,14 @@ class ScanRepository(private val context: Context) {
     fun provenExportsOfTrashed(item: TrashedDocument): List<ProvenExport> =
         provenExportsIn(File(trashDir, item.key), item.originalId)
 
+    /**
+     * T44: every copy this Trash entry recorded, proven or not. The permanent-delete sheet names
+     * the recorded copies it cannot prove so the user is never told "1 PDF copy" while a
+     * different saved file stays. Reading only; never used to delete.
+     */
+    fun exportRecordsOfTrashed(item: TrashedDocument): List<ExportRecord> =
+        exportRecordsIn(File(trashDir, item.key))
+
     /** Copies recorded by any document other than this Trash entry. */
     fun exportsRecordedByOthersThan(item: TrashedDocument): Set<Uri> =
         exportsRecordedOutside(File(trashDir, item.key))

@@ -12,5 +12,7 @@
 
     <!-- Import PDF: the first Back after an import asks before keeping it (F5/W2). -->
     <string name="fixflow_import_keep_title">Keep imported document?</string>
-    <string name="fixflow_import_keep_msg">Discard deletes the imported document and its preview. Your other documents stay as they are.</string>
+    <string name="fixflow_import_keep_msg">Delete removes this imported document and its preview from the library. Your other documents stay as they are.</string>
+    <!-- T44: the destructive answer must say it deletes the import, not "discard changes". -->
+    <string name="fixflow_import_discard">Delete this import</string>
 </resources>

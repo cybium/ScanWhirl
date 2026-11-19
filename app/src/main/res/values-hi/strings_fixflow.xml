@@ -8,5 +8,6 @@
     <string name="fixflow_id_layout_front_page">सामने वाला भाग एक पन्ने पर</string>
 
     <string name="fixflow_import_keep_title">लाया गया दस्तावेज़ रखें?</string>
-    <string name="fixflow_import_keep_msg">हटाने पर लाया गया दस्तावेज़ और उसकी झलक मिट जाएगी। बाकी दस्तावेज़ वैसे ही रहेंगे।</string>
+    <string name="fixflow_import_keep_msg">हटाने पर यह लाया गया दस्तावेज़ और उसकी झलक कागज़ात से मिट जाएँगे। बाकी दस्तावेज़ वैसे ही रहेंगे।</string>
+    <string name="fixflow_import_discard">यह आयात हटाएँ</string>
 </resources>

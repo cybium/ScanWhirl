@@ -113,6 +113,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** F5/W2: the import question was already asked (Keep or Discard), never ask twice. */
     private var freshImportAsked = false
 
+    /**
+     * T44: the user has acted on this import (saved a copy to Documents, shared it, or changed the
+     * document). It is theirs now: Back never offers to delete it, in line with the library rule
+     * that a document the user worked with is never silently thrown away.
+     */
+    private var importKept = false
+
     /** Not lifecycle-bound: a pending delete must land even during onDestroy. */
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -253,6 +260,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         freshImport = intent.getBooleanExtra(EXTRA_FRESH_IMPORT, false)
+        // T44: a rotation must not resurrect the delete question after Keep/Discard, nor undo the
+        // fact that the user already acted on this import.
+        freshImportAsked = savedInstanceState?.getBoolean(KEY_IMPORT_ASKED) ?: false
+        importKept = savedInstanceState?.getBoolean(KEY_IMPORT_KEPT) ?: false
         // A8: a viewer recreated while the corner crop screen was on top still knows where the
         // confirmed photos go when they come back. A batch whose position was never chosen dies
         // with the old screen (the question is gone), so its picked copies are not kept.
@@ -299,6 +310,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.btnShare.setOnClickListener {
             document?.let { doc ->
                 ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
+                    noteImportUsed()
                     ShareUtils.share(this, doc)
                 }
             }
@@ -371,6 +383,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_IMPORT_ASKED, freshImportAsked)
+        outState.putBoolean(KEY_IMPORT_KEPT, importKept)
         pendingPhotoPosition?.let { outState.putInt(KEY_PHOTO_INSERT_AT, it) }
         pendingPhotoCount?.let { outState.putInt(KEY_PHOTO_COUNT, it) }
         // R1: only a batch the crop flow already owns is worth restoring; a copy in flight is
@@ -438,6 +452,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         pages = state.pages
         draft = state.draft
         val damage = state.damage
+        // T44: the record, not only this screen's flag, decides whether the import is the user's.
+        // A saved copy in Documents/ScanWhirl or any page change means the import was acted on.
+        if (freshImport && !importKept) {
+            val recorded = runCatching { repo.exportRecordsOf(doc.id) }.getOrDefault(emptyList())
+            if (recorded.isNotEmpty() || (draft?.changes ?: 0) > 0) importKept = true
+        }
         if (damage != null) {
             // Never invent pages from a damaged manifest: show the base and offer Discard only.
             showDraftUnusable(damage.message ?: getString(R.string.draft_damaged))
@@ -622,6 +642,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             return
         }
         ShareUtils.shareImages(this, files, doc.name)
+        noteImportUsed()
     }
 
     /** ⋯ for selection: Rotate left/right, Duplicate, Move to… (10+), Insert pages here, Extract. */
@@ -1217,6 +1238,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                                 }
                             }
                         }
+                        // T44: a copy the user saved makes this import theirs; Back keeps it.
+                        noteImportUsed()
                         SavedSnackbar.showExport(
                             this@DocumentViewerActivity,
                             binding.root,
@@ -1451,6 +1474,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             val newName = sheet.inputView?.text?.toString()
             if (!newName.isNullOrBlank()) {
                 repo.renameDocument(doc.id, newName.trim())
+                noteImportUsed()
                 lifecycleScope.launch { reloadDocument() }
             }
         }
@@ -1471,6 +1495,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 withContext(kotlinx.coroutines.Dispatchers.IO) {
                     repo.setCategory(doc.id, cat)
                 }
+                noteImportUsed()
                 reloadDocument()
             }
         }
@@ -1493,8 +1518,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     // ------------------------------------------------------------------
 
     private fun handleEditorBack() {
-        // F5/W2: the first Back from a fresh import asks before anything is kept for good.
-        if (freshImport && !freshImportAsked) {
+        // T44: the question only exists for an import the user has not touched. Once acted on
+        // (a saved copy, a share, an edit) the import is kept, never offered for deletion.
+        if (freshImport && !freshImportAsked && !importKept) {
             askKeepImported()
             return
         }
@@ -1513,12 +1539,18 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /**
      * F5/W2: an imported PDF is in the library the moment it arrives, so leaving the first look
-     * asks first. Keep leaves it like any other document; Discard deletes exactly this one
-     * document (and its unlocked preview) and nothing else.
+     * asks first. Keep leaves it like any other document; Delete removes exactly this one document
+     * (and its unlocked preview) and nothing else. T44: it is never asked once the user acted on
+     * the import, and its destructive answer says "delete", not "discard changes".
      */
     private fun askKeepImported() {
         val id = docId
         if (id == null) {
+            finish()
+            return
+        }
+        if (importKept) {
+            // Defensive: a saved copy or an edit happened between the Back and this call.
             finish()
             return
         }
@@ -1527,16 +1559,26 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .setTitle(R.string.fixflow_import_keep_title)
             .setMessage(R.string.fixflow_import_keep_msg)
             .setPrimary(R.string.fixflow_keep) { finish() }
-            .setSecondary(R.string.discard) { discardImported(id) }
+            .setSecondary(R.string.fixflow_import_discard) { discardImported(id) }
             .build()
             .show()
     }
 
     private fun discardImported(id: String) {
+        // T44: never delete an import the user has acted on, whatever asked.
+        if (importKept) {
+            finish()
+            return
+        }
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { runCatching { repo.deleteDocument(id) } }
             finish()
         }
+    }
+
+    /** T44: this import is the user's now; Back must never offer to delete it again. */
+    private fun noteImportUsed() {
+        if (freshImport) importKept = true
     }
 
     /** `Draft · N pages · K changes`, visible only while K > 0. */
@@ -1776,7 +1818,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private fun confirmVaultDelete(doc: ScanDocument) {
         // M07: only copies this document provably made (signed records) are offered.
         val copies = DeleteExports.copiesFor(repo, doc.id)
-        val body = DeleteExports.dialogBody(this, copies.size)
+        val body = DeleteExports.dialogBody(this, copies, DeleteExports.unprovenFor(repo, doc.id))
         val box: android.widget.CheckBox? = body.findViewById(R.id.deleteCopiesBox)
         val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.delete_title)
@@ -1824,6 +1866,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         /** F5/W2: this viewer was opened right after an import; the first Back asks first. */
         private const val EXTRA_FRESH_IMPORT = "fresh_import"
+
+        /** T44: the keep question and the "user acted on the import" state survive rotation. */
+        private const val KEY_IMPORT_ASKED = "import_asked"
+        private const val KEY_IMPORT_KEPT = "import_kept"
 
         fun intent(context: Context, docId: String): Intent =
             Intent(context, DocumentViewerActivity::class.java).putExtra(EXTRA_DOC_ID, docId)

@@ -139,8 +139,10 @@ class TrashActivity : BaseActivity() {
 
     private fun confirmDeleteForever(item: ScanRepository.TrashedDocument) {
         lifecycleScope.launch {
-            val copies = withContext(Dispatchers.IO) { DeleteExports.copiesFor(repo, item) }
-            val body = DeleteExports.dialogBody(this@TrashActivity, copies.size)
+            val (copies, unproven) = withContext(Dispatchers.IO) {
+                DeleteExports.copiesFor(repo, item) to DeleteExports.unprovenFor(repo, item)
+            }
+            val body = DeleteExports.dialogBody(this@TrashActivity, copies, unproven)
             com.scanwhirl.app.ui.kit.SwSheet.builder(this@TrashActivity)
                 .setTitle(R.string.trash_delete_forever_title)
                 .setMessage(getString(R.string.trash_delete_forever_message, item.document.name))
@@ -160,10 +162,11 @@ class TrashActivity : BaseActivity() {
         val all = items
         if (all.isEmpty()) return
         lifecycleScope.launch {
-            val copies = withContext(Dispatchers.IO) {
-                all.flatMap { DeleteExports.copiesFor(repo, it) }.distinctBy { it.uri }
+            val (copies, unproven) = withContext(Dispatchers.IO) {
+                all.flatMap { DeleteExports.copiesFor(repo, it) }.distinctBy { it.uri } to
+                    all.flatMap { DeleteExports.unprovenFor(repo, it) }.distinct()
             }
-            val body = DeleteExports.dialogBody(this@TrashActivity, copies.size)
+            val body = DeleteExports.dialogBody(this@TrashActivity, copies, unproven)
             com.scanwhirl.app.ui.kit.SwSheet.builder(this@TrashActivity)
                 .setTitle(R.string.trash_empty_confirm_title)
                 .setMessage(resources.getQuantityString(R.plurals.trash_empty_confirm_message, all.size, all.size))
