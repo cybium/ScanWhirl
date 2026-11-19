@@ -126,11 +126,12 @@ class WordNeedsTextFixResultTest {
         val failure = runCatching { runBlocking { repo.exportWord(id, out) } }
 
         assertTrue("N2: an unreadable document must still fail", failure.isFailure)
-        assertEquals(
-            "the honest message stays",
-            "Read the text first, then convert it to Word.",
-            failure.exceptionOrNull()?.message
-        )
+        val message = failure.exceptionOrNull()?.message.orEmpty()
+        // T37: the old "Read the text first" left a Hindi user with no way forward. The message
+        // now names the setting that actually decides whether the page can be read.
+        assertTrue("the message must name the text language setting: $message", message.contains("Text language"))
+        assertTrue("the message must name Hindi: $message", message.contains("Hindi"))
+        assertTrue("the message must say how to recover: $message", message.contains("try again", ignoreCase = true))
         assertFalse("no half written .docx may be left", out.exists())
         assertNull("nothing is invented as text", repo.ocrDoc(id)["page_000.jpg"])
     }

@@ -54,6 +54,7 @@
     <item name="toolResultTypeBadge" type="id" />
     <item name="toolResultFileName" type="id" />
     <item name="toolResultFileMeta" type="id" />
+    <item name="toolResultRasterNote" type="id" />
     <item name="toolResultError" type="id" />
     <item name="toolCropView" type="id" />
     <item name="toolCropApply" type="id" />
