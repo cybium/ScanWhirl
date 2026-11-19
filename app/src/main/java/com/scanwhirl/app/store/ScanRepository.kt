@@ -2800,6 +2800,12 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
+     * No recognised text. The setup screen turns this into a sheet that names the text-language
+     * setting and opens it, instead of leaving a Hindi scan at "Read the text first".
+     */
+    class NoTextForExportException(message: String) : IllegalStateException(message)
+
+    /**
      * Writes a `.docx` from the document's recognised text (one paragraph per OCR line, page
      * break between pages). With [includePictures] each page starts with its own page image
      * (fitted to the text width) followed by that page's text. Never rewrites the document.
@@ -2839,8 +2845,10 @@ class ScanRepository(private val context: Context) {
         val pages = doc.pageFiles.map { page ->
             (text[page.name] ?: "").lines().dropLastWhile { it.isBlank() }
         }
-        require(pages.any { lines -> lines.any { it.isNotBlank() } }) {
-            "Read the text first, then convert it to Word."
+        if (pages.none { lines -> lines.any { it.isNotBlank() } }) {
+            // T37: "Read the text first" left a Hindi user with nowhere to go. Name the setting
+            // that actually decides whether the page can be read.
+            throw NoTextForExportException(context.getString(R.string.tools_word_no_text))
         }
         if (includePictures) {
             val context = currentCoroutineContext()
@@ -2872,28 +2880,80 @@ class ScanRepository(private val context: Context) {
     /**
      * Writes a minimal valid `.pptx`: one slide per page, each slide a picture of the page
      * fitted to the slide; the page's OCR text goes in the speaker notes. Slide size follows
-     * the first page's aspect (A4, portrait or landscape). Pages are encoded one at a time.
+     * the first page's displayed aspect (A4, portrait or landscape). A page stored sideways
+     * (a PDF page with `/Rotate` 90 or 270, which the importer renders without turning) is
+     * turned upright before it becomes the slide picture; see [slideUprightRotation].
+     * Pages are encoded one at a time.
      */
     suspend fun exportPowerPoint(id: String, outFile: File): File = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
         val text = ocrStore.readText(id)
+        val geometry = ocrStore.readGeo(id)
         val firstSize = ImageTools.imageSize(doc.pageFiles.first().readBytes())
             ?: throw IllegalStateException("Page ${doc.pageFiles.first().name} can't be read")
+        val rotations = doc.pageFiles.map { page -> slideUprightRotation(page, geometry[page.name]) }
         val context = currentCoroutineContext()
         PptxWriter.write(
             outFile,
             doc.pageFiles.size,
-            portrait = firstSize.second >= firstSize.first,
+            portrait = slidePortrait(firstSize.first, firstSize.second, rotations.first()),
             pageJpeg = { index ->
                 context.ensureActive()
-                slidePageJpeg(doc.pageFiles[index])
+                slidePageJpeg(doc.pageFiles[index], rotations[index])
             },
             pageNotes = { index -> text[doc.pageFiles[index].name] }
         )
         outFile
     }
+
+    /**
+     * Clockwise degrees (0/90/180/270) that make a slide page read the way a PDF reader shows
+     * it. The importer renders the page pixels without applying the PDF page's `/Rotate`, so a
+     * page that was turned on its side is stored sideways. A stored EXIF orientation is the
+     * explicit case. Otherwise the stored OCR line boxes decide: a turned line has a tall box,
+     * and its text starts on a shared margin. That margin is the box top for a page stored
+     * turned clockwise (so it goes back counter-clockwise, 270) and the box bottom for the
+     * other way (90). No geometry means no guess: the page is left exactly as stored.
+     */
+    private fun slideUprightRotation(page: File, geometry: OcrPage?): Int {
+        val exif = OcrEngine.exifRotation(page)
+        if (exif % 360 != 0) return exif
+        return geometry?.let { sidewaysRotation(it) } ?: 0
+    }
+
+    /**
+     * 270 when the recognised lines' tops share one margin, 90 when their bottoms do, 0 when
+     * the lines are upright or the evidence is mixed. Only a page whose lines are mostly
+     * taller than wide is considered, so ordinary text is never turned.
+     */
+    internal fun sidewaysRotation(page: OcrPage): Int {
+        val lines = page.lines.filter {
+            it.text.isNotBlank() && it.right > it.left && it.bottom > it.top
+        }
+        if (lines.size < 3) return 0
+        val tall = lines.count { (it.bottom - it.top).toFloat() >= (it.right - it.left) * 1.25f }
+        if (tall * 2 < lines.size) return 0
+        val topSpread = spread(lines.map { it.top })
+        val bottomSpread = spread(lines.map { it.bottom })
+        return when {
+            bottomSpread > topSpread * 2 + 8 -> 270
+            topSpread > bottomSpread * 2 + 8 -> 90
+            else -> 0
+        }
+    }
+
+    /** Interquartile range: one centred title or indented line cannot decide the margin. */
+    private fun spread(values: List<Int>): Int {
+        if (values.size < 2) return 0
+        val sorted = values.sorted()
+        return sorted[(sorted.size * 3) / 4] - sorted[sorted.size / 4]
+    }
+
+    /** True when the page, after its upright turn, is taller than it is wide. */
+    private fun slidePortrait(width: Int, height: Int, rotation: Int): Boolean =
+        if (rotation % 180 == 0) height >= width else width >= height
 
     /**
      * The workbook a To Excel run wrote, plus how many pages carried a table. [file] is null when
@@ -2950,12 +3010,21 @@ class ScanRepository(private val context: Context) {
         ExcelExport(file = outFile, tablePages = tablePages, totalPages = pages.size)
     }
 
-    /** A page for a slide: at most 2000 px on the long side, JPEG 90. */
-    private fun slidePageJpeg(page: File): ByteArray {
+    /** A page for a slide, turned upright by [uprightRotation]: at most 2000 px, JPEG 90. */
+    private fun slidePageJpeg(page: File, uprightRotation: Int): ByteArray {
         val bitmap = ImageTools.decodeSampledFile(page, PPTX_PICTURE_MAX_PX)
+        val turned = if (uprightRotation % 360 == 0) {
+            bitmap
+        } else {
+            Bitmap.createBitmap(
+                bitmap, 0, 0, bitmap.width, bitmap.height,
+                android.graphics.Matrix().apply { postRotate(uprightRotation.toFloat()) }, true
+            )
+        }
         return try {
-            ImageTools.encodeJpeg(bitmap, 90)
+            ImageTools.encodeJpeg(turned, 90)
         } finally {
+            if (turned !== bitmap) turned.recycle()
             bitmap.recycle()
         }
     }

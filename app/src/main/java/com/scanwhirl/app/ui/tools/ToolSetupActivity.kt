@@ -1268,6 +1268,26 @@ class ToolSetupActivity : BaseActivity() {
         errorView.isVisible = true
     }
 
+    /**
+     * T37: a page with no recognised text is not a dead end. Name the setting that decides
+     * whether the text can be read and give one tap into it; the message stays in the error
+     * line after the sheet closes.
+     */
+    private fun showNoTextGuidance() {
+        val message = getString(R.string.tools_word_no_text)
+        errorView.text = message
+        errorView.isVisible = true
+        SwSheet.builder(this)
+            .setTitle(R.string.tools_word_no_text_title)
+            .setMessage(message)
+            .setPrimary(R.string.tools_word_change_language) {
+                startActivity(com.scanwhirl.app.ui.SettingsActivity.intent(this))
+            }
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+            .show()
+    }
+
     private fun <T> execute(block: suspend () -> T, onDone: (T) -> Unit) {
         progressOverlay.isVisible = true
         runButton.isEnabled = false
@@ -1279,6 +1299,10 @@ class ToolSetupActivity : BaseActivity() {
                 onDone(result)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: ScanRepository.NoTextForExportException) {
+                progressOverlay.isVisible = false
+                runButton.isEnabled = true
+                showNoTextGuidance()
             } catch (e: Exception) {
                 progressOverlay.isVisible = false
                 runButton.isEnabled = true
