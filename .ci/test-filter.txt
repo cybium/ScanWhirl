@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.shell.TrashUndoWindowTest,com.scanwhirl.app.ui.shell.SelectionBarPinTest,com.scanwhirl.app.ui.shell.TrashWordingTest,com.scanwhirl.app.ui.shell.SettingsSwitchTargetTest,com.scanwhirl.app.ui.shell.LibraryOrganisationTest,com.scanwhirl.app.ui.shell.TrashEntryPointsFixTest,com.scanwhirl.app.ui.shell.LibraryListCraftTest

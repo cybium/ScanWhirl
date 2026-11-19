@@ -10,6 +10,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewGroup.MarginLayoutParams
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -110,6 +111,8 @@ class LibraryScreen(
     private lateinit var quickAll: TextView
     private lateinit var selectionBar: LinearLayout
     private lateinit var selectionCount: TextView
+    /** T32: the scroll hook that keeps the selection bar pinned in the viewport. */
+    private var selectionPin: android.view.ViewTreeObserver.OnScrollChangedListener? = null
     private var folderNames: List<String> = emptyList()
     private var folder: String? = null
     private var selectionMode = false
@@ -328,12 +331,14 @@ class LibraryScreen(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         installChrome()
+        installSelectionPin()
     }
 
     override fun onDetachedFromWindow() {
         // The host (ShellActivity's tab content) clears its children on a tab switch.
         // Drop the scroll listener but never remove a sibling while the host is
         // iterating its children; installChrome() adopts a surviving overlay.
+        releaseSelectionPin()
         chrome?.release()
         chrome = null
         super.onDetachedFromWindow()
@@ -636,6 +641,12 @@ class LibraryScreen(
                 val m = SwStyle.dp(context, 18f)
                 setMargins(m, SwStyle.dp(context, 4f), m, SwStyle.dp(context, 4f))
             }
+            // T32: the reserved list space follows the bar's real height (a font
+            // scale change reshapes the bar) instead of a fixed 92 dp guess.
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                updateSelectionInset()
+                pinSelectionBar()
+            }
         }
         val top = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -708,18 +719,86 @@ class LibraryScreen(
 
     private fun renderSelectionBar() {
         selectionBar.isVisible = selectionMode
-        // The bar overlays the list; inset the first rows so nothing is hidden.
-        docList.setPadding(
-            0,
-            if (selectionMode) SwStyle.dp(context, 92f) else 0,
-            0,
-            listBottomInset()
-        )
+        // T32 (phone build 3): the bar was inside the scrolling content, so one
+        // scroll left only a 6 px sliver of it on screen, and its bottom sat ~19 dp
+        // over the first row although the list reserved 92 dp. The list now
+        // reserves the bar's *measured* height (the old 92 dp was a guess that a
+        // 200 % font beats) and the bar is pinned to the viewport top while the
+        // list scrolls under it.
+        updateSelectionInset()
+        pinSelectionBar()
         if (selectionMode) {
             selectionCount.text = resources.getQuantityString(
                 R.plurals.sel_count, selected.size, selected.size
             )
+            // The bar has no height until it is laid out; reserve it right after.
+            selectionBar.post {
+                updateSelectionInset()
+                pinSelectionBar()
+            }
         }
+    }
+
+    /**
+     * T32: reserves exactly the room the selection bar takes above the list, so no
+     * row is covered at 100 % or 200 % font. The bar reports its own height, so a
+     * font scale change cannot leave a guess behind (92 dp was too small).
+     */
+    private fun updateSelectionInset() {
+        val bottom = listBottomInset()
+        if (!selectionMode) {
+            if (docList.paddingTop != 0) docList.setPadding(0, 0, 0, bottom)
+            return
+        }
+        if (selectionBar.height <= 0) return
+        val lp = selectionBar.layoutParams as? MarginLayoutParams
+        val wanted = selectionBar.height +
+            (lp?.topMargin ?: 0) +
+            (lp?.bottomMargin ?: 0) +
+            SwStyle.dp(context, 6f)
+        if (docList.paddingTop != wanted) docList.setPadding(0, wanted, 0, bottom)
+    }
+
+    /**
+     * T32: keeps the bar at the top of the viewport instead of letting it scroll
+     * away. Its natural place is in the content (below the quick tools); once the
+     * list scrolls past that place, a translation holds it at the viewport's top
+     * edge. Touches follow the translation (Android hit-tests the drawn position),
+     * so Done/Move/Delete stay reachable while scrolling.
+     */
+    private fun pinSelectionBar() {
+        if (!selectionMode || selectionBar.height <= 0 || !selectionBar.isAttachedToWindow) {
+            if (selectionBar.translationY != 0f) selectionBar.translationY = 0f
+            return
+        }
+        val scroll = parent as? ScrollView ?: return
+        // Layout offset of the bar inside the scrolling content (no location reads:
+        // those lag a just-applied translation).
+        var offset = 0
+        var view: View? = selectionBar
+        while (view != null && view !== this) {
+            offset += view.top
+            view = view.parent as? View
+        }
+        val delta = scroll.scrollY - offset
+        val wanted = if (delta > 0) delta.toFloat() else 0f
+        if (selectionBar.translationY != wanted) selectionBar.translationY = wanted
+    }
+
+    /** T32: the scroll hook that keeps the selection bar pinned (removed on detach). */
+    private fun installSelectionPin() {
+        if (selectionPin != null) return
+        val scroll = parent as? ScrollView ?: return
+        val listener = android.view.ViewTreeObserver.OnScrollChangedListener { pinSelectionBar() }
+        selectionPin = listener
+        scroll.viewTreeObserver.addOnScrollChangedListener(listener)
+    }
+
+    private fun releaseSelectionPin() {
+        val listener = selectionPin ?: return
+        selectionPin = null
+        val vto = viewTreeObserver
+        if (vto.isAlive) vto.removeOnScrollChangedListener(listener)
     }
 
     private fun enterSelection(id: String) {
