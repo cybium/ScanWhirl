@@ -92,9 +92,22 @@ android {
             // A fresh test JVM every 40 classes with a fixed 1.5 GB heap keeps the full suite alive
             // (120 classes / 1 GB still hit OutOfMemoryError in "SDK 35 Main Thread").
             // The cloud gate (16 GB runner) passes -PtestHeap=4g -PtestForkEvery=200.
+            // UI-ATLAS (tools/atlas/run_atlas.ps1) is an on-demand job: with no atlas flag the
+            // class is filtered out instead of skipped, because the fail-closed gate counts a
+            // skipped test as a failure. The test itself also Assume-guards on the property.
+            val atlasRun = ((project.findProperty("scanwhirl.atlas") as String?)
+                ?: System.getProperty("scanwhirl.atlas")) == "true"
             all {
                 it.maxHeapSize = (project.findProperty("testHeap") as String?) ?: "1536m"
                 it.forkEvery = (project.findProperty("testForkEvery") as String?)?.toLongOrNull() ?: 40L
+                it.systemProperty("scanwhirl.atlas", if (atlasRun) "true" else "false")
+                it.systemProperty(
+                    "scanwhirl.atlas.out",
+                    File(project.layout.buildDirectory.get().asFile, "atlas").absolutePath
+                )
+                if (!atlasRun) {
+                    it.filter { excludeTestsMatching("com.scanwhirl.app.atlas.*") }
+                }
             }
         }
     }
