@@ -147,7 +147,7 @@ class OcrTextScreenTest {
     fun `the four action chips carry their icons and labels`() {
         launch { activity ->
             val expected = mapOf(
-                R.id.btnCopy to R.string.ocr_copy_btn,
+                R.id.btnCopy to R.string.ocr_w5_copy_page,
                 R.id.btnShare to R.string.ocr_share_btn,
                 R.id.btnSave to R.string.ocr_save_btn,
                 R.id.btnToWord to R.string.ocr_to_word_pro

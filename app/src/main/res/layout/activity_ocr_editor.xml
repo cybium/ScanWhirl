@@ -190,8 +190,10 @@
         android:textColorHint="@color/text_hologram_dim"
         android:textSize="14sp" />
 
-    <!-- v2 UI: 08_text_ocr — Undo and Redo first, then the word count. -->
+    <!-- v2 UI: 08_text_ocr — Undo and Redo first, then the word count. Edit mode only:
+         read-first hides editing controls until the person chooses Edit text. -->
     <LinearLayout
+        android:id="@+id/ocrEditBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"

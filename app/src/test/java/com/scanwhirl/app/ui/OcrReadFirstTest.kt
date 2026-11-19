@@ -190,12 +190,12 @@ class OcrReadFirstTest {
             activity.findViewById<View>(R.id.btnSaveEdits).performClick()
 
             assertTrue(idleUntil { repo.ocrDoc(id)["page_000.jpg"] == "corrected café" })
+            assertTrue("the edited marker clears after the library save", idleUntil {
+                !activity.findViewById<TextView>(R.id.wordCount).text
+                    .contains("edited", ignoreCase = true)
+            })
             assertFalse("Save edits is not a file export", File(dir, "Library only - text.txt").exists())
             assertFalse("the screen stays open", activity.isFinishing)
-            assertFalse(
-                "the edited marker clears after the library save",
-                activity.findViewById<TextView>(R.id.wordCount).text.contains("edited", ignoreCase = true)
-            )
         }
     }
 
@@ -251,6 +251,11 @@ class OcrReadFirstTest {
 
             activity.findViewById<View>(R.id.ocrLangChip).performClick()
             shadowOf(Looper.getMainLooper()).idle()
+            val languageSheet = ShadowDialog.getLatestDialog()
+            assertNotNull("the language sheet opens", languageSheet)
+            (languageSheet.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+                .getChildAt(0) as View).performClick()
+            shadowOf(Looper.getMainLooper()).idle()
             val sheet = ShadowDialog.getLatestDialog()
             assertNotNull("changing the text language asks before it reads again", sheet)
             assertEquals(
@@ -285,7 +290,7 @@ class OcrReadFirstTest {
             assertTrue("Save edits stores the text", idleUntil {
                 repo.ocrDoc(id)["page_000.jpg"] == "kept in the library"
             })
-            assertTrue("the screen closes after the library save", activity.isFinishing)
+            assertTrue("the screen closes after the library save", idleUntil { activity.isFinishing })
             assertFalse(File(dir, "Back save - text.txt").exists())
         }
     }

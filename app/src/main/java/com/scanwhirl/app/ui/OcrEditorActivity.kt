@@ -9,9 +9,12 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.text.InputType
+import android.text.method.TextKeyListener
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -91,6 +94,12 @@ class OcrEditorActivity : BaseActivity() {
     private var saving = false
     /** v2 UI: 08_text_ocr — Text is the default pane; Page shows the scan. */
     private var pageMode = false
+    /**
+     * W5: the screen opens read-first. [editing] is the explicit edit mode; read mode
+     * keeps the text selectable but not typeable, so recognised text is never changed
+     * by an accidental tap or cursor.
+     */
+    private var editing = false
 
     private lateinit var editText: EditText
     private lateinit var wordCount: TextView
@@ -148,16 +157,24 @@ class OcrEditorActivity : BaseActivity() {
         setupPageTabs()
         setupEditText()
         setupActionBar()
+        // W5: opening the text screen is reading, not typing.
+        setEditing(false)
         // One short line normally; at large text a second line is better than clipping.
         if (resources.configuration.fontScale > 1.5f) binding.ocrFootNote.maxLines = 2
         binding.btnOcrRetry.setOnClickListener { retryReading() }
         showPage(currentPageKey)
 
-        // Dirty-state back handling.
+        // Dirty-state back handling. In read mode with no edits, Back leaves the screen.
         onBackPressedDispatcher.addCallback(
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (isDirty) showUnsavedConfirm() else finish()
+                    if (editing && !isDirty) {
+                        setEditing(false)
+                    } else if (isDirty) {
+                        showUnsavedConfirm()
+                    } else {
+                        finish()
+                    }
                 }
             }
         )
@@ -233,7 +250,11 @@ class OcrEditorActivity : BaseActivity() {
         updateSubtitle()
         A11yTargets.stackToolbarText(toolbar)
         toolbar.setNavigationOnClickListener {
-            if (isDirty) showUnsavedConfirm() else finish()
+            when {
+                editing && !isDirty -> setEditing(false)
+                isDirty -> showUnsavedConfirm()
+                else -> finish()
+            }
         }
     }
 
@@ -281,13 +302,34 @@ class OcrEditorActivity : BaseActivity() {
     }
 
     private fun onLanguagePicked(language: OcrLanguage) {
-        OcrLanguageSettings.set(this, language)
         val id = docId
         if (id == null) {
+            OcrLanguageSettings.set(this, language)
             Toast.makeText(this, R.string.ocr_lang_saved, Toast.LENGTH_SHORT).show()
             recreate()
             return
         }
+        // W5: reading again replaces stored text, so it never happens silently:
+        // the person confirms that corrections will be replaced.
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.ocr_w5_reread_title)
+            .setMessage(R.string.ocr_w5_reread_msg)
+            .setPrimary(R.string.ocr_w5_reread_confirm) { reReadDocument(id, language) }
+            .setSecondary(android.R.string.cancel) { }
+            .build()
+            .show()
+    }
+
+    /** W5: the confirmed re-read; drops unsaved edits only after the person agreed. */
+    private fun reReadDocument(id: String, language: OcrLanguage) {
+        OcrLanguageSettings.set(this, language)
+        // The confirmation replaces unsaved edits, so drop them before recreation
+        // instead of restoring them on top of the freshly recognised text.
+        setEditing(false)
+        pageTexts.clear()
+        pageTexts.putAll(originalTexts)
+        isDirty = false
+        pageHistories.clear()
         Toast.makeText(this, R.string.ocr_lang_reading, Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
             try {
@@ -470,8 +512,12 @@ class OcrEditorActivity : BaseActivity() {
         val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         // Tidy shares the first action row: its own row stole the height the text pane needs at 1.3.
         chip(row1, R.id.btnTidyText, R.drawable.ic_sym_auto_fix_high, R.string.ocr_tidy_text)
-            .setOnClickListener { showTidySheet() }
-        chip(row1, R.id.btnCopy, R.drawable.ic_sym_content_copy, R.string.ocr_copy_btn)
+            .setOnClickListener {
+                // W5: cleaning text is an edit, so it never changes read-only text.
+                if (!editing) setEditing(true)
+                showTidySheet()
+            }
+        chip(row1, R.id.btnCopy, R.drawable.ic_sym_content_copy, R.string.ocr_w5_copy_page)
             .setOnClickListener { copyCurrent() }
         chip(row1, R.id.btnShare, R.drawable.ic_sym_share, R.string.ocr_share_btn)
             .setOnClickListener { shareCurrent() }
@@ -495,7 +541,71 @@ class OcrEditorActivity : BaseActivity() {
         sealRow(row1)
         sealRow(row2)
         setupModeSwitch()
+        setupReadRow()
         updateWordCount()
+        updateUndoRedoState()
+    }
+
+    /** W5: page indicator, Copy all pages, Edit text / Done and Save edits. */
+    private fun setupReadRow() {
+        binding.btnCopyAll.setOnClickListener { copyAllPages() }
+        binding.btnEditText.setOnClickListener {
+            setEditing(!editing)
+        }
+        binding.btnSaveEdits.setOnClickListener { saveEdits() }
+        binding.btnTxtRetry.setOnClickListener {
+            hideTxtFailure()
+            saveCurrent()
+        }
+    }
+
+    /**
+     * W5 read-first: read mode keeps the text selectable but not typeable; edit mode
+     * installs the key listener and shows Save edits. Switching modes never changes
+     * the text or the page.
+     */
+    private fun setEditing(edit: Boolean) {
+        editing = edit
+        val field = editText
+        // setTextIsSelectable() re-applies the current text; without this guard the
+        // TextWatcher would treat that as typing and blank the page's stored text.
+        val wasApplying = applyingHistory
+        applyingHistory = true
+        try {
+            if (edit) {
+                field.setTextIsSelectable(false)
+                field.isFocusable = true
+                field.isFocusableInTouchMode = true
+                field.isCursorVisible = true
+                field.inputType = InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                field.keyListener = TextKeyListener.getInstance()
+            } else {
+                field.setKeyListener(null)
+                field.isCursorVisible = false
+                field.setTextIsSelectable(true)
+            }
+        } finally {
+            applyingHistory = wasApplying
+        }
+        if (edit) {
+            field.requestFocus()
+            field.post {
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
+            }
+        } else {
+            field.clearFocus()
+        }
+        binding.btnEditText.setText(
+            if (edit) R.string.ocr_w5_done_editing else R.string.ocr_w5_edit_text
+        )
+        binding.btnSaveEdits.isVisible = edit
+        binding.btnCopyAll.isVisible = !edit
+        // Read-first keeps one 48dp action line: the edit bar (Undo/Redo/word count)
+        // replaces the read line only while the person is editing.
+        binding.ocrEditBar.isVisible = edit
         updateUndoRedoState()
     }
 
@@ -575,7 +685,7 @@ class OcrEditorActivity : BaseActivity() {
         val text = editText.text.toString()
         val at = text.indexOf(line.text)
         if (at >= 0) {
-            editText.requestFocus()
+            if (editing) editText.requestFocus()
             editText.setSelection(at.coerceAtMost(text.length))
         }
     }
@@ -584,8 +694,10 @@ class OcrEditorActivity : BaseActivity() {
         val name = docTitle ?: getString(R.string.ocr_screen_title)
         val total = maxOf(1, pageTexts.size)
         val current = pageNumberOf(currentPageKey).coerceIn(1, total)
-        // Short form: the full "page N of M" wording is ellipsized at font scale 2.0.
-        binding.toolbar.subtitle = getString(R.string.ocr_page_sub_short, name, current, total)
+        // W5: the filename is the toolbar subtitle; the read line below carries
+        // the explicit "Page n of m" indicator.
+        binding.toolbar.subtitle = name
+        binding.ocrPageIndicator.text = getString(R.string.ocr_w5_page_of, current, total)
         A11yTargets.stackToolbarText(binding.toolbar)
     }
 
@@ -793,9 +905,76 @@ class OcrEditorActivity : BaseActivity() {
         val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cb.setPrimaryClip(ClipData.newPlainText("ocr", text))
         com.google.android.material.snackbar.Snackbar.make(
-            binding.root, R.string.ocr_copied, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
+            binding.root, R.string.ocr_w5_page_copied,
+            com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
         ).show()
-        findViewById<com.scanwhirl.app.ui.kit.SwChip>(R.id.btnCopy)?.flashDone(R.string.ocr_copied)
+        findViewById<com.scanwhirl.app.ui.kit.SwChip>(R.id.btnCopy)
+            ?.flashDone(R.string.ocr_w5_page_copied)
+    }
+
+    /**
+     * W5: "Save edits" persists the corrected OCR text in the document (search,
+     * reopen) and writes no file. It never claims a .txt copy; [saveCurrent] does
+     * that. The screen closes only after the library write really succeeded.
+     */
+    private fun saveEdits(finishAfter: Boolean = false) {
+        if (saving) return
+        val id = docId
+        if (id == null) {
+            Toast.makeText(this, R.string.ocr_w5_not_in_library, Toast.LENGTH_LONG).show()
+            return
+        }
+        val changedPages = pageTexts.filter { (k, v) -> v != (originalTexts[k] ?: "") }
+        if (changedPages.isEmpty()) {
+            Toast.makeText(this, R.string.ocr_w5_no_edits, Toast.LENGTH_SHORT).show()
+            if (finishAfter) finish()
+            return
+        }
+        saving = true
+        lifecycleScope.launch {
+            try {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    checkNotNull(repo.updateOcrPages(id, changedPages.toMap())) {
+                        "Document no longer exists"
+                    }
+                }
+                originalTexts = originalTexts + changedPages
+                if (unreadKeys.removeAll(changedPages.keys)) setupPageTabs()
+                recomputeDirty()
+                updateWordCount()
+                updateStatus()
+                updateSubtitle()
+                hideTxtFailure()
+                Toast.makeText(this@OcrEditorActivity, R.string.ocr_w5_edits_saved, Toast.LENGTH_SHORT).show()
+                finishSaveAttempt()
+                if (finishAfter) finish()
+            } catch (e: CancellationException) {
+                finishSaveAttempt()
+                throw e
+            } catch (e: Exception) {
+                finishSaveAttempt()
+                Toast.makeText(
+                    this@OcrEditorActivity,
+                    getString(R.string.page_op_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /** W5: the .txt write failed but the library text is kept; Retry is next to it. */
+    private fun showTxtFailure() {
+        val message = if (docId != null) {
+            R.string.ocr_w5_txt_failed_kept
+        } else {
+            R.string.ocr_w5_txt_failed_here
+        }
+        binding.ocrTxtFailureText.setText(message)
+        binding.ocrTxtFailure.isVisible = true
+    }
+
+    private fun hideTxtFailure() {
+        binding.ocrTxtFailure.isVisible = false
     }
 
     private fun shareCurrent() {
@@ -895,6 +1074,7 @@ class OcrEditorActivity : BaseActivity() {
                     onUndo = null
                 )
                 Toast.makeText(this@OcrEditorActivity, message, Toast.LENGTH_LONG).show()
+                hideTxtFailure()
                 finishSaveAttempt()
                 // The sheet asked to close only after the save landed. On a failure the
                 // error above says the .txt could not be written; the document text is
@@ -912,16 +1092,16 @@ class OcrEditorActivity : BaseActivity() {
                         action = { writeDocumentTxt(fileName, finishAfterSave, retried = true) },
                         onDenied = {
                             reportTxtFailure(e)
+                            showTxtFailure()
                             finishSaveAttempt()
                         }
                     )
                 } else {
                     reportTxtFailure(e)
+                    showTxtFailure()
                     finishSaveAttempt()
-                    // The sheet asked to close after its save. The error above says the
-                    // .txt could not be written; the document text is already stored, so
-                    // the edits are not lost.
-                    if (finishAfterSave) finish()
+                    // W5: a failed .txt write keeps the screen open with Retry. The
+                    // document text was stored first, so the message can say it is kept.
                 }
             }
         }
@@ -976,6 +1156,7 @@ class OcrEditorActivity : BaseActivity() {
                     // The outcome is also a toast so it is reported even when a
                     // snackbar cannot show (and existing export tests read it).
                     Toast.makeText(this@OcrEditorActivity, message, Toast.LENGTH_LONG).show()
+                    hideTxtFailure()
                     saving = false
                     findViewById<View>(R.id.btnSave).isEnabled = true
                     onSaved()
@@ -989,6 +1170,8 @@ class OcrEditorActivity : BaseActivity() {
                         getString(R.string.text_save_failed, e.message ?: e.javaClass.simpleName),
                         Toast.LENGTH_LONG
                     ).show()
+                    // W5: temp text stays on screen; the failure is actionable with Retry.
+                    showTxtFailure()
                 }
             }
         }
@@ -1038,7 +1221,7 @@ class OcrEditorActivity : BaseActivity() {
         val all = renderAllPages()
         val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cb.setPrimaryClip(ClipData.newPlainText("ocr-all", all))
-        Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.ocr_w5_all_copied, Toast.LENGTH_SHORT).show()
     }
 
     private fun shareAllPages() {
@@ -1081,16 +1264,27 @@ class OcrEditorActivity : BaseActivity() {
     // Unsaved-changes confirm (SwSheet)
     // ------------------------------------------------------------------
 
+    /**
+     * W5: back with edits offers the three honest outcomes: Save edits (library
+     * text only), Save .txt and close (a file, then close) or Discard. The sheet's
+     * primary keeps the corrections in the document; the close icon keeps editing.
+     */
     private fun showUnsavedConfirm() {
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ocr_unsaved_title)
-            .setMessage(R.string.ocr_unsaved_msg)
-            .setPrimaryStayOpen(R.string.ocr_save_btn) {
-                saveCurrent(finishAfterSave = true)
+            .setMessage(R.string.ocr_w5_back_msg)
+            .setOptions(
+                listOf(
+                    getString(R.string.ocr_w5_save_txt_and_close),
+                    getString(R.string.ocr_discard_btn)
+                )
+            ) { which, _ ->
+                if (which == 0) saveCurrent(finishAfterSave = true) else finish()
             }
-            .setSecondary(R.string.ocr_discard_btn) {
-                finish()
+            .setPrimary(R.string.ocr_w5_save_edits) {
+                saveEdits(finishAfter = true)
             }
+            .setSecondary(R.string.ocr_w5_keep_editing) { }
             .build()
             .show()
     }

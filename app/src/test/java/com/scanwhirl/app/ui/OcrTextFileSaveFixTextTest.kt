@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Intent
 import android.os.Environment
 import android.os.Looper
+import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
@@ -162,7 +163,14 @@ class OcrTextFileSaveFixTextTest {
                 activity.onBackPressedDispatcher.onBackPressed()
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("the unsaved-changes sheet opens", sheet)
-                sheet.findViewById<android.view.View>(R.id.swSheetPrimary).performClick()
+                // W5: the sheet's primary keeps edits in the library; the explicit
+                // "Save .txt and close" row writes the file. This test covers the file.
+                val rows = sheet.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+                assertEquals(
+                    activity.getString(R.string.ocr_w5_save_txt_and_close),
+                    (rows.getChildAt(0) as ViewGroup).contentDescription?.toString()
+                )
+                rows.getChildAt(0).performClick()
                 awaitToast()
 
                 val file = File(dir, "Notes - text.txt")
