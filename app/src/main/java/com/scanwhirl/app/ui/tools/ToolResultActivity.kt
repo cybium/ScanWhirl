@@ -49,7 +49,8 @@ import java.util.zip.ZipOutputStream
  *
  * One screen for a new document copy and for an exported file: Open, "Also save in Documents"
  * (one tap into Documents/ScanWhirl), Share, Save as… (the system Save-as picker), Show in library
- * and Undo. Undo removes only the copy this run created; the source document is never touched.
+ * and Undo. Undo removes only the copy this run created — including the Documents copy it saved
+ * (B2-H1) — and the source document is never touched.
  * Compress also says so when the produced size is still above the size the person asked for.
  * Built with the kit on the ink background.
  *
@@ -80,6 +81,13 @@ class ToolResultActivity : BaseActivity() {
 
     /** F1: the ID card flow's own result actions (Keep / Discard). */
     private val idCardFlow: Boolean get() = toolId == "id_card"
+
+    /**
+     * B2-H1 (phone, build 2 = 1485874c): the Documents/ScanWhirl copy this result created.
+     * The confirmation bar's Undo removes it only while its six seconds are up; the screen's own
+     * Undo must undo the whole run, so it removes this copy too however long the person takes.
+     */
+    private var savedCopy: DownloadSaver.SavedFile? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -577,6 +585,9 @@ class ToolResultActivity : BaseActivity() {
                         }
                     }
                 }
+                // B2-H1: only a copy this save actually created may ever be undone here. An
+                // identical file that was already in Documents stays out of reach, as always.
+                if (saved.created) savedCopy = saved
                 SavedSnackbar.showExport(
                     this@ToolResultActivity, rootView, saved, R.string.result_saved_documents, docId
                 )
@@ -684,14 +695,50 @@ class ToolResultActivity : BaseActivity() {
         // deleteDocument permanently purges (no Trash). Undo therefore removes the generated
         // files and keeps the document: the safe direction for an unknown caller.
         val docs = if (outs.isEmpty()) docIds.toList() else emptyList()
+        val recordDoc = docIds.singleOrNull()
+        // B2-H1: the Documents copy this run saved is part of the run, so the screen's Undo
+        // removes it too — the confirmation bar is no longer the only way, and pressing Undo
+        // after that bar has gone no longer leaves the copy behind. Only the copy this run
+        // created is a candidate, and only while it still holds exactly the bytes it wrote.
+        val copy = savedCopy
+        savedCopy = null
         docIds.clear()
         files.clear()
         lifecycleScope.launch {
+            val copyUndo = copy?.let { saved ->
+                withContext(Dispatchers.IO) {
+                    val result = try {
+                        DownloadSaver.undoSave(this@ToolResultActivity, saved)
+                    } catch (_: Exception) {
+                        DownloadSaver.UndoResult.FAILED
+                    }
+                    if (result == DownloadSaver.UndoResult.REMOVED && recordDoc != null && docs.isEmpty()) {
+                        try {
+                            repo.removeExport(recordDoc, saved.uri)
+                        } catch (_: Exception) {
+                            // A stale record is harmless: delete-with-document re-checks the file.
+                        }
+                    }
+                    result
+                }
+            }
             withContext(Dispatchers.IO) {
                 docs.forEach { runCatching { repo.deleteDocument(it) } }
                 outs.forEach { runCatching { it.delete() } }
             }
-            Toast.makeText(this@ToolResultActivity, R.string.tools_result_undone, Toast.LENGTH_SHORT).show()
+            // Data honesty: a copy that could not be removed is never reported as undone.
+            val (text, long) = when (copyUndo) {
+                DownloadSaver.UndoResult.KEPT_CHANGED ->
+                    getString(R.string.export_undo_kept_changed, copy?.name.orEmpty()) to true
+                DownloadSaver.UndoResult.FAILED ->
+                    getString(R.string.export_undo_failed, copy?.name.orEmpty()) to true
+                else -> getString(R.string.tools_result_undone) to false
+            }
+            Toast.makeText(
+                this@ToolResultActivity,
+                text,
+                if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+            ).show()
             finish()
         }
     }
