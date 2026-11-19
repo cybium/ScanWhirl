@@ -77,6 +77,16 @@ class LockedSourceTest {
                 assertNotNull(sheet.findViewById<View>(R.id.unlockPassword))
                 sheet.findViewById<EditText>(R.id.unlockPassword).setText("1234")
                 sheet.findViewById<View>(R.id.unlockOpen).performClick()
+                idle()
+                // SAFE-UNLOCK-CONSENT: the password only proves the file opens. Taking the
+                // protection off the library copy needs the explicit yes on the next sheet.
+                val consent = requireNotNull(ShadowDialog.getLatestDialog()) { "no consent sheet" }
+                assertEquals(
+                    "the file stays locked until the user agrees",
+                    true,
+                    repo.getDocument(id)?.isLocked
+                )
+                consent.findViewById<View>(R.id.swSheetPrimary).performClick()
             }
             assertTrue(
                 "the document is unlocked",
