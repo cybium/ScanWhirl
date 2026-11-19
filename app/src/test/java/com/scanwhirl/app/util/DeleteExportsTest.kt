@@ -14,6 +14,7 @@ import com.scanwhirl.app.ui.TrashActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -135,12 +136,86 @@ class DeleteExportsTest {
             assertNull("no copy count for unproven copies", dialog.findViewById<android.view.View>(R.id.deleteCopiesBox))
             val note = dialog.findViewById<android.widget.TextView>(R.id.deleteCopiesNote)
             assertNotNull("the dialog says unproven copies stay", note)
-            assertEquals(app.getString(R.string.delete_copies_unproven_note), note!!.text.toString())
+            val text = note!!.text.toString()
+            assertTrue(
+                "T44: the dialog names the copy it cannot prove, so the user can find it — got \"$text\"",
+                text.contains("Older.pdf")
+            )
             // v2 UI: 09_unlock_sheet — the confirmation is a SwSheet; find its primary by id.
             dialog.findViewById<View>(R.id.swSheetPrimary).performClick()
             assertTrue(poll { repo.listTrash().isEmpty() })
         }
         assertEquals("the older copy is kept", 1, media.scanwhirlPdfs().size)
+    }
+
+    @Test
+    fun `the delete question names exactly the copy it will remove`() {
+        val id = seedDoc("Named")
+        exportSigned(id, "Named")
+        repo.moveToTrash(id)
+
+        ActivityScenario.launch(TrashActivity::class.java).use { scenario ->
+            awaitRows(scenario, 1)
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnTrashDelete).performClick()
+            }
+            val dialog = awaitDialog()
+            val label = dialog.findViewById<android.widget.CheckBox>(R.id.deleteCopiesBox)
+                ?.text?.toString().orEmpty()
+            assertTrue("the box names the file it removes — got \"$label\"", label.contains("Named.pdf"))
+            assertFalse(
+                "a saved copy is not always a PDF, so the box must not promise a PDF: \"$label\"",
+                label.contains("PDF")
+            )
+        }
+    }
+
+    @Test
+    fun `a recorded copy the app cannot prove is named in the sheet and stays`() {
+        val id = seedDoc("Older")
+        val saved = DownloadSaver.savePdfFile(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor("Older"))
+        repo.addExport(id, saved.uri, saved.fingerprint) // recorded, never signed: never removable
+        repo.moveToTrash(id)
+
+        ActivityScenario.launch(TrashActivity::class.java).use { scenario ->
+            awaitRows(scenario, 1)
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnTrashDelete).performClick()
+            }
+            val dialog = awaitDialog()
+            assertNull(
+                "an unproven copy is never offered for removal",
+                dialog.findViewById<android.view.View>(R.id.deleteCopiesBox)
+            )
+            val note = dialog.findViewById<android.widget.TextView>(R.id.deleteCopiesNote)?.text?.toString().orEmpty()
+            assertTrue("the sheet names the copy that stays — got \"$note\"", note.contains("Older.pdf"))
+            assertTrue("and says why — got \"$note\"", note.contains("cannot prove") || note.contains("can't prove"))
+            dialog.findViewById<View>(R.id.swSheetPrimary).performClick()
+            assertTrue(poll { repo.listTrash().isEmpty() })
+        }
+        assertEquals("the recorded copy stays", 1, media.scanwhirlPdfs().size)
+    }
+
+    @Test
+    fun `permanent delete removes this document's copy and never another document's`() {
+        val a = seedDoc("Same")
+        val b = seedDoc("Other")
+        exportSigned(a, "Same")
+        // B saves the same requested name with different bytes: a real second file, "Same (2).pdf",
+        // with its own signed record. (Identical bytes would be adopted as "already saved".)
+        exportSigned(b, "Same", "the other document's pdf".toByteArray())
+        assertEquals(2, media.scanwhirlPdfs().size)
+        repo.moveToTrash(a)
+
+        val text = deleteForeverFromTrash(uncheck = false)
+        assertTrue("A's copy is removed — got $text", text != null && text.contains("1 copy removed"))
+        val left = media.scanwhirlPdfs().mapNotNull { it.name }
+        assertEquals("only B's copy is left: $left", listOf("Same (2).pdf"), left)
+        assertEquals(
+            "B still records exactly its own copy",
+            listOf(media.rowNamed("Same (2).pdf").id),
+            repo.exportsOf(b).map { android.content.ContentUris.parseId(it) }
+        )
     }
 
     @Test
@@ -188,8 +263,8 @@ class DeleteExportsTest {
     // Helpers
     // ------------------------------------------------------------------
 
-    private fun exportSigned(id: String, name: String) {
-        val saved = DownloadSaver.savePdfFile(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor(name))
+    private fun exportSigned(id: String, name: String, bytes: ByteArray = "pdf".toByteArray()) {
+        val saved = DownloadSaver.savePdfFile(app, bytes, DownloadSaver.pdfNameFor(name))
         repo.addExport(id, saved)
     }
 
