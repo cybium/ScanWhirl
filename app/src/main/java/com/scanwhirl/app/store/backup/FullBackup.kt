@@ -79,6 +79,11 @@ class FullBackup(
         val vaultReencrypted: Int,
         val extras: Int,
         val vaultLocked: Boolean,
+        /**
+         * Plain sentences for the user, shown after the counts. A write fills this when
+         * something could not be included (today: the Vault during a pending setup), a restore
+         * when part of the archive had to wait or was left out.
+         */
         val warnings: List<String>
     )
 
@@ -97,7 +102,7 @@ class FullBackup(
      * Writes the whole app into [target]. [secret] is either a password (>= 10 characters) or the
      * formatted Vault recovery code; [wrap] says which and is recorded in the header.
      */
-    fun write(target: File, secret: String, wrap: Wrap) {
+    fun write(target: File, secret: String, wrap: Wrap): Report {
         when (wrap) {
             Wrap.PASSWORD -> require(secret.length >= MIN_PASSWORD) {
                 "The backup password needs at least $MIN_PASSWORD characters"
@@ -106,13 +111,19 @@ class FullBackup(
                 "That is not a Vault recovery code"
             }
         }
-        withActiveJob { writeWhileActive(target, secret, wrap) }
+        return withActiveJob { writeWhileActive(target, secret, wrap) }
     }
 
-    private fun writeWhileActive(target: File, secret: String, wrap: Wrap) {
+    private fun writeWhileActive(target: File, secret: String, wrap: Wrap): Report {
         val plain = File(context.cacheDir, "fullbackup-${UUID.randomUUID().toString().take(8)}.tmp")
         try {
-            val vaultKey = vaultKeyFor(secret, wrap)
+            // Review VAULT-F1: a Vault whose one-time recovery code has not passed its check is
+            // unlocked by setup(), so it used to export its encrypted files *and* the key that
+            // opens them. Whoever could read the archive then needed only the backup password
+            // they chose, not the code the owner may not have written down. While pending, the
+            // Vault is left out and the report says so; the library still backs up.
+            val vaultPending = vault.isConfirmationPending()
+            val vaultKey = if (vaultPending) null else vaultKeyFor(secret, wrap)
             try {
                 DataOutputStream(BufferedOutputStream(FileOutputStream(plain), BUFFER)).use { out ->
                     writeEntry(out, "manifest.json", manifest().toByteArray(Charsets.UTF_8))
@@ -120,7 +131,7 @@ class FullBackup(
                     copyTree(out, sigDir, "signatures")
                     copyTree(out, stampDir, "stamps")
                     copyTree(out, draftDir, "drafts")
-                    copyVault(out)
+                    if (!vaultPending) copyVault(out)
                     if (vaultKey != null) writeEntry(out, VAULT_KEY_ENTRY, vaultKey)
                     writeEntry(out, "settings.json", settings().toByteArray(Charsets.UTF_8))
                     out.writeByte(END)
@@ -154,6 +165,19 @@ class FullBackup(
                     target.delete()
                     throw e
                 }
+                return Report(
+                    documents = countEntries(docsDir),
+                    skipped = 0,
+                    vaultEntries = if (vaultPending) 0 else countVaultEntries(),
+                    vaultReencrypted = 0,
+                    extras = countFiles(sigDir) + countFiles(stampDir) + countFiles(draftDir),
+                    vaultLocked = false,
+                    warnings = if (vaultPending) {
+                        listOf(context.getString(R.string.vault_pending_backup_omitted))
+                    } else {
+                        emptyList()
+                    }
+                )
             } finally {
                 vaultKey?.fill(0)
             }
@@ -288,7 +312,10 @@ class FullBackup(
 
     /** True when this backup can merge Vault entries but this phone's Vault is locked. */
     fun needsVaultUnlock(file: File): Boolean =
-        header(file).hasVaultKey && vault.isSetUp() && !vault.isUnlocked()
+        header(file).hasVaultKey && vault.isSetUp() && !vault.isUnlocked() &&
+            // A pending Vault defers the merge anyway (VAULT-F1): asking to unlock it first
+            // would open the Vault screen and change nothing.
+            !vault.isConfirmationPending()
 
     /** Number of days since the last backup, or null when none was ever made. */
     fun daysSinceLastBackup(now: Long = System.currentTimeMillis()): Long? {        val last = prefs.getLong(PREF_LAST_BACKUP, 0L)
@@ -314,8 +341,9 @@ class FullBackup(
 
     private fun settings(): String = JSONObject().apply {
         prefs.all.forEach { (key, value) ->
-            // The legacy PIN hash is device state, not a setting; never carry it.
-            if (key == "vault_pin_sha256") return@forEach
+            // Device state, not settings: the legacy PIN hash and the non-secret "setup not
+            // checked yet" marker both belong to this phone only.
+            if (key == "vault_pin_sha256" || key == PREF_VAULT_PENDING) return@forEach
             when (value) {
                 is String -> put(key, value)
                 is Boolean -> put(key, value)
@@ -326,6 +354,26 @@ class FullBackup(
             }
         }
     }.toString()
+
+    /**
+     * How many document/entry folders a tree holds. The full-backup report counts these (a
+     * document, a Vault entry), never the raw page files.
+     */
+    private fun countEntries(root: File): Int =
+        root.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.size ?: 0
+
+    /** Files under [root] that the backup would copy (the same filter [copyTree] uses). */
+    private fun countFiles(root: File): Int {
+        if (!root.isDirectory) return 0
+        return root.walkTopDown()
+            .onEnter { !it.name.startsWith(".") }
+            .count { it.isFile && !it.name.startsWith(".") }
+    }
+
+    /** Vault entry folders (a directory carrying an encrypted manifest), not raw file count. */
+    private fun countVaultEntries(): Int =
+        vaultDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") && File(f, "manifest.enc").isFile }
+            ?.size ?: 0
 
     private fun copyTree(out: DataOutputStream, root: File, prefix: String) {
         if (!root.isDirectory) return
@@ -521,6 +569,13 @@ class FullBackup(
                 if (File(vaultDir, "recovery.bin").isFile) {
                     runCatching { vault.markConfirmationPassed() }
                 }
+            } else if (vault.isConfirmationPending()) {
+                // Review VAULT-F1: setup() unlocks a Vault whose recovery code has not passed its
+                // four-character check, so a full restore used to publish verified entries into a
+                // Vault that is not finished. Nothing is published; the library part is restored
+                // and the report says the Vault part waits for the same code check as everything
+                // else. The archive is not touched, so restoring it again afterwards merges.
+                warnings.add(context.getString(R.string.vault_pending_restore_deferred))
             } else if (oldVaultKey == null) {
                 warnings.add("This backup does not carry the Vault key; its Vault files were not restored.")
             } else if (!vault.isUnlocked()) {
@@ -617,6 +672,8 @@ class FullBackup(
         const val MIN_PASSWORD = 10
         const val PREF_LAST_BACKUP = "full_backup_last_at"
         const val PREF_REMIND = "full_backup_remind"
+        /** The non-secret "Vault setup not checked yet" marker (Prefs); device state only. */
+        private const val PREF_VAULT_PENDING = "vault_setup_confirm_pending"
         const val EXTENSION = "swbackup"
         const val MIME = "application/octet-stream"
 
