@@ -189,25 +189,72 @@ class TrashActivity : BaseActivity() {
                 val (removed, kept) = if (copies.isEmpty()) 0 to 0 else {
                     DeleteExports.removeCopies(applicationContext, copies)
                 }
-                var failed = 0
+                val failedKeys = mutableSetOf<String>()
                 for (t in targets) {
                     try {
                         repo.deleteFromTrash(t.key)
                     } catch (_: Exception) {
-                        failed++
+                        failedKeys += t.key
                     }
                 }
-                Triple(removed, kept, failed)
+                // UI-W8: report what the list really shows. A removal can die after the entry
+                // was renamed aside: it is gone from Trash, but its bytes are cleaned at the
+                // next start. A removal can also refuse before the rename: it is still listed.
+                val listed = runCatching { repo.listTrash().map { it.key }.toSet() }.getOrNull()
+                DeleteOutcome(removed, kept, failedKeys, listed)
             }
-            val (removed, kept, failed) = outcome
-            val msg = when {
-                failed > 0 -> getString(R.string.trash_delete_failed)
-                copies.isNotEmpty() -> DeleteExports.message(this@TrashActivity, removed, kept)
-                else -> resources.getQuantityString(R.plurals.trash_deleted, targets.size, targets.size)
-            }
+            val msg = deleteMessage(targets, outcome)
             Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG).show()
             reload()
         }
+    }
+
+    private class DeleteOutcome(
+        val copiesRemoved: Int,
+        val copiesKept: Int,
+        val failedKeys: Set<String>,
+        /** Keys still listed after the attempt; null when the list could not be read. */
+        val stillListed: Set<String>?
+    )
+
+    /**
+     * UI-W8: the result line is assembled from what actually happened, not from "some failed".
+     * A partial Empty Trash says how many left, how many are still in Trash, and how many
+     * removals still finish at the next start. Export-copy outcomes are never dropped.
+     */
+    private fun deleteMessage(
+        targets: List<ScanRepository.TrashedDocument>,
+        outcome: DeleteOutcome
+    ): CharSequence {
+        val failed = outcome.failedKeys.size
+        val stillInTrash = if (outcome.stillListed == null) failed else {
+            outcome.failedKeys.count { it in outcome.stillListed }
+        }
+        // A thrown removal that is no longer listed was renamed aside: its cleanup is pending.
+        val cleanupPending = failed - stillInTrash
+        val deleted = targets.size - failed
+        val parts = mutableListOf<CharSequence>()
+        when {
+            failed == 0 -> parts += resources.getQuantityString(R.plurals.trash_deleted, targets.size, targets.size)
+            deleted == 0 -> parts += getString(R.string.trash_delete_failed)
+            else -> {
+                parts += getString(R.string.trash_deleted_partial, deleted, targets.size)
+                if (stillInTrash > 0) {
+                    parts += resources.getQuantityString(
+                        R.plurals.trash_still_in_trash, stillInTrash, stillInTrash
+                    )
+                }
+                if (cleanupPending > 0) {
+                    parts += resources.getQuantityString(
+                        R.plurals.trash_cleanup_pending, cleanupPending, cleanupPending
+                    )
+                }
+            }
+        }
+        if (outcome.copiesRemoved > 0 || outcome.copiesKept > 0) {
+            parts += DeleteExports.message(this, outcome.copiesRemoved, outcome.copiesKept)
+        }
+        return parts.joinToString(" ")
     }
 
     // ------------------------------------------------------------------

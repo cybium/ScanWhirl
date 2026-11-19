@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.CheckBox
@@ -87,19 +88,20 @@ class BackupActivity : BaseActivity() {
         pending = null
         pendingWarnings = emptyList()
         if (uri == null || file == null) return@registerForActivityResult
+        // Read the destination's own name before writing: it is what the person sees in the
+        // result, and it is never used as proof of anything.
+        val destination = displayName(uri)
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
-                runCatching {
-                    contentResolver.openOutputStream(uri)?.use { out ->
-                        file.inputStream().use { it.copyTo(out, 64 * 1024) }
-                    } ?: error("no stream")
-                }.isSuccess
+                runCatching { writeDurably(file, uri) }.getOrDefault(false)
             }
             file.delete()
             if (ok) {
                 backup.markBackedUp()
                 refresh()
-                toast(R.string.backup_saved)
+                // UI-W8: "Saved to <location>" only after the bytes were written, flushed and
+                // synced, and the count matched the archive. "Backup ready" stays the cached file.
+                toast(getString(R.string.backup_saved_to, destination ?: getString(R.string.backup_saved_name_unknown)))
             } else {
                 toast(R.string.backup_failed)
             }
@@ -147,12 +149,36 @@ class BackupActivity : BaseActivity() {
         if (!awaitingShareReturn) return
         awaitingShareReturn = false
         val file = pending ?: return
-        if (file.isFile) offerSaving(file)
+        if (file.isFile) {
+            offerSaving(file)
+            // UI-W8: sharing hands the file to another app; ScanWhirl has no way to know whether
+            // that app wrote it, so the person hears the limit instead of a "saved" claim.
+            toast(R.string.backup_share_unconfirmed)
+        }
     }
 
     // ------------------------------------------------------------------
 
     private fun buildScreen(): ViewGroup {
+        // UI-W8: an explicit up control, because this screen is FLAG_SECURE (no screenshot can
+        // show a system gesture) and a person who cannot find Back must not be trapped here.
+        // The bars are padded once on the outer column so both the header and the scrolling
+        // content clear the clock and the navigation bar / gesture area.
+        val shell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            applySystemBarsPadding()
+        }
+        shell.addView(
+            backControl(),
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginStart = dp(8f)
+                topMargin = dp(4f)
+            }
+        )
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20f), dp(18f), dp(20f), dp(24f))
@@ -208,15 +234,27 @@ class BackupActivity : BaseActivity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = dp(14f) }
         )
-        return ScrollView(this).apply {
-            addView(root)
-            // T-FIX-INSETS-BACKUP: BaseActivity turns decor fitting off, so this screen must
-            // clear the system bars itself. On the owner's Redmi (108 px status bar) the title
-            // was drawn at y=54 px, half under the clock. The inner column keeps its own 20/18
-            // padding; this adds the bars outside the scrolling area, on top and bottom.
-            applySystemBarsPadding()
-        }
+        shell.addView(
+            ScrollView(this).apply { addView(root) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        )
+        return shell
     }
+
+    /** A 48dp text button named Back, first in the reading order of the screen. */
+    private fun backControl(): TextView =
+        SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+            id = R.id.backupBack
+            text = getString(R.string.backup_back)
+            contentDescription = text
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            minHeight = dp(48f)
+            minWidth = dp(48f)
+            setPadding(dp(12f), 0, dp(12f), 0)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { finish() }
+        }
 
     private fun primary(text: String, id: Int, onClick: () -> Unit): TextView =
         SwStyle.text(this, 15f, SwStyle.color(this, R.color.sw_disc_ink), bold = true).apply {
@@ -376,9 +414,47 @@ class BackupActivity : BaseActivity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivity(Intent.createChooser(send, getString(R.string.backup_share_title)))
-        backup.markBackedUp()
-        refresh()
+        // UI-W8: no markBackedUp() here. The share sheet can be cancelled, and ScanWhirl cannot
+        // see whether the chosen app wrote anything; "last backup: today" would be a guess.
     }
+
+    /**
+     * UI-W8: writes [file] to the SAF [uri] and only then reports success.
+     *
+     * The bytes are flushed and, when the provider hands us a file descriptor stream, fsynced;
+     * the written count must match the archive. A provider that accepts fewer bytes, throws, or
+     * cannot be opened makes this false, so the screen says the backup could not be written
+     * instead of "Saved to ...".
+     */
+    private fun writeDurably(file: File, uri: Uri): Boolean {
+        val expected = file.length()
+        if (expected <= 0L) return false
+        val stream = contentResolver.openOutputStream(uri, "w") ?: return false
+        var copied = 0L
+        stream.use { out ->
+            file.inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                    copied += read
+                }
+            }
+            out.flush()
+            (out as? java.io.FileOutputStream)?.fd?.sync()
+        }
+        return copied == expected
+    }
+
+    /** The destination's own display name (allowed to be unknown): shown, never proof. */
+    private fun displayName(uri: Uri): String? = runCatching {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
+            }
+            ?.takeIf { it.isNotBlank() }
+    }.getOrNull()
 
     // ------------------------------------------------------------------
     // Restore
@@ -492,4 +568,5 @@ class BackupActivity : BaseActivity() {
 
     private fun dp(value: Float): Int = SwStyle.dp(this, value)
     private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
+    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 }
