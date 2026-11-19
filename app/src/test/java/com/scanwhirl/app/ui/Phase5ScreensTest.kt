@@ -424,11 +424,16 @@ class Phase5ScreensTest {
                 assertEquals("dock is inset 4dp", margin, lp.leftMargin)
                 assertEquals("dock is inset 4dp", margin, lp.rightMargin)
 
-                // v2 UI: 07_reader_dock — one row of four equal DockItem buttons in the
-                // fixed order Edit · Text · More · Share (the document is sent away last).
+                // v2 UI: 07_reader_dock, B2 — one row of four equal DockItem buttons in the
+                // fixed order Edit · Read text · Share · Actions (the named sheet is last).
                 assertEquals("dock is one row of four", 4, dock.childCount)
+                assertEquals(
+                    "dock order",
+                    listOf(R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore),
+                    (0 until dock.childCount).map { dock.getChildAt(it).id }
+                )
                 val expectedLabels = listOf(
-                    R.string.edit, R.string.btn_text, R.string.more, R.string.share_pdf
+                    R.string.edit, R.string.dock_read_text, R.string.share_pdf, R.string.doc_actions
                 )
                 for (i in 0 until dock.childCount) {
                     val btn = dock.getChildAt(i)
@@ -585,7 +590,9 @@ class Phase5ScreensTest {
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("the More sheet must open", sheet)
 
-                // §4.5: exactly these rows, in exactly these three groups.
+                // B2 (UI critique #3): the sheet is bound to this document and starts with the
+                // document-linked tools — Compress, Sign, Read text, Share — before file
+                // management, and puts the destructive row last.
                 for (row in listOf(
                     R.id.rowMoreRename, R.id.rowMoreMove, R.id.rowMoreDuplicate,
                     R.id.rowMoreCompress, R.id.rowMoreLock,
@@ -594,14 +601,33 @@ class Phase5ScreensTest {
                 for (hdr in listOf(R.id.hdrOrganize, R.id.hdrTools, R.id.hdrDanger)) {
                     assertNotNull("header $hdr must exist", sheet!!.findViewById<View>(hdr))
                 }
+                val deco = sheet!!.window!!.decorView
+                for (key in listOf("sign", "read_text", "share")) {
+                    assertNotNull(
+                        "the document-linked '$key' row must exist",
+                        deco.findViewWithTag<View>("docActions:$key")
+                    )
+                }
+                val rows = requireNotNull(deco.findViewWithTag<android.view.ViewGroup>("docActions:rows"))
+                val order = (0 until rows.childCount)
+                    .mapNotNull { rows.getChildAt(it).tag as? String }
+                    .filter { it.startsWith("docActions:") }
+                    .map { it.removePrefix("docActions:") }
+                    .filter { it != "header" && !it.startsWith("hdr:") }
+                assertEquals(
+                    "B2 order: tools first, file management next, destructive last",
+                    listOf(
+                        "compress", "sign", "read_text", "share",
+                        "rename", "move", "duplicate", "lock", "vault", "trash"
+                    ),
+                    order
+                )
 
-                // One home per action: no OCR row (D-E) and no save row — the
-                // toolbar's download icon is the only export left (§4.5).
-                val labels = allViews(sheet!!.window!!.decorView)
+                // One home per action: no save row — the toolbar's download icon is the only
+                // export left (§4.5).
+                val labels = allViews(sheet.window!!.decorView)
                     .filterIsInstance<TextView>()
                     .map { it.text?.toString() }
-                assertFalse("no OCR row in the sheet (D-E)",
-                    labels.contains(activity.getString(R.string.btn_ocr_text)))
                 assertFalse("no save row in the sheet (§4.5)",
                     labels.contains(activity.getString(R.string.save_pdf_device)))
                 assertEquals("no OCR button in the sheet (D-E)", 0,

@@ -22,7 +22,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
@@ -36,7 +35,6 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
-import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -45,7 +43,6 @@ import com.scanwhirl.app.ui.tools.PhotoCropFlowActivity
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
-import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
@@ -53,7 +50,6 @@ import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -305,8 +301,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
 
         // v2 UI: Organize pages (owner revision) — one clean dock; page work appears only
-        // after a long-press. Dock, left to right: Edit · Text · More · Share (work on the
-        // document first, send it away last). The handlers below are the pre-revision ones.
+        // after a long-press. B2 (UI critique #3): the dock reads Edit · Read text · Share ·
+        // Actions (work on the document first, act on it, send it away, then the named sheet),
+        // and wraps to 2x2 at 160 % font. The handlers below are the pre-revision ones.
         binding.btnShare.setOnClickListener {
             document?.let { doc ->
                 ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
@@ -319,7 +316,20 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             docId?.let { id -> startActivity(PageViewerActivity.intent(this, id, 0)) }
         }
         binding.btnText.setOnClickListener { runTextFlow() }
-        binding.btnMore.setOnClickListener { showMoreSheet() }
+        // B2 (UI critique #3): the dock's last item is the named Actions sheet, bound to this
+        // document by id. The sheet owns every secondary action (Compress, Sign, Read text,
+        // Share, rename/move/duplicate/protect, Trash); it reloads this screen on a change and
+        // closes it when the document leaves.
+        binding.btnMore.setOnClickListener {
+            val id = docId ?: return@setOnClickListener
+            DocumentActionsSheet.show(
+                this,
+                id,
+                onChange = { lifecycleScope.launch { reloadDocument() } },
+                onGone = { if (!isFinishing) finish() }
+            )
+        }
+        applyDock()
         // T4.6: the header category chip is tappable now — it opens the
         // category picker (the old "Categorize" list dialog is gone).
         // v2 UI: 07_reader_dock — the 48 dp container is the tap target; the pill itself is
@@ -534,6 +544,47 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      * 48 dp: the transparent container around it is the clickable view (and the spoken label),
      * so a tap in the empty space around the pill still opens the category picker.
      */
+
+    /**
+     * B2 (UI critique #3): one dock order — Edit · Read text · Share · Actions — with the old
+     * "Text"/"More" ids and handlers kept. At 160 % font and above the dock becomes a 2x2 grid
+     * (Edit/Read text over Share/Actions) instead of shrinking the labels: a 12 sp label in a
+     * half-width cell still fits at 200 %, while a quarter-width cell would clip it.
+     */
+    private fun applyDock() {
+        binding.btnText.text = getString(R.string.dock_read_text)
+        binding.btnText.contentDescription = getString(R.string.dock_read_text)
+        binding.btnMore.text = getString(R.string.doc_actions)
+        binding.btnMore.contentDescription = getString(R.string.doc_actions)
+        val items = listOf(binding.btnEdit, binding.btnText, binding.btnShare, binding.btnMore)
+        val fontScale = resources.displayMetrics.scaledDensity / resources.displayMetrics.density
+        val dock = binding.bottomDock
+        dock.removeAllViews()
+        if (fontScale >= 1.6f) {
+            dock.orientation = LinearLayout.VERTICAL
+            items.chunked(2).forEach { pair ->
+                val line = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                }
+                pair.forEach { item ->
+                    item.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    line.addView(item)
+                }
+                dock.addView(
+                    line,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            }
+        } else {
+            dock.orientation = LinearLayout.HORIZONTAL
+            items.forEach { item ->
+                item.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                dock.addView(item)
+            }
+        }
+    }
 
     /** Bytes the document occupies: its PDF, or its pages while no PDF exists. */
     private fun docSizeBytes(doc: ScanDocument): Long =
@@ -1262,205 +1313,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * Dock "Text" (§4.5): OCR through the shared [OcrFlow] — one home per action. Text is a
-     * Free tool; only its "To Word" action is Pro and asks for the offer there.
+     * Dock "Read text" (B2; was "Text"): OCR through the shared [OcrFlow] — one home per
+     * action. Read text is a Free tool; only its "To Word" action is Pro and asks there.
      */
     private fun runTextFlow() {
         val doc = document ?: return
         ocrFlow.runOcrForScan(doc)
-    }
-
-    /**
-     * Dock "More" (§4.5): the single sheet for every secondary action, in
-     * exactly three groups. No OCR row (the dock's Text is its entry), no
-     * Categorize (the chip is its entry), no save rows (the toolbar's one
-     * download icon is the only export).
-     */
-    private fun showMoreSheet() {
-        val doc = document ?: return
-        val sheet = BottomSheetDialog(this)
-        val view = layoutInflater.inflate(R.layout.sheet_more_document, null)
-        sheet.setContentView(view)
-        fun icon(rowId: Int, res: Int, tint: Int = R.color.cyan_primary) {
-            val row = view.findViewById<android.widget.LinearLayout>(rowId) ?: return
-            if (row.getChildAt(0) is android.widget.ImageView) return
-            val glyph = android.widget.ImageView(this).apply {
-                setImageResource(res)
-                imageTintList = android.content.res.ColorStateList.valueOf(
-                    androidx.core.content.ContextCompat.getColor(this@DocumentViewerActivity, tint)
-                )
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }
-            val size = (24 * resources.displayMetrics.density).toInt()
-            val lp = android.widget.LinearLayout.LayoutParams(size, size)
-                .apply { marginEnd = (14 * resources.displayMetrics.density).toInt() }
-            row.addView(glyph, 0, lp)
-        }
-        icon(R.id.rowMoreRename, R.drawable.ic_sym_edit)
-        icon(R.id.rowMoreMove, R.drawable.ic_sym_folder_open)
-        icon(R.id.rowMoreDuplicate, R.drawable.ic_sym_content_copy)
-        icon(R.id.rowMoreCompress, R.drawable.ic_sym_compress)
-        icon(R.id.rowMoreLock, R.drawable.ic_sym_encrypted)
-        icon(R.id.rowMoreVault, R.drawable.ic_sym_shield_lock)
-        icon(R.id.rowMoreDelete, R.drawable.ic_sym_delete, R.color.laser_danger)
-
-        // Tools labels that flip with the document's own state.
-        view.findViewById<android.widget.TextView>(R.id.labelLock).setText(
-            if (doc.isLocked) R.string.btn_unlock_pdf else R.string.menu_protect_pdf
-        )
-        view.findViewById<android.widget.TextView>(R.id.labelVault).setText(
-            if (doc.isVaulted) R.string.btn_vault_unhide else R.string.btn_vault_hide
-        )
-        // PRO pills: none. Protect/Unlock PDF and the Vault row are Free (WP-22-5), so no row in
-        // this sheet sells anything and none opens the old "Pro is not available yet" panel.
-        view.findViewById<android.widget.TextView>(R.id.pillLock).isVisible = false
-        view.findViewById<android.widget.TextView>(R.id.pillVault).isVisible = false
-
-        // Organize
-        view.findViewById<View>(R.id.rowMoreRename).setOnClickListener {
-            sheet.dismiss()
-            promptRename()
-        }
-        view.findViewById<View>(R.id.rowMoreMove).setOnClickListener {
-            sheet.dismiss()
-            promptCategorize()
-        }
-        view.findViewById<View>(R.id.rowMoreDuplicate).setOnClickListener {
-            sheet.dismiss()
-            duplicateDocument()
-        }
-        // Tools
-        view.findViewById<View>(R.id.rowMoreCompress).setOnClickListener {
-            sheet.dismiss()
-            compressFlow.startWith(doc)
-        }
-        // Unlock and Protect are both free (WP-22-5; Protect PDF is a free registry tool).
-        view.findViewById<View>(R.id.rowMoreLock).setOnClickListener {
-            sheet.dismiss()
-            if (doc.isLocked) {
-                unlockCurrentPdf()
-            } else {
-                // v2 UI: 05_protect_pdf — the same Protect sheet as Tools → Protect PDF.
-                LockFlow(this, repo, this, { listOf(doc) }, { _ -> }).protectDocument(doc)
-            }
-        }
-        // Vault row is NOT Pro-guarded (WP-22): removing an existing vaulted
-        // doc is Free; adding is unavailable and says so (no Pro redirect).
-        // M08: adding to the legacy Vault is unavailable (O-02), so the row exists only to
-        // take an existing Vault item back out — never as a dead end that just shows a toast.
-        view.findViewById<View>(R.id.rowMoreVault).apply {
-            isVisible = doc.isVaulted
-            setOnClickListener {
-                sheet.dismiss()
-                toggleVaultDoc()
-            }
-        }
-        // Danger: ordinary documents go to Trash; legacy Vault items are deleted permanently.
-        view.findViewById<android.widget.TextView>(R.id.labelMoreDelete).setText(
-            if (doc.isVaulted) R.string.delete_document else R.string.trash_move
-        )
-        view.findViewById<View>(R.id.rowMoreDelete).setOnClickListener {
-            sheet.dismiss()
-            confirmDelete(doc)
-        }
-        // M7 (device sweep 2026-11-19): each row is clickable and its label is a child TextView,
-        // so TalkBack focused a nameless box. The row now carries the words it shows — read after
-        // the labels above are final, because Protect/Unlock, Vault and Delete change with state.
-        for (rowId in listOf(
-            R.id.rowMoreRename, R.id.rowMoreMove, R.id.rowMoreDuplicate, R.id.rowMoreCompress,
-            R.id.rowMoreLock, R.id.rowMoreVault, R.id.rowMoreDelete
-        )) {
-            val row = view.findViewById<android.view.ViewGroup>(rowId) ?: continue
-            val words = firstVisibleText(row)
-            if (words.isNotEmpty()) row.contentDescription = words
-        }
-        sheet.show()
-    }
-
-    /** The first visible, non-empty label inside a row: what the row should be announced as. */
-    private fun firstVisibleText(group: android.view.ViewGroup): String {
-        for (i in 0 until group.childCount) {
-            val child = group.getChildAt(i)
-            if (child.visibility != View.VISIBLE) continue
-            if (child is android.widget.TextView) {
-                val words = child.text?.toString()?.trim().orEmpty()
-                if (words.isNotEmpty()) return words
-            }
-            if (child is android.view.ViewGroup) {
-                val nested = firstVisibleText(child)
-                if (nested.isNotEmpty()) return nested
-            }
-        }
-        return ""
-    }
-
-    /** More → Organize → Duplicate (§4.5): a copy stays put, Home refreshes. */
-    private fun duplicateDocument() {
-        val doc = document ?: return
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    repo.duplicateDocument(doc.id, "${doc.name} Copy")
-                }
-                toast(R.string.saved_as_new, Toast.LENGTH_LONG)
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    /** Removes password protection from this scan and restores the clean PDF. */
-    private fun unlockCurrentPdf() {
-        val doc = document ?: return
-        // PM-3.1b: Unlock needs the current password (F9).
-        LockFlow.promptCurrentPassword(this, doc.name) { pw ->
-            lifecycleScope.launch {
-                val progress = showProgress()
-                try {
-                    withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, pw) }
-                    progress.dismiss()
-                    Toast.makeText(
-                        this@DocumentViewerActivity,
-                        R.string.unlock_pdf_done,
-                        Toast.LENGTH_LONG
-                    ).show()
-                    reloadDocument()
-                } catch (e: PdfProtection.WrongPassword) {
-                    progress.dismiss()
-                    Toast.makeText(
-                        this@DocumentViewerActivity,
-                        R.string.unlock_pdf_wrong,
-                        Toast.LENGTH_LONG
-                    ).show()
-                } catch (e: Exception) {
-                    progress.dismiss()
-                    Toast.makeText(
-                        this@DocumentViewerActivity,
-                        getString(R.string.page_op_failed, e.message),
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        }
-    }
-
-    /** Moves this scan out of the 4-digit PIN Hidden Vault (free, WP-22-6).
-     *  Moving INTO vault is disabled until encrypted Private ships (WP-14). */
-    private fun toggleVaultDoc() {
-        val doc = document ?: return
-        if (doc.isVaulted) {
-            // Removing from vault is always free — users can always access their own files.
-            repo.setVaulted(doc.id, false)
-            Toast.makeText(this, R.string.vault_moved_out, Toast.LENGTH_SHORT).show()
-            lifecycleScope.launch { reloadDocument() }
-        } else {
-            // New vault additions disabled until WP-14 encrypted Private ships.
-            Toast.makeText(this, R.string.vault_new_unavailable, Toast.LENGTH_LONG).show()
-        }
     }
 
     private fun promptRename() {
@@ -1781,79 +1639,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         Toast.makeText(this, message, duration).show()
     }
 
-    /**
-     * M07 P1: an ordinary document moves to Trash at once; Home shows the Undo
-     * snackbar as this screen closes. A legacy Vault item never enters Trash, so it
-     * keeps the explicit permanent delete below.
-     */
-    private fun confirmDelete(doc: ScanDocument) {
-        if (doc.isVaulted) {
-            confirmVaultDelete(doc)
-            return
-        }
-        // v2 UI: 09_unlock_sheet — moving a document to Trash always asks first.
-        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
-            .setTitle(getString(R.string.shell_trash_title, doc.name))
-            .setMessage(R.string.shell_trash_note)
-            .setPrimary(R.string.shell_move_to_trash) { moveToTrash(doc) }
-            .setSecondary(R.string.sheet_cancel)
-            .build()
-            .show()
-    }
-
-    private fun moveToTrash(doc: ScanDocument) {
-        lifecycleScope.launch {
-            val moved = withContext(NonCancellable + Dispatchers.IO) {
-                TrashActions.moveAll(repo, listOf(doc.id))
-            }
-            if (moved.keys.isEmpty()) {
-                Snackbar.make(binding.root, R.string.trash_move_failed, Snackbar.LENGTH_LONG).show()
-                return@launch
-            }
-            TrashActions.post(moved)
-            finish()
-        }
-    }
-
-    private fun confirmVaultDelete(doc: ScanDocument) {
-        // M07: only copies this document provably made (signed records) are offered.
-        val copies = DeleteExports.copiesFor(repo, doc.id)
-        val body = DeleteExports.dialogBody(this, copies, DeleteExports.unprovenFor(repo, doc.id))
-        val box: android.widget.CheckBox? = body.findViewById(R.id.deleteCopiesBox)
-        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
-            .setTitle(R.string.delete_title)
-            .setMessage(getString(R.string.delete_vault_message, doc.name))
-            .setContent(body)
-            .setSecondary(android.R.string.cancel)
-            .setPrimary(R.string.delete) {
-                repo.deleteDocument(doc.id) // never blocked by copy removal
-                if (box?.isChecked == true && copies.isNotEmpty()) {
-                    lifecycleScope.launch {
-                        // M06: removal re-reads each copy to prove it is still ours.
-                        val (removed, failed) = withContext(NonCancellable + Dispatchers.IO) {
-                            DeleteExports.removeCopies(applicationContext, copies)
-                        }
-                        // The viewer is closing, so hold the close until the
-                        // result message has actually been seen.
-                        val snackbar = Snackbar.make(
-                            binding.root,
-                            DeleteExports.message(this@DocumentViewerActivity, removed, failed),
-                            Snackbar.LENGTH_LONG
-                        )
-                        snackbar.addCallback(object : Snackbar.Callback() {
-                            override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                                if (!isFinishing) finish()
-                            }
-                        })
-                        snackbar.show()
-                    }
-                } else {
-                    finish()
-                }
-            }
-            .build()
-        sheet.show()
-    }
 
     companion object {
         private const val EXTRA_DOC_ID = "doc_id"

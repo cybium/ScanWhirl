@@ -346,6 +346,7 @@ class AccessibilityAuditTest {
     @Test
     fun `review and protect sheets are accessible`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Audit review")
+        val actionsDoc = DocFixtures.saved(repo, app, pages = 2, name = "Audit actions")
         atScales {
             val staging = File(app.cacheDir, "a11y_review_${System.nanoTime()}").apply { mkdirs() }
             File(staging, "page_001.jpg").writeBytes(ImportFixtures.image(width = 300, height = 400))
@@ -368,6 +369,11 @@ class AccessibilityAuditTest {
                     verify = { false },
                     onUnlocked = {}
                 )
+            }
+            auditSheet("Actions sheet") { host ->
+                com.scanwhirl.app.ui.DocumentActionsSheet.show(host, actionsDoc)
+                idle()
+                requireNotNull(ShadowDialog.getLatestDialog())
             }
         }
         assertNoProblems()
