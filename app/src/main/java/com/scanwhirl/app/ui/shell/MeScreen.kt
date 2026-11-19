@@ -128,6 +128,8 @@ class MeScreen(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = SwStyle.card(context, 18f)
+            // UI-W8: every Me row keeps a 48dp target even when the text is short.
+            minimumHeight = SwStyle.dp(context, 48f)
             isClickable = true
             isFocusable = true
             // M7 (device sweep 2026-11-19): the visible label lives on child TextViews, so the
