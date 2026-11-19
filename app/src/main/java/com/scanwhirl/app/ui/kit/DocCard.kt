@@ -15,9 +15,25 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.ui.home.PageHitViews
 import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
+import com.scanwhirl.app.util.PageTextMatches
+
+/**
+ * T28: what a Home search row may truthfully say about a stored-text hit.
+ * Built off the main thread from the already-stored per-page OCR text; never
+ * carries a page for a locked or Vault document.
+ */
+data class DocSearchHit(
+    val docId: String,
+    val revision: Long,
+    val pageIndex: Int,
+    val pageKey: String,
+    val query: String,
+    val excerpt: PageTextMatches.Excerpt
+)
 
 /**
  * v2 UI: 01_home_A — a document row: paper thumbnail with the page count,
@@ -47,6 +63,11 @@ class DocCard(context: Context) : LinearLayout(context) {
 
     /** The selection check; visible only while the library is selecting this card. */
     val selectionBadge: ImageView
+
+    /** T28: "Page N" and the stored-text snippet for a search hit; hidden otherwise. */
+    val searchPage: TextView
+    val searchSnippet: TextView
+    private val searchBlock: LinearLayout
 
     private val thumbFrame: FrameLayout
     private val thumbPlaceholderGroup: LinearLayout
@@ -260,6 +281,47 @@ class DocCard(context: Context) : LinearLayout(context) {
                 .apply { topMargin = (3 * d).toInt() }
         )
 
+        // T28: page evidence from stored OCR text. Two calm lines under the meta:
+        // "Page 2" then one short excerpt with the matched word bold (never colour-only).
+        // The row itself is the tap target, so this is not a nested 48 dp control.
+        searchPage = SwStyle.text(
+            context,
+            11.5f,
+            SwStyle.color(context, R.color.cyan_primary),
+            bold = true
+        ).apply {
+            id = R.id.swSearchPage
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        searchSnippet = SwStyle.text(
+            context,
+            if (com.scanwhirl.app.util.AppLanguage.showingHindi(context)) 14f else 13f,
+            SwStyle.color(context, R.color.text_hologram_mid)
+        ).apply {
+            id = R.id.swSearchSnippet
+            maxLines = if (resources.configuration.fontScale >= 1.6f) 3 else 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+        }
+        searchBlock = LinearLayout(context).apply {
+            orientation = VERTICAL
+            visibility = View.GONE
+            addView(searchPage)
+            addView(
+                searchSnippet,
+                LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = (2 * d).toInt() }
+            )
+        }
+        info.addView(
+            searchBlock,
+            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = (5 * d).toInt() }
+        )
+
         addView(info, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         actions = LinearLayout(context).apply {
@@ -291,7 +353,8 @@ class DocCard(context: Context) : LinearLayout(context) {
         document: ScanDocument,
         meta: String,
         onShare: () -> Unit,
-        onMore: () -> Unit
+        onMore: () -> Unit,
+        search: DocSearchHit? = null
     ) {
         doc = document
         nameView.text = document.name
@@ -301,6 +364,28 @@ class DocCard(context: Context) : LinearLayout(context) {
         alpha = if (document.isLocked) 0.92f else 1f
         pageBadge.text = document.pageCount.toString()
         pageBadge.isVisible = document.pageCount > 0
+
+        // T28: evidence belongs to THIS document at its current revision. A locked or
+        // Vault document shows none even if a stale map hands one in.
+        val hit = search?.takeIf {
+            !document.isLocked && !document.isVaulted &&
+                it.docId == document.id && it.revision == document.revision
+        }
+        searchBlock.isVisible = hit != null
+        if (hit == null) {
+            searchPage.text = null
+            searchSnippet.text = null
+            contentDescription = null
+        } else {
+            searchPage.text = context.getString(R.string.search_hit_page, hit.pageIndex + 1)
+            searchSnippet.text = PageHitViews.styled(context, hit.excerpt)
+            contentDescription = context.getString(
+                R.string.search_hit_row_desc,
+                document.name,
+                hit.pageIndex + 1,
+                hit.excerpt.text
+            )
+        }
 
         // The row names the folder the document lives in (sentence case, as the person
         // typed it). An unsorted document still names its library category.
@@ -381,6 +466,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         categoryRow.visibility = View.GONE
         actions.visibility = View.GONE
         selectionBadge.visibility = View.GONE
+        searchBlock.visibility = View.GONE
         nameView.maxLines = 2
         metaView.maxLines = 2
     }
