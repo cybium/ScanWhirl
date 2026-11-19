@@ -198,11 +198,18 @@ def render_md(data, groups, old_map, sha, branch):
         return "\n".join(out) + "\n"
 
     old_titles, old_buttons = parse_old_map(old_map)
-    new_titles = [g["byScale"].get("1.0", g["first"]).get("title") or k for k, g in groups.items()]
+    new_titles = new_title_set(groups)
     matched, gone, new = match_titles(old_titles, new_titles)
     out.append("Heuristic text match (titles and visible button words), not a semantic diff.")
     out.append("")
     out.append("### Screens in the old map that are gone now")
+    out.append("")
+    out.append(
+        "No current entry matches these titles. Some are system UI (photo picker, SAF); some are "
+        "other tools' setup screens this atlas does not render (To Word, Split, PowerPoint, Excel, "
+        "PDF to images, Long image); some are the same screen under a new name (Choose a category, "
+        "Viewer save snackbar). Review before treating any as removed."
+    )
     out.append("")
     if gone:
         for t in gone:
@@ -272,30 +279,57 @@ def norm_title(t):
     return " ".join(t.split())
 
 
+def title_variants(t):
+    """Variants of an old title: the whole title, each parenthesis, and the base.
+
+    The 18 Nov map named screens after the sample file (SW_TEST_3pages) and the QA folder,
+    which no longer exist; strip those before matching so the same screen is not reported as
+    "gone" just because the sample was renamed.
+    """
+    t = re.sub(r"(?i)sw_test_3pages|qa folder(\s*\(\d+\))?", " ", t or "")
+    variants = {norm_title(t)}
+    for part in re.findall(r"\((.*?)\)", t):
+        variants.add(norm_title(part))
+    variants.add(norm_title(re.sub(r"\(.*?\)", " ", t)))
+    return {v for v in variants if v}
+
+
+def new_title_set(groups):
+    titles = []
+    for g in groups.values():
+        e = g["byScale"].get("1.0") or g["first"]
+        t = e.get("title") or e["key"]
+        titles.append(t)
+        d = e.get("dialogTitle")
+        if d and d not in titles:
+            titles.append(d)
+    return titles
+
+
 def match_titles(old_titles, new_titles):
     matched = []
-    old_left = list(old_titles)
-    new_left = list(new_titles)
-    pairs = []
     for o in old_titles:
-        if norm_title(o) in {"", "home"}:
+        ov = title_variants(o)
+        if not ov:
             continue
+        best_score = 0.0
+        best_new = None
         for n in new_titles:
-            r = difflib.SequenceMatcher(None, norm_title(o), norm_title(n)).ratio()
-            if r >= 0.62:
-                pairs.append((r, o, n))
-    pairs.sort(reverse=True)
-    used_o, used_n = set(), set()
-    for _r, o, n in pairs:
-        if o in used_o or n in used_n:
-            continue
-        used_o.add(o)
-        used_n.add(n)
-        matched.append((o, n))
-    gone = [t for t in old_left if t not in used_o]
-    new = [t for t in new_left if t not in used_n]
-    # Code-level screens that never appear on the phone (no visible title) are not "new UI".
-    new = [t for t in new if t not in {"not-renderable"}]
+            nv = norm_title(n)
+            for variant in ov:
+                score = difflib.SequenceMatcher(None, variant, nv).ratio()
+                if len(variant) >= 10 and (variant in nv or nv in variant):
+                    score = max(score, 0.9)
+                if score > best_score:
+                    best_score = score
+                    best_new = n
+        if best_new is not None and best_score >= 0.75:
+            matched.append((o, best_new))
+    used_new = {n for _o, n in matched}
+    gone = [t for t in old_titles if t not in {o for o, _n in matched}]
+    new = [t for t in new_titles if t not in used_new and t != "not-renderable"]
+    # Several states can share one title (the four Create sheets, three More sheets): list once.
+    new = list(dict.fromkeys(new))
     return matched, gone, new
 
 
@@ -367,7 +401,7 @@ def render_html(data, groups, old_map, sha, branch, scale_list):
     diff_html = ""
     if old_map:
         old_titles, old_buttons = parse_old_map(old_map)
-        new_titles = [g["byScale"].get("1.0", g["first"]).get("title") or k for k, g in groups.items()]
+        new_titles = new_title_set(groups)
         matched, gone, new = match_titles(old_titles, new_titles)
         diff_html = (
             "<h3>Old map screens gone now</h3><ul>"
