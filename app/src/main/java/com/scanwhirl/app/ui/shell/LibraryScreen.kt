@@ -33,7 +33,9 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.TrashActions
+import com.scanwhirl.app.ui.PdfViewerActivity
 import com.scanwhirl.app.ui.kit.DocCard
+import com.scanwhirl.app.ui.kit.DocSearchHit
 import com.scanwhirl.app.ui.kit.SwChip
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
@@ -49,6 +51,7 @@ import com.scanwhirl.app.util.BatchRename
 import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
+import com.scanwhirl.app.util.PageTextMatches
 import com.scanwhirl.app.util.ProGate
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -125,6 +128,9 @@ class LibraryScreen(
     private var query = ""
     private var category: String? = null
     private var revealId: String? = null
+
+    /** T28: page + snippet evidence for the text hits currently shown, by document id. */
+    private var rowEvidence: Map<String, DocSearchHit> = emptyMap()
 
     // uihome: the pinned layer (sticky count + fast-scroll bar) lives above the
     // ScrollView that ShellActivity owns; this screen may not edit that activity,
@@ -1640,21 +1646,32 @@ class LibraryScreen(
             .show()
     }
 
+    /** The docs to show and which of them matched by stored OCR text (never locked/Vault). */
+    private data class VisibleDocs(
+        val docs: List<ScanDocument>,
+        val textHitIds: Set<String>
+    )
+
     private fun computeVisible(
         q: String,
         folderFilter: String?,
         categoryFilter: String?,
         sortMode: String
-    ): List<ScanDocument> {
+    ): VisibleDocs {
         val needle = q.lowercase(Locale.getDefault())
+        val textHits = HashSet<String>()
         val filtered = docs.filter { doc ->
+            val textHit = needle.isNotEmpty() &&
+                runCatching { textCache.normalized(doc.id).contains(needle) }.getOrDefault(false)
+            // A locked/Vault document stays searchable by its visible name only for
+            // evidence purposes: its OCR never becomes a snippet or a page link.
+            if (textHit && !doc.isLocked && !doc.isVaulted) textHits += doc.id
             (folderFilter == null || doc.folder.equals(folderFilter, true)) &&
                 (categoryFilter == null || doc.category == categoryFilter) &&
                 (needle.isEmpty() || doc.name.lowercase(Locale.getDefault()).contains(needle) ||
-                    doc.tags.any { it.lowercase(Locale.getDefault()).contains(needle) } ||
-                    runCatching { textCache.normalized(doc.id).contains(needle) }.getOrDefault(false))
+                    doc.tags.any { it.lowercase(Locale.getDefault()).contains(needle) } || textHit)
         }
-        return when (sortMode) {
+        val sorted = when (sortMode) {
             com.scanwhirl.app.util.Prefs.LIB_OLDEST -> filtered.sortedBy { it.createdAt }
             com.scanwhirl.app.util.Prefs.LIB_NAME_ASC ->
                 filtered.sortedBy { it.name.lowercase(Locale.getDefault()) }
@@ -1663,6 +1680,41 @@ class LibraryScreen(
             com.scanwhirl.app.util.Prefs.LIB_SIZE -> filtered.sortedByDescending { docSize(it) }
             else -> filtered.sortedByDescending { it.createdAt }
         }
+        return VisibleDocs(sorted, textHits)
+    }
+
+    /**
+     * T28: one "Page N" + short excerpt per shown document whose stored page text
+     * holds the query. Runs on the library IO dispatcher with the same pass that
+     * filtered the list; it reads no file the search did not already read, changes
+     * no ranking and invents no page: [PageTextMatches] only reports a page when
+     * every term occurs there. Name-only hits stay absent.
+     */
+    private fun computeRowEvidence(q: String, visible: VisibleDocs): Map<String, DocSearchHit> {
+        if (q.isBlank() || visible.textHitIds.isEmpty()) return emptyMap()
+        val out = LinkedHashMap<String, DocSearchHit>()
+        for (doc in visible.docs.take(maxDocCards)) {
+            if (doc.id !in visible.textHitIds || doc.isLocked || doc.isVaulted) continue
+            val pages = runCatching { textCache.pages(doc.id) }.getOrDefault(emptyMap())
+            if (pages.isEmpty()) continue
+            val result = runCatching {
+                PageTextMatches.find(q, doc.pageFiles.map { it.name }, pages)
+            }.getOrNull() ?: continue
+            val first = result.hits.firstOrNull() ?: continue
+            val pageText = pages[first.pageKey] ?: continue
+            val range = first.ranges.firstOrNull() ?: continue
+            val excerpt = PageTextMatches.excerpt(pageText, range, result.terms)
+            if (excerpt.text.isBlank()) continue
+            out[doc.id] = DocSearchHit(
+                docId = doc.id,
+                revision = doc.revision,
+                pageIndex = first.pageIndex,
+                pageKey = first.pageKey,
+                query = q,
+                excerpt = excerpt
+            )
+        }
+        return out
     }
 
     /** L1-4: the size is cached by [ScanRepository.loadDocument]; no page stat pass. */
@@ -1681,7 +1733,8 @@ class LibraryScreen(
     private fun renderDocs() {
         val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
         if (owner == null) {
-            applyDocs(computeVisible(query, folder, category, sort))
+            val visible = computeVisible(query, folder, category, sort)
+            applyDocs(visible.docs, computeRowEvidence(query, visible))
             return
         }
         renderJob?.cancel()
@@ -1691,8 +1744,11 @@ class LibraryScreen(
         val s = sort
         renderJob = owner.launch {
             if (q.isNotBlank() && searchDebounceMs > 0L) delay(searchDebounceMs)
-            val shown = withContext(ioDispatcher) { computeVisible(q, f, c, s) }
-            if (isActive) applyDocs(shown)
+            val shown = withContext(ioDispatcher) {
+                val visible = computeVisible(q, f, c, s)
+                visible to computeRowEvidence(q, visible)
+            }
+            if (isActive) applyDocs(shown.first.docs, shown.second)
         }
     }
 
@@ -1708,19 +1764,31 @@ class LibraryScreen(
         append(doc.isLocked).append('\u0000')
         append(doc.isVaulted).append('\u0000')
         append(selectionMode && doc.id in selected).append('\u0000')
-        append(doc.id == revealId)
+        append(doc.id == revealId).append('\u0000')
+        rowEvidence[doc.id]?.let {
+            append(it.pageIndex).append('\u0000').append(it.query).append('\u0000')
+                .append(it.excerpt.text)
+        }
     }
 
     private fun bindCard(card: DocCard, doc: ScanDocument) {
+        val hit = rowEvidence[doc.id]
         card.bind(
             doc,
             metaFor(doc),
             onShare = { callbacks.onShareDoc(doc) },
-            onMore = { callbacks.onMoreDoc(doc) }
+            onMore = { callbacks.onMoreDoc(doc) },
+            search = hit
         )
         card.setSelection(selectionMode, doc.id in selected)
         card.setOnClickListener {
-            if (selectionMode) toggleSelection(doc.id) else callbacks.onOpenDoc(doc)
+            if (selectionMode) {
+                toggleSelection(doc.id)
+            } else if (hit != null && !doc.isLocked && !doc.isVaulted && hit.revision == doc.revision) {
+                openAtPage(doc, hit)
+            } else {
+                callbacks.onOpenDoc(doc)
+            }
         }
         card.setOnLongClickListener {
             com.scanwhirl.app.ui.kit.SwHaptics.tick(it)
@@ -1745,6 +1813,27 @@ class LibraryScreen(
         }
     }
 
+    /**
+     * T28: a text-hit row opens the ScanWhirl reader at the matched page, with Find
+     * pre-filled. [PdfViewerActivity.startPage] refuses a stale page order and says so,
+     * so an edited document never opens on the wrong page. No callback, no document
+     * screen change: the reader API already exists and is the same path Find uses.
+     */
+    private fun openAtPage(doc: ScanDocument, hit: DocSearchHit) {
+        val activity = context as? android.app.Activity
+        if (activity == null) {
+            callbacks.onOpenDoc(doc)
+            return
+        }
+        runCatching {
+            activity.startActivity(
+                PdfViewerActivity.pageIntent(
+                    activity, doc.id, doc.name, hit.pageIndex, hit.pageKey, hit.query
+                )
+            )
+        }.onFailure { callbacks.onOpenDoc(doc) }
+    }
+
     private fun newCard(doc: ScanDocument): DocCard = DocCard(context).also { bindCard(it, doc) }
 
     /**
@@ -1752,7 +1841,8 @@ class LibraryScreen(
      * common rename/selection/sort-in-place case) rebinds just the rows whose
      * content signature changed; an insert/remove/filter reorders the list.
      */
-    private fun applyDocs(shown: List<ScanDocument>) {
+    private fun applyDocs(shown: List<ScanDocument>, hits: Map<String, DocSearchHit> = emptyMap()) {
+        rowEvidence = hits
         val limit = shown.take(maxDocCards)
         val signatures = limit.map { signature(it) }
         val sameIds = limit.map { it.id } == renderedDocs.map { it.id }

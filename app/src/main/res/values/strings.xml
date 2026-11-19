@@ -561,6 +561,10 @@
     <string name="page_hit_see_all_desc">Open %1$s and find all %2$d matching pages</string>
     <string name="page_hit_across">Matches across this document, not on one page</string>
     <string name="page_hit_reader_note">Page links open in the ScanWhirl reader</string>
+    <!-- T28: a Home search row names the page and quotes the stored text it matched.
+         The page is a navigation promise: tapping the row opens that page in the reader. -->
+    <string name="search_hit_page">Page %1$d</string>
+    <string name="search_hit_row_desc">%1$s, page %2$d. Match: %3$s</string>
     <string name="reader_find">Find in text</string>
     <string name="reader_find_hint">Find in recognised text</string>
     <string name="reader_find_prev">Previous</string>
