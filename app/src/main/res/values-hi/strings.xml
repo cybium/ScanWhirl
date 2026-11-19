@@ -57,8 +57,15 @@
     <string name="scan_saved">स्कैन सहेजा गया</string>
     <!-- review: the 3 plurals below were machine-translated at T4.8 — native review pending -->
     <plurals name="delete_copies">
-        <item quantity="one">Documents/ScanWhirl में सहेजी गई %1$d PDF प्रति भी हटाएँ</item>
-        <item quantity="other">Documents/ScanWhirl में सहेजी गई %1$d PDF प्रतियाँ भी हटाएँ</item>
+        <item quantity="one">Documents/ScanWhirl में सहेजी गई %1$d प्रति भी हटाएँ</item>
+        <item quantity="other">Documents/ScanWhirl में सहेजी गई %1$d प्रतियाँ भी हटाएँ</item>
+    </plurals>
+    <!-- T44: when file names are known, the box says exactly which files go. -->
+    <string name="delete_copies_named">Documents/ScanWhirl में %1$s भी हटाएँ</string>
+    <string name="delete_copies_names_more">%1$s और %2$d अन्य</string>
+    <plurals name="delete_copies_unproven_named">
+        <item quantity="one">1 सहेजी गई प्रति रह जाएगी, क्योंकि ScanWhirl साबित नहीं कर सकता कि यह उसने बनाई: %1$s (Files देखें)।</item>
+        <item quantity="other">%1$d सहेजी गई प्रतियाँ रह जाएँगी, क्योंकि ScanWhirl साबित नहीं कर सकता कि ये उसने बनाईं: %1$s (Files देखें)।</item>
     </plurals>
     <plurals name="deleted_copies_ok">
         <item quantity="one">हटाया गया। %1$d प्रति हटाई गई।</item>
