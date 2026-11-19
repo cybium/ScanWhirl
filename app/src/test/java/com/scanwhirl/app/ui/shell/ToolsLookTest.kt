@@ -265,48 +265,6 @@ abstract class ToolsLookBase {
         }
     }
 
-    @Test
-    fun `quick tool labels stay whole inside their five columns`() {
-        for (scale in listOf(1.0f, 1.3f)) {
-            RuntimeEnvironment.setFontScale(scale)
-            ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
-                scenario.onActivity { activity ->
-                    idle()
-                    layoutRoot(activity)
-                    val row = activity.findViewById<ViewGroup>(R.id.swQuickRow)
-                    val bad = mutableListOf<String>()
-                    for (index in 0 until row.childCount) {
-                        val tile = row.getChildAt(index) as? ToolTile ?: continue
-                        val label = tile.labelView
-                        val layout = label.layout ?: continue
-                        val avail = label.width - label.totalPaddingLeft - label.totalPaddingRight
-                        // v2 UI: 01_home_A - five columns: a label may use two lines (11sp
-                        // floor), never a third, never a line wider than the column.
-                        if (layout.lineCount > 2 || layout.lineCount < 1) bad += "${label.text}: ${layout.lineCount} lines"
-                        if (layout.getEllipsisCount(0) != 0) bad += "${label.text}: ellipsized"
-                        for (line in 0 until layout.lineCount) {
-                            if (layout.getLineMax(line) > avail + 0.5f) {
-                                bad += "${label.text}: line $line wider than its column"
-                            }
-                        }
-                        if (layout.height + label.totalPaddingTop + label.totalPaddingBottom > label.height + 1) {
-                            bad += "${label.text}: clipped"
-                        }
-                        // The glyph must still read bigger than the label even in the tight row.
-                        assertTrue(
-                            "${label.text}: glyph is at least 24dp",
-                            tile.iconView.width / density >= 24f
-                        )
-                    }
-                    assertTrue(
-                        "quick labels at ${scale}x: ${bad.joinToString(" | ")}",
-                        bad.isEmpty()
-                    )
-                }
-            }
-        }
-    }
-
     private fun groupTitle(group: ToolGroup): Int = when (group) {
         ToolGroup.CREATE -> R.string.tools_group_create
         ToolGroup.ORGANIZE -> R.string.tools_group_organize

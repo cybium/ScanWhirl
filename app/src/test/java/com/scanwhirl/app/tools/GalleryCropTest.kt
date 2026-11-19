@@ -149,9 +149,17 @@ class GalleryCropTest {
         var scannerStarted = false
         GalleryCrop.startOverride = { scannerStarted = true; true }
         launch { activity ->
+            // UI-B1 (#2): photos start from the Create sheet now, not a Home tile.
+            fun openPhotos() {
+                activity.findViewById<View>(R.id.swNavScan).performClick()
+                idle()
+                val create = ShadowDialog.getLatestDialog()
+                assertNotNull("the Create sheet opens", create)
+                create!!.findViewById<View>(R.id.swCreatePhotos).performClick()
+                idle()
+            }
             // Auto-crop (remembered default) -> the gallery scanner.
-            activity.findViewById<View>(R.id.swCreatePhotos).performClick()
-            idle()
+            openPhotos()
             var sheet = ShadowDialog.getLatestDialog()
             assertNotNull("the Add photos sheet opens", sheet)
             var rows = sheet!!.findViewById<ViewGroup>(R.id.swSheetItems)
@@ -162,8 +170,7 @@ class GalleryCropTest {
             assertTrue(Prefs.galleryAutoCrop(app))
 
             // Keep as they are -> the existing picker.
-            activity.findViewById<View>(R.id.swCreatePhotos).performClick()
-            idle()
+            openPhotos()
             sheet = ShadowDialog.getLatestDialog()
             rows = sheet!!.findViewById<ViewGroup>(R.id.swSheetItems)
             rows.getChildAt(1).performClick()

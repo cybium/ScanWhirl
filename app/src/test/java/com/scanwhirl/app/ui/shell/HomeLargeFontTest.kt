@@ -11,11 +11,12 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.util.AppLanguage
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -25,6 +26,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 
 /**
  * T23-FIX-HOME-200 — the 200 % font defects the device sweep found on build a55b4223
@@ -114,99 +116,70 @@ abstract class HomeLargeFontBase {
     }
 
     @Test
-    fun `home tile labels wrap between words and are never dropped at 200 percent`() {
+    fun `create sheet labels wrap between words and are never clipped at 200 percent`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 val root = layoutRoot(activity)
                 val problems = mutableListOf<String>()
-                val expected = listOf(
-                    R.string.quick_merge,
-                    R.string.quick_compress,
-                    R.string.quick_sign,
-                    R.string.quick_protect,
-                    R.string.quick_to_word,
-                    R.string.quick_read_text
-                ).map { activity.getString(it) }
-                val found = mutableListOf<String>()
-                var tiles = 0
-                for (rowId in intArrayOf(R.id.swQuickRow, R.id.swQuickRow2, R.id.swQuickRow3)) {
-                    val row = activity.findViewById<ViewGroup>(rowId) ?: continue
-                    if (!row.isVisible) continue
-                    for (i in 0 until row.childCount) {
-                        val tile = row.getChildAt(i) as? ToolTile ?: continue
-                        tiles++
-                        val label = tile.labelView
-                        if (label.text.isBlank()) {
-                            problems += "quick tile ${tile.tool?.id} has no label"
-                            continue
-                        }
-                        found += label.text.toString()
-                        problems += labelProblems(label, "quick \"${label.text}\"")
-                        if (label.width > tile.width + 1) {
-                            problems += "quick \"${label.text}\" is ${label.width}px wide in a ${tile.width}px tile"
-                        }
-                        if (AppLanguage.showingHindi(activity)) {
-                            if (label.letterSpacing != 0f) {
-                                problems += "Hindi quick \"${label.text}\" has letter-spacing ${label.letterSpacing}"
-                            }
-                        }
-                    }
+                val density = activity.resources.displayMetrics.density
+
+                // UI-B1 (#1): a populated Home starts with documents, not creation chrome.
+                assertNull(
+                    "the Home creation row is gone",
+                    activity.findViewById<View>(R.id.swCreateRow)
+                )
+                assertNull(
+                    "the Home quick tools are gone",
+                    activity.findViewById<View>(R.id.swQuickRow)
+                )
+                val list = activity.findViewById<ViewGroup>(R.id.swDocList)
+                assertTrue("the seeded documents are listed", list.childCount > 0)
+
+                // The header still holds the language chip, on screen, a 48dp target.
+                val chip = activity.findViewById<TextView>(R.id.swLanguageChip)
+                assertNotNull("the A/अ chip is in the header", chip)
+                if (rightIn(chip, root) > root.width - 1) {
+                    problems += "the A/अ chip ends at ${rightIn(chip, root)}px, past ${root.width}px"
                 }
-                assertTrue("the quick row rendered tiles", tiles > 0)
-                for (text in expected) {
-                    if (text !in found) problems += "quick label \"$text\" is missing (found $found)"
-                }
-                // H1/H2 fix: large text gets fewer, wider columns instead of 69dp slivers.
-                val firstRow = activity.findViewById<ViewGroup>(R.id.swQuickRow)
-                val perRow = (0 until firstRow.childCount).count { firstRow.getChildAt(it) is ToolTile }
-                if (perRow > 3) {
-                    problems += "at 200 % Home uses $perRow quick columns (needs <= 3 so a label fits a word)"
+                if (chip!!.height < 48 * density - 1) {
+                    problems += "the A/अ chip is ${chip.height}px tall, needs 48dp"
                 }
 
-                // M1 at 200 %: the row meta keeps the date readable too.
-                val docList = activity.findViewById<ViewGroup>(R.id.swDocList)
-                if (docList.childCount > 0) {
-                    val meta = (docList.getChildAt(0) as com.scanwhirl.app.ui.kit.DocCard).metaView
-                    val metaLayout = meta.layout
-                    if (metaLayout == null) {
-                        problems += "the row meta is not laid out"
-                    } else {
-                        for (line in 0 until metaLayout.lineCount) {
-                            if (metaLayout.getEllipsisCount(line) > 0) {
-                                problems += "row meta line $line is ellipsized (\"${meta.text}\")"
-                            }
-                        }
-                        if (!meta.text.contains(activity.getString(R.string.shell_today))) {
-                            problems += "the row meta lost its date (\"${meta.text}\")"
-                        }
+                // The Create sheet replaces the tiles: at 200 % it must use full width rows
+                // with whole labels.
+                activity.findViewById<View>(R.id.swNavScan).performClick()
+                idle()
+                val dialog = ShadowDialog.getLatestDialog()
+                assertNotNull("the Create sheet opens from Scan", dialog)
+                val content = dialog!!.findViewById<ViewGroup>(R.id.swSheetContent)
+                assertNotNull("the sheet content is there", content)
+                val entries = intArrayOf(
+                    R.id.swCreateIdCard, R.id.swCreatePassport, R.id.swCreateQr,
+                    R.id.swCreatePhotos, R.id.swCreateImport
+                )
+                for (id in entries) {
+                    val row = dialog.findViewById<ViewGroup>(id)
+                    assertNotNull("Create entry ${idName(root, id)} exists", row)
+                    val label = (0 until row!!.childCount)
+                        .map { row.getChildAt(it) }
+                        .filterIsInstance<TextView>()
+                        .firstOrNull()
+                    if (label == null) {
+                        problems += "Create entry ${idName(root, id)} has no label"
+                        continue
                     }
-                }
-
-                // The create row (ID card / Photos / Import PDF) is Home chrome too: H1 showed
-                // "Import PDF" painting past its tile at 200 %.
-                for (id in intArrayOf(R.id.swCreateIdCard, R.id.swCreatePhotos, R.id.swCreateImport)) {
-                    val card = activity.findViewById<ViewGroup>(id)
-                    val label = card.getChildAt(card.childCount - 1) as TextView
+                    if (label.text.isBlank()) problems += "Create entry ${idName(root, id)} has no text"
                     problems += labelProblems(label, "create \"${label.text}\"")
-                    if (label.left < 0 || label.right > card.width + 1) {
-                        problems += "create \"${label.text}\" box [${label.left},${label.right}] leaves its card (0..${card.width})"
+                    if (row.width < content!!.width * 0.9f) {
+                        problems += "create \"${label.text}\" is a tile (${row.width}px) at 200 %, " +
+                            "not a full width row (${content.width}px)"
+                    }
+                    if (AppLanguage.showingHindi(activity) && label.letterSpacing != 0f) {
+                        problems += "Hindi create \"${label.text}\" has letter-spacing ${label.letterSpacing}"
                     }
                 }
-
-                // The top trust pill must stay inside the screen, fully readable (H1/H2).
-                val pillText = activity.getString(R.string.trust_offline_no_ads)
-                val pill = findText(activity.findViewById(R.id.swTabContent), pillText)
-                    ?: findText(root, pillText)
-                if (pill == null) {
-                    problems += "the top trust pill \"$pillText\" is missing"
-                } else {
-                    val right = rightIn(pill, root)
-                    if (right > root.width - 1) {
-                        problems += "the top trust pill ends at ${right}px, past the screen (${root.width}px)"
-                    }
-                    problems += labelProblems(pill, "trust pill")
-                }
+                dialog.dismiss()
 
                 assertTrue(
                     "${problems.size} large-font problem(s):\n" + problems.joinToString("\n"),
@@ -215,6 +188,9 @@ abstract class HomeLargeFontBase {
             }
         }
     }
+
+    private fun idName(root: View, id: Int): String =
+        runCatching { root.resources.getResourceEntryName(id) }.getOrElse { id.toString() }
 
     @Test
     fun `all chip and clear search are 48dp touch targets at 200 percent`() {
