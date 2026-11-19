@@ -179,6 +179,13 @@ class ResultAlsoSaveTest {
             })
             scenario.onActivity { undo!!.performClick() }
             assertTrue("Undo removes the copy this save created", pollUntil { media.rows[copy.id] == null })
+            // The export record is forgotten in the same background block as the removal, after
+            // it: wait for that too instead of reading it on the test thread while it is in
+            // flight (the flake: assert-after-async outside the poll).
+            assertTrue(
+                "the removed copy is no longer recorded as an export of the document",
+                pollUntil { !hasExternalExport(id) }
+            )
             assertNotNull("Undo never touches a file the person already had", media.rows[other.id])
             assertTrue(
                 "Undo says the copy was removed",
@@ -189,10 +196,7 @@ class ResultAlsoSaveTest {
             )
         }
         assertNotNull("the library document survives", repo.getDocument(id))
-        assertFalse(
-            "the removed copy is no longer recorded as an export of the document",
-            repo.exportsOf(id).any { it.toString().contains("media/external") }
-        )
+        assertFalse("the removed copy is no longer recorded as an export of the document", hasExternalExport(id))
     }
 
     // ---- 3b. the screen's own Undo undoes the whole run ------------------
@@ -258,6 +262,13 @@ class ResultAlsoSaveTest {
             assertTrue(
                 "the copy this run saved is removed with the run (toast='${ShadowToast.getTextOfLatestToast()}')",
                 pollUntil { media.rows[copy.id] == null }
+            )
+            // undo() deletes the run's document on Dispatchers.IO after the copy block, so the
+            // document is only gone once that background delete has finished. Poll the actual
+            // condition while the screen's lifecycle (the scope of the delete) is still alive.
+            assertTrue(
+                "the run's own document is undone",
+                pollUntil { repo.getDocument(id) == null }
             )
             assertNotNull("a file the person already had is never touched", media.rows[other.id])
         }
@@ -529,6 +540,10 @@ class ResultAlsoSaveTest {
         app.getString(R.string.compress_target_missed, "SENTINEL").substringAfter("SENTINEL")
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    /** The document still records a copy that lives in the fake external Documents volume. */
+    private fun hasExternalExport(id: String): Boolean =
+        repo.exportsOf(id).any { it.toString().contains("media/external") }
 
     private fun idleFor(ms: Long) =
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))
