@@ -28,14 +28,14 @@
     <string name="draft_back_msg">आपका सहेजा दस्तावेज़ नहीं बदला है। इन बदलावों को नई फ़ाइल बनाकर सहेजें या बदलाव न रखें।</string>
     <string name="draft_replace_title">“%1$s” की जगह रखें?</string>
     <string name="draft_replace_msg">मौजूदा संस्करण हटाई गई फ़ाइलों में “%1$s (पिछला संस्करण)” के रूप में चला जाएगा। आप उसे वहाँ से वापस ला सकते हैं।</string>
-    <string name="draft_discard_msg">%1$d पन्नों के बदलाव हटाएँ? सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
+    <string name="draft_discard_msg">%1$d पन्नों में किए बदलाव न रखें? सहेजा हुआ दस्तावेज़ नहीं बदलेगा।</string>
     <string name="draft_saved_new">“%1$s” के रूप में सहेजा गया</string>
     <string name="draft_replaced">बदल दिया गया। पिछला संस्करण हटाई गई फ़ाइलों में है।</string>
     <string name="trash_previous_version">%1$s (पिछला संस्करण)</string>
 
     <!-- Selection mode (owner revision) -->
     <string name="draft_select_all">सभी चुनें</string>
-    <string name="draft_delete_msg">पन्ने बिना सहेजे बदलावों से हट जाएँगे। सहेजा दस्तावेज़ जैसा है वैसा रहेगा।</string>
+    <string name="draft_delete_msg">ये पन्ने सिर्फ़ मसौदे से हटेंगे। सहेजा हुआ दस्तावेज़ नहीं बदलेगा।</string>
     <string name="draft_rotate_left">बाएँ घुमाएँ</string>
     <string name="draft_rotate_right">दाएँ घुमाएँ</string>
     <string name="draft_duplicate">पन्ने की दूसरी प्रति बनाएँ</string>

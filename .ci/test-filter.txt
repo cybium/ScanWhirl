@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.DeleteExportsTest,com.scanwhirl.app.StringFormatContractTest,com.scanwhirl.app.ui.shell.TrashWordingTest,com.scanwhirl.app.ui.tools.ResultAlsoSaveTest,com.scanwhirl.app.ui.tools.IdCardFixFlowTest,com.scanwhirl.app.ui.ImportPdfFixFlowTest,com.scanwhirl.app.HindiGlossaryTermsTest

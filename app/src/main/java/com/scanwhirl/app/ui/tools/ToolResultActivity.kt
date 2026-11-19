@@ -794,7 +794,7 @@ class ToolResultActivity : BaseActivity() {
         SwSheet.builder(this)
             .setTitle(R.string.fixflow_id_discard_title)
             .setMessage(R.string.fixflow_id_discard_msg)
-            .setPrimary(R.string.discard) { discardIdCard() }
+            .setPrimary(R.string.fixflow_id_delete_copy) { discardIdCard() }
             .setSecondary(R.string.fixflow_keep)
             .build()
             .show()

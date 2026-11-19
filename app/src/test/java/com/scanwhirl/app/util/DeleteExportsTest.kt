@@ -22,6 +22,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -194,6 +195,74 @@ class DeleteExportsTest {
             assertTrue(poll { repo.listTrash().isEmpty() })
         }
         assertEquals("the recorded copy stays", 1, media.scanwhirlPdfs().size)
+    }
+
+    /**
+     * T46 (release blocker): with two recorded copies the app cannot prove, the note is the
+     * `other` plural — it used `%1$d` and `%1$s` for one argument, so building the sheet threw
+     * IllegalFormatConversionException and the delete sheet never appeared. The call now passes
+     * the count as argument 1 and the names as argument 2 in both locales.
+     */
+    @Test
+    fun `two recorded copies the app cannot prove are both named and both kept`() {
+        val id = seedDoc("Older")
+        val first = DownloadSaver.savePdfFile(app, "one".toByteArray(), DownloadSaver.pdfNameFor("Older"))
+        repo.addExport(id, first.uri, first.fingerprint) // recorded, never signed: never removable
+        val second = DownloadSaver.savePdfFile(app, "two".toByteArray(), DownloadSaver.pdfNameFor("Older"))
+        repo.addExport(id, second.uri, second.fingerprint)
+        assertEquals("two real copies", 2, media.scanwhirlPdfs().size)
+        repo.moveToTrash(id)
+
+        ActivityScenario.launch(TrashActivity::class.java).use { scenario ->
+            awaitRows(scenario, 1)
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnTrashDelete).performClick()
+            }
+            // Before T46 this threw while building the note, so no sheet ever appeared.
+            val dialog = awaitDialog()
+            assertNull(
+                "an unproven copy is never offered for removal",
+                dialog.findViewById<android.view.View>(R.id.deleteCopiesBox)
+            )
+            val note = dialog.findViewById<android.widget.TextView>(R.id.deleteCopiesNote)?.text?.toString().orEmpty()
+            assertTrue("the note names the first copy — got \"$note\"", note.contains("Older.pdf"))
+            assertTrue("the note names the second copy — got \"$note\"", note.contains("Older (2).pdf"))
+            assertTrue("the note gives the count — got \"$note\"", note.contains("2"))
+            dialog.findViewById<View>(R.id.swSheetPrimary).performClick()
+            assertTrue(poll { repo.listTrash().isEmpty() })
+        }
+        assertEquals("neither recorded copy is deleted", 2, media.scanwhirlPdfs().size)
+    }
+
+    /** T46: the same sheet body in Hindi must format too (it is built on every locale). */
+    @Test
+    fun `two recorded copies the app cannot prove format in Hindi without a crash`() {
+        val id = seedDoc("Older")
+        val first = DownloadSaver.savePdfFile(app, "one".toByteArray(), DownloadSaver.pdfNameFor("Older"))
+        repo.addExport(id, first.uri, first.fingerprint)
+        val second = DownloadSaver.savePdfFile(app, "two".toByteArray(), DownloadSaver.pdfNameFor("Older"))
+        repo.addExport(id, second.uri, second.fingerprint)
+        repo.moveToTrash(id)
+
+        RuntimeEnvironment.setQualifiers("hi")
+        try {
+            val trashed = repo.listTrash().single()
+            val unproven = DeleteExports.unprovenFor(repo, trashed)
+            assertEquals("both copies are unproven", 2, unproven.size)
+            val body = DeleteExports.dialogBody(app, emptyList(), unproven)
+            assertNull(
+                "an unproven copy is never offered for removal",
+                body.findViewById<android.view.View>(R.id.deleteCopiesBox)
+            )
+            val note = body.findViewById<android.widget.TextView>(R.id.deleteCopiesNote)?.text?.toString().orEmpty()
+            assertTrue("the Hindi note names the first copy — got \"$note\"", note.contains("Older.pdf"))
+            assertTrue("the Hindi note names the second copy — got \"$note\"", note.contains("Older (2).pdf"))
+            assertTrue("the Hindi note keeps the count — got \"$note\"", note.contains("2"))
+            assertFalse("the Hindi note does not print a raw placeholder — got \"$note\"", note.contains("%"))
+        } finally {
+            RuntimeEnvironment.setQualifiers("")
+        }
+        assertEquals("neither recorded copy is deleted", 2, media.scanwhirlPdfs().size)
     }
 
     @Test

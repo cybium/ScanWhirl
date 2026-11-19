@@ -6,7 +6,7 @@
     <!-- The page's text could not be read: nothing was checked, so never say it is clean. -->
     <string name="find_unreadable_one">इस पन्ने का लिखा हुआ पढ़ा नहीं जा सका, इसलिए अपने आप कुछ नहीं मिला। चौकोर निशान बनाने वाला काम चुनकर निजी जानकारी खुद ढकें।</string>
     <plurals name="find_unreadable_pages">
-        <item quantity="one">%1$d पन्ने का लिखा हुआ पढ़ा नहीं जा सका, इसलिए वहाँ अपने आप कुछ नहीं मिला। चौकोर निशान बनाने वाला काम चुनकर निजी जानकारी खुद ढकें।</item>
+        <item quantity="one">इस पन्ने का लिखा हुआ पढ़ा नहीं जा सका, इसलिए वहाँ अपने आप कुछ नहीं मिला। चौकोर निशान बनाने वाला काम चुनकर निजी जानकारी खुद ढकें।</item>
         <item quantity="other">%1$d पन्नों का लिखा हुआ पढ़ा नहीं जा सका, इसलिए वहाँ अपने आप कुछ नहीं मिला। चौकोर निशान बनाने वाला काम चुनकर निजी जानकारी खुद ढकें।</item>
     </plurals>
     <!-- Action on the unreadable-page notice: arm the manual redaction box tool. -->

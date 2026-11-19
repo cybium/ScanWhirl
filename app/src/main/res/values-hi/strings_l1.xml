@@ -108,7 +108,7 @@
          review: the entry below was written for T13 (agent Hindi) — native review pending -->
     <string name="pro_price_play">कीमत Google Play पर दिखती है</string>
     <string name="pro_one_time">एक बार</string>
-    <string name="pro_price_note">बार-बार भुगतान नहीं। आपके Google खाते वाले हर फ़ोन पर Pro।</string>
+    <string name="pro_price_note">एक बार भुगतान। कोई सदस्यता नहीं।</string>
     <string name="pro_unlock">Pro चालू करें</string>
     <string name="pro_restore">पहले की खरीद फिर चालू करें</string>
     <string name="pro_see_all">Pro के सभी 18 काम देखें ›</string>
@@ -156,7 +156,7 @@
     <string name="shell_yesterday">कल</string>
     <string name="shell_doc_actions_note">इस दस्तावेज़ को खोलें, भेजें, या हटाई गई फ़ाइलों में डालें।</string>
     <string name="shell_open">खोलें</string>
-    <string name="shell_move_to_trash">हटाएँ</string>
+    <string name="shell_move_to_trash">हटाई गई फ़ाइलों में भेजें</string>
     <string name="shell_trash_title">“%1$s” हटाएँ?</string>
     <string name="shell_trash_note">यह 30 दिन तक हटाई गई फ़ाइलों में रहेगा। कुछ भी इंटरनेट पर नहीं जाता।</string>
     <string name="shell_moved_to_trash">हटाई गई फ़ाइलों में डाल दिया</string>
