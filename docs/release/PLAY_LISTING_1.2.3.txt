@@ -1,0 +1,69 @@
+<short-en>
+Scan to PDF, compress, merge and read text on your phone. No ads, no account.
+</short-en>
+<full-en>
+Scan paper, keep the PDF, and make it the size a form asks for. ScanWhirl is an offline scanner and PDF tool kit for everyday paperwork. No account, no ads, no internet permission.
+
+WHAT YOU CAN DO FOR FREE
+
+Scan and create
+• Scan with the camera, up to 60 pages in one scan; edges are detected and the page is cropped
+• Import a PDF, or add photos from your gallery as pages
+• ID card: front and back on one A4 or Letter page, or one page per side
+• Passport photo: crop to the 35 x 45 mm size
+• Improve a scan with Auto, Colour boost, Grey or Black and white
+• Read text (OCR) in English and Devanagari; copy, share or save it as .txt
+• Add recognised text to a PDF so it can be searched
+
+Organise and prepare
+• Search by name or by words inside documents; a result shows the page number
+• Merge, extract, insert and duplicate pages
+• Compress toward a size you type, or pick a level; resize pages
+• PDF to images, long image, text export, ZIP export
+• Password-protect a PDF with AES-256; unlock a PDF whose password you have
+• Make a copy without hidden metadata
+
+Keep and protect
+• Save any tool result to your library as well
+• Vault: files encrypted on this phone, opened with fingerprint, face or passcode
+• Encrypted backup: one file with your library, Vault and settings, saved where you choose
+
+PRO, ONE PAYMENT
+Pro tools are marked Pro; free tools stay free.
+• Sign a PDF: save your signature, then place it on any page
+• Add text, draw, highlight, stamps, watermark, page numbers
+• Hide private info: find phone numbers, emails, ID numbers and card numbers, then cover them. The exported copy has those pixels and that text removed. The original stays in your library until you replace it.
+• Convert to Word, Excel or PowerPoint. Word reads two-column pages column by column. PowerPoint slides are page pictures with the recognised text in the notes; in Excel, check columns before sorting.
+• Split by page range; batch tools for many documents at once, including one ZIP
+• Folders and tags; QR code reading
+• Save a PDF/A-2b copy for archiving
+
+One payment, no subscription. Google Play shows the price in your country. Restore works after a reinstall on the same Google account. A refunded purchase turns Pro off.
+
+PRIVATE BY DESIGN
+• The app has no internet permission, so its own code cannot upload your documents
+• The scanner, English text reading and QR reading come from Google Play services, which may download or update them and send Google diagnostic data, as described in the privacy policy. The Hindi model is inside the app.
+• No account, no ads, no analytics of our own
+• Documents stay in the app until you share, export, save or back up a file. What you send goes where you send it.
+• Vault files are encrypted with AES-256-GCM, and the passcode is not stored
+• The backup file is encrypted with your backup password or Vault recovery code
+
+MAKE IT FIT THE FORM
+• Scan the pages you need and merge them into one PDF
+• Compress, then read the size the app reports. If a file cannot reach your target, the result says so.
+• Each website sets its own upload rules; check the size it asks for.
+
+WHO IT IS FOR
+• Students: scan notes, read the text, share one PDF
+• Forms: sign, add a date, hide a phone or ID number before sharing
+
+QUICK ANSWERS
+Is it free? Scanning, PDF creation, merging, compression, text reading, password protection, Vault and backup are free. Pro tools are paid once.
+Does it need internet? The app has no internet permission. Google Play services may download the scanner and text models and sends its own diagnostics. Files leave the phone only when you share, export or back up.
+Where are my files? In ScanWhirl's library on your phone. Save or share any file to Downloads, Drive or another app. Deleted items stay in Trash for 30 days; empty Trash to remove them.
+Is the text exact? No. ScanWhirl shows what it recognised; check and edit it.
+</full-en>
+<short-hi>
+काग़ज़ स्कैन करें, PDF छोटा करें, जोड़ें। विज्ञापन नहीं, खाता नहीं।
+</short-hi>
+The Hindi line is a draft that needs a native Hindi review. Do not paste this sentence into Play.

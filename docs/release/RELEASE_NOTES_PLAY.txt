@@ -1,14 +1,21 @@
 <en-US>
-New in 1.2.2:
-• Cleaner Offline and No ads badges on Home, Tools and Pro
-• Small fixes
-
-Also in 1.2.x: Hindi fixed everywhere with an A/अ switch on Home, safer Pro purchase and Restore, Hide private info never calls an unread page clean, fewer freezes and crashes.
+New in 1.2.3:
+• Move to Trash now really keeps a document for 30 days, with Undo
+• Undo after a PDF/A copy no longer removes your original
+• Every tool result can also be saved in Documents
+• One scan holds 60 pages, with Add more pages
+• Search shows the page and finds older documents
+• Word reads columns; sideways PowerPoint pages turn upright
+• Calmer Home and Tools, clearer large text, safer Vault
 </en-US>
 <hi-IN>
-1.2.2 में नया:
-• होम, टूल्स और Pro पर ऑफ़लाइन और विज्ञापन नहीं वाले बैज साफ़ दिखते हैं
-• छोटे सुधार
-
-1.2.x में और भी: पूरे ऐप में हिंदी ठीक, होम पर A/अ भाषा बटन, Pro खरीद और रीस्टोर ज़्यादा भरोसेमंद, निजी जानकारी छिपाएँ बिना पढ़े पेज को साफ़ नहीं बताता, ऐप कम अटकता और बंद होता है।
+1.2.3 में नया:
+• अब "हटाएँ" करने पर दस्तावेज़ 30 दिन तक हटाई गई फ़ाइलों में रहता है, वापस लाया जा सकता है
+• PDF/A बनाने के बाद "वापस लाएँ" आपकी मूल फ़ाइल नहीं हटाता
+• हर टूल का नतीजा कागज़ात में भी सहेजा जा सकता है
+• एक स्कैन में 60 पन्ने, "और पन्ने जोड़ें" के साथ
+• खोज पन्ना संख्या दिखाती है और पुराने दस्तावेज़ भी ढूँढती है
+• Word में स्तंभ ठीक पढ़े जाते हैं; PowerPoint के तिरछे पन्ने सीधे होते हैं
+• होम और टूल्स शांत, बड़े अक्षर साफ़, तिजोरी ज़्यादा सुरक्षित
 </hi-IN>
+Hindi above is a draft: needs a native Hindi review before it is pasted into Play. This line is not part of the notes.
