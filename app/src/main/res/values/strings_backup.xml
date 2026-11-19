@@ -5,7 +5,7 @@
     <string name="me_backup_summary">One encrypted file with every scan, the Vault and your settings</string>
 
     <string name="backup_title">Backup &amp; restore</string>
-    <string name="backup_explain">One encrypted file with every scan, the Vault, signatures and settings. Restore it on a new phone and everything comes back in its place.</string>
+    <string name="backup_explain">One encrypted file with every scan, the Vault, signatures and settings. Restore it on a new phone to bring them back.</string>
     <string name="backup_never">No backup yet</string>
     <string name="backup_today">Last backup: today</string>
     <string name="backup_one_day">Last backup: yesterday</string>
@@ -13,7 +13,7 @@
     <string name="backup_now">Back up now</string>
     <string name="backup_restore">Restore from backup</string>
     <string name="backup_remind">Remind me if my last backup is a month old</string>
-    <string name="backup_no_internet">ScanWhirl has no internet permission. Google Drive opens through the share sheet when you choose Share.</string>
+    <string name="backup_no_internet">ScanWhirl has no internet permission. Back up now asks for a password or code, then Save to device opens the phone\'s save dialog and Share opens the share sheet.</string>
 
     <string name="backup_choose">Protect the backup</string>
     <string name="backup_choose_note">Choose what opens this file. You will need the same thing to restore it.</string>

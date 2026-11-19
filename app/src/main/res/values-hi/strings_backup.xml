@@ -5,7 +5,7 @@
     <string name="me_backup_summary">हर स्कैन, तिजोरी और सेटिंग वाली एक फ़ाइल, जिसे पासवर्ड या कोड के बिना पढ़ा नहीं जा सकता</string>
 
     <string name="backup_title">प्रति सहेजना और वापस लाना</string>
-    <string name="backup_explain">हर स्कैन, तिजोरी, हस्ताक्षर और सेटिंग वाली एक फ़ाइल, जिसे पासवर्ड या कोड के बिना पढ़ा नहीं जा सकता। नए फ़ोन पर वापस लाएँ और सब कुछ अपनी जगह लौट आता है।</string>
+    <string name="backup_explain">हर स्कैन, तिजोरी, हस्ताक्षर और सेटिंग वाली एक फ़ाइल, जिसे पासवर्ड या कोड के बिना पढ़ा नहीं जा सकता। नए फ़ोन पर वापस लाएँ, ताकि ये सब लौट आएँ।</string>
     <string name="backup_never">अभी कोई प्रति नहीं सहेजी</string>
     <string name="backup_today">पिछली सहेजी प्रति: आज</string>
     <string name="backup_one_day">पिछली सहेजी प्रति: कल</string>
@@ -13,7 +13,7 @@
     <string name="backup_now">अभी प्रति सहेजें</string>
     <string name="backup_restore">सहेजी प्रति से वापस लाएँ</string>
     <string name="backup_remind">पिछली प्रति एक महीने पुरानी हो तो याद दिलाएँ</string>
-    <string name="backup_no_internet">ScanWhirl के पास इंटरनेट की अनुमति नहीं है। भेजें चुनने पर Google Drive भेजने की सूची से खुलता है।</string>
+    <string name="backup_no_internet">ScanWhirl के पास इंटरनेट की अनुमति नहीं है। अभी प्रति सहेजें के बाद पासवर्ड या कोड चुनें, फिर फ़ोन में सहेजें से सहेजने की जगह चुनें और भेजें से भेजने की सूची खुलती है।</string>
 
     <string name="backup_choose">प्रति को सुरक्षित करें</string>
     <string name="backup_choose_note">तय करें कि यह फ़ाइल किससे खुलेगी। वापस लाने के लिए वही चीज़ चाहिए होगी।</string>
