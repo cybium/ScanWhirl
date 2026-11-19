@@ -62,6 +62,16 @@ class ProScreen(
     /** How far the dock sits below the page bottom; the pinned bar stops above it. */
     private var dockOverlap: (() -> Int)? = null
 
+    /**
+     * B2-M4 (device sweep 2026-11-19): the decorative hero was a fixed 150dp, so at 200 % system
+     * font the promise chips ("No ads / No account / Offline") were pushed under the pinned
+     * price card and sliced in half. The hero is decoration: at large fonts it gives up height
+     * so the title, the promise and the chips stay whole above the pinned offer. The words keep
+     * their size — nothing that is read shrinks, only the rings and the mark.
+     */
+    private val largeFont = context.resources.configuration.fontScale >= 1.6f
+    private val heroDp = if (largeFont) 72f else 150f
+
     /** Test seam: the order in which the entrance phases actually ran. */
     internal val entranceSteps = mutableListOf<String>()
 
@@ -89,11 +99,13 @@ class ProScreen(
         content.addView(top, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         val hero = FrameLayout(context).apply {
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 150f))
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, heroDp))
             clipChildren = false
         }
+        // The rings and the mark keep their proportions when the hero gives up height (B2-M4).
+        val heroScale = heroDp / 150f
         for (size in listOf(150, 110, 70)) {
-            val ring = SwStyle.dp(context, size.toFloat())
+            val ring = SwStyle.dp(context, (size * heroScale).coerceAtLeast(1f))
             val ringView = View(context).apply {
                 background = SwStyle.rounded(
                     context, 0x00FFB800, radiusDp = 999f,
@@ -112,7 +124,10 @@ class ProScreen(
         }
         hero.addView(
             mark,
-            FrameLayout.LayoutParams(SwStyle.dp(context, 56f), SwStyle.dp(context, 56f))
+            FrameLayout.LayoutParams(
+                SwStyle.dp(context, 56f * heroScale).coerceAtLeast(1),
+                SwStyle.dp(context, 56f * heroScale).coerceAtLeast(1)
+            )
                 .apply { gravity = Gravity.CENTER }
         )
         content.addView(hero)
@@ -149,6 +164,7 @@ class ProScreen(
         )
 
         val trustRow = LinearLayout(context).apply {
+            id = R.id.swProTrust
             orientation = HORIZONTAL
             gravity = Gravity.CENTER
         }
@@ -167,7 +183,7 @@ class ProScreen(
         content.addView(
             trustRow,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = SwStyle.dp(context, 14f) }
+                .apply { topMargin = SwStyle.dp(context, if (largeFont) 8f else 14f) }
         )
         this.trustRow = trustRow
 
