@@ -213,10 +213,14 @@ class CameraPageCapTest {
                 val density = a.resources.displayMetrics.density
                 val min48 = (48 * density).toInt()
                 for (id in listOf(R.id.swSheetPrimary, R.id.swSheetSecondary)) {
-                    val button = sheet!!.findViewById<View>(id)!!
-                    assertTrue("button $id is a 48 dp target", button.layoutParams.height >= min48)
+                    val button = sheet!!.findViewById<TextView>(id)!!
+                    // SAFE-UNLOCK-CONSENT: the primary is now wrap_content with a 54dp
+                    // minimum, so a long label grows at 200% font instead of being cut. The
+                    // declared target is the larger of the fixed height and the minimal one.
+                    val declared = maxOf(button.layoutParams.height, button.minHeight)
+                    assertTrue("button $id is a 48 dp target", declared >= min48)
                     assertTrue("button $id is clickable", button.isClickable)
-                    val label = (button as TextView).text.toString()
+                    val label = button.text.toString()
                     assertTrue("button $id has a label", label.isNotBlank())
                 }
                 sheet!!.dismiss()
