@@ -171,7 +171,7 @@ class VaultActivity : BaseActivity() {
      * configuration change through [onRetainCustomNonConfigurationInstance]) and is never written
      * to a Bundle, Intent extra, preference or file:
      *
-     * - [pendingCode] waits for the system file picker the user opened;
+     * - [pendingSave] waits for the system file picker the user opened;
      * - [code] is the one-time code on screen;
      * - [confirmCode] is the code whose four-character check is still owed;
      * - [migrateLegacy] is the protected action the check gates (moving old PIN files in).
@@ -179,7 +179,11 @@ class VaultActivity : BaseActivity() {
      * A real process death drops all of it, so the flow cannot be finished without the check.
      */
     private class RecoveryFlow {
-        var pendingCode: String? = null
+        /**
+         * The "Save as file" picker that is open: the code, the flow it belongs to and the Vault
+         * it was enrolled for. A result may only write while all three still match (VAULT-F1).
+         */
+        var pendingSave: PendingSave? = null
         var code: String? = null
         var confirmCode: String? = null
         var replacement: VaultStore.RecoveryReplacement? = null
@@ -198,7 +202,7 @@ class VaultActivity : BaseActivity() {
         var dispatched: Boolean = false
 
         fun clearSecrets() {
-            pendingCode = null
+            pendingSave = null
             code = null
             confirmCode = null
             replacement = null
@@ -208,6 +212,9 @@ class VaultActivity : BaseActivity() {
             generation++
         }
     }
+
+    /** One picker save in flight, with the flow and Vault it is allowed to write for. */
+    private class PendingSave(val code: String, val generation: Int, val vaultIdentity: String?)
 
     private var recoveryFlow = RecoveryFlow()
 
@@ -1968,26 +1975,47 @@ class VaultActivity : BaseActivity() {
      * picks a file and only the code plus one warning line is written there.
      */
     private fun startSaveRecoveryCode(code: String) {
-        recoveryFlow.pendingCode = code
+        recoveryFlow.pendingSave = PendingSave(
+            code = code,
+            generation = recoveryFlow.generation,
+            vaultIdentity = recoveryFlow.vaultIdentity
+        )
         saveRecoveryCode.launch(getString(R.string.vault_recovery_file_name))
     }
 
     private fun handleRecoverySaveResult(uri: Uri?) {
+        val save = recoveryFlow.pendingSave
+        recoveryFlow.pendingSave = null
         // Cancel: the user picked nothing, so there is nothing to write and nothing to report.
-        if (uri == null) {
-            recoveryFlow.pendingCode = null
-            return
-        }
-        val code = recoveryFlow.pendingCode
-        recoveryFlow.pendingCode = null
-        if (code == null) {
+        if (uri == null) return
+        if (save == null) {
             // The process was killed while the picker was open, so the one-time code is gone (it
-            // is never persisted). The picker still created an empty document: remove it and say
-            // what happened instead of leaving a silent empty file.
-            discardAndExplain(uri, R.string.vault_recovery_code_lost)
+            // is never persisted). A locked Vault gets nothing at all (review VAULT-F1: no secret
+            // and no dead end on the lock screen); an open one says what happened.
+            if (store.isUnlocked()) {
+                discardAndExplain(uri, R.string.vault_recovery_code_lost)
+            } else {
+                deleteQuietly(uri)
+            }
             return
         }
-        writeRecoveryCode(uri, code)
+        if (!saveStillValid(save)) {
+            // A late result: the Vault relocked (session expiry, "Lock now"), a new flow replaced
+            // this one, or a restore swapped the Vault under it. The code must not be written to
+            // the file picked before that, and nothing is raised over the screen: the picker's
+            // empty document is removed and the owner starts the step again.
+            deleteQuietly(uri)
+            return
+        }
+        writeRecoveryCode(uri, save.code)
+    }
+
+    /** The same flow, still unlocked, still the same Vault: only then may the code be written. */
+    private fun saveStillValid(save: PendingSave): Boolean {
+        if (!store.isUnlocked()) return false
+        if (recoveryFlow.generation != save.generation) return false
+        val identity = store.vaultIdentity() ?: return false
+        return identity == save.vaultIdentity
     }
 
     private fun writeRecoveryCode(uri: Uri, code: String) {
@@ -2016,6 +2044,18 @@ class VaultActivity : BaseActivity() {
                 runCatching { DocumentsContract.deleteDocument(contentResolver, uri) }
             }
             showError(getString(messageRes))
+        }
+    }
+
+    /**
+     * Removes the empty document a stale picker result created, without telling the owner: a
+     * sheet here would land on a locked screen (review VAULT-F1), and there is no secret to show.
+     */
+    private fun deleteQuietly(uri: Uri) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { DocumentsContract.deleteDocument(contentResolver, uri) }
+            }
         }
     }
 
