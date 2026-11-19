@@ -209,7 +209,7 @@ class ProtectionStateTest {
                 shown
             })
             scenario.onActivity { activity ->
-                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick()
                 shadowOf(android.os.Looper.getMainLooper()).idle()
                 assertNotNull("a dialog is shown", ShadowDialog.getLatestDialog())
                 assertEquals(

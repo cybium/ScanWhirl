@@ -7,11 +7,12 @@ import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 import android.view.Gravity
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -37,13 +38,16 @@ import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.OcrFlow
 import com.scanwhirl.app.tools.ScanLauncher
+import com.scanwhirl.app.ui.kit.ProOffer
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.stamp.StampEditorActivity
 import com.scanwhirl.app.ui.tools.PhotoCropFlowActivity
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
@@ -252,6 +256,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        // The document's own name is the header H1 (it wraps, never an ellipsis at 200 %);
+        // the toolbar keeps only Back and the brand mark.
+        supportActionBar?.setDisplayShowTitleEnabled(false)
         binding.toolbar.setNavigationOnClickListener { handleEditorBack() }
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
@@ -300,12 +307,20 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
 
-        // v2 UI: Organize pages (owner revision) — one clean dock; page work appears only
-        // after a long-press. B2 (UI critique #3): the dock reads Edit · Read text · Share ·
-        // Actions (work on the document first, act on it, send it away, then the named sheet),
-        // and wraps to 2x2 at 160 % font. The handlers below are the pre-revision ones.
+        // UI-B6 (GPT judgement 2026-11-19b, item 1): the document screen is the workspace.
+        // Seven named actions, each bound to the document this screen shows:
+        //  - Edit / crop, Read text and Share keep their pre-B6 handlers and ids;
+        //  - Compress runs the SAME guarded handler the Actions sheet runs
+        //    (CompressFlow.startWith(doc), no source chooser);
+        //  - Sign goes through ProOffer.require, then the stamp editor armed with Sign for
+        //    THIS id — never the generic picker and never a trial promise;
+        //  - Save PDF is the one save-to-Documents copy (the icon-only toolbar route is gone);
+        //  - More is the named Actions sheet.
+        // A locked or Vault document keeps Compress, Sign and Read text disabled with the
+        // sheet's own reason (applyActionAvailability): no handler is reachable from them.
         binding.btnShare.setOnClickListener {
             document?.let { doc ->
+                traceAction("share", doc)
                 ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
                     noteImportUsed()
                     ShareUtils.share(this, doc)
@@ -313,15 +328,19 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             }
         }
         binding.btnEdit.setOnClickListener {
+            document?.let { doc -> traceAction("edit", doc) }
             docId?.let { id -> startActivity(PageViewerActivity.intent(this, id, 0)) }
         }
         binding.btnText.setOnClickListener { runTextFlow() }
-        // B2 (UI critique #3): the dock's last item is the named Actions sheet, bound to this
-        // document by id. The sheet owns every secondary action (Compress, Sign, Read text,
-        // Share, rename/move/duplicate/protect, Trash); it reloads this screen on a change and
-        // closes it when the document leaves.
+        binding.btnCompress.setOnClickListener { compressFromPanel() }
+        binding.btnSign.setOnClickListener { signFromPanel() }
+        binding.btnSavePdf.setOnClickListener { savePdfToDocuments() }
+        // The named Actions sheet, bound to this document by id. The sheet owns every
+        // secondary action (rename/move/duplicate/protect, Trash) and reloads this screen on
+        // a change, or closes it when the document leaves.
         binding.btnMore.setOnClickListener {
             val id = docId ?: return@setOnClickListener
+            document?.let { doc -> traceAction("more", doc) }
             DocumentActionsSheet.show(
                 this,
                 id,
@@ -329,7 +348,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 onGone = { if (!isFinishing) finish() }
             )
         }
-        applyDock()
+        applyActionPanel()
         // T4.6: the header category chip is tappable now — it opens the
         // category picker (the old "Categorize" list dialog is gone).
         // v2 UI: 07_reader_dock — the 48 dp container is the tap target; the pill itself is
@@ -351,22 +370,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.btnDraftDiscard.setOnClickListener { discardFlow() }
         binding.btnDraftReplace.setOnClickListener { replaceFlow() }
         binding.btnDraftSave.setOnClickListener { saveDraftFlow() }
-        // Title tappable → Rename (replaces the deleted toolbar rename icon).
-        binding.toolbar.setOnClickListener { promptRename() }
-        // The ONLY toolbar action: one always-shown download icon, no overflow (⋮).
-        binding.toolbar.inflateMenu(R.menu.menu_document)
-        binding.toolbar.setOnMenuItemClickListener { item ->
-            if (item.itemId == R.id.action_save_pdf) {
-                savePdfToDocuments()
-                true
-            } else {
-                false
-            }
-        }
+        // Rename lives in the Actions sheet (the name row is a heading, not a button).
+        // The toolbar carries no menu: Save PDF is the panel's labelled action, exactly once.
         // Checkboxes stay hidden until Select pages is tapped (§4.5, D-D).
         binding.pageList.checkboxesVisible = false
-
-        styleDocTitle()
 
         // First load (off the main thread). Opening a document writes no draft (G14).
         lifecycleScope.launch {
@@ -376,19 +383,6 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 startInsertPages()
             }
         }
-    }
-
-    // test26 T5.2 (§4.5): the single Save-a-copy action is exposed both as a
-    // toolbar listener (real taps) and via onMenuItemSelected (Robolectric's
-    // clickMenuItem used by ExportHygieneTest dispatches through here).
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_document, menu)
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-        R.id.action_save_pdf -> { savePdfToDocuments(); true }
-        else -> super.onOptionsItemSelected(item)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -426,20 +420,20 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     override fun onResume() {
         super.onResume()
-        // AppCompat re-syncs the toolbar title from the manifest label during resume;
-        // re-apply the document name so it wins.
-        document?.let {
-            binding.toolbar.title = it.name
-            styleDocTitle()
+        // AppCompat re-syncs the toolbar title from the manifest label during resume; the
+        // toolbar hides its title (the header H1 carries the document name), but the Pro word
+        // on Sign must follow a purchase made while this screen was away.
+        supportActionBar?.setDisplayShowTitleEnabled(false)
+        document?.let { doc ->
+            binding.docName.text = doc.name
+            applySignLabel()
+            applyActionAvailability(doc)
         }
         // Returning from the full-screen page view: a draft edit may have been committed.
         if (document != null && firstLoad) {
             lifecycleScope.launch { reloadDocument() }
         }
     }
-
-    // test26 T5.2: menu_viewer.xml + the whole overflow machinery are gone
-    // (D-A…D-F). The toolbar's single download icon is inflated in onCreate.
 
     /** Re-reads the document from disk and refreshes all UI. Returns false if it vanished. */
     private suspend fun reloadDocument(): Boolean {
@@ -472,8 +466,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             // Never invent pages from a damaged manifest: show the base and offer Discard only.
             showDraftUnusable(damage.message ?: getString(R.string.draft_damaged))
         }
-        binding.toolbar.title = doc.name
-        styleDocTitle()
+        binding.docName.text = doc.name
         // v2 UI: 07_reader_dock — the meta line carries the size as well as the page count.
         docBytes = withContext(Dispatchers.IO) { docSizeBytes(doc) }
         binding.docLockBadge.isVisible = doc.isLocked
@@ -494,6 +487,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.docCategoryTouch.isVisible = true
         refreshGrid()
         updateDraftBar()
+        applyActionAvailability(doc)
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
         return true
     }
@@ -519,72 +513,200 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * v2 UI: 07_reader_dock — the document name is the header's H1: two lines at most, then
-     * an ellipsis. Toolbar builds its own title TextView (single-line by default), so the
-     * view is found once it exists and restyled; later title changes reuse it.
+     * UI-B6 (GPT judgement 2026-11-19b, item 1): the document workspace panel.
+     *
+     * Seven NAMED actions, each its own labelled 48 dp+ target:
+     * Edit / crop · Read text · Share · Compress · Sign (+ Pro) · Save PDF · More.
+     *
+     *  - 4 + 3 on a 360 dp phone; 3 + 3 + 1 on a 320 dp phone (a 320 dp quarter-width cell
+     *    cannot hold "Read text"/"Compress" at 130 % without breaking a word);
+     *  - from 160 % type the panel moves into the scroll flow ABOVE the pages as two growing
+     *    columns (the last action keeps the full width), inside the one scroll owner;
+     *  - labels wrap but are never ellipsized, and no label is ever shrunk below 12 sp.
      */
-    private fun styleDocTitle() {
-        val title = binding.toolbar.title?.toString().orEmpty()
-        if (title.isEmpty()) return
-        val view = (0 until binding.toolbar.childCount)
-            .map { binding.toolbar.getChildAt(it) }
-            .filterIsInstance<android.widget.TextView>()
-            .firstOrNull { it.text?.toString() == title } ?: return
-        view.setSingleLine(false)
-        view.maxLines = 2
-        view.ellipsize = android.text.TextUtils.TruncateAt.END
-        view.setHorizontallyScrolling(false)
-        view.textSize = 18f
-        view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        view.setLineSpacing(0f, 1.1f)
+    private fun applyActionPanel() {
+        applyActionLabels()
+        val fontScale = resources.displayMetrics.scaledDensity / resources.displayMetrics.density
+        val large = fontScale >= 1.6f
+        val narrow = resources.configuration.screenWidthDp < 360
+        val columns = when {
+            large -> 2
+            narrow -> 3
+            else -> 4
+        }
+        val items = listOf(
+            binding.btnEdit,
+            binding.btnText,
+            binding.btnShare,
+            binding.btnCompress,
+            binding.btnSign,
+            binding.btnSavePdf,
+            binding.btnMore
+        )
+        val grid = binding.actionGrid
+        grid.removeAllViews()
+        items.chunked(columns).forEachIndexed { rowIndex, chunk ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            grid.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { if (rowIndex > 0) topMargin = dp(6f) }
+            )
+            chunk.forEachIndexed { index, item ->
+                val params = if (large && chunk.size == 1) {
+                    // One action left in a two-column grid grows across both columns.
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                } else {
+                    LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+                    ).apply { if (index > 0) marginStart = dp(6f) }
+                }
+                row.addView(item, params)
+            }
+        }
+        // At 200 % the meta line stacks (pages/size above the chip), as the concept does.
+        binding.docMetaRow.orientation =
+            if (large) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+        moveActionPanel(large)
+    }
+
+    /** The visible and spoken labels; the Pro word on Sign follows the build's real state. */
+    private fun applyActionLabels() {
+        binding.btnEdit.text = getString(R.string.doc_action_edit_crop)
+        binding.btnEdit.contentDescription = getString(R.string.doc_action_edit_crop)
+        binding.btnText.text = getString(R.string.dock_read_text)
+        binding.btnText.contentDescription = getString(R.string.dock_read_text)
+        binding.btnShare.text = getString(R.string.share_pdf)
+        binding.btnShare.contentDescription = getString(R.string.share_pdf)
+        binding.btnCompress.text = getString(R.string.tool_compress)
+        binding.btnCompress.contentDescription = getString(R.string.tool_compress)
+        binding.btnSavePdf.text = getString(R.string.doc_action_save_pdf)
+        // Spoken: the visible label also says where the copy goes.
+        binding.btnSavePdf.contentDescription = getString(R.string.save_pdf_device)
+        binding.btnMore.text = getString(R.string.more)
+        binding.btnMore.contentDescription = getString(R.string.doc_action_more_desc)
+        applySignLabel()
     }
 
     /**
-     * v2 UI: 07_reader_dock — the compact category pill is 32 dp tall while its tap area stays
-     * 48 dp: the transparent container around it is the clickable view (and the spoken label),
-     * so a tap in the empty space around the pill still opens the category picker.
+     * Sign reads "Sign Pro" in Free (the word Pro alone is gold — never the whole button) and
+     * "Sign" once Pro is owned. The description says the same thing to TalkBack, exactly as
+     * the Actions sheet does.
      */
+    private fun applySignLabel() {
+        val sign = getString(R.string.tool_sign)
+        val pro = getString(R.string.doc_action_pro)
+        val free = !ProGate.isPro(this)
+        binding.btnSign.text = if (free) {
+            val full = "$sign $pro"
+            SpannableString(full).apply {
+                setSpan(
+                    ForegroundColorSpan(ContextCompat.getColor(this@DocumentViewerActivity, R.color.pro_gold)),
+                    full.length - pro.length,
+                    full.length,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+        } else {
+            SpannableString(sign)
+        }
+        binding.btnSign.contentDescription = signSpokenLabel()
+    }
+
+    /** What TalkBack says for Sign in the build's real state ("Sign, Pro" while Free). */
+    private fun signSpokenLabel(): String {
+        val sign = getString(R.string.tool_sign)
+        return if (ProGate.isPro(this)) sign
+        else "$sign, ${getString(R.string.doc_action_pro)}"
+    }
+
+    /** The sheet's own reason for a document no tool may read (null when it is usable). */
+    private fun protectedReason(doc: ScanDocument): String? = when {
+        doc.isLocked -> getString(R.string.locked_source_refused, doc.name)
+        doc.isVaulted -> getString(R.string.doc_actions_vault_reason)
+        else -> null
+    }
 
     /**
-     * B2 (UI critique #3): one dock order — Edit · Read text · Share · Actions — with the old
-     * "Text"/"More" ids and handlers kept. At 160 % font and above (and on a 320 dp phone) the
-     * dock becomes a 2x2 grid (Edit/Read text over Share/Actions) instead of shrinking the
-     * labels: a 12 sp label in a half-width cell still fits, while a quarter-width cell clips it.
+     * Compress, Sign and Read text are disabled for a locked or Vault document with the same
+     * words the Actions sheet prints under those rows; the handlers also refuse defensively,
+     * so no route is reachable from a disabled button.
      */
-    private fun applyDock() {
-        binding.btnText.text = getString(R.string.dock_read_text)
-        binding.btnText.contentDescription = getString(R.string.dock_read_text)
-        binding.btnMore.text = getString(R.string.doc_actions)
-        binding.btnMore.contentDescription = getString(R.string.doc_actions)
-        val items = listOf(binding.btnEdit, binding.btnText, binding.btnShare, binding.btnMore)
-        val fontScale = resources.displayMetrics.scaledDensity / resources.displayMetrics.density
-        // A quarter-width cell on a 320 dp phone cannot hold "Read text" at 130 % (TextFitTest
-        // w320dp): wrap there as well, so the label is never ellipsized and never shrunk.
-        val narrow = resources.configuration.screenWidthDp < 360
-        val dock = binding.bottomDock
-        dock.removeAllViews()
-        if (fontScale >= 1.6f || narrow) {
-            dock.orientation = LinearLayout.VERTICAL
-            items.chunked(2).forEach { pair ->
-                val line = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                }
-                pair.forEach { item ->
-                    item.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                    line.addView(item)
-                }
-                dock.addView(
-                    line,
+    private fun applyActionAvailability(doc: ScanDocument) {
+        val reason = protectedReason(doc)
+        val blocked = reason != null
+        val items = listOf(
+            binding.btnCompress to getString(R.string.tool_compress),
+            binding.btnSign to getString(R.string.tool_sign),
+            binding.btnText to getString(R.string.dock_read_text)
+        )
+        for ((button, label) in items) {
+            button.isEnabled = !blocked
+            button.alpha = if (blocked) 0.45f else 1f
+            button.contentDescription = when {
+                blocked -> "$label. $reason"
+                button.id == R.id.btnSign -> signSpokenLabel()
+                else -> label
+            }
+        }
+        binding.actionPanelReason.isVisible = blocked
+        binding.actionPanelReason.text = reason
+    }
+
+    /**
+     * Standard type: the page grid owns the scroll and the panel is pinned below it.
+     * 160 % and above: the panel and the grid move together into [binding.actionFlowScroll]
+     * (panel first, pages after) so the action area grows instead of eating the page area —
+     * one scroll owner either way.
+     */
+    private fun moveActionPanel(large: Boolean) {
+        val panel = binding.bottomDock
+        val pages = binding.pageList
+        val column = binding.actionFlowColumn
+        if (large) {
+            (panel.parent as? ViewGroup)?.takeIf { it !== column }?.removeView(panel)
+            (pages.parent as? ViewGroup)?.takeIf { it !== column }?.removeView(pages)
+            if (panel.parent == null) {
+                column.addView(
+                    panel,
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
                     )
                 )
             }
+            if (pages.parent == null) {
+                pages.layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                pages.isNestedScrollingEnabled = false
+                column.addView(pages)
+            }
+            binding.actionFlowScroll.isVisible = true
         } else {
-            dock.orientation = LinearLayout.HORIZONTAL
-            items.forEach { item ->
-                item.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                dock.addView(item)
+            if (panel.parent === column) column.removeView(panel)
+            if (pages.parent === column) column.removeView(pages)
+            binding.actionFlowScroll.isVisible = false
+            if (panel.parent == null) {
+                panel.layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    leftMargin = dp(4f)
+                    rightMargin = dp(4f)
+                    bottomMargin = dp(4f)
+                }
+                binding.contentRoot.addView(panel)
+            }
+            if (pages.parent == null) {
+                pages.layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                pages.isNestedScrollingEnabled = true
+                binding.pagesHost.addView(pages)
             }
         }
     }
@@ -1269,6 +1391,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      */
     private fun savePdfToDocuments() {
         val doc = document ?: return
+        traceAction("save_pdf", doc)
         // PM-3.1c: a document whose lock and PDF disagree is repaired first, never saved silently.
         ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
             if (!doc.pdfFile.exists() || doc.pdfFile.length() == 0L) {
@@ -1318,28 +1441,37 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /**
      * Dock "Read text" (B2; was "Text"): OCR through the shared [OcrFlow] — one home per
      * action. Read text is a Free tool; only its "To Word" action is Pro and asks there.
+     * A locked or Vault document keeps the button disabled (applyActionAvailability) and this
+     * guard refuses even a programmatic click.
      */
     private fun runTextFlow() {
         val doc = document ?: return
+        if (protectedReason(doc) != null) return
+        traceAction("read_text", doc)
         ocrFlow.runOcrForScan(doc)
     }
 
-    private fun promptRename() {
+    /** Compress from the panel: exactly the guarded handler the Actions sheet runs. */
+    private fun compressFromPanel() {
         val doc = document ?: return
-        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
-            .setTitle(R.string.rename_title)
-            .setInput(initial = doc.name, hint = getString(R.string.rename_title))
-            .setSecondary(android.R.string.cancel)
-            .build()
-        sheet.setPrimary(R.string.save) {
-            val newName = sheet.inputView?.text?.toString()
-            if (!newName.isNullOrBlank()) {
-                repo.renameDocument(doc.id, newName.trim())
-                noteImportUsed()
-                lifecycleScope.launch { reloadDocument() }
-            }
+        if (protectedReason(doc) != null) return
+        traceAction("compress", doc)
+        compressFlow.startWith(doc)
+    }
+
+    /**
+     * Sign from the panel: the Pro gate first (Free lands on the Pro screen), then the stamp
+     * editor armed with Sign for THIS document — never StampToolLauncher's generic picker.
+     */
+    private fun signFromPanel() {
+        val doc = document ?: return
+        if (protectedReason(doc) != null) return
+        traceAction("sign", doc)
+        if (ProOffer.require(this)) {
+            startActivity(
+                StampEditorActivity.intent(this, doc.id, StampEditorActivity.TOOL_SIGN)
+            )
         }
-        sheet.show()
     }
 
     /**
@@ -1642,10 +1774,21 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         Toast.makeText(this, message, duration).show()
     }
 
+    /** Test seam: records (action, document) just before the real handler runs. */
+    private fun traceAction(action: String, doc: ScanDocument) {
+        actionTraceForTests?.invoke(action, doc)
+    }
 
     companion object {
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_INSERT_PAGES = "insert_pages"
+
+        /**
+         * Test seam: proves which document each panel action is about to act on. Null in
+         * production, where every action runs its real handler.
+         */
+        @androidx.annotation.VisibleForTesting
+        internal var actionTraceForTests: ((String, ScanDocument) -> Unit)? = null
 
         /** A8: the insert position and cache folder of a photo batch on the corner crop screen. */
         private const val KEY_PHOTO_INSERT_AT = "insert_photo_position"

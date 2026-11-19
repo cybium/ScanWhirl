@@ -108,7 +108,7 @@ class ExportHygieneTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick()
             }
             val first = pollUntil { media.scanwhirlPdfs().size == 1 }
             assertTrue("first download should create exactly one row", first)
@@ -126,7 +126,7 @@ class ExportHygieneTest {
             assertTrue("Snackbar must show Open and Undo (T4.7)", shown)
 
             scenario.onActivity { activity ->
-                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick()
             }
             // M06: an unchanged document is recognised as already saved: no
             // second write, no duplicate, and no Undo (nothing was created).
@@ -187,7 +187,7 @@ class ExportHygieneTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick()
             }
             assertTrue(pollUntil { media.scanwhirlPdfs().size == 1 })
             val original = media.scanwhirlPdfs().single().file.readBytes()
@@ -196,7 +196,7 @@ class ExportHygieneTest {
             repo.getDocument(id)!!.pdfFile.appendBytes("\n% edited\n".toByteArray())
 
             scenario.onActivity { activity ->
-                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick()
             }
             var snack: android.view.View? = null
             assertTrue(
@@ -266,7 +266,7 @@ class ExportHygieneTest {
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick()
             }
             assertTrue(
                 "first download should create one row",

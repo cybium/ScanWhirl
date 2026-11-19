@@ -258,13 +258,13 @@ class ExportActionsFixResultTest {
     // ---- helpers ---------------------------------------------------------
 
     /**
-     * Opens a document, saves it to Documents/ScanWhirl through the viewer's menu and hands the
+     * Opens a document, saves it to Documents/ScanWhirl through the viewer's Save PDF action and hands the
      * save confirmation's exported row URI to [check].
      */
     private fun launchViewerAndSave(name: String, check: (android.app.Activity, Uri) -> Unit) {
         val id = seedDoc(name)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
-            scenario.onActivity { activity -> shadowOf(activity).clickMenuItem(R.id.action_save_pdf) }
+            scenario.onActivity { activity -> activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick() }
             assertTrue(
                 "the save must create exactly one Documents/ScanWhirl row",
                 pollUntil { media.scanwhirlPdfs().size == 1 }

@@ -1,13 +1,11 @@
 ﻿package com.scanwhirl.app.ui
 
 import android.app.Application
-import android.text.TextUtils
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
-import com.google.android.material.appbar.MaterialToolbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
@@ -29,17 +27,16 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 
 /**
- * v2 UI: 07_reader_dock — the saved-document screen, B2 revision 2026-11-19 (GPT-6.2
- * critique #3, "Two-tap contract"): the dock reads Edit · Read text · Share · Actions (work on
- * the document first, act on it, send it away, then the named Actions sheet), every item is
- * equal width, >= 56 dp tall, 24 dp icon + one 12 sp label that never wraps or clips in EN or
- * HI; at 200 % font the dock becomes a 2x2 grid instead of shrinking its labels; the
- * folder/category pill is sentence case metadata; the title wraps to two lines; the meta line
- * reads "3 pages · 544 KB"; a long document's grid keeps a visible vertical scrollbar and
- * legible page badges.
+ * v2 UI: 07_reader_dock → UI-B6 (GPT judgement 2026-11-19b, item 1): the saved-document
+ * screen is the workspace. Seven NAMED actions — Edit / crop (the only filled cyan button),
+ * Read text, Share, Compress, Sign (+ the gold word Pro while Free), Save PDF and More — read
+ * 4 + 3 at 360 dp, and from 160 % type the panel moves into the scroll flow above the pages as
+ * two growing columns. The folder/category pill is sentence-case metadata, the name wraps and
+ * is never ellipsized, the meta line reads "3 pages · 544 KB", and a long document's grid
+ * keeps a visible vertical scrollbar and legible page badges.
  *
- * Red first: written against the pre-B2 screen (Edit · Text · More · Share, four across at any
- * font scale, "Text"/"More" labels, no 2x2 layout).
+ * Red first: originally written against the pre-B2 screen (Edit · Text · More · Share, four
+ * across at any font scale); updated for B6 where the four-item dock became this panel.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -110,70 +107,112 @@ class DocumentViewerReaderUiTest {
             }
     }
 
-    private fun dock(activity: DocumentViewerActivity): ViewGroup =
+    private fun panel(activity: DocumentViewerActivity): ViewGroup =
         activity.findViewById(R.id.bottomDock)
 
-    private fun dockLabels(activity: DocumentViewerActivity): List<TextView> {
-        val dock = dock(activity)
-        return (0 until dock.childCount).map { dock.getChildAt(it) as TextView }
+    /** The seven action buttons in reading order, flattened out of their rows. */
+    private fun actionButtons(activity: DocumentViewerActivity): List<TextView> {
+        val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
+        return (0 until grid.childCount).flatMap { index ->
+            val row = grid.getChildAt(index) as ViewGroup
+            (0 until row.childCount).map { row.getChildAt(it) as TextView }
+        }
     }
 
-    // --- 1. dock order and shape -------------------------------------------
+    private val actionIds = listOf(
+        R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnCompress,
+        R.id.btnSign, R.id.btnSavePdf, R.id.btnMore
+    )
+
+    // --- 1. the panel's order and shape -------------------------------------
 
     @Test
-    fun `dock reads Edit, Read text, Share then Actions last`() {
+    fun `the workspace reads seven named actions in one order`() {
         open { activity ->
-            val dock = dock(activity)
-            assertEquals("the dock keeps its four actions", 4, dock.childCount)
-            val ids = (0 until dock.childCount).map { dock.getChildAt(it).id }
+            val buttons = actionButtons(activity)
+            assertEquals("the panel keeps its seven actions", 7, buttons.size)
             assertEquals(
-                "Edit · Read text · Share · Actions: the sheet is the last, named door",
-                listOf(R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore),
-                ids
+                "Edit / crop · Read text · Share · Compress · Sign · Save PDF · More",
+                actionIds,
+                buttons.map { it.id }
             )
             val labels = listOf(
-                R.string.edit, R.string.dock_read_text, R.string.share_pdf, R.string.doc_actions
+                R.string.doc_action_edit_crop,
+                R.string.dock_read_text,
+                R.string.share_pdf,
+                R.string.tool_compress,
+                R.string.tool_sign,
+                R.string.doc_action_save_pdf,
+                R.string.more
             )
-            dockLabels(activity).forEachIndexed { index, label ->
-                assertEquals(
-                    "dock item $index keeps its label",
-                    activity.getString(labels[index]),
-                    label.text.toString()
+            buttons.forEachIndexed { index, label ->
+                assertTrue(
+                    "action $index keeps its label",
+                    label.text.toString() == activity.getString(labels[index]) ||
+                        label.text.toString().startsWith(activity.getString(labels[index]))
                 )
             }
+            assertEquals(
+                "the panel names itself",
+                activity.getString(R.string.doc_actions_header),
+                activity.findViewById<TextView>(R.id.actionPanelTitle).text.toString()
+            )
+            assertEquals(
+                "the panel says where the copy goes",
+                activity.getString(R.string.doc_action_save_hint),
+                activity.findViewById<TextView>(R.id.actionPanelHint).text.toString()
+            )
         }
     }
 
     @Test
-    fun `at 200 percent the dock is a 2x2 grid with full labels, not smaller text`() {
+    fun `at 100 percent the actions read four then three`() {
+        open { activity ->
+            val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
+            val rows = (0 until grid.childCount).map { grid.getChildAt(it) as ViewGroup }
+            assertEquals("four actions in the first row, three in the second",
+                listOf(4, 3), rows.map { it.childCount })
+        }
+    }
+
+    @Test
+    fun `at 200 percent the panel is two growing columns above the pages`() {
         RuntimeEnvironment.setFontScale(2.0f)
         try {
             open { activity ->
-                val dock = dock(activity)
-                assertEquals("the dock wraps into two rows at 200 %", 2, dock.childCount)
-                val rows = (0 until dock.childCount).map { dock.getChildAt(it) as ViewGroup }
-                assertTrue("each dock row carries two items", rows.all { it.childCount == 2 })
-                assertEquals(
-                    "the order survives the wrap",
-                    listOf(R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore),
-                    rows.flatMap { row -> (0 until row.childCount).map { row.getChildAt(it).id } }
+                val scroll = activity.findViewById<View>(R.id.actionFlowScroll)
+                assertTrue("the content scrolls at 200 %", scroll.isShown)
+                assertNotNull(
+                    "the panel moved into the scroll flow",
+                    scroll.findViewById<View>(R.id.bottomDock)
                 )
+                val column = activity.findViewById<ViewGroup>(R.id.actionFlowColumn)
+                assertEquals(R.id.bottomDock, column.getChildAt(0).id)
+                assertEquals(R.id.pageList, column.getChildAt(1).id)
+
+                val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
+                val rows = (0 until grid.childCount).map { grid.getChildAt(it) as ViewGroup }
+                assertEquals("two columns at 200 %", listOf(2, 2, 2, 1), rows.map { it.childCount })
                 for (row in rows) {
                     for (i in 0 until row.childCount) {
                         val item = row.getChildAt(i) as TextView
-                        assertEquals("a grid cell keeps its one 12 sp label line", 1, item.lineCount)
-                        assertNotNull("grid cell $i is laid out", item.layout)
+                        assertNotNull("a 200 % cell is laid out", item.layout)
                         assertEquals(
                             "grid label '${item.text}' is not truncated",
                             0,
                             item.layout!!.getEllipsisCount(0)
                         )
                         assertTrue(
-                            "a grid cell stays a 48 dp target, was ${item.height}px",
+                            "a 200 % cell stays a 48 dp target, was ${item.height}px",
                             item.height >= dp(48f)
                         )
                     }
                 }
+                assertEquals(
+                    "the last action uses the full width rather than one column",
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    rows.last().getChildAt(0).layoutParams.width
+                )
 
                 // The sheet is the same named destination from the grid too.
                 activity.findViewById<View>(R.id.btnMore).performClick()
@@ -186,27 +225,30 @@ class DocumentViewerReaderUiTest {
     }
 
     @Test
-    fun `dock items are equal width and at least 56 dp tall`() {
+    fun `each row's actions are equal width and at least 56 dp tall`() {
         open { activity ->
-            val dock = dock(activity)
-            val widths = (0 until dock.childCount).map { dock.getChildAt(it).width }
-            assertTrue("the dock is laid out", widths.all { it > 0 })
-            assertTrue(
-                "every dock item has the same width (even spacing), was $widths",
-                widths.max() - widths.min() <= dp(1f)
-            )
-            (0 until dock.childCount).forEach { index ->
-                val item = dock.getChildAt(index)
-                assertEquals("item $index is weighted equally", 1f, weight(item), 0f)
-                assertEquals(
-                    "item $index keeps the DockItem 56 dp minimum",
-                    dp(56f),
-                    (item as TextView).minimumHeight
-                )
+            val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
+            val rows = (0 until grid.childCount).map { grid.getChildAt(it) as ViewGroup }
+            for ((rowIndex, row) in rows.withIndex()) {
+                val widths = (0 until row.childCount).map { row.getChildAt(it).width }
+                assertTrue("row $rowIndex is laid out", widths.all { it > 0 })
                 assertTrue(
-                    "item $index is at least 56 dp tall, was ${item.height}px",
-                    item.height >= dp(56f)
+                    "every action in row $rowIndex has the same width, was $widths",
+                    widths.max() - widths.min() <= dp(1f)
                 )
+                for (index in 0 until row.childCount) {
+                    val item = row.getChildAt(index)
+                    assertEquals("item $rowIndex/$index is weighted equally", 1f, weight(item), 0f)
+                    assertEquals(
+                        "item $rowIndex/$index keeps the 56 dp DockItem minimum",
+                        dp(56f),
+                        (item as TextView).minimumHeight
+                    )
+                    assertTrue(
+                        "item $rowIndex/$index is at least 56 dp tall, was ${item.height}px",
+                        item.height >= dp(56f)
+                    )
+                }
             }
         }
     }
@@ -216,20 +258,20 @@ class DocumentViewerReaderUiTest {
         return if (lp is android.widget.LinearLayout.LayoutParams) lp.weight else -1f
     }
 
-    // --- 2. labels never wrap or clip, EN and HI ---------------------------
+    // --- 2. labels never clip, EN and HI -----------------------------------
 
     @Test
-    fun `no dock label clips at 360 dp in English`() {
-        open { activity -> assertDockLabelsFit(activity) }
+    fun `no action label clips at 360 dp in English`() {
+        open { activity -> assertActionLabelsFit(activity) }
     }
 
     @Test
     @Config(sdk = [35], qualifiers = "hi-w360dp-h640dp-xhdpi")
-    fun `no dock label clips at 360 dp in Hindi`() {
+    fun `no action label clips at 360 dp in Hindi`() {
         open { activity ->
             assertEquals(
                 // hindi lane: the judged glossary replaced "शेयर करें" with "भेजें".
-                "the Hindi dock label is the judged glossary word",
+                "the Hindi Share label is the judged glossary word",
                 "भेजें",
                 activity.getString(R.string.share_pdf)
             )
@@ -239,35 +281,37 @@ class DocumentViewerReaderUiTest {
                 activity.getString(R.string.dock_read_text)
             )
             assertEquals(
-                "Actions is everyday Hindi, not a loanword",
-                "विकल्प",
-                activity.getString(R.string.doc_actions)
+                "More is everyday Hindi, not a loanword",
+                "और",
+                activity.getString(R.string.more)
             )
-            assertDockLabelsFit(activity)
+            assertActionLabelsFit(activity)
         }
     }
 
-    private fun assertDockLabelsFit(activity: DocumentViewerActivity) {
-        dockLabels(activity).forEachIndexed { index, label ->
+    private fun assertActionLabelsFit(activity: DocumentViewerActivity) {
+        actionButtons(activity).forEachIndexed { index, label ->
             assertEquals(
-                "dock label $index is one line (maxLines)",
-                1,
+                "action label $index may wrap to three lines at most",
+                3,
                 label.maxLines
             )
-            assertEquals(
-                "dock label $index never takes a second line",
-                1,
-                label.lineCount
-            )
             val layout = label.layout
-            assertNotNull("dock label $index is laid out", layout)
+            assertNotNull("action label $index is laid out", layout)
+            for (line in 0 until layout!!.lineCount) {
+                assertEquals(
+                    "action label '${label.text}' is not truncated with an ellipsis",
+                    0,
+                    layout.getEllipsisCount(line)
+                )
+                assertTrue(
+                    "action label '${label.text}' line $line fits between its paddings",
+                    layout.getLineWidth(line) <=
+                        (label.width - label.totalPaddingLeft - label.totalPaddingRight) + 0.5f
+                )
+            }
             assertEquals(
-                "dock label '${label.text}' is not truncated with an ellipsis",
-                0,
-                layout!!.getEllipsisCount(0)
-            )
-            assertEquals(
-                "dock label $index is 12 sp",
+                "action label $index is 12 sp (never shrunk)",
                 12f,
                 label.textSize / activity.resources.displayMetrics.scaledDensity,
                 0.5f
@@ -351,40 +395,38 @@ class DocumentViewerReaderUiTest {
         }
     }
 
-    // --- 4. title wraps twice, meta line carries pages and size ------------
+    // --- 4. the name wraps; the meta line carries pages and size -----------
 
     @Test
-    fun `title wraps to two lines then ellipsis`() {
-        open { activity ->
-            val title = titleView(activity, "Physics notes - Chapter 4")
-            assertEquals("the title may use two lines", 2, title.maxLines)
-            assertEquals(
-                "the title ellipsises instead of running away",
-                TextUtils.TruncateAt.END,
-                title.ellipsize
+    fun `the document name is the header H1 and wraps without an ellipsis`() {
+        val long = "Physics notes - Chapter 4 - thermodynamics, entropy and the second law"
+        open(name = long) { activity ->
+            val name = activity.findViewById<TextView>(R.id.docName)
+            assertEquals("the header shows the document name", long, name.text.toString())
+            assertTrue("a long name takes more than one line", name.lineCount >= 2)
+            val layout = requireNotNull(name.layout) { "the name is laid out" }
+            for (line in 0 until layout.lineCount) {
+                assertEquals(
+                    "the name is never ellipsized (line $line)",
+                    0,
+                    layout.getEllipsisCount(line)
+                )
+            }
+            // The toolbar keeps back + the brand mark; the name is not a toolbar title.
+            val toolbar =
+                activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+            val toolbarTexts = (0 until toolbar.childCount)
+                .map { toolbar.getChildAt(it) }
+                .filterIsInstance<TextView>()
+            assertTrue(
+                "the document name is not painted into the toolbar",
+                toolbarTexts.none { it.text?.toString() == long }
+            )
+            assertNotNull(
+                "the brand mark keeps its leading place",
+                activity.findViewById<View>(R.id.docBrandMark)
             )
         }
-    }
-
-    @Test
-    fun `a long title uses both lines and stops there`() {
-        val long = "Physics notes - Chapter 4 - thermodynamics, entropy and the second law, " +
-            "lecture notes from the autumn term"
-        open(name = long) { activity ->
-            val title = titleView(activity, long)
-            assertEquals("a long name takes the second line", 2, title.lineCount)
-            assertEquals(2, title.maxLines)
-        }
-    }
-
-    private fun titleView(activity: DocumentViewerActivity, name: String): TextView {
-        val toolbar = activity.findViewById<MaterialToolbar>(R.id.toolbar)
-        val title = (0 until toolbar.childCount)
-            .map { toolbar.getChildAt(it) }
-            .filterIsInstance<TextView>()
-            .firstOrNull { it.text?.toString() == name }
-        assertNotNull("the header shows the document name", title)
-        return title!!
     }
 
     @Test
