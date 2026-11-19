@@ -446,12 +446,33 @@ ul li{{margin:4px 0}}
 """
 
 
-def copy_shots(atlas_dir, out_dir, scales):
+def copy_shots(atlas_dir, out_dir, screens):
+    """Copy only the PNGs this atlas.json references, and drop stale ones.
+
+    The render folder can hold images from an earlier aborted or sliced run; keeping them would show
+    screens the current code never produced (the 19 Nov atlas ended up with two different 049_* files).
+    """
     shots_dir = os.path.join(out_dir, "shots")
     os.makedirs(shots_dir, exist_ok=True)
-    for name in os.listdir(atlas_dir):
-        if name.endswith(".png"):
-            shutil.copy2(os.path.join(atlas_dir, name), os.path.join(shots_dir, name))
+    wanted = set()
+    for s in screens:
+        for key in ("png", "overlay"):
+            name = s.get(key)
+            if name:
+                wanted.add(name)
+    for name in os.listdir(shots_dir):
+        if name.endswith(".png") and name not in wanted:
+            os.remove(os.path.join(shots_dir, name))
+    missing = []
+    for name in sorted(wanted):
+        src = os.path.join(atlas_dir, name)
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(shots_dir, name))
+        else:
+            missing.append(name)
+    if missing:
+        print("atlas: WARNING %d referenced screenshots are missing from the render (e.g. %s)"
+              % (len(missing), ", ".join(missing[:3])))
 
 
 def git(repo, *args):
@@ -480,7 +501,7 @@ def main():
         old_map = None
 
     os.makedirs(out_dir, exist_ok=True)
-    copy_shots(atlas_dir, out_dir, data.get("scales", []))
+    copy_shots(atlas_dir, out_dir, data.get("screens", []))
     groups = group_screens(data)
     sha = git(repo, "rev-parse", "HEAD") or "unknown"
     branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD") or "unknown"
