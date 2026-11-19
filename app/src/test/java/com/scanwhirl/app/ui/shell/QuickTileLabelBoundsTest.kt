@@ -131,7 +131,7 @@ abstract class QuickTileLabelBoundsBase {
         a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 
     @Test
-    fun `tool tile labels stay inside their column at 100 and 130 percent font`() {
+    fun `tool labels stay whole in full width rows at 100 and 130 percent font`() {
         val problems = mutableListOf<String>()
         val diag = mutableListOf<String>()
         for (scale in floatArrayOf(1.0f, 1.3f)) {
@@ -141,19 +141,43 @@ abstract class QuickTileLabelBoundsBase {
                     idle()
                     val root = layoutRoot(activity)
                     val scaled = activity.resources.displayMetrics.scaledDensity
-                    // The Home quick row is gone (UI-B1 #1): the Tools tab is where tool tiles
-                    // are read now, with the same label rules.
+                    // The Home quick row is gone (UI-B1 #1): the Tools tab is where tools are
+                    // read now, with the same label rules (full-width rows after B4).
                     activity.findViewById<View>(R.id.swNavTools).performClick()
                     idle()
                     layoutRoot(activity)
                     val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
-                    for (tile in ToolsHubScreen.tiles(body)) {
-                        problems += tileProblems(tile, root).map { "@$scale hub: $it" }
-                        val label = tile.findViewById<TextView>(R.id.swToolLabel)!!
+                    for (row in ToolsHubScreen.rows(body)) {
+                        val label = row.findViewById<TextView>(R.id.swToolLabel)
+                            ?: run { problems += "@$scale hub: a row has no label"; continue }
                         val l = label.layout
-                        diag += "@$scale hub \"${label.text}\" tile=${tile.width} label=${label.width} " +
-                            "lines=${l?.lineCount} lw=${l?.width} lh=${l?.height} h=${label.height} " +
-                            "maxLines=${label.maxLines} ell=${label.ellipsize} sp=${"%.2f".format(label.textSize / scaled)}"
+                        if (l == null) {
+                            problems += "@$scale hub \"${label.text}\" has no text layout"
+                            continue
+                        }
+                        val avail = label.width - label.totalPaddingLeft - label.totalPaddingRight
+                        for (line in 0 until l.lineCount) {
+                            if (l.getEllipsisCount(line) > 0) {
+                                problems += "@$scale hub \"${label.text}\" is ellipsized"
+                            }
+                            if (l.getLineMax(line) > avail + 0.5f) {
+                                problems += "@$scale hub \"${label.text}\" line $line is wider than its box"
+                            }
+                        }
+                        if (l.height + label.totalPaddingTop + label.totalPaddingBottom >
+                            label.height + 1
+                        ) {
+                            problems += "@$scale hub \"${label.text}\" is clipped"
+                        }
+                        val rowL = offsetX(row, root)
+                        val labelL = offsetX(label, root)
+                        if (labelL < rowL || labelL + label.width > rowL + row.width) {
+                            problems += "@$scale hub \"${label.text}\" leaves its row"
+                        }
+                        val sp = label.textSize / scaled
+                        if (sp < 14f) problems += "@$scale hub \"${label.text}\" is ${"%.2f".format(sp)}sp"
+                        diag += "@$scale hub \"${label.text}\" row=${row.width} label=${label.width} " +
+                            "lines=${l.lineCount} h=${label.height} sp=${"%.2f".format(sp)}"
                     }
                 }
             }

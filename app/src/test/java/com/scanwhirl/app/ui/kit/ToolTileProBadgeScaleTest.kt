@@ -158,6 +158,42 @@ abstract class ToolTileProBadgeBase {
         return out
     }
 
+    /** B4-TOOLS: the Pro chip on a full-width row sits under the name, never on the glyph. */
+    private fun rowBadgeProblems(row: ToolRow, root: View, scale: Float): List<String> {
+        val tag = row.proTag
+        if (!tag.isVisible) return emptyList()
+        val where = "@$scale \"${row.labelView.text}\""
+        val out = mutableListOf<String>()
+        if (tag.width <= 0 || tag.height <= 0) {
+            out += "$where: the PRO chip was never laid out (${tag.width}x${tag.height})"
+            return out
+        }
+        val layout = tag.layout
+        if (layout == null) {
+            out += "$where: the PRO chip has no text layout"
+            return out
+        }
+        if (layout.lineCount != 1) {
+            out += "$where: the PRO chip draws ${layout.lineCount} lines (the word must be one line)"
+        }
+        val fits = tag.width - tag.totalPaddingLeft - tag.totalPaddingRight
+        if (layout.getLineMax(0) > fits + 0.5f) {
+            out += "$where: the PRO chip line is ${layout.getLineMax(0)}px but its box fits $fits px"
+        }
+        if (overlap(rect(tag, root), rect(row.iconBox, root))) {
+            out += "$where: the PRO chip covers the tool icon"
+        }
+        val rowRect = rect(row, root)
+        val tagRect = rect(tag, root)
+        if (tagRect[0] < rowRect[0] || tagRect[2] > rowRect[2]) {
+            out += "$where: the PRO chip leaves its row (${tagRect.toList()} vs ${rowRect.toList()})"
+        }
+        if (tagRect[3] > rowRect[3]) {
+            out += "$where: the PRO chip hangs below its row"
+        }
+        return out
+    }
+
     @Test
     fun `the pro badge stays one line and off the icon at 100 130 and 200 percent font`() {
         val problems = mutableListOf<String>()
@@ -169,20 +205,20 @@ abstract class ToolTileProBadgeBase {
                 scenario.onActivity { activity ->
                     idle()
                     val root = layoutRoot(activity)
-                    // The Home quick row is gone (UI-B1 #1); the same tile class is measured on
-                    // the Tools tab, where every Pro tile still draws its badge in Free.
+                    // The Home quick row is gone (UI-B1 #1); the same entry is measured on the
+                    // Tools tab, where every Pro entry still draws its badge in Free.
                     activity.findViewById<View>(R.id.swNavTools).performClick()
                     idle()
                     val hubRoot = layoutRoot(activity)
                     val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
-                    for (tile in ToolsHubScreen.tiles(body)) {
-                        problems += badgeProblems(tile, hubRoot, scale).map { "hub $it" }
-                        if (tile.proTag.isVisible) {
+                    for (row in ToolsHubScreen.rows(body)) {
+                        problems += rowBadgeProblems(row, hubRoot, scale).map { "hub $it" }
+                        if (row.proTag.isVisible) {
                             badges++
-                            diag += "@$scale hub \"${tile.labelView.text}\" tile=${tile.width} " +
-                                "tag=${tile.proTag.width}x${tile.proTag.height} " +
-                                "lines=${tile.proTag.layout?.lineCount} " +
-                                "tagTop=${tile.proTag.top} labelTop=${tile.labelView.top}"
+                            diag += "@$scale hub \"${row.labelView.text}\" row=${row.width} " +
+                                "tag=${row.proTag.width}x${row.proTag.height} " +
+                                "lines=${row.proTag.layout?.lineCount} " +
+                                "tagTop=${row.proTag.top} labelTop=${row.labelView.top}"
                         }
                     }
                 }

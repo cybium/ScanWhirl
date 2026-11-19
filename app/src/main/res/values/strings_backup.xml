@@ -47,19 +47,19 @@
     <string name="backup_restored">Backup restored</string>
     <string name="backup_restored_none">No new documents.</string>
     <plurals name="backup_restored_docs">
-        <item quantity="one">1 document restored.</item>
+        <item quantity="one">%1$d document restored.</item>
         <item quantity="other">%1$d documents restored.</item>
     </plurals>
     <plurals name="backup_restored_skipped">
-        <item quantity="one">1 was already here and was left alone.</item>
+        <item quantity="one">%1$d was already here and was left alone.</item>
         <item quantity="other">%1$d were already here and were left alone.</item>
     </plurals>
     <plurals name="backup_restored_vault">
-        <item quantity="one">1 Vault file restored.</item>
+        <item quantity="one">%1$d Vault file restored.</item>
         <item quantity="other">%1$d Vault files restored.</item>
     </plurals>
     <plurals name="backup_restored_vault_reencrypted">
-        <item quantity="one">1 Vault document was re-encrypted into this Vault.</item>
+        <item quantity="one">%1$d Vault document was re-encrypted into this Vault.</item>
         <item quantity="other">%1$d Vault documents were re-encrypted into this Vault.</item>
     </plurals>
     <string name="backup_vault_locked">Vault files were not restored. Unlock the Vault and restore again.</string>

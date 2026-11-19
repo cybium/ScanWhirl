@@ -62,8 +62,8 @@
     <string name="delete_copies_names_more">%1$s and %2$d more</string>
     <!-- T44: recorded copies the app cannot prove it made are named, not just counted. -->
     <plurals name="delete_copies_unproven_named">
-        <item quantity="one">1 saved copy stays because ScanWhirl cannot prove it made it: %1$s (check Files).</item>
-        <item quantity="other">%1$d saved copies stay because ScanWhirl cannot prove it made them: %1$s (check Files).</item>
+        <item quantity="one">%1$d saved copy stays because ScanWhirl cannot prove it made it: %2$s (check Files).</item>
+        <item quantity="other">%1$d saved copies stay because ScanWhirl cannot prove it made them: %2$s (check Files).</item>
     </plurals>
     <plurals name="deleted_copies_ok">
         <item quantity="one">Deleted. %1$d copy removed.</item>
@@ -416,6 +416,23 @@
     <string name="compress_done">Compressed: %1$s → %2$s</string>
     <string name="compress_failed">Compression failed: %1$s</string>
 
+    <!-- UI-B3 (#7, #8, #9-now): two explicit aims, then a measured result. -->
+    <string name="compress_mode_quality">Choose quality</string>
+    <string name="compress_mode_target">Aim for a file size</string>
+    <string name="compress_target_help">Type KB or MB, like 500 KB or 3 MB</string>
+    <string name="compress_target_required">Type the size you need, like 500 KB or 3 MB</string>
+    <string name="compress_action">Compress</string>
+    <string name="compress_result_header">Compressed</string>
+    <string name="compress_result_size">File now %1$s</string>
+    <string name="compress_result_under_limit">%1$s · Under your %2$s limit</string>
+    <string name="compress_result_over_limit">%1$s · Above your %2$s limit</string>
+    <string name="compress_result_size_unknown">Size could not be measured</string>
+    <string name="compress_result_before">Before: %1$s</string>
+    <string name="compress_result_source_kept">Original kept in Library.</string>
+    <string name="compress_undo">Undo this copy</string>
+    <string name="compress_undo_removed">Removed this compressed copy.</string>
+    <string name="compress_undo_removed_with_copy">Removed this compressed copy and its Documents copy.</string>
+
     <string name="progress_title">Working…</string>
 
     <!-- New pages: camera or a straight gallery import (no scanner crop). -->
@@ -640,7 +657,7 @@
     <string name="trash_delete_forever">Delete permanently</string>
     <string name="trash_delete_forever_named">Delete %1$s permanently</string>
     <string name="trash_delete_forever_title">Delete permanently?</string>
-    <string name="trash_delete_forever_message">\"%1$s\" and all its pages leave this phone for good. This cannot be undone.</string>
+    <string name="trash_delete_forever_message">ScanWhirl’s copy of \"%1$s\" and all its pages leave this phone for good. This cannot be undone.</string>
     <string name="trash_empty_action">Empty Trash</string>
     <string name="trash_empty_confirm_title">Empty Trash?</string>
     <plurals name="trash_empty_confirm_message">

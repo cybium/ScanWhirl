@@ -160,8 +160,11 @@ abstract class LibraryFirstScreenBase {
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
+            // B4-TOOLS: the hub shows job cards and the first rows of a long job; every job's
+            // "All N tools" door opens the rest, exactly as a person reaches them.
+            openAllToolsDoors(activity)
             val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
-            val ids = ToolsHubScreen.tiles(body).mapNotNull { it.tool?.id }.toSet()
+            val ids = ToolsHubScreen.rows(body).mapNotNull { it.tool?.id }.toSet()
             for (id in listOf("merge", "compress", "sign", "protect", "to_word", "read_text")) {
                 assertTrue("$id is still reachable in Tools", id in ids)
             }

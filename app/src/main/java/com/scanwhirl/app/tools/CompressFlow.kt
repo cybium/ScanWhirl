@@ -6,6 +6,7 @@ import android.view.View
 import android.widget.RadioButton
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.DialogCompressBinding
@@ -156,7 +157,15 @@ class CompressFlow(
         }
     }
 
-    /** Level picker with size estimates, plus an exact target-size field. */
+    /**
+     * UI-B3 (#7): the level picker with two explicit aims.
+     *
+     * "Choose quality" keeps the measured estimates below it; "Aim for a file size" shows the
+     * exact-size field with a hint that stays put and an inline error. Only the selected aim
+     * runs: a stale typed size is ignored in quality mode, and a size typed for target mode is
+     * never silently replaced by a level. The primary button is "Compress", and the keyboard's
+     * Done runs the same single submit (a second Done or a race with the button never runs twice).
+     */
     private fun pickLevel(estimates: List<Long>, onChosen: (Level) -> Unit, onTarget: (Long) -> Unit) {
         val dialogBinding = DialogCompressBinding.inflate(activity.layoutInflater)
         levels.forEachIndexed { i, level ->
@@ -184,23 +193,100 @@ class CompressFlow(
             .setContent(dialogBinding.root)
             .setSecondary(android.R.string.cancel)
             .build()
-        sheet.setPrimaryStayOpen(android.R.string.ok) {
-            val targetText = dialogBinding.editCompressTarget.text?.toString()
-            if (!targetText.isNullOrBlank()) {
-                val target = ImageTools.parseSizeInput(targetText)
-                if (target == null) {
-                    Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
-                    return@setPrimaryStayOpen
-                }
-                sheet.dismiss()
-                onTarget(target)
-                return@setPrimaryStayOpen
-            }
-            val checked = dialogBinding.levelGroup.checkedRadioButtonId
-            val index = dialogBinding.levelGroup.indexOfChild(dialogBinding.levelGroup.findViewById(checked))
-            sheet.dismiss()
-            onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
+
+        // B3: the job runs at most once per sheet, however it is started.
+        var submitted = false
+
+        fun showError(res: Int) {
+            dialogBinding.compressTargetError.text = activity.getString(res)
+            dialogBinding.compressTargetError.isVisible = true
         }
+
+        fun clearError() {
+            dialogBinding.compressTargetError.text = null
+            dialogBinding.compressTargetError.isVisible = false
+        }
+
+        fun targetMode(): Boolean =
+            dialogBinding.compressModeGroup.checkedRadioButtonId == R.id.compressModeTarget
+
+        fun applyMode() {
+            val toSize = targetMode()
+            dialogBinding.levelGroup.isVisible = !toSize
+            dialogBinding.compressTargetBlock.isVisible = toSize
+            clearError()
+        }
+
+        fun submit() {
+            if (submitted) return
+            if (!targetMode()) {
+                submitted = true
+                val checked = dialogBinding.levelGroup.checkedRadioButtonId
+                val index = dialogBinding.levelGroup.indexOfChild(
+                    dialogBinding.levelGroup.findViewById(checked)
+                )
+                sheet.dismiss()
+                onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
+                return
+            }
+            val targetText = dialogBinding.editCompressTarget.text?.toString().orEmpty().trim()
+            if (targetText.isEmpty()) {
+                showError(R.string.compress_target_required)
+                return
+            }
+            val target = ImageTools.parseSizeInput(targetText)
+            if (target == null || target <= 0L) {
+                showError(R.string.resize_invalid_target)
+                return
+            }
+            submitted = true
+            sheet.dismiss()
+            onTarget(target)
+        }
+
+        dialogBinding.compressModeGroup.setOnCheckedChangeListener { _, _ -> applyMode() }
+        dialogBinding.editCompressTarget.addTextChangedListener(object :
+            android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = clearError()
+            override fun afterTextChanged(s: android.text.Editable?) = Unit
+        })
+        dialogBinding.editCompressTarget.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                submit()
+                // A Done that did not run (an invalid size) stays in the field to be fixed.
+                true
+            } else {
+                false
+            }
+        }
+        // The keyboard's Done is the same action as the button; it never starts a second run.
+        dialogBinding.editCompressTarget.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_ENTER && event.action ==
+                android.view.KeyEvent.ACTION_DOWN
+            ) {
+                submit()
+                true
+            } else {
+                false
+            }
+        }
+        // B3: with the keyboard up the sheet resizes and scrolls the field into view instead of
+        // hiding it behind the IME at 200% type.
+        sheet.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        dialogBinding.editCompressTarget.setOnFocusChangeListener { _, focused ->
+            if (focused) {
+                dialogBinding.compressScroll.post {
+                    val rect = android.graphics.Rect()
+                    dialogBinding.editCompressTarget.getDrawingRect(rect)
+                    dialogBinding.compressScroll.requestChildRectangleOnScreen(
+                        dialogBinding.editCompressTarget, rect, false
+                    )
+                }
+            }
+        }
+        applyMode()
+        sheet.setPrimaryStayOpen(R.string.compress_action) { submit() }
         sheet.show()
     }
 
@@ -212,7 +298,7 @@ class CompressFlow(
                 val out = repo.compressScan(doc.id, level.quality, level.maxDim)
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
-                showCompressResult(out, before, after)
+                showCompressResult(out, before, after, sourceKept = true)
             } catch (e: Exception) {
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
@@ -236,7 +322,7 @@ class CompressFlow(
                 val pages = withContext(Dispatchers.IO) { fitFilesToTotal(doc.pageFiles, target) }
                 val out = repo.createDocument("${doc.name} (compressed)", pages)
                 host.refreshList()
-                showCompressResult(out, before, out.pdfFile.length(), target)
+                showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true)
             } catch (e: Exception) {
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
@@ -258,7 +344,13 @@ class CompressFlow(
      * never the document the person compressed. [target] is the exact size asked for, so the
      * result can still say honestly when that size was not reached.
      */
-    private fun showCompressResult(out: ScanDocument, before: Long, after: Long, target: Long? = null) {
+    private fun showCompressResult(
+        out: ScanDocument,
+        before: Long,
+        after: Long,
+        target: Long? = null,
+        sourceKept: Boolean = false
+    ) {
         val missed = target != null && after > target
         val note = when {
             // The result's own target line says this, so it is not repeated as a note.
@@ -273,7 +365,8 @@ class CompressFlow(
                 docIds = listOf(out.id), // the new copy only: Undo never touches the source
                 targetBytes = target,
                 note = note,
-                beforeBytes = before
+                beforeBytes = before,
+                sourceKept = sourceKept
             )
         )
     }

@@ -104,14 +104,21 @@ class CompressResultFlowTest {
                     activity.findViewById<View>(R.id.toolResultSave)
                 )
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
-                val beforeAfter = app.getString(
-                    R.string.result_before_after,
-                    StatusLine.formatBytes(source.pdf.size.toLong()),
-                    StatusLine.formatBytes(copy.pdfFile.length())
+                val beforeLine = app.getString(
+                    R.string.compress_result_before,
+                    StatusLine.formatBytes(source.pdf.size.toLong())
                 )
                 assertTrue(
-                    "B2-M2: the before -> after size line must survive: '$summary'",
-                    summary.contains(beforeAfter)
+                    "B2-M2/B3: the before size must survive as its own line: '$summary'",
+                    summary.contains(beforeLine)
+                )
+                assertEquals(
+                    "B3: the result leads with the measured size",
+                    app.getString(
+                        R.string.compress_result_size,
+                        StatusLine.formatBytes(copy.pdfFile.length())
+                    ),
+                    summary.substringBefore("\n")
                 )
             }
         }
@@ -168,9 +175,16 @@ class CompressResultFlowTest {
             scenario.onActivity { activity ->
                 idle()
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
+                val bytes = requireNotNull(repo.getDocument(ids.single())).pdfFile.length()
                 assertTrue(
-                    "B2-M2: the honest target-miss line must appear: '$summary'",
-                    summary.contains(app.getString(R.string.compress_target_missed, "1 KB"))
+                    "B2-M2/B3: the honest target-miss line must appear: '$summary'",
+                    summary.contains(
+                        app.getString(
+                            R.string.compress_result_over_limit,
+                            StatusLine.formatBytes(bytes),
+                            "1 KB"
+                        )
+                    )
                 )
                 assertNotNull(
                     "the same result still offers Also save in Documents",
@@ -191,8 +205,7 @@ class CompressResultFlowTest {
     private fun compressFromDocumentMore(
         name: String,
         target: String? = null
-    ): Pair<Intent, Source> {
-        val sourceId = DocFixtures.saved(repo, app, pages = 2, name = name)
+    ): Pair<Intent, Source> {        val sourceId = DocFixtures.saved(repo, app, pages = 2, name = name)
         val doc = requireNotNull(repo.getDocument(sourceId))
         val source = Source(
             id = sourceId,
@@ -229,6 +242,9 @@ class CompressResultFlowTest {
                 val sheet = requireNotNull(ShadowDialog.getLatestDialog())
                 val decor = requireNotNull(sheet.window).decorView
                 if (target != null) {
+                    // B3: a typed size runs only when the "Aim for a file size" aim is chosen.
+                    decor.findViewById<View>(R.id.compressModeTarget).performClick()
+                    idle()
                     decor.findViewById<EditText>(R.id.editCompressTarget).setText(target)
                     idle()
                 }

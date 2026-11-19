@@ -71,7 +71,9 @@ class ProCountTest {
 
                 more.performClick()
                 idle()
-                val badges = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
+                // Every job opens its "All N tools" door, so the whole catalogue is on screen.
+                openAllToolsDoors(activity)
+                val badges = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
                     .count { it.proTag.visibility == View.VISIBLE }
                 assertEquals(
                     "the advertised number matches the PRO tags in the hub",

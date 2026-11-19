@@ -57,15 +57,15 @@
     <string name="scan_saved">स्कैन सहेजा गया</string>
     <!-- review: the 3 plurals below were machine-translated at T4.8 — native review pending -->
     <plurals name="delete_copies">
-        <item quantity="one">Documents/ScanWhirl में सहेजी गई %1$d प्रति भी हटाएँ</item>
-        <item quantity="other">Documents/ScanWhirl में सहेजी गई %1$d प्रतियाँ भी हटाएँ</item>
+        <item quantity="one">Documents/ScanWhirl से %1$d सहेजी गई प्रति भी हमेशा के लिए मिटाएँ</item>
+        <item quantity="other">Documents/ScanWhirl से %1$d सहेजी गई प्रतियाँ भी हमेशा के लिए मिटाएँ</item>
     </plurals>
     <!-- T44: when file names are known, the box says exactly which files go. -->
-    <string name="delete_copies_named">Documents/ScanWhirl में %1$s भी हटाएँ</string>
+    <string name="delete_copies_named">Documents/ScanWhirl से %1$s भी हमेशा के लिए मिटाएँ</string>
     <string name="delete_copies_names_more">%1$s और %2$d अन्य</string>
     <plurals name="delete_copies_unproven_named">
-        <item quantity="one">1 सहेजी गई प्रति रह जाएगी, क्योंकि ScanWhirl साबित नहीं कर सकता कि यह उसने बनाई: %1$s (Files देखें)।</item>
-        <item quantity="other">%1$d सहेजी गई प्रतियाँ रह जाएँगी, क्योंकि ScanWhirl साबित नहीं कर सकता कि ये उसने बनाईं: %1$s (Files देखें)।</item>
+        <item quantity="one">%1$d सहेजी गई प्रति रह जाएगी, क्योंकि ScanWhirl साबित नहीं कर सकता कि यह उसने बनाई: %2$s (Files देखें)।</item>
+        <item quantity="other">%1$d सहेजी गई प्रतियाँ रह जाएँगी, क्योंकि ScanWhirl साबित नहीं कर सकता कि ये उसने बनाईं: %2$s (Files देखें)।</item>
     </plurals>
     <plurals name="deleted_copies_ok">
         <item quantity="one">हटाया गया। %1$d प्रति हटाई गई।</item>
@@ -194,6 +194,23 @@
     <string name="compress_target_label">अपनी ज़रूरत का आकार (चाहें तो)</string>
     <string name="compress_target_missed">%1$s तक नहीं पहुँच सके। यही सबसे छोटा नतीजा है।</string>
     <string name="compress_title">PDF का आकार घटाएँ</string>
+
+    <!-- UI-B3 (#7, #8, #9-now): दो साफ़ तरीके, फिर मापा हुआ नतीजा। -->
+    <string name="compress_mode_quality">गुणवत्ता चुनें</string>
+    <string name="compress_mode_target">फ़ाइल का आकार तय करें</string>
+    <string name="compress_target_help">KB या MB में लिखें, जैसे 500 KB या 3 MB</string>
+    <string name="compress_target_required">ज़रूरी आकार लिखें, जैसे 500 KB या 3 MB</string>
+    <string name="compress_action">छोटा करें</string>
+    <string name="compress_result_header">छोटा किया गया</string>
+    <string name="compress_result_size">फ़ाइल अब %1$s</string>
+    <string name="compress_result_under_limit">%1$s · आपकी %2$s सीमा के भीतर</string>
+    <string name="compress_result_over_limit">%1$s · आपकी %2$s सीमा से ऊपर</string>
+    <string name="compress_result_size_unknown">आकार मापा नहीं जा सका</string>
+    <string name="compress_result_before">पहले: %1$s</string>
+    <string name="compress_result_source_kept">मूल कागज़ात में सुरक्षित है।</string>
+    <string name="compress_undo">यह प्रति हटाएँ</string>
+    <string name="compress_undo_removed">यह छोटी की गई प्रति हटा दी गई।</string>
+    <string name="compress_undo_removed_with_copy">यह छोटी की गई प्रति और उसकी Documents प्रति हटा दी गई।</string>
     <string name="continue_label">जारी रखें</string>
     <string name="crop_apply">काटें</string>
     <string name="crop_size_free">अपनी मर्ज़ी से</string>
@@ -567,18 +584,18 @@
     <!-- M07 P1: Trash (reversible delete) -->
     <string name="trash_title">हटाई गई फ़ाइलें</string>
     <string name="trash_navigate_up">वापस</string>
-    <string name="trash_move">हटाएँ</string>
+    <string name="trash_move">हटाई गई फ़ाइलों में भेजें</string>
     <string name="trash_move_short">हटाएँ</string>
-    <string name="trash_moved_one">“%1$s” हटा दिया गया</string>
+    <string name="trash_moved_one">“%1$s” हटाई गई फ़ाइलों में भेजा गया</string>
     <plurals name="trash_moved_many">
-        <item quantity="one">%1$d दस्तावेज़ हटाया गया</item>
-        <item quantity="other">%1$d दस्तावेज़ हटाए गए</item>
+        <item quantity="one">%1$d दस्तावेज़ हटाई गई फ़ाइलों में भेजा गया</item>
+        <item quantity="other">%1$d दस्तावेज़ हटाई गई फ़ाइलों में भेजे गए</item>
     </plurals>
     <plurals name="trash_moved_partial">
-        <item quantity="one">%1$d दस्तावेज़ हटाया गया। %2$d को नहीं हटाया जा सका और वह बदला नहीं गया।</item>
-        <item quantity="other">%1$d दस्तावेज़ हटाए गए। %2$d को नहीं हटाया जा सका और वे बदले नहीं गए।</item>
+        <item quantity="one">%1$d दस्तावेज़ हटाई गई फ़ाइलों में भेजा गया। बाकी %2$d में कोई बदलाव नहीं हुआ।</item>
+        <item quantity="other">%1$d दस्तावेज़ हटाई गई फ़ाइलों में भेजे गए। बाकी %2$d में कोई बदलाव नहीं हुआ।</item>
     </plurals>
-    <string name="trash_move_failed">हटाया नहीं जा सका। कुछ भी नहीं हटाया गया।</string>
+    <string name="trash_move_failed">हटाई गई फ़ाइलों में नहीं भेज सके। कोई दस्तावेज़ नहीं हटा।</string>
     <plurals name="trash_restored">
         <item quantity="one">%1$d दस्तावेज़ वापस लाया गया</item>
         <item quantity="other">%1$d दस्तावेज़ वापस लाए गए</item>
@@ -587,10 +604,10 @@
     <string name="trash_restore_failed">वापस नहीं लाया जा सका। दस्तावेज़ अभी भी हटाई गई फ़ाइलों में है, बिना बदले।</string>
     <string name="trash_restore">वापस लाएँ</string>
     <string name="trash_restore_named">%1$s वापस लाएँ</string>
-    <string name="trash_delete_forever">हमेशा के लिए हटाएँ</string>
-    <string name="trash_delete_forever_named">%1$s हमेशा के लिए हटाएँ</string>
-    <string name="trash_delete_forever_title">हमेशा के लिए हटाएँ?</string>
-    <string name="trash_delete_forever_message">“%1$s” और इसके सभी पन्ने, लिखा हुआ और बदलाव इस फ़ोन से हटा दिए जाएँगे। इसे पहले जैसा नहीं किया जा सकता।</string>
+    <string name="trash_delete_forever">हमेशा के लिए मिटाएँ</string>
+    <string name="trash_delete_forever_named">%1$s हमेशा के लिए मिटाएँ</string>
+    <string name="trash_delete_forever_title">हमेशा के लिए मिटाएँ?</string>
+    <string name="trash_delete_forever_message">ScanWhirl में “%1$s” की प्रति और उसके पन्ने, लिखा हुआ और बदलाव हमेशा के लिए मिट जाएँगे। इन्हें वापस नहीं ला सकते।</string>
     <string name="trash_empty_action">हटाई गई सभी फ़ाइलें हमेशा के लिए हटाएँ</string>
     <string name="trash_empty_confirm_title">हटाई गई सभी फ़ाइलें हमेशा के लिए हटाएँ?</string>
     <plurals name="trash_empty_confirm_message">
@@ -603,7 +620,7 @@
     </plurals>
     <string name="trash_delete_failed">कुछ चीज़ें हटाई नहीं जा सकीं। वे अभी भी हटाई गई फ़ाइलों में हैं।</string>
     <string name="trash_empty_title">कोई हटाई गई फ़ाइल नहीं है</string>
-    <string name="trash_empty_body">30 दिन से पुराने दस्तावेज़ अपने आप हट जाते हैं।</string>
+    <string name="trash_empty_body">किसी दस्तावेज़ को हटाई गई फ़ाइलों में भेजने के 30 दिन बाद वह अपने आप मिट जाता है।</string>
     <string name="trash_header_note">वापस लाने पर हर पन्ना लौट आता है।</string>
     <string name="trash_error_title">हटाई गई फ़ाइलें नहीं खुल सकीं</string>
     <string name="trash_error_body">आपके दस्तावेज़ नहीं बदले। फिर से कोशिश करें।</string>
@@ -650,7 +667,7 @@
     <string name="scan_save_failed_review">स्कैन सहेजा नहीं जा सका (%1$s)। पन्ने यहाँ सुरक्षित हैं। जाँचकर फिर सहेजें।</string>
     <!-- T15: camera session reached the page cap. -->
     <!-- review: the 3 entries below were drafted at T15 - native review pending -->
-    <string name="cap_scan_message">एक स्कैन में %1$d पन्ने हो गए। और पन्ने जोड़ें?</string>
+    <string name="cap_scan_message">इस दस्तावेज़ में %1$d पन्ने सहेजे गए हैं। इसी में और पन्ने जोड़ें?</string>
     <string name="cap_scan_add_more">और जोड़ें</string>
     <string name="cap_scan_done">हो गया</string>
 </resources>

@@ -57,6 +57,18 @@
     <string name="tools_group_secure">Secure</string>
     <string name="tools_group_text">Text</string>
 
+    <!-- B4-TOOLS: the seven jobs (UI_PLAN §0b), in the order they are read -->
+    <string name="tools_job_smaller">Make it smaller</string>
+    <string name="tools_job_organise">Combine and organise</string>
+    <string name="tools_job_markup">Sign and mark up</string>
+    <string name="tools_job_private">Keep it private</string>
+    <string name="tools_job_text">Get the text</string>
+    <string name="tools_job_format">Change the format</string>
+    <string name="tools_job_new">Start something new</string>
+    <string name="tools_job_all">All %1$d tools</string>
+    <string name="tools_job_fewer">Show fewer</string>
+    <string name="tools_search_results">Results</string>
+
     <string name="tool_scan">Scan</string>
     <string name="tool_id_card">ID card</string>
     <string name="tool_book_pages">Book pages</string>
@@ -117,7 +129,7 @@
          arrives the price line says where the price comes from. -->
     <string name="pro_price_play">Price shown by Google Play</string>
     <string name="pro_one_time">one time</string>
-    <string name="pro_price_note">No subscription. Pro on every phone with your Google account.</string>
+    <string name="pro_price_note">One payment. No subscription.</string>
     <string name="pro_unlock">Unlock Pro</string>
     <string name="pro_restore">Restore purchase</string>
     <string name="pro_see_all">See all 18 Pro tools ›</string>

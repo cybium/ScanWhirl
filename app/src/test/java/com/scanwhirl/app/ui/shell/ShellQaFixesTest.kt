@@ -170,7 +170,7 @@ class ShellQaFixesTest {
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
-            val tile = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
+            val tile = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
                 .first { it.tool?.id == "searchable_pdf" }
             tile.performClick()
             idle()
@@ -211,7 +211,7 @@ class ShellQaFixesTest {
             idle()
             // fixui: tiles removed (owner F6/F7/F20) - Enhance is gone; To text opens the same
             // document chooser, so the search sheet is still what this test covers.
-            ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
+            ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
                 .first { it.tool?.id == "to_text" }
                 .performClick()
             idle()
@@ -307,6 +307,7 @@ class ShellQaFixesTest {
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
+            openAllToolsDoors(activity)
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)
             val dm = activity.resources.displayMetrics
@@ -314,44 +315,39 @@ class ShellQaFixesTest {
             val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
             repeat(2) { root.measure(w, h); root.layout(0, 0, dm.widthPixels, dm.heightPixels) }
 
+            fun rectIn(v: View): Rect {
+                val r = Rect(0, 0, v.width, v.height)
+                (root as ViewGroup).offsetDescendantRectToMyCoords(v, r)
+                return r
+            }
             var checked = 0
-            for (tile in ToolsHubScreen.tiles(body)) {
-                val tag = when {
-                    tile.soonTag.isVisible -> tile.soonTag
-                    tile.proTag.isVisible -> tile.proTag
-                    else -> null
-                } ?: continue
-                // v2 UI: 03_tools_hub - the badge lives in iconSlot, the glyph in iconBox;
-                // compare both in the slot's coordinates.
-                val box = tile.iconBox
-                val iconRect = Rect(
-                    box.left + tile.iconView.left,
-                    box.top + tile.iconView.top,
-                    box.left + tile.iconView.right,
-                    box.top + tile.iconView.bottom
-                )
-                val tagRect = Rect(
-                    tag.left + tag.translationX.toInt(),
-                    tag.top + tag.translationY.toInt(),
-                    tag.right + tag.translationX.toInt(),
-                    tag.bottom + tag.translationY.toInt()
-                )
+            for (row in ToolsHubScreen.rows(body)) {
+                val tag = row.proTag
+                if (!tag.isVisible) continue
+                // B4-TOOLS: a row's Pro chip sits under the name, never on the 40dp glyph.
+                val iconRect = rectIn(row.iconBox)
+                val tagRect = rectIn(tag)
                 assertFalse(
-                    "${tile.tool?.id} tag overlaps its icon ($tagRect vs $iconRect)",
+                    "${row.tool?.id} tag overlaps its icon ($tagRect vs $iconRect)",
                     Rect.intersects(iconRect, tagRect)
+                )
+                assertTrue(
+                    "${row.tool?.id} tag sits under its name",
+                    tagRect.top >= rectIn(row.labelView).bottom
                 )
                 checked++
             }
-            assertTrue("some tiles carry a tag ($checked)", checked > 0)
+            assertTrue("some rows carry a tag ($checked)", checked > 0)
         }
     }
 
     @Test
-    fun `tagged and untagged tool tiles keep icons and labels on one line`() {
+    fun `tagged and untagged tool rows keep icons and labels aligned`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
+            openAllToolsDoors(activity)
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)
             val dm = activity.resources.displayMetrics
@@ -359,13 +355,18 @@ class ShellQaFixesTest {
             val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
             repeat(2) { root.measure(w, h); root.layout(0, 0, dm.widthPixels, dm.heightPixels) }
 
-            val tiles = ToolsHubScreen.tiles(body)
-            val tagged = tiles.count { it.proTag.isVisible || it.soonTag.isVisible }
-            assertTrue("the hub mixes tagged and untagged tiles", tagged in 1 until tiles.size)
-            val iconTops = tiles.map { it.iconView.top }.toSet()
-            val labelTops = tiles.map { it.labelView.top }.toSet()
-            assertEquals("every tile's icon starts at the same height: $iconTops", 1, iconTops.size)
-            assertEquals("every tile's label starts at the same height: $labelTops", 1, labelTops.size)
+            fun left(v: View): Int {
+                val r = Rect(0, 0, v.width, v.height)
+                (root as ViewGroup).offsetDescendantRectToMyCoords(v, r)
+                return r.left
+            }
+            val rows = ToolsHubScreen.rows(body)
+            val tagged = rows.count { it.proTag.isVisible }
+            assertTrue("the hub mixes tagged and untagged rows", tagged in 1 until rows.size)
+            val iconLefts = rows.map { left(it.iconBox) }.toSet()
+            val labelLefts = rows.map { left(it.labelView) }.toSet()
+            assertEquals("every row's icon starts in one column: $iconLefts", 1, iconLefts.size)
+            assertEquals("every row's name starts in one column: $labelLefts", 1, labelLefts.size)
         }
     }
 
@@ -390,7 +391,7 @@ class ShellQaFixesTest {
             search.setText("read")
             idle()
             assertTrue("clear appears", clear.isVisible)
-            val tiles = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
+            val tiles = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
             assertEquals("Read text ranks first", "read_text", tiles.first().tool?.id)
 
             clear.performClick()

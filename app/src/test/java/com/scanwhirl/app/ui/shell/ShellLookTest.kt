@@ -75,25 +75,25 @@ class ShellLookTest {
     private fun drawableId(view: ImageView): Int = shadowOf(view.drawable).createdFromResId
 
     @Test
-    fun `tool hub labels use two lines and are fully visible`() {
+    fun `tool hub labels are fully visible and never ellipsized`() {
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
+            openAllToolsDoors(activity)
             layoutRoot(activity)
             val body = activity.findViewById<View>(R.id.swToolsBody)
-            val tiles = ToolsHubScreen.tiles(body)
-            // v2 UI: 03_tools_hub - Coming-soon tools are no longer hub tiles.
+            val rows = ToolsHubScreen.rows(body)
+            // B4-TOOLS: every shipping tool is a row once each job's door is open.
             assertEquals(
                 com.scanwhirl.app.ui.kit.ToolRegistry.all
                     .count { it.status != com.scanwhirl.app.ui.kit.ToolStatus.SOON },
-                tiles.size
+                rows.size
             )
-            for (tile in tiles) {
-                val label = tile.findViewById<TextView>(R.id.swToolLabel)
+            for (row in rows) {
+                val label = row.findViewById<TextView>(R.id.swToolLabel)
                 val l = label.layout
                 assertNotNull("${label.text} is laid out", l)
-                assertTrue("${label.text} uses at most 2 lines", l!!.lineCount <= 2)
-                for (line in 0 until l.lineCount) {
+                for (line in 0 until l!!.lineCount) {
                     assertEquals("${label.text} line $line is not ellipsized", 0, l.getEllipsisCount(line))
                 }
                 assertTrue(

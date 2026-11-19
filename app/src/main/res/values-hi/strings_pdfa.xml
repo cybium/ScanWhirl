@@ -2,7 +2,7 @@
 <resources>
     <!-- L2 Save as PDF/A. Hindi values await native review. -->
     <string name="pdfa_pick">PDF/A के रूप में सहेजें</string>
-    <string name="pdfa_note">संग्रह के लिए PDF/A-2b। रूप वही रहता है, पासवर्ड नहीं।</string>
+    <string name="pdfa_note">लंबे समय तक रखने के लिए PDF/A-2b। नई प्रति वैसी ही दिखेगी, लेकिन उस पर पासवर्ड नहीं होगा।</string>
     <string name="pdfa_create">PDF/A प्रति बनाएँ</string>
     <string name="pdfa_locked">यह दस्तावेज़ पासवर्ड से सुरक्षित है। PDF/A के लिए बिना पासवर्ड वाला दस्तावेज़ चाहिए।</string>
     <string name="pdfa_failed">PDF/A प्रति नहीं बन सकी: %1$s</string>
