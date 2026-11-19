@@ -19,6 +19,7 @@ import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.OcrEngine
+import com.scanwhirl.app.util.OcrBox
 import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
@@ -33,6 +34,7 @@ import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.PdfVerifier
 import com.scanwhirl.app.util.PptxWriter
 import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.ReadingOrder
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
@@ -2836,8 +2838,9 @@ class ScanRepository(private val context: Context) {
                 text[page.name] = result.text
             }
         }
+        val geo = ocrStore.readGeo(id)
         val pages = doc.pageFiles.map { page ->
-            (text[page.name] ?: "").lines().dropLastWhile { it.isBlank() }
+            wordPageLines(text[page.name] ?: "", geo[page.name])
         }
         require(pages.any { lines -> lines.any { it.isNotBlank() } }) {
             "Read the text first, then convert it to Word."
@@ -2857,6 +2860,32 @@ class ScanRepository(private val context: Context) {
             DocxWriter.write(outFile, pages)
         }
         outFile
+    }
+
+    /**
+     * T38: the paragraphs one page contributes to the Word file. [stored] is the recognised text
+     * (the long-standing source: one paragraph per line). When the page's stored geometry still
+     * belongs to that text, the lines are put in true reading order ([ReadingOrder]), so a
+     * two-column page or a sidebar is read column by column instead of interleaved. A page whose
+     * geometry is missing, no longer matches the text (the user edited it) or shows no confident
+     * gutter keeps exactly the stored order: never worse than before.
+     */
+    private fun wordPageLines(stored: String, ocr: com.scanwhirl.app.model.OcrPage?): List<String> {
+        val today = stored.lines().dropLastWhile { it.isBlank() }
+        if (ocr == null) return today
+        val boxes = ocr.lines.filter { it.text.isNotBlank() }
+        val textLines = today.filter { it.isNotBlank() }
+        if (boxes.isEmpty() || boxes.size != textLines.size) return today
+        // The stored text wins on every edit: geometry that belongs to different text is stale.
+        for (index in boxes.indices) {
+            if (boxes[index].text.trim() != textLines[index].trim()) return today
+        }
+        val lines = boxes.map {
+            ReadingOrder.LineBox(it.text, OcrBox(it.left, it.top, it.right, it.bottom))
+        }
+        val ordered = ReadingOrder.order(lines)
+        if (ordered == lines) return today
+        return ReadingOrder.toTextLines(ordered)
     }
 
     /** A page for an embedded Word picture: at most 1600 px on the long side, JPEG 90. */
