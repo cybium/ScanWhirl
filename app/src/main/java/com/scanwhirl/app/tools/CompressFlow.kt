@@ -11,11 +11,10 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.DialogCompressBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.ExportResultActivity
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.showSw
-import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.StatusLine
@@ -237,10 +236,7 @@ class CompressFlow(
                 val pages = withContext(Dispatchers.IO) { fitFilesToTotal(doc.pageFiles, target) }
                 val out = repo.createDocument("${doc.name} (compressed)", pages)
                 host.refreshList()
-                showCompressResult(out, before, out.pdfFile.length(),
-                    if (out.pdfFile.length() > target) {
-                        activity.getString(R.string.compress_target_missed, StatusLine.formatBytes(target))
-                    } else null)
+                showCompressResult(out, before, out.pdfFile.length(), target)
             } catch (e: Exception) {
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
@@ -251,27 +247,33 @@ class CompressFlow(
         }
     }
 
-    /** Opens the real result screen (preview + actual before/after + save/share). */
-    private fun showCompressResult(out: ScanDocument, before: Long, after: Long, extraWarning: String? = null) {
-        val warning = when {
-            extraWarning != null -> extraWarning
+    /**
+     * B2-M2 (device sweep 2026-11-19): every Compress result now ends on the same
+     * [ToolResultActivity] as the Tools hub — Open, Also save in Documents, Share, Save as…,
+     * Show in library and Undo — instead of the old export screen that offered only
+     * "Save to Documents" and no way back.
+     *
+     * The result names the NEW compressed document only. The source is never passed as a doc id,
+     * so Undo (which purges the documents it names) can remove exactly the copy this run made and
+     * never the document the person compressed. [target] is the exact size asked for, so the
+     * result can still say honestly when that size was not reached.
+     */
+    private fun showCompressResult(out: ScanDocument, before: Long, after: Long, target: Long? = null) {
+        val missed = target != null && after > target
+        val note = when {
+            // The result's own target line says this, so it is not repeated as a note.
+            missed -> null
             before > 0 && after > before -> activity.getString(R.string.compress_grew_warning)
             else -> null
         }
         activity.startActivity(
-            ExportResultActivity.intent(
+            ToolResultActivity.intent(
                 activity,
-                outputPath = out.pdfFile.path,
-                previewPath = out.pageFiles.firstOrNull()?.path,
-                mime = "application/pdf",
-                displayName = DownloadSaver.pdfNameFor(out.name),
-                beforeBytes = before,
-                afterBytes = after,
-                width = 0,
-                height = 0,
-                title = out.name,
-                warning = warning,
-                docId = out.id // T4.8: record the saved copy on this document
+                toolId = "compress",
+                docIds = listOf(out.id), // the new copy only: Undo never touches the source
+                targetBytes = target,
+                note = note,
+                beforeBytes = before
             )
         )
     }
@@ -380,10 +382,7 @@ class CompressFlow(
                 val out = repo.createDocument("$baseName (compressed)", pages)
                 sheet?.dismiss()
                 host.refreshList()
-                showCompressResult(out, before, out.pdfFile.length(),
-                    if (out.pdfFile.length() > target) {
-                        activity.getString(R.string.compress_target_missed, StatusLine.formatBytes(target))
-                    } else null)
+                showCompressResult(out, before, out.pdfFile.length(), target)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 sheet?.dismiss()
                 throw e

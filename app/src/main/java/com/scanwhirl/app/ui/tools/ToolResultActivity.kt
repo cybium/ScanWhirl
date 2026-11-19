@@ -79,6 +79,12 @@ class ToolResultActivity : BaseActivity() {
     /** T05: the size Compress was asked for, so the result can say it was not reached. */
     private var targetBytes: Long? = null
 
+    /**
+     * B2-M2: the size of the source document, when Compress started from a document's More row.
+     * It keeps the "Before … → After …" line the old export screen showed for the same run.
+     */
+    private var beforeBytes: Long? = null
+
     /** F1: the ID card flow's own result actions (Keep / Discard). */
     private val idCardFlow: Boolean get() = toolId == "id_card"
 
@@ -99,6 +105,7 @@ class ToolResultActivity : BaseActivity() {
         mime = intent.getStringExtra(EXTRA_MIME) ?: defaultMime()
         note = intent.getStringExtra(EXTRA_NOTE)
         targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
+        beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0 }
         saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(mime)) { uri ->
             uri ?: return@registerForActivityResult
             saveTo(uri)
@@ -373,9 +380,26 @@ class ToolResultActivity : BaseActivity() {
     private fun applySummary(line: String, producedBytes: Long? = null) {
         summary.text = buildString {
             append(line)
+            beforeAfterSize(producedBytes)?.let { append("\n").append(it) }
             if (!note.isNullOrBlank()) append("\n").append(note)
             targetMiss(producedBytes)?.let { append("\n").append(it) }
         }
+    }
+
+    /**
+     * B2-M2: Compress can know the source size — the document-menu route does — so the shared
+     * result keeps the "Before … → After …" line the old export screen showed, using the same
+     * string. Without a before size (the Tools-hub route) the line is omitted, as before.
+     */
+    private fun beforeAfterSize(producedBytes: Long?): String? {
+        if (toolId != "compress") return null
+        val before = beforeBytes ?: return null
+        val after = producedBytes ?: return null
+        return getString(
+            R.string.result_before_after,
+            StatusLine.formatBytes(before),
+            StatusLine.formatBytes(after)
+        )
     }
 
     /**
@@ -804,6 +828,9 @@ class ToolResultActivity : BaseActivity() {
         /** T05: Compress's wanted size in bytes (absent or 0 = no target). */
         private const val EXTRA_TARGET = "target_bytes"
 
+        /** B2-M2: the source size for Compress's "Before … → After …" line (absent or 0 = none). */
+        private const val EXTRA_BEFORE = "before_bytes"
+
         /** F1: view tags for the ID card's two actions (no new ids needed). */
         const val TAG_KEEP = "fixflow:id_card_keep"
         const val TAG_DISCARD = "fixflow:id_card_discard"
@@ -820,13 +847,18 @@ class ToolResultActivity : BaseActivity() {
             mime: String? = null,
             note: String? = null,
             /** T05: what Compress was asked to reach, so a miss can be said out loud. */
-            targetBytes: Long? = null
+            targetBytes: Long? = null,
+            /** B2-M2: the size before Compress ran, for the "Before … → After …" line. */
+            beforeBytes: Long? = null
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
             .putStringArrayListExtra(EXTRA_FILES, ArrayList(files.map { it.path }))
             .putExtra(EXTRA_MIME, mime)
             .putExtra(EXTRA_NOTE, note)
-            .apply { if (targetBytes != null && targetBytes > 0L) putExtra(EXTRA_TARGET, targetBytes) }
+            .apply {
+                if (targetBytes != null && targetBytes > 0L) putExtra(EXTRA_TARGET, targetBytes)
+                if (beforeBytes != null && beforeBytes > 0L) putExtra(EXTRA_BEFORE, beforeBytes)
+            }
     }
 }
