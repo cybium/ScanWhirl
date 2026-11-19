@@ -1,7 +1,9 @@
 package com.scanwhirl.app.ui.tools
 
 import android.app.Application
+import android.content.Intent
 import android.content.pm.ProviderInfo
+import android.net.Uri
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
@@ -31,6 +33,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowContentResolver
 import org.robolectric.shadows.ShadowToast
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.Duration
 
@@ -333,6 +337,206 @@ class ResultAlsoSaveTest {
         }
     }
 
+    // ---- 3c. W3: every result names the copies and where they live ---------
+    //
+    // The winner spec (lane 3) asks every tool result to say plainly which copies exist and
+    // where: in the Library, in Documents/ScanWhirl, or in the location the person chose. A
+    // transient snackbar is not enough; the receipt stays on the result. The base build showed
+    // only a page/size line, so these tests are red against it.
+
+    @Test
+    fun `a document result says the copy is in your Library`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "split", docIds = listOf(id))
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val text = summaryText(activity)
+                assertTrue(
+                    "W3: the result must say where the new copy is: $text",
+                    text.contains("In your Library: Rent receipt")
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `an exported file never claims to be in the library`() {
+        val docx = docxResult()
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "to_word", files = listOf(docx), mime = DOCX_MIME)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val text = summaryText(activity)
+                assertFalse("W3: an export is not a library document: $text", text.contains("In your Library"))
+                assertTrue(
+                    "W3: an export says plainly that it lives in the app until saved: $text",
+                    text.contains("Prepared in ScanWhirl")
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `Also save leaves a receipt saying the copy is in Documents`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "split", docIds = listOf(id))
+        ).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
+            assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
+            assertTrue(
+                "W3: the receipt names the Documents copy: ${summaryTextOf(scenario)}",
+                pollUntil {
+                    summaryTextOf(scenario).contains("Also in Documents/ScanWhirl: Rent receipt.pdf")
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `a chosen location is named only after the copy is verified`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
+        val pdf = requireNotNull(repo.getDocument(id)).pdfFile
+        val source = pdf.readBytes()
+        val target = Uri.parse("content://com.scanwhirl.test.documents/chosen.pdf")
+        val written = ByteArrayOutputStream()
+        shadowOf(app.contentResolver).registerOutputStream(target, written)
+        // Readback for the verification step (a supplier, so it sees the finished buffer).
+        shadowOf(app.contentResolver).registerInputStreamSupplier(target) {
+            ByteArrayInputStream(written.toByteArray())
+        }
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "split", docIds = listOf(id))
+        ).use { scenario ->
+            var picker: Intent? = null
+            scenario.onActivity { activity ->
+                idle()
+                activity.findViewById<View>(R.id.toolResultMore).performClick()
+                idle()
+                activity.findViewById<View>(R.id.toolResultSave).performClick()
+                idle()
+                picker = shadowOf(activity).nextStartedActivityForResult?.intent
+            }
+            assertNotNull("the system picker opens", picker)
+            scenario.onActivity { activity ->
+                shadowOf(activity).receiveResult(
+                    picker!!,
+                    android.app.Activity.RESULT_OK,
+                    Intent().setData(target)
+                )
+            }
+            assertTrue(
+                "the chosen file receives the produced bytes",
+                pollUntil { written.toByteArray().contentEquals(source) }
+            )
+            assertTrue(
+                "W3: the receipt names the chosen location: ${summaryTextOf(scenario)}",
+                pollUntil {
+                    summaryTextOf(scenario).contains("In the location you chose: Rent receipt.pdf")
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `a cancelled picker leaves no success or location claim`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "split", docIds = listOf(id))
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                activity.findViewById<View>(R.id.toolResultMore).performClick()
+                idle()
+                activity.findViewById<View>(R.id.toolResultSave).performClick()
+                idle()
+                val forResult = shadowOf(activity).nextStartedActivityForResult
+                assertNotNull("the picker opens", forResult)
+                shadowOf(activity).receiveResult(
+                    forResult!!.intent,
+                    android.app.Activity.RESULT_CANCELED,
+                    null
+                )
+                idleFor(500)
+                val text = summaryText(activity)
+                assertFalse(
+                    "W3: a cancelled picker names no chosen location: $text",
+                    text.contains("In the location you chose")
+                )
+                val toast = ShadowToast.getTextOfLatestToast().orEmpty()
+                assertFalse(
+                    "W3: nothing was saved: $toast",
+                    toast.contains(app.getString(R.string.tools_result_saved, "").trim())
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `Open hands over exactly the produced bytes`() {
+        val docx = docxResult()
+        val source = docx.readBytes()
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "to_word", files = listOf(docx), mime = DOCX_MIME)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                activity.findViewById<View>(R.id.toolResultOpen).performClick()
+                idle()
+                val started = shadowOf(activity).nextStartedActivity
+                assertNotNull("Open hands the result to a viewer", started)
+                val uri = started!!.data
+                assertNotNull("the viewer receives the produced file's URI", uri)
+                val opened = app.contentResolver.openInputStream(uri!!)!!.use { it.readBytes() }
+                assertArrayEquals("W3: Open must hand over exactly these bytes", source, opened)
+            }
+        }
+    }
+
+    @Test
+    fun `a recreated result still removes the Documents copy it saved`() {
+        val docx = docxResult()
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "to_word", files = listOf(docx), mime = DOCX_MIME)
+        ).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
+            assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
+            val copy = media.scanwhirlPdfs().single()
+            assertTrue("the save is finished", pollUntil { snackShown(scenario) })
+
+            // The phone rotates while the person is reading the result.
+            scenario.recreate()
+
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            assertTrue(
+                "W3: Undo after recreation still removes the copy this run created",
+                pollUntil { media.rows[copy.id] == null }
+            )
+        }
+    }
+
+    @Test
+    fun `undo never claims a removal that did not happen`() {
+        val stubborn = File(app.cacheDir, "documents/stubborn.pdf").apply { mkdirs() }
+        File(stubborn, "child.bin").writeBytes(byteArrayOf(1, 2, 3))
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "to_word", files = listOf(stubborn), mime = DOCX_MIME)
+        ).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            assertTrue(
+                "W3: a copy that could not be removed is not reported as removed",
+                pollUntil {
+                    ShadowToast.getTextOfLatestToast().orEmpty()
+                        .contains("Could not remove every copy")
+                }
+            )
+            assertTrue("the copy is still there", stubborn.exists())
+        }
+    }
+
     // ---- 4. saving twice makes no duplicate -------------------------------
 
     @Test
@@ -590,6 +794,15 @@ class ResultAlsoSaveTest {
 
     private fun snackMessage(activity: android.app.Activity): String? =
         activity.findViewById<TextView>(R.id.snackMessage)?.text?.toString()
+
+    private fun summaryText(activity: android.app.Activity): String =
+        activity.findViewById<TextView>(R.id.toolResultSummary)?.text?.toString().orEmpty()
+
+    private fun summaryTextOf(scenario: ActivityScenario<ToolResultActivity>): String {
+        var text = ""
+        scenario.onActivity { text = summaryText(it) }
+        return text
+    }
 
     private fun snackMessageOf(scenario: ActivityScenario<ToolResultActivity>): String? {
         var message: String? = null

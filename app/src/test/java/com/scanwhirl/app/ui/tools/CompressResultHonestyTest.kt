@@ -135,8 +135,14 @@ abstract class CompressResultHonestyBase {
         }
     }
 
+    /**
+     * W3: equality is its own honest state. The base build folded measured == target into
+     * "Under your … limit"; the winner spec asks for "Exactly at the selected limit", because a
+     * file of exactly 100 KB is not under a 100 KB target. This test previously pinned the
+     * under-limit wording at the boundary; it is adjusted, not weakened, to the superseding spec.
+     */
     @Test
-    fun `an exact boundary counts as under the limit`() {
+    fun `an exact boundary is said as exactly at the limit`() {
         val id = doc()
         val bytes = bytesOf(id)
         ActivityScenario.launch<ToolResultActivity>(
@@ -146,13 +152,80 @@ abstract class CompressResultHonestyBase {
                 idle()
                 val first = summaryLines(activity).first()
                 assertEquals(
-                    "measured == target is not a miss",
-                    app.getString(R.string.compress_result_under_limit, fmt(bytes), fmt(bytes)),
+                    "measured == target says exactly at the limit",
+                    app.getString(R.string.compress_result_at_limit, fmt(bytes), fmt(bytes)),
                     first
                 )
                 assertFalse(
                     "B3: no above-limit line at the boundary: $first",
                     first.contains(overTail())
+                )
+                assertFalse(
+                    "W3: equality is not called under the limit: $first",
+                    first.contains(underTail())
+                )
+            }
+        }
+    }
+
+    /**
+     * W3: exact bytes decide below/equal/above, but the displayed size must never contradict
+     * that verdict. 100 KB + 1 byte renders as "100 KB" with whole-KB rounding, which would read
+     * "100 KB · Above your 100 KB limit". The exact byte count is added in that case.
+     */
+    @Test
+    fun `a rounded size never contradicts the above-limit verdict`() {
+        val id = doc("Boundary")
+        val target = 100L * 1024L
+        val measured = target + 1
+        val pdf = requireNotNull(repo.getDocument(id)).pdfFile
+        pdf.writeBytes(ByteArray(measured.toInt()))
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "compress", docIds = listOf(id), targetBytes = target)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val first = summaryLines(activity).first()
+                val measuredShown = app.getString(
+                    R.string.w3_size_with_exact_bytes, fmt(measured), measured
+                )
+                assertTrue(
+                    "W3: the above-limit line carries the exact byte count: $first",
+                    first.startsWith(measuredShown)
+                )
+                assertEquals(
+                    "W3: and still states the honest miss",
+                    app.getString(R.string.compress_result_over_limit, measuredShown, fmt(target)),
+                    first
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a rounded size never contradicts the under-limit verdict`() {
+        val id = doc("Boundary low")
+        val target = 100L * 1024L
+        val measured = target - 1
+        val pdf = requireNotNull(repo.getDocument(id)).pdfFile
+        pdf.writeBytes(ByteArray(measured.toInt()))
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "compress", docIds = listOf(id), targetBytes = target)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val first = summaryLines(activity).first()
+                val measuredShown = app.getString(
+                    R.string.w3_size_with_exact_bytes, fmt(measured), measured
+                )
+                assertTrue(
+                    "W3: the under-limit line carries the exact byte count: $first",
+                    first.startsWith(measuredShown)
+                )
+                assertEquals(
+                    "W3: and still states the honest hit",
+                    app.getString(R.string.compress_result_under_limit, measuredShown, fmt(target)),
+                    first
                 )
             }
         }
@@ -446,6 +519,19 @@ class CompressResultHindiWordingTest {
         assertEquals(
             "544 KB · आपकी 100 KB सीमा से ऊपर",
             app.getString(R.string.compress_result_over_limit, "544 KB", "100 KB")
+        )
+        // W3: equality is its own state, not "under".
+        assertEquals(
+            "544 KB · ठीक आपकी 100 KB सीमा पर",
+            app.getString(R.string.compress_result_at_limit, "544 KB", "100 KB")
+        )
+        assertEquals(
+            "100 KB (102401 बाइट) · आपकी 100 KB सीमा से ऊपर",
+            app.getString(
+                R.string.compress_result_over_limit,
+                app.getString(R.string.w3_size_with_exact_bytes, "100 KB", 102401),
+                "100 KB"
+            )
         )
         assertEquals(
             "मूल कागज़ात में सुरक्षित है।",

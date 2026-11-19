@@ -92,6 +92,20 @@ class ToolResultActivity : BaseActivity() {
     private val isCompressResult: Boolean get() = toolId == "compress"
 
     /**
+     * W3: the result's own receipt lines: which copies exist and where. They are appended to the
+     * summary and survive the save that created them, instead of living only in a 6 s snackbar.
+     */
+    private val locationLines = mutableListOf<String>()
+    private var summaryBaseLine: String? = null
+    private var measuredSummaryBytes: Long? = null
+
+    /** W3: the name written through the system Save-as picker, after its bytes were verified. */
+    private var chosenLocationName: String? = null
+
+    /** W3: a Documents copy this run found already there (nothing was created, nothing to undo). */
+    private var documentsExistingName: String? = null
+
+    /**
      * UI-B3 (#9-now): the compressed source was a library document and was left in place, so the
      * result can say where the original is. Export-only results never show this line.
      */
@@ -116,6 +130,15 @@ class ToolResultActivity : BaseActivity() {
         targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0 }
         sourceKept = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
+        // W3: a rotation must not lose what this run already learned. The saved Documents copy
+        // stays undoable (it is still the same copy, still verified by its fingerprint), and an
+        // already-undone result never offers the actions again as if nothing happened.
+        savedInstanceState?.let { state ->
+            undone = state.getBoolean(KEY_UNDONE)
+            savedCopy = readSavedCopy(state)
+            chosenLocationName = state.getString(KEY_CHOSEN_NAME)
+            documentsExistingName = state.getString(KEY_EXISTING_NAME)
+        }
         saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(mime)) { uri ->
             uri ?: return@registerForActivityResult
             saveTo(uri)
@@ -129,8 +152,45 @@ class ToolResultActivity : BaseActivity() {
         rootView = buildRoot()
         setContentView(rootView)
         render()
+        // W3: if this result was already undone before a rotation, do not offer its actions again.
+        if (undone) showAlreadyUndone()
         // v2 UI: 74_motion — the one success moment call for every tool result.
         com.scanwhirl.app.ui.kit.SwMotion.success(this)
+    }
+
+    /**
+     * W3: keep the run's receipt and its one undoable Documents copy across recreation. Only the
+     * copy state is persisted — never a storage policy — so a recreated screen either keeps the
+     * verified Undo or narrows its claim instead of silently forgetting it.
+     */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_UNDONE, undone)
+        chosenLocationName?.let { outState.putString(KEY_CHOSEN_NAME, it) }
+        documentsExistingName?.let { outState.putString(KEY_EXISTING_NAME, it) }
+        savedCopy?.let { copy ->
+            outState.putString(KEY_COPY_URI, copy.uri.toString())
+            outState.putString(KEY_COPY_NAME, copy.name)
+            outState.putString(KEY_COPY_REQUESTED, copy.requestedName)
+            outState.putString(KEY_COPY_OUTCOME, copy.outcome.name)
+            copy.fingerprint?.let { outState.putString(KEY_COPY_FINGERPRINT, it.encode()) }
+        }
+    }
+
+    private fun readSavedCopy(state: Bundle): DownloadSaver.SavedFile? {
+        val raw = state.getString(KEY_COPY_URI) ?: return null
+        val name = state.getString(KEY_COPY_NAME) ?: return null
+        val outcome = state.getString(KEY_COPY_OUTCOME)
+            ?.let { runCatching { DownloadSaver.Outcome.valueOf(it) }.getOrNull() }
+            ?: return null
+        return DownloadSaver.SavedFile(
+            uri = Uri.parse(raw),
+            name = name,
+            outcome = outcome,
+            requestedName = state.getString(KEY_COPY_REQUESTED) ?: name,
+            fingerprint = state.getString(KEY_COPY_FINGERPRINT)
+                ?.let { DownloadSaver.Fingerprint.decode(it) }
+        )
     }
 
     private fun buildRoot(): View {
@@ -464,14 +524,55 @@ class ToolResultActivity : BaseActivity() {
             }
         } else {
             nameView.text = ""
-            summary.text = getString(R.string.tools_result_nothing)
+            applySummary(getString(R.string.tools_result_nothing))
         }
+        refreshLocationLines()
     }
 
     private fun applySummary(line: String) {
-        summary.text = buildString {
-            append(line)
-            if (!note.isNullOrBlank()) append("\n").append(note)
+        summaryBaseLine = if (note.isNullOrBlank()) line else "$line\n$note"
+        summary.text = composeSummary()
+    }
+
+    private fun composeSummary(): String = buildString {
+        append(
+            if (isCompressResult && summaryBaseLine == null) compressSummaryText()
+            else summaryBaseLine.orEmpty()
+        )
+        for (line in locationLines) {
+            if (line.isNotBlank()) append("\n").append(line)
+        }
+    }
+
+    /**
+     * W3: the persistent receipt. A copy made from a library document lives in the Library; an
+     * exported file lives in the app until it is saved; "Also save" and the system picker add the
+     * exact place they wrote to. Only lines that are true for this result are shown.
+     */
+    private fun refreshLocationLines() {
+        val next = mutableListOf<String>()
+        if (docIds.isNotEmpty()) {
+            val docs = docIds.mapNotNull { runCatching { repo.getDocument(it) }.getOrNull() }
+            if (docs.isNotEmpty()) {
+                val name = if (docs.size == 1) {
+                    docs.first().name
+                } else {
+                    getString(R.string.tools_result_name_more, docs.first().name, docs.size - 1)
+                }
+                next += getString(R.string.w3_where_library, name)
+            }
+        } else if (files.isNotEmpty()) {
+            next += getString(R.string.w3_where_app_output)
+        }
+        savedCopy?.let { next += getString(R.string.w3_where_documents, it.name) }
+        documentsExistingName?.let {
+            next += getString(R.string.w3_where_documents_existing, it)
+        }
+        chosenLocationName?.let { next += getString(R.string.w3_where_chosen, it) }
+        if (next != locationLines) {
+            locationLines.clear()
+            locationLines.addAll(next)
+            summary.text = composeSummary()
         }
     }
 
@@ -479,44 +580,65 @@ class ToolResultActivity : BaseActivity() {
      * UI-B3 (#8): a Compress result answers the question it was asked, in this order:
      *
      * 1. the measured size, plus the target status only when the bytes prove it
-     *    ("9 KB · Under your 10 KB limit" at or below the limit, "132 KB · Above your 100 KB
-     *    limit" when the smallest honest result is still bigger); with no target, the measured
-     *    size alone, and no status line at all;
+     *    ("9 KB · Under your 10 KB limit", "... Exactly at ..." when equal, "132 KB · Above ..."
+     *    when the smallest honest result is still bigger); with no target, the measured size
+     *    alone, and no status line at all;
      * 2. "Before: 824 KB", when the source size is known;
      * 3. where the original is, for a copy made from a library document.
      *
      * A result whose PDF cannot be measured never claims a size or a success.
      */
     private fun applyCompressSummary(measuredBytes: Long?) {
-        summary.text = buildString {
-            append(compressOutcome(measuredBytes))
-            beforeBytes?.let {
-                append("\n").append(
-                    getString(R.string.compress_result_before, StatusLine.formatBytes(it))
-                )
-            }
-            if (sourceKept) append("\n").append(getString(R.string.compress_result_source_kept))
-            if (!note.isNullOrBlank()) append("\n").append(note)
-        }
+        measuredSummaryBytes = measuredBytes
+        summaryBaseLine = null
+        summary.text = composeSummary()
     }
+
+    private fun compressSummaryText(): String = buildString {
+        append(compressOutcome(measuredSummaryBytes))
+        beforeBytes?.let {
+            append("\n").append(
+                getString(R.string.compress_result_before, StatusLine.formatBytes(it))
+            )
+        }
+        if (sourceKept) append("\n").append(getString(R.string.compress_result_source_kept))
+        if (!note.isNullOrBlank()) append("\n").append(note)
+    }
+
+    private enum class SizeRelation { BELOW, EQUAL, ABOVE }
 
     private fun compressOutcome(measuredBytes: Long?): String {
         val measured = measuredBytes?.takeIf { it > 0L }
             ?: return getString(R.string.compress_result_size_unknown)
         val target = targetBytes
             ?: return getString(R.string.compress_result_size, StatusLine.formatBytes(measured))
-        return if (measured <= target) {
-            getString(
-                R.string.compress_result_under_limit,
-                StatusLine.formatBytes(measured),
-                StatusLine.formatBytes(target)
-            )
+        // W3: exact bytes decide; the displayed number must never contradict that verdict.
+        val relation = when {
+            measured < target -> SizeRelation.BELOW
+            measured > target -> SizeRelation.ABOVE
+            else -> SizeRelation.EQUAL
+        }
+        val shown = measuredForDisplay(measured, target, relation)
+        val targetShown = StatusLine.formatBytes(target)
+        return when (relation) {
+            SizeRelation.BELOW -> getString(R.string.compress_result_under_limit, shown, targetShown)
+            SizeRelation.EQUAL -> getString(R.string.compress_result_at_limit, shown, targetShown)
+            SizeRelation.ABOVE -> getString(R.string.compress_result_over_limit, shown, targetShown)
+        }
+    }
+
+    /**
+     * Whole-KB rounding can print a file one byte over 100 KB as "100 KB", which would read
+     * "100 KB · Above your 100 KB limit". When the rounded size would collide with the target,
+     * the exact byte count is shown next to it, so the sentence cannot contradict itself.
+     */
+    private fun measuredForDisplay(measured: Long, target: Long, relation: SizeRelation): String {
+        val shown = StatusLine.formatBytes(measured)
+        if (relation == SizeRelation.EQUAL) return shown
+        return if (shown == StatusLine.formatBytes(target)) {
+            getString(R.string.w3_size_with_exact_bytes, shown, measured)
         } else {
-            getString(
-                R.string.compress_result_over_limit,
-                StatusLine.formatBytes(measured),
-                StatusLine.formatBytes(target)
-            )
+            shown
         }
     }
 
@@ -652,7 +774,9 @@ class ToolResultActivity : BaseActivity() {
             return
         }
         val file = files.firstOrNull()
-        if (file == null || !file.isFile) return fail(getString(R.string.tools_result_nothing))
+        if (file == null || !file.isFile || file.length() == 0L) {
+            return fail(getString(R.string.tools_result_nothing))
+        }
         val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
         val view = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mime)
@@ -730,10 +854,24 @@ class ToolResultActivity : BaseActivity() {
                 }
                 // B2-H1: only a copy this save actually created may ever be undone here. An
                 // identical file that was already in Documents stays out of reach, as always.
-                if (saved.created) savedCopy = saved
+                if (saved.created) {
+                    savedCopy = saved
+                    documentsExistingName = null
+                } else {
+                    documentsExistingName = saved.name
+                }
+                refreshLocationLines()
                 SavedSnackbar.showExport(
                     this@ToolResultActivity, rootView, saved, R.string.result_saved_documents, docId
-                )
+                ) { result ->
+                    // W3: if the bar's Undo removed the copy, the screen's receipt must stop
+                    // claiming it is there.
+                    if (result == DownloadSaver.UndoResult.REMOVED) {
+                        savedCopy = null
+                        documentsExistingName = null
+                        refreshLocationLines()
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -798,16 +936,24 @@ class ToolResultActivity : BaseActivity() {
 
     private fun saveTo(uri: Uri) {
         val source = sourceForSave() ?: return fail(getString(R.string.tools_result_nothing))
+        val displayName = suggestedName() ?: source.name
         lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) {
+                val verified = withContext(Dispatchers.IO) {
                     contentResolver.openOutputStream(uri)?.use { out ->
                         source.inputStream().use { it.copyTo(out) }
+                        out.flush()
                     } ?: throw IllegalStateException("No access to the destination")
+                    // W3: the location is named only after the written bytes were read back and
+                    // match the produced file, not just because the picker returned a URI.
+                    writtenBytesMatch(uri, source)
                 }
+                if (!verified) throw IllegalStateException("The copy could not be verified")
+                chosenLocationName = displayName
+                refreshLocationLines()
                 Toast.makeText(
                     this@ToolResultActivity,
-                    getString(R.string.tools_result_saved, source.name),
+                    getString(R.string.tools_result_saved, displayName),
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: CancellationException) {
@@ -818,6 +964,34 @@ class ToolResultActivity : BaseActivity() {
         }
     }
 
+    /** W3: exact read-back comparison of the file just written through the system picker. */
+    private fun writtenBytesMatch(uri: Uri, source: File): Boolean {
+        val readBack = contentResolver.openInputStream(uri) ?: return false
+        return readBack.use { input ->
+            source.inputStream().use { expected ->
+                val a = ByteArray(64 * 1024)
+                val b = ByteArray(64 * 1024)
+                var same = true
+                while (true) {
+                    val n = expected.read(a)
+                    val m = input.read(b)
+                    if (n != m) {
+                        same = false
+                        break
+                    }
+                    if (n < 0) break
+                    for (i in 0 until n) {
+                        if (a[i] != b[i]) {
+                            same = false
+                            break
+                        }
+                    }
+                    if (!same) break
+                }
+                same
+            }
+        }
+    }
     private fun showInLibrary() {
         val docId = docIds.firstOrNull()
         startActivity(
@@ -845,8 +1019,10 @@ class ToolResultActivity : BaseActivity() {
         // created is a candidate, and only while it still holds exactly the bytes it wrote.
         val copy = savedCopy
         savedCopy = null
+        documentsExistingName = null
         docIds.clear()
         files.clear()
+        locationLines.clear()
         lifecycleScope.launch {
             val copyUndo = copy?.let { saved ->
                 withContext(Dispatchers.IO) {
@@ -869,20 +1045,29 @@ class ToolResultActivity : BaseActivity() {
                 docs.forEach { runCatching { repo.deleteDocument(it) } }
                 outs.forEach { runCatching { it.delete() } }
             }
+            // W3: claim removal only after checking the copies are really gone. deleteDocument
+            // and File.delete can fail; a recreated screen can also ask to undo a run that is
+            // already gone. In both cases the honest answer is "not every copy was removed".
+            val remainingDocs = withContext(Dispatchers.IO) {
+                docs.filter { runCatching { repo.getDocument(it) }.getOrNull() != null }
+            }
+            val remainingFiles = withContext(Dispatchers.IO) { outs.filter { it.exists() } }
+            val allRunCopiesGone = remainingDocs.isEmpty() && remainingFiles.isEmpty()
+            val nothingToRemove = docs.isEmpty() && outs.isEmpty() && copy == null
             // Data honesty: a copy that could not be removed is never reported as undone.
-            val (text, long) = when (copyUndo) {
-                DownloadSaver.UndoResult.KEPT_CHANGED ->
+            val (text, long) = when {
+                copyUndo == DownloadSaver.UndoResult.KEPT_CHANGED ->
                     getString(R.string.export_undo_kept_changed, copy?.name.orEmpty()) to true
-                DownloadSaver.UndoResult.FAILED ->
+                copyUndo == DownloadSaver.UndoResult.FAILED ->
                     getString(R.string.export_undo_failed, copy?.name.orEmpty()) to true
-                // B3 (#9-now): say exactly what this Undo removed.
-                else -> when {
-                    isCompressResult && copy != null ->
-                        getString(R.string.compress_undo_removed_with_copy) to false
-                    isCompressResult ->
-                        getString(R.string.compress_undo_removed) to false
-                    else -> getString(R.string.tools_result_undone) to false
-                }
+                nothingToRemove || !allRunCopiesGone ->
+                    getString(R.string.w3_undo_not_removed) to true
+                // B3 (#9-now): say exactly what this Undo removed, now that it is verified.
+                isCompressResult && copy != null ->
+                    getString(R.string.compress_undo_removed_with_copy) to false
+                isCompressResult ->
+                    getString(R.string.compress_undo_removed) to false
+                else -> getString(R.string.tools_result_undone) to false
             }
             Toast.makeText(
                 this@ToolResultActivity,
@@ -891,6 +1076,19 @@ class ToolResultActivity : BaseActivity() {
             ).show()
             finish()
         }
+    }
+
+    /**
+     * W3: a result that was already undone must not offer its actions again after recreation —
+     * the files it names may be gone, and a repeated Undo would make an unverifiable claim.
+     */
+    private fun showAlreadyUndone() {
+        listOf(
+            R.id.toolResultOpen, R.id.toolResultShare, R.id.toolResultAlsoSave,
+            R.id.toolResultMore, R.id.toolResultMorePanel, R.id.toolResultUndo,
+            R.id.toolResultSave, R.id.toolResultLibrary
+        ).forEach { id -> findViewById<View>(id)?.visibility = View.GONE }
+        summary.text = getString(R.string.w3_result_undone_note)
     }
 
     // ---- ID card: Keep / Discard (F1/W3) ----------------------------------
@@ -959,6 +1157,16 @@ class ToolResultActivity : BaseActivity() {
 
         /** UI-B3 (#9): the compressed source is a library document and was left in place. */
         private const val EXTRA_SOURCE_KEPT = "source_kept"
+
+        /** W3: recreation-safe receipt/undo state (never a storage policy, only this run's own copy). */
+        private const val KEY_UNDONE = "w3_undone"
+        private const val KEY_COPY_URI = "w3_copy_uri"
+        private const val KEY_COPY_NAME = "w3_copy_name"
+        private const val KEY_COPY_REQUESTED = "w3_copy_requested"
+        private const val KEY_COPY_OUTCOME = "w3_copy_outcome"
+        private const val KEY_COPY_FINGERPRINT = "w3_copy_fingerprint"
+        private const val KEY_CHOSEN_NAME = "w3_chosen_name"
+        private const val KEY_EXISTING_NAME = "w3_existing_name"
 
         /** F1: view tags for the ID card's two actions (no new ids needed). */
         const val TAG_KEEP = "fixflow:id_card_keep"

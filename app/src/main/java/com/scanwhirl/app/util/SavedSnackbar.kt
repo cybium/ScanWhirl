@@ -113,7 +113,9 @@ object SavedSnackbar {
         root: View,
         saved: DownloadSaver.SavedFile,
         @StringRes createdMessage: Int,
-        docId: String?
+        docId: String?,
+        /** W3: told how the bar's Undo ended, so the result's receipt can stop claiming the copy. */
+        onUndoResult: ((DownloadSaver.UndoResult) -> Unit)? = null
     ): Snackbar {
         val message = when {
             !saved.created -> activity.getString(R.string.export_already_saved, saved.name)
@@ -144,6 +146,7 @@ object SavedSnackbar {
                             activity.getString(R.string.fixresult_export_undo_nothing)
                         else -> activity.getString(R.string.export_undo_failed, saved.name)
                     }
+                    onUndoResult?.invoke(result)
                     Toast.makeText(app, text, Toast.LENGTH_LONG).show()
                 }
                 Unit
