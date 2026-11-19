@@ -12,11 +12,17 @@ import kotlin.math.min
  *
  * The historical [OcrLayout] cut cannot split a page whose full-width title (or subtitle, or
  * table rule) crosses the gutter, so such a page fell back to row order and mixed the columns.
- * This function uses the same stored geometry but looks for a **vertical gutter that no ordinary
- * text line crosses**: a line wide enough to be a title, a wide subheading or a footer is allowed
- * to cross it and keeps its own vertical position, while every other line must sit entirely on
- * one side. The page is then read left column top to bottom, right column top to bottom, with
- * the crossing lines emitted where they are on the page (a title first, a footer last).
+ * This function uses the same stored geometry but looks for a **vertical gutter that ordinary
+ * body lines do not cross**: a title, a wide subheading, a rule or a footer may cross it and
+ * keeps its own vertical position, while every other line must sit entirely on one side. The
+ * page is then read left column top to bottom, right column top to bottom, with the crossing
+ * lines emitted where they are on the page (a title first, a footer last).
+ *
+ * T47 (phone FAIL on the public FynePDF two-column sample): the earlier candidate search only
+ * accepted a gutter that no *narrow* line crossed at all, so the sample's footer - which starts
+ * in the left column and runs a little past the gutter - hid the gutter and the page still
+ * exported interleaved. A gutter is now found from the line edges themselves and tolerates a
+ * few crossing lines; the gates that reject tables, forms and single-column pages are unchanged.
  *
  * It is deliberately conservative: when no confident gutter exists (a form with two short
  * blocks, a table of cells, a page with one column, missing or degenerate boxes) the input order
@@ -51,6 +57,15 @@ object ReadingOrder {
      * column; table cells are short values and fail here, which keeps a table in row order.
      */
     const val MIN_MEDIAN_WIDTH_FRACTION = 0.5
+
+    /**
+     * T47: lines that may still cross a gutter before it stops being a confident column break.
+     * A title, a horizontal rule, a table heading and a footer do cross it, and they keep
+     * their own place on the page. A line only counts as crossing when it really spans the
+     * gutter: the real two-column sample has a footer that starts in the left column and runs
+     * a little way past the gutter, which is neither a body line nor a full-width banner.
+     */
+    const val MIN_CROSSING_LINES = 3
 
     /**
      * [lines] in reading order, or [lines] itself when the page has no confident gutter. The
@@ -124,20 +139,37 @@ object ReadingOrder {
         // Only ordinary lines block a gutter position: a wide line may be a title or a footer.
         val blocking = lines.filter { it.box.width < WIDE_FRACTION * textWidth }
         if (blocking.size < MIN_LINES_PER_COLUMN) return null
-        val bodyTop = blocking.minOf { it.box.top }
-        val bodyBottom = blocking.maxOf { it.box.bottom }
-        val bodyHeight = bodyBottom - bodyTop
+        // T47: title, rule, table heading, footer - a few lines may cross the gutter and keep
+        // their own height. They are not body lines, so they must not hide the gutter.
+        val maxCrossing = max(MIN_CROSSING_LINES, lines.size / 8)
 
         var best: Gutter? = null
         var bestScore = -1
         var bestWidth = -1
-        for ((a, b) in freeBands(blocking, textLeft, textRight, minGutter)) {
-            val left = blocking.filter { it.box.right <= a }
-            val right = blocking.filter { it.box.left >= b }
+        // T47 (phone FAIL, real sample-two-column.pdf): the old candidate search swept the
+        // line span left to right, so a single line that started in the left column and
+        // reached a little past the gutter (the sample's "Sample file from FynePDF..." footer)
+        // carried that sweep over the gutter and no band was ever found - the page fell back
+        // to the interleaved recogniser order. A gutter can only start where a line of the
+        // right column starts, so every distinct line left edge is the candidate, and the band
+        // ends at the last line that ends before it.
+        for (b in lines.map { it.box.left }.distinct().sorted()) {
+            val a = lines.filter { it.box.right < b }.maxOfOrNull { it.box.right } ?: continue
+            if (b - a < minGutter) continue
+
+            val candidate = partition(lines, a, b)
+            val left = candidate.left
+            val right = candidate.right
             if (left.size < MIN_LINES_PER_COLUMN || right.size < MIN_LINES_PER_COLUMN) continue
+            if (candidate.crossing.size > maxCrossing) continue
 
             val leftSpan = left.maxOf { it.box.bottom } - left.minOf { it.box.top }
             val rightSpan = right.maxOf { it.box.bottom } - right.minOf { it.box.top }
+            // The two columns together are the body: a crossing title or footer is not part of
+            // it, so it cannot stretch the height the columns are measured against.
+            val bodyTop = min(left.minOf { it.box.top }, right.minOf { it.box.top })
+            val bodyBottom = max(left.maxOf { it.box.bottom }, right.maxOf { it.box.bottom })
+            val bodyHeight = bodyBottom - bodyTop
             if (bodyHeight > 0) {
                 if (max(leftSpan, rightSpan) < bodyHeight * COLUMN_COVERAGE) continue
                 if (min(leftSpan, rightSpan) < bodyHeight * MIN_COLUMN_COVERAGE) continue
@@ -147,34 +179,12 @@ object ReadingOrder {
 
             val score = min(left.size, right.size)
             if (score > bestScore || (score == bestScore && b - a > bestWidth)) {
-                best = partition(lines, a, b)
+                best = candidate
                 bestScore = score
                 bestWidth = b - a
             }
         }
         return best
-    }
-
-    /** The x ranges inside the text block that no [blocking] line crosses, at least [minGutter] wide. */
-    private fun freeBands(
-        blocking: List<LineBox>,
-        textLeft: Int,
-        textRight: Int,
-        minGutter: Int
-    ): List<Pair<Int, Int>> {
-        val spans = blocking.map { it.box.left to it.box.right }.sortedBy { it.first }
-        val bands = ArrayList<Pair<Int, Int>>()
-        var cursor = textLeft
-        for ((left, right) in spans) {
-            if (left > cursor) addBand(bands, cursor, left, minGutter)
-            if (right > cursor) cursor = right
-        }
-        if (cursor < textRight) addBand(bands, cursor, textRight, minGutter)
-        return bands
-    }
-
-    private fun addBand(bands: MutableList<Pair<Int, Int>>, from: Int, to: Int, minGutter: Int) {
-        if (to - from >= minGutter) bands.add(Pair(from, to))
     }
 
     private fun medianWidth(lines: List<LineBox>): Int =
