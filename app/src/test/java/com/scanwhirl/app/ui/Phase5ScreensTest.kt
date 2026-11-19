@@ -413,8 +413,10 @@ class Phase5ScreensTest {
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 label = activity.findViewById(R.id.docCategoryLabel)
-                // Inset floating glass dock behind the bottom action row.
-                val dock = activity.findViewById<View>(R.id.btnShare).parent as ViewGroup
+                // Inset floating glass dock behind the bottom action row. At a narrow screen
+                // (Robolectric's default 320 dp) the dock is the 2x2 form: the glass sits on
+                // bottomDock, so find it by id, not through a button's parent.
+                val dock = activity.findViewById<ViewGroup>(R.id.bottomDock)
                 assertTrue("document viewer dock is bg_dock_glass",
                     sameDrawable(dock.background, R.drawable.bg_dock_glass))
                 // v2 UI: 07_reader_dock — a 4 dp inset leaves all four equal items enough
@@ -424,14 +426,29 @@ class Phase5ScreensTest {
                 assertEquals("dock is inset 4dp", margin, lp.leftMargin)
                 assertEquals("dock is inset 4dp", margin, lp.rightMargin)
 
-                // v2 UI: 07_reader_dock — one row of four equal DockItem buttons in the
-                // fixed order Edit · Text · More · Share (the document is sent away last).
-                assertEquals("dock is one row of four", 4, dock.childCount)
-                val expectedLabels = listOf(
-                    R.string.edit, R.string.btn_text, R.string.more, R.string.share_pdf
-                )
+                // v2 UI: 07_reader_dock, B2 — four equal DockItem buttons in the fixed order
+                // Edit · Read text · Share · Actions, in one row or in the 2x2 grid the dock
+                // becomes when a quarter-width cell could not hold the label.
+                val buttons = ArrayList<View>()
                 for (i in 0 until dock.childCount) {
-                    val btn = dock.getChildAt(i)
+                    val child = dock.getChildAt(i)
+                    if (child is ViewGroup && child.id == View.NO_ID) {
+                        for (j in 0 until child.childCount) buttons.add(child.getChildAt(j))
+                    } else {
+                        buttons.add(child)
+                    }
+                }
+                assertEquals("dock holds four actions", 4, buttons.size)
+                assertEquals(
+                    "dock order",
+                    listOf(R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore),
+                    buttons.map { it.id }
+                )
+                val expectedLabels = listOf(
+                    R.string.edit, R.string.dock_read_text, R.string.share_pdf, R.string.doc_actions
+                )
+                for (i in buttons.indices) {
+                    val btn = buttons[i]
                         as com.google.android.material.button.MaterialButton
                     assertEquals("button $i has no fixed height (wrap_content)",
                         android.view.ViewGroup.LayoutParams.WRAP_CONTENT, btn.layoutParams.height)
@@ -585,7 +602,9 @@ class Phase5ScreensTest {
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("the More sheet must open", sheet)
 
-                // §4.5: exactly these rows, in exactly these three groups.
+                // B2 (UI critique #3): the sheet is bound to this document and starts with the
+                // document-linked tools — Compress, Sign, Read text, Share — before file
+                // management, and puts the destructive row last.
                 for (row in listOf(
                     R.id.rowMoreRename, R.id.rowMoreMove, R.id.rowMoreDuplicate,
                     R.id.rowMoreCompress, R.id.rowMoreLock,
@@ -594,14 +613,33 @@ class Phase5ScreensTest {
                 for (hdr in listOf(R.id.hdrOrganize, R.id.hdrTools, R.id.hdrDanger)) {
                     assertNotNull("header $hdr must exist", sheet!!.findViewById<View>(hdr))
                 }
+                val deco = sheet!!.window!!.decorView
+                for (key in listOf("sign", "read_text", "share")) {
+                    assertNotNull(
+                        "the document-linked '$key' row must exist",
+                        deco.findViewWithTag<View>("docActions:$key")
+                    )
+                }
+                val rows = requireNotNull(deco.findViewWithTag<android.view.ViewGroup>("docActions:rows"))
+                val order = (0 until rows.childCount)
+                    .mapNotNull { rows.getChildAt(it).tag as? String }
+                    .filter { it.startsWith("docActions:") }
+                    .map { it.removePrefix("docActions:") }
+                    .filter { it != "header" && !it.startsWith("hdr:") }
+                assertEquals(
+                    "B2 order: tools first, file management next, destructive last",
+                    listOf(
+                        "compress", "sign", "read_text", "share",
+                        "rename", "move", "duplicate", "lock", "vault", "trash"
+                    ),
+                    order
+                )
 
-                // One home per action: no OCR row (D-E) and no save row — the
-                // toolbar's download icon is the only export left (§4.5).
-                val labels = allViews(sheet!!.window!!.decorView)
+                // One home per action: no save row — the toolbar's download icon is the only
+                // export left (§4.5).
+                val labels = allViews(sheet.window!!.decorView)
                     .filterIsInstance<TextView>()
                     .map { it.text?.toString() }
-                assertFalse("no OCR row in the sheet (D-E)",
-                    labels.contains(activity.getString(R.string.btn_ocr_text)))
                 assertFalse("no save row in the sheet (§4.5)",
                     labels.contains(activity.getString(R.string.save_pdf_device)))
                 assertEquals("no OCR button in the sheet (D-E)", 0,
