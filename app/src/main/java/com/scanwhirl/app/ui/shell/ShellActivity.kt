@@ -755,6 +755,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         override fun onShareDocs(docs: List<ScanDocument>) = shareDocuments(docs)
         override fun onProRequired() = showPro()
         override fun onMoreDoc(doc: ScanDocument) = showDocActions(doc)
+        // T40-FIX-SNACK-ANCHOR: the same anchored notice the single-row path uses.
+        override fun onMovedToTrash(moved: TrashActions.Moved) = showMovedNotice(moved)
     }
 
     /** v2 UI: 03_tools_hub — share every selected document's PDF at once. */
@@ -894,7 +896,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             .show()
     }
 
-    /** The "Moved to Trash" snackbar with Undo, anchored above the nav bar. */
+    /**
+     * The "Moved to Trash" snackbar with Undo, anchored above the nav bar.
+     *
+     * T40-FIX-SNACK-ANCHOR: this is now the one place an in-shell move shows its
+     * notice - the single row ([confirmTrash]) and a library multi-selection
+     * ([LibraryScreen.Callbacks.onMovedToTrash]) both land here, so the bar can
+     * never be drawn under the nav again.
+     */
     private fun showMovedNotice(moved: TrashActions.Moved) {
         val root = findViewById<View>(android.R.id.content) ?: return
         TrashActions.showMoved(this, root, navHost, moved) { library.reload() }

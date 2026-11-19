@@ -20,7 +20,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
@@ -83,6 +82,13 @@ class LibraryScreen(
         fun onShareDocs(docs: List<ScanDocument>)
         /** A Pro-only library action was tapped in a Free build. */
         fun onProRequired()
+        /**
+         * T40-FIX-SNACK-ANCHOR: a selection moved to Trash. The host shows the
+         * "Moved N documents to Trash" Undo bar, because only it knows the bottom
+         * nav the bar must sit above (a null anchor drew Undo under the nav on the
+         * phone and the tap opened Me).
+         */
+        fun onMovedToTrash(moved: TrashActions.Moved)
     }
 
     lateinit var searchInput: EditText
@@ -894,6 +900,10 @@ class LibraryScreen(
     /**
      * T27-FIX-TRASH (data loss): the sheet says "You can restore it for 30 days", so a
      * selected document moves to Trash (Undo restores it) instead of being purged.
+     *
+     * T40-FIX-SNACK-ANCHOR: the "Moved N documents to Trash" Undo bar is shown by the
+     * host (ShellActivity) so it is anchored above the bottom nav. Showing it here with
+     * a null anchor drew it over the nav, where the phone's Undo tap opened Me.
      */
     private fun confirmDeleteSelection() {
         val ids = selected.toList()
@@ -904,12 +914,7 @@ class LibraryScreen(
                 ioWrite({ TrashActions.moveAll(repo, ids) }) { moved ->
                     exitSelection()
                     reload()
-                    val activity = context as? AppCompatActivity
-                    if (activity != null) {
-                        TrashActions.showMoved(activity, this, null, moved) { reload() }
-                    } else if (moved.keys.isEmpty()) {
-                        Toast.makeText(context, R.string.trash_move_failed, Toast.LENGTH_SHORT).show()
-                    }
+                    callbacks.onMovedToTrash(moved)
                 }
             }
             .setSecondary(R.string.sheet_cancel)
