@@ -144,6 +144,11 @@ abstract class CompressSheetTargetBase {
                 )
                 val field = decor.findViewById<EditText>(R.id.editCompressTarget)
                 assertNotNull("the custom-size field is in the sheet", field)
+                // B3: the size field belongs to the "Aim for a file size" aim, so it is measured
+                // there (the quality aim shows the estimates instead).
+                decor.findViewById<View>(R.id.compressModeTarget).performClick()
+                idle()
+                layoutAt360(a, decor)
                 assertTrue(
                     "B2-M3: the custom-size field is ${field!!.height}px tall " +
                         "(${Math.round(field.height / d)}dp), needs 48dp",

@@ -56,6 +56,8 @@
     <item name="toolResultFileMeta" type="id" />
     <item name="toolResultRasterNote" type="id" />
     <item name="toolResultError" type="id" />
+    <item name="toolResultMore" type="id" />
+    <item name="toolResultMorePanel" type="id" />
     <item name="toolCropView" type="id" />
     <item name="toolCropApply" type="id" />
     <item name="toolIdCardFront" type="id" />

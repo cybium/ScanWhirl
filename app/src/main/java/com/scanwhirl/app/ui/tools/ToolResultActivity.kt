@@ -1,4 +1,4 @@
-package com.scanwhirl.app.ui.tools
+﻿package com.scanwhirl.app.ui.tools
 
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -88,6 +88,15 @@ class ToolResultActivity : BaseActivity() {
     /** F1: the ID card flow's own result actions (Keep / Discard). */
     private val idCardFlow: Boolean get() = toolId == "id_card"
 
+    /** UI-B3: Compress leads with the measured size and an honest target status. */
+    private val isCompressResult: Boolean get() = toolId == "compress"
+
+    /**
+     * UI-B3 (#9-now): the compressed source was a library document and was left in place, so the
+     * result can say where the original is. Export-only results never show this line.
+     */
+    private var sourceKept = false
+
     /**
      * B2-H1 (phone, build 2 = 1485874c): the Documents/ScanWhirl copy this result created.
      * The confirmation bar's Undo removes it only while its six seconds are up; the screen's own
@@ -106,6 +115,7 @@ class ToolResultActivity : BaseActivity() {
         note = intent.getStringExtra(EXTRA_NOTE)
         targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0 }
+        sourceKept = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
         saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(mime)) { uri ->
             uri ?: return@registerForActivityResult
             saveTo(uri)
@@ -147,7 +157,10 @@ class ToolResultActivity : BaseActivity() {
         })
         bar.addView(
             SwStyle.text(this, 22f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
-                text = getString(R.string.tools_result_done)
+                // B3: a compressed result opens with what happened, not with "Done".
+                text = getString(
+                    if (isCompressResult) R.string.compress_result_header else R.string.tools_result_done
+                )
             },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = SwStyle.dp(this@ToolResultActivity, 10f)
@@ -167,54 +180,82 @@ class ToolResultActivity : BaseActivity() {
             // fixidcrop: a white ID card page on a white box had no visible paper edge. The card
             // page sits on the ink backdrop, inset by a little padding and framed by a thin line,
             // so the sheet is obvious. Every other tool result keeps its previous preview.
-            if (idCardFlow) {
-                val pad = SwStyle.dp(this@ToolResultActivity, ID_PREVIEW_PADDING_DP)
-                setPadding(pad, pad, pad, pad)
-                background = SwStyle.rounded(
-                    this@ToolResultActivity,
-                    SwStyle.color(this@ToolResultActivity, R.color.void_abyss),
-                    radiusDp = 16f,
-                    stroke = ID_PREVIEW_LINE
-                )
-            } else {
-                background = SwStyle.rounded(
-                    this@ToolResultActivity,
-                    SwStyle.color(this@ToolResultActivity, R.color.glass_surface),
-                    radiusDp = 16f,
-                    stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
-                )
+            when {
+                idCardFlow -> {
+                    val pad = SwStyle.dp(this@ToolResultActivity, ID_PREVIEW_PADDING_DP)
+                    setPadding(pad, pad, pad, pad)
+                    background = SwStyle.rounded(
+                        this@ToolResultActivity,
+                        SwStyle.color(this@ToolResultActivity, R.color.void_abyss),
+                        radiusDp = 16f,
+                        stroke = ID_PREVIEW_LINE
+                    )
+                }
+                // B3 (#8): a compressed page is shown smaller, on the ink surface, so the measured
+                // numbers above it stay the headline instead of a big white preview.
+                isCompressResult -> {
+                    background = SwStyle.rounded(
+                        this@ToolResultActivity,
+                        SwStyle.color(this@ToolResultActivity, R.color.void_abyss),
+                        radiusDp = 16f,
+                        stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
+                    )
+                }
+                else -> {
+                    background = SwStyle.rounded(
+                        this@ToolResultActivity,
+                        SwStyle.color(this@ToolResultActivity, R.color.glass_surface),
+                        radiusDp = 16f,
+                        stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
+                    )
+                }
             }
             clipToOutline = true
         }
         preview = ImageView(this).apply {
             id = R.id.toolResultPreview
             scaleType = ImageView.ScaleType.FIT_CENTER
-            if (!idCardFlow) setBackgroundColor(Color.WHITE)
+            if (!idCardFlow && !isCompressResult) setBackgroundColor(Color.WHITE)
             contentDescription = getString(R.string.tools_result_preview)
         }
         previewHost.addView(preview, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
-        column.addView(previewHost, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, 200f)
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
 
         nameView = SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.toolResultName
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
-        column.addView(nameView, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) })
 
         summary = SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
             id = R.id.toolResultSummary
             setLineSpacing(0f, 1.25f)
         }
-        column.addView(summary, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
+
+        // B3: a compressed result reads outcome, before size, then a smaller preview; every other
+        // result keeps the preview first.
+        if (isCompressResult) {
+            column.addView(nameView, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
+            column.addView(summary, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
+            column.addView(previewHost, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, 140f)
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
+        } else {
+            column.addView(previewHost, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, 200f)
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
+            column.addView(nameView, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) })
+            column.addView(summary, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
+        }
 
         errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
             id = R.id.toolResultError
@@ -248,32 +289,81 @@ class ToolResultActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
         )
+        // UI-B3 (#12): Open is the filled action; Share is secondary; "Also save in Documents"
+        // stays visible for every result, including a compress that missed its target.
         // T05-RESULT-SLICE: one tap keeps a copy in Documents for the person's own files app and
-        // USB, for a document result and for an exported file alike. The system Save-as picker
-        // stays next to Share for choosing another place.
+        // USB, for a document result and for an exported file alike.
+        column.addView(
+            button(getString(R.string.tools_result_share), R.id.toolResultShare) { share() },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+        )
         column.addView(
             button(getString(R.string.tools_result_also_save), R.id.toolResultAlsoSave) { alsoSave() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
         )
-        column.addView(
-            rowOf(
-                button(getString(R.string.tools_result_share), R.id.toolResultShare) { share() },
-                button(getString(R.string.tools_result_save), R.id.toolResultSave) { save() }
-            )
-        )
-        val library = button(getString(R.string.tools_result_library), R.id.toolResultLibrary) {
-            showInLibrary()
-        }
         // H7: an exported file (Word, Excel, PowerPoint, images, ZIP) is not a library document
         // and the Library can never list it, so "Show in library" went to a screen where the
         // result was missing. The export lives in the app's own output folder until the user
         // Saves it somewhere, so the smaller honest change is to drop the button, not to point
         // it at another empty folder.
+        val library = button(getString(R.string.tools_result_library), R.id.toolResultLibrary) {
+            showInLibrary()
+        }
         if (isExportOnlyResult()) library.visibility = View.GONE
+        val morePanel = LinearLayout(this).apply {
+            id = R.id.toolResultMorePanel
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        morePanel.addView(
+            button(getString(R.string.tools_result_choose_location), R.id.toolResultSave) { save() },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
+        )
+        morePanel.addView(
+            library,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
+        )
+        val more = textAction(getString(R.string.tools_result_more_options)).apply {
+            id = R.id.toolResultMore
+            setOnClickListener {
+                val opening = morePanel.visibility != View.VISIBLE
+                morePanel.visibility = if (opening) View.VISIBLE else View.GONE
+                text = getString(
+                    if (opening) R.string.tools_result_fewer_options
+                    else R.string.tools_result_more_options
+                )
+            }
+        }
         column.addView(
-            rowOf(library, button(getString(R.string.tools_result_undo), R.id.toolResultUndo) { undo() })
+            more,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+        )
+        column.addView(
+            morePanel,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+        // B3 (#9-now): Undo names what it removes; for compress that is this new copy (and the
+        // Documents copy this run saved, when there is one).
+        val undoLabel = getString(
+            if (isCompressResult) R.string.compress_undo else R.string.tools_result_undo
+        )
+        column.addView(
+            button(undoLabel, R.id.toolResultUndo) { undo() },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
         )
         return root
     }
@@ -281,18 +371,14 @@ class ToolResultActivity : BaseActivity() {
     /** H7: a result made of exported files only (no library document behind it). */
     private fun isExportOnlyResult(): Boolean = docIds.isEmpty() && files.isNotEmpty()
 
-    private fun rowOf(left: TextView, right: TextView): View =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(left, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = SwStyle.dp(this@ToolResultActivity, 8f)
-            })
-            addView(right, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = SwStyle.dp(this@ToolResultActivity, 8f)
-            })
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+    /** A quiet tertiary control (the "More options" disclosure): text, 48dp tall, no box. */
+    private fun textAction(text: String): TextView =
+        SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+            this.text = text
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(this@ToolResultActivity, 50f)
+            isClickable = true
+            isFocusable = true
         }
 
     private fun button(
@@ -309,7 +395,8 @@ class ToolResultActivity : BaseActivity() {
             if (tag != null) this.tag = tag
             this.text = text
             gravity = Gravity.CENTER
-            maxLines = 2
+            // At 200% type a long action ("Also save in Documents") needs more than two lines.
+            maxLines = 3
             minimumHeight = SwStyle.dp(this@ToolResultActivity, 50f)
             background = if (primary) {
                 SwStyle.rounded(this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.cyan_primary), radiusDp = 16f)
@@ -348,7 +435,11 @@ class ToolResultActivity : BaseActivity() {
             if (showSizes) {
                 line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
             }
-            applySummary(line, bytes)
+            if (isCompressResult) {
+                applyCompressSummary(bytes)
+            } else {
+                applySummary(line)
+            }
             previewPreview(docs.first().pageFiles.firstOrNull())
         } else if (files.isNotEmpty()) {
             val bytes = files.sumOf { it.length() }
@@ -361,7 +452,7 @@ class ToolResultActivity : BaseActivity() {
             if (showSizes) {
                 line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
             }
-            applySummary(line, bytes)
+            applySummary(line)
             val first = files.first()
             if (isTypedFile(first)) {
                 showFileCard(first)
@@ -377,40 +468,56 @@ class ToolResultActivity : BaseActivity() {
         }
     }
 
-    private fun applySummary(line: String, producedBytes: Long? = null) {
+    private fun applySummary(line: String) {
         summary.text = buildString {
             append(line)
-            beforeAfterSize(producedBytes)?.let { append("\n").append(it) }
             if (!note.isNullOrBlank()) append("\n").append(note)
-            targetMiss(producedBytes)?.let { append("\n").append(it) }
         }
     }
 
     /**
-     * B2-M2: Compress can know the source size — the document-menu route does — so the shared
-     * result keeps the "Before … → After …" line the old export screen showed, using the same
-     * string. Without a before size (the Tools-hub route) the line is omitted, as before.
+     * UI-B3 (#8): a Compress result answers the question it was asked, in this order:
+     *
+     * 1. the measured size, plus the target status only when the bytes prove it
+     *    ("9 KB · Under your 10 KB limit" at or below the limit, "132 KB · Above your 100 KB
+     *    limit" when the smallest honest result is still bigger); with no target, the measured
+     *    size alone, and no status line at all;
+     * 2. "Before: 824 KB", when the source size is known;
+     * 3. where the original is, for a copy made from a library document.
+     *
+     * A result whose PDF cannot be measured never claims a size or a success.
      */
-    private fun beforeAfterSize(producedBytes: Long?): String? {
-        if (toolId != "compress") return null
-        val before = beforeBytes ?: return null
-        val after = producedBytes ?: return null
-        return getString(
-            R.string.result_before_after,
-            StatusLine.formatBytes(before),
-            StatusLine.formatBytes(after)
-        )
+    private fun applyCompressSummary(measuredBytes: Long?) {
+        summary.text = buildString {
+            append(compressOutcome(measuredBytes))
+            beforeBytes?.let {
+                append("\n").append(
+                    getString(R.string.compress_result_before, StatusLine.formatBytes(it))
+                )
+            }
+            if (sourceKept) append("\n").append(getString(R.string.compress_result_source_kept))
+            if (!note.isNullOrBlank()) append("\n").append(note)
+        }
     }
 
-    /**
-     * T05-RESULT-SLICE: Compress only, and only when the produced file is still bigger than the
-     * size the person asked for. "Met" says nothing, and no other tool ever has a target.
-     */
-    private fun targetMiss(producedBytes: Long?): String? {
-        if (toolId != "compress") return null
-        val target = targetBytes ?: return null
-        if (producedBytes == null || producedBytes <= target) return null
-        return getString(R.string.compress_target_missed, StatusLine.formatBytes(target))
+    private fun compressOutcome(measuredBytes: Long?): String {
+        val measured = measuredBytes?.takeIf { it > 0L }
+            ?: return getString(R.string.compress_result_size_unknown)
+        val target = targetBytes
+            ?: return getString(R.string.compress_result_size, StatusLine.formatBytes(measured))
+        return if (measured <= target) {
+            getString(
+                R.string.compress_result_under_limit,
+                StatusLine.formatBytes(measured),
+                StatusLine.formatBytes(target)
+            )
+        } else {
+            getString(
+                R.string.compress_result_over_limit,
+                StatusLine.formatBytes(measured),
+                StatusLine.formatBytes(target)
+            )
+        }
     }
 
     /**
@@ -768,7 +875,14 @@ class ToolResultActivity : BaseActivity() {
                     getString(R.string.export_undo_kept_changed, copy?.name.orEmpty()) to true
                 DownloadSaver.UndoResult.FAILED ->
                     getString(R.string.export_undo_failed, copy?.name.orEmpty()) to true
-                else -> getString(R.string.tools_result_undone) to false
+                // B3 (#9-now): say exactly what this Undo removed.
+                else -> when {
+                    isCompressResult && copy != null ->
+                        getString(R.string.compress_undo_removed_with_copy) to false
+                    isCompressResult ->
+                        getString(R.string.compress_undo_removed) to false
+                    else -> getString(R.string.tools_result_undone) to false
+                }
             }
             Toast.makeText(
                 this@ToolResultActivity,
@@ -843,6 +957,9 @@ class ToolResultActivity : BaseActivity() {
         /** B2-M2: the source size for Compress's "Before … → After …" line (absent or 0 = none). */
         private const val EXTRA_BEFORE = "before_bytes"
 
+        /** UI-B3 (#9): the compressed source is a library document and was left in place. */
+        private const val EXTRA_SOURCE_KEPT = "source_kept"
+
         /** F1: view tags for the ID card's two actions (no new ids needed). */
         const val TAG_KEEP = "fixflow:id_card_keep"
         const val TAG_DISCARD = "fixflow:id_card_discard"
@@ -861,7 +978,9 @@ class ToolResultActivity : BaseActivity() {
             /** T05: what Compress was asked to reach, so a miss can be said out loud. */
             targetBytes: Long? = null,
             /** B2-M2: the size before Compress ran, for the "Before … → After …" line. */
-            beforeBytes: Long? = null
+            beforeBytes: Long? = null,
+            /** UI-B3: the source was a library document and stays there untouched. */
+            sourceKept: Boolean = false
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
@@ -871,6 +990,7 @@ class ToolResultActivity : BaseActivity() {
             .apply {
                 if (targetBytes != null && targetBytes > 0L) putExtra(EXTRA_TARGET, targetBytes)
                 if (beforeBytes != null && beforeBytes > 0L) putExtra(EXTRA_BEFORE, beforeBytes)
+                if (sourceKept) putExtra(EXTRA_SOURCE_KEPT, true)
             }
     }
 }

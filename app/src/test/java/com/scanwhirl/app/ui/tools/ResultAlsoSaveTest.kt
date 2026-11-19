@@ -14,6 +14,7 @@ import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.FakeMediaStore
+import com.scanwhirl.app.util.StatusLine
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -392,6 +393,7 @@ class ResultAlsoSaveTest {
     @Test
     fun `a compress result reports the size it could not reach`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Compressed receipt")
+        val bytes = requireNotNull(repo.getDocument(id)).pdfFile.length()
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "compress", docIds = listOf(id), targetBytes = 1L)
         ).use { scenario ->
@@ -400,7 +402,13 @@ class ResultAlsoSaveTest {
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
                 assertTrue(
                     "the honest target-miss line is shown: $summary",
-                    summary.contains(app.getString(R.string.compress_target_missed, "1 B"))
+                    summary.contains(
+                        app.getString(
+                            R.string.compress_result_over_limit,
+                            StatusLine.formatBytes(bytes),
+                            "1 B"
+                        )
+                    )
                 )
             }
         }
@@ -409,12 +417,23 @@ class ResultAlsoSaveTest {
     @Test
     fun `a compress result that met the size says nothing about a miss`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Compressed receipt")
+        val bytes = requireNotNull(repo.getDocument(id)).pdfFile.length()
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "compress", docIds = listOf(id), targetBytes = 100_000_000L)
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
+                assertTrue(
+                    "the size was met and is said: $summary",
+                    summary.contains(
+                        app.getString(
+                            R.string.compress_result_under_limit,
+                            StatusLine.formatBytes(bytes),
+                            StatusLine.formatBytes(100_000_000L)
+                        )
+                    )
+                )
                 assertFalse("no miss when the size was met: $summary", summary.contains(missSuffix()))
             }
         }
@@ -453,12 +472,20 @@ class ResultAlsoSaveTest {
             }
             val started = waitForStartedResult(scenario)
             assertNotNull("compress opens its result", started)
-            ActivityScenario.launch<ToolResultActivity>(started!!).use { result ->
+            val producedId = started!!.getStringArrayListExtra("doc_ids").orEmpty().single()
+            val bytes = requireNotNull(repo.getDocument(producedId)).pdfFile.length()
+            ActivityScenario.launch<ToolResultActivity>(started).use { result ->
                 result.onActivity { activity ->
                     val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
                     assertTrue(
                         "the size the person typed reaches the result and is answered: $summary",
-                        summary.contains(app.getString(R.string.compress_target_missed, "1 KB"))
+                        summary.contains(
+                            app.getString(
+                                R.string.compress_result_over_limit,
+                                StatusLine.formatBytes(bytes),
+                                "1 KB"
+                            )
+                        )
                     )
                 }
             }
@@ -533,11 +560,13 @@ class ResultAlsoSaveTest {
         }
 
     /**
-     * The tail of the existing target-miss sentence, so a test can look for the line without
-     * depending on the size formatting of the same sentence.
+     * The tail of the above-limit sentence, so a test can look for the line without depending on
+     * the size formatting of the same sentence.
      */
     private fun missSuffix(): String =
-        app.getString(R.string.compress_target_missed, "SENTINEL").substringAfter("SENTINEL")
+        app.getString(R.string.compress_result_over_limit, "\u0001", "\u0002")
+            .substringAfter("\u0001")
+            .substringBefore("\u0002")
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 

@@ -194,6 +194,23 @@
     <string name="compress_target_label">अपनी ज़रूरत का आकार (चाहें तो)</string>
     <string name="compress_target_missed">%1$s तक नहीं पहुँच सके। यही सबसे छोटा नतीजा है।</string>
     <string name="compress_title">PDF का आकार घटाएँ</string>
+
+    <!-- UI-B3 (#7, #8, #9-now): दो साफ़ तरीके, फिर मापा हुआ नतीजा। -->
+    <string name="compress_mode_quality">गुणवत्ता चुनें</string>
+    <string name="compress_mode_target">फ़ाइल का आकार तय करें</string>
+    <string name="compress_target_help">KB या MB में लिखें, जैसे 500 KB या 3 MB</string>
+    <string name="compress_target_required">ज़रूरी आकार लिखें, जैसे 500 KB या 3 MB</string>
+    <string name="compress_action">छोटा करें</string>
+    <string name="compress_result_header">छोटा किया गया</string>
+    <string name="compress_result_size">फ़ाइल अब %1$s</string>
+    <string name="compress_result_under_limit">%1$s · आपकी %2$s सीमा के भीतर</string>
+    <string name="compress_result_over_limit">%1$s · आपकी %2$s सीमा से ऊपर</string>
+    <string name="compress_result_size_unknown">आकार मापा नहीं जा सका</string>
+    <string name="compress_result_before">पहले: %1$s</string>
+    <string name="compress_result_source_kept">मूल कागज़ात में सुरक्षित है।</string>
+    <string name="compress_undo">यह प्रति हटाएँ</string>
+    <string name="compress_undo_removed">यह छोटी की गई प्रति हटा दी गई।</string>
+    <string name="compress_undo_removed_with_copy">यह छोटी की गई प्रति और उसकी Documents प्रति हटा दी गई।</string>
     <string name="continue_label">जारी रखें</string>
     <string name="crop_apply">काटें</string>
     <string name="crop_size_free">अपनी मर्ज़ी से</string>
