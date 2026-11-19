@@ -1,27 +1,66 @@
 package com.scanwhirl.app.ui
 
+import android.app.Activity
+import android.content.Context
+import android.os.Build
 import android.view.View
+import android.view.accessibility.AccessibilityManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.util.SavedSnackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.max
 
 /**
  * M07 P1: the shared "Move to Trash" + Undo behaviour for Home (one card or a
  * selection) and the document screen.
  *
  * Moving to Trash is immediate and reversible, so it asks nothing first; the
- * snackbar names what moved and offers Undo for [SavedSnackbar.ACTION_DURATION_MS].
+ * snackbar names what moved and offers Undo for [UNDO_DURATION_MS].
  * Exports in Documents/ScanWhirl are never touched by a move. Legacy Vault items
  * are never moved (the caller uses permanent delete inside the authenticated Vault).
  */
 object TrashActions {
+
+    /**
+     * T32 (phone build 3): how long the move's Undo stays up. Two taps ~3.5-4 s
+     * after the move missed a 6 s bar, and Undo is the only in-app way back
+     * without opening Trash, so the window is at least 8 s - a safety net the
+     * device measurement supports. Longer when the system "time to take action"
+     * accessibility timeout asks for more (see [undoDurationMs]).
+     *
+     * SavedSnackbar's export result (Open/Undo) is a different bar and keeps its
+     * own ACTION_DURATION_MS = 6 s: it is not this code path.
+     */
+    const val UNDO_DURATION_MS = 8000
+
+    /**
+     * The real window: never below [UNDO_DURATION_MS], and never below the
+     * platform's recommended timeout (Android 10+ "time to take action"), which
+     * is what a user with a motor/vision accessibility setting expects.
+     */
+    internal fun undoDurationMs(recommendedTimeoutMs: Int?): Int =
+        max(UNDO_DURATION_MS, recommendedTimeoutMs ?: 0)
+
+    /** The system's recommended timeout, or null when unavailable (API < 29, no service). */
+    private fun recommendedTimeout(activity: Activity): Int? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val manager = activity.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+            ?: return null
+        return try {
+            manager.getRecommendedTimeoutMillis(
+                UNDO_DURATION_MS,
+                AccessibilityManager.FLAG_CONTENT_CONTROLS or AccessibilityManager.FLAG_CONTENT_TEXT
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     /** What one move did. [keys] are the Trash entries Undo restores. */
     data class Moved(val keys: List<String>, val names: List<String>, val failed: Int)
@@ -92,7 +131,7 @@ object TrashActions {
             )
         }
         val bar = Snackbar.make(root, text, Snackbar.LENGTH_LONG)
-            .setDuration(SavedSnackbar.ACTION_DURATION_MS)
+            .setDuration(undoDurationMs(recommendedTimeout(activity)))
         if (anchor != null && anchor.isShown) bar.setAnchorView(anchor)
         if (moved.keys.isNotEmpty()) {
             bar.setAction(R.string.undo) {

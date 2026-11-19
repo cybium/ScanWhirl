@@ -613,17 +613,17 @@
     <string name="trash_move_short">Trash</string>
     <string name="trash_moved_one">Moved “%1$s” to Trash</string>
     <plurals name="trash_moved_many">
-        <item quantity="one">Moved %1$d scan to Trash</item>
-        <item quantity="other">Moved %1$d scans to Trash</item>
+        <item quantity="one">Moved %1$d document to Trash</item>
+        <item quantity="other">Moved %1$d documents to Trash</item>
     </plurals>
     <plurals name="trash_moved_partial">
-        <item quantity="one">Moved %1$d scan to Trash. %2$d could not be moved and was not changed.</item>
-        <item quantity="other">Moved %1$d scans to Trash. %2$d could not be moved and were not changed.</item>
+        <item quantity="one">Moved %1$d document to Trash. %2$d could not be moved and was not changed.</item>
+        <item quantity="other">Moved %1$d documents to Trash. %2$d could not be moved and were not changed.</item>
     </plurals>
     <string name="trash_move_failed">Couldn’t move to Trash. Nothing was deleted.</string>
     <plurals name="trash_restored">
-        <item quantity="one">Restored %1$d scan</item>
-        <item quantity="other">Restored %1$d scans</item>
+        <item quantity="one">Restored %1$d document</item>
+        <item quantity="other">Restored %1$d documents</item>
     </plurals>
     <string name="trash_restored_one">Restored “%1$s” to your library</string>
     <string name="trash_restore_failed">Couldn’t restore. The item is still in Trash, unchanged.</string>

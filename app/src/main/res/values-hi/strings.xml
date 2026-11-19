@@ -564,17 +564,17 @@
     <string name="trash_move_short">हटाएँ</string>
     <string name="trash_moved_one">“%1$s” हटा दिया गया</string>
     <plurals name="trash_moved_many">
-        <item quantity="one">%1$d स्कैन हटाया गया</item>
-        <item quantity="other">%1$d स्कैन हटाए गए</item>
+        <item quantity="one">%1$d दस्तावेज़ हटाया गया</item>
+        <item quantity="other">%1$d दस्तावेज़ हटाए गए</item>
     </plurals>
     <plurals name="trash_moved_partial">
-        <item quantity="one">%1$d स्कैन हटाया गया। %2$d को नहीं हटाया जा सका और वह बदला नहीं गया।</item>
-        <item quantity="other">%1$d स्कैन हटाए गए। %2$d को नहीं हटाया जा सका और वे बदले नहीं गए।</item>
+        <item quantity="one">%1$d दस्तावेज़ हटाया गया। %2$d को नहीं हटाया जा सका और वह बदला नहीं गया।</item>
+        <item quantity="other">%1$d दस्तावेज़ हटाए गए। %2$d को नहीं हटाया जा सका और वे बदले नहीं गए।</item>
     </plurals>
     <string name="trash_move_failed">हटाया नहीं जा सका। कुछ भी नहीं हटाया गया।</string>
     <plurals name="trash_restored">
-        <item quantity="one">%1$d स्कैन वापस लाया गया</item>
-        <item quantity="other">%1$d स्कैन वापस लाए गए</item>
+        <item quantity="one">%1$d दस्तावेज़ वापस लाया गया</item>
+        <item quantity="other">%1$d दस्तावेज़ वापस लाए गए</item>
     </plurals>
     <string name="trash_restored_one">“%1$s” आपके कागज़ात में वापस आ गया</string>
     <string name="trash_restore_failed">वापस नहीं लाया जा सका। दस्तावेज़ अभी भी हटाई गई फ़ाइलों में है, बिना बदले।</string>
