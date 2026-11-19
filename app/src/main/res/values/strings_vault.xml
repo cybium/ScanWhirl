@@ -65,6 +65,9 @@
     <string name="vault_pending_note">Finish setting up: type 4 characters of your recovery code.</string>
     <string name="vault_code_stale">This Vault changed. Start the recovery code step again.</string>
     <string name="vault_finish_failed">Could not finish the setup. Try again.</string>
+    <!-- VAULT-F1: a full backup written while the setup is unfinished, and a full restore into it. -->
+    <string name="vault_pending_backup_omitted">The Vault is still being set up, so this backup has no Vault files. Finish the setup and back up again.</string>
+    <string name="vault_pending_restore_deferred">The Vault is still being set up, so its Vault files were not restored. Finish the setup, then restore this backup again.</string>
 
     <string name="vault_unlock_sheet_title">Unlock Vault</string>
     <string name="vault_unlock_note_fingerprint">Use your fingerprint, or enter your passcode.</string>
