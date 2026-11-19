@@ -213,6 +213,12 @@ class AccessibilityAuditTest {
                 docs.getChildAt(0).performLongClick()
                 idle()
             }
+            // UI-B1 #2: the Create sheet, opened from the centre Scan action.
+            auditSheet("Create sheet") { host ->
+                host.findViewById<View>(R.id.swNavScan).performClick()
+                idle()
+                requireNotNull(ShadowDialog.getLatestDialog()) { "no Create sheet" }
+            }
             auditShell("Tools") { a ->
                 a.findViewById<View>(R.id.swNavTools).performClick()
                 idle()

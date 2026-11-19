@@ -64,20 +64,21 @@ class ShellScreenTest {
     }
 
     @Test
-    fun `library shows the create row, six quick tools and document cards`() {
+    fun `library shows the header, folder chips and document rows`() {
         scrollActivity { activity ->
-            val create = activity.findViewById<View>(R.id.swCreateRow)
-            assertNotNull("create row is missing", create)
-            assertEquals(3, (create as android.view.ViewGroup).childCount)
+            // UI-B1 (#1): the populated Home no longer spends its first screen on creation
+            // tiles and quick tools; those live in the Create sheet and the Tools tab.
+            assertNull(activity.findViewById<View>(R.id.swCreateRow))
+            assertNull(activity.findViewById<View>(R.id.swQuickRow))
 
-            val quick = activity.findViewById<View>(R.id.swQuickRow) as android.view.ViewGroup
-            // v2 UI: 01_home_A - five columns per quick row (the sixth tool wraps).
-            assertEquals(LibraryScreen.QUICK_COLUMNS, quick.childCount)
+            assertNotNull("the brand mark is in the header", activity.findViewById<View>(R.id.swBrandMark))
+            assertEquals("A/अ", activity.findViewById<TextView>(R.id.swLanguageChip).text.toString())
+            assertNotNull("the search field is there", activity.findViewById<View>(R.id.swHomeSearch))
+            assertNotNull("the folder chips are there", activity.findViewById<View>(R.id.swFolderRow))
 
             val docs = activity.findViewById<View>(R.id.swDocList) as android.view.ViewGroup
             assertEquals("two seeded documents", 2, docs.childCount)
             assertTrue(activity.findViewById<View>(R.id.swHomeEmpty).isVisible.not())
-            assertNotNull(activity.findViewById<View>(R.id.swHomeSearch))
         }
     }
 
@@ -89,7 +90,7 @@ class ShellScreenTest {
             assertTrue(activity.findViewById<View>(R.id.swToolsSearch).isVisible)
             assertNull(
                 "Library content leaves the hierarchy when another tab is shown",
-                activity.findViewById<View>(R.id.swCreateRow)
+                activity.findViewById<View>(R.id.swDocList)
             )
 
             activity.findViewById<View>(R.id.swNavMe).performClick()
@@ -102,7 +103,7 @@ class ShellScreenTest {
 
             activity.findViewById<View>(R.id.swNavLibrary).performClick()
             idle()
-            assertTrue(activity.findViewById<View>(R.id.swCreateRow).isVisible)
+            assertTrue(activity.findViewById<View>(R.id.swDocList).isVisible)
         }
     }
 

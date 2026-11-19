@@ -141,35 +141,8 @@ abstract class QuickTileLabelBoundsBase {
                     idle()
                     val root = layoutRoot(activity)
                     val scaled = activity.resources.displayMetrics.scaledDensity
-                    // Home quick row: five columns (the sixth tool wraps to row two).
-                    for (id in intArrayOf(R.id.swQuickRow, R.id.swQuickRow2, R.id.swQuickRow3)) {
-                        val row = activity.findViewById<ViewGroup>(id)
-                        if (!row.isVisible) continue
-                        val labels = mutableListOf<Pair<TextView, IntArray>>()
-                        for (i in 0 until row.childCount) {
-                            val tile = row.getChildAt(i)
-                            if (tile !is ToolTile) continue
-                            problems += tileProblems(tile, root).map { "@$scale quick: $it" }
-                            val label = tile.findViewById<TextView>(R.id.swToolLabel)!!
-                            labels += label to labelRect(label, root)
-                            val l = label.layout
-                            for (line in 0 until (l?.lineCount ?: 0)) {
-                                if (l!!.getEllipsisCount(line) > 0) {
-                                    problems += "@$scale quick: \"${label.text}\" is ellipsized (5 columns, 2 lines must fit)"
-                                }
-                            }
-                            diag += "@$scale quick \"${label.text}\" tile=${tile.width} label=${label.width} " +
-                                "lines=${l?.lineCount} sp=${"%.2f".format(label.textSize / scaled)} " +
-                                "lineMax=${(0 until (l?.lineCount ?: 0)).joinToString(",") { l!!.getLineMax(it).toInt().toString() }}"
-                        }
-                        for (i in labels.indices) for (j in i + 1 until labels.size) {
-                            if (overlap(labels[i].second, labels[j].second)) {
-                                problems += "@$scale quick: \"${labels[i].first.text}\" overlaps " +
-                                    "\"${labels[j].first.text}\" (${labels[i].second.toList()} vs ${labels[j].second.toList()})"
-                            }
-                        }
-                    }
-                    // Tools tab.
+                    // The Home quick row is gone (UI-B1 #1): the Tools tab is where tool tiles
+                    // are read now, with the same label rules.
                     activity.findViewById<View>(R.id.swNavTools).performClick()
                     idle()
                     layoutRoot(activity)

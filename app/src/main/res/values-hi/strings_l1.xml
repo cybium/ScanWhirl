@@ -15,6 +15,12 @@
     <string name="shell_nav_me">मैं</string>
     <string name="shell_scan_disc_desc">दस्तावेज़ स्कैन करें</string>
 
+    <!-- UI-B1-LIBRARY-CREATE: the Create sheet behind the centre Scan action.
+         Plain everyday Hindi, no rejected loanwords (अनुवाद की समीक्षा बाकी है). -->
+    <string name="create_scan">दस्तावेज़ स्कैन करें</string>
+    <string name="create_import_photos">फ़ोटो लाएँ</string>
+    <string name="create_disc_desc">बनाएँ: स्कैन करें या फ़ाइल लाएँ</string>
+
     <string name="home_search_hint">पन्नों के शब्द खोजें</string>
     <string name="home_create_id_card">पहचान पत्र</string>
     <string name="home_create_photos">फ़ोटो</string>

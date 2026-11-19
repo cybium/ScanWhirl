@@ -397,7 +397,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             id = R.id.swNavScan
             isClickable = true
             isFocusable = true
-            contentDescription = getString(R.string.shell_scan_disc_desc)
+            // The disc is the primary action: after a sheet closes, focus must be able to
+            // return to it even on a touch-mode phone (the focus ring never shows on touch).
+            isFocusableInTouchMode = true
+            contentDescription = getString(R.string.create_disc_desc)
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(
@@ -412,8 +415,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     SwStyle.color(this@ShellActivity, R.color.rv_bg)
                 )
             }
+            // UI-B1 (#2): the centre action opens the Create sheet; the camera is one choice
+            // inside it, next to ID card, Passport, QR code, photos and PDF.
             setOnClickListener {
-                com.scanwhirl.app.ui.kit.SwMotion.expandFrom(this) { scanLauncher.launchScanner() }
+                com.scanwhirl.app.ui.kit.SwMotion.expandFrom(this) { showCreateSheet() }
             }
             com.scanwhirl.app.ui.kit.SwMotion.press(this)
             com.scanwhirl.app.ui.kit.SwMotion.breathe(this)
@@ -694,9 +699,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     }
 
     private fun showAbout() {
+        // UI-B1 (#1): the Home trust pill moved here, so the promise is still one tap away
+        // (IDENTITY.md: "No internet permission. No ads. No account."; the shipped short form
+        // is the existing trust string, now stated on About and on the empty Library).
+        val message = getString(R.string.about_message, versionName()) +
+            "\n\n" + getString(R.string.trust_offline_no_ads)
         SwSheet.builder(this)
             .setTitle(getString(R.string.about_title))
-            .setMessage(getString(R.string.about_message, versionName()))
+            .setMessage(message)
             .setOptions(
                 listOf(getString(R.string.settings_privacy), getString(R.string.about_licences)),
                 -1
@@ -757,6 +767,51 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         override fun onMoreDoc(doc: ScanDocument) = showDocActions(doc)
         // T40-FIX-SNACK-ANCHOR: the same anchored notice the single-row path uses.
         override fun onMovedToTrash(moved: TrashActions.Moved) = showMovedNotice(moved)
+    }
+
+    /**
+     * UI-B1 (#2): the centre Scan action opens one Create sheet. Every row routes to the same
+     * launcher the old Home tiles used; QR keeps the registry's Pro gate through launchTool.
+     * Back/Close/outside tap launches nothing and returns focus to the Scan button.
+     */
+    private fun showCreateSheet() {
+        val sheet = CreateSheet(this, object : CreateSheet.Actions {
+            override fun onScan() = scanLauncher.launchScanner()
+
+            override fun onIdCard() {
+                ToolRegistry.byId("id_card")?.let { this@ShellActivity.launchTool(it) }
+            }
+
+            override fun onPassport() {
+                ToolRegistry.byId("passport")?.let { this@ShellActivity.launchTool(it) }
+            }
+
+            override fun onQr() {
+                ToolRegistry.byId("qr_code")?.let { this@ShellActivity.launchTool(it) }
+            }
+
+            override fun onImportPhotos() = showPhotoImportSheet()
+
+            override fun onImportPdf() {
+                ImportSheet.show(
+                    this@ShellActivity,
+                    onPhotos = { pickGalleryImages.launch("image/*") },
+                    onPdf = { pickImportPdf.launch(arrayOf("application/pdf")) }
+                )
+            }
+        })
+        sheet.show {
+            val disc = findViewById<View>(R.id.swNavScan) ?: return@show
+            // TalkBack and keyboard focus return to the action that opened the sheet.
+            disc.post {
+                disc.requestFocus()
+                androidx.core.view.ViewCompat.performAccessibilityAction(
+                    disc,
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS,
+                    null
+                )
+            }
+        }
     }
 
     /** v2 UI: 03_tools_hub — share every selected document's PDF at once. */

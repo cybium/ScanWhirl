@@ -62,8 +62,20 @@ class ProStateTest {
         return out
     }
 
+    /** Opens the Create sheet from the centre Scan action. */
+    private fun openCreate(activity: ShellActivity): android.app.Dialog {
+        activity.findViewById<View>(R.id.swNavScan).performClick()
+        idle()
+        val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog()
+        org.junit.Assert.assertNotNull("the Create sheet opens", dialog)
+        return dialog!!
+    }
+
+    private fun qrProBadge(dialog: android.app.Dialog): TextView? =
+        dialog.findViewById<TextView>(R.id.swCreateQrPro)
+
     @Test
-    fun `a Pro build has no PRO tags and the Me row is active`() {
+    fun `a Pro build has no PRO marker in the Create sheet and the Me row is active`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
@@ -71,14 +83,13 @@ class ProStateTest {
                     "test builds start Pro",
                     ProGate.isPro(activity)
                 )
-                val quick = activity.findViewById<ViewGroup>(R.id.swQuickRow)
-                val tiles = (0 until quick.childCount)
-                    .mapNotNull { quick.getChildAt(it) as? com.scanwhirl.app.ui.kit.ToolTile }
-                assertTrue(tiles.isNotEmpty())
+                val sheet = openCreate(activity)
+                val badge = qrProBadge(sheet)
                 assertTrue(
-                    "no PRO tag on any Pro build tile",
-                    tiles.none { it.proTag.visibility == View.VISIBLE }
+                    "no PRO marker in a Pro build",
+                    badge == null || badge.visibility != View.VISIBLE
                 )
+                sheet.dismiss()
 
                 activity.findViewById<View>(R.id.swNavMe).performClick()
                 idle()
@@ -94,32 +105,38 @@ class ProStateTest {
     }
 
     @Test
-    fun `tags flip when the Pro override changes and the shell resumes`() {
+    fun `the Pro marker follows the override when the Create sheet is reopened`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                fun tiles(): List<com.scanwhirl.app.ui.kit.ToolTile> {
-                    val quick = activity.findViewById<ViewGroup>(R.id.swQuickRow)
-                    return (0 until quick.childCount)
-                        .mapNotNull { quick.getChildAt(it) as? com.scanwhirl.app.ui.kit.ToolTile }
-                }
-                assertTrue("start Pro: no tags", tiles().none { it.proTag.visibility == View.VISIBLE })
+                var sheet = openCreate(activity)
+                assertTrue(
+                    "start Pro: no marker",
+                    qrProBadge(sheet)?.visibility != View.VISIBLE
+                )
+                sheet.dismiss()
 
                 ProGate.setTestOverride(app, false)
                 activity.syncProState()
                 idle()
+                sheet = openCreate(activity)
+                val freeBadge = qrProBadge(sheet)
                 assertTrue(
-                    "flipping to Free re-binds the tiles",
-                    tiles().any { it.tool?.pro == true && it.proTag.visibility == View.VISIBLE }
+                    "flipping to Free marks the QR entry",
+                    freeBadge != null && freeBadge.visibility == View.VISIBLE
                 )
+                assertEquals("Pro", freeBadge!!.text.toString())
+                sheet.dismiss()
 
                 ProGate.setTestOverride(app, null)
                 activity.syncProState()
                 idle()
+                sheet = openCreate(activity)
                 assertTrue(
-                    "flipping back to Pro hides them again",
-                    tiles().none { it.proTag.visibility == View.VISIBLE }
+                    "flipping back to Pro hides it again",
+                    qrProBadge(sheet)?.visibility != View.VISIBLE
                 )
+                sheet.dismiss()
             }
         }
     }
@@ -142,16 +159,18 @@ class ProStateTest {
         assertFalse("the gate now reports Free", ProGate.isPro(activity))
         assertEquals(false, ProGate.testOverride(activity))
 
-        // A Free build shows the PRO tags again.
+        // A Free build marks the Pro route again.
         val shellController = Robolectric.buildActivity(ShellActivity::class.java).setup()
         val shell = shellController.get()
         idle()
-        val quick = shell.findViewById<ViewGroup>(R.id.swQuickRow)
-        val tiles = (0 until quick.childCount)
-            .mapNotNull { quick.getChildAt(it) as? com.scanwhirl.app.ui.kit.ToolTile }
+        shell.findViewById<View>(R.id.swNavScan).performClick()
+        idle()
+        val sheet = org.robolectric.shadows.ShadowDialog.getLatestDialog()
+        assertNotNull("the Create sheet opens", sheet)
+        val badge = sheet!!.findViewById<TextView>(R.id.swCreateQrPro)
         assertTrue(
-            "Free builds mark Pro tools",
-            tiles.any { it.tool?.pro == true && it.proTag.visibility == View.VISIBLE }
+            "Free builds mark the Pro route in the Create sheet",
+            badge != null && badge.visibility == View.VISIBLE
         )
         shellController.pause().stop().destroy()
         settings.pause().stop().destroy()

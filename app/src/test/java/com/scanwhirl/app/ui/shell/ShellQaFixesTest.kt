@@ -374,7 +374,7 @@ class ShellQaFixesTest {
         launch { activity ->
             val empty = activity.findViewById<ViewGroup>(R.id.swHomeEmpty)
             assertTrue("the empty state is shown", empty.isVisible)
-            assertEquals("image, title, body only", 3, empty.childCount)
+            assertEquals("icon, title, body, Scan, import, trust", 6, empty.childCount)
         }
     }
 
@@ -409,18 +409,22 @@ class ShellQaFixesTest {
     }
 
     @Test
-    fun `search mode collapses the create row and quick tools until cleared`() {
+    fun `search mode collapses folders and section chrome until cleared`() {
         DocFixtures.saved(repo, app, pages = 1, name = "Searchable doc")
         launch { activity ->
             search(activity, "searchable")
-            assertFalse("create row is out of the way", activity.findViewById<View>(R.id.swCreateRow).isVisible)
-            assertFalse("quick tools are out of the way", activity.findViewById<View>(R.id.swQuickRow).isVisible)
+            assertFalse(
+                "folder chips are out of the way",
+                (activity.findViewById<View>(R.id.swFolderScroll).parent as View).isVisible
+            )
             assertEquals(1, cards(activity).size)
 
             activity.findViewById<View>(R.id.swHomeClear).performClick()
             idle()
-            assertTrue("create row returns", activity.findViewById<View>(R.id.swCreateRow).isVisible)
-            assertTrue("quick tools return", activity.findViewById<View>(R.id.swQuickRow).isVisible)
+            assertTrue(
+                "folder chips return",
+                (activity.findViewById<View>(R.id.swFolderScroll).parent as View).isVisible
+            )
         }
     }
 
@@ -428,10 +432,11 @@ class ShellQaFixesTest {
     fun `an empty library collapses the chrome so the empty state fits`() {
         launch { activity ->
             assertTrue("the empty state is shown", activity.findViewById<View>(R.id.swHomeEmpty).isVisible)
-            assertFalse("quick tools are hidden on a first run",
-                activity.findViewById<View>(R.id.swQuickRow).isVisible)
-            assertEquals("no stray button under the empty state", 3,
-                activity.findViewById<ViewGroup>(R.id.swHomeEmpty).childCount)
+            assertEquals(
+                "the empty state is icon, title, body, Scan, import and trust",
+                6,
+                activity.findViewById<ViewGroup>(R.id.swHomeEmpty).childCount
+            )
         }
     }
 
