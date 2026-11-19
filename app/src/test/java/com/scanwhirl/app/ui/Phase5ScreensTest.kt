@@ -413,39 +413,37 @@ class Phase5ScreensTest {
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 label = activity.findViewById(R.id.docCategoryLabel)
-                // Inset floating glass dock behind the bottom action row. At a narrow screen
-                // (Robolectric's default 320 dp) the dock is the 2x2 form: the glass sits on
-                // bottomDock, so find it by id, not through a button's parent.
+                // UI-B6: the workspace panel — seven labelled actions in the glass panel,
+                // 4 + 3 on a 360 dp phone (3 + 3 + 1 on a 320 dp one). The rows are children
+                // of actionGrid, so they are flattened out in reading order.
                 val dock = activity.findViewById<ViewGroup>(R.id.bottomDock)
-                assertTrue("document viewer dock is bg_dock_glass",
+                assertTrue("document viewer panel is bg_dock_glass",
                     sameDrawable(dock.background, R.drawable.bg_dock_glass))
-                // v2 UI: 07_reader_dock — a 4 dp inset leaves all four equal items enough
-                // width for their 12 sp labels in EN and HI.
+                // v2 UI: 07_reader_dock — a 4 dp inset keeps the panel clear of the screen edge.
                 val margin = Math.round(4f * activity.resources.displayMetrics.density)
                 val lp = dock.layoutParams as android.view.ViewGroup.MarginLayoutParams
-                assertEquals("dock is inset 4dp", margin, lp.leftMargin)
-                assertEquals("dock is inset 4dp", margin, lp.rightMargin)
+                assertEquals("panel is inset 4dp", margin, lp.leftMargin)
+                assertEquals("panel is inset 4dp", margin, lp.rightMargin)
 
-                // v2 UI: 07_reader_dock, B2 — four equal DockItem buttons in the fixed order
-                // Edit · Read text · Share · Actions, in one row or in the 2x2 grid the dock
-                // becomes when a quarter-width cell could not hold the label.
+                val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
                 val buttons = ArrayList<View>()
-                for (i in 0 until dock.childCount) {
-                    val child = dock.getChildAt(i)
-                    if (child is ViewGroup && child.id == View.NO_ID) {
-                        for (j in 0 until child.childCount) buttons.add(child.getChildAt(j))
-                    } else {
-                        buttons.add(child)
-                    }
+                for (r in 0 until grid.childCount) {
+                    val row = grid.getChildAt(r) as ViewGroup
+                    for (j in 0 until row.childCount) buttons.add(row.getChildAt(j))
                 }
-                assertEquals("dock holds four actions", 4, buttons.size)
+                assertEquals("the panel holds seven actions", 7, buttons.size)
                 assertEquals(
-                    "dock order",
-                    listOf(R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore),
+                    "panel order",
+                    listOf(
+                        R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnCompress,
+                        R.id.btnSign, R.id.btnSavePdf, R.id.btnMore
+                    ),
                     buttons.map { it.id }
                 )
                 val expectedLabels = listOf(
-                    R.string.edit, R.string.dock_read_text, R.string.share_pdf, R.string.doc_actions
+                    R.string.doc_action_edit_crop, R.string.dock_read_text, R.string.share_pdf,
+                    R.string.tool_compress, R.string.tool_sign, R.string.doc_action_save_pdf,
+                    R.string.more
                 )
                 for (i in buttons.indices) {
                     val btn = buttons[i]
@@ -455,8 +453,9 @@ class Phase5ScreensTest {
                     assertEquals("button $i minHeight is 56dp (DockItem default)",
                         Math.round(56f * activity.resources.displayMetrics.density),
                         btn.minimumHeight)
-                    assertEquals("button $i is label ${activity.getString(expectedLabels[i])}",
-                        activity.getString(expectedLabels[i]), btn.text.toString())
+                    assertTrue("button $i is label ${activity.getString(expectedLabels[i])}",
+                        btn.text.toString() == activity.getString(expectedLabels[i]) ||
+                            btn.text.toString().startsWith(activity.getString(expectedLabels[i])))
                     val w = (btn.layoutParams as android.widget.LinearLayout.LayoutParams).weight
                     assertEquals("button $i weight is equal", 1f, w, 0f)
                 }
@@ -553,18 +552,23 @@ class Phase5ScreensTest {
     // --- T5.2 (§4.5): toolbar, More sheet, Select pages ---------------------
 
     @Test
-    fun `document toolbar carries exactly one save action and no overflow`() {
+    fun `document toolbar carries no save action, the panel's labelled Save PDF is the only one`() {
         val id = seedDoc("Toolbar doc")
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 val toolbar =
                     activity.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar)
-                // One always-shown action: the Save-a-copy download icon (N10/T4.7).
-                assertEquals("exactly one toolbar action, no overflow (⋮)",
-                    1, toolbar.menu.size())
-                assertEquals("the action is the Save-a-copy icon",
-                    R.id.action_save_pdf, toolbar.menu.getItem(0).itemId)
+                // UI-B6: the icon-only toolbar Save became the panel's labelled action, so the
+                // toolbar keeps no action at all (no overflow, no duplicate save route).
+                assertEquals("no toolbar action, no overflow (⋮)", 0, toolbar.menu.size())
+                assertEquals(
+                    "exactly one visible Save PDF action",
+                    activity.getString(R.string.doc_action_save_pdf),
+                    activity.findViewById<com.google.android.material.button.MaterialButton>(
+                        R.id.btnSavePdf
+                    ).text.toString()
+                )
 
                 // The old viewer menu and its drawer are deleted outright, not
                 // hidden: neither the actions nor the crown/tray buttons exist.

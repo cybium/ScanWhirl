@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  UI-B6 (GPT judgement 2026-11-19b, item 1 — "Make Document the workspace").
+
+  The saved-document screen is the place the document is worked on, so it carries the seven
+  named actions in one panel: Edit / crop (the only filled cyan button), Read text, Share,
+  Compress, Sign (+ the gold word Pro while the build is Free), Save PDF and More. The old
+  icon-only toolbar Save is gone: exactly one visible Save PDF route remains.
+
+  Standard type keeps the panel pinned at the bottom in a 4 + 3 row (3 + 3 + 1 on a 320 dp
+  phone). From 160 % type the panel moves INTO the scroll flow above the pages as two growing
+  columns (DocumentViewerActivity.applyActionPanel / moveActionPanel): one scroll owner, no
+  clipped labels, no ellipsis. Page tiles keep their tap, selection and reorder behaviour.
+-->
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -10,121 +23,170 @@
         android:background="@color/sf_appbar"
         app:elevation="0dp">
 
-        <!-- v2 UI: 07_reader_dock — the document name is the screen's one H1 and wraps to
-             two lines before it ellipsises (never a one-line cut). The title is painted in
-             code (DocumentViewerActivity.styleDocTitle) because Toolbar builds its own
-             title TextView; the bar grows only when the name really needs the second line. -->
+        <!-- Back plus the brand mark in the same leading position as the Library bar. The
+             document's own name no longer lives in the toolbar: it is the header's H1 below,
+             where it can wrap at 200 % instead of being cut to one toolbar line. The mark is
+             decorative (the screen's title is the document name). -->
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="?attr/actionBarSize"
+            app:contentInsetStart="4dp"
+            app:contentInsetStartWithNavigation="4dp"
             app:navigationIcon="?attr/homeAsUpIndicator"
-            app:titleTextColor="?attr/colorOnSurface" />
+            app:titleTextColor="?attr/colorOnSurface">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/docBrandMark"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/avd_sw_brand_whirl" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/app_name"
+                    android:textColor="@color/text_hologram_mid"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.appbar.MaterialToolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
     <LinearLayout
+        android:id="@+id/contentRoot"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
+        <!-- The document name is the screen's H1: it wraps as far as it needs (never an
+             ellipsis at 200 %), and the meta line below carries pages, size and category. -->
         <LinearLayout
+            android:id="@+id/docHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:paddingTop="10dp"
+            android:paddingTop="6dp"
             android:paddingBottom="4dp">
 
             <TextView
-                android:id="@+id/pageCount"
-                android:layout_width="0dp"
+                android:id="@+id/docName"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/text_hologram_mid"
-                android:textSize="13sp" />
+                android:fontFamily="@font/manrope"
+                android:lineSpacingMultiplier="1.1"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
-            <!-- v2 UI: 07_reader_dock — the folder/category pill is metadata: a compact 32 dp
-                 tonal pill (13 sp sentence-case label, 8 dp dot in the category's colour)
-                 centred on the meta line. This 48 dp container is the tap target (it carries
-                 the spoken label), so the target is big while the visible chip stays small. -->
-            <FrameLayout
-                android:id="@+id/docCategoryTouch"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="8dp"
-                android:clickable="true"
-                android:clipChildren="false"
-                android:focusable="true"
-                android:visibility="gone">
+            <LinearLayout
+                android:id="@+id/docMetaRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="2dp">
 
-                <LinearLayout
-                    android:id="@+id/docCategoryChip"
-                    android:layout_width="wrap_content"
+                <TextView
+                    android:id="@+id/pageCount"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center_vertical"
-                    android:background="@drawable/bg_category_chip_tonal"
-                    android:gravity="center_vertical"
-                    android:minHeight="32dp"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="12dp"
-                    android:paddingVertical="6dp"
+                    android:layout_weight="1"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="3"
+                    android:textColor="@color/text_hologram_mid"
+                    android:textSize="13sp" />
+
+                <!-- v2 UI: 07_reader_dock — the folder/category pill is metadata: a compact
+                     32 dp tonal pill (13 sp sentence-case label, 8 dp dot in the category's
+                     colour) centred on the meta line. This 48 dp container is the tap target
+                     (it carries the spoken label), so the target is big while the visible chip
+                     stays small. -->
+                <FrameLayout
+                    android:id="@+id/docCategoryTouch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:clickable="true"
+                    android:clipChildren="false"
+                    android:focusable="true"
                     android:visibility="gone">
 
-                    <View
-                        android:id="@+id/docCategoryDot"
-                        android:layout_width="8dp"
-                        android:layout_height="8dp"
-                        android:background="@drawable/bg_category_dot"
-                        android:importantForAccessibility="no" />
-
-                    <TextView
-                        android:id="@+id/docCategoryLabel"
+                    <LinearLayout
+                        android:id="@+id/docCategoryChip"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:textColor="@color/text_hologram_mid"
-                        android:textSize="13sp" />
-                </LinearLayout>
-            </FrameLayout>
+                        android:layout_gravity="center_vertical"
+                        android:background="@drawable/bg_category_chip_tonal"
+                        android:gravity="center_vertical"
+                        android:minHeight="32dp"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="6dp"
+                        android:visibility="gone">
 
-            <TextView
-                android:id="@+id/docVaultBadge"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="6dp"
-                android:background="@drawable/bg_lock_badge"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="3dp"
-                android:text="@string/badge_vault"
-                android:textColor="@color/pro_gold"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
+                        <View
+                            android:id="@+id/docCategoryDot"
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:background="@drawable/bg_category_dot"
+                            android:importantForAccessibility="no" />
 
-            <TextView
-                android:id="@+id/docLockBadge"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/bg_lock_badge"
-                android:drawableStart="@drawable/ic_lock_small"
-                android:drawablePadding="4dp"
-                android:drawableTint="@color/pro_gold"
-                android:gravity="center_vertical"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="3dp"
-                android:text="@string/badge_locked"
-                android:textColor="@color/pro_gold"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
+                        <TextView
+                            android:id="@+id/docCategoryLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textColor="@color/text_hologram_mid"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/docVaultBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_lock_badge"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="3dp"
+                    android:text="@string/badge_vault"
+                    android:textColor="@color/pro_gold"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/docLockBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_lock_badge"
+                    android:drawableStart="@drawable/ic_lock_small"
+                    android:drawablePadding="4dp"
+                    android:drawableTint="@color/pro_gold"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="3dp"
+                    android:text="@string/badge_locked"
+                    android:textColor="@color/pro_gold"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Organize pages (owner revision): a CamScanner-style top bar. It exists only
@@ -202,18 +264,42 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- v2 UI: 07_reader_dock — a long document must show that the grid continues: a
-             visible vertical scrollbar (never fading) inside the grid's padding. -->
-        <com.scanwhirl.app.ui.pagegrid.PageGridView
-            android:id="@+id/pageList"
+        <!-- The one scroll owner of the page area. Standard type: the grid scrolls here and
+             the action panel stays pinned below. From 160 % type the panel and the grid both
+             move into actionFlowScroll (panel first), so there is still exactly one scroller
+             and the action area is never squeezed into a fixed dock. -->
+        <FrameLayout
+            android:id="@+id/pagesHost"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:clipToPadding="false"
-            android:fadeScrollbars="false"
-            android:padding="12dp"
-            android:scrollbarStyle="insideInset"
-            android:scrollbars="vertical" />
+            android:layout_weight="1">
+
+            <!-- v2 UI: 07_reader_dock — a long document must show that the grid continues: a
+                 visible vertical scrollbar (never fading) inside the grid's padding. -->
+            <com.scanwhirl.app.ui.pagegrid.PageGridView
+                android:id="@+id/pageList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:fadeScrollbars="false"
+                android:padding="12dp"
+                android:scrollbarStyle="insideInset"
+                android:scrollbars="vertical" />
+
+            <androidx.core.widget.NestedScrollView
+                android:id="@+id/actionFlowScroll"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/actionFlowColumn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </androidx.core.widget.NestedScrollView>
+        </FrameLayout>
 
         <!-- PM-2.2c: the draft bar appears after the first page edit. Discard always
              works; the saved document changes only on Save as new or Replace. -->
@@ -375,67 +461,145 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- v2 UI: 07_reader_dock — one fixed dock order, left to right: Edit · Text · More ·
-             Share. Work on the document first, send it away last. Four equal-width items
-             (weight 1 each), each >= 56 dp tall, 24 dp icon over one 12 sp label. Every
-             action and handler is unchanged; only the order and the spacing are. -->
+        <!-- The document workspace panel: seven NAMED actions, each its own 48 dp+ target with
+             an icon and a label that may wrap but is never ellipsized. Edit / crop is the only
+             filled cyan button; gold is reserved for the word Pro. The rows are built in
+             DocumentViewerActivity.applyActionPanel (4 + 3, or 3 + 3 + 1 on 320 dp, or two
+             growing columns from 160 %). -->
         <LinearLayout
             android:id="@+id/bottomDock"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="4dp"
+            android:layout_marginBottom="4dp"
             android:background="@drawable/bg_dock_glass"
-            android:orientation="horizontal"
-            android:paddingHorizontal="4dp"
-            android:paddingVertical="4dp">
+            android:orientation="vertical"
+            android:paddingHorizontal="10dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="6dp">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnEdit"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="0dp"
+            <TextView
+                android:id="@+id/actionPanelTitle"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:paddingHorizontal="0dp"
-                android:text="@string/edit"
-                app:icon="@drawable/ic_edit" />
+                android:text="@string/doc_actions_header"
+                android:textColor="@color/text_hologram_mid"
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnText"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="0dp"
+            <!-- Shown only while the document cannot hand its pages to a tool (locked or
+                 Vault): the same words the Actions sheet prints under the disabled rows. -->
+            <TextView
+                android:id="@+id/actionPanelReason"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:paddingHorizontal="0dp"
-                android:text="@string/btn_text"
-                app:icon="@drawable/ic_ocr" />
+                android:layout_marginTop="2dp"
+                android:textColor="@color/text_hologram_mid"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnMore"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:id="@+id/actionGrid"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:paddingHorizontal="0dp"
-                android:text="@string/more"
-                app:icon="@drawable/ic_more" />
+                android:layout_marginTop="6dp"
+                android:orientation="vertical">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnShare"
-                style="@style/Widget.ScanWhirl.Button.DockItem"
-                android:layout_width="0dp"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEdit"
+                    style="@style/Widget.ScanWhirl.Button.DockItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="none"
+                    android:maxLines="3"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/doc_action_edit_crop"
+                    android:textColor="@color/sw_disc_ink"
+                    app:backgroundTint="@color/cyan_primary"
+                    app:icon="@drawable/ic_edit"
+                    app:iconTint="@color/sw_disc_ink" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnText"
+                    style="@style/Widget.ScanWhirl.Button.DockItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="none"
+                    android:maxLines="3"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/dock_read_text"
+                    app:backgroundTint="@color/glass_surface_raised"
+                    app:icon="@drawable/ic_ocr" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnShare"
+                    style="@style/Widget.ScanWhirl.Button.DockItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="none"
+                    android:maxLines="3"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/share_pdf"
+                    app:backgroundTint="@color/glass_surface_raised"
+                    app:icon="@drawable/ic_share" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCompress"
+                    style="@style/Widget.ScanWhirl.Button.DockItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="none"
+                    android:maxLines="3"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/tool_compress"
+                    app:backgroundTint="@color/glass_surface_raised"
+                    app:icon="@drawable/ic_sym_compress" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSign"
+                    style="@style/Widget.ScanWhirl.Button.DockItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="none"
+                    android:maxLines="3"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/tool_sign"
+                    app:backgroundTint="@color/glass_surface_raised"
+                    app:icon="@drawable/ic_sym_signature" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSavePdf"
+                    style="@style/Widget.ScanWhirl.Button.DockItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="none"
+                    android:maxLines="3"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/doc_action_save_pdf"
+                    app:backgroundTint="@color/glass_surface_raised"
+                    app:icon="@drawable/ic_sym_download" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMore"
+                    style="@style/Widget.ScanWhirl.Button.DockItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="none"
+                    android:maxLines="3"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/more"
+                    app:backgroundTint="@color/glass_surface_raised"
+                    app:icon="@drawable/ic_sym_more_horiz" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/actionPanelHint"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:paddingHorizontal="0dp"
-                android:text="@string/share_pdf"
-                app:icon="@drawable/ic_share" />
+                android:layout_marginTop="6dp"
+                android:text="@string/doc_action_save_hint"
+                android:textColor="@color/text_hologram_mid"
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

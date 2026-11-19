@@ -160,7 +160,7 @@ class ImportPdfFixFlowTest {
             DocumentViewerActivity.intent(app, imported, freshImport = true)
         ).use { scenario ->
             scenario.onActivity { activity ->
-                shadowOf(activity).clickMenuItem(R.id.action_save_pdf)
+                activity.findViewById<android.view.View>(R.id.btnSavePdf).performClick()
             }
             assertTrue(
                 "the saved copy is recorded for this import",

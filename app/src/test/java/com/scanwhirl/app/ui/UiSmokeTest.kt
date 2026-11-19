@@ -9,6 +9,7 @@ import com.scanwhirl.app.store.ScanRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -429,7 +430,17 @@ class UiSmokeTest {
                 val toolbar = activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
                 val pageCount = activity.findViewById<android.widget.TextView>(R.id.pageCount)
                 val pages = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList)
-                assertEquals("Viewer doc", toolbar.title)
+                // UI-B6: the name is the header's H1 (it wraps at 200 %), not a toolbar title.
+                assertEquals(
+                    "Viewer doc",
+                    activity.findViewById<android.widget.TextView>(R.id.docName).text.toString()
+                )
+                assertNotEquals(
+                    "the document name is not painted into the toolbar",
+                    "Viewer doc",
+                    toolbar.title?.toString()
+                )
+
                 // v2 UI: 07_reader_dock — the meta line carries pages and size.
                 assertTrue(
                     "meta line is '2 pages · <size>', was '${pageCount.text}'",
@@ -1092,18 +1103,20 @@ class UiSmokeTest {
     }
 
     @Test
-    fun `viewer toolbar carries only save-pdf page actions live in select bar`() {
+    fun `viewer toolbar keeps no menu and page actions live in the select bar`() {
         val id = seedDoc("Menu doc", pages = 2)
         val intent = DocumentViewerActivity.intent(app, id)
         ActivityScenario.launch<com.scanwhirl.app.ui.DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
-                // T5.2 (§4.5): the toolbar keeps exactly one action — Save-a-copy;
-                // no overflow, no page-actions menu.
+                // UI-B6 (GPT judgement 2026-11-19b, item 1): Save PDF is the workspace panel's
+                // labelled action, so the toolbar keeps no action and no page-actions menu.
                 val menu = activity.findViewById<
                     com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).menu
-                assertEquals("toolbar has exactly one action, no overflow (⋮)", 1, menu.size())
-                assertEquals("the action is Save-a-copy",
-                    R.id.action_save_pdf, menu.getItem(0).itemId)
+                assertEquals("toolbar has no action and no overflow (⋮)", 0, menu.size())
+                assertNotNull(
+                    "the one Save PDF action lives in the panel",
+                    activity.findViewById<android.view.View>(R.id.btnSavePdf)
+                )
 
                 // v2 UI: Organize pages grid (owner revision): the five page actions live in
                 // the bottom selection bar and stay hidden until a long-press selects a page.
