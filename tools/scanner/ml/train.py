@@ -54,8 +54,9 @@ CFG = {
     "grad_clip": 5.0,
     "mask_loss_weight": 1.0,
     "dice_weight": 1.0,
-    "presence_loss_weight": 0.5,
-    "negatives_per_batch": 2,
+    "presence_loss_weight": 1.0,
+    "negatives_per_batch": 3,
+    "synth_negatives_per_batch": 3,
     "pos_weight": 2.0,
     "t_presence": 0.5,
     "t_mask": 0.5,
@@ -135,6 +136,26 @@ def make_real_batch(pool: data_ml.RealPool, indices, rng: np.random.Generator,
         presence.append(sample.presence)
     return (np.stack(grids), _stack_masks(masks), np.asarray(has_mask, dtype=np.float32),
             np.asarray(weights, dtype=np.float32), np.asarray(presence, dtype=np.float32))
+
+
+def pick_synth_indices(synth: data_ml.SynthPool, take: int, negatives: int,
+                       rng: np.random.Generator) -> np.ndarray:
+    """``take`` synthetic indices with at least ``negatives`` hard negatives.
+
+    The v2 pool is ~45 % negatives by construction; forcing a floor is what stops a batch
+    from being accidentally all pages when the RNG happens to favour positives.
+    """
+    neg_pool = synth.negatives
+    pos_pool = synth.positives
+    n_neg = min(negatives, take, len(neg_pool))
+    chosen: list[int] = []
+    if n_neg > 0:
+        chosen.extend(int(v) for v in rng.choice(neg_pool, size=n_neg, replace=False))
+    remaining = take - len(chosen)
+    if remaining > 0:
+        pool = pos_pool if pos_pool else list(range(len(synth)))
+        chosen.extend(int(v) for v in rng.choice(pool, size=remaining, replace=remaining > len(pool)))
+    return np.asarray(chosen, dtype=np.int64)
 
 
 def make_synth_batch(synth: data_ml.SynthPool, indices) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -292,6 +313,9 @@ def main(argv=None) -> int:
     parser.add_argument("--negatives-per-batch", type=int, default=CFG["negatives_per_batch"],
                         help="real NoDocument frames forced into every real half-batch")
     parser.add_argument("--presence-weight", type=float, default=CFG["presence_loss_weight"])
+    parser.add_argument("--synth-pool-dir", default=str(data_ml.SYNTH_DIR))
+    parser.add_argument("--synth-negatives-per-batch", type=int,
+                        default=CFG["synth_negatives_per_batch"])
     parser.add_argument("--resume", default="", help="checkpoint to resume from")
     args = parser.parse_args(argv)
 
@@ -310,21 +334,24 @@ def main(argv=None) -> int:
     cfg.update(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, seed=args.seed,
                torch_threads=args.threads, augment=not args.no_augment,
                negatives_per_batch=args.negatives_per_batch,
+               synth_negatives_per_batch=args.synth_negatives_per_batch,
                presence_loss_weight=args.presence_weight,
+               synth_pool_dir=str(args.synth_pool_dir),
                real_per_batch=max(1, args.batch_size // 2))
 
     log(f"run {run_id} -> {run_dir}")
     train_rows = data_ml.load_manifest(split="train")
     val_rows = data_ml.load_manifest(split="val")
-    test_rows = data_ml.load_manifest(split="test")
-    log(f"manifest: train {len(train_rows)}, val {len(val_rows)}, test {len(test_rows)} rows")
+    # TEST is deliberately NOT loaded here: v2 selection is VAL + VAL-NEG only.
+    log(f"manifest: train {len(train_rows)}, val {len(val_rows)} rows")
 
     t0 = time.perf_counter()
     train_pool = data_ml.RealPool(train_rows, log=log)
     val_pool = data_ml.RealPool(val_rows, log=log)
-    synth = data_ml.SynthPool(data_ml.SYNTH_DIR)
+    synth_dir = Path(args.synth_pool_dir)
+    synth = data_ml.SynthPool(synth_dir)
     log(f"pools ready in {time.perf_counter() - t0:.1f}s: train {len(train_pool)} usable, "
-        f"val {len(val_pool)}, synth {len(synth)}")
+        f"val {len(val_pool)}, synth {len(synth)} ({len(synth.negatives)} negatives)")
 
     net = model_lib.TinyPageNet()
     params = model_lib.count_parameters(net)
@@ -362,9 +389,10 @@ def main(argv=None) -> int:
         "trainable": "from scratch (no pretrained weights, no external checkpoint)",
         "manifest_sha256": sha256_file(data_ml.OWN_DIR / "manifest.csv"),
         "splits_sha256": sha256_file(data_ml.OWN_DIR / "splits.json"),
-        "synth_pool": json.loads((data_ml.SYNTH_DIR / "pool.json").read_text(encoding="utf-8")),
-        "synth_manifest_sha256": sha256_file(data_ml.SYNTH_DIR / "manifest.csv"),
-        "synth_generator_sha256": sha256_file(here.parent / "synth.py"),
+        "synth_pool": json.loads((synth_dir / "pool.json").read_text(encoding="utf-8")),
+        "synth_manifest_sha256": sha256_file(synth_dir / "manifest.csv"),
+        "synth_generator_sha256": sha256_file(here.parent / "synth2.py") if (here.parent / "synth2.py").is_file() else sha256_file(here.parent / "synth.py"),
+        "cc0_manifest_sha256": sha256_file(Path(r"C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\scannerx-ml\commercial\cc0\manifest.csv")),
         "data_policy": "commercial pool only: owner recordings (manifest) + self-generated synth; "
                        "research_only_DO_NOT_TRAIN never read; web stills never trained on",
         "counts": {"train": len(train_pool), "val": len(val_pool),
@@ -405,7 +433,7 @@ def main(argv=None) -> int:
             if not real_idx:
                 break
             real = make_real_batch(train_pool, real_idx, batch_rng, cfg["augment"])
-            synth_idx = synth_rng.integers(0, len(synth), size=take)
+            synth_idx = pick_synth_indices(synth, take, cfg["synth_negatives_per_batch"], synth_rng)
             synth_batch = make_synth_batch(synth, synth_idx)
             merged = concat_batches(real, synth_batch)
             x, mask_t, has_mask, weight, presence_t = to_tensors(*merged)

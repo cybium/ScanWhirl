@@ -342,6 +342,14 @@ class SynthPool:
     def __len__(self) -> int:
         return len(self.ids)
 
+    @property
+    def negatives(self) -> list[int]:
+        return [i for i, flag in enumerate(self.has_doc) if flag == 0]
+
+    @property
+    def positives(self) -> list[int]:
+        return [i for i, flag in enumerate(self.has_doc) if flag == 1]
+
     def sample(self, index: int) -> RealSample:
         ident = self.ids[index]
         with Image.open(self.dir / "images" / f"{ident}.jpg") as img:

@@ -41,6 +41,7 @@ CAPTION = 34
 PAD = 6
 COLOR_GT = (60, 220, 90)
 COLOR_R2 = (70, 150, 255)
+COLOR_V1 = (250, 190, 60)
 COLOR_ML = (240, 90, 200)
 COLOR_MISS = (240, 60, 60)
 
@@ -118,32 +119,32 @@ def make_tile(entry: dict, out_path: Path) -> None:
         thumb = img.resize((panel_w, PANEL), Image.BILINEAR)
 
     panels = []
-    for name, colour in (("original", None), ("ground truth", COLOR_GT),
-                         ("r2 (accept 0.55)", COLOR_R2), ("trained model", COLOR_ML)):
+    specs = [("original", None, None), ("ground truth", COLOR_GT, "truth"),
+             ("r2 (accept 0.55)", COLOR_R2, "r2")]
+    if entry.get("has_v1"):
+        specs.append(("v1 (ml003)", COLOR_V1, "v1"))
+    specs.append(("candidate (v2 gate)", COLOR_ML, "ml"))
+    for name, colour, key in specs:
         panel = Image.new("RGB", (panel_w, PANEL), (18, 18, 20))
         panel.paste(thumb, (0, 0))
         draw = ImageDraw.Draw(panel)
-        if name == "ground truth":
+        if key == "truth":
             if entry["truth"] is not None:
                 draw_quad(draw, entry["truth"], scale, (0, 0), COLOR_GT)
             else:
-                draw.text((6, 6), f"no page (has_doc={entry['has_doc']})", fill=(240, 240, 240))
-        elif name == "r2 (accept 0.55)":
-            if entry["r2"] is not None:
-                draw_quad(draw, entry["r2"], scale, (0, 0), COLOR_R2)
-            else:
-                draw.rectangle([0, 0, 74, 20], fill=(0, 0, 0))
-                draw.text((5, 5), "no page", fill=(255, 255, 255))
-        elif name == "trained model":
-            if entry["ml"] is not None:
-                draw_quad(draw, entry["ml"], scale, (0, 0), COLOR_ML)
+                draw.rectangle([0, 0, 150, 20], fill=(0, 0, 0))
+                draw.text((5, 5), f"no page (has_doc={entry['has_doc']})", fill=(255, 255, 255))
+        else:
+            quad = entry.get(key)
+            if quad is not None:
+                draw_quad(draw, quad, scale, (0, 0), colour)
             else:
                 draw.rectangle([0, 0, 74, 20], fill=(0, 0, 0))
                 draw.text((5, 5), "no page", fill=(255, 255, 255))
         panel = panel.resize((PANEL, PANEL), Image.BILINEAR)
         panels.append((name, panel, colour))
 
-    width = PANEL * 4 + PAD * 5
+    width = PANEL * len(panels) + PAD * (len(panels) + 1)
     height = PANEL + CAPTION + PAD
     tile = Image.new("RGB", (width, height), (26, 26, 30))
     draw = ImageDraw.Draw(tile)
@@ -170,14 +171,18 @@ def margin_text(colour) -> tuple[int, int, int]:
 
 def caption_for(entry: dict) -> str:
     pieces = [f"{entry['clip']}/{entry['frame']}", entry["category"], f"has_doc={entry['has_doc']}"]
+    v1 = ""
+    if entry.get("has_v1") and entry["truth"] is not None:
+        v1 = (f" | v1 IoU {entry['v1_iou']:.3f}" if entry["v1_iou"] is not None
+              else " | v1: no page")
     if entry["has_doc"] == 2:
         pieces.append("partial page (excluded from recall/false-accept)")
         pieces.append("model: quad" if entry["ml"] is not None else "model: no page")
         pieces.append("r2: quad" if entry["r2"] is not None else "r2: no page")
-        return " | ".join(pieces)
+        return " | ".join(pieces) + v1
     if entry["truth"] is not None:
-        pieces.append(f"model IoU {entry['ml_iou']:.3f}" if entry["ml_iou"] is not None
-                      else "model: no page")
+        pieces.append(f"v2 IoU {entry['ml_iou']:.3f}" if entry["ml_iou"] is not None
+                      else "v2: no page")
         pieces.append(f"r2 IoU {entry['r2_iou']:.3f}" if entry["r2_iou"] is not None
                       else "r2: no page")
         if entry["ml_iou"] is not None and entry["ml_iou"] < 0.8:
@@ -186,14 +191,16 @@ def caption_for(entry: dict) -> str:
         # presence-only label: the page is there but the geometry was not labelled,
         # so there is nothing to score -- say so instead of calling it a false accept
         pieces.append("geometry not labelled")
-        pieces.append("model: quad (unscored)" if entry["ml"] is not None else "model: no page")
+        pieces.append("v2: quad (unscored)" if entry["ml"] is not None else "v2: no page")
         pieces.append("r2: quad" if entry["r2"] is not None else "r2: no page")
     else:
-        pieces.append("model FALSE ACCEPT" if entry["ml"] is not None else "model: no page (correct)")
+        pieces.append("v2 FALSE ACCEPT" if entry["ml"] is not None else "v2: no page (correct)")
         pieces.append("r2 FALSE ACCEPT" if entry["r2"] is not None else "r2: no page (correct)")
+        if entry.get("has_v1"):
+            pieces.append("v1 FALSE ACCEPT" if entry["v1"] is not None else "v1: no page")
     if entry["confidence"]:
         pieces.append(f"label conf {entry['confidence']}")
-    return " | ".join(pieces)
+    return " | ".join(pieces) + v1
 
 
 def select(frames: list[dict], targets: dict, quota: int, failure_share: float = 0.65) -> list[dict]:
@@ -265,6 +272,8 @@ def main(argv=None) -> int:
         pred_ml = read_predictions(run_dir / f"pred_{split}_ml.csv")
         pred_r2 = read_predictions(run_dir / f"pred_{split}_r2.csv")
         pred_shipped = read_predictions(run_dir / f"pred_{split}_shipped.csv")
+        pred_v1_path = run_dir / f"pred_{split}_v1.csv"
+        pred_v1 = read_predictions(pred_v1_path) if pred_v1_path.is_file() else {}
         for row in read_labels(labels_path):
             key = (row["clip"], row["frame"])
             path = None
@@ -277,9 +286,11 @@ def main(argv=None) -> int:
                 continue
             ml_quad = pred_ml.get(key)
             r2_quad = pred_r2.get(key)
+            v1_quad = pred_v1.get(key)
             truth = row["quad"]
             ml_iou = polygon_iou(ml_quad, truth, row["width"], row["height"]) if (ml_quad and truth) else None
             r2_iou = polygon_iou(r2_quad, truth, row["width"], row["height"]) if (r2_quad and truth) else None
+            v1_iou = polygon_iou(v1_quad, truth, row["width"], row["height"]) if (v1_quad and truth) else None
             if truth is None:
                 # presence-only positive frames carry no trustworthy quad: no IoU, and
                 # "returned a quad" is not a failure there. Only has_doc=0 can false-accept.
@@ -288,9 +299,10 @@ def main(argv=None) -> int:
                 is_failure = ml_quad is None or (ml_iou is not None and ml_iou < 0.8)
             entries.append({
                 "split": split, "clip": row["clip"], "frame": row["frame"], "path": str(path),
-                "truth": truth, "ml": ml_quad, "r2": r2_quad,
+                "truth": truth, "ml": ml_quad, "r2": r2_quad, "v1": v1_quad,
                 "shipped": pred_shipped.get(key),
-                "ml_iou": ml_iou, "r2_iou": r2_iou,
+                "ml_iou": ml_iou, "r2_iou": r2_iou, "v1_iou": v1_iou,
+                "has_v1": bool(pred_v1),
                 "has_doc": row["has_doc"], "category": row["category"],
                 "confidence": row["confidence"], "is_failure": is_failure,
             })
@@ -324,6 +336,8 @@ def _write_html(path: Path, run_id: str, selected: list[dict], test_entries: lis
     for entry in selected:
         iou_ml = "n/a" if entry["ml_iou"] is None else f"{entry['ml_iou']:.3f}"
         iou_r2 = "n/a" if entry["r2_iou"] is None else f"{entry['r2_iou']:.3f}"
+        iou_v1 = "" if not entry.get("has_v1") else (
+            " &middot; v1 IoU <b>" + ("n/a" if entry["v1_iou"] is None else f"{entry['v1_iou']:.3f}") + "</b>")
         kind = "failure" if entry["is_failure"] else "pass"
         rows.append(
             f'<figure class="{kind}">'
@@ -331,7 +345,7 @@ def _write_html(path: Path, run_id: str, selected: list[dict], test_entries: lis
             f'alt="{_esc(entry["clip"])}/{_esc(entry["frame"])}" loading="lazy"></a>'
             f'<figcaption><b>{_esc(entry["clip"])}/{_esc(entry["frame"])}</b> '
             f'({_esc(entry["category"])}, has_doc={entry["has_doc"]})<br>'
-            f'model IoU <b>{iou_ml}</b> &middot; r2 IoU {iou_r2}'
+            f'v2 IoU <b>{iou_ml}</b> &middot; r2 IoU {iou_r2}{iou_v1}'
             f'{" &middot; <span class=miss>FAILURE</span>" if entry["is_failure"] else ""}'
             f'</figcaption></figure>')
 
@@ -368,7 +382,8 @@ def _write_html(path: Path, run_id: str, selected: list[dict], test_entries: lis
 Failures are listed first in the selection; the nine third-party web stills are appended.</p>
 <p class="legend"><span><i class="sw" style="background:#3cdc5a"></i>ground truth</span>
 <span><i class="sw" style="background:#4696ff"></i>r2</span>
-<span><i class="sw" style="background:#f05ac8"></i>trained model</span></p>
+<span><i class="sw" style="background:#fae33c"></i>v1 (ml003)</span>
+<span><i class="sw" style="background:#f05ac8"></i>trained model (v2)</span></p>
 <p class="meta">Trained model: {totals(test_entries, "ml_iou")} on the TEST selection &middot;
 {sum(1 for e in test_entries if e["is_failure"])} frames flagged as failures in total.<br>
 r2: {totals(test_entries, "r2_iou")}. Web stills: model {totals(web_entries, "ml_iou")},

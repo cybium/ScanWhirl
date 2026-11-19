@@ -41,11 +41,13 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import data_ml
+import hybrid_gate
 import infer
 import postprocess
 
 SPLIT_CLIPS = {"val": ["05", "10", "17", "22", "28"], "test": None}
 R2_ACCEPT = 0.55
+FALSE_ACCEPT_TARGET = 0.05
 PROTO = Path(__file__).resolve().parent.parent / "proto"
 TEST_LOG = data_ml.RUNS_DIR / "test_runs.log"
 
@@ -62,6 +64,7 @@ class Frame:
     confidence: str
     labeler: str
     quad: Optional[list[tuple[float, float]]]
+    crop: Optional[tuple[int, int, int, int]] = None  # (left, top, width, height) applied first
 
 
 def sha256_file(path: str | Path) -> str:
@@ -99,6 +102,38 @@ def manifest_frames(split: str) -> list[Frame]:
                             height=height, has_doc=row.has_doc, category=row.category,
                             confidence=row.confidence, labeler="manifest", quad=row.quad()))
     frames.sort(key=lambda f: (f.clip, f.frame))
+    return frames
+
+
+def valneg_frames() -> list[Frame]:
+    """The VAL-NEG proxy set: synthetic hard negatives (other seed) + held-out CC0 photos.
+
+    Both pools store a *letterboxed* 256 grid, so the frame is cropped back to the valid
+    region straight from the manifest (``net_w``/``net_h``) before inference: the black pad
+    must not be part of the "frame" being judged, or a texture negative would be scored on
+    an image with black borders the model never sees at capture time.
+
+    This is a PROXY for "no-document scenes": the synthetic half tests screen/monitor,
+    boxes, pictures, walls and clutter rendered by ``synth2.py``; the photo half tests
+    rich non-paper texture. Neither is a photograph of a real desk, so a false-accept rate
+    here is a floor, not a promise.
+    """
+    frames: list[Frame] = []
+    root = data_ml.QA_ROOT / "commercial"
+    for sub, category, labeler in (("valneg_synth", "ValNegSynth", "synth2"),
+                                   ("valneg_photos", "ValNegPhoto", "cc0")):
+        manifest = root / sub / "manifest.csv"
+        if not manifest.is_file():
+            print(f"  (missing {manifest}; {sub} skipped)")
+            continue
+        with open(manifest, encoding="utf-8-sig", newline="") as handle:
+            for index, row in enumerate(csv.DictReader(handle)):
+                net_w, net_h = int(row["net_w"]), int(row["net_h"])
+                frames.append(Frame(
+                    clip=sub, frame=index, path=str(root / sub / "images" / f"{row['id']}.jpg"),
+                    width=net_w, height=net_h, has_doc=0, category=category,
+                    confidence="", labeler=labeler, quad=None,
+                    crop=(0, 0, net_w, net_h)))
     return frames
 
 
@@ -151,16 +186,43 @@ def write_predictions(path: Path, rows: list[dict]) -> None:
 
 
 # --------------------------------------------------------------------------- detectors
-def predict_ml(detector: infer.MLDetector, frames: list[Frame], refine: bool = False) -> list[dict]:
+def load_rgb(frame: Frame) -> np.ndarray:
+    """Stored pixels (optionally cropped to the letterbox valid region) as uint8 RGB."""
+    with Image.open(frame.path) as img:
+        rgb = np.asarray(img.convert("RGB"), dtype=np.uint8)
+    if frame.crop is not None:
+        left, top, width, height = frame.crop
+        rgb = rgb[top:top + height, left:left + width]
+    return rgb
+
+
+def predict_ml(detector: infer.MLDetector, frames: list[Frame], refine: bool = False,
+               veto=None, veto_threshold: Optional[float] = None,
+               risk_log: Optional[list] = None,
+               gate_detector: Optional[infer.MLDetector] = None,
+               gate_threshold: Optional[float] = None) -> list[dict]:
     rows = []
     for index, frame in enumerate(frames):
-        with Image.open(frame.path) as img:
-            rgb = np.asarray(img.convert("RGB"), dtype=np.uint8)
+        rgb = load_rgb(frame)
         start = time.perf_counter()
         pred = detector.predict_array(rgb)
         quad = pred.quad
+        if gate_detector is not None:
+            # ENSEMBLE: this model supplies the quad, another model the presence decision.
+            # Two forward passes, but each head keeps the job it is better at.
+            gate = gate_detector.predict_array(rgb)
+            if gate_threshold is not None and gate.presence < gate_threshold:
+                quad = None
         if refine and quad is not None:
             quad = _refine_quad(frame, quad)
+        if veto is not None and quad is not None:
+            risk = veto.risk(rgb, quad)
+            if risk_log is not None:
+                risk_log.append(risk)
+            if veto_threshold is not None and risk.get("screen_risk", 0.0) >= veto_threshold:
+                quad = None
+        elif risk_log is not None:
+            risk_log.append({"screen_risk": None})
         ms = (time.perf_counter() - start) * 1000.0
         row = {"clip": frame.clip, "frame": frame.frame, "has_quad": 1 if quad else 0,
                "ms": round(ms, 2)}
@@ -302,25 +364,102 @@ def timing_stats(rows: list[dict]) -> dict:
             "n": len(values)}
 
 
+def sweep_screen_veto(detector: infer.MLDetector, frames: list[Frame], heuristic_neg: list[Frame],
+                      scorer, t_presence: float, t_mask: float, veto_grid) -> list[dict]:
+    """HYBRID gate: keep the trained quad, then drop it if r2's screen risk is high.
+
+    One forward pass per set, then a sweep of the veto threshold. The veto is measured on
+    the *trained model's own quad*, so it asks "does the region you found look like glass",
+    not "does the frame contain a screen somewhere". VAL + VAL-NEG only; TEST never read.
+    """
+    veto = hybrid_gate.ScreenVeto()
+    if not veto.available:
+        print("hybrid gate unavailable (r2 prototype not importable); nothing to sweep")
+        return []
+
+    def collect(items):
+        out = []
+        for frame in items:
+            rgb = load_rgb(frame)
+            pred = detector.predict_array(rgb)
+            risk = veto.risk(rgb, pred.quad) if pred.quad is not None else {"screen_risk": None}
+            iou = None
+            if pred.quad is not None and frame.quad is not None:
+                iou = scorer.polygon_iou(pred.quad, frame.quad, frame.width, frame.height)
+            out.append((frame, pred.quad is not None, risk.get("screen_risk"), iou))
+        return out
+
+    cached = collect(frames)
+    cached_neg = collect(heuristic_neg)
+    results = []
+    for threshold in veto_grid:
+        doc1 = matched = doc0 = fa = 0
+        ious = []
+        for frame, has_quad, risk, iou in cached:
+            keep = has_quad and (risk is None or risk < threshold)
+            if frame.has_doc == 0:
+                doc0 += 1
+                fa += 1 if keep else 0
+            elif frame.has_doc == 1 and frame.quad is not None:
+                doc1 += 1
+                value = iou if (keep and iou is not None) else 0.0
+                ious.append(value)
+                matched += 1 if value >= 0.8 else 0
+        neg_keep = sum(1 for _f, has_quad, risk, _i in cached_neg
+                       if has_quad and (risk is None or risk < threshold))
+        results.append({
+            "screen_veto": round(threshold, 3),
+            "recall": matched / doc1 if doc1 else None,
+            "matched": matched,
+            "doc1": doc1,
+            "false_accept": fa / doc0 if doc0 else None,
+            "false_accept_n": fa,
+            "doc0": doc0,
+            "false_accept_valneg": neg_keep / len(cached_neg) if cached_neg else None,
+            "false_accept_valneg_n": neg_keep,
+            "valneg_frames": len(cached_neg),
+            "corner_iou_mean": float(np.mean(ious)) if ious else None,
+        })
+    risks = [r for _f, has_quad, r, _i in cached if r is not None]
+    risks_neg = [r for _f, has_quad, r, _i in cached_neg if r is not None]
+    if risks:
+        print("screen risk on VAL quads:      " + ", ".join(
+            f"p{q}={float(np.percentile(risks, q)):.3f}" for q in (50, 90, 95)))
+    if risks_neg:
+        print("screen risk on VAL-NEG quads:  " + ", ".join(
+            f"p{q}={float(np.percentile(risks_neg, q)):.3f}" for q in (50, 90, 95)))
+    return results
+
+
 def pct(value) -> str:
     return "n/a" if value is None else f"{value * 100:.1f}%"
 
 
 # --------------------------------------------------------------------------- sweep
 def sweep_thresholds(detector: infer.MLDetector, frames: list[Frame], scorer,
-                     t_presence_grid, t_mask_grid) -> list[dict]:
-    """Threshold selection on VAL: one forward pass, then every (t_p, t_m) pair.
+                     t_presence_grid, t_mask_grid,
+                     valneg: Optional[list[Frame]] = None) -> list[dict]:
+    """Threshold selection on VAL plus the VAL-NEG proxy: one forward pass per set.
 
-    Recall/false-accept are counted exactly as score.py counts them (IoU >= 0.8 on
+    Recall/false accept are counted exactly as score.py counts them (IoU >= 0.8 on
     has_doc=1 frames with corners; any quad on has_doc=0 frames), so the numbers are
-    comparable with the final report. Selection is VAL-only by construction.
+    comparable with the final report. The proxy adds a second false-accept column because
+    VAL has only one negative clip, which is how v1's 0 % VAL / 89 % TEST gap happened.
+
+    A pair only qualifies if **both** false-accept rates are at or below
+    ``FALSE_ACCEPT_TARGET``; among those, recall decides. Trading recall for false accepts
+    on scenes the model has never seen is not an improvement.
     """
-    cached = []
-    for frame in frames:
-        with Image.open(frame.path) as img:
-            rgb = np.asarray(img.convert("RGB"), dtype=np.uint8)
-        pred = detector.predict_array(rgb)
-        cached.append((frame, pred.mask_prob, pred.presence, pred.box))
+    def cache_items(items):
+        cached_local = []
+        for frame in items:
+            rgb = load_rgb(frame)
+            pred = detector.predict_array(rgb)
+            cached_local.append((frame, pred.mask_prob, pred.presence, pred.box))
+        return cached_local
+
+    cached = cache_items(frames)
+    cached_neg = cache_items(valneg) if valneg else []
 
     results = []
     for t_presence in t_presence_grid:
@@ -341,8 +480,17 @@ def sweep_thresholds(detector: infer.MLDetector, frames: list[Frame], scorer,
                                                                       frame.width, frame.height)
                     ious.append(iou)
                     matched += 1 if iou >= 0.8 else 0
+            neg_accepts = 0
+            for frame, mask_prob, presence, box in cached_neg:
+                det = postprocess.detect_from_outputs(mask_prob, presence, box,
+                                                      t_presence=t_presence, t_mask=t_mask)
+                neg_accepts += 1 if det.quad is not None else 0
             recall = matched / doc1 if doc1 else None
             fa = false_accepts / doc0 if doc0 else None
+            fa_neg = neg_accepts / len(cached_neg) if cached_neg else None
+            ok = all(value is None or value <= FALSE_ACCEPT_TARGET for value in (fa, fa_neg))
+            penalty = (1.5 * max((fa or 0.0) - FALSE_ACCEPT_TARGET, 0.0)
+                       + 1.5 * max((fa_neg or 0.0) - FALSE_ACCEPT_TARGET, 0.0))
             results.append({
                 "t_presence": round(t_presence, 3),
                 "t_mask": round(t_mask, 3),
@@ -352,19 +500,26 @@ def sweep_thresholds(detector: infer.MLDetector, frames: list[Frame], scorer,
                 "false_accept": fa,
                 "false_accept_n": false_accepts,
                 "doc0": doc0,
+                "false_accept_valneg": fa_neg,
+                "false_accept_valneg_n": neg_accepts,
+                "valneg_frames": len(cached_neg),
                 "corner_iou_mean": float(np.mean(ious)) if ious else None,
-                "score": (recall or 0.0) - 1.5 * (fa or 0.0),
+                "meets_fa_target": bool(ok),
+                "score": (recall or 0.0) - penalty,
             })
-    results.sort(key=lambda r: (-r["score"], -r["recall"], r["false_accept"]))
+    results.sort(key=lambda r: (not r["meets_fa_target"], -r["score"], -r["recall"],
+                                r["false_accept_valneg"] or 0.0))
 
     presence_pos = [p for f, _m, p, _b in cached if f.has_doc == 1]
     presence_neg = [p for f, _m, p, _b in cached if f.has_doc == 0]
+    presence_valneg = [p for _f, _m, p, _b in cached_neg]
     if presence_pos and presence_neg:
         def quantiles(values, qs=(5, 50, 95)):
             return ", ".join(f"p{q}={float(np.percentile(values, q)):.3f}" for q in qs)
-        print("presence probability  positives: " + quantiles(presence_pos))
-        print("presence probability  negatives: " + quantiles(presence_neg))
-        print("  (negatives are the NoDocument clip(s); a usable t_presence sits above them)")
+        print("presence probability  VAL positives: " + quantiles(presence_pos))
+        print("presence probability  VAL negatives (clip 28): " + quantiles(presence_neg))
+        if presence_valneg:
+            print("presence probability  VAL-NEG proxy: " + quantiles(presence_valneg))
     return results
 
 
@@ -386,11 +541,19 @@ def report_table(summary: list[dict], timings: dict, split: str, n_doc1: int, n_
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run-id", required=True)
-    parser.add_argument("--split", default="val", choices=["val", "test", "web", "all"])
+    parser.add_argument("--split", default="val", choices=["val", "test", "web", "valneg", "all"])
     parser.add_argument("--weights", default="", help="default runs/<run_id>/best.pt")
     parser.add_argument("--t-presence", type=float, default=0.5)
     parser.add_argument("--t-mask", type=float, default=0.5)
     parser.add_argument("--refine", action="store_true", help="also write the step-refined variant")
+    parser.add_argument("--screen-veto", type=float, default=None,
+                        help="reject a trained quad whose r2 screen risk is >= this value")
+    parser.add_argument("--extra-models", action="append", default=[],
+                        help="label|weights[|t_presence[|t_mask]] -- score another model on "
+                             "the identical frames (used to compare v1 with v2 in one run)")
+    parser.add_argument("--presence-from", default="",
+                        help="label|weights|t_presence -- ENSEMBLE: take the quad from --weights "
+                             "and the presence decision from this model")
     parser.add_argument("--json-summary", default="", help="write a combined summary JSON here")
     parser.add_argument("--test", action="store_true",
                         help="spend one of the two TEST hold-out runs (required for test/web)")
@@ -398,6 +561,11 @@ def main(argv=None) -> int:
                         help="VAL-only threshold sweep (t_presence x t_mask) instead of a full report")
     parser.add_argument("--tp-grid", default="0.30,0.40,0.50,0.60,0.70,0.80,0.90,0.95")
     parser.add_argument("--tm-grid", default="0.30,0.50,0.70")
+    parser.add_argument("--no-valneg", action="store_true",
+                        help="sweep on VAL only (default includes the VAL-NEG proxy)")
+    parser.add_argument("--hybrid-sweep", action="store_true",
+                        help="sweep the r2 screen-veto threshold at the chosen t_presence/t_mask")
+    parser.add_argument("--veto-grid", default="0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.70,0.80")
     parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args(argv)
 
@@ -413,21 +581,54 @@ def main(argv=None) -> int:
         scorer = load_scorer(repo)
         detector = infer.MLDetector(weights=str(weights), threads=args.threads)
         frames = manifest_frames("val")
-        print(f"sweep on VAL: {len(frames)} frames, weights {weights_sha[:16]}...")
+        valneg = valneg_frames() if not args.no_valneg else []
+        print(f"sweep on VAL: {len(frames)} frames + VAL-NEG proxy {len(valneg)} frames, "
+              f"weights {weights_sha[:16]}...")
         results = sweep_thresholds(detector, frames, scorer,
                                    [float(v) for v in args.tp_grid.split(",") if v.strip()],
-                                   [float(v) for v in args.tm_grid.split(",") if v.strip()])
+                                   [float(v) for v in args.tm_grid.split(",") if v.strip()],
+                                   valneg=valneg or None)
         path = run_dir / "sweep_val.csv"
         with open(path, "w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=list(results[0].keys()))
             writer.writeheader()
             writer.writerows(results)
-        print(f"{'t_p':>5} {'t_m':>5} {'recall':>7} {'matched':>8} {'FA':>6} {'FA_n':>5} {'iou_mean':>9} {'score':>7}")
+        print(f"{'t_p':>5} {'t_m':>5} {'recall':>7} {'matched':>8} {'FA28':>6} "
+              f"{'FA_neg':>7} {'n':>4} {'iou_mean':>9} {'ok':>3} {'score':>7}")
         for row in results:
             print(f"{row['t_presence']:>5.2f} {row['t_mask']:>5.2f} {pct(row['recall']):>7} "
                   f"{row['matched']:>4}/{row['doc1']:<3} {pct(row['false_accept']):>6} "
-                  f"{row['false_accept_n']:>5} {row['corner_iou_mean']:>9.3f} {row['score']:>7.3f}")
+                  f"{pct(row['false_accept_valneg']):>7} {row['false_accept_valneg_n']:>4} "
+                  f"{row['corner_iou_mean']:>9.3f} {str(row['meets_fa_target'])[0]:>3} "
+                  f"{row['score']:>7.3f}")
         print(f"wrote {path}")
+        return 0
+
+    if args.hybrid_sweep:
+        scorer = load_scorer(repo)
+        detector = infer.MLDetector(weights=str(weights), t_presence=args.t_presence,
+                                    t_mask=args.t_mask, threads=args.threads)
+        frames = manifest_frames("val")
+        heuristic_neg = valneg_frames() if not args.no_valneg else []
+        print(f"hybrid sweep: VAL {len(frames)} frames + VAL-NEG {len(heuristic_neg)} at "
+              f"t_presence {args.t_presence}, t_mask {args.t_mask}")
+        results = sweep_screen_veto(detector, frames, heuristic_neg, scorer,
+                                    args.t_presence, args.t_mask,
+                                    [float(v) for v in args.veto_grid.split(",") if v.strip()])
+        if results:
+            path = run_dir / "sweep_veto.csv"
+            with open(path, "w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(results[0].keys()))
+                writer.writeheader()
+                writer.writerows(results)
+            print(f"{'veto':>6} {'recall':>7} {'matched':>8} {'FA28':>6} {'FA_neg':>7} "
+                  f"{'n':>4} {'iou_mean':>9}")
+            for row in results:
+                print(f"{row['screen_veto']:>6.2f} {pct(row['recall']):>7} "
+                      f"{row['matched']:>4}/{row['doc1']:<3} {pct(row['false_accept']):>6} "
+                      f"{pct(row['false_accept_valneg']):>7} {row['false_accept_valneg_n']:>4} "
+                      f"{row['corner_iou_mean']:>9.3f}")
+            print(f"wrote {path}")
         return 0
 
     splits = ["val", "test", "web"] if args.split == "all" else [args.split]
@@ -438,6 +639,17 @@ def main(argv=None) -> int:
     scorer = load_scorer(repo)
     detector = infer.MLDetector(weights=str(weights), t_presence=args.t_presence,
                                 t_mask=args.t_mask, threads=args.threads)
+    gate_detector = None
+    gate_threshold = None
+    if args.presence_from:
+        parts = args.presence_from.split("|")
+        if len(parts) < 2:
+            raise SystemExit("--presence-from wants label|weights[|t_presence]")
+        gate_threshold = float(parts[2]) if len(parts) > 2 and parts[2] else args.t_presence
+        gate_detector = infer.MLDetector(weights=parts[1], t_presence=gate_threshold,
+                                          t_mask=args.t_mask, threads=args.threads)
+        print(f"ensemble: quad from {weights.name}, presence from {parts[1]} "
+              f"(label {parts[0]}, t_presence {gate_threshold})")
     print(f"model: {weights} sha256 {weights_sha[:16]}... t_presence {args.t_presence} "
           f"t_mask {args.t_mask}")
 
@@ -445,18 +657,47 @@ def main(argv=None) -> int:
     timings_all = {}
     sections = []
     for split in splits:
-        frames = manifest_frames(split) if split in ("val", "test") else web_frames()
+        if split == "valneg":
+            frames = valneg_frames()
+        elif split in ("val", "test"):
+            frames = manifest_frames(split)
+        else:
+            frames = web_frames()
         if not frames:
             print(f"{split}: no frames, skipped")
             continue
         print(f"\n=== {split}: {len(frames)} frames ===", flush=True)
         stem = f"eval_{split}"
         start = time.perf_counter()
-        rows_ml = predict_ml(detector, frames)
+        veto = None
+        if args.screen_veto is not None:
+            veto = hybrid_gate.ScreenVeto()
+            print(f"hybrid screen veto at {args.screen_veto} "
+                  f"(r2 cues {'available' if veto.available else 'UNAVAILABLE'})")
+        rows_ml = predict_ml(detector, frames, veto=veto, veto_threshold=args.screen_veto,
+                             gate_detector=gate_detector, gate_threshold=gate_threshold)
         ml_seconds = time.perf_counter() - start
         rows_ml_refined = predict_ml(detector, frames, refine=True) if args.refine else None
-        rows_shipped = predict_shipped(frames)
-        rows_r2 = predict_r2(frames)
+        extra_rows = {}
+        for spec in args.extra_models:
+            # "label|weights[|t_presence[|t_mask]]" -- '|' because Windows paths contain ':'
+            parts = spec.split("|")
+            label, path = parts[0], parts[1] if len(parts) > 1 else ""
+            if not path:
+                raise SystemExit(f"--extra-models wants label|weights, got {spec!r}")
+            t_presence = float(parts[2]) if len(parts) > 2 and parts[2] else args.t_presence
+            t_mask = float(parts[3]) if len(parts) > 3 and parts[3] else args.t_mask
+            extra_detector = infer.MLDetector(weights=path, t_presence=t_presence,
+                                              t_mask=t_mask, threads=args.threads)
+            print(f"  extra model {label} <- {path} (t_p {t_presence}, t_m {t_mask})")
+            extra_rows[label] = predict_ml(extra_detector, frames)
+        if split == "valneg":
+            # proxy negatives only: no ground-truth quads, and the baselines are not run on
+            # a fabricated scene set (that would be a number about nothing)
+            rows_shipped, rows_r2 = [], []
+        else:
+            rows_shipped = predict_shipped(frames)
+            rows_r2 = predict_r2(frames)
 
         labels_csv = run_dir / f"labels_{split}.csv"
         write_labels(labels_csv, frames)
@@ -464,13 +705,23 @@ def main(argv=None) -> int:
         pred_shipped = run_dir / f"pred_{split}_shipped.csv"
         pred_r2 = run_dir / f"pred_{split}_r2.csv"
         write_predictions(pred_ml, rows_ml)
-        write_predictions(pred_shipped, rows_shipped)
-        write_predictions(pred_r2, rows_r2)
-        pred_files = [pred_shipped, pred_r2, pred_ml]
+        pred_files = [pred_ml]
+        if rows_shipped:
+            write_predictions(pred_shipped, rows_shipped)
+            pred_files.insert(0, pred_shipped)
+        if rows_r2:
+            write_predictions(pred_r2, rows_r2)
+            pred_files.insert(1, pred_r2)
         if rows_ml_refined is not None:
             pred_refined = run_dir / f"pred_{split}_ml_refined.csv"
             write_predictions(pred_refined, rows_ml_refined)
             pred_files.append(pred_refined)
+        pred_extra = {}
+        for label, rows in extra_rows.items():
+            path = run_dir / f"pred_{split}_{label}.csv"
+            write_predictions(path, rows)
+            pred_extra[label] = path
+            pred_files.append(path)
 
         out_md = run_dir / f"{stem}.md"
         out_json = run_dir / f"{stem}.json"
@@ -482,6 +733,8 @@ def main(argv=None) -> int:
         timing = {"pred_{}_ml".format(split): timing_stats(rows_ml),
                   f"pred_{split}_shipped": timing_stats(rows_shipped),
                   f"pred_{split}_r2": timing_stats(rows_r2)}
+        for label, rows in extra_rows.items():
+            timing[f"pred_{split}_{label}"] = timing_stats(rows)
         if rows_ml_refined is not None:
             timing[f"pred_{split}_ml_refined"] = {"median": None, "p90": None, "n": 0}
         overall = {
@@ -509,6 +762,7 @@ def main(argv=None) -> int:
                                    (f"pred_{split}_shipped", rows_shipped),
                                    (f"pred_{split}_r2", rows_r2)]
                 + ([(f"pred_{split}_ml_refined", rows_ml_refined)] if rows_ml_refined else [])
+                + [(f"pred_{split}_{label}", rows) for label, rows in extra_rows.items()]
             },
         }
         timings_all[split] = timing
@@ -523,6 +777,9 @@ def main(argv=None) -> int:
             "t_presence": args.t_presence,
             "t_mask": args.t_mask,
             "refine": bool(args.refine),
+            "screen_veto": args.screen_veto,
+            "presence_from": args.presence_from or None,
+            "extra_models": args.extra_models,
             "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(repo),
                                                text=True).strip(),
             # An uncommitted working tree is normal here (code is committed after the run),
@@ -540,14 +797,25 @@ def main(argv=None) -> int:
         print(f"\nTEST budget: appended run to {TEST_LOG}")
 
     summary_path = Path(args.json_summary) if args.json_summary else run_dir / "eval_summary.json"
+    # merge with anything already recorded for this run: scoring one split must never
+    # delete another split's numbers from the index
+    previous = {}
+    if summary_path.is_file():
+        try:
+            previous = json.loads(summary_path.read_text(encoding="utf-8"))
+        except Exception:
+            previous = {}
+    merged_splits = dict(previous.get("splits", {}))
+    merged_splits.update(summary_all)
     payload = {
         "run_id": args.run_id,
         "weights": str(weights),
         "weights_sha256": weights_sha,
         "t_presence": args.t_presence,
         "t_mask": args.t_mask,
-        "splits": summary_all,
+        "splits": merged_splits,
         "generated_utc": utc_now(),
+        "splits_scored_this_invocation": list(summary_all.keys()),
     }
     summary_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     (run_dir / "eval_summary.md").write_text(

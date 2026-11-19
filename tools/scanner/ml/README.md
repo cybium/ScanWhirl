@@ -25,7 +25,10 @@ Nothing in stage 2 is wired into the Android app, and no trained weight is commi
 | `train.py` | 50/50 real/synthetic batches, mask BCE+Dice (manifest weight), presence BCE, selection on VAL only |
 | `evaluate_ml.py` | writes predictions in `score.py` format, runs the **unchanged** judge for shipped / r2 / trained model on identical frames; `--sweep` selects thresholds on VAL |
 | `export_onnx.py` | opset-17 export plus an onnxruntime parity check (fails above 1e-4 logit difference) |
-| `report_gallery.py` | 4-panel visual report (original, ground truth, r2, trained model) + offline `index.html`, failures first |
+| `report_gallery.py` | 4-panel visual report (original, ground truth, r2, trained model) + offline `index.html`, failures first; adds a v1 column when `pred_<split>_v1.csv` exists |
+| `synth2.py` | second generator (ML-004): composite CC0-photo backgrounds, hard negatives (document on a screen, framed pictures, white boxes, tissues, doors/walls, cluttered desk) and hand-held pages filling the frame |
+| `hybrid_gate.py` | optional veto: r2's hand-written screen cues evaluated inside the trained quad, used to drop screen-like detections |
+| `test_ml_v2.py` | properties of the v2 generator (label/pixel consistency, determinism, occluded mask) and of the veto |
 
 Commands (private workspace, never Git):
 
@@ -43,6 +46,28 @@ cd tools\scanner\ml
 The TEST hold-out (9 clips + the 9 third-party web stills) may be scored **twice, ever**;
 `evaluate_ml.py` refuses `--split test|web` without `--test` and appends every such run to
 `qa\scannerx-ml\runs\test_runs.log` with the weight SHA256.
+
+## v2 data and the VAL-NEG proxy (ML-004)
+
+```powershell
+& $py train.py --run-id ml004_v2 --epochs 40 --batch-size 16 `
+    --synth-pool-dir <qa>\commercial\synth_train_v2 `
+    --negatives-per-batch 3 --synth-negatives-per-batch 3 --presence-weight 1.0
+& $py evaluate_ml.py --run-id ml004_v2 --sweep          # VAL + VAL-NEG, both FA columns
+& $py evaluate_ml.py --run-id ml004_v2 --hybrid-sweep --t-presence <p> --t-mask <m>
+& $py evaluate_ml.py --run-id ml004_v2 --split valneg   # proxy only, never TEST
+```
+
+* **CC0 pool** (`qa\commercial\cc0\`, 44 Poly Haven assets, CC0): background textures for the
+  generator plus pure-texture negatives. 14 assets are held out and never trained on.
+* **VAL-NEG proxy**: 600 synthetic hard negatives generated with a *different seed* and only
+  the held-out CC0 assets, plus 42 crops of those held-out photos. It is a **proxy** for
+  "a no-document scene": it tests screen/box/wall/clutter recognitions on rendered scenes and
+  rich texture, not a photograph of a real desk.
+* Thresholds must keep false accepts at or below 5 % on **both** clip 28 and the proxy while
+  maximising recall on VAL positives.
+* The hybrid screen veto is adopted only if it improves VAL without spending recall; it can
+  only remove a quad, never invent one.
 
 ## Policy (from AGENTS.md and the Scanner X roadmap)
 
