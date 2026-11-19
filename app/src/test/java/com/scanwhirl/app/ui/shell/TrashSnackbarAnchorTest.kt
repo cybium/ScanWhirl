@@ -119,11 +119,10 @@ class TrashSnackbarAnchorTest {
 
                 cards(activity).first { it.doc?.id == id }.moreButton.performClick()
                 idle()
-                val actions = latestDialog("the row sheet")
-                val delete = findText(
-                    actions.window!!.decorView,
-                    app.getString(R.string.shell_move_to_trash)
-                )
+                // UI-B5: the row's ⋮ is the shared Actions sheet; its Trash row still
+                // ends in the shell's anchored Undo notice.
+                val actions = latestDialog("the row's Actions sheet")
+                val delete = actions.findViewById<View>(R.id.rowMoreDelete)
                 assertNotNull("the sheet offers Move to Trash", delete)
                 delete!!.performClick()
                 idle()
@@ -288,24 +287,14 @@ class TrashSnackbarAnchorTest {
         return null
     }
 
-    private fun findText(root: View, text: String): View? {
-        if (root is TextView && root.text.toString() == text && root.isClickable) return root
-        if (root is ViewGroup) {
-            for (i in 0 until root.childCount) {
-                findText(root.getChildAt(i), text)?.let { return it }
-            }
-        }
-        return null
-    }
-
-    /** The newest showing SwSheet (has a primary button); fails with [what] when none is up. */
+    /** The newest showing titled SwSheet; fails with [what] when none is up. */
     private fun latestDialog(what: String): android.app.Dialog {
         val deadline = System.currentTimeMillis() + 8_000
         while (System.currentTimeMillis() < deadline) {
             idle()
             val dialog = ShadowDialog.getLatestDialog()
             if (dialog != null && dialog.isShowing &&
-                dialog.findViewById<View>(R.id.swSheetPrimary) != null
+                dialog.findViewById<View>(R.id.swSheetTitle) != null
             ) {
                 return dialog
             }

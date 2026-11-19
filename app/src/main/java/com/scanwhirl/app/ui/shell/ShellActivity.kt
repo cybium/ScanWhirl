@@ -31,6 +31,7 @@ import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
+import com.scanwhirl.app.ui.DocumentActionsSheet
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.ImportSheet
 import com.scanwhirl.app.ui.OcrEditorActivity
@@ -908,57 +909,42 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         sheet.show()
     }
 
-    private fun showDocActions(doc: ScanDocument) {
-        val sheet = SwSheet.builder(this)
-            .setTitle(doc.name)
-            .setMessage(getString(R.string.shell_doc_actions_note))
-            .setPrimary(R.string.shell_open) { openDocument(doc.id) }
-            .setSecondary(R.string.share_pdf) { ShareUtils.share(this, doc) }
-            .build()
-        val delete = SwStyle.text(this, 13.5f, SwStyle.color(this, R.color.laser_danger), bold = true).apply {
-            text = getString(R.string.shell_move_to_trash)
-            gravity = Gravity.CENTER
-            minimumHeight = SwStyle.dp(this@ShellActivity, 40f)
-            isClickable = true
-            setOnClickListener {
-                sheet.dismiss()
-                confirmTrash(doc)
-            }
-        }
-        sheet.setContent(delete)
-        sheet.show()
-    }
-
     /**
-     * T27-FIX-TRASH (data loss): the sheet promises "You can restore it for 30 days",
-     * so it must move the document to Trash, never purge it. Undo (TrashActions)
-     * restores it; exported copies in Documents/ScanWhirl are untouched.
+     * B5: a Library row's ⋮ opens the SAME named Actions sheet as the document
+     * screen's dock ([DocumentActionsSheet.show]), bound to this row's id - one
+     * vocabulary, one set of handlers, nothing picked twice.
+     *
+     * This screen never closes, so:
+     *  - [DocumentActionsSheet.show]'s onChange reloads the list: a rename, a category
+     *    move, a copy or a protection change is visible without leaving Library;
+     *  - its onGone means the document left the list (moved to Trash, or a legacy Vault
+     *    item permanently deleted). The sheet posts that move exactly as it does for the
+     *    viewer; consume it here and draw the same anchored Undo notice every other
+     *    in-shell move uses (T40), never the sheet's unanchored bar.
+     *
+     * T27-FIX-TRASH stays: the row hands over to [DocumentActionsSheet]'s confirmation,
+     * which moves to Trash and stays restorable - it never purges.
      */
-    private fun confirmTrash(doc: ScanDocument) {
-        SwSheet.builder(this)
-            .setTitle(getString(R.string.shell_trash_title, doc.name))
-            .setMessage(R.string.shell_trash_note)
-            .setPrimary(R.string.shell_move_to_trash) {
-                lifecycleScope.launch {
-                    val moved = withContext(Dispatchers.IO) {
-                        TrashActions.moveAll(repo, listOf(doc.id))
-                    }
-                    library.reload()
-                    showMovedNotice(moved)
-                }
+    private fun showDocActions(doc: ScanDocument) {
+        DocumentActionsSheet.show(
+            activity = this,
+            docId = doc.id,
+            onChange = { library.reload() },
+            onGone = {
+                // Called after the sheet's own onChange, so the list is already reloading.
+                TrashActions.takePending()?.let { showMovedNotice(it) }
             }
-            .setSecondary(R.string.sheet_cancel)
-            .build()
-            .show()
+        )
     }
 
     /**
      * The "Moved to Trash" snackbar with Undo, anchored above the nav bar.
      *
-     * T40-FIX-SNACK-ANCHOR: this is now the one place an in-shell move shows its
-     * notice - the single row ([confirmTrash]) and a library multi-selection
-     * ([LibraryScreen.Callbacks.onMovedToTrash]) both land here, so the bar can
-     * never be drawn under the nav again.
+     * T40-FIX-SNACK-ANCHOR: this is the one place an in-shell move shows its notice - a
+     * Library row's Actions sheet, a library multi-selection
+     * ([LibraryScreen.Callbacks.onMovedToTrash]) and a move made on the document screen
+     * (the pending notice on resume) all land here, so the bar can never be drawn under
+     * the nav again.
      */
     private fun showMovedNotice(moved: TrashActions.Moved) {
         val root = findViewById<View>(android.R.id.content) ?: return

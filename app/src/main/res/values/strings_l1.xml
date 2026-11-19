@@ -175,8 +175,6 @@
     <string name="tool_pick_image">Choose an image</string>
     <string name="shell_today">Today</string>
     <string name="shell_yesterday">Yesterday</string>
-    <string name="shell_doc_actions_note">Open, share, or move this document to Trash.</string>
-    <string name="shell_open">Open</string>
     <string name="shell_move_to_trash">Move to Trash</string>
     <string name="shell_trash_title">Move “%1$s” to Trash?</string>
     <string name="shell_trash_note">You can restore it for 30 days. Nothing is uploaded.</string>
