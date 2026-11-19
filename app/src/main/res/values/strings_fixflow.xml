@@ -5,6 +5,7 @@
     <string name="fixflow_keep">Keep</string>
     <string name="fixflow_id_discard_title">Discard this ID card?</string>
     <string name="fixflow_id_discard_msg">The card is already on this phone. Discard deletes it and its preview; Keep goes back to the card.</string>
+    <string name="fixflow_id_delete_copy">Delete this copy</string>
 
     <!-- ID card: front only, so only the front layout is offered (W6). -->
     <string name="fixflow_id_layout_front_only_msg">The front side goes on its own page.</string>

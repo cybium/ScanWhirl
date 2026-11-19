@@ -23,13 +23,13 @@
     <string name="protect_aes_title">AES-256 encryption</string>
     <string name="protect_aes_note">The modern standard. Strength depends on your password. Use 10+ characters.</string>
     <string name="protect_remember_title">Remember in Vault</string>
-    <string name="protect_remember_note">So you never lose it. Opens with fingerprint.</string>
+    <string name="protect_remember_note">Saved in the Vault. Open the Vault to use it.</string>
     <string name="protect_action_share">Protect &amp; share</string>
     <string name="protect_action_save">Save protected copy</string>
     <string name="protect_action_change">Change password</string>
     <string name="protect_result_summary">%1$s\nProtected with AES-256</string>
     <string name="vault_save_prompt">Save the password in Vault?</string>
-    <string name="vault_save_prompt_note">Unlock the Vault so you never lose it.</string>
+    <string name="vault_save_prompt_note">Unlock the Vault to save this password.</string>
     <string name="vault_unlock_action">Unlock</string>
     <string name="not_now">Not now</string>
     <string name="vault_reason_save_password">Unlock the Vault to save this password.</string>

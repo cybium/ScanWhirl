@@ -2,12 +2,13 @@
 <resources>
     <string name="fixflow_keep">रखें</string>
     <string name="fixflow_id_discard_title">यह पहचान पत्र हटाएँ?</string>
-    <string name="fixflow_id_discard_msg">पहचान पत्र इस फ़ोन में सहेजा जा चुका है। हटाने पर वह और उसकी झलक मिट जाएगी; रखें चुनने पर आप पहचान पत्र पर लौटेंगे।</string>
+    <string name="fixflow_id_discard_msg">पहचान पत्र की यह प्रति सहेजी जा चुकी है। मिटाने पर यह प्रति और इसकी झलक हमेशा के लिए मिट जाएँगी।</string>
+    <string name="fixflow_id_delete_copy">यह प्रति मिटाएँ</string>
 
     <string name="fixflow_id_layout_front_only_msg">सामने वाला भाग अपने अलग पन्ने पर जाएगा।</string>
     <string name="fixflow_id_layout_front_page">सामने वाला भाग एक पन्ने पर</string>
 
     <string name="fixflow_import_keep_title">लाया गया दस्तावेज़ रखें?</string>
-    <string name="fixflow_import_keep_msg">हटाने पर यह लाया गया दस्तावेज़ और उसकी झलक कागज़ात से मिट जाएँगे। बाकी दस्तावेज़ वैसे ही रहेंगे।</string>
-    <string name="fixflow_import_discard">यह आयात हटाएँ</string>
+    <string name="fixflow_import_keep_msg">यहाँ लाई गई प्रति और उसकी झलक ScanWhirl से हमेशा के लिए मिट जाएँगी। मूल PDF और बाकी दस्तावेज़ नहीं बदलेंगे।</string>
+    <string name="fixflow_import_discard">यह प्रति मिटाएँ</string>
 </resources>
