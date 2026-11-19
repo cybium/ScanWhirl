@@ -7,6 +7,24 @@ import java.util.Locale
 /** v2 UI: 03_tools_hub — the seven catalogue groups, in mockup order. */
 enum class ToolGroup { CREATE, ORGANIZE, OPTIMIZE, CONVERT, EDIT, SECURE, TEXT }
 
+/**
+ * B4-TOOLS: the seven jobs from UI_PLAN §0b, in the order a person reads them. The Tools tab
+ * is organised by what the person wants done, not by this catalogue's internal groups; the
+ * tools themselves stay in [ToolGroup] for the rest of the app.
+ *
+ * [pro] is true for a job whose tools are all Pro work (UI_PLAN writes "Sign and mark up
+ * (Pro)"). The badge is only drawn in a Free build, like every other Pro marker.
+ */
+enum class ToolJob(val title: Int, val pro: Boolean = false) {
+    SMALLER(R.string.tools_job_smaller),
+    ORGANISE(R.string.tools_job_organise),
+    MARKUP(R.string.tools_job_markup, pro = true),
+    PRIVATE(R.string.tools_job_private),
+    TEXT(R.string.tools_job_text),
+    FORMAT(R.string.tools_job_format),
+    NEW(R.string.tools_job_new)
+}
+
 enum class ToolStatus { READY, BUILD, SOON }
 
 /** What a tool does when it is tapped; implemented by the v2 shell. */
@@ -254,6 +272,90 @@ object ToolRegistry {
     /** Grouped catalogue in mockup order, including empty groups only if they ever appear. */
     fun grouped(): List<Pair<ToolGroup, List<SwTool>>> =
         ToolGroup.entries.map { group -> group to byGroup(group) }.filter { it.second.isNotEmpty() }
+
+    // ---- B4-TOOLS: the seven jobs ------------------------------------------
+
+    /**
+     * One line per tool id: the only place a tool is attached to a job. A list of pairs, not
+     * a map, so a repeated id is a test failure instead of a silently overwritten key. A tool
+     * added later still gets a job from [groupJob], so the hub can never silently drop it.
+     */
+    private val jobAssignments: List<Pair<String, ToolJob>> = listOf(
+        // Make it smaller
+        "compress" to ToolJob.SMALLER,
+        "resize" to ToolJob.SMALLER,
+        // Combine and organise
+        "merge" to ToolJob.ORGANISE,
+        "split" to ToolJob.ORGANISE,
+        "extract" to ToolJob.ORGANISE,
+        "organize_pages" to ToolJob.ORGANISE,
+        "insert_pages" to ToolJob.ORGANISE,
+        "folders" to ToolJob.ORGANISE,
+        "batch_rename" to ToolJob.ORGANISE,
+        "batch_tools" to ToolJob.ORGANISE,
+        // Sign and mark up
+        "sign" to ToolJob.MARKUP,
+        "add_text" to ToolJob.MARKUP,
+        "draw" to ToolJob.MARKUP,
+        "highlight" to ToolJob.MARKUP,
+        "watermark" to ToolJob.MARKUP,
+        "page_numbers" to ToolJob.MARKUP,
+        "stamp" to ToolJob.MARKUP,
+        // Keep it private (Redact is the "hide private info" job, not a markup)
+        "redact" to ToolJob.PRIVATE,
+        "protect" to ToolJob.PRIVATE,
+        "unlock" to ToolJob.PRIVATE,
+        "vault" to ToolJob.PRIVATE,
+        "remove_metadata" to ToolJob.PRIVATE,
+        // Get the text
+        "read_text" to ToolJob.TEXT,
+        "to_text" to ToolJob.TEXT,
+        "searchable_pdf" to ToolJob.TEXT,
+        // Change the format
+        "pdf_to_images" to ToolJob.FORMAT,
+        "long_image" to ToolJob.FORMAT,
+        "to_word" to ToolJob.FORMAT,
+        "to_powerpoint" to ToolJob.FORMAT,
+        "to_excel" to ToolJob.FORMAT,
+        "zip" to ToolJob.FORMAT,
+        "pdfa" to ToolJob.FORMAT,
+        // Start something new
+        "scan" to ToolJob.NEW,
+        "id_card" to ToolJob.NEW,
+        "import_pdf" to ToolJob.NEW,
+        "passport" to ToolJob.NEW,
+        "qr_code" to ToolJob.NEW
+    )
+
+    private val jobOfId: Map<String, ToolJob> = jobAssignments.toMap()
+
+    /** The explicit assignments, so a test can prove none is stale or duplicated. */
+    internal fun jobTable(): List<Pair<String, ToolJob>> = jobAssignments
+
+    /**
+     * The job a tool belongs to. Every catalogue tool has exactly one: the explicit table
+     * first, then its catalogue group, so a new tool is never unreachable.
+     */
+    fun jobOf(tool: SwTool): ToolJob = jobOfId[tool.id] ?: groupJob(tool.group)
+
+    private fun groupJob(group: ToolGroup): ToolJob = when (group) {
+        ToolGroup.CREATE -> ToolJob.NEW
+        ToolGroup.ORGANIZE -> ToolJob.ORGANISE
+        ToolGroup.OPTIMIZE -> ToolJob.SMALLER
+        ToolGroup.CONVERT -> ToolJob.FORMAT
+        ToolGroup.EDIT -> ToolJob.MARKUP
+        ToolGroup.SECURE -> ToolJob.PRIVATE
+        ToolGroup.TEXT -> ToolJob.TEXT
+    }
+
+    /**
+     * The shipping tools under each job, in catalogue order. Derived from [all]: there is no
+     * hand-written membership list and no count anywhere. A Coming-soon tool has no row (the
+     * hub never shows a Soon tile), so a job's list can never advertise what does not ship.
+     */
+    fun jobs(): List<Pair<ToolJob, List<SwTool>>> = ToolJob.entries.map { job ->
+        job to all.filter { it.status != ToolStatus.SOON && jobOf(it) == job }
+    }
 
     /** Title + keyword search; a blank query returns nothing (the hub shows all). */
     fun search(query: String): List<SwTool> = rankedSearch(query) { null }
