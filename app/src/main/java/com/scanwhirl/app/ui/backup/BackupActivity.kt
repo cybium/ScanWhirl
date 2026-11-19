@@ -69,6 +69,13 @@ class BackupActivity : BaseActivity() {
 
     /** The archive just written, waiting for "save" or "share". */
     private var pending: File? = null
+
+    /**
+     * What [FullBackup.write] had to leave out of [pending] (today: the Vault during a pending
+     * setup). Kept next to the file because the "Backup ready" sheet returns after the share
+     * sheet, and it must not lose the honesty note on the way back.
+     */
+    private var pendingWarnings: List<String> = emptyList()
     private var restoreSource: File? = null
 
     /** Set while the system share sheet is up, so the "Backup ready" sheet can return with it. */
@@ -77,6 +84,7 @@ class BackupActivity : BaseActivity() {
     private val saveTo = registerForActivityResult(ActivityResultContracts.CreateDocument(FullBackup.MIME)) { uri ->
         val file = pending
         pending = null
+        pendingWarnings = emptyList()
         if (uri == null || file == null) return@registerForActivityResult
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
@@ -317,15 +325,19 @@ class BackupActivity : BaseActivity() {
         val file = backup.newArchiveFile()
         toast(R.string.backup_working)
         lifecycleScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                runCatching { backup.write(file, secret, wrap) }.isSuccess
+            // Keep the whole report: it says when part of the phone is not in the archive
+            // (a Vault whose setup is unfinished), and the person must hear that here.
+            val report = withContext(Dispatchers.IO) {
+                runCatching { backup.write(file, secret, wrap) }
             }
-            if (!ok) {
+            val written = report.getOrNull()
+            if (written == null) {
                 file.delete()
                 toast(R.string.backup_failed)
                 return@launch
             }
             pending = file
+            pendingWarnings = written.warnings
             offerSaving(file)
         }
     }
@@ -333,10 +345,16 @@ class BackupActivity : BaseActivity() {
     private fun offerSaving(file: File) {
         SwSheet.builder(this)
             .setTitle(R.string.backup_ready)
-            .setMessage(getString(R.string.backup_ready_note, (file.length() / (1024 * 1024)).toInt()))
+            .setMessage(readyMessage(file))
             .setPrimary(R.string.backup_save_device) { saveTo.launch(file.name) }
             .setSecondary(R.string.backup_share) { share(file) }
             .build().show()
+    }
+
+    /** The size note, then one line per warning the write reported. */
+    private fun readyMessage(file: File): String {
+        val sizeNote = getString(R.string.backup_ready_note, (file.length() / (1024 * 1024)).toInt())
+        return (listOf(sizeNote) + pendingWarnings).joinToString("\n")
     }
 
     private fun share(file: File) {
