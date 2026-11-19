@@ -510,7 +510,7 @@ class ResultAlsoSaveTest {
     @Test
     @Config(qualifiers = "hi-w360dp-h800dp-xhdpi")
     fun `Save as and Also save have the agreed Hindi words`() {
-        assertEquals("इस रूप में सहेजें…", app.getString(R.string.tools_result_save))
+        assertEquals("जगह चुनकर सहेजें…", app.getString(R.string.tools_result_save))
         assertEquals("Documents में भी सहेजें", app.getString(R.string.tools_result_also_save))
         for (res in listOf(R.string.tools_result_save, R.string.tools_result_also_save)) {
             assertFalse(

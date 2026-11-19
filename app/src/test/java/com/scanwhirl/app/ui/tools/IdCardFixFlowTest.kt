@@ -400,7 +400,7 @@ class IdCardFixFlowTest {
                     dialog.findViewById<TextView>(R.id.swSheetTitle).text.toString()
                 )
                 assertEquals(
-                    app.getString(R.string.discard),
+                    app.getString(R.string.fixflow_id_delete_copy),
                     dialog.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
                 )
                 assertEquals(

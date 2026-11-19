@@ -106,5 +106,5 @@
         <item quantity="other">%1$d चीज़ें छिपाई गईं। चौकोर निशान जाँचें, फिर सहेजें।</item>
     </plurals>
     <string name="private_info_label">निजी जानकारी छिपी है</string>
-    <string name="private_info_saved">निजी जानकारी छिपाकर प्रति सहेजी: %1$s</string>
+    <string name="private_info_saved">निजी जानकारी छिपाकर प्रति सहेजी: %1$s। मूल दस्तावेज़ कागज़ात में है और नहीं बदला है।</string>
 </resources>

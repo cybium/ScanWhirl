@@ -4,7 +4,7 @@
     <string name="qr_title">QR code</string>
     <string name="qr_close">Close</string>
     <string name="qr_scan_title">Scan a QR code</string>
-    <string name="qr_scan_body">Reads a link, Wi-Fi network, contact, phone number, email or text. Stays on this phone.</string>
+    <string name="qr_scan_body">Reads a link, Wi-Fi network, contact, phone number, email or text. The code is read on this phone.</string>
     <string name="qr_result_title">Last scan</string>
     <string name="qr_scan_button">Scan code</string>
     <string name="qr_scan_again">Scan again</string>

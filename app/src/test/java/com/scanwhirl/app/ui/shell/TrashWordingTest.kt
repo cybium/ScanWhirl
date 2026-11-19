@@ -68,4 +68,65 @@ class TrashWordingTest {
             RuntimeEnvironment.setQualifiers("")
         }
     }
+
+    /**
+     * T46: "हटाएँ" (delete) on a reversible action read as a permanent delete. The
+     * destination says where the document goes, in every form the app shows.
+     */
+    @Test
+    fun `the Hindi move names the Trash destination for one, many and partial moves`() {
+        RuntimeEnvironment.setQualifiers("hi")
+        try {
+            val move = app.getString(R.string.trash_move)
+            assertEquals("the menu action names the destination", "हटाई गई फ़ाइलों में भेजें", move)
+            assertEquals(
+                "the sheet action says the same as the menu",
+                move,
+                app.getString(R.string.shell_move_to_trash)
+            )
+
+            val one = app.getString(R.string.trash_moved_one, "किराया.pdf")
+            assertTrue("one moved document names the destination: $one", one.contains("हटाई गई फ़ाइलों में भेजा गया"))
+
+            val many = app.resources.getQuantityString(R.plurals.trash_moved_many, 2, 2)
+            assertTrue("many moved documents name the destination: $many", many.contains("हटाई गई फ़ाइलों में भेजे गए"))
+
+            val partial = app.resources.getQuantityString(R.plurals.trash_moved_partial, 2, 2, 1)
+            assertTrue("a partial move names the destination: $partial", partial.contains("हटाई गई फ़ाइलों में भेजे गए"))
+            assertTrue("a partial move says the rest is unchanged: $partial", partial.contains("बाकी 1"))
+
+            val failed = app.getString(R.string.trash_move_failed)
+            assertTrue("a failed move names the destination: $failed", failed.contains("हटाई गई फ़ाइलों में नहीं भेज सके"))
+            assertTrue("a failed move promises nothing was deleted: $failed", failed.contains("कोई दस्तावेज़ नहीं हटा"))
+        } finally {
+            RuntimeEnvironment.setQualifiers("")
+        }
+    }
+
+    /**
+     * T46: the permanent delete must not borrow the draft's "बदलाव न रखें" (discard the
+     * changes) wording — it deletes the document itself, and says so.
+     */
+    @Test
+    fun `the Hindi permanent delete never uses the discard-changes wording`() {
+        RuntimeEnvironment.setQualifiers("hi")
+        try {
+            val texts = listOf(
+                app.getString(R.string.trash_delete_forever),
+                app.getString(R.string.trash_delete_forever_title),
+                app.getString(R.string.trash_delete_forever_named, "किराया.pdf"),
+                app.getString(R.string.trash_delete_forever_message, "किराया.pdf"),
+            )
+            for (text in texts) {
+                assertFalse("permanent delete must not say discard-changes: $text", text.contains("बदलाव न रखें"))
+            }
+            assertTrue(
+                "permanent delete says the copy is gone for good: ${texts[3]}",
+                texts[3].contains("हमेशा के लिए मिट जाएँगे") && texts[3].contains("वापस नहीं ला सकते")
+            )
+            assertTrue("the destructive action uses मिटाएँ: ${texts[0]}", texts[0].contains("मिटाएँ"))
+        } finally {
+            RuntimeEnvironment.setQualifiers("")
+        }
+    }
 }
