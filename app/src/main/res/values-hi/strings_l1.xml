@@ -48,6 +48,18 @@
     <string name="tools_group_secure">सुरक्षा</string>
     <string name="tools_group_text">लिखा हुआ</string>
 
+    <!-- B4-TOOLS: सात काम (UI_PLAN §0b), पढ़ने के क्रम में -->
+    <string name="tools_job_smaller">छोटा करें</string>
+    <string name="tools_job_organise">जोड़ें और सजाएँ</string>
+    <string name="tools_job_markup">हस्ताक्षर और निशान लगाएँ</string>
+    <string name="tools_job_private">निजी रखें</string>
+    <string name="tools_job_text">लिखा हुआ निकालें</string>
+    <string name="tools_job_format">फ़ॉर्मैट बदलें</string>
+    <string name="tools_job_new">कुछ नया शुरू करें</string>
+    <string name="tools_job_all">सभी %1$d काम</string>
+    <string name="tools_job_fewer">कम दिखाएँ</string>
+    <string name="tools_search_results">नतीजे</string>
+
     <string name="tool_scan">स्कैन</string>
     <string name="tool_id_card">पहचान पत्र</string>
     <string name="tool_book_pages">किताब के पन्ने</string>
