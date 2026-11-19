@@ -1,39 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  UI-B3 (#7): the Compress setup sheet. Two explicit aims ("Choose quality" / "Aim for a file
+  size"), the existing quality estimates, and the exact-size field with a hint that stays put
+  and an inline error. The whole content scrolls so the field and the Compress button stay
+  reachable at 200% type with the keyboard open.
+-->
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/compressScroll"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:paddingHorizontal="24dp"
-    android:paddingTop="12dp"
-    android:paddingBottom="8dp">
+    android:clipToPadding="false"
+    android:fillViewport="false"
+    android:scrollbars="vertical">
 
-    <RadioGroup
-        android:id="@+id/levelGroup"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical" />
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="8dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:text="@string/compress_target_label"
-        android:textAppearance="?attr/textAppearanceLabelLarge"
-        android:textColor="@color/text_hologram_hi" />
+        <RadioGroup
+            android:id="@+id/compressModeGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
-    <EditText
-        android:id="@+id/editCompressTarget"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginTop="6dp"
-        android:background="@drawable/bg_search_bar"
-        android:gravity="center_vertical"
-        android:hint="@string/resize_target_hint"
-        android:importantForAutofill="no"
-        android:inputType="text"
-        android:paddingHorizontal="12dp"
-        android:selectAllOnFocus="true"
-        android:textColor="@color/text_hologram_hi"
-        android:textColorHint="@color/text_hologram_dim"
-        android:textSize="14sp" />
-</LinearLayout>
+            <RadioButton
+                android:id="@+id/compressModeQuality"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:paddingVertical="8dp"
+                android:text="@string/compress_mode_quality"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/compressModeTarget"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:paddingVertical="8dp"
+                android:text="@string/compress_mode_target"
+                android:textColor="@color/text_hologram_hi"
+                android:textSize="15sp" />
+        </RadioGroup>
+
+        <!-- The quality estimates, rebuilt in code from the measured samples. -->
+        <RadioGroup
+            android:id="@+id/levelGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:id="@+id/compressTargetBlock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/editCompressTarget"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_search_bar"
+                android:gravity="center_vertical"
+                android:hint="@string/resize_target_hint"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:maxLines="1"
+                android:paddingHorizontal="12dp"
+                android:selectAllOnFocus="true"
+                android:textColor="@color/text_hologram_hi"
+                android:textColorHint="@color/text_hologram_dim"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/compressTargetHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/compress_target_help"
+                android:textColor="@color/text_hologram_mid"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/compressTargetError"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:accessibilityLiveRegion="polite"
+                android:textColor="@color/laser_danger"
+                android:textSize="13sp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

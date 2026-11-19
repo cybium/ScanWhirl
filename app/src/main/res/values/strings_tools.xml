@@ -217,6 +217,11 @@
     <string name="tools_result_save_failed">Could not save: %1$s</string>
     <string name="tools_result_undone">The new copy was removed.</string>
 
+    <!-- UI-B3 (#12): the extra destinations live behind one disclosure. -->
+    <string name="tools_result_more_options">More options</string>
+    <string name="tools_result_fewer_options">Fewer options</string>
+    <string name="tools_result_choose_location">Choose another location</string>
+
     <!-- v2 UI: 03_tools_hub - passport crop preset -->
     <string name="tools_passport_hint">Drag the corners to the edges of the passport photo.</string>
     <string name="tools_passport_apply">Crop and save</string>

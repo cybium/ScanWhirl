@@ -416,6 +416,23 @@
     <string name="compress_done">Compressed: %1$s → %2$s</string>
     <string name="compress_failed">Compression failed: %1$s</string>
 
+    <!-- UI-B3 (#7, #8, #9-now): two explicit aims, then a measured result. -->
+    <string name="compress_mode_quality">Choose quality</string>
+    <string name="compress_mode_target">Aim for a file size</string>
+    <string name="compress_target_help">Type KB or MB, like 500 KB or 3 MB</string>
+    <string name="compress_target_required">Type the size you need, like 500 KB or 3 MB</string>
+    <string name="compress_action">Compress</string>
+    <string name="compress_result_header">Compressed</string>
+    <string name="compress_result_size">File now %1$s</string>
+    <string name="compress_result_under_limit">%1$s · Under your %2$s limit</string>
+    <string name="compress_result_over_limit">%1$s · Above your %2$s limit</string>
+    <string name="compress_result_size_unknown">Size could not be measured</string>
+    <string name="compress_result_before">Before: %1$s</string>
+    <string name="compress_result_source_kept">Original kept in Library.</string>
+    <string name="compress_undo">Undo this copy</string>
+    <string name="compress_undo_removed">Removed this compressed copy.</string>
+    <string name="compress_undo_removed_with_copy">Removed this compressed copy and its Documents copy.</string>
+
     <string name="progress_title">Working…</string>
 
     <!-- New pages: camera or a straight gallery import (no scanner crop). -->
