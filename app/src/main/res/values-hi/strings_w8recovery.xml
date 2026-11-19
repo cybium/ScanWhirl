@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UI-W8: हिंदी में वापसी सतहें — हटाई गई फ़ाइलों का ईमानदार नतीजा, प्रति सहेजने की स्क्रीन का
+     अपना वापस बटन, और "प्रति तैयार" (फ़ोन के कैश में) बनाम "… में सहेजी गई" (चुनी जगह तक पहुँची) का फ़र्क़। -->
+<resources>
+    <string name="backup_back">वापस</string>
+    <string name="backup_saved_to">%1$s में सहेजी गई</string>
+    <string name="backup_saved_name_unknown">आपकी चुनी हुई जगह</string>
+    <string name="backup_share_unconfirmed">प्रति उस ऐप को भेज दी गई जो आपने चुना। ScanWhirl पुष्टि नहीं कर सकता कि वह वहाँ सहेजी गई।</string>
+
+    <string name="trash_deleted_partial">%2$d में से %1$d हट गए।</string>
+    <plurals name="trash_still_in_trash">
+        <item quantity="one">%1$d अभी भी हटाई गई फ़ाइलों में है।</item>
+        <item quantity="other">%1$d अभी भी हटाई गई फ़ाइलों में हैं।</item>
+    </plurals>
+    <plurals name="trash_cleanup_pending">
+        <item quantity="one">%1$d हटाना पूरा नहीं हुआ। ScanWhirl अगली बार खुलने पर उसे पूरा करेगा।</item>
+        <item quantity="other">%1$d हटाना पूरा नहीं हुआ। ScanWhirl अगली बार खुलने पर उन्हें पूरा करेगा।</item>
+    </plurals>
+</resources>

@@ -135,6 +135,50 @@ class SystemBarsClearanceTest {
         }
     }
 
+    /**
+     * UI-W8: navigation bars come in two shapes — three-button (126 px, the test above) and
+     * gesture (a small handle). Backup & restore must stay below the status bar and above
+     * the gesture area in both, and it must show a real Back control instead of relying on
+     * the system gesture alone.
+     */
+    @Test
+    fun `backup and restore clears the bars with gesture navigation and shows Back`() {
+        val gestureNav = 24
+        val controller = Robolectric.buildActivity(BackupActivity::class.java).setup()
+        try {
+            val activity = controller.get()
+            val root = contentRoot(activity)
+            val screenHeight = dispatchBars(activity, root, STATUS_BAR, gestureNav)
+
+            val title = textView(activity, activity.getString(R.string.backup_title))
+            assertNotNull("Backup & restore shows its title", title)
+            val titleTop = boundsIn(root, title!!).top
+            assertTrue(
+                "the title starts at ${titleTop}px, under the ${STATUS_BAR}px status bar",
+                titleTop >= STATUS_BAR
+            )
+
+            val back = visibleBack(activity)
+            assertNotNull("a visible Back control is on the screen", back)
+            val backTop = boundsIn(root, back!!).top
+            assertTrue(
+                "Back starts at ${backTop}px, under the ${STATUS_BAR}px status bar",
+                backTop >= STATUS_BAR
+            )
+
+            val lastLine = lastLeaf(root)
+            assertNotNull("the screen has content", lastLine)
+            val lastBottom = boundsIn(root, lastLine!!).bottom
+            assertTrue(
+                "the last line ends at ${lastBottom}px, inside the ${gestureNav}px navigation " +
+                    "area (page ${screenHeight}px)",
+                lastBottom <= screenHeight - gestureNav
+            )
+        } finally {
+            controller.close()
+        }
+    }
+
     // ------------------------------------------------------------------ the guard
 
     @Test
@@ -241,9 +285,12 @@ class SystemBarsClearanceTest {
     }
 
     /** A 108 px status bar and a 126 px navigation bar, exactly like the owner's phone. */
-    private fun dispatchBars(activity: Activity, root: View): Int {
+    private fun dispatchBars(activity: Activity, root: View): Int =
+        dispatchBars(activity, root, STATUS_BAR, NAV_BAR)
+
+    private fun dispatchBars(activity: Activity, root: View, statusBar: Int, navBar: Int): Int {
         val insets = WindowInsetsCompat.Builder()
-            .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.of(0, STATUS_BAR, 0, NAV_BAR))
+            .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.of(0, statusBar, 0, navBar))
             .build()
         ViewCompat.dispatchApplyWindowInsets(root, insets)
         val density = activity.resources.displayMetrics.density
@@ -274,6 +321,20 @@ class SystemBarsClearanceTest {
             if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
         }
         walk(contentRoot(activity))
+        return out.firstOrNull()
+    }
+
+    /** A visible, clickable control named Back (UI-W8: the screen's own up control). */
+    private fun visibleBack(activity: Activity): View? {
+        val expected = activity.getString(R.string.backup_back)
+        val out = mutableListOf<View>()
+        fun walk(v: View) {
+            val labelled = v.contentDescription?.toString() == expected ||
+                (v is TextView && v.text?.toString() == expected)
+            if (v.isClickable && v.visibility == View.VISIBLE && labelled) out += v
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(activity.window!!.decorView)
         return out.firstOrNull()
     }
 

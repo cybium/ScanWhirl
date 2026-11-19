@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Full Backup 2.0 screen (Me -> Backup & restore). -->
 <resources>
+    <item name="backupBack" type="id" />
     <item name="backupLastLine" type="id" />
     <item name="backupNow" type="id" />
     <item name="backupRestore" type="id" />
