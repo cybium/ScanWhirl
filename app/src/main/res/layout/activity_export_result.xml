@@ -17,6 +17,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
+            app:navigationContentDescription="@string/trash_navigate_up"
             app:navigationIcon="?attr/homeAsUpIndicator"
             app:title="@string/result_title"
             app:titleTextColor="?attr/colorOnSurface" />

@@ -1,6 +1,7 @@
 package com.scanwhirl.app.tools
 
 import android.net.Uri
+import android.view.Gravity
 import android.view.View
 import android.widget.RadioButton
 import android.widget.Toast
@@ -12,6 +13,7 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.ExportResultActivity
 import com.scanwhirl.app.ui.SwDialog
+import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
@@ -166,6 +168,13 @@ class CompressFlow(
                     activity.getString(level.nameRes),
                     StatusLine.formatBytes(estimates.getOrElse(i) { 0L })
                 )
+                // B2-M3 (device sweep 2026-11-19): a bare RadioButton was a 32dp-high row.
+                // The rule is 48dp minimum on every touch target; the visual density stays,
+                // the row just gets breathing room around the same text.
+                minHeight = SwStyle.dp(activity, 48f)
+                gravity = Gravity.CENTER_VERTICAL
+                val padV = SwStyle.dp(activity, 8f)
+                setPadding(SwStyle.dp(activity, 4f), padV, SwStyle.dp(activity, 4f), padV)
             }
             dialogBinding.levelGroup.addView(button)
         }

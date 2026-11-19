@@ -127,6 +127,7 @@
     <item name="swToolsEmpty" type="id" />
     <item name="swProScreen" type="id" />
     <item name="swProPrice" type="id" />
+    <item name="swProTrust" type="id" />
     <item name="swMeList" type="id" />
     <item name="swMeSettings" type="id" />
     <item name="swMePro" type="id" />
