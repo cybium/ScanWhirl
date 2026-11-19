@@ -22,20 +22,24 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 
 /**
- * v2 UI: 07_reader_dock — the saved-document screen, owner revision 2026-11-18:
- * the dock reads Edit · Text · More · Share (the document is worked on first, sent away last),
- * every item is equal width, >= 56 dp tall, 24 dp icon + one 12 sp label that never wraps or
- * clips in EN or HI; the folder/category pill is sentence case metadata; the title wraps to
- * two lines; the meta line reads "3 pages · 544 KB"; a long document's grid keeps a visible
- * vertical scrollbar and legible page badges.
+ * v2 UI: 07_reader_dock — the saved-document screen, B2 revision 2026-11-19 (GPT-6.2
+ * critique #3, "Two-tap contract"): the dock reads Edit · Read text · Share · Actions (work on
+ * the document first, act on it, send it away, then the named Actions sheet), every item is
+ * equal width, >= 56 dp tall, 24 dp icon + one 12 sp label that never wraps or clips in EN or
+ * HI; at 200 % font the dock becomes a 2x2 grid instead of shrinking its labels; the
+ * folder/category pill is sentence case metadata; the title wraps to two lines; the meta line
+ * reads "3 pages · 544 KB"; a long document's grid keeps a visible vertical scrollbar and
+ * legible page badges.
  *
- * Red first: written against the pre-revision screen (Share first, weight 2/1/1/1, caps pill,
- * one-line title, "N pages" only, no scrollbar).
+ * Red first: written against the pre-B2 screen (Edit · Text · More · Share, four across at any
+ * font scale, "Text"/"More" labels, no 2x2 layout).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -117,18 +121,18 @@ class DocumentViewerReaderUiTest {
     // --- 1. dock order and shape -------------------------------------------
 
     @Test
-    fun `dock reads Edit, Text, More then Share last`() {
+    fun `dock reads Edit, Read text, Share then Actions last`() {
         open { activity ->
             val dock = dock(activity)
             assertEquals("the dock keeps its four actions", 4, dock.childCount)
             val ids = (0 until dock.childCount).map { dock.getChildAt(it).id }
             assertEquals(
-                "Edit · Text · More · Share: sharing the document is the last action",
-                listOf(R.id.btnEdit, R.id.btnText, R.id.btnMore, R.id.btnShare),
+                "Edit · Read text · Share · Actions: the sheet is the last, named door",
+                listOf(R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore),
                 ids
             )
             val labels = listOf(
-                R.string.edit, R.string.btn_text, R.string.more, R.string.share_pdf
+                R.string.edit, R.string.dock_read_text, R.string.share_pdf, R.string.doc_actions
             )
             dockLabels(activity).forEachIndexed { index, label ->
                 assertEquals(
@@ -137,6 +141,47 @@ class DocumentViewerReaderUiTest {
                     label.text.toString()
                 )
             }
+        }
+    }
+
+    @Test
+    fun `at 200 percent the dock is a 2x2 grid with full labels, not smaller text`() {
+        RuntimeEnvironment.setFontScale(2.0f)
+        try {
+            open { activity ->
+                val dock = dock(activity)
+                assertEquals("the dock wraps into two rows at 200 %", 2, dock.childCount)
+                val rows = (0 until dock.childCount).map { dock.getChildAt(it) as ViewGroup }
+                assertTrue("each dock row carries two items", rows.all { it.childCount == 2 })
+                assertEquals(
+                    "the order survives the wrap",
+                    listOf(R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore),
+                    rows.flatMap { row -> (0 until row.childCount).map { row.getChildAt(it).id } }
+                )
+                for (row in rows) {
+                    for (i in 0 until row.childCount) {
+                        val item = row.getChildAt(i) as TextView
+                        assertEquals("a grid cell keeps its one 12 sp label line", 1, item.lineCount)
+                        assertNotNull("grid cell $i is laid out", item.layout)
+                        assertEquals(
+                            "grid label '${item.text}' is not truncated",
+                            0,
+                            item.layout!!.getEllipsisCount(0)
+                        )
+                        assertTrue(
+                            "a grid cell stays a 48 dp target, was ${item.height}px",
+                            item.height >= dp(48f)
+                        )
+                    }
+                }
+
+                // The sheet is the same named destination from the grid too.
+                activity.findViewById<View>(R.id.btnMore).performClick()
+                idle()
+                assertNotNull("Actions opens the document sheet", ShadowDialog.getLatestDialog())
+            }
+        } finally {
+            RuntimeEnvironment.setFontScale(1.0f)
         }
     }
 
@@ -187,6 +232,16 @@ class DocumentViewerReaderUiTest {
                 "the Hindi dock label is the judged glossary word",
                 "भेजें",
                 activity.getString(R.string.share_pdf)
+            )
+            assertEquals(
+                "Read text is everyday Hindi, not a loanword",
+                "पढ़ें",
+                activity.getString(R.string.dock_read_text)
+            )
+            assertEquals(
+                "Actions is everyday Hindi, not a loanword",
+                "विकल्प",
+                activity.getString(R.string.doc_actions)
             )
             assertDockLabelsFit(activity)
         }

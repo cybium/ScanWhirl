@@ -267,9 +267,13 @@ class TrashEntryPointsFixTest {
     fun `no UI file purges a library document outside the documented purge sites`() {
         // Where a permanent purge is correct, and how many calls each file may have.
         val allowed = mapOf(
-            // Fresh-import "Discard" (the picked file is untouched) and the legacy Vault
-            // permanent delete (Vault content never enters Trash).
-            "DocumentViewerActivity.kt" to 2,
+            // Fresh-import "Discard" (the picked file is untouched). The legacy Vault
+            // permanent delete moved out of the viewer into the shared document Actions
+            // sheet in B2; the viewer keeps only the Discard purge.
+            "DocumentViewerActivity.kt" to 1,
+            // Legacy Vault permanent delete (Vault content never enters Trash) — the one
+            // documented purge of the shared document Actions sheet (B2).
+            "DocumentActionsSheet.kt" to 1,
             // Legacy Vault permanent delete inside the authenticated Vault.
             "MainActivity.kt" to 1,
             // Result Undo removes only the generated result documents (no Trash promise).
