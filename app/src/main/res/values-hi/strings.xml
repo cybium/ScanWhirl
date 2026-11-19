@@ -512,6 +512,10 @@
     <string name="page_hit_see_all_desc">%1$s खोलें और सभी %2$d मिलते पन्ने ढूँढें</string>
     <string name="page_hit_across">मिलान पूरे दस्तावेज़ में है, किसी एक पन्ने पर नहीं</string>
     <string name="page_hit_reader_note">पन्ने के पते ScanWhirl में खुलते हैं</string>
+    <!-- T28 · REVIEW-HI: natural wording checked against the judged glossary (पन्ना is the
+         judged word for page; no rejected loanword); a Hindi speaker should still read it. -->
+    <string name="search_hit_page">पन्ना %1$d</string>
+    <string name="search_hit_row_desc">%1$s, पन्ना %2$d पर यह मिला: %3$s</string>
     <string name="reader_find">लिखे हुए में ढूँढें</string>
     <string name="reader_find_hint">पहचाने गए लिखे हुए में ढूँढें</string>
     <string name="reader_find_prev">पिछला</string>
