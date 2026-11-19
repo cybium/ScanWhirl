@@ -500,6 +500,12 @@ class FullBackup(
             val targetSetUp = File(vaultDir, "recovery.bin").let { it.isFile && it.length() > 0 }
             if (!targetSetUp) {
                 vaultDir.mkdirs()
+                // Leftovers of a setup that never published its "set up" blob belong to no Vault
+                // and must never shadow the backup's own wraps (review MUST-FIX 2).
+                listOf("passcode.bin", "keystore.bin").forEach { name ->
+                    File(vaultDir, name).delete()
+                    File(vaultDir, "$name.tmp").delete()
+                }
                 restoredVault.listFiles()?.sortedBy { it.name }?.forEach { from ->
                     val to = File(vaultDir, from.name)
                     if (to.exists()) return@forEach
@@ -509,6 +515,11 @@ class FullBackup(
                     if (from.renameTo(to)) {
                         if (wasDirectory) vaultEntries++ else extras++
                     }
+                }
+                // The restore typed the backup's recovery code, so the adopted Vault is known:
+                // a pending marker left by an interrupted setup is not owed any more.
+                if (File(vaultDir, "recovery.bin").isFile) {
+                    runCatching { vault.markConfirmationPassed() }
                 }
             } else if (oldVaultKey == null) {
                 warnings.add("This backup does not carry the Vault key; its Vault files were not restored.")

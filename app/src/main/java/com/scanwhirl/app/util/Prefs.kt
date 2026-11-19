@@ -105,9 +105,12 @@ object Prefs {
     fun vaultSetupConfirmPending(c: Context): Boolean =
         sp(c).getBoolean(KEY_VAULT_SETUP_CONFIRM_PENDING, false)
 
-    fun setVaultSetupConfirmPending(c: Context, pending: Boolean) {
+    /**
+     * Returns false when the marker could not be persisted. Provisioning must then fail closed:
+     * a Vault whose pending check cannot be recorded is never published (review MUST-FIX 2).
+     */
+    fun setVaultSetupConfirmPending(c: Context, pending: Boolean): Boolean =
         sp(c).edit().putBoolean(KEY_VAULT_SETUP_CONFIRM_PENDING, pending).commit()
-    }
 
     private const val KEY_AUTO_COPY = "auto_copy_to_documents"
 

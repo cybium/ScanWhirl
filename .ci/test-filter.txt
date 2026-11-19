@@ -1,0 +1,1 @@
+com.scanwhirl.app.HindiGlossaryTermsTest,com.scanwhirl.app.FixVault2FinalTest

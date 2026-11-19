@@ -70,11 +70,15 @@ class VaultStore(
      * A new recovery code that is sealed but NOT written yet (review H2). The old wrap stays
      * active until [commitRecoveryCode] runs after the four-character check, so abandoning the
      * flow (or losing this object with the process) can never lock the user out.
+     *
+     * [preparedFor] is the non-secret identity of the Vault that sealed it (review MUST-FIX 1):
+     * a candidate can only ever be written into that same Vault, never into one restored later.
      */
     class RecoveryReplacement internal constructor(
         /** Grouped for display ("ABCD EFGH ..."). Shown once, never stored. */
         val code: String,
-        internal val blob: ByteArray
+        internal val blob: ByteArray,
+        internal val preparedFor: String?
     ) {
         override fun toString(): String = "RecoveryReplacement(code=<redacted>)"
     }
@@ -143,7 +147,24 @@ class VaultStore(
     fun isConfirmationPending(): Boolean = isSetUp() && Prefs.vaultSetupConfirmPending(context)
 
     /** The four-character check passed for the code that is active now. */
-    fun markConfirmationPassed() = Prefs.setVaultSetupConfirmPending(context, false)
+    fun markConfirmationPassed() {
+        if (!isConfirmationPending()) return
+        // Fail closed (review MUST-FIX 2): a marker that cannot be cleared must never be
+        // reported as a finished setup.
+        if (!Prefs.setVaultSetupConfirmPending(context, false)) {
+            throw IOException("Could not save the Vault setup state")
+        }
+    }
+
+    /**
+     * Non-secret identity of the active recovery wrap (SHA-256 of `recovery.bin`), or null when
+     * this phone has no Vault. It changes when the Vault is re-created or restored, so a code
+     * sealed for one Vault can never be written into another (review MUST-FIX 1).
+     */
+    fun vaultIdentity(): String? = synchronized(LOCK) {
+        val file = File(vaultDir, RECOVERY_FILE)
+        if (!file.isFile || file.length() == 0L) null else Sha256.of(file)
+    }
 
     fun isUnlocked(): Boolean = VaultSession.isUnlocked()
 
@@ -167,6 +188,9 @@ class VaultStore(
         if (isSetUp()) throw IllegalStateException("The Vault is already set up")
         requireValidPasscode(passcode)
         if (!vaultDir.mkdirs() && !vaultDir.isDirectory) throw IOException("Could not open the Vault folder")
+        // A setup that died before its "set up" blob belongs to no Vault: its leftovers must
+        // never be published as, or shadow, a passcode wrap (review MUST-FIX 2).
+        clearIncompleteProvisioning()
 
         val key = VaultCrypto.newKey()
         val recoveryCode = VaultCrypto.generateRecoveryCode()
@@ -177,10 +201,22 @@ class VaultStore(
         // Non-secret pending marker BEFORE the "set up" blob: a Vault can never exist with an
         // unconfirmed recovery code and no marker, even if the process dies right here. It is
         // cleared only by markConfirmationPassed() after the four-character check.
-        Prefs.setVaultSetupConfirmPending(context, true)
-        // Written last: its presence is the "set up" marker.
-        Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
-        Durable.syncDir(vaultDir)
+        if (!Prefs.setVaultSetupConfirmPending(context, true)) {
+            // Fail closed: without the marker the check could be skipped, so nothing is published.
+            File(vaultDir, PASSCODE_FILE).delete()
+            throw IOException("Could not start the Vault setup")
+        }
+        try {
+            // Written last: its presence is the "set up" marker.
+            Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
+            Durable.syncDir(vaultDir)
+        } catch (e: Exception) {
+            // The transaction did not complete (a write failed): leave nothing that looks
+            // provisioned. A real process kill cannot run this, so recover() and the backup
+            // restore also clear such leftovers (review MUST-FIX 2).
+            File(vaultDir, PASSCODE_FILE).delete()
+            throw e
+        }
         VaultSession.open(key)
         Setup(VaultCrypto.formatRecoveryCode(recoveryCode))
     }
@@ -279,13 +315,19 @@ class VaultStore(
         val code = VaultCrypto.generateRecoveryCode()
         RecoveryReplacement(
             VaultCrypto.formatRecoveryCode(code),
-            VaultKeyWrap.seal(key, code, VaultCrypto.newSalt(), iterations)
+            VaultKeyWrap.seal(key, code, VaultCrypto.newSalt(), iterations),
+            vaultIdentity()
         )
     }
 
-    /** Atomically replaces the recovery wrap with [replacement] (same format, no migration). */
+    /**
+     * Atomically replaces the recovery wrap with [replacement] (same format, no migration).
+     * The candidate must have been sealed by THIS Vault: a code prepared before a re-create or
+     * a restore is rejected under the lock instead of overwriting the new Vault's wrap.
+     */
     fun commitRecoveryCode(replacement: RecoveryReplacement) = synchronized(LOCK) {
         requireKey()
+        if (vaultIdentity() != replacement.preparedFor) throw VaultStaleReplacementException()
         Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), replacement.blob)
     }
 
@@ -571,7 +613,12 @@ class VaultStore(
                 f.deleteRecursively()
             }
         }
-        if (!isSetUp()) return@synchronized
+        if (!isSetUp()) {
+            // An interrupted provisioning transaction: its wraps belong to no Vault and must
+            // never shadow a later (or restored) passcode wrap (review MUST-FIX 2).
+            clearIncompleteProvisioning()
+            return@synchronized
+        }
 
         entryDirs().forEach { dir ->
             val id = dir.name
@@ -625,6 +672,18 @@ class VaultStore(
     private fun requireValidPasscode(passcode: String) {
         require(passcode.length >= MIN_PASSCODE_LENGTH && passcode.all { it.isDigit() }) {
             "The passcode needs at least $MIN_PASSCODE_LENGTH digits"
+        }
+    }
+
+    /**
+     * Deletes the wraps of a setup that never published its "set up" blob. Only when this phone
+     * has no Vault: a complete Vault is never touched.
+     */
+    private fun clearIncompleteProvisioning() {
+        if (isSetUp()) return
+        listOf(PASSCODE_FILE, KEYSTORE_FILE).forEach { name ->
+            File(vaultDir, name).delete()
+            File(vaultDir, "$name.tmp").delete()
         }
     }
 
@@ -819,3 +878,9 @@ class VaultStore(
  * (review H1). Normal use and every migration wait; authentication and code re-enrollment work.
  */
 class VaultPendingException : IllegalStateException("Finish setting up the Vault first")
+
+/**
+ * A prepared recovery-code candidate belongs to a different Vault than the one on this phone now
+ * (a re-create or a restore happened after it was sealed). It is rejected, never written.
+ */
+class VaultStaleReplacementException : IllegalStateException("This code belongs to a different Vault")

@@ -62,6 +62,8 @@
     <string name="vault_confirm_wrong">यह कोड से मेल नहीं खाता</string>
     <string name="vault_finish">बनाना पूरा करें</string>
     <string name="vault_pending_note">बनाना पूरा करें: अपने कोड के पहले 4 अक्षर लिखें।</string>
+    <string name="vault_code_stale">यह तिजोरी बदल गई है। कोड का चरण फिर से शुरू करें।</string>
+    <string name="vault_finish_failed">बनाना पूरा नहीं हो सका। फिर कोशिश करें।</string>
 
     <string name="vault_unlock_sheet_title">तिजोरी खोलें</string>
     <string name="vault_unlock_note_fingerprint">अपनी उँगली का निशान लगाएँ, या गुप्त नंबर डालें।</string>
