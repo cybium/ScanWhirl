@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.OfficeFileCounts
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -128,6 +129,42 @@ class ResultFileCardTest {
         card(xlsx, "XLSX", "2 sheets")
         card(pptx, "PPTX", "3 slides")
         card(zip, "ZIP", "4 files")
+    }
+
+    @Test
+    fun `the pptx card says the slides are pictures and the text is in the notes`() {
+        val pptx = packageFile(
+            "Deck.pptx",
+            mapOf(
+                "ppt/slides/slide1.xml" to "<p:sld/>",
+                "ppt/notesSlides/notesSlide1.xml" to "<p:notes/>"
+            )
+        )
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "to_powerpoint", files = listOf(pptx), mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val words = allText(activity.window.decorView)
+                assertTrue("the PPTX result must say the slides are page pictures: $words", words.contains("picture", true))
+                assertTrue("the PPTX result must say where the text lives: $words", words.contains("notes", true))
+                assertFalse("the PPTX result must not promise editable slides: $words", words.contains("editable", true))
+            }
+        }
+    }
+
+    private fun allText(view: android.view.View): String {
+        val out = StringBuilder()
+        fun walk(v: android.view.View) {
+            if (v is TextView && v.visibility == android.view.View.VISIBLE) {
+                out.append(v.text).append('\n')
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+        }
+        walk(view)
+        return out.toString()
     }
 
     @Test

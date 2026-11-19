@@ -485,6 +485,18 @@ class ToolResultActivity : BaseActivity() {
         card.addView(meta, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
+        // T37: a PPTX is a picture deck. Say so on the result instead of letting "slides"
+        // suggest editable text that the writer never creates.
+        if (extension == "pptx") {
+            card.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+                id = R.id.toolResultRasterNote
+                text = getString(R.string.tools_result_pptx_note)
+                gravity = Gravity.CENTER
+                setLineSpacing(0f, 1.2f)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
+        }
         previewHost.addView(card, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))

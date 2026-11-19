@@ -1,0 +1,1 @@
+com.scanwhirl.app.store.ExportHonestT37Test,com.scanwhirl.app.store.WordNeedsTextFixResultTest,com.scanwhirl.app.ui.tools.ResultFileCardTest,com.scanwhirl.app.ui.tools.ExportHonestWordUiTest

@@ -52,15 +52,18 @@
     <string name="tools_setup_word_note">पहचानी गई हर पंक्ति अलग रहेगी और अगले पन्ने की लिखाई नए पन्ने से शुरू होगी।</string>
     <string name="tools_setup_word_pictures">पन्नों की तस्वीरें जोड़ें</string>
     <string name="tools_setup_word_pictures_note">हर तस्वीर उस पन्ने के लिखे हुए के ऊपर रहती है।</string>
-    <string name="tools_setup_pptx_note">हर पन्ने से प्रस्तुति का एक पन्ना बनता है। पहचाने गए शब्द बोलने वाले के लिए रखी टिप्पणियों में जाते हैं।</string>
+    <string name="tools_setup_pptx_note">हर पन्ना प्रस्तुति में एक तस्वीर बनता है। पहचाना गया लिखा हुआ बोलते समय की टिप्पणियों में जाता है।</string>
     <string name="tools_setup_excel_tables_only">सिर्फ़ तालिकाएँ</string>
     <string name="tools_setup_excel_all_text">सारा लिखा हुआ</string>
-    <string name="tools_setup_excel_note">सहेजे गए शब्दों में खाने और कतारों वाली जानकारी खोजता है। बाकी पन्नों के सिर्फ़ शब्द रखे जाते हैं।</string>
+    <string name="tools_setup_excel_note">तालिकाएँ अपने आप पहचानी जाती हैं। स्कैन किए गए ब्यौरे में स्तंभ अलग जगह आ सकते हैं, इसलिए छाँटने या जोड़ने से पहले जाँचें।</string>
     <string name="tools_excel_no_table">इस पन्ने पर कोई तालिका नहीं मिली।</string>
     <string name="tools_excel_tables_note">%2$d में से %1$d पन्नों पर तालिकाएँ मिलीं</string>
     <string name="tools_excel_no_tables_title">कोई तालिका नहीं मिली</string>
     <string name="tools_excel_no_tables_msg">इस दस्तावेज़ के किसी पन्ने पर तालिका नहीं है। आप इसके बजाय सारा लिखा हुआ सहेज सकते हैं।</string>
     <string name="tools_excel_export_all">इसके बजाय सारा लिखा हुआ सहेजें</string>
+    <string name="tools_word_no_text">कोई लिखा हुआ नहीं पहचाना गया। अगर यह पन्ना हिंदी में है, तो सेटिंग में लिखे हुए की भाषा हिंदी करें और फिर कोशिश करें।</string>
+    <string name="tools_word_no_text_title">कोई लिखा हुआ नहीं मिला</string>
+    <string name="tools_word_change_language">लिखे हुए की भाषा बदलें</string>
 
     <string name="tools_import_plan_title">इस PDF में %1$d पन्ने हैं</string>
     <string name="tools_import_plan_msg">लगभग %1$s चाहिए; %2$s खाली है। सब लाएँ या कुछ पन्ने चुनें।</string>
@@ -176,6 +179,7 @@
     <string name="tools_result_type_docx">DOCX</string>
     <string name="tools_result_type_xlsx">XLSX</string>
     <string name="tools_result_type_pptx">PPTX</string>
+    <string name="tools_result_pptx_note">स्लाइड पर पन्ने की तस्वीर है; पहचाना गया लिखा हुआ बोलते समय की टिप्पणियों में है।</string>
     <string name="tools_result_type_zip">ZIP</string>
     <string name="tools_result_type_pdf">PDF</string>
     <plurals name="tools_result_sheets">
