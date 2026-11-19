@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- B2 (GPT-6.2 critique #3): the document Actions sheet, shared by the document
+     viewer (dock Actions) and, later, the Library row overflow. The sheet is bound
+     to one document id; its header repeats that document's own thumbnail and name. -->
+<resources>
+    <!-- Dock label and the sheet's pane title. "Actions" replaces "More". -->
+    <string name="doc_actions">Actions</string>
+    <!-- Dock label: "Read text" replaces "Text". Short enough for a quarter-width
+         dock cell in Hindi at 130 % (the sheet row keeps btn_ocr_text). -->
+    <string name="dock_read_text">Read text</string>
+    <!-- Section header above Compress / Sign / Read text / Share. -->
+    <string name="doc_actions_header">Work on this document</string>
+    <!-- Why a row is greyed out for a legacy Vault item. -->
+    <string name="doc_actions_vault_reason">Take this document out of the Vault first.</string>
+    <!-- The document behind a stale sheet id is gone (deleted while the sheet was open). -->
+    <string name="doc_actions_missing">This document is no longer in your library.</string>
+</resources>
