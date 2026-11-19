@@ -220,11 +220,23 @@ class ShellScreenTest {
             activity.findViewById<View>(R.id.swDocMore).performClick()
             idle()
             val dialog = ShadowDialog.getLatestDialog()
-            assertNotNull(dialog)
-            assertNotNull(dialog.findViewById<View>(R.id.swSheetPrimary))
+            assertNotNull("the row's Actions sheet opens", dialog)
+            // UI-B5: the row's overflow is the shared named Actions sheet, bound to this
+            // row, not the old "Open / Share / Move to Trash" sheet it replaced.
             assertEquals(
-                activity.getString(R.string.shell_open),
-                dialog.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
+                activity.getString(R.string.doc_actions),
+                dialog.findViewById<TextView>(R.id.swSheetTitle).text.toString()
+            )
+            val header = dialog.window?.decorView?.findViewWithTag<TextView>("docActions:name")
+            assertNotNull("the sheet names its own document", header)
+            assertEquals(
+                "the sheet is bound to the row it came from",
+                (card as com.scanwhirl.app.ui.kit.DocCard).doc?.name,
+                header!!.text.toString()
+            )
+            assertNotNull(
+                "the shared sheet's destructive row is there",
+                dialog.findViewById<View>(R.id.rowMoreDelete)
             )
             dialog.dismiss()
             assertTrue(card.hasOnClickListeners())

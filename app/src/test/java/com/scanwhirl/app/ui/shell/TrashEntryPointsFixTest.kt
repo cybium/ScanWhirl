@@ -63,7 +63,7 @@ class TrashEntryPointsFixTest {
         TrashActions.takePending() // no notice left over from another test
     }
 
-    // ---- the library row sheet (ShellActivity.confirmTrash) -----------------
+    // ---- the library row's Actions sheet (DocumentActionsSheet) --------------
 
     @Test
     fun `row sheet moves the document to Trash and Undo restores it`() {
@@ -74,9 +74,16 @@ class TrashEntryPointsFixTest {
                 assertTrue("the library lists the document", poll { cards(activity).any { it.doc?.id == id } })
                 cards(activity).first { it.doc?.id == id }.moreButton.performClick()
                 idle()
-                val actions = latestDialog("the row sheet")
-                val delete = findText(actions.window!!.decorView, app.getString(R.string.shell_move_to_trash))
+                // UI-B5: the ⋮ opens the shared Actions sheet; its destructive row is the
+                // one that must move to Trash (T27), never purge.
+                val actions = latestDialog("the row's Actions sheet")
+                val delete = actions.findViewById<View>(R.id.rowMoreDelete)
                 assertNotNull("the sheet offers Move to Trash", delete)
+                assertEquals(
+                    "the move row names the Trash destination",
+                    app.getString(R.string.trash_move),
+                    actions.findViewById<TextView>(R.id.labelMoreDelete).text.toString()
+                )
                 delete!!.performClick()
                 idle()
 
@@ -341,30 +348,20 @@ class TrashEntryPointsFixTest {
         idle()
     }
 
-    /** The newest showing SwSheet (has a primary button); fails with [what] when none is up. */
+    /** The newest showing titled SwSheet; fails with [what] when none is up. */
     private fun latestDialog(what: String): android.app.Dialog {
         val deadline = System.currentTimeMillis() + 8_000
         while (System.currentTimeMillis() < deadline) {
             idle()
             val dialog = ShadowDialog.getLatestDialog()
             if (dialog != null && dialog.isShowing &&
-                dialog.findViewById<View>(R.id.swSheetPrimary) != null
+                dialog.findViewById<View>(R.id.swSheetTitle) != null
             ) {
                 return dialog
             }
             Thread.sleep(25)
         }
         throw AssertionError("$what never appeared")
-    }
-
-    private fun findText(root: View, text: String): View? {
-        if (root is TextView && root.text.toString() == text && root.isClickable) return root
-        if (root is ViewGroup) {
-            for (i in 0 until root.childCount) {
-                findText(root.getChildAt(i), text)?.let { return it }
-            }
-        }
-        return null
     }
 
     private fun findById(root: View, id: Int): View? {

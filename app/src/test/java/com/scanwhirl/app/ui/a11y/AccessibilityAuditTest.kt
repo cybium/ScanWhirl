@@ -32,6 +32,7 @@ import com.scanwhirl.app.ui.OcrEditorActivity
 import com.scanwhirl.app.ui.PageViewerActivity
 import com.scanwhirl.app.ui.ScanReviewActivity
 import com.scanwhirl.app.ui.SettingsActivity
+import com.scanwhirl.app.ui.kit.DocCard
 import com.scanwhirl.app.ui.protect.ProtectSheet
 import com.scanwhirl.app.ui.protect.UnlockSheet
 import com.scanwhirl.app.ui.shell.ShellActivity
@@ -218,6 +219,15 @@ class AccessibilityAuditTest {
                 host.findViewById<View>(R.id.swNavScan).performClick()
                 idle()
                 requireNotNull(ShadowDialog.getLatestDialog()) { "no Create sheet" }
+            }
+            // UI-B5: the Library row's ⋮ opens the shared Actions sheet; audit it as the
+            // user reaches it (the row's own overflow), at 1.3x and 2.0x.
+            auditSheet("Library row actions sheet") { host ->
+                val docs = host.findViewById<ViewGroup>(R.id.swDocList)
+                assertTrue("a seeded document card is needed", docs.childCount > 0)
+                (docs.getChildAt(0) as DocCard).moreButton.performClick()
+                idle()
+                requireNotNull(ShadowDialog.getLatestDialog()) { "no row Actions sheet" }
             }
             auditShell("Tools") { a ->
                 a.findViewById<View>(R.id.swNavTools).performClick()

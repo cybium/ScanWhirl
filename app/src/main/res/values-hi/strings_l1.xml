@@ -172,8 +172,6 @@
     <string name="tool_pick_image">तस्वीर चुनें</string>
     <string name="shell_today">आज</string>
     <string name="shell_yesterday">कल</string>
-    <string name="shell_doc_actions_note">इस दस्तावेज़ को खोलें, भेजें, या हटाई गई फ़ाइलों में डालें।</string>
-    <string name="shell_open">खोलें</string>
     <string name="shell_move_to_trash">हटाई गई फ़ाइलों में भेजें</string>
     <string name="shell_trash_title">“%1$s” को हटाई गई फ़ाइलों में भेजें?</string>
     <string name="shell_trash_note">यह 30 दिन तक हटाई गई फ़ाइलों में रहेगा। कुछ भी इंटरनेट पर नहीं जाता।</string>
