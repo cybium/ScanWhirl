@@ -15,6 +15,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -104,45 +105,47 @@ class ShellProGateTest {
     }
 
     @Test
-    fun `Free - Pro tools in the Home quick row open the Pro screen`() {
+    fun `Free - the Pro QR entry in the Create sheet opens the Pro screen`() {
         ProGate.setTestOverride(app, false)
-        val proQuick = listOf("sign", "to_word")
         launch { activity ->
-            for (id in proQuick) {
-                val quick = activity.findViewById<View>(R.id.swQuickRow) as android.view.ViewGroup
-                val tile = (0 until quick.childCount)
-                    .map { quick.getChildAt(it) }
-                    .filterIsInstance<com.scanwhirl.app.ui.kit.ToolTile>()
-                    .firstOrNull { it.tool?.id == id }
-                assertNotNull("$id quick tile is missing", tile)
-                tile!!.performClick()
-                idle()
-                assertProScreen(activity, id)
-            }
+            activity.findViewById<View>(R.id.swNavScan).performClick()
+            idle()
+            val dialog = ShadowDialog.getLatestDialog()
+            assertNotNull("the Create sheet opens", dialog)
+            val qr = dialog!!.findViewById<View>(R.id.swCreateQr)
+            assertNotNull("the Create sheet offers QR code", qr)
+            qr!!.performClick()
+            idle()
+            assertProScreen(activity, "qr_code")
+            assertNull(
+                "a gated QR tap starts no QR activity",
+                shadowOf(activity).nextStartedActivity
+            )
         }
     }
 
     @Test
-    fun `Free - a Free tool still runs instead of the Pro screen`() {
+    fun `Free - a Free Create entry still runs instead of the Pro screen`() {
         ProGate.setTestOverride(app, false)
         launch { activity ->
-            val quick = activity.findViewById<View>(R.id.swQuickRow) as android.view.ViewGroup
-            val tile = (0 until quick.childCount)
-                .map { quick.getChildAt(it) }
-                .filterIsInstance<com.scanwhirl.app.ui.kit.ToolTile>()
-                .first { it.tool?.id == "compress" }
-            tile.performClick()
+            activity.findViewById<View>(R.id.swNavScan).performClick()
+            idle()
+            val dialog = ShadowDialog.getLatestDialog()
+            assertNotNull("the Create sheet opens", dialog)
+            val idCard = dialog!!.findViewById<View>(R.id.swCreateIdCard)
+            assertNotNull("the Create sheet offers ID card", idCard)
+            idCard!!.performClick()
             idle()
             assertFalse(
                 "a Free tool must not be gated",
                 proVisible(activity)
             )
-            // Compress asks for its source: a sheet, or the file picker when the
-            // library list has not loaded yet. Either way it is not the Pro pitch.
-            val dialog = ShadowDialog.getLatestDialog()
-            val picker = shadowOf(activity).nextStartedActivityForResult
-            assertTrue("compress starts its real flow", dialog != null || picker != null)
-            dialog?.dismiss()
+            val started = shadowOf(activity).nextStartedActivity
+            assertNotNull("the ID card tool opens", started)
+            assertEquals(
+                com.scanwhirl.app.ui.tools.IdCardActivity::class.java.name,
+                started.component?.className
+            )
         }
     }
 

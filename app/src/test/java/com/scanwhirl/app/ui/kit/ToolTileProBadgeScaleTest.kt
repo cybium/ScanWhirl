@@ -205,23 +205,8 @@ abstract class ToolTileProBadgeBase {
                 scenario.onActivity { activity ->
                     idle()
                     val root = layoutRoot(activity)
-                    // Home quick row: the tiles the sweep photographed.
-                    for (id in intArrayOf(R.id.swQuickRow, R.id.swQuickRow2, R.id.swQuickRow3)) {
-                        val row = activity.findViewById<ViewGroup>(id) ?: continue
-                        if (!row.isVisible) continue
-                        for (i in 0 until row.childCount) {
-                            val tile = row.getChildAt(i) as? ToolTile ?: continue
-                            problems += badgeProblems(tile, root, scale).map { "quick $it" }
-                            if (tile.proTag.isVisible) {
-                                badges++
-                                diag += "@$scale quick \"${tile.labelView.text}\" tile=${tile.width} " +
-                                    "tag=${tile.proTag.width}x${tile.proTag.height} " +
-                                    "lines=${tile.proTag.layout?.lineCount} " +
-                                    "tagTop=${tile.proTag.top} labelTop=${tile.labelView.top}"
-                            }
-                        }
-                    }
-                    // Tools hub: full-width rows; the Pro word sits under the name.
+                    // The Home quick row is gone (UI-B1 #1); the same entry is measured on the
+                    // Tools tab, where every Pro entry still draws its badge in Free.
                     activity.findViewById<View>(R.id.swNavTools).performClick()
                     idle()
                     val hubRoot = layoutRoot(activity)

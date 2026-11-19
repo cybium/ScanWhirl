@@ -114,6 +114,7 @@ class DeadButtonAuditTest {
     fun `shell screens have no dead buttons`() {
         auditBothProStates(
             Screen("Library") { shellHost() },
+            Screen("Create sheet", freshEachClick = true) { createSheet() },
             Screen("Library selection") { shellSelection() },
             Screen("Tools") { shellTab(R.id.swNavTools) },
             Screen("Me") { shellTab(R.id.swNavMe) },
@@ -428,6 +429,15 @@ class DeadButtonAuditTest {
         return a to contentRoot(a)
     }
 
+    /** UI-B1 #2: the Create sheet behind the centre Scan action. */
+    private fun createSheet(): Pair<Activity, View> {
+        val (a, _) = shellHost()
+        a.findViewById<View>(R.id.swNavScan).performClick()
+        idle()
+        val dialog = requireNotNull(ShadowDialog.getLatestDialog()) { "no Create sheet" }
+        return a to (dialog.window?.decorView ?: throw IOException("no Create decor"))
+    }
+
     private fun shellSelection(): Pair<Activity, View> {
         val (a, _) = shellHost()
         val docs = a.findViewById<ViewGroup>(R.id.swDocList)
@@ -667,10 +677,9 @@ class DeadButtonAuditTest {
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
     private fun assertNoProblems() {
-        val message = buildString {
-            appendLine("${problems.size} dead-button problem(s):")
-            problems.forEach { appendLine(" - $it") }
-        }
-        assertTrue(message, problems.isEmpty())
+        // One line on purpose: the CI gate's summary prints only the first line of a failure,
+        // so a multi-line list of findings used to lose every detail.
+        val message = problems.joinToString(" ; ")
+        assertTrue("${problems.size} dead-button problem(s): $message", problems.isEmpty())
     }
 }

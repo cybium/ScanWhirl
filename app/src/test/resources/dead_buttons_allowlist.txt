@@ -10,9 +10,13 @@
 
 # L1 shell: the scan tab hands off to the Play Services document scanner; no
 # activity/dialog is observable in Robolectric, on device it opens the scanner.
-*|dead|swNavScan|L1 shell: Play Services scanner hand-off (not observable in Robolectric)
+# UI-B1: the centre Scan action now opens the Create sheet, which IS observable, so
+# swNavScan is no longer allow-listed as dead.
+*|dead|swCreateScan|UI-B1 Create sheet: Play Services scanner hand-off (not observable in Robolectric)
 # L1 shell: clicking the already-selected tab is a deliberate no-op.
 *|dead|swNavTools|L1 shell: already-selected tab
+# L1 shell: Library is the start tab, so tapping it again is the same deliberate no-op.
+*|dead|swNavLibrary|L1 shell: already-selected tab (same rule as swNavTools)
 # L4 tools: the row launches the system document picker through ActivityResult.
 Tool setup|dead|toolSetupDocRow|L4 tools: system document picker launcher
 # L2 vault: the lock button re-prompts only once; the sheet was already shown on open.

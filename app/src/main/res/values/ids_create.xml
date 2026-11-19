@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- UI-B1-LIBRARY-CREATE: the Create sheet's own ids (the ID card / photos / PDF entries
+         reuse the existing swCreate* ids). Kept in a new file so lanes never edit ids_l1.xml. -->
+    <item name="swCreatePassport" type="id" />
+    <item name="swCreateQr" type="id" />
+    <item name="swCreateQrPro" type="id" />
+    <item name="swCreateScan" type="id" />
+    <item name="swEmptyScan" type="id" />
+    <item name="swEmptyImport" type="id" />
+    <item name="swEmptyTrust" type="id" />
+</resources>

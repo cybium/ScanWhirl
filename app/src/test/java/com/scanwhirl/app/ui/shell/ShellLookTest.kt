@@ -75,45 +75,6 @@ class ShellLookTest {
     private fun drawableId(view: ImageView): Int = shadowOf(view.drawable).createdFromResId
 
     @Test
-    fun `the six quick tools fit 360dp in five columns with readable labels`() {
-        launch { activity ->
-            layoutRoot(activity)
-            val quick = activity.findViewById<ViewGroup>(R.id.swQuickRow)
-            // v2 UI: 01_home_A - five columns (the sixth tool starts the second row) so a
-            // Hindi label keeps 11sp and two lines instead of shrinking to fit six.
-            assertEquals(LibraryScreen.QUICK_COLUMNS, quick.childCount)
-            assertTrue("the row starts on screen", quick.left >= 0)
-            assertTrue(
-                "the row ends on screen",
-                quick.right <= activity.resources.displayMetrics.widthPixels
-            )
-
-            var sum = 0
-            for (i in 0 until quick.childCount) {
-                val tile = quick.getChildAt(i)
-                assertTrue("column $i has width", tile.width > 0)
-                sum += tile.width
-                val circle = tile.findViewById<View>(R.id.swToolIcon)
-                assertTrue("column $i circle starts inside", circle.left >= 0)
-                assertTrue("column $i circle ends inside", circle.right <= tile.width)
-                val label = tile.findViewById<TextView>(R.id.swToolLabel)
-                val l = label.layout
-                assertNotNull("${label.text} is laid out", l)
-                assertTrue("${label.text} uses at most two lines", l!!.lineCount <= 2)
-                assertEquals("${label.text} is never ellipsized", 0, l.getEllipsisCount(0))
-                val avail = label.width - label.totalPaddingLeft - label.totalPaddingRight
-                for (line in 0 until l.lineCount) {
-                    assertTrue(
-                        "${label.text} line $line fits its column (${l.getLineWidth(line)} > $avail)",
-                        l.getLineWidth(line) <= avail + 0.5f
-                    )
-                }
-            }
-            assertTrue("the columns fit the row", sum <= quick.width)
-        }
-    }
-
-    @Test
     fun `tool hub labels are fully visible and never ellipsized`() {
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
