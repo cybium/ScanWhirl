@@ -128,34 +128,40 @@ def make_tile(entry: dict, out_path: Path) -> None:
         panel = Image.new("RGB", (panel_w, PANEL), (18, 18, 20))
         panel.paste(thumb, (0, 0))
         draw = ImageDraw.Draw(panel)
+        badge = None
         if key == "truth":
             if entry["truth"] is not None:
                 draw_quad(draw, entry["truth"], scale, (0, 0), COLOR_GT)
             else:
-                draw.rectangle([0, 0, 150, 20], fill=(0, 0, 0))
-                draw.text((5, 5), f"no page (has_doc={entry['has_doc']})", fill=(255, 255, 255))
+                badge = f"no page (has_doc={entry['has_doc']})"
         else:
             quad = entry.get(key)
             if quad is not None:
                 draw_quad(draw, quad, scale, (0, 0), colour)
             else:
-                draw.rectangle([0, 0, 74, 20], fill=(0, 0, 0))
-                draw.text((5, 5), "no page", fill=(255, 255, 255))
+                badge = "no page"
         panel = panel.resize((PANEL, PANEL), Image.BILINEAR)
-        panels.append((name, panel, colour))
+        panels.append((name, panel, colour, badge))
 
     width = PANEL * len(panels) + PAD * (len(panels) + 1)
     height = PANEL + CAPTION + PAD
     tile = Image.new("RGB", (width, height), (26, 26, 30))
     draw = ImageDraw.Draw(tile)
-    for index, (name, panel, colour) in enumerate(panels):
+    for index, (name, panel, colour, badge) in enumerate(panels):
         x = PAD + index * (PANEL + PAD)
         tile.paste(panel, (x, PAD))
         draw.rectangle([x, PAD, x + PANEL - 1, PAD + PANEL - 1], outline=(70, 70, 78))
-        draw.rectangle([x + 1, PAD + 1, x + 4 + 6 * len(name), PAD + 17], fill=(10, 10, 12))
+        # titles and badges are drawn on the final tile, so the font never scales with
+        # the thumbnail (a badge used to grow with a tall portrait frame)
+        title_box = [x + 1, PAD + 1, x + 8 + 6 * len(name), PAD + 16]
+        draw.rectangle(title_box, fill=(10, 10, 12))
         draw.text((x + 4, PAD + 4), name, fill=margin_text(colour), anchor="lt")
         if colour:
-            draw.rectangle([x + 2, PAD + 19, x + 12, PAD + 29], outline=colour)
+            draw.rectangle([x + 4, PAD + 18, x + 12, PAD + 26], outline=colour)
+        if badge:
+            box = [x + 6, PAD + 26, x + 14 + 6 * len(badge), PAD + 44]
+            draw.rectangle(box, fill=(0, 0, 0))
+            draw.text((x + 9, PAD + 31), badge, fill=(255, 255, 255), anchor="lt")
 
     caption = entry["caption"]
     draw.text((PAD + 2, PANEL + PAD + 6), caption, fill=(235, 235, 235))
@@ -251,11 +257,15 @@ def main(argv=None) -> int:
     parser.add_argument("--split", default="test")
     parser.add_argument("--max", type=int, default=30)
     parser.add_argument("--include-web", action="store_true", default=True)
+    parser.add_argument("--ml-source", default="ml",
+                        help="which prediction file is the model column: 'ml' (the scored "
+                             "candidate) or an extra-model label such as 'v2'")
+    parser.add_argument("--out-dir", default="", help="gallery directory (default: gallery)")
     parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args(argv)
 
     run_dir = data_ml.RUNS_DIR / args.run_id
-    gallery = run_dir / "gallery"
+    gallery = Path(args.out_dir) if args.out_dir else run_dir / "gallery"
     gallery.mkdir(parents=True, exist_ok=True)
 
     label_sets = [(args.split, run_dir / f"labels_{args.split}.csv")]
@@ -269,7 +279,7 @@ def main(argv=None) -> int:
         if not labels_path.is_file():
             print(f"missing {labels_path}, skipped")
             continue
-        pred_ml = read_predictions(run_dir / f"pred_{split}_ml.csv")
+        pred_ml = read_predictions(run_dir / f"pred_{split}_{args.ml_source}.csv")
         pred_r2 = read_predictions(run_dir / f"pred_{split}_r2.csv")
         pred_shipped = read_predictions(run_dir / f"pred_{split}_shipped.csv")
         pred_v1_path = run_dir / f"pred_{split}_v1.csv"
