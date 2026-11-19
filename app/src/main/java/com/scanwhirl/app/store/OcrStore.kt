@@ -3,6 +3,7 @@ package com.scanwhirl.app.store
 import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Sha256
 import kotlin.concurrent.withLock
 import java.io.File
@@ -35,6 +36,9 @@ class OcrStore(private val docsDir: File) {
     private val PENDING_FILE = "ocr_pending"
     private val TEXT_FILE = "ocr.txt"
     private val GEO_FILE = "ocr_geo.txt"
+
+    /** Legacy 4-digit-PIN Vault marker (see ScanRepository.VAULT_FILE). */
+    private val VAULT_FILE = "vault.flag"
 
     companion object {
         private val lock = ReentrantLock()
@@ -456,11 +460,14 @@ class OcrStore(private val docsDir: File) {
      * Marks an EXISTING, visible document for indexing. It never creates a
      * directory and never touches a directory a save transaction still owns
      * (`.incomplete`), so it cannot resurrect a deleted or unpublished document.
+     * Vault (`vault.flag`) and password-locked (`locked.meta`) documents are
+     * never queued: their pages must never be read for text.
      */
     fun markPending(id: String) {
         lock.withLock {
             val dir = docDir(id)
             if (!dir.isDirectory || SaveFormat.isIncomplete(dir)) return
+            if (File(dir, VAULT_FILE).exists() || File(dir, PdfProtection.LOCK_FILE).exists()) return
             // Queue first: a crash before the marker still leaves the id in the queue, and the
             // next pass marks it again. The marker alone is the older, slower fallback.
             enqueuePending(id)
@@ -476,20 +483,22 @@ class OcrStore(private val docsDir: File) {
     }
 
     /**
-     * The documents waiting for indexing, newest first. Reads one small queue file instead of
-     * listing every document directory on launch; entries whose marker disappeared (indexed,
-     * deleted, or a save that never published) are dropped and the file is rewritten.
+     * The documents waiting for indexing, newest first.
      *
-     * A missing queue file (first launch after an upgrade) is rebuilt once from the markers.
+     * The `ocr_pending` marker file is the only authority. [ScanRepository.buildAndPublish]
+     * writes the marker inside a staging folder *before* the document has an id, so such a
+     * document can never be queued at write time; older builds did the same. Trusting the
+     * queue file alone therefore hid those documents forever (T41: a compressed or otherwise
+     * re-encoded output was never recognised and never became searchable). The queue file is
+     * kept as a small, self-healing cache of this listing; one directory listing is cheap next
+     * to the page reads an indexing pass does.
+     *
+     * Vault (`vault.flag`) and password-locked (`locked.meta`) documents are never returned:
+     * their pages must never be read for text.
      */
     internal fun pendingQueue(): List<String> = lock.withLock {
-        val rebuilt = !queueFile.isFile
-        val listed = if (!rebuilt) readQueue() else scanPendingMarkers()
-        val alive = listed.filter { id ->
-            val dir = docDir(id)
-            dir.isDirectory && !SaveFormat.isIncomplete(dir) && File(dir, PENDING_FILE).isFile
-        }.sortedByDescending { docDir(it).lastModified() }
-        if (rebuilt || alive != listed) writeQueue(alive)
+        val alive = scanPendingMarkers()
+        if (readQueue() != alive) writeQueue(alive)
         alive
     }
 
@@ -527,7 +536,11 @@ class OcrStore(private val docsDir: File) {
 
     private fun scanPendingMarkers(): List<String> =
         docsDir.listFiles { f ->
-            f.isDirectory && !SaveFormat.isIncomplete(f) && File(f, PENDING_FILE).isFile
+            f.isDirectory &&
+                !SaveFormat.isIncomplete(f) &&
+                File(f, PENDING_FILE).isFile &&
+                !File(f, VAULT_FILE).exists() &&
+                !File(f, PdfProtection.LOCK_FILE).exists()
         }?.sortedByDescending { it.lastModified() }?.mapNotNull { it.name } ?: emptyList()
 
     /**
