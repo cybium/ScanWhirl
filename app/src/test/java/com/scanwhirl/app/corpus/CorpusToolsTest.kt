@@ -33,7 +33,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowContentResolver
-import java.awt.image.BufferedImage
 import java.io.File
 import java.io.InputStream
 import java.nio.file.Files
@@ -41,7 +40,6 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.util.Locale
 import java.util.zip.ZipFile
-import javax.imageio.ImageIO
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Document
 import kotlin.math.abs
@@ -147,10 +145,9 @@ class CorpusToolsTest {
                     (0 until source.numberOfPages).map { i ->
                         val box = source.getPage(i).cropBox
                         val scale = minOf(150f / 72f, 2048f / maxOf(box.width, box.height))
-                        val raster = renderer.renderImage(i, scale)
+                        val raster = render(renderer, i, scale)
                         val page = File(dir, "$i.jpg")
-                        check(ImageIO.write(raster, "JPEG", page)) { "Host JPEG encoder missing" }
-                        raster.flush()
+                        raster.writeJpeg(page)
                         Uri.fromFile(page)
                     }
                 }
@@ -308,7 +305,7 @@ class CorpusToolsTest {
                 Loader.loadPDF(f).use { original ->
                     val renderer = PDFRenderer(original).apply { isSubsamplingAllowed = true }
                     for ((index, file) in doc.pageFiles.withIndex()) {
-                        similar(renderer.renderImage(index, 0.55f), image(file),
+                        similar(render(renderer, index, 0.55f), image(file),
                             if (index == 0) "first-page thumbnail" else "imported page ${index + 1}")
                     }
                 }
@@ -616,7 +613,9 @@ class CorpusToolsTest {
                     val catalog = it.documentCatalog
                     verify(catalog.outputIntents.any { intent ->
                         intent.destOutputIntent?.createInputStream()?.use { stream ->
-                            java.awt.color.ICC_Profile.getInstance(stream).numComponents == 3
+                            val header = stream.readNBytes(128)
+                            header.size == 128 && String(header, 16, 4, Charsets.US_ASCII) == "RGB " &&
+                                String(header, 36, 4, Charsets.US_ASCII) == "acsp"
                         } == true
                     }, "PDF/A sRGB ICC stream missing or invalid")
                     val xml = catalog.metadata?.createInputStream()?.use(::parseXml)
@@ -672,7 +671,7 @@ class CorpusToolsTest {
                     val entries = z.entries().toList()
                     equal(doc.pageCount, entries.size, "exported image count")
                     for ((i, entry) in entries.withIndex()) {
-                        val decoded = z.getInputStream(entry).use(ImageIO::read)
+                        val decoded = z.getInputStream(entry).use(::image)
                             ?: throw Mismatch("Unrecognized exported image ${entry.name}")
                         similar(image(doc.pageFiles[i]), decoded, "export image #${i + 1}")
                     }
@@ -712,7 +711,7 @@ class CorpusToolsTest {
                             .single { it.getAttribute("Type").endsWith("/image") }.getAttribute("Target")
                         val embedded = zip.getEntry("ppt/" + target.removePrefix("../"))
                             ?: throw Mismatch("Missing slide image $target")
-                        val decoded = zip.getInputStream(embedded).use(ImageIO::read)
+                        val decoded = zip.getInputStream(embedded).use(::image)
                             ?: throw Mismatch("Unreadable embedded slide image")
                         similar(image(doc.pageFiles[i - 1]), decoded, "slide $i embedded page")
                     }
@@ -904,7 +903,8 @@ class CorpusToolsTest {
                     val resources = removed.getPage(edit.pageIndex).resources
                     val raster = resources.xObjectNames.map { resources.getXObject(it) }.filterIsInstance<PDImageXObject>()
                     equal(1, raster.size, "raster backing for redacted page")
-                    val images = listOf(renderer.renderImage(edit.pageIndex, .8f), raster.single().image)
+                    val images = listOf(render(renderer, edit.pageIndex, .8f),
+                        HostImage(requireNotNull(PDImageXObject::class.java.getMethod("getImage").invoke(raster.single()))))
                     for (mask in edit.marks) {
                         val region = (mask as PageStamp.Mark.Redact).box
                         for (page in images) for (i in 1..7) for (j in 1..7) {
@@ -970,15 +970,47 @@ class CorpusToolsTest {
         return digest.digest().joinToString("") { "%02x".format(Locale.ROOT, it) }
     }
 
-    private fun image(file: File): BufferedImage =
-        ImageIO.read(file) ?: throw Mismatch("Independent ImageIO cannot decode ${file.name}")
+    // AGP compiles against the Android Java API surface, which omits java.desktop.
+    // Robolectric executes in the host JDK; keep the reflection at this test-only AWT boundary.
+    private class HostImage(private val value: Any) {
+        val width: Int = awt.getMethod("getWidth").invoke(value) as Int
+        val height: Int = awt.getMethod("getHeight").invoke(value) as Int
+        fun getRGB(x: Int, y: Int): Int = rgb.invoke(value, x, y) as Int
+        fun getSubimage(x: Int, y: Int, w: Int, h: Int) = HostImage(sub.invoke(value, x, y, w, h))
+        fun writeJpeg(file: File) {
+            check(write.invoke(null, value, "JPEG", file) == true) { "Host JPEG encoder missing" }
+            flush.invoke(value)
+        }
 
-    private fun similar(expected: BufferedImage, actual: BufferedImage, label: String) {
+        companion object {
+            private val awt = Class.forName("java.awt.image.BufferedImage")
+            private val io = Class.forName("javax.imageio.ImageIO")
+            private val int = Int::class.javaPrimitiveType!!
+            private val rgb = awt.getMethod("getRGB", int, int)
+            private val sub = awt.getMethod("getSubimage", int, int, int, int)
+            private val flush = awt.getMethod("flush")
+            private val write = io.getMethod("write", Class.forName("java.awt.image.RenderedImage"), String::class.java, File::class.java)
+            private val read = io.getMethod("read", InputStream::class.java)
+            fun decode(input: InputStream): HostImage? = read.invoke(null, input)?.let(::HostImage)
+        }
+    }
+
+    private val renderMethod by lazy {
+        PDFRenderer::class.java.getMethod("renderImage", Int::class.javaPrimitiveType, Float::class.javaPrimitiveType)
+    }
+    private fun render(renderer: PDFRenderer, index: Int, scale: Float): HostImage =
+        HostImage(requireNotNull(renderMethod.invoke(renderer, index, scale)))
+
+    private fun image(input: InputStream): HostImage? = HostImage.decode(input)
+    private fun image(file: File): HostImage =
+        file.inputStream().use(::image) ?: throw Mismatch("Independent ImageIO cannot decode ${file.name}")
+
+    private fun similar(expected: HostImage, actual: HostImage, label: String) {
         var referenceInk = 0
         var actualInk = 0
         var delta = 0L
         for (y in 0 until 96) for (x in 0 until 96) {
-            fun gray(img: BufferedImage): Int {
+            fun gray(img: HostImage): Int {
                 val p = img.getRGB(x * img.width / 96, y * img.height / 96)
                 return ((p shr 16 and 255) + (p shr 8 and 255) + (p and 255)) / 3
             }
