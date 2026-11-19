@@ -205,7 +205,7 @@
     <string name="tools_result_open">खोलें</string>
     <string name="tools_result_share">भेजें</string>
     <!-- review: renamed and added at T05-RESULT-SLICE - native review pending -->
-    <string name="tools_result_save">इस रूप में सहेजें…</string>
+    <string name="tools_result_save">जगह चुनकर सहेजें…</string>
     <string name="tools_result_also_save">Documents में भी सहेजें</string>
     <string name="tools_result_library">कागज़ात में दिखाएँ</string>
     <string name="tools_result_undo">वापस लाएँ</string>

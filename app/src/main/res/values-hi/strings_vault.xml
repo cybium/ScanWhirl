@@ -18,7 +18,7 @@
     <string name="vault_locked_title">तिजोरी पर ताला है</string>
     <string name="vault_locked_body">अपनी निजी फ़ाइलें देखने के लिए उँगली का निशान लगाएँ या गुप्त नंबर डालें।</string>
     <string name="vault_not_setup_title">आपकी निजी जगह</string>
-    <string name="vault_not_setup_body">इस फ़ोन पर फ़ाइलें ऐसे रखने के लिए तिजोरी बनाएँ कि कोड के बिना उन्हें कोई न पढ़ सके। इन्हें सिर्फ़ आप खोल सकते हैं।</string>
+    <string name="vault_not_setup_body">निजी फ़ाइलें रखने के लिए तिजोरी बनाएँ। फ़ाइलें देखने के लिए पहले तिजोरी खोलनी होगी।</string>
     <string name="vault_banner_fingerprint">उँगली के निशान से खुली · 2 मिनट में फिर ताला</string>
     <string name="vault_banner_passcode">गुप्त नंबर से खुली · 2 मिनट में फिर ताला</string>
     <string name="vault_banner_recovery">तिजोरी वापस खोलने के कोड से खुली · 2 मिनट में फिर ताला</string>
@@ -61,7 +61,7 @@
     <string name="vault_confirm_hint">पहले 4 अक्षर</string>
     <string name="vault_confirm_wrong">यह कोड से मेल नहीं खाता</string>
     <string name="vault_finish">बनाना पूरा करें</string>
-    <string name="vault_pending_note">बनाना पूरा करें: अपने कोड के पहले 4 अक्षर लिखें।</string>
+    <string name="vault_pending_note">तिजोरी बनाना पूरा करें। जो कोड दिखे, उसके शुरू के 4 अक्षर या अंक डालें।</string>
     <string name="vault_code_stale">यह तिजोरी बदल गई है। कोड का चरण फिर से शुरू करें।</string>
     <string name="vault_finish_failed">बनाना पूरा नहीं हो सका। फिर कोशिश करें।</string>
     <!-- VAULT-F1: बनाना अधूरा रहने पर बचाकर रखी प्रति और बहाली। -->
@@ -113,8 +113,8 @@
     <string name="vault_add_failed">यह दस्तावेज़ नहीं जोड़ा जा सका: %1$s</string>
 
     <string name="vault_open">खोलें</string>
-    <string name="vault_remove">तिजोरी से हटाएँ</string>
-    <string name="vault_remove_note">यह सुरक्षित प्रति हमेशा के लिए हटा देगा, जिसे गुप्त नंबर या कोड के बिना पढ़ा नहीं जा सकता। कागज़ात की प्रति पहले ही हट चुकी है।</string>
+    <string name="vault_remove">तिजोरी की प्रति मिटाएँ</string>
+    <string name="vault_remove_note">तिजोरी की यह प्रति हमेशा के लिए मिट जाएगी। कागज़ात में इसकी प्रति पहले ही हटाई जा चुकी है।</string>
     <string name="vault_removed">तिजोरी से हटा दिया</string>
     <string name="vault_open_failed">यह दस्तावेज़ नहीं खुल सका: %1$s</string>
 

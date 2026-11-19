@@ -6,7 +6,7 @@
     <!-- The page's text could not be read: nothing was checked, so never say it is clean. -->
     <string name="find_unreadable_one">Couldn\'t read the text on this page, so nothing was found automatically. Cover private info by hand with the box tool.</string>
     <plurals name="find_unreadable_pages">
-        <item quantity="one">Couldn\'t read the text on this page, so nothing was found automatically. Cover private info by hand with the box tool.</item>
+        <item quantity="one">Couldn\'t read the text on %1$d page, so nothing was found there automatically. Cover private info by hand with the box tool.</item>
         <item quantity="other">Couldn\'t read the text on %1$d pages, so nothing was found there automatically. Cover private info by hand with the box tool.</item>
     </plurals>
     <!-- Action on the unreadable-page notice: arm the manual redaction box tool. -->

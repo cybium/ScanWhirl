@@ -108,6 +108,7 @@ object DeleteExports {
             context.resources.getQuantityString(
                 R.plurals.delete_copies_unproven_named,
                 present.size,
+                present.size,
                 joined(context, names)
             )
         } else {
