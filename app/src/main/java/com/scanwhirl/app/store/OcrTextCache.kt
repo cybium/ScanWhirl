@@ -6,9 +6,16 @@ import java.io.File
 
 /**
  * Caches normalised OCR text for search. Holds only normalised text, keyed
- * by `docId|ocr.txt lastModified`, in an LruCache bounded to 4,000,000
+ * by `docId|ocr.txt lastModified|length`, in an LruCache bounded to 4,000,000
  * characters total. Original text is read from disk on demand (only for
  * hits shown).
+ *
+ * T41-SEARCH-INDEX: there is no persistent search index to migrate. A document
+ * whose text was recognised by an older build is searched the first time its
+ * id is asked for, because a cache miss reads the stored `ocr.txt` (v2 or the
+ * legacy headerless format) and normalises it. Callers must ask from an IO
+ * thread (Home does, in the debounced search pass); nothing here touches the
+ * main thread by itself, and nothing here writes to disk or re-runs OCR.
  *
  * Retrieval slice 5: [pages] keeps the stored per-page map (read-only, keyed
  * by page file name) for documents that matched a search, so page-level hits
@@ -38,7 +45,10 @@ class OcrTextCache(private val repo: ScanRepository) {
         // turns each keystroke into O(pages) work for long textbooks.
         val ocrFile = File(File(repo.docsDir, docId), "ocr.txt")
         val modified = ocrFile.lastModified()
-        val key = "$docId|$modified"
+        // Length as well as mtime: a rewrite inside the same millisecond (or a file restored
+        // with an old timestamp) must not serve the previous text. A miss reads the stored text,
+        // so a document recognised by an earlier build needs no migration to be searchable.
+        val key = "$docId|$modified|${ocrFile.length()}"
         return cache.get(key) ?: run {
             readProbe?.invoke(Thread.currentThread().name)
             val text = repo.ocrDoc(docId).values.joinToString("\n")
