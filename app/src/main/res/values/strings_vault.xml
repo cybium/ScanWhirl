@@ -63,6 +63,8 @@
     <string name="vault_confirm_wrong">That does not match the code</string>
     <string name="vault_finish">Finish setup</string>
     <string name="vault_pending_note">Finish setting up: type 4 characters of your recovery code.</string>
+    <string name="vault_code_stale">This Vault changed. Start the recovery code step again.</string>
+    <string name="vault_finish_failed">Could not finish the setup. Try again.</string>
 
     <string name="vault_unlock_sheet_title">Unlock Vault</string>
     <string name="vault_unlock_note_fingerprint">Use your fingerprint, or enter your passcode.</string>
