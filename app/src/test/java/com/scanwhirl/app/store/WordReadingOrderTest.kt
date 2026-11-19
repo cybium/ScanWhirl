@@ -101,6 +101,37 @@ class WordReadingOrderTest {
             index
         }
 
+    /**
+     * T47: the stored OCR text and geometry of the public CC0 FynePDF two-column sample, as the
+     * phone produced them (`qa/export-quality-2026-11-19/device-ocr/`, copied with `run-as` from
+     * a real import on 2026-11-19). The sample's own public text only.
+     */
+    private fun captured(page: String): Pair<String, OcrPage> {
+        fun fixture(name: String): String =
+            javaClass.getResourceAsStream("/t38/$name")!!.use { it.readBytes().toString(Charsets.UTF_8) }
+
+        val textRecord = fixture("sample-two-column.ocr.txt").lineSequence().first { it.startsWith("$page\t") }
+        val text = String(java.util.Base64.getDecoder().decode(textRecord.substringAfter('\t')), Charsets.UTF_8)
+
+        val geoRecord = fixture("sample-two-column.ocr_geo.txt").lineSequence().first { it.startsWith("$page\t") }
+        val payload = String(java.util.Base64.getDecoder().decode(geoRecord.substringAfter('\t')), Charsets.UTF_8)
+        val rows = payload.lineSequence().toList()
+        val (width, height) = rows.first().split(' ').map { it.toInt() }
+        val lines = rows.drop(1)
+            .filter { it.contains('\t') && !it.startsWith("#text-sha256") }
+            .map { row ->
+                val coordinates = row.substringBefore('\t').split(' ')
+                OcrLine(
+                    row.substringAfter('\t'),
+                    coordinates[0].toInt(),
+                    coordinates[1].toInt(),
+                    coordinates[2].toInt(),
+                    coordinates[3].toInt()
+                )
+            }
+        return text to OcrPage(width, height, lines)
+    }
+
     // ---------------------------------------------------------------- tests
 
     @Test
@@ -206,5 +237,38 @@ class WordReadingOrderTest {
             listOf("hand corrected text", "second line"),
             paragraphs(out).filter { it.isNotBlank() }
         )
+    }
+
+    /**
+     * T47: the phone FAIL of 2026-11-19 (DEVICE_BUILD6 F2). The public FynePDF sample stores
+     * text and geometry that match line for line, but its footer starts in the left column and
+     * runs a little past the gutter, so the export still fell back to the interleaved order.
+     * This is the device's own stored data, not synthetic geometry.
+     */
+    @Test
+    fun `the captured public two-column sample exports the left column before the right`() {
+        val (id, page) = page(width = 1240, height = 1752)
+        val (text, ocr) = captured("page_000.jpg")
+        val name = repo.getDocument(id)!!.pageFiles.first().name
+        repo.ocrStore.putPage(id, name, text, ocr)
+
+        val out = File(work, "sample_two_column.docx")
+        runBlocking { repo.exportWord(id, out) }
+
+        val paragraphs = paragraphs(out).filter { it.isNotBlank() }
+        assertEquals("every stored line is still one paragraph", 79, paragraphs.size)
+        assertEquals("The PDF format in ten short parts", paragraphs.first())
+        assertEquals(
+            "Sample file from FynePDF. Free to use for testing. fynepdf.com/samples",
+            paragraphs.last()
+        )
+        val left = paragraphs.indexOf("PDF stands for Portable Document Format. Adobe")
+        val right = paragraphs.indexOf("and screenshots are usually kept in a lossless")
+        assertTrue("the left column comes first: $paragraphs", left in 0 until right)
+        // DEVICE_BUILD6 F2 quoted exactly this interleaving: heading, right column, left column.
+        val heading = paragraphs.indexOf("1. What a PDF is")
+        val afterHeading = paragraphs.indexOf("introduced it in 1993 so a document would look")
+        assertTrue("the left column is not split by the right: $paragraphs", heading in 0 until afterHeading)
+        assertTrue("the right column follows the whole left one: $paragraphs", afterHeading < right)
     }
 }
