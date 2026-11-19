@@ -15,6 +15,7 @@ import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.SwDialog
+import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.showSw
@@ -56,6 +57,10 @@ class LockToolsActivity : BaseActivity(), HomeHost {
     private fun buildRoot(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(24), dp(32), dp(24), dp(32))
+        // T-FIX-INSETS-BACKUP: the chooser title was the other screen drawn under the status
+        // bar (BaseActivity turns decor fitting off). The original 24/32 padding is kept and
+        // the system bars are added on top and bottom.
+        applySystemBarsPadding()
         addView(
             SwStyle.text(
                 this@LockToolsActivity,

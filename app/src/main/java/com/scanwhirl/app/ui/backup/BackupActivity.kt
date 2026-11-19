@@ -21,6 +21,7 @@ import com.scanwhirl.app.store.vault.VaultAuthException
 import com.scanwhirl.app.store.vault.VaultCrypto
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.ui.BaseActivity
+import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
@@ -207,7 +208,14 @@ class BackupActivity : BaseActivity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = dp(14f) }
         )
-        return ScrollView(this).apply { addView(root) }
+        return ScrollView(this).apply {
+            addView(root)
+            // T-FIX-INSETS-BACKUP: BaseActivity turns decor fitting off, so this screen must
+            // clear the system bars itself. On the owner's Redmi (108 px status bar) the title
+            // was drawn at y=54 px, half under the clock. The inner column keeps its own 20/18
+            // padding; this adds the bars outside the scrolling area, on top and bottom.
+            applySystemBarsPadding()
+        }
     }
 
     private fun primary(text: String, id: Int, onClick: () -> Unit): TextView =
