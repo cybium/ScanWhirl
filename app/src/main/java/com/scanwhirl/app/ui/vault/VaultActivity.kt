@@ -38,6 +38,7 @@ import com.scanwhirl.app.store.vault.VaultKeyChallenge
 import com.scanwhirl.app.store.vault.VaultKeyInvalidatedException
 import com.scanwhirl.app.store.vault.VaultLockedException
 import com.scanwhirl.app.store.vault.VaultSession
+import com.scanwhirl.app.store.vault.VaultStaleReplacementException
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.PdfViewerActivity
@@ -184,6 +185,12 @@ class VaultActivity : BaseActivity() {
         var replacement: VaultStore.RecoveryReplacement? = null
         var migrateLegacy: Boolean = false
 
+        /** Identity of the Vault that showed this code (review: a stale check must not write). */
+        var vaultIdentity: String? = null
+
+        /** A rotation is closing the sheets; that is not an abandonment. */
+        var recreating: Boolean = false
+
         /** Bumped for every new flow, so a sheet from an older instance is stale. */
         var generation: Int = 0
 
@@ -195,6 +202,7 @@ class VaultActivity : BaseActivity() {
             code = null
             confirmCode = null
             replacement = null
+            vaultIdentity = null
             migrateLegacy = false
             dispatched = false
             generation++
@@ -203,7 +211,12 @@ class VaultActivity : BaseActivity() {
 
     private var recoveryFlow = RecoveryFlow()
 
-    override fun onRetainCustomNonConfigurationInstance(): Any = recoveryFlow
+    override fun onRetainCustomNonConfigurationInstance(): Any {
+        // Mark the flow as surviving a configuration change: the dismissal of its dialogs during
+        // this destroy is not the user abandoning the step.
+        recoveryFlow.recreating = true
+        return recoveryFlow
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -211,6 +224,7 @@ class VaultActivity : BaseActivity() {
         // for the code (it must not be persisted), so a process death correctly leaves nothing.
         val retained = lastCustomNonConfigurationInstance as? RecoveryFlow
         recoveryFlow = retained ?: RecoveryFlow()
+        recoveryFlow.recreating = false
         val checkOwedBeforeRecreation = savedInstanceState?.getBoolean(KEY_CONFIRM_OWED) == true
         // Security audit: the Vault shows secrets (recovery code, passcodes, private file
         // names). FLAG_SECURE blocks screenshots/screen recording and blanks the recents card.
@@ -256,6 +270,21 @@ class VaultActivity : BaseActivity() {
         recoveryFlow.clearSecrets()
         enrollmentSheet?.dismiss()
         enrollmentSheet = null
+    }
+
+    /**
+     * A closed enrollment sheet abandons the step unless the activity is merely being recreated
+     * (then the new instance restores it). Clearing here lets the step be started again and
+     * drops the prepared candidate, so it can never be committed later (review MUST-FIX 1).
+     */
+    private fun onEnrollmentSheetDismissed(displayCode: String? = null, confirmCode: String? = null) {
+        if (recoveryFlow.recreating || isFinishing) return
+        val abandoned = when {
+            displayCode != null -> recoveryFlow.code == displayCode
+            confirmCode != null -> recoveryFlow.confirmCode == confirmCode
+            else -> false
+        }
+        if (abandoned) recoveryFlow.clearSecrets()
     }
 
     override fun onStart() {
@@ -988,6 +1017,7 @@ class VaultActivity : BaseActivity() {
         recoveryFlow.code = code
         recoveryFlow.confirmCode = null
         recoveryFlow.migrateLegacy = migrateLegacy
+        recoveryFlow.vaultIdentity = store.vaultIdentity()
         recoveryFlow.dispatched = false
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val codeView = SwStyle.text(
@@ -1049,6 +1079,8 @@ class VaultActivity : BaseActivity() {
         sheet.setPrimary(R.string.vault_recovery_saved) {
             showConfirmRecovery(code, migrateLegacy)
         }
+        // A dismissal (X, Back) abandons the step; a rotation keeps it for the new instance.
+        sheet.setOnDismissListener { onEnrollmentSheetDismissed(displayCode = code) }
         enrollmentSheet = sheet
         sheet.show()
         sheet.view.applySystemBarsPadding(top = false)
@@ -1089,23 +1121,41 @@ class VaultActivity : BaseActivity() {
                 return@setOnClickListener
             }
             field.setError(null)
+            // MUST-FIX 1: the check belongs to the Vault that showed the code. A restore or a
+            // re-create in the meantime makes this confirmation stale: it must not write.
+            if (store.vaultIdentity() != recoveryFlow.vaultIdentity) {
+                dropRetainedSecrets()
+                sheet.dismiss()
+                showError(getString(R.string.vault_code_stale))
+                return@setOnClickListener
+            }
+            // Capture the validated candidate now, not inside the worker: the flow can be
+            // invalidated while the key work runs.
+            val candidate = recoveryFlow.replacement
             recoveryFlow.dispatched = true
             // H2: the replacement wrap is written only now, after the check, and atomically.
             // The pending marker is cleared only after that write succeeded.
             keyWorkOffMain(sheet.primaryButton) {
-                val ok = runCatching {
+                val error = runCatching {
                     withContext(Dispatchers.Default) {
-                        recoveryFlow.replacement?.let { store.commitRecoveryCode(it) }
+                        candidate?.let { store.commitRecoveryCode(it) }
                         store.markConfirmationPassed()
                     }
-                }.isSuccess
-                if (!ok) {
+                }.exceptionOrNull()
+                if (error != null) {
                     recoveryFlow.dispatched = false
-                    field.setError(getString(R.string.vault_unlock_first))
+                    if (error is VaultStaleReplacementException || error is VaultLockedException) {
+                        dropRetainedSecrets()
+                        sheet.dismiss()
+                        showError(getString(R.string.vault_code_stale))
+                    } else {
+                        field.setError(getString(R.string.vault_finish_failed))
+                    }
                     return@keyWorkOffMain
                 }
                 recoveryFlow.replacement = null
                 recoveryFlow.confirmCode = null
+                recoveryFlow.vaultIdentity = null
                 recoveryFlow.migrateLegacy = false
                 sheet.dismiss()
                 enrollmentSheet = null
@@ -1114,6 +1164,7 @@ class VaultActivity : BaseActivity() {
             }
         }
         enrollmentSheet = sheet
+        sheet.setOnDismissListener { onEnrollmentSheetDismissed(confirmCode = code) }
         sheet.show()
         sheet.view.applySystemBarsPadding(top = false)
         field.editText.requestFocus()
@@ -1724,6 +1775,9 @@ class VaultActivity : BaseActivity() {
             lifecycleScope.launch {
                 try {
                     withContext(Dispatchers.IO) { store.importBackup(file, code) }
+                    // A restore replaces the Vault identity: a prepared code or a confirmation
+                    // from before it must not survive (review MUST-FIX 1).
+                    dropRetainedSecrets()
                     sheet.dismiss()
                     file.delete()
                     unlockMethod = UnlockMethod.RECOVERY
