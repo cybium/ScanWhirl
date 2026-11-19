@@ -1,0 +1,10 @@
+# Generated/private artefacts that must never be committed from this directory.
+__pycache__/
+*.pyc
+data/
+runs/
+weights/
+*.pt
+*.pth
+*.onnx
+*.tflite

@@ -1,0 +1,26 @@
+# Scanner X ML tooling — pinned direct dependencies (CPU only, no CUDA, no system installs)
+#
+# Install into the isolated venv QA workspace, never system-wide:
+#   py -3.11 -m venv C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\scannerx-ml\.venv
+#   C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\scannerx-ml\.venv\Scripts\python.exe -m pip install -r tools\scanner\ml\requirements-ml.txt
+#
+# The extra index carries the CPU-only PyTorch wheels (no CUDA download). torch and
+# torchvision are pinned with the "+cpu" local version so only that index can satisfy
+# them; numpy/pillow/onnx/onnxruntime resolve from normal PyPI.
+# Licences: see THIRD_PARTY.md in this directory. Verified 2026-11-19 on
+# Python 3.11.9 (CPython, win_amd64).
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.15.0+cpu
+torchvision==0.29.2+cpu
+numpy==2.4.6
+pillow==13.0.0
+onnx==1.23.2
+onnxruntime==1.32.0
+
+# Transitive versions resolved with the pins above on 2026-11-19 (for reproducibility;
+# pip installs them automatically, they are not required lines):
+#   filelock==4.2.4  fsspec==2026.9.0  jinja2==3.1.6  MarkupSafe==3.0.3  mpmath==1.3.0
+#   networkx==3.6.1  sympy==1.14.0  typing-extensions==4.16.0
+#   setuptools==78.1.0  flatbuffers==25.12.19  protobuf==7.36.2  packaging==26.3
+#   ml_dtypes==0.7.0
