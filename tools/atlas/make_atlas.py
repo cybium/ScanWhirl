@@ -458,7 +458,9 @@ def main():
         f.write(md)
     with open(os.path.join(out_dir, "ATLAS.html"), "w", encoding="utf-8") as f:
         f.write(html_text)
-    shutil.copy2(os.path.join(atlas_dir, "atlas.json"), os.path.join(out_dir, "atlas.json"))
+    # Write the normalised data (same effects the HTML/MD show), not a raw copy.
+    with open(os.path.join(out_dir, "atlas.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
     dead = sum(1 for g in groups.values()
                for e in [g["byScale"].get("1.0") or g["first"]]
