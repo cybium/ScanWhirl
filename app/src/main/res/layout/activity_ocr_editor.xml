@@ -229,6 +229,100 @@
             android:textSize="12sp" />
     </LinearLayout>
 
+    <!-- W5 read-first: page indicator plus the read-mode actions. Read mode offers
+         Copy all pages and Edit text; edit mode swaps in Save edits and Done. -->
+    <LinearLayout
+        android:id="@+id/ocrReadRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:id="@+id/ocrPageIndicator"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="2"
+            android:textColor="@color/text_hologram_mid"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCopyAll"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
+            android:paddingHorizontal="6dp"
+            android:text="@string/ocr_w5_copy_all_pages"
+            android:textColor="@color/cyan_primary"
+            android:textSize="13sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveEdits"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
+            android:paddingHorizontal="6dp"
+            android:text="@string/ocr_w5_save_edits"
+            android:textColor="@color/cyan_primary"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEditText"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
+            android:paddingHorizontal="6dp"
+            android:text="@string/ocr_w5_edit_text"
+            android:textColor="@color/cyan_primary"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- W5: the .txt write failed but the library text is kept; Retry retries the write. -->
+    <LinearLayout
+        android:id="@+id/ocrTxtFailure"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="4dp"
+        android:background="@color/rv_surface_2"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/ocrTxtFailureText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:accessibilityLiveRegion="polite"
+            android:textColor="@color/rv_warn"
+            android:textSize="13sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTxtRetry"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="@string/ocr_w5_retry_txt" />
+    </LinearLayout>
+
     <!-- v2 UI: 08_text_ocr — Copy all · Share text · Save .txt · To Word (chips).
          Owner F8: roomy chip rows: 8dp gaps inside a row, 12dp between the rows (in code). -->
     <LinearLayout

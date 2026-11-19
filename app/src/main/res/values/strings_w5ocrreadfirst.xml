@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- W5 read-first OCR: readable text, explicit edit mode, separate copy/save outcomes. -->
+    <string name="ocr_w5_page_of">Page %1$d of %2$d</string>
+    <string name="ocr_w5_copy_page">Copy page</string>
+    <string name="ocr_w5_copy_all_pages">Copy all pages</string>
+    <string name="ocr_w5_page_copied">Page copied</string>
+    <string name="ocr_w5_all_copied">All pages copied</string>
+    <string name="ocr_w5_edit_text">Edit text</string>
+    <string name="ocr_w5_done_editing">Done</string>
+    <string name="ocr_w5_save_edits">Save edits</string>
+    <string name="ocr_w5_edits_saved">Edits saved in this document</string>
+    <string name="ocr_w5_no_edits">No changes to save</string>
+    <string name="ocr_w5_not_in_library">This text is not in a document, so there is no library text to save</string>
+    <string name="ocr_w5_txt_failed_kept">The .txt file could not be written. Your text is still saved in this document.</string>
+    <string name="ocr_w5_txt_failed_here">The .txt file could not be written. Your text is still here on this screen.</string>
+    <string name="ocr_w5_retry_txt">Retry</string>
+    <string name="ocr_w5_reread_title">Read the text again?</string>
+    <string name="ocr_w5_reread_msg">Reading again replaces the text on every page, including corrections you made. Save edits first if you want to keep them.</string>
+    <string name="ocr_w5_reread_confirm">Read again</string>
+    <string name="ocr_w5_keep_editing">Keep editing</string>
+    <string name="ocr_w5_back_msg">Keep your corrections in this document, save a .txt copy, or discard them.</string>
+    <string name="ocr_w5_save_txt_and_close">Save .txt and close</string>
+</resources>
