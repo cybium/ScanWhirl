@@ -34,7 +34,11 @@ import com.scanwhirl.app.R
  *  - the icon + label group centred horizontally, with the tag's band reserved above the
  *    container so tagged and untagged tiles line up;
  *  - the PRO badge (12sp, gold, the word PRO) on the container's top-right corner, clear
- *    of the glyph and clear of the tile edge.
+ *    of the glyph and clear of the tile edge — as ONE line. When the word is wider than the
+ *    48dp corridor above the glyph (200 % system font on the owner's phone, B2-M1: "PR" / "O"
+ *    over the icon), the badge moves under the label, where the whole column is available, and
+ *    stays gold with the full word (UI_PLAN §0.11). It is never wrapped and never shrunk, and a
+ *    lock glyph is not needed at any font the app supports.
  *
  * The tile is exactly its content (12dp + 48dp + 8dp + label + 8dp, no fixed minimum): the
  * lead's 2026-11-18 visual check found the old ~125dp rows wasted a screen of tools. The
@@ -53,6 +57,14 @@ class ToolTile(context: Context) : FrameLayout(context) {
     val labelView: TextView
     val proTag: TextView
     val soonTag: TextView
+
+    /**
+     * True when the PRO badge could not fit the 48dp corridor above the glyph and sits under the
+     * label instead (large system fonts, B2-M1). Exposed so a test can tell the two placements
+     * apart without guessing from pixels.
+     */
+    var proTagBelowLabel = false
+        private set
 
     private val inner: LinearLayout
 
@@ -88,6 +100,15 @@ class ToolTile(context: Context) : FrameLayout(context) {
         proTag.id = R.id.swToolProTag
         soonTag.id = R.id.swToolSoonTag
 
+        // The badge is one line, always (tagView enforces it). 12sp gold on a 48dp corridor is
+        // fine at 100 % and 130 %; at 200 % the word is wider than the corridor, so it is
+        // placed under the label instead of being squeezed into it (B2-M1).
+        proTag.measure(
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        )
+        proTagBelowLabel = proTag.measuredWidth > SwStyle.dp(context, 48f)
+
         iconBox = FrameLayout(context).apply {
             background = SwStyle.rounded(
                 context,
@@ -111,12 +132,10 @@ class ToolTile(context: Context) : FrameLayout(context) {
         // the container's top, so it never reaches the glyph (which starts 11dp down). The
         // band it needs is real layout space (a negative-offset badge was clipped by its
         // container), but it is paid for out of the tile's 12dp top space, not on top of it:
-        // a tile is 12 + 48 + 8 + label + 8, nothing more.
-        proTag.measure(
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        )
-        val overhang = maxOf(0, proTag.measuredHeight - SwStyle.dp(context, 8f))
+        // a tile is 12 + 48 + 8 + label + 8, nothing more. A badge that cannot fit the corridor
+        // (B2-M1) gets no band at all: it goes under the label instead.
+        val overhang =
+            if (proTagBelowLabel) 0 else maxOf(0, proTag.measuredHeight - SwStyle.dp(context, 8f))
         iconSlot = FrameLayout(context)
         iconSlot.addView(
             iconBox,
@@ -125,13 +144,15 @@ class ToolTile(context: Context) : FrameLayout(context) {
                 Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             )
         )
-        iconSlot.addView(
-            proTag,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP or Gravity.END
+        if (!proTagBelowLabel) {
+            iconSlot.addView(
+                proTag,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.TOP or Gravity.END
+                )
             )
-        )
+        }
         iconSlot.addView(
             soonTag,
             FrameLayout.LayoutParams(
@@ -173,6 +194,18 @@ class ToolTile(context: Context) : FrameLayout(context) {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(context, 8f) }
         )
+
+        // B2-M1: at 200 % the badge does not fit the 48dp corridor, so it moves under the
+        // label where the whole column is available. Same gold pill, same word, one line, and
+        // it can no longer sit on the icon.
+        if (proTagBelowLabel) {
+            inner.addView(
+                proTag,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(context, 6f) }
+            )
+        }
 
         // 12dp is the brief's minimum between the tile top and the icon container; the badge
         // hangs in that band, so the tile never grows past its content (a bigger font grows
@@ -258,6 +291,9 @@ class ToolTile(context: Context) : FrameLayout(context) {
         ).apply {
             this.text = text
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            // A badge is one line: the words are never broken across lines (B2-M1).
+            maxLines = 1
+            ellipsize = null
             setPadding(
                 SwStyle.dp(context, 6f), SwStyle.dp(context, 1f),
                 SwStyle.dp(context, 6f), SwStyle.dp(context, 1f)
