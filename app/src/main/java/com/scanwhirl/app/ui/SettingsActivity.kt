@@ -50,6 +50,11 @@ class SettingsActivity : BaseActivity() {
         binding.switchAutoCopyToDocuments.contentDescription =
             getString(R.string.settings_auto_copy_to_documents)
         binding.switchSearchablePdf.contentDescription = getString(R.string.settings_searchable_pdf)
+        // T32 (phone build 3): this switch measured 66 px (~24 dp) tall at 200 % font
+        // on the Infinix, half the 48 dp touch target the other rows keep, and it is
+        // the row's only control. Pin the target here instead of leaving it to the
+        // switchStyle theme attribute.
+        binding.switchSearchablePdf.minimumHeight = com.scanwhirl.app.ui.kit.SwStyle.dp(this, 48f)
 
         // test25 Phase 5A / D1: Orbital-only dark theme — the row stays in the
         // XML (locked ID) but is hidden, and the summary is pinned to the one
