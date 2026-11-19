@@ -13,7 +13,7 @@
     <string name="backup_now">अभी प्रति सहेजें</string>
     <string name="backup_restore">सहेजी प्रति से वापस लाएँ</string>
     <string name="backup_remind">पिछली प्रति एक महीने पुरानी हो तो याद दिलाएँ</string>
-    <string name="backup_no_internet">ScanWhirl के पास इंटरनेट की अनुमति नहीं है। अभी प्रति सहेजें के बाद पासवर्ड या कोड चुनें, फिर फ़ोन में सहेजें से सहेजने की जगह चुनें और भेजें से भेजने की सूची खुलती है।</string>
+    <string name="backup_no_internet">ScanWhirl के पास इंटरनेट की अनुमति नहीं है। अभी प्रति सहेजें के बाद पासवर्ड (या तिजोरी वापस खोलने का कोड) चुनें, फिर फ़ोन में सहेजें से सहेजने की जगह चुनें और भेजें से भेजने की सूची खोलें।</string>
 
     <string name="backup_choose">प्रति को सुरक्षित करें</string>
     <string name="backup_choose_note">तय करें कि यह फ़ाइल किससे खुलेगी। वापस लाने के लिए वही चीज़ चाहिए होगी।</string>

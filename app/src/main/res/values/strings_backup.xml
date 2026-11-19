@@ -13,7 +13,7 @@
     <string name="backup_now">Back up now</string>
     <string name="backup_restore">Restore from backup</string>
     <string name="backup_remind">Remind me if my last backup is a month old</string>
-    <string name="backup_no_internet">ScanWhirl has no internet permission. Back up now asks for a password or code, then Save to device opens the phone\'s save dialog and Share opens the share sheet.</string>
+    <string name="backup_no_internet">ScanWhirl has no internet permission. Back up now asks for a password (or your Vault recovery code), then Save to device opens the phone\'s save dialog and Share opens the share sheet.</string>
 
     <string name="backup_choose">Protect the backup</string>
     <string name="backup_choose_note">Choose what opens this file. You will need the same thing to restore it.</string>
