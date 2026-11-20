@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.PdfTextLayerTest,com.scanwhirl.app.store.SearchablePdfHindiTest,com.scanwhirl.app.store.OcrStoreLocaleTest,com.scanwhirl.app.store.ExcelStoredTextTest
