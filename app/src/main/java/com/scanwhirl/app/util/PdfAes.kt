@@ -166,14 +166,18 @@ object PdfAes {
     /**
      * Algorithm 2.A for the user password: null when the password is wrong, otherwise the 32-byte
      * file key (Algorithm 10's authentication, then /UE decrypted with the key salt).
+     *
+     * [revision] selects the hash: R5 uses one SHA-256 of password + salt + user data, R6 uses the
+     * iterated Algorithm 2.B. Passing R6's loop at an R5 file would reject its own password.
      */
-    fun userKey(password: String, u: ByteArray, ue: ByteArray): ByteArray? {
+    fun userKey(password: String, u: ByteArray, ue: ByteArray, revision: Int = REVISION): ByteArray? {
         if (u.size != 48 || ue.size != KEY_BYTES) return null
+        if (revision !in 5..6) return null
         val pw = normalizePassword(password)
         return try {
             val validationSalt = u.copyOfRange(32, 40)
-            if (!MessageDigest.isEqual(hash(pw, validationSalt), u.copyOfRange(0, 32))) return null
-            val intermediate = hash(pw, u.copyOfRange(40, 48))
+            if (!MessageDigest.isEqual(hashFor(revision, pw, validationSalt), u.copyOfRange(0, 32))) return null
+            val intermediate = hashFor(revision, pw, u.copyOfRange(40, 48))
             aesCbc(false, intermediate, ZERO_IV, ue, "AES/CBC/NoPadding")
         } finally {
             pw.fill(0)
@@ -181,17 +185,52 @@ object PdfAes {
     }
 
     /** Algorithm 2.A for the owner password (Algorithm 11): /U is the owner hash's user data. */
-    fun ownerKey(password: String, o: ByteArray, oe: ByteArray, u: ByteArray): ByteArray? {
+    fun ownerKey(
+        password: String,
+        o: ByteArray,
+        oe: ByteArray,
+        u: ByteArray,
+        revision: Int = REVISION
+    ): ByteArray? {
         if (o.size != 48 || oe.size != KEY_BYTES || u.size != 48) return null
+        if (revision !in 5..6) return null
         val pw = normalizePassword(password)
         return try {
             val validationSalt = o.copyOfRange(32, 40)
-            if (!MessageDigest.isEqual(hash(pw, validationSalt, u), o.copyOfRange(0, 32))) return null
-            val intermediate = hash(pw, o.copyOfRange(40, 48), u)
+            if (!MessageDigest.isEqual(hashFor(revision, pw, validationSalt, u), o.copyOfRange(0, 32))) return null
+            val intermediate = hashFor(revision, pw, o.copyOfRange(40, 48), u)
             aesCbc(false, intermediate, ZERO_IV, oe, "AES/CBC/NoPadding")
         } finally {
             pw.fill(0)
         }
+    }
+
+    /**
+     * Algorithm 13: /Perms is the AES-256-ECB encryption of /P (little endian), FF FF FF FF, the
+     * metadata flag ('T'/'F'), "adb" and four random bytes. False means the block was altered or
+     * does not belong to this key, so the file must be refused rather than trusted.
+     */
+    fun permsValid(
+        fileKey: ByteArray,
+        perms: ByteArray,
+        permissions: Int,
+        encryptMetadata: Boolean
+    ): Boolean {
+        if (fileKey.size != KEY_BYTES || perms.size != 16) return false
+        val block = try {
+            aesEcb(false, fileKey, perms)
+        } catch (e: IOException) {
+            return false
+        }
+        if (block.size != 16) return false
+        for (i in 0..3) {
+            if (block[i] != ((permissions ushr (8 * i)) and 0xFF).toByte()) return false
+        }
+        if (block[9] != 'a'.code.toByte() || block[10] != 'd'.code.toByte() || block[11] != 'b'.code.toByte()) {
+            return false
+        }
+        val flag = block[8]
+        return if (encryptMetadata) flag == 'T'.code.toByte() else flag == 'F'.code.toByte()
     }
 
     /** NFKC, UTF-8, at most [MAX_PASSWORD_BYTES] bytes — the standard's password preparation. */
@@ -201,11 +240,17 @@ object PdfAes {
     }
 
     /**
-     * Algorithm 2.B (Revision 6): salt = the validation or key salt (8 bytes); [userData] is empty for
-     * the user entry and the 48-byte /U value for the owner entry. At least 64 rounds, and then until
-     * the last byte of E is ≤ the round number − 32 (ISO 32000-2 2.B step 3).
+     * Password hash for [revision]: R5 is a single SHA-256 of password + salt + user data
+     * (ISO 32000-2 2.A step 2, the deprecated revision real files still carry); R6 is the
+     * iterated Algorithm 2.B.
      */
-    internal fun hash(password: ByteArray, salt: ByteArray, userData: ByteArray = EMPTY): ByteArray {
+    internal fun hashFor(
+        revision: Int,
+        password: ByteArray,
+        salt: ByteArray,
+        userData: ByteArray = EMPTY
+    ): ByteArray {
+        if (revision <= 5) return sha("SHA-256", password + salt + userData)
         var k = sha("SHA-256", password + salt + userData)
         var e = ByteArray(0)
         var rounds = 0
@@ -227,6 +272,10 @@ object PdfAes {
         }
         return k.copyOf(KEY_BYTES)
     }
+
+    /** Algorithm 2.B (Revision 6). */
+    internal fun hash(password: ByteArray, salt: ByteArray, userData: ByteArray = EMPTY): ByteArray =
+        hashFor(REVISION, password, salt, userData)
 
     // ------------------------------------------------------------------
     // primitives
