@@ -25,6 +25,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
+import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.databinding.ActivityPdfViewerBinding
 import com.scanwhirl.app.databinding.ItemPdfPageBinding
 import com.scanwhirl.app.util.ShareUtils
@@ -53,6 +54,8 @@ class PdfViewerActivity : BaseActivity() {
     private var docPageKeys: List<String>? = null
     /** Vaulted or locked: Find's query is never written into saved state. */
     private var privateDoc = false
+    private var vaultMode = false
+    @Volatile private var vaultRevoked = false
     private var find: ReaderFind? = null
 
     /** Cache copy of an opened content Uri (seekable); deleted with the screen. */
@@ -87,6 +90,13 @@ class PdfViewerActivity : BaseActivity() {
         binding = ActivityPdfViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.root.applySystemBarsPadding()
+        vaultMode = intent.getBooleanExtra(EXTRA_PRIVATE, false) ||
+            intent.getStringExtra(EXTRA_PATH)?.let { isVaultOpenCopy(File(it)) } == true
+        if (vaultMode) {
+            privateDoc = true
+            com.scanwhirl.app.util.SecureView.applyForDocument(this, window, true)
+            if (!checkVaultSession()) return
+        }
         // Optional full-screen wallpaper; otherwise the light document background shows.
         val wallpaper = com.scanwhirl.app.util.Wallpaper.drawable(this)
         if (wallpaper != null) {
@@ -189,6 +199,7 @@ class PdfViewerActivity : BaseActivity() {
     }
 
     private fun afterOpen(savedInstanceState: Bundle?) {
+        if (!checkVaultSession()) return
         if (!openPdf()) {
             finish()
             return
@@ -323,19 +334,83 @@ class PdfViewerActivity : BaseActivity() {
         find = null
         renderExecutor.shutdownNow()
         pageCache.evictAll()
-        try {
-            renderer?.close()
-        } catch (_: Exception) {
+        synchronized(renderLock) {
+            try { renderer?.close() } catch (_: Exception) {}
+            try { pfd?.close() } catch (_: Exception) {}
+            renderer = null
+            pfd = null
         }
-        try {
-            pfd?.close()
-        } catch (_: Exception) {
-        }
-        renderer = null
-        pfd = null
+        if (vaultMode && isFinishing && !isChangingConfigurations) deleteVaultCopy()
         // The ViewModel owns picked-file scratch and releases it only on a real exit.
         tempPdf = null
         super.onDestroy()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        checkVaultSession()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkVaultSession()
+    }
+
+    /** Background renders never touch Views; their UI deliveries recheck on the main thread. */
+    private fun vaultReadable(): Boolean =
+        !vaultRevoked && (!vaultMode || VaultSession.isUnlocked())
+
+    private fun checkVaultForRender(): Boolean {
+        if (vaultReadable()) return true
+        // Rendering may be requested while stopped. Do not wait for the next resume
+        // to revoke the UI and scratch copy when that request discovers expiry.
+        runOnUiThread { checkVaultSession() }
+        return false
+    }
+
+    private fun checkVaultSession(): Boolean {
+        if (!vaultMode || vaultReadable()) return true
+        vaultRevoked = true
+        if (::binding.isInitialized) {
+            binding.root.visibility = View.INVISIBLE
+            closeZoom()
+            fun clearImages(view: View) {
+                if (view is ImageView) view.setImageDrawable(null)
+                if (view is ViewGroup) {
+                    for (i in 0 until view.childCount) clearImages(view.getChildAt(i))
+                }
+            }
+            clearImages(binding.root)
+            pagerAdapter.submit(0)
+            binding.pdfPager.adapter = null
+            binding.pdfPager.recycledViewPool.clear()
+            findViewById<ViewGroup>(R.id.readerStripPages).removeAllViews()
+            binding.toolbar.title = ""
+        }
+        previewJob?.cancel()
+        find?.shutdown()
+        find = null
+        renderExecutor.shutdownNow()
+        synchronized(renderLock) {
+            pageCache.evictAll()
+            try { renderer?.close() } catch (_: Exception) {}
+            try { pfd?.close() } catch (_: Exception) {}
+            renderer = null
+            pfd = null
+            pageCount = 0
+        }
+        dockFile = null
+        deleteVaultCopy()
+        finish()
+        return false
+    }
+
+    private fun deleteVaultCopy() {
+        intent.getStringExtra(EXTRA_PATH)?.let { path ->
+            val file = File(path)
+            // Never delete an arbitrary caller-supplied original.
+            if (isVaultOpenCopy(file)) file.delete()
+        }
     }
 
     private fun handleBack() {
@@ -440,9 +515,11 @@ class PdfViewerActivity : BaseActivity() {
 
     /** Renders one page to a bitmap at screen-ish resolution. Serialized. */
     private fun renderPage(index: Int): Bitmap? {
-        val r = renderer ?: return null
         return try {
-            synchronized(renderLock) { r.render(index, maxRenderDim) }
+            synchronized(renderLock) {
+                if (!checkVaultForRender()) return null
+                renderer?.render(index, maxRenderDim)
+            }
         } catch (_: Exception) {
             null
         }
@@ -508,6 +585,7 @@ class PdfViewerActivity : BaseActivity() {
     }
 
     private fun shareCurrent() {
+        if (!checkVaultSession()) return
         val doc = dockDoc
         if (doc != null) {
             ShareUtils.share(this, doc)
@@ -549,6 +627,7 @@ class PdfViewerActivity : BaseActivity() {
     }
 
     private fun toggleStrip() {
+        if (!checkVaultSession()) return
         val strip = findViewById<View>(R.id.readerStrip)
         if (strip.visibility == View.VISIBLE) {
             strip.visibility = View.GONE
@@ -578,12 +657,14 @@ class PdfViewerActivity : BaseActivity() {
                 )
                 renderExecutor.execute {
                     val bmp = try {
-                        synchronized(renderLock) { renderer?.render(index, 120) }
+                        synchronized(renderLock) {
+                            if (checkVaultForRender()) renderer?.render(index, 120) else null
+                        }
                     } catch (_: Exception) {
                         null
                     }
                     if (bmp != null) runOnUiThread {
-                        if (thumb.tag == index) thumb.setImageBitmap(bmp)
+                        if (checkVaultSession() && thumb.tag == index) thumb.setImageBitmap(bmp)
                     }
                 }
             }
@@ -602,6 +683,7 @@ class PdfViewerActivity : BaseActivity() {
     }
 
     private fun openZoom(index: Int) {
+        if (!checkVaultSession()) return
         val cached = pageCache.get(index)
         if (cached != null) {
             showZoom(cached)
@@ -609,8 +691,12 @@ class PdfViewerActivity : BaseActivity() {
         }
         renderExecutor.execute {
             val bmp = renderPage(index) ?: return@execute
-            pageCache.put(index, bmp)
-            runOnUiThread { showZoom(bmp) }
+            runOnUiThread {
+                if (checkVaultSession()) {
+                    pageCache.put(index, bmp)
+                    showZoom(bmp)
+                }
+            }
         }
     }
 
@@ -618,6 +704,7 @@ class PdfViewerActivity : BaseActivity() {
     private var findHiddenForZoom = false
 
     private fun showZoom(bmp: Bitmap) {
+        if (!checkVaultSession()) return
         binding.zoomImage.setImageBitmap(bmp)
         binding.zoomOverlay.visibility = View.VISIBLE
         if (binding.findPanel.visibility == View.VISIBLE) {
@@ -655,6 +742,7 @@ class PdfViewerActivity : BaseActivity() {
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(index: Int) {
+            if (!checkVaultSession()) return
             binding.pageImage.tag = index
             binding.pageImage.setOnClickListener { openZoom(index) }
             val cached = pageCache.get(index)
@@ -669,6 +757,7 @@ class PdfViewerActivity : BaseActivity() {
                 val bmp = renderPage(index)
                 if (bmp != null && bmp.width > 0) lastAspect = bmp.height.toFloat() / bmp.width
                 runOnUiThread {
+                    if (!checkVaultSession()) return@runOnUiThread
                     if (bmp == null) return@runOnUiThread
                     pageCache.put(index, bmp)
                     if (binding.pageImage.tag == index) {

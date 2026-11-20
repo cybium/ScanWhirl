@@ -42,6 +42,7 @@ abstract class BaseActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        VaultAppLifecycle.install(application)
         when (Prefs.fontStyle(this)) {
             Prefs.FONT_SERIF -> setTheme(R.style.Theme_ScanWhirl_Serif)
             Prefs.FONT_MONO -> setTheme(R.style.Theme_ScanWhirl_Mono)
