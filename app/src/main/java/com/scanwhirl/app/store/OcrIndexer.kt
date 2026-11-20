@@ -64,16 +64,18 @@ class OcrIndexer(
     private val channel = Channel<String>(Channel.UNLIMITED)
     private val enqueued = mutableSetOf<String>()
     private val inFlight = mutableSetOf<String>()
+    private val rerun = mutableSetOf<String>()
+    /** All queue bookkeeping uses this lock; never held across recognition or suspension. */
+    private val queueLock = Any()
+    /** Serializes indexing passes, not queue state. */
     private val mutex = Mutex()
 
     private val _state = MutableStateFlow(IndexState(null, 0, 0, 0))
     val state: StateFlow<IndexState> = _state.asStateFlow()
 
-    private var consumerJob: kotlinx.coroutines.Job? = null
-
     init {
         if (autoRun) {
-            consumerJob = scope.launch {
+            scope.launch {
                 consumerLoop()
             }
         }
@@ -81,14 +83,17 @@ class OcrIndexer(
 
     /** Marks [docId] pending and queues it for indexing (deduplicated). No-op when `autoRun` is false. */
     fun enqueue(docId: String) {
-        store.markPending(docId)
-        if (!autoRun) return
-        synchronized(this) {
-            if (docId !in enqueued && docId !in inFlight) {
-                enqueued.add(docId)
-                scope.launch {
-                    channel.send(docId)
-                }
+        synchronized(queueLock) {
+            // Serialize the marker with consumer completion: an enqueue must not be lost
+            // between clearPending and removal from inFlight.
+            store.markPending(docId)
+            if (!autoRun) return
+            if (docId in inFlight) {
+                rerun.add(docId)
+            } else if (enqueued.add(docId)) {
+                // UNLIMITED: publishing is synchronous and cannot be cancelled between
+                // adding the set entry and delivering its work item.
+                if (channel.trySend(docId).isFailure) enqueued.remove(docId)
             }
         }
     }
@@ -146,7 +151,19 @@ class OcrIndexer(
      * fresh automatic retry budget (automatic passes never reset it themselves).
      */
     suspend fun index(docId: String, resetAttempts: Boolean = false): IndexReport = mutex.withLock {
-        store.withRecognitionLock(docId) { indexDocument(docId, resetAttempts) }
+        try {
+            store.withRecognitionLock(docId) { indexDocument(docId, resetAttempts) }
+        } catch (failure: Throwable) {
+            // A failed commit is not a completed pass, including a direct index() call
+            // that did not go through enqueue(). Keep it discoverable on the next pass.
+            try {
+                store.markPending(docId)
+            } catch (pendingFailure: Exception) {
+                failure.addSuppressed(pendingFailure)
+            }
+            _state.value = IndexState(null, 0, 0, 1)
+            throw failure
+        }
     }
 
     /** F-02: true when an unread page of [docId] used up its automatic attempts. */
@@ -220,11 +237,6 @@ class OcrIndexer(
                     val result = recognize(page)
                     pending += OcrStore.Recognized(key, sourceHash, result.text, result.page)
                     attempts.remove(key)
-                    if (pending.size >= batchPages ||
-                        (System.nanoTime() - lastFlush) / 1_000_000 >= batchMillis
-                    ) {
-                        flush()
-                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -238,12 +250,19 @@ class OcrIndexer(
                     failedPages++
                     countAttempt(attempts, key, sourceHash ?: NO_IMAGE_HASH)
                 }
+                // Persistence is not a recognition failure. It must escape the page retry
+                // handler rather than spend the per-image recognition budget.
+                if (pending.size >= batchPages ||
+                    (System.nanoTime() - lastFlush) / 1_000_000 >= batchMillis
+                ) {
+                    flush()
+                }
                 done++
             }
         } finally {
             // Commit what was recognized even when the pass is cancelled: at most the current
             // page is lost, which stays absent and is recognized again on resume.
-            runCatching { flush() }
+            flush()
         }
 
         // Do not erase an invalidation raised while this pass was recognizing. When
@@ -312,19 +331,19 @@ class OcrIndexer(
     private fun writeAttempts(docId: String, attempts: Map<String, PageAttempt>) {
         val file = retryFile(docId)
         if (attempts.isEmpty()) {
-            runCatching { if (file.exists()) file.delete() }
+            if (file.exists() && !file.delete()) throw java.io.IOException("Could not clear OCR attempts")
             return
         }
         val body = (listOf(RETRY_HEADER) + attempts.map { (key, attempt) ->
             "$key\t${attempt.imageHash}\t${attempt.count}"
         }).joinToString("\n")
-        runCatching { Durable.atomicWriteText(file, body) }
+        Durable.atomicWriteText(file, body)
     }
 
     private suspend fun consumerLoop() {
         while (true) {
             val docId = channel.receive()
-            mutex.withLock {
+            synchronized(queueLock) {
                 enqueued.remove(docId)
                 inFlight.add(docId)
             }
@@ -337,8 +356,17 @@ class OcrIndexer(
             } catch (_: OutOfMemoryError) {
                 // C06: the consumer must survive a page that could not be decoded.
             } finally {
-                mutex.withLock {
+                synchronized(queueLock) {
                     inFlight.remove(docId)
+                    if (rerun.remove(docId)) {
+                        // This request may refer to a newer page revision than the pass
+                        // just completed. A resume-safe follow-up never re-recognizes
+                        // already stored pages.
+                        store.markPending(docId)
+                        if (enqueued.add(docId) && channel.trySend(docId).isFailure) {
+                            enqueued.remove(docId)
+                        }
+                    }
                 }
             }
         }

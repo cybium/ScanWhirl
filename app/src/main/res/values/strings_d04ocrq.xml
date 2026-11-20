@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ocr_d04_phone_read">Read on this phone.</string>
+    <string name="ocr_d04_searchable">Searchable.</string>
+</resources>

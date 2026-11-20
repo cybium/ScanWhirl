@@ -568,6 +568,7 @@ class OcrEditorActivity : BaseActivity() {
 
     private fun recomputeDirty() {
         isDirty = pageTexts.any { (k, v) -> v != (originalTexts[k] ?: "") }
+        updateFootnote()
     }
 
     /** v2 UI: 08_text_ocr — the three text fixes live in one sheet. */
@@ -1013,6 +1014,7 @@ class OcrEditorActivity : BaseActivity() {
      * text and becomes searchable, which is real manual entry, not fake OCR.
      */
     private fun updateStatus() {
+        updateFootnote()
         val total = pageTexts.size
         val unread = unreadKeys.size
         val id = docId
@@ -1036,6 +1038,25 @@ class OcrEditorActivity : BaseActivity() {
         binding.ocrStatusText.text = message
         val canRetry = docId != null && unread > 0 && !retrying
         binding.btnOcrRetry.isVisible = canRetry
+    }
+
+    /** D9-2: stored text alone proves neither on-device recognition nor a PDF text layer. */
+    private fun updateFootnote() {
+        val id = docId
+        val searchable = id?.let { repo.getDocument(it)?.isSearchable } == true
+        // Valid geometry is bound to the stored text digest; manual corrections invalidate
+        // it. Also suppress the claim while this page has an unsaved edit.
+        val phoneRead = id != null &&
+            repo.ocrGeometry(id)[currentPageKey]?.let { it.width > 0 && it.height > 0 } == true &&
+            pageTexts[currentPageKey] == originalTexts[currentPageKey]
+        val label = when {
+            phoneRead && searchable -> R.string.ocr_foot_note
+            phoneRead -> R.string.ocr_d04_phone_read
+            searchable -> R.string.ocr_d04_searchable
+            else -> null
+        }
+        binding.ocrFootNote.isVisible = label != null
+        binding.ocrFootNote.text = label?.let { getString(it) }.orEmpty()
     }
 
     /** F-02: true when the stored retry budget for an unread page is used up. */
