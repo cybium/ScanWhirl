@@ -29,6 +29,7 @@ running lanes never share a file; a lane that needs another lane's code waits fo
 ## 3. Current state (update this table, newest first)
 | When | State |
 |---|---|
+| 11-20 20:0x | Integration 740e6883. Merged 11-20: R1-R3,R5-R7 (device defects), S5A/S5B/S5C (Vault restore traversal, Pro-through-backup bypass, Play signature verification with owner key), S6A (Vault recovery provenance BLOCKER), F1 (startup recovery never ran from launcher), F3-F11 (hunt fixes H1-H6: Hindi searchable PDF, file names, rotation state, save-as, import errors, PDF/A honest + veraPDF 2b PASS, signatures). Device Build 9 (e219b600) passed 6 old defects. GPT final security review on fce19fe3 = BLOCKED -> S6A merged, S6B chunk integrity + S6C budgets pending, re-review required. Release plan: 1.3.0 / versionCode 26112001, freshly signed, owner phone session before production. Section 6 = plan from the 20-app review. |
 | 11-19 02:0x | 24h sprint (OpenCode, lead ses_e0fc45965ffe0O80CN8mLSLEWY; checkpoint outside repo). Added docs/ACTIVE_INDEX.md + docs/DECISIONS.md (ledger; owner questions POL-001 Long Image, POL-002 Vault lock, PRC-001 price); banners on 10 stale docs; UI_PLAN §0b approval now conditional (UX-004). CI: fail-closed verdict lane/cifail e942646; pre-push secret guard lane/prepush in progress. |
 | 11-18 21:1x | Integration 482b8b3 FAILED (2 Hindi merge-interaction tests) -> fixed 3b03ab4; 63b6a97 FAILED (PageEditorDraftTest flake #3 + lint WrongConstant in ToolTile from uiicons) -> fixed 38429f2 (LineBreaker constant; named asserts + 30 s wait). Gate on 38429f2 RUNNING. test3 on phone = 63b6a97 build (sha 71973252...f618); rebuild after green so build == commit. |
 | 11-18 19:2x | MERGED visible UI: uiviewer (0b7830f), uipicker, uihome, uiicons, hindi (9b775fb; strings_tools conflict resolved: hindi side + uipicker's compress_note/run). 1.2.3-test3 (26111803, 482b8b3, sha256 28e3afbd...97a8) built + installed on the test copy; integration gate RUNNING on 482b8b3 (do not push docs). Lead visual check EN+HI: Home tiles/meta/scrollbar OK, Tools 5-col tonal squares OK (13 tools first screen), Hindi nav/Tools OK; BUG: Home quick-tools labels overlap in Hindi + 'Batch tools' spills -> lane uiquick (ses_e11159aa4ffe6woOjHpPUjsXe2). Rebuild test3 after uiquick. Phase-5 job grouping of Tools (v4 concept) NOT done yet. |
@@ -56,6 +57,39 @@ running lanes never share a file; a lane that needs another lane's code waits fo
   docs/audit/2026-11-18/UI_CRITIQUE.md (what is wrong), next/docs/research/ (pricing, online/offline, + R1/R2 output).
 - Evidence: ScanWhirl-HQ\qa\screenmap (174 screens + SCREEN_MAP.md), qa\hunt\BUGS_HUNT.md.
 - Night log for the owner: ScanWhirl-HQ\MORNING_2026-11-18.md.
+
+## 6. Plan from the 20-app professional review (lead decisions 2026-11-20, binding)
+Source of record (owner's private GPT review, read-only evidence): Desktop\gpt review\competitor_adb_audit\10_PROFESSIONAL_UI_UX_GRADE_20_APPS.md,
+11_OPUS_SCANWHIRL_DESIGN_PRIORITIES.md, 02_DEFICIENCY_LEDGER_FCE19FE.md. Verdict accepted: ScanWhirl 7.8/10 (Smallpdf 8.6, Genius 8.5,
+vFlat 7.9) - same professional league; KEEP the cyan brand, centre Scan, 5 destinations, job-grouped Tools; refine, never redesign.
+Owner rule 11-20: no UI/design engineering before this release.
+
+**6.1 In THIS release (honesty/correctness only):**
+1. "All offline" (Tools) / "Offline · No ads" (Me) and store copy must be true about Google Play services possibly downloading the
+   ML Kit scanner/QR module once (decision D-11).
+2. Text-reading and backup states never show false success (lanes G1, G2: OCR retry, D9-1 stale Text screen, restore != backed up).
+3. Pro screen + store listing capability names match what is built (e.g. "Sign" = drawn signature, not a certified digital
+   signature; folders free, Pro "Tags"); checked against the RC commit in the release folder.
+
+**6.2 FIRST after release, in this order (each: device screenshots EN/HI 100/200 %, no new claims):**
+1. Library: section title says "Recent" while sorted Name A-Z -> title follows the sort ("Documents" when not by date);
+   two unqualified "All" rows (folder chips vs document filter) -> one clear folder control + one filter.
+2. Empty state for a new user: two actions, "Scan a page" and "Import a PDF or photo", in the cyan language.
+3. Vault vs Protect PDF vs Hide private info: distinct glyphs + one-line subtitle each (protect = password on a file,
+   hide = permanent removal, Vault = locked area on this phone).
+4. Centre Scan: decide caption / first-use hint ONLY from a 5-8 person novice test (incl. Hindi-primary users), not opinion.
+5. Tools everyday access: measure taps to Compress/OCR/Backup/Scan with the same testers before adding favourites/recents
+   (owner questioned the removed Home quick tools and the "All N tools" door, 11-20).
+6. One icon family (stroke/optical size), Pro screen accent and wording polish; then motion/elevation micro-tuning.
+
+**6.3 Direction decisions:** A keep 5 destinations + centre Scan; B scanning/export stay free, Rs 299 one-time lifetime Pro
+tools bundle, purchases persist via Play restore; C offline-first, no account, no cloud AI in this release (any future
+opt-in cloud = new decision + privacy review); D after release: keep-original PDF import first (R4_IMPORT_SCOPE), then faster
+core jobs; book dewarp stays parked with Scanner X.
+
+**6.4 Usability evidence gate (post-release, before 6.2 items 4-5):** 5-8 first-time users, exact signed build, synthetic files,
+6 tasks (scan+find, import/compress/export, mixed Hindi/English OCR + retry, explain/open Vault, backup freshness + restore,
+understand Rs 299 one-time + restore purchase); target >= 85 % unaided completion, zero data loss.
 
 ## 5. Open research (feeds phases 3-7)
 - R1 Pro value + paywall psychology (India, ₹299-499 one-time, ethical: no dark patterns, Play policy).
