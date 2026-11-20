@@ -29,6 +29,8 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.BaseActivity
+import com.scanwhirl.app.ui.DocumentActionDispatcher
+import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.MergePdfActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -67,6 +69,13 @@ class ToolSetupActivity : BaseActivity() {
     private var docs: List<ScanDocument> = emptyList()
     /** False until the first library listing arrives (C07: the layout is up first). */
     private var docsLoaded = false
+
+    /**
+     * F11 (H3-4): the ids whose document has an unsaved page draft, read with the listing (off the
+     * main thread). Run uses it as a one-frame pre-check, so a normal tap still validates at once;
+     * the authoritative re-read happens in [DocumentActionDispatcher.confirmSavedPages].
+     */
+    private var draftIds: Set<String> = emptySet()
 
     /** Selected source documents, in tap order (Merge keeps this order). */
     private val selected = LinkedHashSet<String>()
@@ -172,11 +181,13 @@ class ToolSetupActivity : BaseActivity() {
      */
     private fun loadDocs(firstLoad: Boolean) {
         lifecycleScope.launch {
-            val fresh = withContext(Dispatchers.IO) {
-                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            val (fresh, drafts) = withContext(Dispatchers.IO) {
+                val listed = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+                listed to openDraftsIn(listed)
             }
             if (isFinishing || isDestroyed || !::tool.isInitialized) return@launch
             docs = fresh
+            draftIds = drafts
             if (firstLoad) {
                 docs.firstOrNull()?.let { selected += it.id }
                 nameText = if (toolId == "duplicate" || toolId == "merge" || toolId == "zip") {
@@ -191,6 +202,17 @@ class ToolSetupActivity : BaseActivity() {
             render()
         }
     }
+
+    /**
+     * F11 (H3-4): the ids among [listed] whose document has an unsaved page draft. A manifest
+     * that cannot be read counts as a draft (it is not "no draft").
+     */
+    private suspend fun openDraftsIn(listed: List<ScanDocument>): Set<String> =
+        listed.mapNotNull { doc ->
+            val draft = runCatching { repo.draftOf(doc.id) }
+            val open = draft.isFailure || (draft.getOrNull()?.changes ?: 0) > 0
+            if (open) doc.id else null
+        }.toSet()
 
     // ---- layout -----------------------------------------------------------
 
@@ -1130,6 +1152,26 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun run() {
         errorView.isVisible = false
+        // F11 (H3-4): every tool here reads the document's SAVED pages and this screen shows no
+        // draft bar, so a document with unsaved page edits gets the document screen's own
+        // question first. The cheap check is the ids read with the listing, so an ordinary tap
+        // still validates and answers at once; the dispatcher re-reads the draft before running.
+        if (selected.none { it in draftIds }) {
+            runTool()
+            return
+        }
+        DocumentActionDispatcher.confirmSavedPages(
+            activity = this,
+            repo = repo,
+            docIds = selected.toList(),
+            onFinishEditing = { doc ->
+                startActivity(DocumentViewerActivity.intent(this, doc.id))
+                finish()
+            }
+        ) { runTool() }
+    }
+
+    private fun runTool() {
         val docId = selected.firstOrNull()
         when (tool.id) {
             "split" -> {

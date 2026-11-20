@@ -457,8 +457,10 @@ class CompressFlow(
                 } else {
                     doc.pageFiles.sumOf { it.length() }
                 }
-                val pages = withContext(Dispatchers.IO) { fitFilesToTotal(doc.pageFiles, target) }
-                val out = repo.createDocument("${doc.name} (compressed)", pages)
+                // F11 (H3-2): the repository's streaming path, one page at a time. The old sheet
+                // code built a List<ByteArray> for the whole document here and could OOM on a
+                // long scan. F11 (H3-5): this path also carries the recognised text.
+                val out = repo.compressScanToTarget(doc.id, target)
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true)
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -614,27 +616,19 @@ class CompressFlow(
                         .also { it.show() }
                 }
                 val indices = devicePages.orEmpty()
-                val rendered = withContext(Dispatchers.IO) {
-                    PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
-                        // One page at a time: never hold a whole PDF's JPEGs in memory.
-                        val out = mutableListOf<ByteArray>()
-                        indices.forEachIndexed { position, pageIndex ->
-                            kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                            PdfPageRenderer.renderPageJpeg(
-                                fd, pageIndex, 150f, 2048, 85
-                            ).let { out.add(it) }
-                            activity.runOnUiThread {
-                                sheet?.setMessage(
-                                    com.scanwhirl.app.ui.tools.DevicePdfGate
-                                        .progressText(activity, position + 1, indices.size)
-                                )
-                            }
+                // F11 (H3-2): render into private staging one page at a time and re-fit each page
+                // from disk; the old code collected every rendered JPEG in memory first.
+                val out = repo.importPdfToTarget(
+                    uri, baseName, indices, target,
+                    onPage = { done, total ->
+                        activity.runOnUiThread {
+                            sheet?.setMessage(
+                                com.scanwhirl.app.ui.tools.DevicePdfGate
+                                    .progressText(activity, done, total)
+                            )
                         }
-                        out
                     }
-                }
-                val pages = fitJpegsToTotal(rendered, target)
-                val out = repo.createDocument("$baseName (compressed)", pages)
+                ) ?: return@launch
                 sheet?.dismiss()
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target)
@@ -653,15 +647,6 @@ class CompressFlow(
     // ------------------------------------------------------------------
     // Exact-target compression helpers (PDF ≈ Σ page JPEGs + ~600 B/page)
     // ------------------------------------------------------------------
-
-    private fun fitFilesToTotal(files: List<File>, target: Long): List<ByteArray> =
-        SizeFit.compressPages(files, target)
-
-    private fun fitJpegsToTotal(pages: List<ByteArray>, target: Long): List<ByteArray> =
-        SizeFit.compressBytes(pages, target)
-
-    /** Never grows a page: keeps the original bytes when they already fit the share. */
-    private fun fitToShare(orig: ByteArray, share: Long): ByteArray = SizeFit.fitToShare(orig, share)
 
     internal companion object {
 
@@ -756,6 +741,10 @@ internal object CompressTarget {
  * v2 UI: 03_tools_hub — exact target-size compression shared by the legacy Compress flow and
  * the v2 Compress setup screen. A generated PDF is about the sum of its page JPEGs plus
  * ~600 bytes per page, and a page never grows: bytes that already fit are kept unchanged.
+ *
+ * F11 (H3-2): the two list helpers below hold every page at once, so no UI path uses them any
+ * more — Compress runs through `ScanRepository.compressScanToTarget`/`importPdfToTarget`, which
+ * stream one page at a time. They stay as measured references for the perf harness.
  */
 object SizeFit {
 

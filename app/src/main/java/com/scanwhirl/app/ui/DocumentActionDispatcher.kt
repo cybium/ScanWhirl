@@ -29,6 +29,9 @@ import kotlinx.coroutines.withContext
  *     Cancel commits nothing; "Finish editing first" commits nothing and hands the host back.
  *
  * The read-only checks run off the main thread; the host's [run] always runs on the main thread.
+ *
+ * F11 (H3-4): [confirmSavedPages] reuses the same question for the Tools tab, which has no draft
+ * bar of its own and would otherwise run a copy tool on the pre-edit pages.
  */
 object DocumentActionDispatcher {
 
@@ -82,6 +85,46 @@ object DocumentActionDispatcher {
             }
             onUsed(loaded)
             guarded(activity, action, run, loaded)
+        }
+    }
+
+    /**
+     * F11 (H3-4): the Tools tab runs its copy tools on the document's **saved** pages, and its
+     * own picker shows no draft bar. So a document with unsaved page edits gets the same three
+     * answers the document screen gives, before any tool runs: [R.string.w1_draft_finish_first],
+     * [R.string.w1_use_saved_version] or [R.string.sheet_cancel]. [onFinishEditing] hands the
+     * person back to the page edits; [run] only runs when they explicitly choose the saved
+     * version, so a pre-edit crop/rotation/page delete is never exported silently.
+     */
+    fun confirmSavedPages(
+        activity: AppCompatActivity,
+        repo: ScanRepository,
+        docIds: Collection<String>,
+        onFinishEditing: (ScanDocument) -> Unit = {},
+        run: () -> Unit
+    ) {
+        activity.lifecycleScope.launch {
+            val draftDoc = openDraftIn(repo, docIds)
+            if (draftDoc == null) {
+                run()
+                return@launch
+            }
+            ask(activity, draftDoc, onFinishEditing) { run() }
+        }
+    }
+
+    /**
+     * The first of [docIds] that has an unsaved (or unreadable, which is not "no draft") page
+     * draft, or null. Split out so the decision itself is testable without a screen.
+     */
+    internal suspend fun openDraftIn(
+        repo: ScanRepository,
+        docIds: Collection<String>
+    ): ScanDocument? = withContext(Dispatchers.IO) {
+        docIds.distinct().firstNotNullOfOrNull { id ->
+            val draft = runCatching { repo.draftOf(id) }
+            val open = draft.isFailure || (draft.getOrNull()?.changes ?: 0) > 0
+            if (!open) null else runCatching { repo.getDocument(id) }.getOrNull()
         }
     }
 
