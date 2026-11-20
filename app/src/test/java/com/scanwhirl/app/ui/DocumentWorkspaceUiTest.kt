@@ -21,7 +21,9 @@ import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.ui.stamp.StampEditorActivity
 import com.scanwhirl.app.util.FakeMediaStore
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.ShareUtils
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -37,6 +39,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowContentResolver
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowToast
+import java.io.File
 
 /**
  * UI-B6 (GPT judgement 2026-11-19b, item 1 — "Make Document the workspace"): the saved
@@ -199,6 +203,63 @@ abstract class DocumentWorkspaceBase {
         }
         return false
     }
+
+    // ------------------------------------------------------------------ draft rig
+
+    /** One page edit in the draft manifest: the screen now shows an unsaved change. */
+    protected fun draftChange(id: String) {
+        kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                repo.draftRotate(id, 0, true)
+            }
+        }
+    }
+
+    /** How many unsaved changes the draft manifest holds (0 = none). */
+    protected fun draftChanges(id: String): Int = kotlinx.coroutines.runBlocking {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            repo.draftOf(id)?.changes ?: 0
+        }
+    }
+
+    /** The one unsaved-draft question, if it is the sheet on top. */
+    private fun draftPrompt(activity: DocumentViewerActivity): android.app.Dialog? {
+        val title = activity.getString(R.string.w1_draft_action_title)
+        return ShadowDialog.getLatestDialog()?.takeIf { dialog ->
+            dialog.isShowing &&
+                dialog.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString() == title
+        }
+    }
+
+    protected fun awaitDraftPrompt(activity: DocumentViewerActivity): android.app.Dialog {
+        var found: android.app.Dialog? = null
+        assertTrue(
+            "the unsaved page-change question must appear before any output runs",
+            pollUntil { draftPrompt(activity).also { found = it } != null }
+        )
+        return requireNotNull(found)
+    }
+
+    private fun draftRows(dialog: android.app.Dialog): List<View> {
+        val list = requireNotNull(dialog.findViewById<ViewGroup>(R.id.swSheetItems)) {
+            "the draft question lists its named answers"
+        }
+        return (0 until list.childCount).map { list.getChildAt(it) }
+    }
+
+    private fun draftRowLabels(dialog: android.app.Dialog): List<String> = draftRows(dialog).map {
+        ((it as ViewGroup).getChildAt(0) as TextView).text.toString()
+    }
+
+    private fun expectedDraftAnswers(activity: DocumentViewerActivity): List<String> = listOf(
+        activity.getString(R.string.w1_draft_finish_first),
+        activity.getString(R.string.w1_use_saved_version),
+        activity.getString(R.string.sheet_cancel)
+    )
+
+    /** Where ShareUtils puts the file it hands to the chooser (cache, provider-readable). */
+    private fun sharedCopy(name: String): File =
+        File(app.cacheDir, "documents/share/" + ShareUtils.sanitizeName(name) + ".pdf")
 
     private fun contrast(fg: Int, bg: Int): Double {
         fun channel(v: Int): Double {
@@ -477,6 +538,84 @@ abstract class DocumentWorkspaceBase {
         }
     }
 
+    /**
+     * Owner add-on (fresh atlas, `006_viewer_2.0.png`): the meta line ("2 pages · 10 KB") vanished
+     * at 200 % because the stacked meta row kept the page line as a 0 dp weighted cell in a
+     * vertical parent. It must be visible, laid out and untruncated at every scale.
+     */
+    @Test
+    fun `the pages and size line stays visible at every font scale`() {
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Physics notes")
+        for (scale in floatArrayOf(1.0f, 1.3f, 2.0f)) {
+            open(id, scale) { activity, _ ->
+                val meta = activity.findViewById<TextView>(R.id.pageCount)
+                assertTrue("the pages/size line is shown at ${scale}x", meta.isShown)
+                assertTrue(
+                    "it has a real width at ${scale}x (was ${meta.width}px)",
+                    meta.width > 0
+                )
+                assertTrue(
+                    "it has a real height at ${scale}x (was ${meta.height}px)",
+                    meta.height > 0
+                )
+                val text = meta.text.toString()
+                assertTrue("it still names the page count at ${scale}x: '$text'", text.contains("2"))
+                assertTrue("it still separates pages from size at ${scale}x: '$text'", text.contains("·"))
+                val layout = requireNotNull(meta.layout) { "the line is laid out at ${scale}x" }
+                assertTrue("it has at least one line at ${scale}x", layout.lineCount >= 1)
+                for (line in 0 until layout.lineCount) {
+                    assertTrue(
+                        "line $line has visible ink at ${scale}x",
+                        layout.getLineWidth(line) > 0f
+                    )
+                    assertEquals(
+                        "line $line is never ellipsized at ${scale}x",
+                        0,
+                        layout.getEllipsisCount(line)
+                    )
+                }
+                assertTrue(
+                    "its lines fit inside its own height at ${scale}x " +
+                        "(lines ${layout.height}px, view ${meta.height}px)",
+                    layout.height <= meta.height
+                )
+            }
+        }
+    }
+
+    /**
+     * Owner add-on (fresh atlas, `006_viewer_1.0.png`): the gold Pro word touched "Sign". The
+     * label is "Sign · Pro" in Free and the gold span covers exactly the Pro word.
+     */
+    @Test
+    fun `the free Pro word on Sign keeps its own separator`() {
+        ProGate.setTestOverride(app, false)
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
+        open(id) { activity, _ ->
+            val sign = buttonOf(activity, R.id.btnSign)
+            val label = sign.text as android.text.Spanned
+            val text = label.toString()
+            val word = activity.getString(R.string.tool_sign)
+            val pro = activity.getString(R.string.doc_action_pro)
+            assertEquals(
+                "Sign and the gold Pro word keep the screen's separator",
+                "$word · $pro",
+                text
+            )
+            val proAt = text.indexOf(pro)
+            assertTrue("the Pro word is on the label", proAt > 0)
+            val gold = label.getSpans(
+                proAt, proAt + pro.length, android.text.style.ForegroundColorSpan::class.java
+            )
+            assertTrue(
+                "only the Pro word is gold",
+                gold.any { it.foregroundColor == activity.getColor(R.color.pro_gold) }
+            )
+            val before = label.getSpans(0, proAt, android.text.style.ForegroundColorSpan::class.java)
+            assertTrue("the label itself is not gold", before.isEmpty())
+        }
+    }
+
     // ------------------------------------------------------------------ 2. routing
 
     @Test
@@ -537,7 +676,11 @@ abstract class DocumentWorkspaceBase {
             })
 
             sign.performClick()
-            idle()
+            // W1: Sign goes through the bound dispatcher, which re-reads the id off the main thread.
+            assertTrue(
+                "Free Sign opens the Pro screen",
+                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
+            )
             val started = requireNotNull(shadowOf(activity).nextStartedActivity) {
                 "Free Sign opens the Pro screen"
             }
@@ -567,7 +710,11 @@ abstract class DocumentWorkspaceBase {
             )?.any { it.foregroundColor == activity.getColor(R.color.pro_gold) } == true
             assertFalse("Pro does not show the Pro word on Sign", hasGoldPro)
             activity.findViewById<View>(R.id.btnSign).performClick()
-            idle()
+            // W1: Sign goes through the bound dispatcher, which re-reads the id off the main thread.
+            assertTrue(
+                "Pro Sign opens the stamp editor",
+                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
+            )
             val started = requireNotNull(shadowOf(activity).nextStartedActivity) {
                 "Pro Sign opens the stamp editor"
             }
@@ -652,6 +799,259 @@ abstract class DocumentWorkspaceBase {
                 sheet.window?.decorView?.findViewWithTag<TextView>("docActions:name")
             ) { "the sheet names its document" }
             assertEquals("Audit actions A", name.text.toString())
+        }
+    }
+
+    // ------------------------------------------------------------------ 2b. draft safety
+
+    /**
+     * W1: while the screen shows an unsaved page edit, Share must ask first. "Use saved version"
+     * hands over the saved PDF's own bytes (verified byte for byte), never a draft render, and the
+     * draft stays exactly as the user left it.
+     */
+    @Test
+    fun `a draft asks before Share and the saved PDF is what leaves`() {
+        val shown = DocFixtures.saved(repo, app, pages = 3, name = "Electricity bill Oct - FAKE")
+        val decoy = DocFixtures.saved(repo, app, pages = 2, name = "Electricity bill Oct (2) - FAKE")
+        draftChange(shown)
+        val savedBytes = requireNotNull(repo.getDocument(shown)).pdfFile.readBytes()
+
+        open(shown) { activity, _ ->
+            assertTrue(
+                "the screen says its page changes are unsaved",
+                activity.findViewById<View>(R.id.draftBar).isShown
+            )
+            activity.findViewById<View>(R.id.btnShare).performClick()
+            val prompt = awaitDraftPrompt(activity)
+            assertEquals(
+                "Finish editing first · Use saved version · Cancel",
+                expectedDraftAnswers(activity),
+                draftRowLabels(prompt)
+            )
+            assertNull(
+                "no chooser opens before the user answers",
+                shadowOf(activity).peekNextStartedActivity()
+            )
+            draftRows(prompt)[1].performClick()
+            assertTrue(
+                "Use saved version shares",
+                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
+            )
+        }
+
+        val shared = sharedCopy("Electricity bill Oct - FAKE")
+        assertTrue("the saved PDF reached the chooser: ${shared.absolutePath}", shared.isFile)
+        assertArrayEquals(
+            "the shared bytes are the saved PDF, not the unsaved pages",
+            savedBytes,
+            shared.readBytes()
+        )
+        assertFalse(
+            "the near-identical other document was never shared",
+            sharedCopy("Electricity bill Oct (2) - FAKE").exists()
+        )
+        assertNotNull("the other fixture is intact", repo.getDocument(decoy))
+        assertEquals("sharing the saved version keeps the draft", 1, draftChanges(shown))
+    }
+
+    /** W1: Cancel (and closing the question) commits nothing and writes nothing. */
+    @Test
+    fun `Save PDF with a draft asks and Cancel writes nothing`() {
+        val shown = DocFixtures.saved(repo, app, pages = 2, name = "Marksheet 12th - FAKE")
+        draftChange(shown)
+
+        open(shown) { activity, _ ->
+            activity.findViewById<View>(R.id.btnSavePdf).performClick()
+            val prompt = awaitDraftPrompt(activity)
+            draftRows(prompt)[2].performClick()
+            idle()
+            idle()
+            assertTrue(
+                "Cancel writes no Documents copy",
+                media.scanwhirlPdfs().isEmpty()
+            )
+            assertTrue(
+                "Cancel records no export",
+                repo.exportRecordsOf(shown).isEmpty()
+            )
+        }
+        assertEquals("nothing was committed", 1, draftChanges(shown))
+    }
+
+    /** W1: "Finish editing first" never shares and never commits the draft. */
+    @Test
+    fun `Finish editing first shares nothing and leaves the draft alone`() {
+        val shown = DocFixtures.saved(repo, app, pages = 2, name = "Aadhaar front - FAKE")
+        draftChange(shown)
+
+        open(shown) { activity, _ ->
+            activity.findViewById<View>(R.id.btnShare).performClick()
+            val prompt = awaitDraftPrompt(activity)
+            draftRows(prompt)[0].performClick()
+            idle()
+            idle()
+            assertNull(
+                "nothing was shared",
+                shadowOf(activity).peekNextStartedActivity()
+            )
+            assertFalse(
+                "the question is gone",
+                prompt.isShowing
+            )
+        }
+        assertFalse("no shared copy was written", sharedCopy("Aadhaar front - FAKE").exists())
+        assertEquals("the draft is still unsaved and untouched", 1, draftChanges(shown))
+    }
+
+    /** W1: Compress and Sign are the same risky outputs; they ask before using saved pages. */
+    @Test
+    fun `a draft asks before Compress and Sign too`() {
+        val shown = DocFixtures.saved(repo, app, pages = 2, name = "Rent receipt October - FAKE")
+        draftChange(shown)
+
+        open(shown) { activity, _ ->
+            activity.findViewById<View>(R.id.btnCompress).performClick()
+            val compressPrompt = awaitDraftPrompt(activity)
+            assertEquals(
+                "Compress asks with the same three answers",
+                expectedDraftAnswers(activity),
+                draftRowLabels(compressPrompt)
+            )
+            compressPrompt.dismiss()
+            idle()
+
+            activity.findViewById<View>(R.id.btnSign).performClick()
+            val signPrompt = awaitDraftPrompt(activity)
+            assertEquals(
+                "Sign asks with the same three answers",
+                expectedDraftAnswers(activity),
+                draftRowLabels(signPrompt)
+            )
+            assertNull(
+                "no tool screen or editor opened before the answer",
+                shadowOf(activity).peekNextStartedActivity()
+            )
+            signPrompt.dismiss()
+        }
+        assertEquals("both questions committed nothing", 1, draftChanges(shown))
+    }
+
+    /**
+     * W1: the question is usable at 200 % type (the workspace test class runs in English and
+     * Hindi at 360 dp and 320 dp): three named, 48 dp answers, none ellipsized, and the chosen
+     * one really runs the output.
+     */
+    @Test
+    fun `the draft question works at 200 percent`() {
+        val shown = DocFixtures.saved(repo, app, pages = 2, name = "Ration card - FAKE")
+        draftChange(shown)
+
+        open(shown, 2.0f) { activity, _ ->
+            activity.findViewById<View>(R.id.btnShare).performClick()
+            val prompt = awaitDraftPrompt(activity)
+            val root = requireNotNull(prompt.findViewById<View>(R.id.swSheetRoot)) {
+                "the question has its own sheet root"
+            }
+            val w = px(screenWidthDp.toFloat())
+            root.measure(
+                View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            root.layout(0, 0, w, root.measuredHeight)
+
+            val rows = draftRows(prompt)
+            assertEquals("three answers at 200 %", 3, rows.size)
+            assertEquals(
+                "the answers keep their words",
+                expectedDraftAnswers(activity),
+                draftRowLabels(prompt)
+            )
+            for ((index, row) in rows.withIndex()) {
+                assertTrue(
+                    "answer $index keeps a 48 dp target at 200 % (was ${row.height}px)",
+                    row.height >= px(48f)
+                )
+                val label = (row as ViewGroup).getChildAt(0) as TextView
+                val layout = requireNotNull(label.layout) { "answer $index is laid out" }
+                for (line in 0 until layout.lineCount) {
+                    assertEquals(
+                        "answer $index is never ellipsized at 200 %",
+                        0,
+                        layout.getEllipsisCount(line)
+                    )
+                    assertTrue(
+                        "answer $index line $line fits its row",
+                        layout.getLineMax(line) <=
+                            (label.width - label.totalPaddingLeft - label.totalPaddingRight) + 1f
+                    )
+                }
+            }
+            draftRows(prompt)[1].performClick()
+            assertTrue(
+                "the chosen answer still shares at 200 %",
+                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
+            )
+        }
+    }
+
+    // ------------------------------------------------------------------ 2c. fail safe
+
+    /**
+     * W1: a PDF that vanished before the tap never produces an empty chooser. The document still
+     * has its pages, so Share falls back to the page images it really has, and the chooser gets
+     * each of them (no crash, no silent nothing).
+     */
+    @Test
+    fun `a document whose PDF vanished shares the pages it still has`() {
+        val shown = DocFixtures.saved(repo, app, pages = 2, name = "Property tax receipt - FAKE")
+
+        open(shown) { activity, _ ->
+            val doc = requireNotNull(repo.getDocument(shown))
+            assertTrue("fixture PDF removed", doc.pdfFile.delete())
+            val pages = doc.pageFiles
+            assertTrue("the pages are still there", pages.all { it.isFile })
+            activity.findViewById<View>(R.id.btnShare).performClick()
+            assertTrue(
+                "the chooser still opens with real content",
+                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
+            )
+            val chooser = requireNotNull(shadowOf(activity).nextStartedActivity)
+            val send = requireNotNull(
+                chooser.getParcelableExtra<android.content.Intent>(android.content.Intent.EXTRA_INTENT)
+            )
+            assertEquals(
+                "the fallback shares the page images, not an empty PDF",
+                android.content.Intent.ACTION_SEND_MULTIPLE,
+                send.action
+            )
+            val streams = send.getParcelableArrayListExtra<android.net.Uri>(
+                android.content.Intent.EXTRA_STREAM
+            )
+            assertEquals("every page is in the share", pages.size, streams?.size)
+        }
+    }
+
+    /**
+     * W1: a document that left the library after the screen opened is refused with a message; no
+     * chooser is opened from the stale on-screen object.
+     */
+    @Test
+    fun `a document deleted after opening fails safe with a message`() {
+        val shown = DocFixtures.saved(repo, app, pages = 2, name = "School fee receipt - FAKE")
+
+        open(shown) { activity, _ ->
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    repo.deleteDocument(shown)
+                }
+            }
+            activity.findViewById<View>(R.id.btnShare).performClick()
+            val expected = activity.getString(R.string.w1_doc_gone)
+            assertTrue(
+                "the removed document is named out loud, was '${ShadowToast.getTextOfLatestToast()}'",
+                pollUntil { ShadowToast.getTextOfLatestToast() == expected }
+            )
+            assertNull("nothing was shared", shadowOf(activity).peekNextStartedActivity())
         }
     }
 

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W1 (lane w1filesafety): one bound dispatcher for Share / Save PDF / Compress / Sign,
+     and the explicit question when the screen still shows an unsaved page-edit draft. -->
+<resources>
+    <string name="w1_draft_action_title">Unsaved page changes</string>
+    <string name="w1_draft_action_msg">%1$s uses the saved version. Page changes you have not saved are not included.</string>
+    <string name="w1_draft_finish_first">Finish editing first</string>
+    <string name="w1_use_saved_version">Use saved version</string>
+    <string name="w1_saved_missing">This document\'s file is missing. Nothing was shared or saved.</string>
+    <string name="w1_doc_gone">This document is no longer available.</string>
+    <string name="w1_action_failed">Could not start this action: %1$s</string>
+</resources>

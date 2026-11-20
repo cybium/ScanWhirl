@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui
 
 import android.app.Application
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
@@ -257,7 +258,11 @@ class DocumentActionsSheetTest {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Share me")
         withActions(id) { activity, sheet ->
             sheet.window!!.decorView.findViewWithTag<View>("docActions:share").performClick()
-            idle()
+            // W1: the bound dispatcher re-reads the id off the main thread before sharing.
+            assertTrue(
+                "Share must open the chooser, not die",
+                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
+            )
             val chooser = shadowOf(activity).nextStartedActivity
             assertNotNull("Share must open the chooser, not die", chooser)
             assertEquals(
@@ -270,8 +275,52 @@ class DocumentActionsSheetTest {
         }
     }
 
-    // --- 4. Sign: Pro marker, Free gate, never the editor ----------------------
+    /**
+     * W1: the sheet's Share is the same bound output. With an unsaved page edit it asks first;
+     * no chooser opens until the user picks "Use saved version".
+     */
+    @Test
+    fun `with an unsaved draft the sheet's Share asks before any chooser`() {
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Bill Oct - FAKE")
+        kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                repo.draftRotate(id, 0, true)
+            }
+        }
+        withActions(id) { activity, sheet ->
+            sheet.window!!.decorView.findViewWithTag<View>("docActions:share").performClick()
+            var question: android.app.Dialog? = null
+            assertTrue(
+                "the unsaved page-change question appears",
+                pollUntil {
+                    val dialog = ShadowDialog.getLatestDialog()
+                    val matches = dialog != null && dialog.isShowing &&
+                        dialog.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString() ==
+                        app.getString(R.string.w1_draft_action_title)
+                    if (matches) question = dialog
+                    matches
+                }
+            )
+            val answers = requireNotNull(
+                question!!.findViewById<ViewGroup>(R.id.swSheetItems)
+            ) { "the question lists its answers" }
+            assertEquals(
+                "Finish editing first · Use saved version · Cancel",
+                listOf(
+                    app.getString(R.string.w1_draft_finish_first),
+                    app.getString(R.string.w1_use_saved_version),
+                    app.getString(R.string.sheet_cancel)
+                ),
+                (0 until answers.childCount).map {
+                    ((answers.getChildAt(it) as ViewGroup).getChildAt(0) as TextView).text.toString()
+                }
+            )
+            assertNull("no chooser before the answer", shadowOf(activity).peekNextStartedActivity())
+            question!!.dismiss()
+        }
+    }
 
+    // --- 4. Sign: Pro marker, Free gate, never the editor ----------------------
     @Test
     fun `Free tapping Sign opens the Pro gate and never the editor`() {
         ProGate.setTestOverride(app, false)
@@ -284,7 +333,11 @@ class DocumentActionsSheetTest {
                 sheet.window!!.decorView.findViewWithTag<View>("docActions:sign_pro")
             )
             sign.performClick()
-            idle()
+            // W1: the dispatcher re-reads the id before the Pro gate.
+            assertTrue(
+                "Sign must not be a dead tap for a Free user",
+                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
+            )
             val started = requireNotNull(shadowOf(activity).nextStartedActivity) {
                 "Sign must not be a dead tap for a Free user"
             }
@@ -310,7 +363,11 @@ class DocumentActionsSheetTest {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
         withActions(id) { activity, sheet ->
             tag(sheet, "sign").performClick()
-            idle()
+            // W1: the dispatcher re-reads the id before the editor is opened.
+            assertTrue(
+                "Pro Sign must open the editor",
+                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
+            )
             val started = requireNotNull(shadowOf(activity).nextStartedActivity) {
                 "Pro Sign must open the editor"
             }

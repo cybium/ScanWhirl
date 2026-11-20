@@ -1,6 +1,7 @@
 package com.scanwhirl.app.ui.shell
 
 import android.app.Application
+import android.content.Intent
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
@@ -14,10 +15,13 @@ import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.TrashActions
 import com.scanwhirl.app.ui.kit.DocCard
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.ShareUtils
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -27,6 +31,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowToast
 import java.io.File
 
 /**
@@ -58,6 +63,11 @@ class LibraryRowActionsTest {
         ProGate.setPro(app, false)
         ProGate.setTestOverride(app, null)
         TrashActions.takePending() // no notice left over from another test
+        // androidx FileProvider caches its roots per authority in a static map; each Robolectric
+        // test gets a fresh cacheDir, so a stale entry makes share/export URI creation fail.
+        val cache = androidx.core.content.FileProvider::class.java.getDeclaredField("sCache")
+        cache.isAccessible = true
+        (cache.get(null) as MutableMap<*, *>).clear()
     }
 
     @After
@@ -359,7 +369,144 @@ class LibraryRowActionsTest {
         }
     }
 
+    // --- 7. W1: Share from the row sheet sends that row's own bytes --------------
+
+    /**
+     * W1: two near-identical Indian document names. Share is tapped on the newer row's sheet and
+     * the recipient must get THAT row's saved PDF, byte for byte, never the older twin.
+     */
+    @Test
+    fun `Share from the row sheet sends the tapped row's own PDF`() {
+        val older = DocFixtures.saved(repo, app, pages = 2, name = "Electricity bill Oct - FAKE")
+        val shown = DocFixtures.saved(repo, app, pages = 3, name = "Electricity bill Oct (2) - FAKE")
+        val olderBytes = repo.getDocument(older)!!.pdfFile.readBytes()
+        val shownBytes = repo.getDocument(shown)!!.pdfFile.readBytes()
+        assertFalse("the fixtures really differ", olderBytes.contentEquals(shownBytes))
+
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val sheet = openRowActions(activity, shown)
+                val share = requireNotNull(
+                    sheet.window?.decorView?.findViewWithTag<View>("docActions:share")
+                ) { "the row sheet has a Share row" }
+                share.performClick()
+                assertTrue(
+                    "Share opens the chooser",
+                    poll { shadowOf(activity).peekNextStartedActivity() != null }
+                )
+                val chooser = shadowOf(activity).peekNextStartedActivity()
+                assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+                val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                assertEquals(Intent.ACTION_SEND, send?.action)
+                assertNotNull("the chooser carries one stream", send?.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM))
+            }
+        }
+
+        val shared = sharedCopy("Electricity bill Oct (2) - FAKE")
+        assertTrue("the tapped row's PDF was prepared: ${shared.absolutePath}", shared.isFile)
+        assertArrayEquals(
+            "the shared bytes are the tapped row's saved PDF",
+            shownBytes,
+            shared.readBytes()
+        )
+        assertFalse(
+            "the older twin was never handed to the chooser",
+            sharedCopy("Electricity bill Oct - FAKE").exists()
+        )
+        assertArrayEquals(
+            "the older document is untouched",
+            olderBytes,
+            repo.getDocument(older)!!.pdfFile.readBytes()
+        )
+    }
+
+    /** W1: a row whose document left the library after the sheet opened says so; no chooser. */
+    @Test
+    fun `Share from a row whose document was deleted says so and sends nothing`() {
+        val shown = DocFixtures.saved(repo, app, pages = 2, name = "Water bill Aug - FAKE")
+
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val sheet = openRowActions(activity, shown)
+                repo.deleteDocument(shown)
+                requireNotNull(
+                    sheet.window?.decorView?.findViewWithTag<View>("docActions:share")
+                ).performClick()
+                val expected = app.getString(R.string.w1_doc_gone)
+                assertTrue(
+                    "the removed document is named out loud, was '${ShadowToast.getTextOfLatestToast()}'",
+                    poll { ShadowToast.getTextOfLatestToast() == expected }
+                )
+                assertNull("nothing reached the chooser", shadowOf(activity).peekNextStartedActivity())
+            }
+        }
+        assertFalse(
+            "no shared copy was written",
+            sharedCopy("Water bill Aug - FAKE").exists()
+        )
+    }
+
+    /**
+     * W1: a row whose document has an unsaved page edit asks before sharing, and "Finish editing
+     * first" opens that document (nothing is shared or committed).
+     */
+    @Test
+    fun `Share from a row with an unsaved draft asks and Finish editing opens the document`() {
+        val shown = DocFixtures.saved(repo, app, pages = 2, name = "Electricity bill Sep - FAKE")
+        kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                repo.draftRotate(shown, 0, true)
+            }
+        }
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val sheet = openRowActions(activity, shown)
+                requireNotNull(
+                    sheet.window?.decorView?.findViewWithTag<View>("docActions:share")
+                ).performClick()
+
+                var question: android.app.Dialog? = null
+                assertTrue(
+                    "the unsaved page-change question appears",
+                    poll {
+                        val dialog = ShadowDialog.getLatestDialog()
+                        val matches = dialog != null && dialog.isShowing &&
+                            dialog.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString() ==
+                            app.getString(R.string.w1_draft_action_title)
+                        if (matches) question = dialog
+                        matches
+                    }
+                )
+                assertNull("no chooser before the answer", shadowOf(activity).peekNextStartedActivity())
+
+                val answers = requireNotNull(
+                    question!!.findViewById<ViewGroup>(R.id.swSheetItems)
+                )
+                (answers.getChildAt(0) as View).performClick() // Finish editing first
+                assertTrue(
+                    "Finish editing first opens the document so the edits can be finished",
+                    poll {
+                        shadowOf(activity).peekNextStartedActivity()?.component?.className ==
+                            DocumentViewerActivity::class.java.name
+                    }
+                )
+                assertEquals(
+                    "the opened screen is that row's document",
+                    shown,
+                    shadowOf(activity).peekNextStartedActivity()?.getStringExtra("doc_id")
+                )
+                assertNull(
+                    "Finish editing first shares nothing",
+                    sharedCopy("Electricity bill Sep - FAKE").takeIf { it.exists() }
+                )
+            }
+        }
+    }
+
     // --- helpers -------------------------------------------------------------
+
+    /** Where ShareUtils puts the file it hands to the chooser (cache, provider-readable). */    private fun sharedCopy(name: String): File =
+        File(app.cacheDir, "documents/share/" + ShareUtils.sanitizeName(name) + ".pdf")
 
     private fun findById(root: View, id: Int): View? {
         if (root.id == id) return root
