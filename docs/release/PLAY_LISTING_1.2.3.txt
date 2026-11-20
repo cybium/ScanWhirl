@@ -2,7 +2,7 @@
 Scan to PDF, compress, merge and read text on your phone. No ads, no account.
 </short-en>
 <full-en>
-Scan paper, keep the PDF, and make it the size a form asks for. ScanWhirl is an offline scanner and PDF tool kit for everyday paperwork. No account, no ads, no internet permission.
+Scan paper, keep the PDF, and make it the size a form asks for. ScanWhirl is a scanner and PDF tool kit for everyday paperwork that keeps your files on your phone. No account, no ads, no internet permission. The scanner comes from Google Play services and may download once.
 
 WHAT YOU CAN DO FOR FREE
 
