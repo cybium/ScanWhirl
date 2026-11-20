@@ -37,6 +37,7 @@ import com.scanwhirl.app.store.OcrReindex
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.OcrCleanup
+import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrLanguage
 import com.scanwhirl.app.util.OcrLanguageSettings
 import com.scanwhirl.app.util.TextHistory
@@ -87,6 +88,7 @@ class OcrEditorActivity : BaseActivity() {
     /** Why pages are unread, from the last indexing pass: [PROBLEM_UNAVAILABLE] / [PROBLEM_FAILED]. */
     private var readProblem: String? = null
     private var retrying = false
+    private var rereading = false
     /** Per-page undo/redo history. */
     private val pageHistories = mutableMapOf<String, TextHistory>()
     /** Suppresses recording while the activity sets text programmatically. */
@@ -289,6 +291,7 @@ class OcrEditorActivity : BaseActivity() {
 
     /** v2 UI: 08_text_ocr — pick the language; a doc-backed page is read again in it. */
     private fun showLanguageSheet() {
+        if (rereading) return
         val languages = listOf(OcrLanguage.ENGLISH, OcrLanguage.ENGLISH_HINDI, OcrLanguage.HINDI)
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ocr_lang_title)
@@ -322,6 +325,8 @@ class OcrEditorActivity : BaseActivity() {
 
     /** W5: the confirmed re-read; drops unsaved edits only after the person agreed. */
     private fun reReadDocument(id: String, language: OcrLanguage) {
+        if (rereading) return
+        rereading = true
         OcrLanguageSettings.set(this, language)
         // The confirmation replaces unsaved edits, so drop them before recreation
         // instead of restoring them on top of the freshly recognised text.
@@ -333,11 +338,17 @@ class OcrEditorActivity : BaseActivity() {
         Toast.makeText(this, R.string.ocr_lang_reading, Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
             try {
-                OcrReindex(repo).reRecognise(id, language)
+                OcrReindex(repo).reRecognise(id, language, replaceCorrections = true)
+                readProblem = PROBLEM_FAILED // Only displayed if a page remains unread.
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                val unavailable = OcrEngine.isUnavailable(e)
+                readProblem = if (unavailable) PROBLEM_UNAVAILABLE else PROBLEM_FAILED
                 Toast.makeText(
                     this@OcrEditorActivity,
-                    getString(R.string.ocr_lang_failed, e.message.orEmpty()),
+                    if (unavailable) getString(R.string.ocr_unavailable_toast)
+                    else getString(R.string.ocr_lang_failed, e.message.orEmpty()),
                     Toast.LENGTH_LONG
                 ).show()
             }

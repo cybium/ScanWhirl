@@ -13,10 +13,14 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.material.chip.ChipGroup
+import com.google.mlkit.common.MlKitException
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.OcrEngine
+import com.scanwhirl.app.util.OcrLanguage
+import com.scanwhirl.app.util.OcrLanguageSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -70,6 +74,7 @@ class OcrReadFirstTest {
     @After
     fun tearDown() {
         DownloadSaver.resetForTests()
+        OcrEngine.rawReader = null
     }
 
     private fun seed(name: String, vararg texts: String): String {
@@ -243,7 +248,8 @@ class OcrReadFirstTest {
 
     @Test
     fun `re-reading asks first and Cancel keeps the corrections`() {
-        val id = seed("Ask first", "recognised")
+        val id = seed("Ask first", "saved café correction")
+        val beforeLanguage = OcrLanguageSettings.get(app)
         launch(id, "Ask first") { activity ->
             activity.findViewById<View>(R.id.btnEditText).performClick()
             val edit = activity.findViewById<EditText>(R.id.editText)
@@ -254,7 +260,7 @@ class OcrReadFirstTest {
             val languageSheet = ShadowDialog.getLatestDialog()
             assertNotNull("the language sheet opens", languageSheet)
             (languageSheet.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
-                .getChildAt(0) as View).performClick()
+                .getChildAt(2) as View).performClick()
             shadowOf(Looper.getMainLooper()).idle()
             val sheet = ShadowDialog.getLatestDialog()
             assertNotNull("changing the text language asks before it reads again", sheet)
@@ -267,7 +273,35 @@ class OcrReadFirstTest {
             sheet.findViewById<View>(R.id.swSheetSecondary).performClick()
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals("Cancel keeps the edit", "my correction", edit.text.toString())
+            assertEquals("Cancel keeps saved corrections", "saved café correction", repo.ocrDoc(id)["page_000.jpg"])
+            assertEquals("Cancel keeps the recognition language", beforeLanguage, OcrLanguageSettings.get(app))
             assertFalse("the editor stays open", activity.isFinishing)
+        }
+    }
+
+    @Test
+    fun `confirmed Hindi reread reports an unavailable model without storing blank text`() {
+        val id = seed("Unavailable Hindi", "old recognition")
+        OcrEngine.rawReader = { _, _ ->
+            throw MlKitException("Model unavailable", MlKitException.UNAVAILABLE)
+        }
+        launch(id, "Unavailable Hindi") { activity ->
+            ShadowToast.reset()
+            activity.findViewById<View>(R.id.ocrLangChip).performClick()
+            shadowOf(Looper.getMainLooper()).idle()
+            ShadowDialog.getLatestDialog()
+                .findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+                .getChildAt(2).performClick()
+            shadowOf(Looper.getMainLooper()).idle()
+            ShadowDialog.getLatestDialog().findViewById<View>(R.id.swSheetPrimary).performClick()
+
+            val expected = activity.getString(R.string.ocr_unavailable_toast)
+            assertTrue("the editor explains why it could not reread", idleUntil {
+                ShadowToast.getTextOfLatestToast() == expected
+            })
+            assertEquals(OcrLanguage.HINDI, OcrLanguageSettings.get(app))
+            assertTrue("no page was stored as read", repo.ocrDoc(id).isEmpty())
+            assertTrue("a future read can retry", repo.ocrStore.isPending(id))
         }
     }
 
