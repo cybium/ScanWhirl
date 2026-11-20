@@ -52,6 +52,11 @@ class ImportPdfFixFlowTest {
             provider.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
             ShadowContentResolver.registerProviderInternal("media", provider)
         }
+        // androidx FileProvider caches its roots per authority; a fresh cacheDir per test makes a
+        // stale entry fail the share (W1 shares from the Actions sheet here).
+        val cache = androidx.core.content.FileProvider::class.java.getDeclaredField("sCache")
+        cache.isAccessible = true
+        (cache.get(null) as MutableMap<*, *>).clear()
     }
 
     @After
@@ -180,6 +185,45 @@ class ImportPdfFixFlowTest {
         }
         assertNotNull("the import stays in the library", repo.getDocument(imported))
         assertEquals("its saved copy stays too", 1, media.scanwhirlPdfs().size)
+    }
+
+    /**
+     * W1: an import the user shared from the document screen's Actions sheet is theirs. Back must
+     * close the screen without a Keep/Discard question and without deleting it.
+     */
+    @Test
+    fun `an import shared from the Actions sheet is kept on Back, with no delete question`() {
+        val imported = DocFixtures.saved(repo, app, pages = 2, name = "Fee receipt Oct - FAKE")
+        ActivityScenario.launch<DocumentViewerActivity>(
+            DocumentViewerActivity.intent(app, imported, freshImport = true)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<View>(R.id.btnMore).performClick()
+                idle()
+                val sheet = requireNotNull(ShadowDialog.getLatestDialog()) {
+                    "the Actions sheet opens"
+                }
+                requireNotNull(
+                    sheet.window?.decorView?.findViewWithTag<View>("docActions:share")
+                ) { "the sheet has a Share row" }.performClick()
+                assertTrue(
+                    "Share reaches the chooser",
+                    waitUntil { shadowOf(activity).peekNextStartedActivity() != null }
+                )
+            }
+            var finishing = false
+            scenario.onActivity { activity ->
+                activity.onBackPressedDispatcher.onBackPressed()
+                idle()
+                finishing = activity.isFinishing
+            }
+            assertTrue("Back closes the viewer", finishing)
+            assertNull(
+                "no Keep/Discard question once the import was shared",
+                ShadowDialog.getLatestDialog()?.takeIf { it.isShowing }
+            )
+        }
+        assertNotNull("the shared import stays in the library", repo.getDocument(imported))
     }
 
     /**

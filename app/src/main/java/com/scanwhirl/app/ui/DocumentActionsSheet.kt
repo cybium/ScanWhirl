@@ -40,20 +40,20 @@ import kotlinx.coroutines.withContext
 
 /**
  * B2 (GPT-6.2 critique #3 and its "Two-tap contract"): ONE named Actions sheet, bound to ONE
- * document id — the same sheet from the document viewer's dock and (in the next lane) from a
+ * document id â€” the same sheet from the document viewer's dock and (in the next lane) from a
  * Library row's overflow.
  *
  * The header repeats the document the sheet is bound to: its own page thumbnail (never one for
- * a locked or Vault document — [DocThumbBinder] decides) and its name. Rows then run, in this
+ * a locked or Vault document â€” [DocThumbBinder] decides) and its name. Rows then run, in this
  * order:
  *
- *  1. the document-linked work: Compress, Sign Â·Pro, Read text, Share;
+ *  1. the document-linked work: Compress, Sign Ã‚Â·Pro, Read text, Share;
  *  2. file management: Rename, Move to category, Duplicate, Protect/Unlock PDF, (Vault);
  *  3. the destructive row last: Move to Trash, or Delete permanently for a legacy Vault item.
  *
  * Every row calls the EXISTING entry point for THAT document, with the source already pinned:
  * [CompressFlow.startWith] (no source chooser), the reader's own Sign route ([ProOffer] gate,
- * then [StampEditorActivity.intent] with this id — never StampToolLauncher's generic picker),
+ * then [StampEditorActivity.intent] with this id â€” never StampToolLauncher's generic picker),
  * [OcrFlow.runOcrForScan] for this doc, and [ShareUtils] behind the protection guard.
  *
  * A password-locked or Vault document cannot hand its pages to Compress, Sign or Read text:
@@ -62,7 +62,7 @@ import kotlinx.coroutines.withContext
  *
  * The sheet never holds viewer state. The host may pass [onChange] (reload itself after a
  * rename/duplicate/protect/unlock/Vault change) and [onGone] (the host closes when the shown
- * document leaves — the viewer); with no [onGone] the sheet shows the move's own Undo bar.
+ * document leaves â€” the viewer); with no [onGone] the sheet shows the move's own Undo bar.
  */
 object DocumentActionsSheet {
 
@@ -89,7 +89,14 @@ object DocumentActionsSheet {
         activity: AppCompatActivity,
         docId: String,
         onChange: () -> Unit = {},
-        onGone: (() -> Unit)? = null
+        onGone: (() -> Unit)? = null,
+        /** W1: a real output ran for this document (a fresh import must survive Back). */
+        onUsed: () -> Unit = {},
+        /**
+         * W1: the user chose "Finish editing first". Null opens the document workspace so the
+         * edits can be finished there; a host that already shows the document passes a no-op.
+         */
+        onFinishEditing: (() -> Unit)? = null
     ) {
         val repo = ScanWhirlApp.from(activity).repository
         val doc = repo.getDocument(docId)
@@ -97,7 +104,7 @@ object DocumentActionsSheet {
             Toast.makeText(activity, R.string.doc_actions_missing, Toast.LENGTH_SHORT).show()
             return
         }
-        show(activity, repo, doc, onChange, onGone)
+        show(activity, repo, doc, onChange, onGone, onUsed, onFinishEditing)
     }
 
     private fun show(
@@ -105,12 +112,21 @@ object DocumentActionsSheet {
         repo: ScanRepository,
         doc: ScanDocument,
         onChange: () -> Unit,
-        onGone: (() -> Unit)?
+        onGone: (() -> Unit)?,
+        onUsed: () -> Unit,
+        onFinishEditing: (() -> Unit)?
     ) {
+        val finishEditing: () -> Unit = onFinishEditing ?: {
+            activity.startActivity(DocumentViewerActivity.intent(activity, doc.id))
+        }
         val host = SheetHost(activity, onChange)
         val rows = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             tag = TAG_PREFIX + "rows"
+            // Owner add-on (atlas 007_actions_sheet_2.0): the sheet's Close row is fixed below the
+            // scroll, so the content carries its own bottom inset. Without it the last row (and,
+            // at 200 %, a half-row) ran flush into the footer with no way to sit clear of it.
+            setPadding(0, 0, 0, 0)
         }
         rows.addView(header(activity, doc))
         rows.addView(groupHeader(activity, R.string.doc_actions_header, null, "work", after = false))
@@ -140,13 +156,23 @@ object DocumentActionsSheet {
             reason = reason,
             onRun = {
                 dismissThen(Action.COMPRESS) {
-                    CompressFlow(
+                    // W1: the id is re-read at the tap; a draft asks before the saved pages are used.
+                    DocumentActionDispatcher.dispatch(
                         activity = activity,
                         repo = repo,
-                        host = host,
-                        pickPdf = {},
-                        docs = { listOf(doc) }
-                    ).startWith(doc)
+                        docId = doc.id,
+                        action = DocumentActionDispatcher.Action.COMPRESS,
+                        onUsed = { _ -> onUsed() },
+                        onFinishEditing = { _ -> finishEditing() }
+                    ) { bound ->
+                        CompressFlow(
+                            activity = activity,
+                            repo = repo,
+                            host = host,
+                            pickPdf = {},
+                            docs = { listOf(bound) }
+                        ).startWith(bound)
+                    }
                 }
             }
         ))
@@ -162,12 +188,21 @@ object DocumentActionsSheet {
                 dismissThen(Action.SIGN) {
                     // The reader's own route (PdfViewerActivity dock Sign): the Pro gate first,
                     // then the editor armed with Sign for THIS document. Free never gets here.
-                    if (ProOffer.require(activity)) {
-                        activity.startActivity(
-                            StampEditorActivity.intent(
-                                activity, doc.id, StampEditorActivity.TOOL_SIGN
+                    DocumentActionDispatcher.dispatch(
+                        activity = activity,
+                        repo = repo,
+                        docId = doc.id,
+                        action = DocumentActionDispatcher.Action.SIGN,
+                        onUsed = { _ -> onUsed() },
+                        onFinishEditing = { _ -> finishEditing() }
+                    ) { bound ->
+                        if (ProOffer.require(activity)) {
+                            activity.startActivity(
+                                StampEditorActivity.intent(
+                                    activity, bound.id, StampEditorActivity.TOOL_SIGN
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -195,7 +230,15 @@ object DocumentActionsSheet {
                     ProtectionDialogs.guardExport(
                         activity, repo, doc, onResolved = onChange
                     ) {
-                        ShareUtils.share(activity, doc)
+                        // W1: bound id + draft question; the saved version is what leaves.
+                        DocumentActionDispatcher.dispatch(
+                            activity = activity,
+                            repo = repo,
+                            docId = doc.id,
+                            action = DocumentActionDispatcher.Action.SHARE,
+                            onUsed = { _ -> onUsed() },
+                            onFinishEditing = { _ -> finishEditing() }
+                        ) { bound -> ShareUtils.share(activity, bound) }
                     }
                 }
             }
@@ -253,7 +296,7 @@ object DocumentActionsSheet {
                     if (doc.isLocked) {
                         unlock(activity, repo, doc, host, onChange)
                     } else {
-                        // v2 UI: 05_protect_pdf — the same Protect sheet as Tools → Protect PDF.
+                        // v2 UI: 05_protect_pdf â€” the same Protect sheet as Tools â†’ Protect PDF.
                         LockFlow(activity, repo, host, { listOf(doc) }, { _ -> }).protectDocument(doc)
                     }
                 }
@@ -420,7 +463,7 @@ object DocumentActionsSheet {
     /**
      * One 56 dp row: 24 dp glyph, the label, an optional PRO pill and, for a row that cannot
      * run, the second-line reason. The row carries the words TalkBack reads (a clickable parent
-     * with a child label is otherwise announced as a nameless box — M7).
+     * with a child label is otherwise announced as a nameless box â€” M7).
      */
     private fun row(
         activity: AppCompatActivity,

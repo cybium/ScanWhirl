@@ -322,8 +322,15 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             document?.let { doc ->
                 traceAction("share", doc)
                 ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
-                    noteImportUsed()
-                    ShareUtils.share(this, doc)
+                    // W1: the id decides, not the screen's transient handle; a draft asks first and
+                    // "Use saved version" hands over the saved document's own bytes.
+                    DocumentActionDispatcher.dispatch(
+                        activity = this,
+                        repo = repo,
+                        docId = doc.id,
+                        action = DocumentActionDispatcher.Action.SHARE,
+                        onUsed = { _ -> noteImportUsed() }
+                    ) { bound -> ShareUtils.share(this, bound) }
                 }
             }
         }
@@ -345,7 +352,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 this,
                 id,
                 onChange = { lifecycleScope.launch { reloadDocument() } },
-                onGone = { if (!isFinishing) finish() }
+                onGone = { if (!isFinishing) finish() },
+                // W1: a sheet action the user started on a fresh import counts as acting on it,
+                // and "Finish editing first" must not stack a second document screen here.
+                onUsed = { noteImportUsed() },
+                onFinishEditing = {}
             )
         }
         applyActionPanel()
@@ -569,9 +580,24 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 row.addView(item, params)
             }
         }
-        // At 200 % the meta line stacks (pages/size above the chip), as the concept does.
+        // At 200 % the meta line stacks (pages/size above the chip), as the concept does. The
+        // page line takes the whole width when stacked: a 0 dp weighted cell in a VERTICAL row
+        // would measure to nothing and the "2 pages · 10 KB" line would disappear.
+        val stacked = large
         binding.docMetaRow.orientation =
-            if (large) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+        binding.pageCount.layoutParams = if (stacked) {
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        } else {
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        (binding.docCategoryTouch.layoutParams as? LinearLayout.LayoutParams)?.let { chip ->
+            chip.topMargin = if (stacked) dp(4f) else 0
+            binding.docCategoryTouch.layoutParams = chip
+        }
         moveActionPanel(large)
     }
 
@@ -603,7 +629,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val pro = getString(R.string.doc_action_pro)
         val free = !ProGate.isPro(this)
         binding.btnSign.text = if (free) {
-            val full = "$sign $pro"
+            // The gold word keeps its own space from the label: "Sign Pro" ran together as
+            // "SignPro" on the phone; the dot is the screen's own metadata separator.
+            val full = "$sign · $pro"
             SpannableString(full).apply {
                 setSpan(
                     ForegroundColorSpan(ContextCompat.getColor(this@DocumentViewerActivity, R.color.pro_gold)),
@@ -1394,44 +1422,54 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         traceAction("save_pdf", doc)
         // PM-3.1c: a document whose lock and PDF disagree is repaired first, never saved silently.
         ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
-            if (!doc.pdfFile.exists() || doc.pdfFile.length() == 0L) {
-                Toast.makeText(this, R.string.pdf_missing, Toast.LENGTH_SHORT).show()
-                return@guardExport
-            }
-            withStoragePermission {
-                lifecycleScope.launch {
-                    try {
-                        val saved = withContext(Dispatchers.IO) {
-                            DownloadSaver.savePdfFile(
-                                this@DocumentViewerActivity,
-                                doc.pdfFile,
-                                DownloadSaver.pdfNameFor(doc.name)
-                            ).also {
-                                // T4.8: remember the copy so delete can remove it. A failure to
-                                // record it must not turn a finished export into a failed one.
-                                try {
-                                    repo.addExport(doc.id, it)
-                                } catch (_: Exception) {
+            // W1: with an unsaved draft the user chooses "Finish editing first" or "Use saved
+            // version"; the copy written below is always the saved PDF's own bytes.
+            DocumentActionDispatcher.dispatch(
+                activity = this,
+                repo = repo,
+                docId = doc.id,
+                action = DocumentActionDispatcher.Action.SAVE_PDF,
+                onUsed = { _ -> noteImportUsed() }
+            ) { bound ->
+                if (!bound.pdfFile.exists() || bound.pdfFile.length() == 0L) {
+                    Toast.makeText(this, R.string.pdf_missing, Toast.LENGTH_SHORT).show()
+                    return@dispatch
+                }
+                withStoragePermission {
+                    lifecycleScope.launch {
+                        try {
+                            val saved = withContext(Dispatchers.IO) {
+                                DownloadSaver.savePdfFile(
+                                    this@DocumentViewerActivity,
+                                    bound.pdfFile,
+                                    DownloadSaver.pdfNameFor(bound.name)
+                                ).also {
+                                    // T4.8: remember the copy so delete can remove it. A failure to
+                                    // record it must not turn a finished export into a failed one.
+                                    try {
+                                        repo.addExport(bound.id, it)
+                                    } catch (_: Exception) {
+                                    }
                                 }
                             }
+                            // T44: a copy the user saved makes this import theirs; Back keeps it.
+                            noteImportUsed()
+                            SavedSnackbar.showExport(
+                                this@DocumentViewerActivity,
+                                binding.root,
+                                saved,
+                                R.string.pdf_saved_docs,
+                                bound.id
+                            )
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Toast.makeText(
+                                this@DocumentViewerActivity,
+                                getString(R.string.pdf_save_failed, e.message),
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
-                        // T44: a copy the user saved makes this import theirs; Back keeps it.
-                        noteImportUsed()
-                        SavedSnackbar.showExport(
-                            this@DocumentViewerActivity,
-                            binding.root,
-                            saved,
-                            R.string.pdf_saved_docs,
-                            doc.id
-                        )
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Toast.makeText(
-                            this@DocumentViewerActivity,
-                            getString(R.string.pdf_save_failed, e.message),
-                            Toast.LENGTH_LONG
-                        ).show()
                     }
                 }
             }
@@ -1456,7 +1494,14 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val doc = document ?: return
         if (protectedReason(doc) != null) return
         traceAction("compress", doc)
-        compressFlow.startWith(doc)
+        // W1: a draft asks first; the level sheet is estimated from the saved pages.
+        DocumentActionDispatcher.dispatch(
+            activity = this,
+            repo = repo,
+            docId = doc.id,
+            action = DocumentActionDispatcher.Action.COMPRESS,
+            onUsed = { _ -> noteImportUsed() }
+        ) { bound -> compressFlow.startWith(bound) }
     }
 
     /**
@@ -1467,10 +1512,19 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val doc = document ?: return
         if (protectedReason(doc) != null) return
         traceAction("sign", doc)
-        if (ProOffer.require(this)) {
-            startActivity(
-                StampEditorActivity.intent(this, doc.id, StampEditorActivity.TOOL_SIGN)
-            )
+        // W1: a draft asks first; Sign then opens the editor for the saved version's pages.
+        DocumentActionDispatcher.dispatch(
+            activity = this,
+            repo = repo,
+            docId = doc.id,
+            action = DocumentActionDispatcher.Action.SIGN,
+            onUsed = { _ -> noteImportUsed() }
+        ) { bound ->
+            if (ProOffer.require(this)) {
+                startActivity(
+                    StampEditorActivity.intent(this, bound.id, StampEditorActivity.TOOL_SIGN)
+                )
+            }
         }
     }
 

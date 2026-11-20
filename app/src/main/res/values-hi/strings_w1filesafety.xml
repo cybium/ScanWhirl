@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W1 (lane w1filesafety): सादा हिंदी, judged glossary (सहेजें, not सेव; साझा, not शेयर). -->
+<resources>
+    <string name="w1_draft_action_title">पन्नों के बदलाव अभी सहेजे नहीं गए</string>
+    <string name="w1_draft_action_msg">%1$s सहेजा हुआ संस्करण इस्तेमाल करेगा। पन्नों के जो बदलाव अभी सहेजे नहीं गए, वे इसमें शामिल नहीं होंगे।</string>
+    <string name="w1_draft_finish_first">पहले बदलाव पूरे करें</string>
+    <string name="w1_use_saved_version">सहेजा संस्करण इस्तेमाल करें</string>
+    <string name="w1_saved_missing">इस दस्तावेज़ की फ़ाइल नहीं मिली। कुछ भी साझा या सहेजा नहीं गया।</string>
+    <string name="w1_doc_gone">यह दस्तावेज़ अब मौजूद नहीं है।</string>
+    <string name="w1_action_failed">यह काम शुरू नहीं हो सका: %1$s</string>
+</resources>
