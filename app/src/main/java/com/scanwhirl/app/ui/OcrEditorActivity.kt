@@ -557,6 +557,112 @@ class OcrEditorActivity : BaseActivity() {
             hideTxtFailure()
             saveCurrent()
         }
+        // Buttons default to a single line; a wrapped label must break between words
+        // instead of clipping or splitting a word at large type.
+        for (button in listOf(binding.btnCopyAll, binding.btnSaveEdits, binding.btnEditText)) {
+            button.isSingleLine = false
+            button.maxLines = 3
+            button.ellipsize = null
+        }
+        reflowReadRowForLargeText()
+        reflowActionsForLargeText()
+        compactLargeTextSpacing()
+    }
+
+    /** W5: at 200 % on 320dp, a few 2–4dp gaps decide whether the Hindi footer fits. */
+    private fun compactLargeTextSpacing() {
+        if (resources.configuration.fontScale <= 1.5f) return
+        val d = resources.displayMetrics.density
+        binding.ocrReadRow.setPadding((12 * d).toInt(), 0, (12 * d).toInt(), 0)
+        binding.ocrSegmentRow.setPadding(
+            (12 * d).toInt(), (2 * d).toInt(), (12 * d).toInt(), 0
+        )
+        binding.ocrActions.setPadding(
+            (12 * d).toInt(), 0, (12 * d).toInt(), (2 * d).toInt()
+        )
+        (binding.ocrFootNote.layoutParams as? LinearLayout.LayoutParams)?.let {
+            it.bottomMargin = (2 * d).toInt()
+            binding.ocrFootNote.layoutParams = it
+        }
+    }
+
+    /**
+     * W5 large type: five chips on two weighted rows leave ~90dp each, so a word
+     * like "Share" or ".txt" is split inside the word. Two columns keep every word
+     * whole and wrap only between words.
+     */
+    private fun reflowActionsForLargeText() {
+        if (resources.configuration.fontScale <= 1.5f) return
+        val container = binding.ocrActions
+        val ids = listOf(
+            R.id.btnTidyText, R.id.btnCopy, R.id.btnShare, R.id.btnSave, R.id.btnToWord
+        )
+        val chips = ids.mapNotNull { findViewById<View>(it) }
+        for (chip in chips) (chip.parent as? android.view.ViewGroup)?.removeView(chip)
+        container.removeAllViews()
+        val gap = (8 * resources.displayMetrics.density).toInt()
+        val rowGap = (8 * resources.displayMetrics.density).toInt()
+        val rows = listOf(chips.subList(0, 2), chips.subList(2, 4), chips.subList(4, 5))
+        rows.forEachIndexed { index, group ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            group.forEachIndexed { i, chip ->
+                row.addView(
+                    chip,
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        .apply { marginEnd = if (i < group.lastIndex) gap else 0 }
+                )
+            }
+            container.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { if (index > 0) topMargin = rowGap }
+            )
+        }
+    }
+
+    /**
+     * W5: at large type three controls on one line squeeze the page indicator into
+     * clipped lines. The indicator takes a full line and the actions share the next
+     * one, which also keeps the text pane tall enough.
+     */
+    private fun reflowReadRowForLargeText() {
+        if (resources.configuration.fontScale <= 1.5f) return
+        val density = resources.displayMetrics.density
+        val gap = (8 * density).toInt()
+        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val list = listOf(binding.btnCopyAll, binding.btnSaveEdits, binding.btnEditText)
+        list.forEach {
+            (it.parent as? android.view.ViewGroup)?.removeView(it)
+            buttons.addView(
+                it,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    1f
+                ).apply { marginEnd = gap }
+            )
+        }
+        (buttons.getChildAt(buttons.childCount - 1).layoutParams as LinearLayout.LayoutParams)
+            .marginEnd = 0
+        binding.ocrReadRow.orientation = LinearLayout.VERTICAL
+        binding.ocrReadRow.addView(
+            buttons,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        binding.ocrPageIndicator.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        binding.ocrPageIndicator.maxLines = 3
+        for (button in list) {
+            button.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+            button.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        }
     }
 
     /**

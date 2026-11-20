@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.OcrLabelFitTest,com.scanwhirl.app.ui.a11y.AccessibilityAuditTest,com.scanwhirl.app.HindiGlossaryTermsTest,com.scanwhirl.app.ui.OcrReadFirstTest,com.scanwhirl.app.ui.TextFitTest,com.scanwhirl.app.ui.OcrChipSpacingFixUiTest
