@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -23,6 +24,7 @@ import com.scanwhirl.app.ui.kit.ToolJob
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolRow
 import com.scanwhirl.app.ui.kit.ToolStatus
+import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
@@ -32,12 +34,12 @@ import com.scanwhirl.app.util.ProGate
  *
  * T1 (owner-approved 2026-11-20): everyday tools come first. Under the search field sits
  * "Recent tools" — the last up-to-six distinct tools this person launched, most recent first,
- * each one tap on the same launch path as any other row (so Pro gating is unchanged). The row
+ * each one tap on the same launch path as any other tool (so Pro gating is unchanged). The row
  * is absent for someone who has never launched a tool (no placeholder), and while searching.
  *
  * Then the seven approved jobs come first in reading order (Make it smaller / Combine and
  * organise / Sign and mark up / Keep it private / Get the text / Change the format / Start
- * something new), each one a card of full-width [ToolRow]s. "Make it smaller" is first and
+ * something new), each one a wrapping grid of [ToolTile]s. "Make it smaller" is first and
  * names Compress, so making a file smaller no longer means decoding "Optimize".
  *
  * Every job lists every one of its shipping tools directly: there is no "All N tools" door,
@@ -45,7 +47,7 @@ import com.scanwhirl.app.util.ProGate
  * [ToolRegistry.jobs]; a Coming-soon tool is never rendered.
  *
  * Search reuses the existing ranking and draws the same rows, so "Searchable PDF" reads in
- * full instead of the old five-column "…".
+ * full. The job grids instead grow labels and reduce columns at large font sizes.
  */
 class ToolsHubScreen(
     private val context: Context,
@@ -278,7 +280,7 @@ class ToolsHubScreen(
         .take(Prefs.MAX_RECENT_TOOLS)
 
     /**
-     * "Recent tools": the same full-width rows as a job, under their own heading, each one
+     * "Recent tools": the same tiles as a job, in one horizontally scrollable row, each one
      * tapping into the one launch path ([ToolHost.launchTool]) so Pro gating is unchanged.
      */
     private fun recentCard(tools: List<SwTool>): View {
@@ -286,19 +288,104 @@ class ToolsHubScreen(
         card.tag = TAG_RECENT
         card.addView(jobHeader(context.getString(R.string.tools_recent_title), false))
         card.addView(headRule())
-        for (tool in tools) card.addView(row(tool))
+        card.addView(object : HorizontalScrollView(context) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                (getChildAt(0) as? ToolGrid)?.viewportWidth = MeasureSpec.getSize(widthMeasureSpec)
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            }
+        }.apply {
+            isFillViewport = true
+            isHorizontalScrollBarEnabled = true
+            addView(ToolGrid(singleRow = true).apply {
+                for (tool in tools) addView(tile(tool))
+            }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        })
         return card
     }
 
-    /** One job: its heading and every one of its shipping rows, with nothing hidden. */
+    /** One job: its heading and every shipping tile, with nothing hidden behind another tap. */
     private fun jobCard(job: ToolJob, tools: List<SwTool>): View {
         val card = card()
         // The card remembers its job, so a rebuild keeps its place and tests can find it.
         card.tag = job
         card.addView(jobHeader(context.getString(job.title), job.pro))
         card.addView(headRule())
-        for (tool in tools) card.addView(row(tool))
+        card.addView(ToolGrid().apply {
+            for (tool in tools) addView(tile(tool))
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         return card
+    }
+
+    private fun tile(tool: SwTool): ToolTile = ToolTile(context).apply {
+        host = this@ToolsHubScreen.host
+        bind(tool)
+        // The hub renders READY tools only, so it has no Soon placeholder, even as a hidden node.
+        (soonTag.parent as? ViewGroup)?.removeView(soonTag)
+        // T2 owner 2026-11-21: icon grid. Grow labels rather than hiding any part of a name.
+        labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+        labelView.ellipsize = null
+        labelView.maxLines = Int.MAX_VALUE
+        // One focus stop, full tool name + Pro from bind(), not separate icon/label/badge nodes.
+        (getChildAt(0) as ViewGroup).importantForAccessibility =
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(
+                host: View, info: android.view.accessibility.AccessibilityNodeInfo
+            ) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Button::class.java.name
+            }
+        }
+    }
+
+    /**
+     * Row-major children keep keyboard/TalkBack order identical to reading order. A 64dp
+     * minimum gives five columns in the 336dp card interior on 360dp, four on 320dp. Font
+     * scaling grows that minimum, not the glyph; content-sized labels may use extra lines.
+     */
+    inner class ToolGrid(private val singleRow: Boolean = false) : ViewGroup(context) {
+        var viewportWidth = 0
+        var columnCount: Int = 1
+            private set
+        private var columnWidth = 0
+        private var rowHeights = emptyList<Int>()
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val minimum = SwStyle.dp(context, 64f * maxOf(1f, resources.configuration.fontScale))
+            // HorizontalScrollView gives its child UNSPECIFIED width; use its actual viewport.
+            val available = if (singleRow) viewportWidth else MeasureSpec.getSize(widthMeasureSpec)
+            val fitting = maxOf(1, available / minimum)
+            columnWidth = maxOf(minimum, available / fitting)
+            columnCount = if (singleRow) maxOf(1, childCount) else fitting
+            val heights = mutableListOf<Int>()
+            for (index in 0 until childCount) {
+                val child = getChildAt(index)
+                child.measure(
+                    MeasureSpec.makeMeasureSpec(columnWidth, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                )
+                val row = index / columnCount
+                if (row == heights.size) heights += 0
+                heights[row] = maxOf(heights[row], child.measuredHeight)
+            }
+            rowHeights = heights
+            setMeasuredDimension(
+                if (singleRow) columnWidth * childCount else available,
+                heights.sum()
+            )
+        }
+
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            var y = 0
+            for (index in 0 until childCount) {
+                val column = index % columnCount
+                if (column == 0 && index > 0) y += rowHeights[index / columnCount - 1]
+                val x = column * columnWidth
+                val child = getChildAt(index)
+                child.layout(x, y, x + columnWidth, y + child.measuredHeight)
+            }
+        }
     }
 
     /**
@@ -318,6 +405,7 @@ class ToolsHubScreen(
                 id = R.id.swToolsEmpty
                 typeface = SwType.semibold(context)
                 text = title
+                androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
                 setPadding(
                     SwStyle.dp(context, 12f), SwStyle.dp(context, 14f),
                     SwStyle.dp(context, 12f), SwStyle.dp(context, 2f)
@@ -405,6 +493,7 @@ class ToolsHubScreen(
                 typeface = SwType.semibold(context)
                 text = title
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
@@ -484,6 +573,17 @@ class ToolsHubScreen(
             val found = mutableListOf<ToolRow>()
             fun walk(view: View) {
                 if (view is ToolRow) found += view
+                if (view is ViewGroup) for (i in 0 until view.childCount) walk(view.getChildAt(i))
+            }
+            walk(root)
+            return found
+        }
+
+        /** Catalogue and Recent tiles in row-major order (search intentionally uses rows). */
+        fun tiles(root: View): List<ToolTile> {
+            val found = mutableListOf<ToolTile>()
+            fun walk(view: View) {
+                if (view is ToolTile) found += view
                 if (view is ViewGroup) for (i in 0 until view.childCount) walk(view.getChildAt(i))
             }
             walk(root)

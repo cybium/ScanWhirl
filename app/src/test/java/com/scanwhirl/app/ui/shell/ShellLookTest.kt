@@ -82,7 +82,8 @@ class ShellLookTest {
             openAllToolsDoors(activity)
             layoutRoot(activity)
             val body = activity.findViewById<View>(R.id.swToolsBody)
-            val rows = ToolsHubScreen.rows(body)
+            // T2 owner 2026-11-21: icon grid
+            val rows = ToolsHubScreen.tiles(body)
             // T1 owner-approved 2026-11-20: no hidden tools, so every shipping tool is already
             // a row on the first render.
             assertEquals(

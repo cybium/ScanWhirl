@@ -211,8 +211,9 @@ abstract class ToolTileProBadgeBase {
                     idle()
                     val hubRoot = layoutRoot(activity)
                     val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
-                    for (row in ToolsHubScreen.rows(body)) {
-                        problems += rowBadgeProblems(row, hubRoot, scale).map { "hub $it" }
+                    // T2 owner 2026-11-21: icon grid
+                    for (row in ToolsHubScreen.tiles(body)) {
+                        problems += badgeProblems(row, hubRoot, scale).map { "hub $it" }
                         if (row.proTag.isVisible) {
                             badges++
                             diag += "@$scale hub \"${row.labelView.text}\" row=${row.width} " +

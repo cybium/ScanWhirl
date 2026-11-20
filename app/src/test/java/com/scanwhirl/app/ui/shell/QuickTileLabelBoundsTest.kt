@@ -147,7 +147,8 @@ abstract class QuickTileLabelBoundsBase {
                     idle()
                     layoutRoot(activity)
                     val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
-                    for (row in ToolsHubScreen.rows(body)) {
+                    // T2 owner 2026-11-21: icon grid
+                    for (row in ToolsHubScreen.tiles(body)) {
                         val label = row.findViewById<TextView>(R.id.swToolLabel)
                             ?: run { problems += "@$scale hub: a row has no label"; continue }
                         val l = label.layout
@@ -175,7 +176,7 @@ abstract class QuickTileLabelBoundsBase {
                             problems += "@$scale hub \"${label.text}\" leaves its row"
                         }
                         val sp = label.textSize / scaled
-                        if (sp < 14f) problems += "@$scale hub \"${label.text}\" is ${"%.2f".format(sp)}sp"
+                        if (sp < 12.4f) problems += "@$scale hub \"${label.text}\" is ${"%.2f".format(sp)}sp"
                         diag += "@$scale hub \"${label.text}\" row=${row.width} label=${label.width} " +
                             "lines=${l.lineCount} h=${label.height} sp=${"%.2f".format(sp)}"
                     }

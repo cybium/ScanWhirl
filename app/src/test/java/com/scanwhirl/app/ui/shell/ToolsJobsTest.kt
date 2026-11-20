@@ -189,8 +189,9 @@ abstract class ToolsJobsBase {
                 assertNotEquals("a Soon tag survives in the hub", app.getString(R.string.tool_soon_tag), text)
                 assertNotEquals("a Soon note survives in the hub", app.getString(R.string.tool_coming_soon_note), text)
             }
-            val rows = ToolsHubScreen.rows(body)
-            assertTrue("the hub draws tool rows", rows.isNotEmpty())
+            // T2 owner 2026-11-21: icon grid
+            val rows = ToolsHubScreen.tiles(body)
+            assertTrue("the hub draws tool tiles", rows.isNotEmpty())
             assertTrue(
                 "no Coming soon row: ${rows.map { it.tool?.id }}",
                 rows.none { it.tool?.status == ToolStatus.SOON }
@@ -208,7 +209,7 @@ abstract class ToolsJobsBase {
             val header = (card.getChildAt(0) as ViewGroup).getChildAt(0) as TextView
             assertEquals(app.getString(R.string.tools_job_smaller), header.text.toString())
 
-            val compress = ToolsHubScreen.rows(body).firstOrNull { it.tool?.id == "compress" }
+            val compress = ToolsHubScreen.tiles(body).firstOrNull { it.tool?.id == "compress" }
             assertNotNull("Compress is not a row in the first job", compress)
             assertEquals(
                 "the row says the real tool name",
@@ -224,10 +225,10 @@ abstract class ToolsJobsBase {
                     "content ${content.top}..${content.bottom})",
                 rect.top >= content.top && rect.bottom <= content.bottom
             )
-            // Rows are full width inside their job card, side by side with nothing else.
+            // T2 owner 2026-11-21: icon grid
             assertEquals(
-                "a row fills its job card",
-                cardContentWidth(compress),
+                "a tile gets one of five columns",
+                cardContentWidth(compress) / 5,
                 compress.width
             )
             assertTrue(
@@ -240,7 +241,7 @@ abstract class ToolsJobsBase {
     @Test
     fun `every Pro tool shows the gold Pro word`() {
         toolsTab { _, body ->
-            val rows = ToolsHubScreen.rows(body)
+            val rows = ToolsHubScreen.tiles(body)
             for (tool in ToolRegistry.all.filter { it.pro && it.status != ToolStatus.SOON }) {
                 val row = rows.firstOrNull { it.tool?.id == tool.id }
                 assertNotNull("Pro tool ${tool.id} has no row", row)
@@ -277,7 +278,7 @@ abstract class ToolsJobsBase {
         toolsTab { _, body ->
             val organises = ToolRegistry.jobs().first { it.first == ToolJob.ORGANISE }.second
             assertTrue("Combine and organise stays a long job", organises.size > 3)
-            val ids = ToolsHubScreen.rows(body).mapNotNull { it.tool?.id }
+            val ids = ToolsHubScreen.tiles(body).mapNotNull { it.tool?.id }
             for ((job, tools) in ToolRegistry.jobs()) {
                 for (tool in tools) {
                     assertTrue("${tool.id} is not visible in job $job", tool.id in ids)
@@ -371,7 +372,7 @@ abstract class ToolsJobsBase {
             assertEquals(
                 "no search hit survives: every shipping tool of every job shows",
                 ToolRegistry.all.count { it.status != ToolStatus.SOON },
-                ToolsHubScreen.rows(body).size
+                ToolsHubScreen.tiles(body).size
             )
         }
     }
@@ -436,17 +437,18 @@ abstract class ToolsJobsBase {
     }
 
     @Test
-    fun `200 percent uses list rows and the last job clears the dock`() {
+    fun `200 percent uses wrapping tiles and the last job clears the dock`() {
         RuntimeEnvironment.setFontScale(2.0f)
         toolsTab { activity, body ->
-            val rows = ToolsHubScreen.rows(body)
+            // T2 owner 2026-11-21: icon grid
+            val rows = ToolsHubScreen.tiles(body)
             assertEquals(
-                "at 200% every shipping tool keeps its own full-width row",
+                "at 200% every shipping tool keeps its tile",
                 ToolRegistry.all.count { it.status != ToolStatus.SOON },
                 rows.size
             )
             for (row in rows) {
-                assertEquals("a row fills its job card", cardContentWidth(row), row.width)
+                assertTrue("a tile fits its grid", row.width <= cardContentWidth(row))
                 val label = row.labelView
                 val layout = label.layout ?: continue
                 for (line in 0 until layout.lineCount) {

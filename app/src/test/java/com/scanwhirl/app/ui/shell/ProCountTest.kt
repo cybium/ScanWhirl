@@ -73,7 +73,8 @@ class ProCountTest {
                 idle()
                 // T1 owner-approved 2026-11-20: the whole catalogue is on screen already.
                 openAllToolsDoors(activity)
-                val badges = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
+                // T2 owner 2026-11-21: icon grid
+                val badges = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
                     .count { it.proTag.visibility == View.VISIBLE }
                 assertEquals(
                     "the advertised number matches the PRO tags in the hub",

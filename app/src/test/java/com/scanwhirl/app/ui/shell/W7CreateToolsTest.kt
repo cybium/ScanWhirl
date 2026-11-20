@@ -330,7 +330,8 @@ class W7ToolsExpansionTest : W7CreateBase() {
         toolsTab { _, body ->
             val ready = ToolRegistry.all
                 .filter { it.status == com.scanwhirl.app.ui.kit.ToolStatus.READY }
-            val rows = ToolsHubScreen.rows(body)
+            // T2 owner 2026-11-21: icon grid
+            val rows = ToolsHubScreen.tiles(body)
             assertEquals(
                 "the whole READY catalogue is on the first render",
                 ready.map { it.id }.sorted(),
@@ -391,7 +392,8 @@ class W7ToolsExpansionTest : W7CreateBase() {
                 .filter { it.status == com.scanwhirl.app.ui.kit.ToolStatus.READY }
                 .map { it.id }
                 .sorted()
-            val shown = ToolsHubScreen.rows(body).mapNotNull { it.tool?.id }.sorted()
+            // T2 owner 2026-11-21: icon grid
+            val shown = ToolsHubScreen.tiles(body).mapNotNull { it.tool?.id }.sorted()
             assertEquals(
                 "the hub lists exactly the READY tools of the registry",
                 ready,
@@ -704,7 +706,8 @@ class W7ToolsNarrowTest : W7CreateBase() {
 
                 val ready = ToolRegistry.all
                     .count { it.status == com.scanwhirl.app.ui.kit.ToolStatus.READY }
-                val rows = ToolsHubScreen.rows(body)
+                // T2 owner 2026-11-21: icon grid
+                val rows = ToolsHubScreen.tiles(body)
                 assertEquals("every shipping tool shows at 320dp and 200 %", ready, rows.size)
                 for (row in rows) {
                     assertTrue(

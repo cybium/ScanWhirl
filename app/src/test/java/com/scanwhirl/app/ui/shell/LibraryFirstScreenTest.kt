@@ -164,7 +164,8 @@ abstract class LibraryFirstScreenBase {
             // catalogue is reachable without opening anything.
             openAllToolsDoors(activity)
             val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
-            val ids = ToolsHubScreen.rows(body).mapNotNull { it.tool?.id }.toSet()
+            // T2 owner 2026-11-21: icon grid
+            val ids = ToolsHubScreen.tiles(body).mapNotNull { it.tool?.id }.toSet()
             for (id in listOf("merge", "compress", "sign", "protect", "to_word", "read_text")) {
                 assertTrue("$id is still reachable in Tools", id in ids)
             }
