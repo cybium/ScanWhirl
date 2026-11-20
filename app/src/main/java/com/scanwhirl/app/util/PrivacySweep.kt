@@ -75,6 +75,14 @@ object PrivacySweep {
         // them would break the job it is in the middle of.
         val jobRunning = backupRunning()
         var removed = 0
+        // These directories are private seekable picked-file copies, not outgoing shares.
+        // At cold start the ownership registry is empty. A repeated sweep leaves live jobs
+        // and readers (including a reader retained across rotation) alone.
+        listOf("pdf_fd", "pdf_open").forEach { name ->
+            File(cache, name).listFiles()?.forEach { file ->
+                if (BoundedCopy.removeIfUnowned(file)) removed++
+            }
+        }
         CACHE_DIRS.forEach { name ->
             // `vault_open` is recreated by the Vault when it opens; while unlocked it belongs
             // to the running session and is left alone.

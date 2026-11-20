@@ -1,0 +1,5 @@
+<resources>
+    <string name="l1_copy_too_large">This file is too large to open here. Choose a smaller file.</string>
+    <string name="l1_copy_no_space">Not enough free storage to open this file. Free some space and try again.</string>
+    <string name="l1_copy_unreadable">Could not read this file. Choose it again or try another file.</string>
+</resources>
