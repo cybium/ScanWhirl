@@ -128,6 +128,18 @@ class CorpusToolsTest {
         suspend fun load(file: File): ScanDocument = if (file.extension == "pdf") {
             requireNotNull(repo.importPdfAsScanPlanned(Uri.fromFile(file), file.nameWithoutExtension, onPlan = { ImportDecision.All }))
         } else {
+            // A HEIC/HEIF photo is converted by the app's platform decoder. A host JVM has no
+            // HEIF codec, so the exact same file cannot exercise the conversion here.
+            val bytes = file.readBytes()
+            if (com.scanwhirl.app.util.PageImageFormat.isHeif(bytes)) {
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                if (bounds.outWidth <= 0) throw NeedsDevice(
+                    "HEIC/HEIF needs the phone's own codec; this host JVM has none. On device: pick the " +
+                        "photo, confirm it is converted upright to JPEG with no EXIF, or that the app " +
+                        "says plainly it cannot read it on this phone."
+                )
+            }
             repo.saveScan(listOf(Uri.fromFile(file)), null, file.nameWithoutExtension)
         }
         fun pdf(doc: ScanDocument, pages: Int, record: Boolean = true) {
@@ -634,8 +646,13 @@ class CorpusToolsTest {
                 }
             }
             "remove_metadata" -> {
-                settings = "Library Remove metadata; preserve pixels/orientation and PDF text"
+                settings = "Library Remove metadata; preserve pixels, orientation, recognised text and PDF text"
                 val doc = tracked(f)
+                // Android PDF import rasterises; the corpus staging below is raster too. Seed the
+                // library with the source PDF's own text so the promise is checked against the
+                // document the tool actually receives, not text the app never imported.
+                val seeded = if (f.extension == "pdf") seedText(f, doc) else emptyList()
+                if (seeded.any { it.isNotBlank() }) repo.makeSearchable(doc.id)
                 val original = sha(doc.pdfFile)
                 val result = repo.removeMetadata(doc.id)
                 pdf(result, doc.pageCount)
@@ -653,8 +670,10 @@ class CorpusToolsTest {
                     verify(listOf(info.author, info.producer, info.creator, info.title).all { it.isNullOrBlank() },
                         "document Info fields remain")
                     equal(null, clean.documentCatalog.metadata, "XMP")
-                    if (f.extension == "pdf") Loader.loadPDF(f).use { source ->
-                        equal(PDFTextStripper().getText(source), PDFTextStripper().getText(clean), "PDF text unchanged")
+                    val text = PDFTextStripper().getText(clean).replace(Regex("\\s+"), " ")
+                    for (line in seeded.filter { it.isNotBlank() }) {
+                        val expected = line.replace(Regex("\\s+"), " ").trim()
+                        verify(expected in text, "library text lost: ${expected.take(60)}")
                     }
                 }
             }

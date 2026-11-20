@@ -27,7 +27,7 @@ object XlsxWriter {
     enum class NumberKind(val formatCode: String) {
         INTEGER("0"),
         DECIMAL("#,##0.00"),
-        PERCENT("0%"),
+        PERCENT("0.00%"),
         RUPEE("\"\u20B9\"#,##0.00"),
         DOLLAR("\"$\"#,##0.00"),
         EURO("\"\u20AC\"#,##0.00"),
@@ -169,8 +169,12 @@ object XlsxWriter {
         append("<col min=\"1\" max=\"").append(columns).append("\" width=\"22\" customWidth=\"1\"/>")
         append("</cols><sheetData>")
         sheet.rows.forEachIndexed { rowIndex, row ->
+            // OCR often returns a label and its value on one line ("Percentage: 85.50% Result:
+            // PASS"). Split the unambiguous value out so Excel gets a real number cell while
+            // the words stay in their own cells.
+            val cells = row.flatMap(::splitCell)
             append("<row r=\"").append(rowIndex + 1).append("\">")
-            row.forEachIndexed { columnIndex, text ->
+            cells.forEachIndexed { columnIndex, text ->
                 val reference = "${columnName(columnIndex)}${rowIndex + 1}"
                 val numeric = parseNumeric(text)
                 if (numeric != null) {
@@ -184,6 +188,41 @@ object XlsxWriter {
             append("</row>")
         }
         append("</sheetData></worksheet>")
+    }
+
+    /** A value with a unit or separator (%, currency, grouping or decimal point) inside a text cell. */
+    private val valueToken = Regex(
+        "[-+]?(?:\\u20B9|\\$|\\u20AC|\\u00A3|\\u00A5)?\\s?\\d{1,3}(?:,\\d{2,3})*(?:\\.\\d+)?%?"
+    )
+
+    /**
+     * Splits one OCR cell into text/value cells without losing a character. Only a token that
+     * [parseNumeric] accepts and that carries a currency sign, percent sign, grouping comma or
+     * decimal point is split, so ordinary words ("A4", "Page 1", "2026") stay whole. A value
+     * that already fills the cell is returned unchanged.
+     */
+    internal fun splitCell(raw: String): List<String> {
+        val text = raw.trim()
+        if (text.isEmpty() || parseNumeric(text) != null) return listOf(raw)
+        for (match in valueToken.findAll(text)) {
+            val raw = match.value
+            val token = raw.trim()
+            if (token.isEmpty()) continue
+            val start = match.range.first + (raw.length - raw.trimStart().length)
+            val end = match.range.first + raw.trimEnd().length
+            val before = text.substring(0, start)
+            val after = text.substring(end)
+            if (parseNumeric(token) == null) continue
+            if (token.none { it == '%' || it == ',' || it == '.' || it in "\u20B9$\u20AC\u00A3\u00A5" }) continue
+            if (before.lastOrNull()?.isLetterOrDigit() == true) continue
+            if (after.firstOrNull()?.isLetterOrDigit() == true) continue
+            val cells = mutableListOf<String>()
+            if (before.isNotBlank()) cells += before.trim()
+            cells += token
+            if (after.isNotBlank()) cells += after.trim()
+            return cells
+        }
+        return listOf(raw)
     }
 
     /** cellXfs index: 0 = text, then one per [NumberKind] in declaration order. */

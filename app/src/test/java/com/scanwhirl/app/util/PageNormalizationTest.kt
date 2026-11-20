@@ -65,8 +65,23 @@ class PageNormalizationTest {
             ExifInterface(normalized.inputStream()).getAttributeInt(ExifInterface.TAG_ORIENTATION, 0))
     }
 
-    @Test fun `EXIF horizontal mirror`() = checkOrientation(2, listOf(Color.GREEN, Color.RED, Color.YELLOW, Color.BLUE))
-    @Test fun `EXIF rotation 180`() = checkOrientation(3, listOf(Color.YELLOW, Color.BLUE, Color.GREEN, Color.RED))
+    @Test fun `HEIC container is recognised and a truncated HEIC is refused`() {
+        val heic = byteArrayOf(
+            0, 0, 0, 20,
+            'f'.code.toByte(), 't'.code.toByte(), 'y'.code.toByte(), 'p'.code.toByte(),
+            'h'.code.toByte(), 'e'.code.toByte(), 'i'.code.toByte(), 'c'.code.toByte(),
+            0, 0, 0, 0,
+            'm'.code.toByte(), 'i'.code.toByte(), 'f'.code.toByte(), '1'.code.toByte()
+        )
+        assertEquals(PageImageFormat.Format.HEIF, PageImageFormat.check(heic))
+        val truncated = heic.copyOf(12)
+        assertTrue(
+            "a truncated HEIC must not be offered as a supported page",
+            runCatching { PageImageFormat.check(truncated) }.isFailure
+        )
+    }
+
+    @Test fun `EXIF horizontal mirror`() = checkOrientation(2, listOf(Color.GREEN, Color.RED, Color.YELLOW, Color.BLUE))    @Test fun `EXIF rotation 180`() = checkOrientation(3, listOf(Color.YELLOW, Color.BLUE, Color.GREEN, Color.RED))
     @Test fun `EXIF vertical mirror`() = checkOrientation(4, listOf(Color.BLUE, Color.YELLOW, Color.RED, Color.GREEN))
     @Test fun `EXIF transpose`() = checkOrientation(5, listOf(Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW))
     @Test fun `EXIF rotation 90`() = checkOrientation(6, listOf(Color.BLUE, Color.RED, Color.YELLOW, Color.GREEN))
