@@ -370,6 +370,83 @@ class LibraryCreateSheetTest {
         }
     }
 
+    /**
+     * ATLAS-F2 (005_create_sheet_2.0): at 200 % the sheet was taller than the screen and the
+     * last row ("Import PDF") was cut by the bottom edge with no way to reach it. The entries
+     * must scroll inside a bounded area so the whole sheet stays on screen and the last row can
+     * be brought fully into view.
+     */
+    @Test
+    fun `the sheet scrolls so the last entry is reachable at 200 percent`() {
+        RuntimeEnvironment.setFontScale(2.0f)
+        launch { activity ->
+            val dialog = openSheet(activity)
+            val root = dialog.window!!.decorView
+            val dm = activity.resources.displayMetrics
+            val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+            val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+            fun layoutAll() {
+                repeat(3) {
+                    root.measure(w, h)
+                    root.layout(0, 0, dm.widthPixels, dm.heightPixels)
+                }
+            }
+            layoutAll()
+
+            val last = entry(dialog, R.id.swCreateImport)
+            val ancestor = ancestorScroll(last)
+            assertNotNull(
+                "the entries sit in a scroll container so a tall sheet can show every row",
+                ancestor
+            )
+            val scroll = ancestor!!
+            assertTrue(
+                "the sheet stays on screen: scroll area ${scroll.height}px of ${dm.heightPixels}px",
+                scroll.height <= (dm.heightPixels * 0.7f).toInt()
+            )
+            assertTrue("the last entry has a laid-out height", last.height > 0)
+            val contentHeight = bottomIn(last, scroll) + scroll.scrollY
+            assertTrue("the last entry has a laid-out position (${contentHeight}px)", contentHeight > 0)
+            // A real swipe happens after layout: fling to the end of the content, then read the
+            // row's position without another measure pass (which could reset the offset).
+            scroll.scrollTo(0, contentHeight)
+            val bottom = bottomIn(last, scroll)
+            assertTrue(
+                "the last entry can be brought fully into view (its bottom is ${bottom}px of " +
+                    "${scroll.height}px)",
+                bottom <= scroll.height + 1
+            )
+            val screenBottom = bottomIn(last, root)
+            assertTrue(
+                "the last entry is not cut by the screen edge (bottom ${screenBottom}px of " +
+                    "${root.height}px)",
+                screenBottom <= root.height + 1
+            )
+            dialog.dismiss()
+        }
+    }
+
+    /** The nearest vertical scroll container above [view], or null. */
+    private fun ancestorScroll(view: View): android.widget.ScrollView? {
+        var current: View? = view.parent as? View
+        while (current != null) {
+            if (current is android.widget.ScrollView) return current
+            current = current.parent as? View
+        }
+        return null
+    }
+
+    /** [view]'s bottom edge in [ancestor]'s visible coordinates (scroll applied). */
+    private fun bottomIn(view: View, ancestor: View): Int {
+        var y = view.bottom
+        var current: View? = view.parent as? View
+        while (current != null && current !== ancestor) {
+            y += current.top
+            current = current.parent as? View
+        }
+        return y - ancestor.scrollY
+    }
+
     private fun topIn(view: View, root: View): Int {
         var y = 0
         var current: View? = view

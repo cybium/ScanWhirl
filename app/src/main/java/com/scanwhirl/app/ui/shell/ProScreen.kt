@@ -132,30 +132,38 @@ class ProScreen(
         )
         content.addView(hero)
 
-        val title = LinearLayout(context).apply {
-            orientation = HORIZONTAL
+        // ATLAS-F2 (026): the title was two TextViews in a fixed horizontal row, so at 200 % on a
+        // 320dp phone "ScanWhirl Pro" ran into both edges. One TextView with a gold span on the
+        // word "Pro" wraps at word boundaries inside the page margins instead.
+        val titleText = context.getString(R.string.pro_title_prefix).trimEnd() + " " +
+            context.getString(R.string.pro_title_pro)
+        val titleGold = SwStyle.color(context, R.color.gold_pro_primary)
+        val title = SwStyle.text(
+            context, 24f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
+        ).apply {
+            text = android.text.SpannableString(titleText).apply {
+                val proStart = titleText.lastIndexOf(context.getString(R.string.pro_title_pro))
+                if (proStart >= 0) {
+                    setSpan(
+                        android.text.style.ForegroundColorSpan(titleGold),
+                        proStart,
+                        titleText.length,
+                        android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+            }
+            typeface = SwType.extraBold(context)
             gravity = Gravity.CENTER
+            setPadding(SwStyle.dp(context, 18f), 0, SwStyle.dp(context, 18f), 0)
         }
-        title.addView(
-            SwStyle.text(context, 24f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
-                text = context.getString(R.string.pro_title_prefix)
-                typeface = SwType.extraBold(context)
-            }
-        )
-        title.addView(
-            SwStyle.text(context, 24f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
-                text = context.getString(R.string.pro_title_pro)
-                typeface = SwType.extraBold(context)
-                layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-                    .apply { marginStart = SwStyle.dp(context, 7f) }
-            }
-        )
         content.addView(title, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         titleRow = title
         subtitle = SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             text = context.getString(if (active) R.string.pro_active_sub else R.string.pro_sub_compact)
             gravity = Gravity.CENTER
-            maxLines = 2
+            // ATLAS-F2 (026): the promise wraps inside the margins. It used to run edge to edge
+            // and stop at two lines, which dropped the end of the sentence at large fonts.
+            setPadding(SwStyle.dp(context, 18f), 0, SwStyle.dp(context, 18f), 0)
         }
         content.addView(
             subtitle,

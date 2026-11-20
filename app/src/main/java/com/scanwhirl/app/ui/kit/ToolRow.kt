@@ -23,9 +23,9 @@ import com.scanwhirl.app.util.ProGate
  *  - 40dp tonal plate with a 22dp cyan glyph, then the tool's own name at 15sp semibold.
  *  - The label has no maxLines and no ellipsis: the row grows instead of dropping a word.
  *    At 200% a long Hindi name uses two or three lines and stays whole.
- *  - The word Pro sits on a gold chip under the name when the tool is Pro and this build is
- *    Free (a Pro build owns every tool and shows no tag). Gold is never the only signal:
- *    the chip says the word, and TalkBack reads it after the name.
+ *  - The word Pro sits on a gold chip on the name's own line, right after the last word, when
+ *    the tool is Pro and this build is Free (a Pro build owns every tool and shows no tag).
+ *    Gold is never the only signal: the chip says the word, and TalkBack reads it after the name.
  *  - 56dp tall at 100% and never below 48dp, so the whole row is the touch target.
  */
 class ToolRow(context: Context) : LinearLayout(context) {
@@ -75,8 +75,8 @@ class ToolRow(context: Context) : LinearLayout(context) {
         )
         addView(iconBox, LayoutParams(dp(40f), dp(40f)))
 
-        val column = LinearLayout(context).apply {
-            orientation = VERTICAL
+        val textRow = LinearLayout(context).apply {
+            orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         labelView = SwStyle.text(
@@ -91,9 +91,9 @@ class ToolRow(context: Context) : LinearLayout(context) {
             // Greedy word wrapping; a single very long word breaks instead of overflowing.
             breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
         }
-        column.addView(
+        textRow.addView(
             labelView,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
 
         proTag = SwStyle.text(
@@ -117,16 +117,18 @@ class ToolRow(context: Context) : LinearLayout(context) {
             )
             isVisible = false
         }
-        // Under the name, never beside it: at 200% the chip keeps its full word and the name
-        // keeps its whole width instead of the two fighting for one line.
-        column.addView(
+        // ATLAS-F2 (002): the badge sits on the name's own line, after the last word. It used
+        // to drop under the label and read as a separate row. The label keeps the flexible
+        // width (weight 1) and the badge is measured first, so the two never fight: a long name
+        // wraps at word boundaries and the badge keeps its whole word.
+        textRow.addView(
             proTag,
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(4f)
+                marginStart = dp(8f)
             }
         )
         addView(
-            column,
+            textRow,
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(12f) }
         )
     }
