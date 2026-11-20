@@ -54,6 +54,7 @@ import com.scanwhirl.app.ui.tools.DevicePdfGate
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -239,6 +240,16 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         })
 
         showTab(Tab.LIBRARY)
+        // F1 (hunt H1-1): storage recovery once per process, off the main thread; the Library
+        // reloads when it finishes so a document an interrupted Replace took away is back.
+        val app = ScanWhirlApp.from(this)
+        app.startStorageRecovery()
+        if (!app.storageRecovered.value) {
+            lifecycleScope.launch {
+                app.storageRecovered.first { it }
+                if (::library.isInitialized) library.reload()
+            }
+        }
         revealFromIntent(intent)
         lastProState = com.scanwhirl.app.util.ProGate.isPro(this)
         if (intent?.getBooleanExtra(EXTRA_OPEN_PRO, false) == true) {

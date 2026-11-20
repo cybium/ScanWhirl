@@ -71,6 +71,35 @@ class ScanWhirlApp : Application() {
         if (Build.FINGERPRINT != "robolectric") startLibraryIndexBackfill()
     }
 
+    private val storageRecoveryStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * F1 (hunt H1-1): true once this process has finished its startup storage recovery. The
+     * launcher screen waits for it and reloads the Library so a rolled-forward document appears.
+     */
+    val storageRecovered = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /**
+     * F1 (hunt H1-1): the storage recovery the legacy Home ran on every start (reclaim abandoned
+     * saves, finish interrupted permanent deletes and expire Trash, drop dead import staging,
+     * roll an interrupted Replace forward) never ran from the shipped launcher. It runs once per
+     * process, off the main thread, in the legacy order. Every step is idempotent, so a legacy
+     * Home that also runs them is harmless. Safe to call from every launcher onCreate.
+     */
+    internal fun startStorageRecovery() {
+        if (!storageRecoveryStarted.compareAndSet(false, true)) return
+        appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                runCatching { repository.reapAbandonedSaves() }
+                runCatching { repository.recoverTrash() }
+                runCatching { repository.recoverImports() }
+                runCatching { repository.recoverOperations() }
+            } finally {
+                storageRecovered.value = true
+            }
+        }
+    }
+
     /**
      * Starts the bounded library index backfill once per process. Runs on a background
      * dispatcher, never on the main thread, and is safe to call more than once.
