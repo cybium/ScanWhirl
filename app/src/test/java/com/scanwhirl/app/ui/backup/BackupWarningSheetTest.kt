@@ -130,6 +130,10 @@ class BackupWarningSheetTest {
         return found!!
     }
 
+    /** The size note's fixed text after its size placeholder (the size itself varies). */
+    private fun sizeNoteTail(): String =
+        app.getString(R.string.backup_ready_note, "\u0001").substringAfter("\u0001")
+
     private fun sheetText(dialog: Dialog): String =
         dialog.findViewById<TextView>(R.id.swSheetMessage)?.text?.toString().orEmpty()
 
@@ -165,8 +169,9 @@ class BackupWarningSheetTest {
             "the person must be told the Vault is missing; sheet said: [$message]",
             message.contains(omitted)
         )
-        val sizeNote = app.getString(R.string.backup_ready_note, 0)
-        assertTrue("the size note stays first; sheet said: [$message]", message.startsWith(sizeNote))
+        val sizeNote = message.lines().first()
+        assertTrue("the size note stays first; sheet said: [$message]", sizeNote.endsWith(sizeNoteTail()))
+        assertFalse("a small backup never reads as 0 MB; sheet said: [$message]", sizeNote.startsWith("0"))
         assertTrue(
             "the warning sits below the size note; sheet said: [$message]",
             message.indexOf(omitted) > message.indexOf(sizeNote)
@@ -192,7 +197,7 @@ class BackupWarningSheetTest {
         )
         assertTrue(
             "the size note is still the whole message; sheet said: [$message]",
-            message.startsWith(app.getString(R.string.backup_ready_note, 0))
+            message.lines().first().endsWith(sizeNoteTail()) && !message.startsWith("0")
         )
     }
 

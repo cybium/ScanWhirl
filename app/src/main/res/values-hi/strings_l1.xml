@@ -138,7 +138,7 @@
     <string name="pro_feat_redact">निजी जानकारी छिपाना</string>
     <string name="pro_feat_scan">QR कोड स्कैन</string>
     <string name="pro_feat_batch">कई फ़ाइलों पर काम</string>
-    <string name="pro_feat_folders">फ़ोल्डर और पहचान-चिह्न</string>
+    <string name="pro_feat_folders">पहचान-चिह्न</string>
 
     <string name="me_title">मैं</string>
     <string name="me_pro">ScanWhirl Pro</string>

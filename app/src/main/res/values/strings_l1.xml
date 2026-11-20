@@ -141,7 +141,7 @@
     <string name="pro_feat_redact">Hide private info</string>
     <string name="pro_feat_scan">QR code scan</string>
     <string name="pro_feat_batch">Batch tools</string>
-    <string name="pro_feat_folders">Folders &amp; tags</string>
+    <string name="pro_feat_folders">Tags</string>
 
     <string name="me_title">Me</string>
     <string name="me_pro">ScanWhirl Pro</string>

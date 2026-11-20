@@ -382,6 +382,10 @@
     <string name="select_pages">चुनें</string>
     <string name="select_pages_first">पहले वे पन्ने चुनें जो आपको चाहिए</string>
     <string name="selected_count">%1$d चुने</string>
+    <plurals name="selected_count">
+        <item quantity="one">%d चुना</item>
+        <item quantity="other">%d चुने</item>
+    </plurals>
     <string name="settings_auto_copy_to_documents_summary">सहेजी गई प्रतियाँ Documents/ScanWhirl में जाती हैं।</string>
     <string name="settings_auto_enhance">स्कैन अपने आप बेहतर करें</string>
     <string name="settings_auto_enhance_summary">स्कैन साफ़ हो जाते हैं। बंद रखने पर फ़ोटो वैसी ही रहती है जैसी खींची गई थी।</string>

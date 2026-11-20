@@ -267,6 +267,29 @@ class SwSheet private constructor(
                     minimumHeight = SwStyle.dp(context, 48f)
                     tag = index
                     contentDescription = label
+                    // F3 (hunt H6-3): the tick is decorative, so TalkBack must hear the choice
+                    // state from the row itself: "checked / not checked" (multi) or
+                    // "selected" (single), never just the label.
+                    isSelected = selected[index]
+                    val isChecked = selected[index]
+                    androidx.core.view.ViewCompat.setAccessibilityDelegate(
+                        this,
+                        object : androidx.core.view.AccessibilityDelegateCompat() {
+                            override fun onInitializeAccessibilityNodeInfo(
+                                host: View,
+                                info: androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+                            ) {
+                                super.onInitializeAccessibilityNodeInfo(host, info)
+                                info.className = if (multi) {
+                                    android.widget.CheckBox::class.java.name
+                                } else {
+                                    android.widget.RadioButton::class.java.name
+                                }
+                                info.isCheckable = true
+                                info.isChecked = isChecked
+                            }
+                        }
+                    )
                     setBackgroundResource(ripple.resourceId)
                     setPadding(
                         SwStyle.dp(context, 6f), SwStyle.dp(context, 6f),

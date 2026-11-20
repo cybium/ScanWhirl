@@ -14,7 +14,7 @@
         <item quantity="one">%d file</item>
         <item quantity="other">%d files</item>
     </plurals>
-    <string name="vault_stats_body">AES-256 · key sealed in this phone’s secure chip\nLocks itself when you leave the app</string>
+    <string name="vault_stats_body">AES-256 · opens with your fingerprint or passcode\nLocks itself 2 minutes after you leave the app</string>
     <string name="vault_locked_title">Vault locked</string>
     <string name="vault_locked_body">Unlock with your fingerprint or passcode to see your private files.</string>
     <string name="vault_not_setup_title">Your private space</string>
