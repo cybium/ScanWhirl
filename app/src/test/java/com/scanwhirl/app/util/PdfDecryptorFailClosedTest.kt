@@ -960,6 +960,51 @@ class PdfDecryptorFailClosedTest {
         assertPlainPdf(plain)
     }
 
+    @Test
+    fun `a trailer Root pointing at the removed Encrypt object returns no output`() {
+        val built = build(Spec(version = 4, revision = 4))
+        assertRefused(replaceOnce(built.bytes, "/Root 1 0 R", "/Root 8 0 R"))
+    }
+
+    @Test
+    fun `a trailer Info pointing at the removed Encrypt object is refused`() {
+        val built = build(Spec(version = 4, revision = 4))
+        assertRefused(replaceOnce(built.bytes, "/Info 7 0 R", "/Info 8 0 R"))
+    }
+
+    @Test
+    fun `a trailer Root pointing at a free xref row is refused`() {
+        val built = build(Spec(version = 4, revision = 4, extraObjects = listOf(10 to 0)))
+        // The fixture's xref has a free row at 9 and a live object at 10.
+        assertRefused(replaceOnce(built.bytes, "/Root 1 0 R", "/Root 9 0 R"))
+    }
+
+    @Test
+    fun `a trailer Info with the wrong generation is refused`() {
+        val built = build(Spec(version = 4, revision = 4))
+        assertRefused(replaceOnce(built.bytes, "/Info 7 0 R", "/Info 7 1 R"))
+    }
+
+    @Test
+    fun `nonzero generations of written trailer targets are preserved`() {
+        val built = build(Spec(version = 4, revision = 4, generations = mapOf(1 to 2, 7 to 3)))
+        val plain = PdfDecryptor.decrypt(built.bytes, "user-pass")
+        assertTrue(String(plain, Charsets.ISO_8859_1).contains("/Root 1 2 R /Info 7 3 R"))
+        assertPlainPdf(plain)
+    }
+
+    @Test
+    fun `a nested object reference to the removed Encrypt object is refused`() {
+        val built = build(Spec(version = 4, revision = 4, catalogExtra = " /Extra [<< /Ref 8 0 R >>]"))
+        assertRefused(built.bytes)
+    }
+
+    @Test
+    fun `a stream dictionary reference to the removed Encrypt number is refused`() {
+        val built = build(Spec(version = 4, revision = 4, contentDictExtra = " /Extra 8 1 R"))
+        assertRefused(built.bytes)
+    }
+
     // ---- Finding 2 (major): embedded files and explicit /Crypt filters are refused ----
 
     @Test
