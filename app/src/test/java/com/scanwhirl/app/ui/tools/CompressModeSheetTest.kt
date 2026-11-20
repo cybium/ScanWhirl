@@ -15,7 +15,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.ui.DocumentViewerActivity
+import com.scanwhirl.app.util.StatusLine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -286,6 +288,60 @@ abstract class CompressModeSheetBase {
         }
     }
 
+    // ---- the sheet says which document it is about (W2) -------------------
+
+    @Test
+    fun `the sheet names the document and its pages before the estimates land`() {
+        val gate = java.util.concurrent.CountDownLatch(1)
+        try {
+            // Hold every estimate: the identity must not wait for one.
+            CompressFlow.estimateForTest = { _, _ ->
+                gate.await(20, java.util.concurrent.TimeUnit.SECONDS)
+                100_000L
+            }
+            launch { activity ->
+                val decor = openSheet(activity)
+                val name = decor.findViewById<TextView>(R.id.compressSourceName)
+                assertNotNull("W2: the sheet says which document it will compress", name)
+                assertEquals(
+                    "with the exact source name",
+                    "Mode sheet",
+                    name.text.toString()
+                )
+                val doc = requireNotNull(repo.getDocument(sourceId))
+                val meta = decor.findViewById<TextView>(R.id.compressSourceMeta)
+                assertNotNull("and its pages and measured size", meta)
+                assertEquals(
+                    "both measured, never a guess",
+                    app.resources.getQuantityString(
+                        R.plurals.page_count_and_date,
+                        doc.pageCount,
+                        doc.pageCount,
+                        StatusLine.formatBytes(
+                            if (doc.pdfFile.exists() && doc.pdfFile.length() > 0) {
+                                doc.pdfFile.length()
+                            } else {
+                                doc.pageFiles.sumOf { it.length() }
+                            }
+                        )
+                    ),
+                    meta.text.toString()
+                )
+                // The target field works while nothing has been measured.
+                decor.findViewById<RadioButton>(R.id.compressModeTarget).performClick()
+                idle()
+                assertEquals(
+                    "the size aim is usable at once",
+                    View.VISIBLE,
+                    decor.findViewById<View>(R.id.compressTargetBlock).visibility
+                )
+            }
+        } finally {
+            CompressFlow.estimateForTest = null
+            gate.countDown()
+        }
+    }
+
     @Test
     fun `size mode runs the typed size`() {
         launch { activity ->
@@ -367,6 +423,30 @@ abstract class CompressModeSheetBase {
                 }
                 val scroll = decor.findViewById<NestedScrollView>(R.id.compressScroll)
                 assertNotNull("the sheet content sits in a scroll view", scroll)
+
+                // W2: the sheet now opens before its estimates land. This test measures the
+                // quality list in the state the base sheet always showed it — with the four
+                // measured sizes on screen — so wait for that state instead of measuring the
+                // "estimating…" placeholders.
+                val levelNames = listOf(
+                    R.string.compress_level_low,
+                    R.string.compress_level_medium,
+                    R.string.compress_level_high,
+                    R.string.compress_level_ultra
+                ).map { app.getString(it) }
+                assertTrue(
+                    "W2: the four level estimates land",
+                    pollUntil {
+                        val group = decor.findViewById<View>(R.id.levelGroup) as
+                            android.view.ViewGroup
+                        (0 until group.childCount).all { index ->
+                            val row = group.getChildAt(index) as RadioButton
+                            row.text.toString() != app.getString(
+                                R.string.compress_est_pending, levelNames[index]
+                            )
+                        }
+                    }
+                )
 
                 // The phone with the keyboard up: a short viewport, 200% type. The six rows of
                 // the quality aim already do not fit, and must scroll rather than be cut off.
