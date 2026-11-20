@@ -98,7 +98,7 @@ class StartupRecoveryTest {
     private fun interruptReplace(): Pair<String, ByteArray> {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Interrupted Replace")
         val retainedPage = requireNotNull(repo.getDocument(id)).pageFiles.last().readBytes()
-        repo.draftDelete(id, 0)
+        runBlocking { repo.draftDelete(id, 0) }
         val death = Faults.dieAtOp("replace:base_trashed")
         runCatching { runBlocking { repo.replaceWithDraft(id) } }
         assertTrue("fixture did not reach the interrupted Replace window", death.fired)
