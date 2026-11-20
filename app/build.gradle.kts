@@ -81,8 +81,8 @@ android {
             if (project.hasProperty("testBuild") && !project.hasProperty("demoBuild")) "ScanWhirl Test" else "ScanWhirl"
         minSdk = 24
         targetSdk = 36
-        versionCode = 26111901
-        versionName = "1.2.3"
+        versionCode = 26112001
+        versionName = "1.3.0"
         buildConfigField("String", "PLAY_LICENSE_KEY_B64", "\"$playLicensingKey\"")
 
         // Pro features are unlocked in test builds so they can be tried free.
