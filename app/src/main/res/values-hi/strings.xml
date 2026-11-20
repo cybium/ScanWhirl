@@ -147,7 +147,8 @@
     <string name="group_organize">क्रम बदलें</string>
     <string name="group_danger">खतरा</string>
     <string name="extracted">%1$d पन्ने एक नए स्कैन में निकाले गए</string>
-    <string name="about_message">ScanWhirl %1$s\n\nफ़ोन से कागज़ की तस्वीर लेकर PDF बनाएँ। सब कुछ आपके फ़ोन पर ही होता है: कोई खाता नहीं, कोई विज्ञापन नहीं, कोई सर्वर नहीं। इंटरनेट पर कोई जानकारी नहीं भेजी जाती। आपके स्कैन सिर्फ़ आपके फ़ोन पर रहते हैं।\n\nबनाने वाला: Cybium (github.com/cybium)\nसहायता: cybiumsupport@gmail.com\nनिजता नीति: cybium.github.io/scanwhirl-privacy</string>
+    <!-- D-11 (2026-11-20): कैमरा स्कैनर Google Play services से चलता है और पहली बार ज़रूरी हिस्सा खुद ले सकता है। -->
+    <string name="about_message">ScanWhirl %1$s\n\nफ़ोन से कागज़ की तस्वीर लेकर PDF बनाएँ। आपके दस्तावेज़ इसी फ़ोन पर रहते हैं: कोई खाता नहीं, कोई विज्ञापन नहीं, कोई सर्वर नहीं। कैमरा स्कैनर Google Play services से चलता है और पहली बार कुछ ज़रूरी जानकारी फ़ोन में उतार सकता है।\n\nबनाने वाला: Cybium (github.com/cybium)\nसहायता: cybiumsupport@gmail.com\nनिजता नीति: cybium.github.io/scanwhirl-privacy</string>
     <string name="about_title">ScanWhirl के बारे में</string>
     <string name="add_from_gallery">फ़ोटो से जोड़ें</string>
     <string name="add_pages">पन्ने जोड़ें</string>

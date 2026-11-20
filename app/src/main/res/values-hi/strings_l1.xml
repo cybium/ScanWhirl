@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L1 shell and kit: Hindi. Each value carries a review marker for a native speaker. -->
-    <string name="trust_offline_no_ads">बिना इंटरनेट · विज्ञापन नहीं</string>
+    <!-- D-11 (2026-11-20): स्कैनर और QR पढ़ने वाला हिस्सा Google Play services से चलता है और पहली
+         बार खुद को फ़ोन पर ले सकता है, इसलिए ये पिल काम की जगह बताते हैं, नेटवर्क की गारंटी नहीं देते। -->
+    <string name="trust_offline_no_ads">फ़ोन पर ही · विज्ञापन नहीं</string>
     <string name="language_chip_desc">भाषा बदलें</string>
-    <string name="trust_all_offline">पूरी तरह बिना इंटरनेट</string>
+    <string name="trust_all_offline">सब कुछ इसी फ़ोन पर</string>
     <string name="trust_no_ads">कोई विज्ञापन नहीं</string>
     <string name="trust_no_account">कोई खाता नहीं</string>
-    <string name="trust_offline">बिना इंटरनेट</string>
+    <string name="trust_offline">फ़ोन पर ही</string>
 
     <string name="shell_nav_library">कागज़ात</string>
     <string name="shell_nav_tools">काम</string>
@@ -110,7 +112,7 @@
     <string name="tool_soon_tag">जल्द</string>
     <string name="tool_coming_soon_note">यह काम बन रहा है। जल्द ही यहाँ होगा।</string>
     <string name="soon_book_pages">पूरी किताब स्कैन करें: एक साथ कई पन्ने, हर खुले दो पन्नों को अलग-अलग पन्नों में बाँटकर। ऐप जारी होने के बाद आएगा।</string>
-    <string name="soon_qr_code">बिना इंटरनेट इस फ़ोन पर QR कोड पढ़ें।</string>
+    <string name="soon_qr_code">इस फ़ोन पर QR कोड पढ़ें।</string>
     <string name="soon_business_card">नाम-पते वाले कागज़ की फ़ोटो से नाम, फ़ोन और ईमेल निकालें।</string>
     <string name="soon_folders">दस्तावेज़ साथ रखने की जगह यानी फ़ोल्डर में रखें और खोजने के लिए पहचान के नाम लगाएँ।</string>
     <string name="soon_batch_rename">एक ही तरीके से कई दस्तावेज़ों के नाम बदलें।</string>
