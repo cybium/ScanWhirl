@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  F8-IMPORT: Hindi parity for values/strings_f8import.xml. Short reasons only; they
+  follow the localized prefix the screen already shows.
+-->
+<resources>
+    <string name="f8_reason_unreadable">फ़ाइल पढ़ी या लिखी नहीं जा सकी</string>
+    <string name="f8_reason_too_large">फ़ाइल इस फ़ोन के लिए बहुत बड़ी है</string>
+    <string name="f8_reason_not_image">यह फ़ाइल तस्वीर नहीं है</string>
+    <string name="f8_stage_page_unreadable">पृष्ठ %1$d: यह तस्वीर पढ़ी नहीं जा सकी। इसे फिर चुनें या कोई दूसरी तस्वीर चुनें।</string>
+    <string name="f8_stage_page_too_large">पृष्ठ %1$d: यह तस्वीर इस फ़ोन के लिए बहुत बड़ी है। छोटी तस्वीर या JPG चुनें।</string>
+</resources>
