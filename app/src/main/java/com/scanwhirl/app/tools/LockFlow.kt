@@ -556,8 +556,8 @@ class LockFlow(
     }
 
     /**
-     * Holds the authorization a sheet's off-main check produced. It is consumed exactly once: a
-     * dismissed or duplicated callback can never act on a password that was verified earlier.
+     * Holds the authorization a sheet's off-main check produced and hands it out once: a dismissed
+     * or duplicated callback can never act on a password that was verified earlier.
      */
     private class GrantHolder {
         @Volatile var value: ScanRepository.PdfPasswordGrant? = null
@@ -572,7 +572,10 @@ class LockFlow(
         }
     }
 
-    /** The sheet reported success but its one-use grant is gone: fail closed, never re-check implicitly. */
+    /**
+     * The sheet reported success but its grant was already handed to another callback: fail closed,
+     * never re-check implicitly.
+     */
     private fun lostGrant() {
         Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
     }
