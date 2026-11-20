@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- F7-SAVE (hunt H2-2 / H2-4). Every line here is said out loud instead of a raw system
+     message: why Android 7-9 asks for storage access before a Documents copy, what happens when
+     the person says no, and what a failed copy through the system picker means. -->
+<resources>
+    <!-- Shown while Android's own storage prompt is up (Android 7-9 only). -->
+    <string name="f7save_perm_why_documents">This Android version needs storage access to copy the file into Documents. Allow access to continue.</string>
+    <!-- The person said no: nothing was written and nothing is claimed. -->
+    <string name="f7save_perm_denied_documents">Not saved: on this Android version Documents needs storage access. Allow access in Settings and try again.</string>
+    <string name="f7save_perm_denied_batch">Not saved: on this Android version Documents needs storage access to keep the PDFs. Allow access in Settings and try again.</string>
+    <!-- The automatic copy after a scan has no screen of its own to ask on, so it is skipped. -->
+    <string name="f7save_autocopy_no_permission">Saved in ScanWhirl. Not copied to Documents: this Android version needs storage access. Allow access in Settings to copy new scans.</string>
+    <!-- The tail of tools_result_save_failed for a picker copy that could not be written. -->
+    <string name="f7save_picker_write_failed">the chosen file could not be written</string>
+    <string name="f7save_picker_write_failed_left">the chosen file could not be written, and its empty copy could not be removed</string>
+</resources>

@@ -439,7 +439,7 @@ class CompressFlow(
                 throw e
             } catch (e: Exception) {
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             } finally {
                 progress.dismiss()
@@ -459,7 +459,8 @@ class CompressFlow(
                 }
                 // F11 (H3-2): the repository's streaming path, one page at a time. The old sheet
                 // code built a List<ByteArray> for the whole document here and could OOM on a
-                // long scan. F11 (H3-5): this path also carries the recognised text.
+                // long scan. F11 (H3-5): this path also carries the recognised text, and the
+                // repository names the copy through the shared output rule (H3-6).
                 val out = repo.compressScanToTarget(doc.id, target)
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true)
@@ -468,7 +469,7 @@ class CompressFlow(
                 throw e
             } catch (e: Exception) {
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             } finally {
                 progress.dismiss()
@@ -551,7 +552,7 @@ class CompressFlow(
                 throw e
             } catch (e: Exception) {
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             }
         }
@@ -594,7 +595,7 @@ class CompressFlow(
             } catch (e: Exception) {
                 sheet?.dismiss()
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             }
         }
@@ -638,7 +639,7 @@ class CompressFlow(
             } catch (e: Exception) {
                 sheet?.dismiss()
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             }
         }
@@ -647,6 +648,15 @@ class CompressFlow(
     // ------------------------------------------------------------------
     // Exact-target compression helpers (PDF ≈ Σ page JPEGs + ~600 B/page)
     // ------------------------------------------------------------------
+
+    /**
+     * H2-5: the toast keeps its localized prefix and names a localized reason. The raw
+     * exception message (English system/JVM text) is never shown.
+     */
+    private fun failureReason(e: Throwable): String = activity.getString(
+        if (ImageTools.isTooLargePhoto(e)) R.string.f8_reason_too_large
+        else R.string.f8_reason_unreadable
+    )
 
     internal companion object {
 

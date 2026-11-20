@@ -7,15 +7,12 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
-import com.scanwhirl.app.ScanWhirlApp
-import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.PdfA
 import com.scanwhirl.app.util.PdfGenerator
-import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
@@ -29,9 +26,9 @@ import java.util.TimeZone
  * v2 UI: 03_tools_hub — "Save as PDF/A" (Convert group, Pro).
  *
  * Pick a document -> setup sheet -> a PDF/A-2b copy of the document (same pages, same look,
- * invisible OCR text kept when searchable PDFs are on) -> the shared result screen (Open,
- * Share, Save, Show in library). A password-protected document is refused with a clear line,
- * because PDF/A never carries encryption.
+ * image-only because a PDF/A archive may not carry the non-embedded OCR font) -> the shared
+ * result screen (Open, Share, Save, Show in library). A password-protected document is refused
+ * with a clear line, because PDF/A never carries encryption.
  */
 object PdfAFlow {
 
@@ -143,10 +140,10 @@ object PdfAFlow {
 /**
  * Builds the PDF/A-2b copy of one document into the app cache.
  *
- * The pages are the document's existing JPEGs (never re-encoded, so the look is identical), the
- * invisible OCR text layer is carried when searchable PDFs are enabled, and the embedded sRGB
- * profile (`res/raw/srgb.icc`) makes the OutputIntent valid. The result screen then lets the
- * user open, share or save the file wherever they want.
+ * The pages are the document's existing JPEGs (never re-encoded, so the look is identical), no
+ * text layer is written (a PDF/A archive may not carry the non-embedded OCR Helvetica), and the
+ * embedded sRGB profile (`res/raw/srgb.icc`) makes the OutputIntent valid. The result screen
+ * then lets the user open, share or save the file wherever they want.
  */
 class PdfAExport(private val context: Context, private val repo: ScanRepository) {
 
@@ -168,28 +165,14 @@ class PdfAExport(private val context: Context, private val repo: ScanRepository)
             timeZone = TimeZone.getDefault()
         )
 
-        val layers = textLayers(doc)
         val dir = File(context.cacheDir, "pdfa").apply { mkdirs() }
         val out = File(dir, "${safeName(doc.name)}-pdfa.pdf")
         PdfGenerator.imagesToPdf(
             images = doc.pageFiles,
             outFile = out,
-            textLayers = layers,
             pdfa = mode
         )
         out
-    }
-
-    /** Page index -> OCR geometry, only for pages whose geometry matches the page image. */
-    private fun textLayers(doc: ScanDocument): Map<Int, OcrPage> {
-        if (!Prefs.makeSearchable(context)) return emptyMap()
-        val geo = repo.ocrGeometry(doc.id)
-        if (geo.isEmpty()) return emptyMap()
-        val layers = LinkedHashMap<Int, OcrPage>()
-        doc.pageFiles.forEachIndexed { index, page ->
-            geo[page.name]?.let { layers[index] = it }
-        }
-        return layers
     }
 
     private fun safeName(name: String): String {

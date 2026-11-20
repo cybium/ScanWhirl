@@ -28,6 +28,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.CompressTarget
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentActionDispatcher
 import com.scanwhirl.app.ui.DocumentViewerActivity
@@ -1209,8 +1210,14 @@ class ToolSetupActivity : BaseActivity() {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
                 val size = targetText.trim()
-                val targetBytes = if (size.isEmpty()) null else ImageTools.parseSizeInput(size)
-                if (size.isNotEmpty() && targetBytes == null) return fail(getString(R.string.tools_setup_bad_target))
+                val targetBytes = when (val parsed = if (size.isEmpty()) null else CompressTarget.parse(size)) {
+                    null, CompressTarget.Result.Blank -> null
+                    is CompressTarget.Result.Bytes -> parsed.value
+                    // H3-7: name the ceiling instead of silently chasing a saturated 2 GiB.
+                    CompressTarget.Result.TooLarge ->
+                        return fail(getString(R.string.compress_target_too_large))
+                    else -> return fail(getString(R.string.tools_setup_bad_target))
+                }
                 target = targetBytes
                 execute({
                     val out = if (targetBytes != null) {
