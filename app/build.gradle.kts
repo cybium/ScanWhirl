@@ -36,8 +36,9 @@ val verifyReleasePlayLicensingKey by tasks.registering {
     doLast { requirePlayLicensingKey(configuredPlayLicensingKey) }
 }
 
-// Exercise the actual Gradle check without trying to sign a release or needing a live key.
+// Exercise the actual Gradle check without trying to sign a release or calling Play.
 val testPlayLicensingKeyValidation by tasks.registering {
+    inputs.property("playLicenseKey", configuredPlayLicensingKey)
     doLast {
         for (bad in listOf("", "PASTE_PLAY_LICENSING_PUBLIC_KEY_HERE", "AAAA", "invalid!")) {
             check(runCatching { requirePlayLicensingKey(bad) }.exceptionOrNull() is GradleException)
@@ -45,6 +46,13 @@ val testPlayLicensingKeyValidation by tasks.registering {
         val generated = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
         val publicKey = Base64.getEncoder().encodeToString(generated.public.encoded)
         check(requirePlayLicensingKey(publicKey) == publicKey)
+
+        val committed = requirePlayLicensingKey(configuredPlayLicensingKey)
+        val committedKey = KeyFactory.getInstance("RSA")
+            .generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(committed))) as RSAPublicKey
+        check(committedKey.modulus.bitLength() == 2048) {
+            "The committed Play licensing public key must be RSA 2048."
+        }
     }
 }
 
