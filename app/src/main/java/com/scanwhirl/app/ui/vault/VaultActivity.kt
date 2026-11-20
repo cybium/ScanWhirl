@@ -219,6 +219,7 @@ class VaultActivity : BaseActivity() {
     private class PendingSave(val code: String, val vaultIdentity: String?)
 
     private var recoveryFlow = RecoveryFlow()
+    private var pickedRestore: File? = null
 
     override fun onRetainCustomNonConfigurationInstance(): Any {
         // Mark the flow as surviving a configuration change: the dismissal of its dialogs during
@@ -266,6 +267,7 @@ class VaultActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        pickedRestore?.let { com.scanwhirl.app.util.BoundedCopy.release(it) }
         // Leaving the Vault screen (not a rotation) drops the in-memory one-time code at once.
         if (isFinishing) recoveryFlow.clearSecrets()
         super.onDestroy()
@@ -1748,15 +1750,27 @@ class VaultActivity : BaseActivity() {
         lifecycleScope.launch {
             val temp = File(cacheDir, "vault-restore-${System.currentTimeMillis()}.swvault")
             try {
-                withContext(Dispatchers.IO) {
-                    val input = contentResolver.openInputStream(uri)
-                        ?: throw IOException("The chosen file cannot be read")
-                    input.use { source -> temp.outputStream().use { target -> source.copyTo(target) } }
+                val result = com.scanwhirl.app.util.BoundedCopy.copy(
+                    this@VaultActivity, uri, temp, com.scanwhirl.app.store.backup.FullBackup.MAX_ARCHIVE_BYTES
+                )
+                if (result == com.scanwhirl.app.util.BoundedCopy.Result.CANCELLED) return@launch
+                if (result != com.scanwhirl.app.util.BoundedCopy.Result.OK) {
+                    showError(getString(when (result) {
+                        com.scanwhirl.app.util.BoundedCopy.Result.TOO_LARGE -> R.string.s6c_backup_too_large
+                        com.scanwhirl.app.util.BoundedCopy.Result.NO_SPACE -> R.string.s6c_backup_no_space
+                        else -> R.string.s6c_backup_unreadable
+                    }))
+                    return@launch
                 }
+                pickedRestore?.let { com.scanwhirl.app.util.BoundedCopy.release(it) }
+                pickedRestore = temp
                 showRestoreCode(temp)
             } catch (e: Exception) {
-                temp.delete()
+                com.scanwhirl.app.util.BoundedCopy.release(temp)
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 showError(getString(R.string.vault_restore_failed, e.message ?: ""))
+            } finally {
+                if (pickedRestore != temp) com.scanwhirl.app.util.BoundedCopy.release(temp)
             }
         }
     }
@@ -1769,7 +1783,7 @@ class VaultActivity : BaseActivity() {
             .setTitle(R.string.vault_restore_title)
             .setMessage(R.string.vault_restore_note)
             .setContent(content)
-            .setSecondary(R.string.vault_cancel) { file.delete() }
+            .setSecondary(R.string.vault_cancel) { com.scanwhirl.app.util.BoundedCopy.release(file) }
             .build()
         // It accepts the recovery code of the backup: secure this dialog's own window.
         sheet.secure()
@@ -1784,18 +1798,28 @@ class VaultActivity : BaseActivity() {
             sheet.primaryButton.isEnabled = false
             lifecycleScope.launch {
                 try {
-                    withContext(Dispatchers.IO) { store.importBackup(file, code) }
+                    kotlinx.coroutines.runInterruptible(Dispatchers.IO) { store.importBackup(file, code) }
                     // A restore replaces the Vault identity: a prepared code or a confirmation
                     // from before it must not survive (review MUST-FIX 1).
                     dropRetainedSecrets()
                     sheet.dismiss()
-                    file.delete()
+                    com.scanwhirl.app.util.BoundedCopy.release(file)
                     unlockMethod = UnlockMethod.RECOVERY
                     render()
                     Toast.makeText(this@VaultActivity, R.string.vault_restore_done, Toast.LENGTH_LONG).show()
                     showNewPasscode(afterRestore = true)
                 } catch (e: Exception) {
-                    field.setError(getString(R.string.vault_restore_failed, e.message ?: ""))
+                    if (e is kotlinx.coroutines.CancellationException) {
+                        com.scanwhirl.app.util.BoundedCopy.release(file)
+                        throw e
+                    }
+                    if (e is com.scanwhirl.app.store.backup.BackupResourceException) {
+                        com.scanwhirl.app.util.BoundedCopy.release(file)
+                        sheet.dismiss()
+                        showError(getString(if (e.noSpace) R.string.s6c_backup_no_space else R.string.s6c_backup_limits))
+                    } else {
+                        field.setError(getString(R.string.vault_restore_failed, e.message ?: ""))
+                    }
                     sheet.primaryButton.isEnabled = true
                 }
             }

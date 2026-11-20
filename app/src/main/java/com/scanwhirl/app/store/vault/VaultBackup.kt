@@ -1,6 +1,8 @@
 package com.scanwhirl.app.store.vault
 
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.store.backup.BackupRestoreBudget
+import com.scanwhirl.app.store.backup.FullBackup
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -104,10 +106,12 @@ object VaultBackup {
      * Extracts a backup into [into] (a private staging directory), never trusting names.
      * The caller verifies every entry with the unwrapped key before publishing it.
      */
-    fun extract(src: File, into: File): Contents {
+    fun extract(src: File, into: File, limits: FullBackup.RestoreLimits = FullBackup.RestoreLimits()): Contents {
         if (!into.mkdirs()) throw IOException("Could not prepare the restore folder")
         val root = into.canonicalFile
+        val budget = BackupRestoreBudget(null, root, limits)
 
+        try {
         DataInputStream(BufferedInputStream(FileInputStream(src))).use { input ->
             val magic = ByteArray(MAGIC.size).also { input.readFully(it) }
             if (!magic.contentEquals(MAGIC)) throw VaultAuthException("Not a ScanWhirl Vault backup")
@@ -132,6 +136,7 @@ object VaultBackup {
                 if (fileCount !in 0..MAX_FILES) throw VaultAuthException("Damaged Vault backup")
                 val names = HashSet<String>()
                 repeat(fileCount) {
+                    limits.checkCancelled()
                     val name = input.readUTF()
                     if ((name != "manifest.enc" && !VaultStore.isSafeStoredName(name)) || !names.add(name.lowercase())) {
                         throw VaultAuthException("Damaged Vault backup")
@@ -140,8 +145,9 @@ object VaultBackup {
                     val maxPlainLength =
                         if (name == "manifest.enc") VaultStore.MAX_MANIFEST_BYTES else VaultStore.MAX_RECORD_BYTES
                     if (length !in 1..VaultCrypto.encryptedLength(maxPlainLength)) throw VaultAuthException("Damaged Vault backup")
+                    budget.requireFits(length)
                     val dest = VaultStore.containedFile(dir, name)
-                    FileOutputStream(dest).use { out -> copy(input, out, length) }
+                    FileOutputStream(dest).use { out -> copy(input, budget.output(out), length) }
                 }
                 ids += id
             }
@@ -158,14 +164,19 @@ object VaultBackup {
                     if (length !in 1..VaultCrypto.encryptedLength(VaultStore.MAX_MANIFEST_BYTES)) {
                         throw VaultAuthException("Damaged Vault backup")
                     }
+                    budget.requireFits(length)
                     val dest = VaultStore.containedFile(root, name)
-                    FileOutputStream(dest).use { out -> copy(input, out, length) }
+                    FileOutputStream(dest).use { out -> copy(input, budget.output(out), length) }
                     extras += dest
                 }
             }
             // Version 1 deliberately stops after the entries and has no extras to publish.
             if (version >= 2 && input.read() != -1) throw VaultAuthException("Damaged Vault backup")
             return Contents(recoveryBlob, ids, extras)
+        }
+        } catch (failure: Throwable) {
+            into.deleteRecursively()
+            throw failure
         }
     }
 

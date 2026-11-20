@@ -28,6 +28,7 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.bindCredentialSubmit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -112,21 +113,26 @@ class BackupActivity : BaseActivity() {
     private val pickBackup = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@registerForActivityResult
         lifecycleScope.launch {
-            val copied = withContext(Dispatchers.IO) {
-                runCatching {
-                    val tmp = File(cacheDir, "picked-backup-${System.nanoTime()}.swbackup")
-                    contentResolver.openInputStream(uri)?.use { input ->
-                        tmp.outputStream().use { input.copyTo(it, 64 * 1024) }
-                    } ?: error("no stream")
-                    tmp
-                }.getOrNull()
+            val copied = File(cacheDir, "picked-backup-${System.nanoTime()}.swbackup")
+            var handedOff = false
+            try {
+                val result = com.scanwhirl.app.util.BoundedCopy.copy(this@BackupActivity, uri, copied, FullBackup.MAX_ARCHIVE_BYTES)
+                if (result == com.scanwhirl.app.util.BoundedCopy.Result.CANCELLED) return@launch
+                if (result != com.scanwhirl.app.util.BoundedCopy.Result.OK) {
+                    toast(when (result) {
+                        com.scanwhirl.app.util.BoundedCopy.Result.TOO_LARGE -> R.string.s6c_backup_too_large
+                        com.scanwhirl.app.util.BoundedCopy.Result.NO_SPACE -> R.string.s6c_backup_no_space
+                        else -> R.string.s6c_backup_unreadable
+                    })
+                    return@launch
+                }
+                restoreSource?.let { com.scanwhirl.app.util.BoundedCopy.release(it) }
+                restoreSource = copied
+                askRestoreSecret(copied)
+                handedOff = true
+            } finally {
+                if (!handedOff) com.scanwhirl.app.util.BoundedCopy.release(copied)
             }
-            if (copied == null) {
-                toast(R.string.backup_failed)
-                return@launch
-            }
-            restoreSource = copied
-            askRestoreSecret(copied)
         }
     }
 
@@ -139,7 +145,7 @@ class BackupActivity : BaseActivity() {
 
     override fun onDestroy() {
         pending?.delete()
-        restoreSource?.delete()
+        restoreSource?.let { com.scanwhirl.app.util.BoundedCopy.release(it) }
         super.onDestroy()
     }
 
@@ -478,7 +484,7 @@ class BackupActivity : BaseActivity() {
         val header = runCatching { backup.header(file) }.getOrNull()
         if (header == null) {
             toast(R.string.backup_not_a_backup)
-            file.delete()
+            com.scanwhirl.app.util.BoundedCopy.release(file)
             return
         }
         if (header.wrap == FullBackup.Wrap.RECOVERY_CODE) {
@@ -492,7 +498,7 @@ class BackupActivity : BaseActivity() {
                 sheet.dismiss()
                 runRestore(file, code)
             }
-            sheet.setSecondary(R.string.backup_cancel) { file.delete() }
+            sheet.setSecondary(R.string.backup_cancel) { com.scanwhirl.app.util.BoundedCopy.release(file) }
             sheet.secure().show()
         } else {
             val field = PasswordField(this).apply {
@@ -508,7 +514,7 @@ class BackupActivity : BaseActivity() {
                 sheet.dismiss()
                 runRestore(file, field.text())
             }
-            sheet.setSecondary(R.string.backup_cancel) { file.delete() }
+            sheet.setSecondary(R.string.backup_cancel) { com.scanwhirl.app.util.BoundedCopy.release(file) }
             sheet.secure().show()
         }
     }
@@ -525,8 +531,12 @@ class BackupActivity : BaseActivity() {
         }
         toast(R.string.backup_restoring)
         lifecycleScope.launch {
-            val report = withContext(Dispatchers.IO) { runCatching { backup.restore(file, secret) } }
-            file.delete()
+            val report = try {
+                runCatching { kotlinx.coroutines.runInterruptible(Dispatchers.IO) { backup.restore(file, secret) } }
+            } finally {
+                com.scanwhirl.app.util.BoundedCopy.release(file)
+            }
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             report.onSuccess { r ->
                 // A restore is not a backup: only a durable backup WRITE (saveTo above) may move
                 // the "last backup" freshness line and postpone the reminder (F-04).
@@ -545,6 +555,8 @@ class BackupActivity : BaseActivity() {
                 }
             }.onFailure { error ->
                 val text = when (error) {
+                    is com.scanwhirl.app.store.backup.BackupResourceException ->
+                        getString(if (error.noSpace) R.string.s6c_backup_no_space else R.string.s6c_backup_limits)
                     is VaultAuthException -> getString(R.string.backup_wrong_secret)
                     else -> getString(R.string.backup_not_a_backup)
                 }
