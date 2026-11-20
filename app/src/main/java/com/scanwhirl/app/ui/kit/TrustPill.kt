@@ -7,7 +7,7 @@ import androidx.appcompat.widget.AppCompatTextView
 import com.scanwhirl.app.R
 
 /**
- * v2 UI: 01_home_A / 06_pro — green promise pill: "On this phone · No ads".
+ * v2 UI: 01_home_A / 06_pro — green promise pill: "Private · No ads".
  *
  * D-11 (2026-11-20): the camera scanner, QR reader and English text reader run in Google Play
  * services and may fetch themselves once, so no pill promises that the app never touches a

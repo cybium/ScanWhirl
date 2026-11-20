@@ -129,7 +129,8 @@ class WordNeedsTextFixResultTest {
         val message = failure.exceptionOrNull()?.message.orEmpty()
         // T37: the old "Read the text first" left a Hindi user with no way forward. The message
         // now names the setting that actually decides whether the page can be read.
-        assertTrue("the message must name the text language setting: $message", message.contains("Text language"))
+        // C1 owner 2026-11-20: the setting is now "Text reading language".
+        assertTrue("the message must name the text language setting: $message", message.contains("Text reading language"))
         assertTrue("the message must name Hindi: $message", message.contains("Hindi"))
         assertTrue("the message must say how to recover: $message", message.contains("try again", ignoreCase = true))
         assertFalse("no half written .docx may be left", out.exists())
