@@ -81,7 +81,7 @@
     <string name="stamp_pro_message">हस्ताक्षर करना, लिखना और निजी जानकारी छिपाना Pro में मिलते हैं। जाँच के लिए बने ऐप में ये मुफ़्त हैं।</string>
     <string name="stamp_redact_warn_title">छिपाई गई जानकारी हमेशा के लिए चली जाएगी</string>
     <string name="stamp_redact_warn_message">छिपाए गए शब्द और तस्वीर के छोटे बिंदु (पिक्सेल) नई प्रति से हमेशा के लिए हट जाते हैं।</string>
-    <string name="stamp_redact_warn_save">छिपाई गई जानकारी वाली प्रति सहेजें</string>
+    <string name="stamp_redact_warn_save">निजी जानकारी ढककर नई प्रति सहेजें</string>
     <!-- review: Hide private info (Redact). -->
     <string name="find_button">निजी जानकारी छिपाएँ</string>
     <string name="find_title">निजी जानकारी छिपाएँ</string>

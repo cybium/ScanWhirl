@@ -15,7 +15,7 @@
     <string name="tools_setup_pick_one">पहले दस्तावेज़ चुनें।</string>
     <string name="tools_setup_locked">ताला लगा है</string>
     <string name="tools_setup_unlock_consent_title">यह PDF सुरक्षित है</string>
-    <string name="tools_setup_unlock_consent_body">%1$s: इसके लिए ScanWhirl आपके कागज़ात में रखी इसकी प्रति से पासवर्ड हटा देगा। बाद में आप इसे फिर से सुरक्षित कर सकते हैं।</string>
+    <string name="tools_setup_unlock_consent_body">%1$s के लिए ScanWhirl कागज़ात में रखी इस PDF का पासवर्ड हटा देगा। चाहें तो बाद में नया पासवर्ड लगाएँ।</string>
     <string name="tools_setup_unlock_consent_primary">पासवर्ड हटाएँ और जारी रखें</string>
     <string name="tools_setup_need_two">कम से कम दो दस्तावेज़ चुनें।</string>
     <string name="tools_setup_merge_device">इस फ़ोन की PDF मिलाएँ</string>

@@ -77,7 +77,7 @@
     </plurals>
     <!-- M06 export transaction: truthful save / Undo outcomes. -->
     <string name="export_already_saved">पहले से सहेजा गया, कोई बदलाव नहीं: %1$s</string>
-    <string name="export_saved_new_copy">नई फ़ाइल बनाकर सहेजा गया: %1$s। आपकी पिछली फ़ाइल सुरक्षित रखी गई।</string>
+    <string name="export_saved_new_copy">नई प्रति %1$s के नाम से सहेजी गई। पिछली प्रति नहीं बदली।</string>
     <string name="export_undo_removed">%1$s हटाई गई</string>
     <string name="export_undo_kept_changed">%1$s रखी गई: सहेजने के बाद यह बदल गई</string>
     <string name="export_undo_failed">%1$s हटाई नहीं जा सकी। ज़रूरत न हो तो Files में हटाएँ।</string>
@@ -122,7 +122,7 @@
     <string name="import_pdf">PDF फ़ाइल</string>
     <string name="import_subtitle">चुनें कि पन्ने कहाँ से आ रहे हैं।</string>
     <string name="import_photos_desc">अपनी फ़ोटो से</string>
-    <string name="import_pdf_desc">हर पन्ना बदलने लायक पन्ना बनता है</string>
+    <string name="import_pdf_desc">PDF के पन्ने तस्वीर बनकर आएँगे</string>
     <string name="import_order_note">Android का फ़ोटो चुनने वाला हिस्सा तस्वीरें अलग क्रम में दे सकता है, इसलिए सहेजने से पहले जाँच में पन्नों का क्रम देख लें।</string>
     <string name="empty_scan_button">एक दस्तावेज़ स्कैन करें</string>
     <string name="empty_import_button">फ़ोटो या एक PDF लाएँ</string>
@@ -209,7 +209,7 @@
     <string name="compress_result_over_limit">%1$s · आपकी %2$s सीमा से ऊपर</string>
     <string name="compress_result_size_unknown">आकार मापा नहीं जा सका</string>
     <string name="compress_result_before">पहले: %1$s</string>
-    <string name="compress_result_source_kept">मूल कागज़ात में सुरक्षित है।</string>
+    <string name="compress_result_source_kept">मूल फ़ाइल कागज़ात में सुरक्षित है।</string>
     <string name="compress_undo">यह प्रति हटाएँ</string>
     <string name="compress_undo_removed">यह छोटी की गई प्रति हटा दी गई।</string>
     <string name="compress_undo_removed_with_copy">यह छोटी की गई प्रति और उसकी Documents प्रति हटा दी गई।</string>
@@ -240,8 +240,8 @@
     <string name="filter_original">मूल</string>
     <string name="filter_title">पन्ने का रंग-रूप</string>
     <string name="last_page_guard">दस्तावेज़ में कम से कम एक पन्ना होना चाहिए। इसके बजाय पूरा दस्तावेज़ हटाएँ।</string>
-    <string name="lock_device_msg">ScanWhirl पहले इस PDF के पन्ने तस्वीरों के रूप में लाता है (लिखा हुआ चुनने लायक नहीं रहता), फिर नई PDF को आपके पासवर्ड से सुरक्षित करता है। अगले पन्ने से ताला लगी हुई फ़ाइल सहेजें या भेजें।</string>
-    <string name="lock_device_note">पन्ने तस्वीरों के रूप में लाए गए, इसलिए यह PDF तस्वीरों वाली है। जो प्रति आप सहेजते हैं वह पासवर्ड से सुरक्षित होती है।</string>
+    <string name="lock_device_msg">ScanWhirl पहले PDF के पन्नों की तस्वीरें बनाता है। इससे मूल लिखावट चुनी नहीं जा सकती। फिर नई PDF पर आपका पासवर्ड लगता है। अगले पन्ने से उसे सहेजें या भेजें।</string>
+    <string name="lock_device_note">पन्ने तस्वीरों में बदले गए हैं। सहेजी जाने वाली नई PDF पासवर्ड से सुरक्षित होगी।</string>
     <string name="lock_device_title">फ़ोन की PDF पर ताला लगाएँ</string>
     <string name="lock_source_lock_device">फ़ोन की PDF पर ताला लगाएँ</string>
     <string name="lock_source_unlock_device">पासवर्ड वाली PDF फ़ाइल का ताला खोलें</string>
@@ -273,7 +273,7 @@
     <string name="ocr_note">लिखे हुए की खोज छपे पन्नों पर सबसे अच्छी चलती है।</string>
     <string name="signal_reading_text">आपके स्कैन पर लिखा हुआ पढ़ रहा है</string>
     <string name="ocr_page_label">पन्ना %d</string>
-    <string name="ocr_remove_gaps">खाली जगह हटाएँ</string>
+    <string name="ocr_remove_gaps">खाली पंक्तियाँ हटाएँ</string>
     <string name="ocr_running">पन्नों से लिखा हुआ निकाला जा रहा है…</string>
     <string name="ocr_save_btn">.txt सहेजें</string>
     <string name="ocr_save_txt">.txt के रूप में सहेजें</string>
@@ -295,7 +295,7 @@
     <string name="page_op_failed">पन्ने का काम नहीं हो सका: %1$s</string>
     <string name="pdf_missing">इस स्कैन की PDF फ़ाइल अभी नहीं बनी</string>
     <string name="pdf_protected">यह PDF पासवर्ड से सुरक्षित है। पहले पासवर्ड हटाएँ, फिर फ़ोन में लाएँ।</string>
-    <string name="pdf_rasterize_note">पन्ने तस्वीरें बन जाते हैं, इसलिए लिखा हुआ चुना नहीं जा सकेगा। बदलाव पहले जैसे ही काम करेंगे।</string>
+    <string name="pdf_rasterize_note">PDF के पन्ने तस्वीरों में बदलेंगे। मूल लिखावट नहीं चुनी जा सकेगी; पन्ने पहले की तरह बदल सकेंगे।</string>
     <string name="pdf_save_failed">PDF सहेजी नहीं जा सकी: %1$s</string>
     <string name="pdf_saved_docs">Documents/ScanWhirl में सहेजा गया: %1$s</string>
     <string name="pdf_viewer_failed">यह PDF नहीं खुल सकी</string>
@@ -416,7 +416,7 @@
     <string name="tool_edit_sub">रंग-रूप बदलें, घुमाएँ और काटें</string>
     <string name="tool_merge_sub">PDF को एक में मिलाएँ</string>
     <string name="tool_resize_sub">तस्वीर का आकार बदलें (पिक्सेल यानी तस्वीर के छोटे बिंदु, या KB में फ़ाइल का आकार)</string>
-    <string name="unlock_device_note">ScanWhirl में आपका स्कैन अपना पासवर्ड रखता है; यह सहेजी गई प्रति खुली है। स्कैन से पासवर्ड हटाने के लिए ताला लगाएँ / खोलें → सहेजा स्कैन इस्तेमाल करें।</string>
+    <string name="unlock_device_note">ScanWhirl में रखा मूल स्कैन अब भी पासवर्ड से सुरक्षित है। केवल बाहर सहेजी गई नई प्रति खुली है। मूल का पासवर्ड हटाने के लिए ताला लगाएँ / खोलें में सहेजा स्कैन चुनें।</string>
     <string name="unlock_pdf_done">पासवर्ड हट गया। PDF खुली है</string>
     <string name="unlock_pdf_msg">\"%1$s\" का पासवर्ड डालें:</string>
     <string name="unlock_pdf_not_ours_msg">ScanWhirl सिर्फ़ अपने पासवर्ड हटाता है। यह फ़ाइल नहीं बदली गई।</string>

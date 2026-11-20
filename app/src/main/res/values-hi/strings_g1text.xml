@@ -3,7 +3,7 @@
 <resources>
     <!-- D9-1: a re-read finished while the Text screen was open. -->
     <string name="ocr_g1text_new_text_title">नई लिखावट पढ़ी गई</string>
-    <string name="ocr_g1text_new_text_msg">इस फ़ोन ने लिखावट फिर से पढ़ी और पन्ना %1$s की सहेजी हुई लिखावट बदल गई। नई लिखावट रखें, या यहाँ लिखा अपना बदलाव रखें?</string>
+    <string name="ocr_g1text_new_text_msg">पन्ने %1$s की लिखावट दोबारा पढ़ने पर बदल गई। नई लिखावट रखें या अपने किए सुधार?</string>
     <string name="ocr_g1text_use_new">नई लिखावट रखें</string>
     <string name="ocr_g1text_keep_mine">मेरा बदलाव रखें</string>
     <!-- F-02: automatic retries are used up, the pages stay unread. -->
