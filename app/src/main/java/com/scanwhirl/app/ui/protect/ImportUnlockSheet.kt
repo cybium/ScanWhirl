@@ -66,6 +66,9 @@ internal object ImportUnlockSheet {
         val handler = Handler(Looper.getMainLooper())
         var busy = false
 
+        // Closed for any reason (Open, back, outside tap): the typed password leaves the view.
+        sheet.setOnDismissListener { field.editText.setText("") }
+
         fun tickPause() {
             if (!sheet.isShowing) return
             val left = cooldown.remainingPauseMs()
@@ -87,13 +90,10 @@ internal object ImportUnlockSheet {
                 tickPause()
                 return
             }
+            // An empty password is a real password: owner-only PDFs (empty user password, owner
+            // password set) need it. The decryptor verifies "" like any other value and answers
+            // WRONG when the file needs a typed user password — the sheet must not decide first.
             val text = field.text()
-            if (text.isEmpty()) {
-                field.setError(
-                    activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
-                )
-                return
-            }
             busy = true
             sheet.primaryButton.isEnabled = false
             field.setError(null)

@@ -86,6 +86,15 @@ class PasswordField(context: Context) : LinearLayout(context) {
             background = null
             isSingleLine = true
             setPadding((12 * d).toInt(), 0, (4 * d).toInt(), 0)
+            // A password is a secret the user did not ask to keep: never write it into the
+            // saved-instance-state Bundle (rotation / process death) and never offer it to
+            // autofill services. The caller may reuse the id for a11y, so opt out explicitly.
+            isSaveEnabled = false
+            freezesText = false
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+                setAutofillHints()
+            }
         }
         fieldBox.addView(
             editText,
