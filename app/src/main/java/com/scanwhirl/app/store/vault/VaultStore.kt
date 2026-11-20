@@ -256,7 +256,7 @@ class VaultStore(
         if (!isSetUp()) return UnlockResult(false)
 
         val key = try {
-            VaultKeyWrap.open(File(vaultDir, PASSCODE_FILE).readBytes(), passcode)
+            VaultKeyWrap.open(VaultControlBlobs.read(File(vaultDir, PASSCODE_FILE), VaultControlBlobs.MAX_WRAP_BYTES), passcode)
         } catch (e: Exception) {
             null
         }
@@ -274,7 +274,7 @@ class VaultStore(
         if (!isSetUp() || !VaultCrypto.isRecoveryCode(code)) return false
         val key = try {
             VaultKeyWrap.open(
-                File(vaultDir, RECOVERY_FILE).readBytes(),
+                VaultControlBlobs.read(File(vaultDir, RECOVERY_FILE), VaultControlBlobs.MAX_WRAP_BYTES),
                 VaultCrypto.normalizeRecoveryCode(code)
             )
         } catch (e: Exception) {
@@ -291,7 +291,9 @@ class VaultStore(
     internal suspend fun unlockWithRecoveryForBackup(code: String, accept: suspend () -> Boolean): Boolean {
         if (!VaultCrypto.isRecoveryCode(code)) return false
         val file = File(vaultDir, RECOVERY_FILE)
-        val blob = synchronized(LOCK) { runCatching { file.readBytes() }.getOrNull() } ?: return false
+        val blob = synchronized(LOCK) {
+            runCatching { VaultControlBlobs.read(file, VaultControlBlobs.MAX_WRAP_BYTES) }.getOrNull()
+        } ?: return false
         val key = try {
             VaultKeyWrap.open(blob, VaultCrypto.normalizeRecoveryCode(code))
         } catch (_: VaultAuthException) {
@@ -301,7 +303,8 @@ class VaultStore(
             if (!accept()) return false
             val jobContext = currentCoroutineContext()
             return synchronized(LOCK) {
-                if (!file.isFile || !file.readBytes().contentEquals(blob)) return@synchronized false
+                val current = runCatching { VaultControlBlobs.read(file, VaultControlBlobs.MAX_WRAP_BYTES) }.getOrNull()
+                if (current == null || !current.contentEquals(blob)) return@synchronized false
                 // Commit point. The following existing unlock transaction must not be interrupted.
                 jobContext.ensureActive()
                 finishRecoveryUnlock(key)
@@ -327,7 +330,7 @@ class VaultStore(
         val blob = File(vaultDir, KEYSTORE_FILE)
         if (!blob.isFile) throw VaultAuthException("No fingerprint key on this phone")
         try {
-            keys.challenge(blob.readBytes())
+            keys.challenge(VaultControlBlobs.read(blob, VaultControlBlobs.MAX_WRAP_BYTES))
         } catch (e: VaultKeyInvalidatedException) {
             blob.delete()
             throw e
@@ -613,7 +616,7 @@ class VaultStore(
     fun exportBackup(dest: File): File = synchronized(LOCK) {
         if (!isSetUp()) throw IllegalStateException("Set up the Vault first")
         requireCompleted()
-        val recovery = File(vaultDir, RECOVERY_FILE).readBytes()
+        val recovery = VaultControlBlobs.read(File(vaultDir, RECOVERY_FILE), VaultControlBlobs.MAX_WRAP_BYTES)
         // Remembered PDF passwords travel with the backup (still encrypted under the vault key).
         val extras = listOf(File(vaultDir, VaultPasswords.FILE_NAME)).filter { it.isFile }
         VaultBackup.write(dest, recovery, entryDirs(), extras)
@@ -937,7 +940,7 @@ class VaultStore(
         if (!blob.isFile || blob.length() !in 1..VaultCrypto.encryptedLength(MAX_MANIFEST_BYTES)) {
             throw VaultAuthException("Damaged Vault entry")
         }
-        val encrypted = blob.readBytes()
+        val encrypted = VaultControlBlobs.read(blob, VaultCrypto.encryptedLength(MAX_MANIFEST_BYTES))
         val plain = VaultCrypto.decryptBytes(encrypted, key)
         if (!VaultCrypto.isEncryptedLength(encrypted.size.toLong(), plain.size.toLong(), encrypted[4].toInt())) {
             throw VaultAuthException("Damaged Vault entry")

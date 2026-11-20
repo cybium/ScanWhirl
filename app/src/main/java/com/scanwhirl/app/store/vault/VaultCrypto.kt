@@ -360,6 +360,7 @@ object VaultKeyWrap {
     }
 
     fun open(blob: ByteArray, secret: String): ByteArray {
+        if (blob.size > VaultControlBlobs.MAX_WRAP_BYTES) throw VaultAuthException("Damaged Vault key file")
         val data = DataInputStream(ByteArrayInputStream(blob))
         return try {
             val magic = ByteArray(MAGIC.size).also { data.readFully(it) }
