@@ -898,8 +898,10 @@ class CorpusToolsTest {
                         when (f.name) {
                             "marksheet_1p.pdf" -> verifyMarksheetPercent(zip, values)
                             "bank_statement_3p.pdf" -> equal(45, rows.count {
-                                dateInStatement.containsMatchIn(it.textContent) &&
-                                    "Opening Balance" !in it.textContent && "Closing Balance" !in it.textContent
+                                val cells = it.getElementsByTagNameNS("*", "c")
+                                val textCells = (0 until cells.length).map { i -> cells.item(i).textContent.trim() }
+                                textCells.any(dateInStatement::matches) &&
+                                    textCells.none { cell -> cell == "Opening Balance" || cell == "Closing Balance" }
                             }, "bank XLSX transaction rows")
                             "tax_invoice_1p.pdf" -> equal(7, invoiceItems.count { it in text }, "invoice XLSX line items")
                             "stock_register_6p.pdf" -> equal(120, Regex("""Item\s+\d{3}\b""").findAll(text)
@@ -950,7 +952,7 @@ class CorpusToolsTest {
         for (word in words) verify(word in normalized, "export is missing '$word'")
     }
 
-    private val dateInStatement = Regex("""\b\d{2}/01/2026\b""")
+    private val dateInStatement = Regex("""\d{2}/01/2026""")
     private val invoiceItems = listOf("A4 copier paper", "Ball pen", "File folder", "Stapler",
         "Highlighter set", "Notebook", "Whiteboard marker")
 
