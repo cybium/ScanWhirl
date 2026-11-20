@@ -176,6 +176,66 @@ class TrashTest {
     }
 
     @Test
+    fun `crash just after moving an old document does not make it expire`() {
+        val id = richDoc("Old but just deleted")
+        val live = File(repo.docsDir, id)
+        val original = snapshot(live)
+        val beforeMove = System.currentTimeMillis()
+        assertTrue(live.setLastModified(beforeMove - 2 * ScanRepository.TRASH_RETENTION_MS))
+        ScanRepository.trashFault = {
+            if (it == ScanRepository.Companion.TrashStage.MOVED) throw IOException("process died")
+        }
+        assertTrue(runCatching { repo.moveToTrash(id) }.exceptionOrNull() is IOException)
+        ScanRepository.resetTestSeams()
+
+        val fresh = ScanRepository(app)
+        assertEquals(0, fresh.recoverTrash())
+        val item = fresh.listTrash().single()
+        assertTrue("the restore window starts at the move", item.trashedAt >= beforeMove)
+        fresh.restoreFromTrash(item.key)
+        assertEquals(original, snapshot(live))
+    }
+
+    @Test
+    fun `a legacy entry with no trustworthy marker starts its restore window at first sight`() {
+        val now = System.currentTimeMillis()
+        val dirs = listOf("Missing", "Corrupt").map { name ->
+            val id = richDoc(name)
+            File(repo.trashDir, repo.moveToTrash(id)!!).apply {
+                val marker = File(this, ScanRepository.TRASH_MARKER)
+                if (name == "Missing") {
+                    assertTrue(marker.delete())
+                } else {
+                    marker.writeText("invalid\n$id\n${now - 2 * ScanRepository.TRASH_RETENTION_MS}\n")
+                }
+                assertTrue(setLastModified(now - 2 * ScanRepository.TRASH_RETENTION_MS))
+            }
+        }
+
+        assertEquals(0, repo.recoverTrash(now))
+        assertTrue(dirs.all { File(it, ScanRepository.TRASH_MARKER).isFile })
+        val firstSeen = ScanRepository(app).listTrash().map { it.trashedAt }
+        assertEquals(listOf(now, now), firstSeen)
+        assertEquals(0, repo.recoverTrash(now + ScanRepository.TRASH_RETENTION_MS - 1))
+        assertEquals(2, repo.recoverTrash(now + ScanRepository.TRASH_RETENTION_MS))
+    }
+
+    @Test
+    fun `a legacy entry whose marker cannot be written never expires`() {
+        val id = richDoc("Cannot record the date")
+        val entry = File(repo.trashDir, repo.moveToTrash(id)!!)
+        assertTrue(File(entry, ScanRepository.TRASH_MARKER).delete())
+        assertTrue(entry.setLastModified(1L))
+        Durable.beforeFileSync = {
+            if (it.name == "${ScanRepository.TRASH_MARKER}.tmp") throw IOException("disk full")
+        }
+
+        assertEquals(0, repo.recoverTrash())
+        assertEquals(0, repo.recoverTrash(System.currentTimeMillis() + 2 * ScanRepository.TRASH_RETENTION_MS))
+        assertEquals(id, repo.listTrash().single().originalId)
+    }
+
+    @Test
     fun `crash after restore move leaves no stale marker after recovery`() {
         val id = richDoc("Marker")
         val key = repo.moveToTrash(id)!!

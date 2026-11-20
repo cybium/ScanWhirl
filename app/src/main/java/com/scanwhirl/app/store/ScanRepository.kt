@@ -1060,23 +1060,46 @@ class ScanRepository(private val context: Context) {
         trashFault(TrashStage.BEFORE_MOVE)
         val key = freeTrashKey(id)
         val dest = File(trashDir, key)
-        if (!src.renameTo(dest)) throw IOException("Could not move \"$name\" to Trash")
-        trashFault(TrashStage.MOVED)
-        // Written after the move, best effort: an entry without it is still a
-        // complete trashed document (id from its name, time from the folder).
+        // F1 (hunt H1-2): the marker is written INSIDE the document before the move, so the
+        // one rename carries the trash time with it. A crash right after the move can no longer
+        // leave an entry whose only date is the folder's old modification time (which expiry
+        // would read as "trashed months ago" and purge). Best effort: an entry without a marker
+        // gets "first seen now" from [recoverTrash] and is never expired on a guessed date. A
+        // marker left in a Library folder by a failed move is stripped by [recoverTrash].
+        val marker = File(src, TRASH_MARKER)
         try {
-            val marker = buildString {
-                append("v1\n")
-                append(id).append('\n')
-                append(System.currentTimeMillis()).append('\n')
-                if (previousToken != null) append("previous=").append(previousToken).append('\n')
-            }
-            Durable.atomicWriteText(File(dest, TRASH_MARKER), marker)
+            Durable.atomicWriteText(marker, trashMarkerText(id, System.currentTimeMillis(), previousToken))
         } catch (_: Exception) {
         }
+        if (!src.renameTo(dest)) {
+            marker.delete()
+            throw IOException("Could not move \"$name\" to Trash")
+        }
+        trashFault(TrashStage.MOVED)
         Durable.syncDir(docsDir)
         Durable.syncDir(trashDir)
         return key
+    }
+
+    private fun trashMarkerText(id: String, trashedAt: Long, previousToken: String?): String = buildString {
+        append("v1\n")
+        append(id).append('\n')
+        append(trashedAt).append('\n')
+        if (previousToken != null) append("previous=").append(previousToken).append('\n')
+    }
+
+    /**
+     * F1 (hunt H1-2): the trash time this entry's own marker recorded, or null when the marker is
+     * missing, unreadable or not a v1 marker. Only a recorded time may ever expire an entry.
+     */
+    private fun recordedTrashTime(dir: File): Long? {
+        val lines = try {
+            File(dir, TRASH_MARKER).takeIf { it.isFile }?.readLines()
+        } catch (_: IOException) {
+            null
+        } ?: return null
+        if (lines.firstOrNull() != "v1") return null
+        return lines.getOrNull(2)?.toLongOrNull()?.takeIf { it > 0 }
     }
 
     /** Trashed documents, most recently trashed first. Vault items never appear. */
@@ -1178,7 +1201,21 @@ class ScanRepository(private val context: Context) {
             }
             trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.forEach { dir ->
                 val trashed = trashedIn(dir) ?: return@forEach
-                if (trashed.previousToken == null && now - trashed.trashedAt >= TRASH_RETENTION_MS) {
+                val recorded = recordedTrashTime(dir)
+                if (recorded == null) {
+                    // F1 (hunt H1-2): no trustworthy date (legacy entry, crash, damaged marker).
+                    // The restore window starts now; if even that cannot be recorded the entry is
+                    // kept, never purged on the folder's old modification time.
+                    try {
+                        Durable.atomicWriteText(
+                            File(dir, TRASH_MARKER),
+                            trashMarkerText(trashed.originalId, now, trashed.previousToken)
+                        )
+                    } catch (_: Exception) {
+                    }
+                    return@forEach
+                }
+                if (trashed.previousToken == null && now - recorded >= TRASH_RETENTION_MS) {
                     if (dir.deleteRecursively()) {
                         finished++
                         dropDerivedCaches(trashed.originalId)
