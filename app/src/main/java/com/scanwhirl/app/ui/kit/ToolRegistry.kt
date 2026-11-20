@@ -135,7 +135,9 @@ object ToolRegistry {
                 com.scanwhirl.app.ui.DocumentViewerActivity.openInsertPicker(activity)
             }
         }),
-        ready("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = true),
+        // PRO_PLAN line 10-11 (accepted 2026-11-18): folder creation and move-to-folder are
+        // FREE and stay free. Tags/batch rename remain Pro; this entry only opens folders.
+        ready("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = false),
         // Owner 11-16: the Batch rename tool is Coming soon. The pattern + preview + undo sheet
         // exists, but the owner asked for a Coming-soon tile until that entry point is finished.
         soon(

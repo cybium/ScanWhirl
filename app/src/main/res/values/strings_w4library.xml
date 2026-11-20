@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  UI-W4 (w4library) · Recognizable Library and accessible folders.
+
+  Part B: an explicit "All folders" route (no hidden long-press is required), a folder
+  menu whose delete keeps every document, and the accepted PRO_PLAN folder policy
+  (docs/release/PRO_PLAN.md line 10-11: folder creation and move-to-folder are FREE;
+  tags stay Pro). New copy for this lane only lives in this file.
+-->
+<resources>
+    <string name="folder_all_folders">All folders</string>
+    <string name="folder_all_folders_desc">All folders. Open a folder to rename or delete it.</string>
+    <string name="folder_more_desc">Folder options for %1$s</string>
+    <string name="folder_none">No folders yet</string>
+    <string name="folder_showing">Showing only: %1$s</string>
+    <string name="folder_filter_active">Folder filter: %1$s</string>
+</resources>

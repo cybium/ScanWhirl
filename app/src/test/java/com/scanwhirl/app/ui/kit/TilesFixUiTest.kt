@@ -61,7 +61,9 @@ class TilesFixUiTest {
         assertEquals(37, ToolRegistry.all.size)
         assertEquals(35, ToolRegistry.all.count { it.status == ToolStatus.READY })
         assertEquals("two tiles are still Coming soon", 2, ToolRegistry.all.count { it.status == ToolStatus.SOON })
-        assertEquals("Business card was the only Pro tile removed from sale", 16, ToolRegistry.proCount())
-        assertEquals(17, ToolRegistry.all.count { it.pro })
+        // PRO_PLAN line 10-11 (accepted): folder creation and move-to-folder are FREE;
+        // only tags and the other Pro tools stay on sale.
+        assertEquals("folders left Pro with the accepted free-folder correction", 15, ToolRegistry.proCount())
+        assertEquals(16, ToolRegistry.all.count { it.pro })
     }
 }

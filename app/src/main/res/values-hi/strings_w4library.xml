@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  UI-W4 (w4library) · Hindi copy for the explicit folder route.
+
+  Same names and placeholders as values/strings_w4library.xml; reviewed wording for a
+  doctor's everyday folder names, with no English UI words left in the sentence.
+-->
+<resources>
+    <string name="folder_all_folders">सभी फ़ोल्डर</string>
+    <string name="folder_all_folders_desc">सभी फ़ोल्डर। किसी फ़ोल्डर का नाम बदलने या उसे हटाने के लिए उसे खोलें।</string>
+    <string name="folder_more_desc">%1$s के फ़ोल्डर विकल्प</string>
+    <string name="folder_none">अभी कोई फ़ोल्डर नहीं</string>
+    <string name="folder_showing">सिर्फ़ यह दिखा रहे हैं: %1$s</string>
+    <string name="folder_filter_active">फ़ोल्डर के हिसाब से: %1$s</string>
+</resources>
