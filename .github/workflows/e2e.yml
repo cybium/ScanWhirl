@@ -51,6 +51,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Harness safety and selector tests (no device)
+        run: |
+          bash -n tools/e2e/smoke.sh tools/e2e/flows.sh
+          python3 -m unittest discover -s tools/e2e -p test_flow_driver.py -v
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: false
@@ -137,6 +142,7 @@ jobs:
             -gpu swiftshader_indirect -camera-back none -camera-front none
           script: |
             bash tools/e2e/smoke.sh
+            bash tools/e2e/flows.sh
         env:
           API_LEVEL: ${{ matrix.api-level }}
           APK: ${{ github.workspace }}/test-apk/app-debug.apk
