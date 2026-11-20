@@ -595,7 +595,8 @@ class DeadButtonAuditTest {
     private val settingsShown = listOf(
         R.id.rowFont, R.id.rowLanguage, R.id.rowViewer,
         R.id.switchAutoEnhance, R.id.switchSearchablePdf, R.id.switchAutoCopyToDocuments,
-        R.id.rowOcrLanguage, R.id.rowBlockScreenshots, R.id.rowAccent
+        // rowAccent is removed: the unbuilt accent capability is no longer shown (ATLAS-F2).
+        R.id.rowOcrLanguage, R.id.rowBlockScreenshots
     )
 
     // ------------------------------------------------------------------ helpers

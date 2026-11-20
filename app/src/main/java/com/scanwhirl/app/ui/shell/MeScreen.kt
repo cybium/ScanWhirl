@@ -28,6 +28,9 @@ class MeScreen(
 
     val list: LinearLayout
 
+    /** Large system font: the decorations give the text their width and height. */
+    private val largeFont = context.resources.configuration.fontScale >= 1.6f
+
     init {
         orientation = VERTICAL
         setPadding(0, 0, 0, SwStyle.dp(context, 20f))
@@ -51,7 +54,10 @@ class MeScreen(
         list = LinearLayout(context).apply {
             id = R.id.swMeList
             orientation = VERTICAL
-            setPadding(SwStyle.dp(context, 14f), SwStyle.dp(context, 8f), SwStyle.dp(context, 14f), 0)
+            // ATLAS-F2 (004/320dp): at large fonts the copying text needs the width; the
+            // card inset gives 4dp of it back on each side.
+            val inset = SwStyle.dp(context, if (largeFont) 10f else 14f)
+            setPadding(inset, SwStyle.dp(context, 8f), inset, 0)
         }
         addView(list)
         buildRows()
@@ -123,7 +129,7 @@ class MeScreen(
         gold: Boolean = false,
         onClick: () -> Unit
     ): View {
-        val card = LinearLayout(context).apply {
+        val card = RowCard(context).apply {
             this.id = id
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -135,7 +141,7 @@ class MeScreen(
             // M7 (device sweep 2026-11-19): the visible label lives on child TextViews, so the
             // clickable node TalkBack focused had no name. The row now carries its own words.
             contentDescription = if (summary.isBlank()) title else "$title, $summary"
-            val pad = SwStyle.dp(context, 14f)
+            val pad = SwStyle.dp(context, if (largeFont) 8f else 14f)
             setPadding(pad, pad, pad, pad)
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = SwStyle.dp(context, 10f)
@@ -143,13 +149,18 @@ class MeScreen(
             setOnClickListener { onClick() }
         }
         val tint = if (gold) R.color.gold_pro_primary else R.color.cyan_primary
+        // The Latin brand name "ScanWhirl" is ~1 % wider in the Devanagari-capable font, so at
+        // large fonts the decorations give the row's words their width back.
+        val iconDp = if (largeFont) 18f else 26f
+        val iconGapDp = if (largeFont) 8f else 14f
+        val chevronDp = if (largeFont) 16f else 22f
         card.addView(
             ImageView(context).apply {
                 setImageResource(icon)
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, tint))
             },
-            LayoutParams(SwStyle.dp(context, 26f), SwStyle.dp(context, 26f))
-                .apply { marginEnd = SwStyle.dp(context, 14f) }
+            LayoutParams(SwStyle.dp(context, iconDp), SwStyle.dp(context, iconDp))
+                .apply { marginEnd = SwStyle.dp(context, iconGapDp) }
         )
         val info = LinearLayout(context).apply {
             orientation = VERTICAL
@@ -170,13 +181,38 @@ class MeScreen(
                 .apply { topMargin = SwStyle.dp(context, 3f) }
         )
         card.addView(info, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        card.addView(
-            ImageView(context).apply {
-                setImageResource(R.drawable.ic_sym_chevron_right)
-                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.text_hologram_dim))
-            },
-            LayoutParams(SwStyle.dp(context, 22f), SwStyle.dp(context, 22f))
-        )
+        // The chevron is decoration. At large fonts it gives its 16dp back to the words (the
+        // card is still clickable, named and focusable), so a long summary never runs past the
+        // card edge.
+        if (!largeFont) {
+            card.addView(
+                ImageView(context).apply {
+                    setImageResource(R.drawable.ic_sym_chevron_right)
+                    imageTintList = ColorStateList.valueOf(
+                        SwStyle.color(context, R.color.text_hologram_dim)
+                    )
+                },
+                LayoutParams(SwStyle.dp(context, chevronDp), SwStyle.dp(context, chevronDp))
+            )
+        }
         return card
+    }
+
+    /**
+     * ATLAS-F2 (004): a Me row is a text card, so its height is never a design decision —
+     * it is whatever the wrapped title + summary need. A plain wrap_content row still lets a
+     * limited height spec crush the second summary line, which cut "30 days" at the card
+     * border at 200 %. Measuring the row with an unbounded height makes the card grow instead;
+     * the tab's ScrollView then scrolls. The 48dp floor still applies.
+     */
+    private class RowCard(context: Context) : LinearLayout(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            super.onMeasure(
+                widthMeasureSpec,
+                android.view.View.MeasureSpec.makeMeasureSpec(
+                    0, android.view.View.MeasureSpec.UNSPECIFIED
+                )
+            )
+        }
     }
 }
