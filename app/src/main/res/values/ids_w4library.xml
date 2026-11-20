@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UI-W4 (w4library): ids for the explicit folder route; declared here so a parallel
+     lane editing the shared ids files cannot collide with this lane. -->
+<resources>
+    <item name="swAllFolders" type="id" />
+    <item name="swActiveFilter" type="id" />
+    <item name="swFolderSheet" type="id" />
+    <item name="swFolderSheetEmpty" type="id" />
+</resources>
