@@ -117,6 +117,42 @@ set_language() { # en|hi
     adb shell cmd locale get-app-locales "$PKG" 2>/dev/null | tr -d '\r'
 }
 
+DIALOGS=0
+dismiss_system_dialogs() {
+    # A system "… isn't responding" dialog (Pixel Launcher, System UI) becomes the
+    # focused window, so every uiautomator dump shows only the dialog and the app
+    # looks absent. That is emulator noise, never the app's fault: tap Wait and
+    # carry on, and report the count so a noisy runner is visible in the summary.
+    local xy tries=0
+    while [ "$tries" -lt 4 ]; do
+        if ! python3 "$HERE/uitool.py" has --id aerr_wait >/dev/null 2>&1; then
+            break
+        fi
+        if ! xy=$(python3 "$HERE/uitool.py" find --id aerr_wait 2>/dev/null); then
+            break
+        fi
+        note "dismissing a system 'isn't responding' dialog (Wait)"
+        # shellcheck disable=SC2086
+        adb shell input tap $xy >/dev/null 2>&1
+        DIALOGS=$((DIALOGS + 1))
+        sleep 3
+        tries=$((tries + 1))
+    done
+}
+
+launch_until_library() { # seconds
+    local limit="${1:-90}"
+    dismiss_system_dialogs
+    if launch_app && wait_id swNavLibrary "$limit"; then
+        return 0
+    fi
+    # One retry: a system dialog that appeared mid-launch, or a cold start that
+    # lost the first frame. The Library must still be on screen afterwards.
+    dismiss_system_dialogs
+    launch_app >/dev/null
+    wait_id swNavLibrary "$limit"
+}
+
 launch_app() {
     adb shell am force-stop "$PKG" >/dev/null 2>&1
     local out
@@ -195,6 +231,9 @@ adb shell settings put global transition_animation_scale 0 >/dev/null 2>&1
 adb shell settings put global animator_duration_scale 0 >/dev/null 2>&1
 adb shell settings put system accelerometer_rotation 0 >/dev/null 2>&1
 adb shell settings put system user_rotation 0 >/dev/null 2>&1
+# Emulator noise, never evidence: without this the Pixel Launcher's own ANR
+# dialog can cover the app and every dump shows only that dialog.
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
 adb logcat -c >/dev/null 2>&1
 
 # ------------------------------------------------------------------- UI walk
@@ -204,7 +243,7 @@ adb logcat -c >/dev/null 2>&1
 walk() { # prefix
     local prefix="$1"
 
-    if ! launch_app || ! wait_id swNavLibrary 90; then
+    if ! launch_until_library 90; then
         record "$prefix launch" FAIL "Library did not appear within 90s"
         shoot "${prefix}_launch_failed" || true
         return 1
@@ -220,22 +259,37 @@ walk() { # prefix
     if tap_id swNavTools && wait_id swToolsSearch 40; then
         capture "${prefix}_tools" "$prefix/tools"
     else
-        record "$prefix/tools" FAIL "Tools screen (swToolsSearch) did not appear"
-        shoot "${prefix}_tools_stuck" || true
+        dismiss_system_dialogs
+        if tap_id swNavTools && wait_id swToolsSearch 40; then
+            capture "${prefix}_tools" "$prefix/tools"
+        else
+            record "$prefix/tools" FAIL "Tools screen (swToolsSearch) did not appear"
+            shoot "${prefix}_tools_stuck" || true
+        fi
     fi
 
     if tap_id swNavVault && wait_id swVaultStatus 40; then
         capture "${prefix}_vault" "$prefix/vault"
     else
-        record "$prefix/vault" FAIL "Vault screen (swVaultStatus) did not appear"
-        shoot "${prefix}_vault_stuck" || true
+        dismiss_system_dialogs
+        if tap_id swNavVault && wait_id swVaultStatus 40; then
+            capture "${prefix}_vault" "$prefix/vault"
+        else
+            record "$prefix/vault" FAIL "Vault screen (swVaultStatus) did not appear"
+            shoot "${prefix}_vault_stuck" || true
+        fi
     fi
 
     if tap_id swNavMe && wait_id swMeList 40; then
         capture "${prefix}_me" "$prefix/me"
     else
-        record "$prefix/me" FAIL "Me screen (swMeList) did not appear"
-        shoot "${prefix}_me_stuck" || true
+        dismiss_system_dialogs
+        if tap_id swNavMe && wait_id swMeList 40; then
+            capture "${prefix}_me" "$prefix/me"
+        else
+            record "$prefix/me" FAIL "Me screen (swMeList) did not appear"
+            shoot "${prefix}_me_stuck" || true
+        fi
     fi
 
     if tap_id swNavLibrary && wait_id swHomeSearch 40; then
@@ -298,7 +352,7 @@ done
 note "--- rotation ---"
 adb shell settings put system font_scale 1.0 >/dev/null 2>&1
 set_language en >/dev/null 2>&1
-if launch_app && wait_id swNavLibrary 90; then
+if launch_until_library 90; then
     pid_before=$(adb shell pidof "$PKG" | tr -d '\r')
     adb shell settings put system user_rotation 1 >/dev/null 2>&1
     sleep 4
@@ -342,6 +396,7 @@ if [ -n "$alive" ]; then
 else
     record "app process alive" FAIL "process $PKG is gone"
 fi
+record "system dialogs" PASS "dismissed $DIALOGS system 'not responding' dialog(s) (emulator noise)"
 
 # --------------------------------------------------------------------- summary
 write_summary

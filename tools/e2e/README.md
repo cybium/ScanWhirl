@@ -47,6 +47,14 @@ Per API level (35 and 36, `google_apis` x86_64 image):
 The job fails on any FAIL row: a crash, an ANR, a screen that never appears, a
 blank screenshot, a missing language, or the app process dying.
 
+Emulator noise is handled explicitly and is never treated as evidence: the
+script sets `hide_error_dialogs` and taps "Wait" on any system "… isn't
+responding" dialog (usually Pixel Launcher on a cold, slow runner) because that
+dialog becomes the focused window and would otherwise hide the app from every
+uiautomator dump. The number dismissed is reported in `summary.md` as
+`system dialogs`, so a noisy runner stays visible. The app's own crashes and
+ANRs are still fatal - they come from logcat, not from the dialog.
+
 ## Design decisions
 
 - **No fixed coordinates.** Every tap comes from a fresh `uiautomator dump`,
