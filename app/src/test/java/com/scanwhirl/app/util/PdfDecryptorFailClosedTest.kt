@@ -225,7 +225,23 @@ class PdfDecryptorFailClosedTest {
         val extraTrailer: String = "",
         val extraObjects: List<Pair<Int, Int>> = emptyList(),
         val generations: Map<Int, Int> = emptyMap(),
-        val omitPerms: Boolean = false
+        val omitPerms: Boolean = false,
+        /** Bytes written after the header line, before the first indexed object. */
+        val headerExtra: String = "",
+        /** Bytes written right after object N's `endobj` (inside the following object's span). */
+        val betweenObjects: Map<Int, String> = emptyMap(),
+        /** Extra entries added to the document catalog's dictionary. */
+        val catalogExtra: String = "",
+        /** Raw object bodies (numbers above the /Encrypt object); no string encryption is applied. */
+        val rawObjects: Map<Int, String> = emptyMap(),
+        /** Extra entries for the page content stream's dictionary. */
+        val contentDictExtra: String = "",
+        /** Drops the last ciphertext byte of the content stream, so it is IV + a partial block. */
+        val truncateContent: Boolean = false,
+        /** Replaces the content stream with ciphertext whose final plaintext byte is an invalid pad. */
+        val invalidPaddingContent: Boolean = false,
+        /** Rewrites the first xref subsection header ("xref\n0 <size>\n"). */
+        val xrefHeader: ((String) -> String)? = null
     )
 
     private class Built(
@@ -247,6 +263,43 @@ class PdfDecryptorFailClosedTest {
 
     private fun id1(): ByteArray = ByteArray(16) { (0x10 + it).toByte() }
     private fun id2(): ByteArray = ByteArray(16) { (0xA0 + it).toByte() }
+
+    /**
+     * ISO 32000-1 Annex D, written independently of the production table: a password is stored in
+     * PDFDocEncoding, so a remapped slot (0x80-0x9E, 0xA0) must be encoded, not passed through.
+     */
+    private val pdfDocSpecials = mapOf(
+        0x18 to '\u02D8', 0x19 to '\u02C7', 0x1A to '\u02C6', 0x1B to '\u02D9',
+        0x1C to '\u02DD', 0x1D to '\u02DB', 0x1E to '\u02DA', 0x1F to '\u02DC',
+        0x80 to '\u2022', 0x81 to '\u2020', 0x82 to '\u2021', 0x83 to '\u2026',
+        0x84 to '\u2014', 0x85 to '\u2013', 0x86 to '\u0192', 0x87 to '\u2044',
+        0x88 to '\u2039', 0x89 to '\u203A', 0x8A to '\u2212', 0x8B to '\u2030',
+        0x8C to '\u201E', 0x8D to '\u201C', 0x8E to '\u201D', 0x8F to '\u2018',
+        0x90 to '\u2019', 0x91 to '\u201A', 0x92 to '\u2122', 0x93 to '\uFB01',
+        0x94 to '\uFB02', 0x95 to '\u0141', 0x96 to '\u0152', 0x97 to '\u0160',
+        0x98 to '\u0178', 0x99 to '\u017D', 0x9A to '\u0131', 0x9B to '\u0142',
+        0x9C to '\u0153', 0x9D to '\u0161', 0x9E to '\u017E', 0xA0 to '\u20AC'
+    )
+
+    private val pdfDocInverse: Map<Char, Int> = buildMap {
+        for (byte in 0..0xFF) {
+            val ch = when (byte) {
+                in 0x00..0x17 -> byte.toChar()
+                in 0x20..0x7E -> byte.toChar()
+                in 0xA1..0xFF -> byte.toChar()
+                0x7F, 0x9F -> null
+                else -> pdfDocSpecials[byte]
+            } ?: continue
+            put(ch, byte)
+        }
+    }
+
+    /** PDFDocEncoding bytes for a typed password, or null when a character has no byte. */
+    private fun pdfDoc(text: String): ByteArray? {
+        val out = ByteArray(text.length)
+        for (i in text.indices) out[i] = (pdfDocInverse[text[i]] ?: return null).toByte()
+        return out
+    }
 
     private fun filterName(cfm: Cfm): String = when (cfm) {
         Cfm.V2 -> "RC4CF"
@@ -308,12 +361,12 @@ class PdfDecryptorFailClosedTest {
             perms = ecb(fileKey, block)
         } else {
             val ownerBytes = ownerEntry(
-                spec.ownerPassword.toByteArray(Charsets.ISO_8859_1),
-                spec.userPassword.toByteArray(Charsets.ISO_8859_1),
+                requireNotNull(pdfDoc(spec.ownerPassword)) { "fixture owner password is not PDFDocEncoding" },
+                requireNotNull(pdfDoc(spec.userPassword)) { "fixture user password is not PDFDocEncoding" },
                 spec.revision, keyLen
             )
             fileKey = legacyFileKey(
-                pad(spec.userPassword.toByteArray(Charsets.ISO_8859_1)),
+                pad(requireNotNull(pdfDoc(spec.userPassword)) { "fixture user password is not PDFDocEncoding" }),
                 ownerBytes, spec.permissions, id, spec.revision, keyLen, spec.encryptMetadata
             )
             o = ownerBytes
@@ -360,19 +413,21 @@ class PdfDecryptorFailClosedTest {
             val cfm = if (spec.version >= 4) spec.stringCfm else Cfm.V2
             return "<${hex(encryptData(cfm, fileKey, number, gen(number), text.toByteArray(Charsets.ISO_8859_1)))}>"
         }
-        fun addStream(number: Int, dictExtra: String, body: ByteArray, cfm: Cfm) {
+        fun addStream(number: Int, dictExtra: String, body: ByteArray, cfm: Cfm, truncate: Boolean = false) {
             val g = gen(number)
             val encrypted = encryptData(cfm, fileKey, number, g, body)
+            // A truncated body keeps a valid /Length, so the AES block check (not /Length) must refuse it.
+            val stored = if (truncate) encrypted.copyOfRange(0, encrypted.size - 1) else encrypted
             entries += Triple(
                 number, g,
-                "<< /Length ${encrypted.size}$dictExtra >>\nstream\n".toByteArray(Charsets.ISO_8859_1) +
-                    encrypted + "\nendstream".toByteArray(Charsets.ISO_8859_1)
+                "<< /Length ${stored.size}$dictExtra >>\nstream\n".toByteArray(Charsets.ISO_8859_1) +
+                    stored + "\nendstream".toByteArray(Charsets.ISO_8859_1)
             )
-            streamBytes[number] = encrypted.size
+            streamBytes[number] = stored.size
         }
 
         entries += Triple(1, gen(1), (
-            "<< /Type /Catalog /Pages ${ref(2)} /Title ${string(1, title)} >>"
+            "<< /Type /Catalog /Pages ${ref(2)} /Title ${string(1, title)}${spec.catalogExtra} >>"
             ).toByteArray(Charsets.ISO_8859_1))
         entries += Triple(2, gen(2), (
             "<< /Type /Pages /Kids [${ref(3)}] /Count 1 >>"
@@ -381,8 +436,27 @@ class PdfDecryptorFailClosedTest {
             "<< /Type /Page /Parent ${ref(2)} /MediaBox [0 0 200 200] " +
                 "/Contents ${ref(4)} /Resources << /Font << /F1 ${ref(6)} >> >> >>"
             ).toByteArray(Charsets.ISO_8859_1))
-        addStream(4, "", "BT /F1 12 Tf 20 100 Td ($bodyText) Tj ET".toByteArray(Charsets.ISO_8859_1),
-            if (spec.version >= 4) spec.streamCfm else Cfm.V2)
+        if (spec.invalidPaddingContent) {
+            // A block of plaintext that is exactly 16 bytes: no PKCS#7 padding at all, so the last
+            // byte ("0", 0x30) is read as a pad length of 48 — deterministically invalid.
+            val iv = bytes(16)
+            val key = perObjectKey(fileKey, 4, gen(4), salted = true)
+            val block = cbcRaw(key, iv, "Invalid padding0".toByteArray(Charsets.ISO_8859_1))
+            val encrypted = iv + block
+            entries += Triple(
+                4, gen(4),
+                "<< /Length ${encrypted.size} >>\nstream\n".toByteArray(Charsets.ISO_8859_1) +
+                    encrypted + "\nendstream".toByteArray(Charsets.ISO_8859_1)
+            )
+            streamBytes[4] = encrypted.size
+        } else {
+            addStream(
+                4, spec.contentDictExtra,
+                "BT /F1 12 Tf 20 100 Td ($bodyText) Tj ET".toByteArray(Charsets.ISO_8859_1),
+                if (spec.version >= 4) spec.streamCfm else Cfm.V2,
+                truncate = spec.truncateContent
+            )
+        }
         addStream(
             5, " /Type /Metadata /Subtype /XML", xmp.toByteArray(Charsets.ISO_8859_1),
             if (!spec.encryptMetadata) Cfm.IDENTITY
@@ -396,6 +470,9 @@ class PdfDecryptorFailClosedTest {
         for ((number, g) in spec.extraObjects) {
             entries += Triple(number, g, "<< /N $number >>".toByteArray(Charsets.ISO_8859_1))
         }
+        for ((number, text) in spec.rawObjects) {
+            entries += Triple(number, gen(number), text.toByteArray(Charsets.ISO_8859_1))
+        }
         if (!spec.inlineEncrypt) {
             entries += Triple(8, gen(8), encryptDict.toByteArray(Charsets.ISO_8859_1))
         }
@@ -403,6 +480,7 @@ class PdfDecryptorFailClosedTest {
         // ---- assemble ----
         val out = ByteArrayOutputStream()
         out.write("%PDF-1.7\n%\u00E2\u00E3\u00CF\u00D3\n".toByteArray(Charsets.ISO_8859_1))
+        out.write(spec.headerExtra.toByteArray(Charsets.ISO_8859_1))
         val offsets = HashMap<Int, Int>()
         val bodies = HashMap<Int, IntRange>()
         for ((number, g, text) in entries.sortedBy { it.first }) {
@@ -411,6 +489,7 @@ class PdfDecryptorFailClosedTest {
             val textStart = out.size()
             out.write(text)
             out.write("\nendobj\n".toByteArray(Charsets.ISO_8859_1))
+            out.write((spec.betweenObjects[number] ?: "").toByteArray(Charsets.ISO_8859_1))
             if (streamBytes.containsKey(number)) {
                 val marker = "\nstream\n".toByteArray(Charsets.ISO_8859_1)
                 val at = indexOf(text, marker, 0)
@@ -420,7 +499,10 @@ class PdfDecryptorFailClosedTest {
         }
         val xrefOffset = out.size()
         val size = entries.maxOf { it.first } + 1
-        val xref = StringBuilder("xref\n0 $size\n0000000000 65535 f \n")
+        val xref = StringBuilder(
+            spec.xrefHeader?.invoke("xref\n0 $size\n") ?: "xref\n0 $size\n"
+        )
+        xref.append("0000000000 65535 f \n")
         for (n in 1 until size) {
             val e = entries.firstOrNull { it.first == n }
             if (e == null) {
@@ -790,5 +872,264 @@ class PdfDecryptorFailClosedTest {
         val elapsedMs = (System.nanoTime() - started) / 1_000_000
         assertTrue("decrypting 3000 objects took ${elapsedMs}ms", elapsedMs < 20_000)
         assertPlainPdf(plain)
+    }
+
+    // ==================================================================
+    // S4A review (2026-11-20): every byte copied by the rewriter is proved first.
+    // Each test names the review finding it closes; all of them must fail closed.
+    // ==================================================================
+
+    private fun hexToBytes(text: String): ByteArray =
+        ByteArray(text.length / 2) { text.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    /** A PDF literal string whose bytes are exactly [bytes]; octal escapes keep it unambiguous. */
+    private fun literalOf(bytes: ByteArray): String = buildString {
+        append('(')
+        for (b in bytes) {
+            val v = b.toInt() and 0xFF
+            if (v in 0x21..0x7E && v != 0x28 && v != 0x29 && v != 0x5C) {
+                append(v.toChar())
+            } else {
+                append('\\').append(Integer.toOctalString(v).padStart(3, '0'))
+            }
+        }
+        append(')')
+    }
+
+    /** A structural problem must be [PdfDecryptor.Unsupported], never a password verdict. */
+    private fun assertRefused(bytes: ByteArray, password: String = "user-pass"): String {
+        val failure = assertThrows(Throwable::class.java) { PdfDecryptor.decrypt(bytes, password) }
+        assertTrue("expected Unsupported, got $failure", failure is PdfDecryptor.Unsupported)
+        assertFalse(
+            "a malformed structure must not be reported as a wrong password",
+            failure.message == "Incorrect password"
+        )
+        return failure.message ?: ""
+    }
+
+    // ---- Finding 1 (blocker): spans, gaps, duplicate keys, the obsolete /Encrypt object ----
+
+    @Test
+    fun `unindexed bytes in the prefix are refused`() {
+        // The extra bytes are written before the objects, so every xref offset stays correct: this
+        // exercises the "nothing but whitespace/comments outside objects" rule, not a bad offset.
+        val built = build(Spec(version = 4, revision = 4, headerExtra = "not-a-comment\n"))
+        assertRefused(built.bytes)
+    }
+
+    @Test
+    fun `an object that does not end at endobj is refused`() {
+        // Same length, so only the required `endobj` token is wrong.
+        val built = build(Spec(version = 4, revision = 4))
+        assertRefused(replaceOnce(built.bytes, "endobj", "endobX"))
+    }
+
+    @Test
+    fun `bytes between two indexed objects are refused`() {
+        val built = build(Spec(version = 4, revision = 4, betweenObjects = mapOf(7 to "unindexed\n")))
+        assertRefused(built.bytes)
+    }
+
+    @Test
+    fun `trailing content inside the Encrypt object is refused`() {
+        // /Encrypt is read as a dictionary and used for the key; anything after it in the same span
+        // would have been copied verbatim into the "plain" output.
+        val built = build(Spec(version = 4, revision = 4, dictPatch = { "$it /Extra true" }))
+        assertRefused(built.bytes)
+    }
+
+    @Test
+    fun `a repeated dictionary key is refused in the encryption dictionary and in an object`() {
+        val encryption = build(
+            Spec(version = 4, revision = 4, dictPatch = { it.replace("/Filter /Standard", "/Filter /Standard /Filter /Standard") })
+        )
+        assertRefused(encryption.bytes)
+        val catalog = build(Spec(version = 4, revision = 4, catalogExtra = " /Type /Catalog"))
+        assertRefused(catalog.bytes)
+    }
+
+    @Test
+    fun `the obsolete Encrypt object is omitted from the output`() {
+        val built = build(Spec(version = 4, revision = 4))
+        val plain = PdfDecryptor.decrypt(built.bytes, "user-pass")
+        val text = String(plain, Charsets.ISO_8859_1)
+        assertFalse("the security handler must not survive", text.contains("/Filter /Standard"))
+        assertFalse("the /Encrypt object must not be copied", Regex("\\b8\\s+0\\s+obj").containsMatchIn(text))
+        assertFalse("the trailer must not point at /Encrypt", text.contains("/Encrypt"))
+        assertTrue("the table now stops at the last real object", text.contains("xref\n0 8\n"))
+        assertPlainPdf(plain)
+    }
+
+    // ---- Finding 2 (major): embedded files and explicit /Crypt filters are refused ----
+
+    @Test
+    fun `a PDF carrying embedded files is refused`() {
+        val control = build(Spec(version = 4, revision = 4))
+        assertPlainPdf(PdfDecryptor.decrypt(control.bytes, "user-pass"))
+        val withFiles = build(
+            Spec(
+                version = 4, revision = 4,
+                catalogExtra = " /Names 9 0 R",
+                rawObjects = mapOf(
+                    9 to "<< /EmbeddedFiles << /Names [(statement) 10 0 R] >> >>",
+                    10 to "<< /Type /Filespec /F (statement.txt) /EF << /F 11 0 R >> >>"
+                )
+            )
+        )
+        assertRefused(withFiles.bytes)
+    }
+
+    @Test
+    fun `an EFF entry is refused even when it is Identity`() {
+        // With /EFF absent the streams inherit /StmF, so "no /EFF" is not "no encryption": the
+        // presence of /EFF at all means the embedded-file cipher is a separate guess.
+        val built = build(
+            Spec(version = 4, revision = 4, dictPatch = { it.replace("/StmF /StdCF", "/EFF /Identity /StmF /StdCF") })
+        )
+        assertRefused(built.bytes)
+    }
+
+    @Test
+    fun `an explicit Crypt stream filter is refused instead of being resolved by guess`() {
+        val identityParms = build(
+            Spec(
+                version = 4, revision = 4,
+                contentDictExtra = " /Filter [/Crypt] /DecodeParms [<< /Type /CryptFilterDecodeParms /Name /Identity >>]"
+            )
+        )
+        assertRefused(identityParms.bytes)
+        // The /DecodeParms slot is positional in /Filter; resolving "the first dictionary" picks the
+        // wrong filter once /Filter has more than one entry.
+        val secondSlot = build(
+            Spec(
+                version = 4, revision = 4,
+                contentDictExtra = " /Filter [/FlateDecode /Crypt] /DecodeParms [null << /Name /StdCF >>]"
+            )
+        )
+        assertRefused(secondSlot.bytes)
+    }
+
+    // ---- Finding 3 (major): the shared xref contract, validated on the decrypt side ----
+
+    @Test
+    fun `a subsection range beyond the object budget is refused`() {
+        val built = build(Spec(version = 4, revision = 4, xrefHeader = { "xref\n0 100001\n" }))
+        assertRefused(built.bytes)
+    }
+
+    @Test
+    fun `an xref row with an out-of-range generation is refused`() {
+        val built = build(Spec(version = 4, revision = 4))
+        val offset = built.offsets.getValue(3)
+        val patched = replaceOnce(
+            built.bytes,
+            String.format(Locale.ROOT, "%010d 00000 n", offset),
+            String.format(Locale.ROOT, "%010d 70000 n", offset)
+        )
+        assertRefused(patched)
+    }
+
+    @Test
+    fun `a free object zero that is not generation 65535 is refused`() {
+        val built = build(Spec(version = 4, revision = 4))
+        assertRefused(replaceOnce(built.bytes, "0000000000 65535 f", "0000000000 00000 f"))
+    }
+
+    @Test
+    fun `data after the end marker is refused`() {
+        val built = build(Spec(version = 4, revision = 4))
+        assertRefused(built.bytes + "trailing junk".toByteArray(Charsets.ISO_8859_1))
+    }
+
+    @Test
+    fun `a file without its end marker is refused`() {
+        val built = build(Spec(version = 4, revision = 4))
+        assertRefused(replaceOnce(built.bytes, "%%EOF", "%%EOX"))
+    }
+
+    @Test
+    fun `a startxref that disagrees with its table is refused`() {
+        val built = build(Spec(version = 4, revision = 4))
+        val text = String(built.bytes, Charsets.ISO_8859_1)
+        val match = Regex("startxref\n(\\d+)\n").find(text)!!
+        val patched = text.replace(
+            match.value,
+            "startxref\n${match.groupValues[1].toInt() + 1}\n"
+        ).toByteArray(Charsets.ISO_8859_1)
+        assertRefused(patched)
+    }
+
+    @Test
+    fun `nesting deeper than the shared depth limit is refused`() {
+        // The protector accepts 64 nested arrays (depth 64); one more must never be read here.
+        val tooDeep = "[".repeat(65) + "0" + "]".repeat(65)
+        assertRefused(build(Spec(version = 4, revision = 4, rawObjects = mapOf(9 to tooDeep))).bytes)
+        val atLimit = "[".repeat(64) + "0" + "]".repeat(64)
+        assertPlainPdf(PdfDecryptor.decrypt(build(Spec(version = 4, revision = 4, rawObjects = mapOf(9 to atLimit))).bytes, "user-pass"))
+    }
+
+    // ---- Finding 5 (partial): malformed /Length and exact PDFDocEncoding ----
+
+    @Test
+    fun `a malformed Length is refused instead of defaulting to 40 bits`() {
+        val malformed = build(Spec(version = 4, revision = 4, dictPatch = { it.replace("/Length 128", "/Length 12X") }))
+        assertRefused(malformed.bytes)
+        val notANumber = build(Spec(version = 4, revision = 4, dictPatch = { it.replace("/Length 128", "/Length (128)") }))
+        assertRefused(notANumber.bytes)
+    }
+
+    @Test
+    fun `a password using a remapped PDFDocEncoding slot opens`() {
+        // U+2022 is byte 0x80 in Annex D, not a passthrough of its UTF-16 code point.
+        val password = "p\u2022ss"
+        val built = build(Spec(version = 4, revision = 4, userPassword = password, ownerPassword = password))
+        val plain = PdfDecryptor.decrypt(built.bytes, password)
+        assertPlainPdf(plain)
+        assertThrows(PdfDecryptor.WrongPassword::class.java) {
+            PdfDecryptor.decrypt(built.bytes, "p\u2020ss")
+        }
+    }
+
+    @Test
+    fun `a character with no PDFDocEncoding byte is never substituted`() {
+        // "a?b" is the file's password. If an unencodable character were replaced by '?', this
+        // would wrongly open the file.
+        val built = build(Spec(version = 4, revision = 4, userPassword = "a?b", ownerPassword = "a?b"))
+        assertPlainPdf(PdfDecryptor.decrypt(built.bytes, "a?b"))
+        assertThrows(PdfDecryptor.WrongPassword::class.java) {
+            PdfDecryptor.decrypt(built.bytes, "a\u4E2Db")
+        }
+    }
+
+    @Test
+    fun `literal and whitespace-separated hex strings are decoded exactly`() {
+        val built = build(
+            Spec(
+                version = 4, revision = 4,
+                dictPatch = { dict ->
+                    val o = Regex("/O <([0-9A-F]{64})>").find(dict)!!.groupValues[1]
+                    val u = Regex("/U <([0-9A-F]{64})>").find(dict)!!.groupValues[1]
+                    dict.replace("/O <$o>", "/O ${literalOf(hexToBytes(o))}")
+                        .replace("/U <$u>", "/U <${u.chunked(4).joinToString(" ")} >")
+                }
+            )
+        )
+        assertPlainPdf(PdfDecryptor.decrypt(built.bytes, "user-pass"))
+    }
+
+    // ---- Finding 6 (partial): damaged ciphertext is Unsupported, never WrongPassword ----
+
+    @Test
+    fun `an invalid PKCS7 padding block is refused, not reported as a wrong password`() {
+        val built = build(Spec(version = 4, revision = 4, invalidPaddingContent = true))
+        val message = assertRefused(built.bytes)
+        assertTrue("expected the AES failure, got '$message'", message.contains("AES stream"))
+    }
+
+    @Test
+    fun `a truncated AES block is refused, not reported as a wrong password`() {
+        val built = build(Spec(version = 4, revision = 4, truncateContent = true))
+        val message = assertRefused(built.bytes)
+        assertTrue("expected the AES failure, got '$message'", message.contains("AES stream"))
     }
 }

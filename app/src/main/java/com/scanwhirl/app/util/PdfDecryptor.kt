@@ -25,8 +25,17 @@ import javax.crypto.spec.SecretKeySpec
  * no `/ObjStm` object stream, direct stream `/Length` values, stream bodies that end exactly where
  * `/Length` says and object headers that match their xref entries. Anything else throws
  * [Unsupported] with a plain message; nothing half-decrypted is ever returned. Work is bounded
- * (object count, dictionary depth, output growth) so a malformed file fails instead of exhausting
- * the phone.
+ * (object count, xref rows, dictionary depth, output growth) so a malformed file fails instead of
+ * exhausting the phone.
+ *
+ * **Every copied byte is proved first.** The rewriter copies file regions, so before a byte is
+ * written each indexed span must be exactly one complete object — header, one value, an optional
+ * stream body delimited by `/Length`, and `endobj` — and only whitespace or comments may follow it.
+ * The prefix after `%PDF-` and the suffix after `%%EOF` are checked the same way, the trailer must
+ * be followed by its own `startxref <offset> %%EOF`, a dictionary may not repeat a key, and the
+ * obsolete `/Encrypt` object is dropped from the output instead of copied. Files that carry
+ * embedded files, an `/EFF` filter or a per-stream `/Crypt` filter are refused outright: their
+ * payloads follow different filters than the document and a wrong guess would corrupt them.
  *
  * The original file is never touched: the caller gets a new plaintext PDF in app storage. Passwords
  * are only ever compared, never stored or logged.
@@ -331,7 +340,12 @@ object PdfDecryptor {
             }
             if (c.raw[c.pos] != 0x2F.toByte()) throw Unsupported("This PDF has a dictionary key that is not a name")
             val key = parseName(c).name ?: throw Unsupported("This PDF has a malformed dictionary")
-            map[key] = parseValue(c, depth + 1)
+            val entry = parseValue(c, depth + 1)
+            // A repeated key makes "which value applies" a guess: PDFBox, Acrobat and our parser
+            // disagree, and decrypting the wrong one corrupts the object. Refuse the file.
+            if (map.put(key, entry) != null) {
+                throw Unsupported("This PDF repeats a dictionary key, which ScanWhirl cannot resolve")
+            }
             if (map.size > MAX_DICT_ENTRIES) throw Unsupported("This PDF has an impossibly large dictionary")
         }
     }
@@ -373,6 +387,14 @@ object PdfDecryptor {
 
     private class Xref(val entries: List<Entry>, val trailer: Pv, val tableOffset: Int)
 
+    /**
+     * Reads the one classic cross-reference table this rewriter can reproduce.
+     *
+     * Everything a later stage relies on is proved here, before a byte is written: the `%PDF-`
+     * header, whitespace/comments only between the header and the first object, one final trailer
+     * followed by its own `startxref <offset> %%EOF` and nothing but whitespace after it, subsection
+     * ranges inside the work budget that never repeat an object, and generations inside 0..65534.
+     */
     private fun readXref(raw: ByteArray): Xref {
         val marker = lastIndexOf(raw, "startxref")
         if (marker < 0) throw Unsupported("This PDF has no xref pointer ScanWhirl can read")
@@ -388,6 +410,8 @@ object PdfDecryptor {
         }
         c.pos += 4
         val entries = ArrayList<Entry>()
+        val numbers = HashSet<Int>()
+        var rows = 0
         while (true) {
             c.skip()
             if (c.pos >= c.limit) throw Unsupported("This PDF's xref table is truncated")
@@ -399,10 +423,20 @@ object PdfDecryptor {
             c.skip()
             val count = readUInt(c) ?: throw Unsupported("This PDF's xref table is malformed")
             c.skip()
-            if (entries.size + count > MAX_XREF_ENTRIES) {
+            if (count <= 0) throw Unsupported("This PDF's xref table has an empty subsection")
+            // Ranges are checked as 64-bit sums: "first + count" must never wrap or escape the budget.
+            if (first.toLong() + count > MAX_OBJECTS) {
+                throw Unsupported("This PDF's xref table is too large to rewrite safely")
+            }
+            rows += count
+            if (rows > MAX_XREF_ROWS) {
                 throw Unsupported("This PDF's xref table is too large to rewrite safely")
             }
             repeat(count) { i ->
+                val number = first + i
+                if (!numbers.add(number)) {
+                    throw Unsupported("This PDF's xref table repeats an object number")
+                }
                 val objectOffset = readUInt(c) ?: throw Unsupported("This PDF's xref table is malformed")
                 c.skip()
                 val generation = readUInt(c) ?: throw Unsupported("This PDF's xref table is malformed")
@@ -410,13 +444,24 @@ object PdfDecryptor {
                 if (c.pos >= c.limit) throw Unsupported("This PDF's xref table is truncated")
                 val type = c.raw[c.pos].toInt().toChar()
                 c.pos++
-                if (type == 'n') {
-                    if (objectOffset <= 0 || objectOffset >= raw.size) {
-                        throw Unsupported("This PDF's xref points outside the file")
+                if (generation > MAX_GENERATION) {
+                    throw Unsupported("This PDF's xref table has an invalid generation")
+                }
+                when (type) {
+                    'n' -> {
+                        if (number == 0) throw Unsupported("This PDF's xref table marks object 0 as used")
+                        if (generation == MAX_GENERATION) {
+                            throw Unsupported("This PDF's xref table has an invalid generation")
+                        }
+                        if (objectOffset <= 0 || objectOffset >= raw.size) {
+                            throw Unsupported("This PDF's xref points outside the file")
+                        }
+                        entries += Entry(number, generation, objectOffset)
                     }
-                    entries += Entry(first + i, generation, objectOffset)
-                } else if (type != 'f') {
-                    throw Unsupported("This PDF's xref table has an entry type ScanWhirl cannot read")
+                    'f' -> if (number == 0 && generation != MAX_GENERATION) {
+                        throw Unsupported("This PDF's free list is malformed")
+                    }
+                    else -> throw Unsupported("This PDF's xref table has an entry type ScanWhirl cannot read")
                 }
                 while (c.pos < c.limit) {
                     val ch = c.raw[c.pos].toInt() and 0xFF
@@ -428,7 +473,50 @@ object PdfDecryptor {
         c.skip()
         val trailer = parseValue(c, 0)
         if (trailer.dict == null) throw Unsupported("This PDF's trailer is not a dictionary")
+        c.skip()
+        if (!c.word("startxref")) throw Unsupported("This PDF's trailer is not followed by startxref")
+        c.skip()
+        val finalPointer = readUInt(c) ?: throw Unsupported("This PDF's xref pointer is unreadable")
+        if (finalPointer != offset) throw Unsupported("This PDF's xref pointer does not match its table")
+        // `%%EOF` is a comment to the tokenizer, so only whitespace may be skipped before it.
+        skipSpace(c)
+        if (!c.atWord("%%EOF")) throw Unsupported("This PDF does not end with %%EOF")
+        c.pos += "%%EOF".length
+        while (c.pos < raw.size) {
+            val ch = raw[c.pos].toInt() and 0xFF
+            if (ch == 0 || ch == 9 || ch == 10 || ch == 12 || ch == 13 || ch == 32) {
+                c.pos++
+            } else {
+                throw Unsupported("This PDF has data after its end marker")
+            }
+        }
+        checkHeader(raw, entries.minOfOrNull { it.offset }
+            ?: throw Unsupported("This PDF has no objects ScanWhirl can read"))
         return Xref(entries, trailer, offset)
+    }
+
+    /** `%PDF-` at byte 0, then one header line and only whitespace/comments up to the first object. */
+    private fun checkHeader(raw: ByteArray, firstObject: Int) {
+        val prefix = "%PDF-".toByteArray(Charsets.ISO_8859_1)
+        if (raw.size <= prefix.size || firstObject <= prefix.size) {
+            throw Unsupported("This file is not a PDF ScanWhirl can read")
+        }
+        for (i in prefix.indices) {
+            if (raw[i] != prefix[i]) throw Unsupported("This file is not a PDF ScanWhirl can read")
+        }
+        var i = prefix.size
+        while (i < firstObject && raw[i] != 0x0A.toByte() && raw[i] != 0x0D.toByte()) i++
+        val c = Cursor(raw, i, firstObject)
+        c.skip()
+        if (c.pos != firstObject) throw Unsupported("This PDF has data before its first object")
+    }
+
+    /** Whitespace only — no comments: used where the next token is `%%EOF`, itself a comment. */
+    private fun skipSpace(c: Cursor) {
+        while (c.pos < c.limit) {
+            val ch = c.raw[c.pos].toInt() and 0xFF
+            if (ch == 0 || ch == 9 || ch == 10 || ch == 12 || ch == 13 || ch == 32) c.pos++ else break
+        }
     }
 
     private fun lastIndexOf(raw: ByteArray, text: String): Int {
@@ -452,22 +540,125 @@ object PdfDecryptor {
             if (entry.offset == previous) throw Unsupported("Two PDF objects claim the same position")
             if (!seen.add(entry.number)) throw Unsupported("Two PDF xref entries claim the same object")
             previous = entry.offset
-            val c = Cursor(raw, entry.offset, raw.size)
-            val number = readUInt(c) ?: throw Unsupported("The PDF xref points at an object that is not there")
-            c.skip()
-            val gen = readUInt(c) ?: throw Unsupported("The PDF xref points at an object that is not there")
-            c.skip()
-            if (!c.atWord("obj") || number != entry.number || gen != entry.gen) {
-                throw Unsupported("The PDF xref and its object headers disagree")
-            }
         }
         for ((i, entry) in sorted.withIndex()) {
             val next = sorted.getOrNull(i + 1)?.offset ?: raw.size
             val limit = if (i + 1 == sorted.size) raw.size else next
             entry.end = if (xref.tableOffset > entry.offset) minOf(limit, xref.tableOffset) else limit
             if (entry.end <= entry.offset) throw Unsupported("A PDF object has an empty region")
+            // The rewriter copies these spans byte for byte, so each one must be exactly one object.
+            validateObject(raw, entry)
         }
         return sorted
+    }
+
+    /** Where a stream body sits inside an object, plus the `/Length` token the rewriter replaces. */
+    private class StreamSpan(
+        val lengthStart: Int,
+        val lengthEnd: Int,
+        val bodyStart: Int,
+        val bodyEnd: Int,
+        val afterEndstream: Int
+    )
+
+    /**
+     * Proves that `[entry.offset, entry.end)` is exactly `<number> <gen> obj <value>` (optionally
+     * `stream … endstream`) `endobj`, followed by whitespace and comments only. Nothing between two
+     * indexed objects may escape this check: unindexed bytes are never copied.
+     */
+    private fun validateObject(raw: ByteArray, entry: Entry) {
+        val c = Cursor(raw, entry.offset, entry.end)
+        val number = readUInt(c) ?: throw Unsupported("The PDF xref points at an object that is not there")
+        c.skip()
+        val generation = readUInt(c) ?: throw Unsupported("The PDF xref points at an object that is not there")
+        c.skip()
+        if (!c.word("obj") || number != entry.number || generation != entry.gen) {
+            throw Unsupported("The PDF xref and its object headers disagree")
+        }
+        c.skip()
+        val value = parseValue(c, 0)
+        val dict = value.dict
+        if (dict != null) refuseEmbeddedFiles(dict)
+        c.skip()
+        if (dict != null && c.atWord("stream")) {
+            refuseCryptFilter(dict)
+            c.pos = readStreamSpan(raw, dict, c, entry.end).afterEndstream
+        }
+        c.skip()
+        if (!c.word("endobj")) throw Unsupported("A PDF object does not end with endobj")
+        c.skip()
+        if (c.pos != entry.end) {
+            throw Unsupported("This PDF has data between its objects that is not an object")
+        }
+    }
+
+    /**
+     * Embedded files are refused, not copied: with `/EFF` absent they follow `/StmF`, with it
+     * present they follow another filter, and a per-stream `/Crypt` picks its filter from the
+     * `/DecodeParms` slot of its own index. Decrypting them by a guess corrupts or leaks them.
+     */
+    private fun refuseEmbeddedFiles(dict: LinkedHashMap<String, Pv>) {
+        if (dict.containsKey("EmbeddedFiles") || dict.containsKey("EF") || dict["Type"]?.name == "EmbeddedFile") {
+            throw Unsupported("This PDF carries embedded files, which ScanWhirl cannot unlock faithfully")
+        }
+    }
+
+    private fun refuseCryptFilter(dict: LinkedHashMap<String, Pv>) {
+        if (filterNames(dict).contains("Crypt")) {
+            throw Unsupported(
+                "This PDF encrypts individual streams with their own crypt filter, which ScanWhirl cannot rewrite"
+            )
+        }
+    }
+
+    /** `/Filter` as a list of names; anything unreadable is refused rather than guessed. */
+    private fun filterNames(dict: LinkedHashMap<String, Pv>): List<String> {
+        val filterValue = dict["Filter"] ?: return emptyList()
+        filterValue.name?.let { return listOf(it) }
+        val array = filterValue.array ?: throw Unsupported("A stream in this PDF has an unreadable /Filter")
+        return array.map { it.name ?: throw Unsupported("A stream in this PDF has an unreadable /Filter") }
+    }
+
+    /**
+     * Requires a direct `/Length`, a body that starts exactly where the dictionary ends, a body of
+     * exactly that many bytes and the literal `endstream` right after it.
+     */
+    private fun readStreamSpan(
+        raw: ByteArray,
+        dict: LinkedHashMap<String, Pv>,
+        c: Cursor,
+        limit: Int
+    ): StreamSpan {
+        val length = dict["Length"] ?: throw Unsupported("A stream in this PDF has no direct /Length")
+        val lengthText = length.number
+        if (length.refNumber >= 0 || lengthText == null || lengthText.isEmpty() ||
+            lengthText.length > 10 || !lengthText.all { it in '0'..'9' }
+        ) {
+            throw Unsupported("A stream in this PDF has no direct /Length")
+        }
+        val bodyLength = lengthText.toIntOrNull()
+            ?: throw Unsupported("A stream in this PDF has an invalid /Length")
+        if (!c.word("stream")) {
+            throw Unsupported("A stream in this PDF does not start where its dictionary ends")
+        }
+        if (c.pos < limit && raw[c.pos] == 0x0D.toByte()) {
+            c.pos++
+            if (c.pos < limit && raw[c.pos] == 0x0A.toByte()) c.pos++
+        } else if (c.pos < limit && raw[c.pos] == 0x0A.toByte()) {
+            c.pos++
+        } else {
+            throw Unsupported("A stream in this PDF does not start where its dictionary ends")
+        }
+        val bodyStart = c.pos
+        val bodyEndLong = bodyStart.toLong() + bodyLength
+        if (bodyEndLong > limit) throw Unsupported("A stream in this PDF runs past its object")
+        val bodyEnd = bodyEndLong.toInt()
+        val after = Cursor(raw, bodyEnd, limit)
+        after.skip()
+        if (!after.atWord("endstream")) {
+            throw Unsupported("A stream in this PDF does not end where /Length says")
+        }
+        return StreamSpan(length.start, length.end, bodyStart, bodyEnd, after.pos + "endstream".length)
     }
 
     // ------------------------------------------------------------------
@@ -478,6 +669,11 @@ object PdfDecryptor {
         val map = dict.dict ?: throw Unsupported("The PDF /Encrypt value is not a dictionary")
         if (map["Filter"]?.name != "Standard") {
             throw Unsupported("This PDF does not use the standard password format")
+        }
+        // /EFF names the filter for embedded-file streams. Even /Identity is refused: with the key
+        // absent the streams inherit /StmF instead, so "no /EFF" is not "no encryption".
+        if (map.containsKey("EFF")) {
+            throw Unsupported("This PDF names a separate embedded-file filter, which ScanWhirl cannot rewrite")
         }
         val version = intValue(map["V"]) ?: 1
         val revision = intValue(map["R"])
@@ -503,13 +699,21 @@ object PdfDecryptor {
 
         val keyBytes: Int
         if (version >= 5) {
-            val length = intValue(map["Length"])
-            if (length != null && length != 256) {
+            val declared = map["Length"]
+            if (declared != null && intValue(declared) != 256) {
                 throw Unsupported("The PDF encryption dictionary declares an inconsistent key length")
             }
             keyBytes = 32
         } else {
-            val bits = intValue(map["Length"]) ?: 40
+            // A present-but-unreadable /Length is not "omitted": defaulting it to 40 bits would
+            // derive a key from a number the file never declared.
+            val declared = map["Length"]
+            val bits = if (declared == null) {
+                40
+            } else {
+                intValue(declared)
+                    ?: throw Unsupported("The PDF encryption dictionary declares an invalid key length")
+            }
             if (bits < 40 || bits > 128 || bits % 8 != 0) {
                 throw Unsupported("The PDF encryption dictionary declares an invalid key length")
             }
@@ -559,10 +763,6 @@ object PdfDecryptor {
 
         val stream = if (version >= 4) resolve(map["StmF"]?.name) else Filter(CIPHER_RC4, keyBytes)
         val string = if (version >= 4) resolve(map["StrF"]?.name) else Filter(CIPHER_RC4, keyBytes)
-        val embedded = map["EFF"]?.name
-        if (embedded != null && embedded != "Identity") {
-            throw Unsupported("This PDF encrypts embedded files with a separate filter ScanWhirl cannot rewrite")
-        }
 
         if (version >= 5) {
             val u = map["U"]?.bytes ?: throw Unsupported("The PDF encryption dictionary is incomplete")
@@ -740,30 +940,45 @@ object PdfDecryptor {
     private fun pdfDocEncoding(password: String): ByteArray? {
         val out = ByteArray(password.length)
         for (i in password.indices) {
-            val ch = password[i]
-            val code = ch.code
-            val byte = when {
-                code in 0x00..0x7F -> code
-                code in 0xA1..0xFF -> code
-                else -> PDF_DOC_SPECIAL[ch] ?: return null
-            }
-            out[i] = byte.toByte()
+            out[i] = (PDF_DOC_BYTES[password[i]] ?: return null).toByte()
         }
         return out
     }
 
-    private val PDF_DOC_SPECIAL: Map<Char, Int> = mapOf(
-        '\u02D8' to 0x18, '\u02C7' to 0x19, '\u02C6' to 0x1A, '\u02D9' to 0x1B,
-        '\u02DD' to 0x1C, '\u02DB' to 0x1D, '\u02DA' to 0x1E, '\u02DC' to 0x1F,
-        '\u2022' to 0x80, '\u2020' to 0x81, '\u2021' to 0x82, '\u2026' to 0x83,
-        '\u2014' to 0x84, '\u2013' to 0x85, '\u0192' to 0x86, '\u2044' to 0x87,
-        '\u2039' to 0x88, '\u203A' to 0x89, '\u2212' to 0x8A, '\u2030' to 0x8B,
-        '\u201E' to 0x8C, '\u201C' to 0x8D, '\u201D' to 0x8E, '\u2018' to 0x8F,
-        '\u2019' to 0x90, '\u201A' to 0x91, '\u2122' to 0x92, '\uFB01' to 0x93,
-        '\uFB02' to 0x94, '\u0141' to 0x95, '\u0152' to 0x96, '\u0160' to 0x97,
-        '\u0178' to 0x98, '\u017D' to 0x99, '\u0131' to 0x9A, '\u0142' to 0x9B,
-        '\u0153' to 0x9C, '\u0161' to 0x9D, '\u017E' to 0x9E, '\u20AC' to 0xA0
+    /** One PDFDocEncoding byte, or null where Annex D leaves the slot undefined (0x7F, 0x9F). */
+    private fun pdfDocChar(byte: Int): Char? = when (byte) {
+        in 0x00..0x17 -> byte.toChar()
+        in 0x20..0x7E -> byte.toChar()
+        in 0xA1..0xFF -> byte.toChar()
+        0x7F, 0x9F -> null
+        else -> PDF_DOC_SPECIAL[byte]
+    }
+
+    /** The 26 remapped slots of Annex D: 0x18-0x1F, 0x80-0x9E and 0xA0 (the euro sign). */
+    private val PDF_DOC_SPECIAL: Map<Int, Char> = mapOf(
+        0x18 to '\u02D8', 0x19 to '\u02C7', 0x1A to '\u02C6', 0x1B to '\u02D9',
+        0x1C to '\u02DD', 0x1D to '\u02DB', 0x1E to '\u02DA', 0x1F to '\u02DC',
+        0x80 to '\u2022', 0x81 to '\u2020', 0x82 to '\u2021', 0x83 to '\u2026',
+        0x84 to '\u2014', 0x85 to '\u2013', 0x86 to '\u0192', 0x87 to '\u2044',
+        0x88 to '\u2039', 0x89 to '\u203A', 0x8A to '\u2212', 0x8B to '\u2030',
+        0x8C to '\u201E', 0x8D to '\u201C', 0x8E to '\u201D', 0x8F to '\u2018',
+        0x90 to '\u2019', 0x91 to '\u201A', 0x92 to '\u2122', 0x93 to '\uFB01',
+        0x94 to '\uFB02', 0x95 to '\u0141', 0x96 to '\u0152', 0x97 to '\u0160',
+        0x98 to '\u0178', 0x99 to '\u017D', 0x9A to '\u0131', 0x9B to '\u0142',
+        0x9C to '\u0153', 0x9D to '\u0161', 0x9E to '\u017E', 0xA0 to '\u20AC'
     )
+
+    /**
+     * The exact inverse of [pdfDocChar]: character to byte. Built once from the byte table, so a
+     * remapped slot can never also be reached by a passthrough range and an undefined slot has no
+     * entry at all.
+     */
+    private val PDF_DOC_BYTES: Map<Char, Int> = buildMap(254) {
+        for (byte in 0..0xFF) {
+            val ch = pdfDocChar(byte) ?: continue
+            check(put(ch, byte) == null) { "PDFDocEncoding byte $byte is not one-to-one" }
+        }
+    }
 
     // ------------------------------------------------------------------
     // Rewriting
@@ -797,20 +1012,19 @@ object PdfDecryptor {
         var highest = 0
 
         for (entry in objects) {
+            // The old /Encrypt object (and its private key material) is never copied: the output is
+            // plaintext, so the security handler and its dictionary have no meaning any more.
+            if (entry.number == encryptObject) continue
             if (out.size().toLong() + (entry.end - entry.offset).toLong() * 2 + 64 > cap) {
                 throw Unsupported("This PDF would grow too large to decrypt safely")
             }
             offsets[entry.number] = out.size()
             highest = maxOf(highest, entry.number)
-            if (entry.number == encryptObject) {
-                out.write(raw, entry.offset, entry.end - entry.offset)
-                continue
-            }
             writeObject(raw, entry, scheme, out)
         }
 
         val size = highest + 1
-        if (size > MAX_XREF_ENTRIES) throw Unsupported("This PDF has too many object numbers to rewrite")
+        if (size > MAX_XREF_ROWS) throw Unsupported("This PDF has too many object numbers to rewrite")
 
         val xrefOffset = out.size()
         val table = StringBuilder()
@@ -902,87 +1116,35 @@ object PdfDecryptor {
         }
 
         val dict = map ?: throw Unsupported("A PDF stream object is not a dictionary")
-        val length = dict["Length"]
-        val lengthText = length?.number
-        if (length == null || length.refNumber >= 0 || lengthText == null ||
-            lengthText.isEmpty() || lengthText.length > 10 || !lengthText.all { it in '0'..'9' }
-        ) {
-            throw Unsupported("A stream in this PDF has no direct /Length")
-        }
-        val bodyLength = lengthText.toIntOrNull()
-            ?: throw Unsupported("A stream in this PDF has an invalid /Length")
-
-        c.pos += "stream".length
-        if (c.pos < c.limit && c.raw[c.pos] == 0x0D.toByte()) {
-            c.pos++
-            if (c.pos < c.limit && c.raw[c.pos] == 0x0A.toByte()) c.pos++
-        } else if (c.pos < c.limit && c.raw[c.pos] == 0x0A.toByte()) {
-            c.pos++
-        } else {
-            throw Unsupported("A stream in this PDF does not start where its dictionary ends")
-        }
-        val bodyStart = c.pos
-        val bodyEndLong = bodyStart.toLong() + bodyLength
-        if (bodyLength < 0 || bodyEndLong > entry.end) {
-            throw Unsupported("A stream in this PDF runs past its object")
-        }
-        val bodyEnd = bodyEndLong.toInt()
-        val after = Cursor(raw, bodyEnd, entry.end)
-        after.skip()
-        if (!after.atWord("endstream")) {
-            throw Unsupported("A stream in this PDF does not end where /Length says")
-        }
-
+        val span = readStreamSpan(raw, dict, c, entry.end)
         val filter = streamFilter(dict, scheme)
-        val body = raw.copyOfRange(bodyStart, bodyEnd)
+        val body = raw.copyOfRange(span.bodyStart, span.bodyEnd)
         val plain = decryptData(scheme, filter, entry.number, entry.gen, body)
 
         out.write(raw, entry.offset, valueStart - entry.offset)
-        rewriteStrings(raw, valueStart, length.start, scheme, entry.number, entry.gen, out)
+        rewriteStrings(raw, valueStart, span.lengthStart, scheme, entry.number, entry.gen, out)
         // The text before the token already ends with "/Length ".
         out.write(plain.size.toString().toByteArray(Charsets.ISO_8859_1))
-        rewriteStrings(raw, length.end, value.end, scheme, entry.number, entry.gen, out)
-        out.write(raw, value.end, bodyStart - value.end)
+        rewriteStrings(raw, span.lengthEnd, value.end, scheme, entry.number, entry.gen, out)
+        out.write(raw, value.end, span.bodyStart - value.end)
         out.write(plain)
-        out.write(raw, bodyEnd, entry.end - bodyEnd)
+        out.write(raw, span.bodyEnd, entry.end - span.bodyEnd)
     }
 
     /** The effective filter for one stream, resolved by name (never guessed from the ciphertext). */
     private fun streamFilter(map: LinkedHashMap<String, Pv>, scheme: Scheme): Filter {
-        val filterValue = map["Filter"]
-        val names = when {
-            filterValue == null -> emptyList()
-            filterValue.name != null -> listOf(filterValue.name!!)
-            filterValue.array != null -> filterValue.array!!.mapNotNull { it.name }
-            else -> throw Unsupported("A stream in this PDF has an unreadable /Filter")
-        }
-        if (names.contains("Crypt")) {
-            val name = cryptFilterName(map)
-            return if (name == null || name == "Identity") {
-                IDENTITY
-            } else {
-                throw Unsupported("This PDF encrypts individual streams with their own crypt filter, which ScanWhirl cannot rewrite")
-            }
-        }
-        if (map["Type"]?.name == "EmbeddedFile") {
-            // /EFF is Identity (a non-Identity /EFF was refused with the encryption dictionary).
-            return IDENTITY
+        // An explicit /Crypt filter takes its name from the /DecodeParms slot of its own position in
+        // /Filter; resolving it by name is refused (see refuseCryptFilter) rather than guessed.
+        if (filterNames(map).contains("Crypt")) {
+            throw Unsupported(
+                "This PDF encrypts individual streams with their own crypt filter, which ScanWhirl cannot rewrite"
+            )
         }
         if (!scheme.encryptMetadata && map["Type"]?.name == "Metadata") {
             // /EncryptMetadata false: the document's metadata stream is stored in the clear.
             return IDENTITY
         }
         return scheme.stream
-    }
-
-    private fun cryptFilterName(map: LinkedHashMap<String, Pv>): String? {
-        val parms = map["DecodeParms"]
-        val dict = when {
-            parms?.dict != null -> parms.dict
-            parms?.array != null -> parms.array!!.firstOrNull { it.dict != null }?.dict
-            else -> null
-        }
-        return dict?.get("Name")?.name
     }
 
     private fun decryptData(
@@ -1227,13 +1389,19 @@ object PdfDecryptor {
     /** Never refuse a file this small, whatever the heap reports. */
     private const val MIN_IN_MEMORY_BYTES = 1L shl 20
 
-    private const val MAX_OBJECTS = 50_000
-    private const val MAX_XREF_ENTRIES = 200_000
-    private const val MAX_DICT_DEPTH = 32
+    private const val MAX_OBJECTS = 100_000
+
+    /** Total xref rows (free and live) accepted: everything [PdfEncryptor] can emit stays readable. */
+    private const val MAX_XREF_ROWS = 100_000
+
+    private const val MAX_DICT_DEPTH = 64
     private const val MAX_DICT_ENTRIES = 4096
     private const val MAX_ARRAY_ITEMS = 65_536
     private const val MAX_STRING_BYTES = 32 * 1024 * 1024
     private const val MAX_OUTPUT_BYTES = 512L * 1024 * 1024
+
+    /** Largest object generation in a table; 65535 is the "free" marker and never a live object. */
+    private const val MAX_GENERATION = 65535
 
     private const val CIPHER_NONE = 0
     private const val CIPHER_RC4 = 1

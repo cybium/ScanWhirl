@@ -226,6 +226,11 @@ object PdfAes {
         for (i in 0..3) {
             if (block[i] != ((permissions ushr (8 * i)) and 0xFF).toByte()) return false
         }
+        // ISO 32000-2 Algorithm 13: bytes 4-7 are fixed at FF FF FF FF. A block that decrypts with
+        // the right key and /P but a different constant was rewritten by something else: refuse it.
+        for (i in 4..7) {
+            if (block[i] != 0xFF.toByte()) return false
+        }
         if (block[9] != 'a'.code.toByte() || block[10] != 'd'.code.toByte() || block[11] != 'b'.code.toByte()) {
             return false
         }
