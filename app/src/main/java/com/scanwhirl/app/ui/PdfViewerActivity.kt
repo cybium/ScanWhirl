@@ -103,8 +103,25 @@ class PdfViewerActivity : BaseActivity() {
         binding.pdfPager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) = updateIndicator()
         })
+        // F1-FIT: the dock floats over the page and grows to two rows at large
+        // text; reserve its measured height (never less than the old 92 dp) so a
+        // page cannot end underneath it.
+        val dockRoot = findViewById<android.view.View>(R.id.readerDockRoot)
+        dockRoot.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> reserveDockSpace(dockRoot) }
+        dockRoot.post { reserveDockSpace(dockRoot) }
 
         startOpen(savedInstanceState)
+    }
+
+    /** F1-FIT: measured dock clearance instead of the old hard-coded 92 dp. */
+    private fun reserveDockSpace(dockRoot: android.view.View) {
+        val pager = binding.pdfPager
+        if (dockRoot.height <= 0) return
+        val density = resources.displayMetrics.density
+        val bottom = maxOf((92 * density).toInt(), dockRoot.height + (12 * density).toInt())
+        if (pager.paddingBottom != bottom) {
+            pager.setPadding(pager.paddingLeft, pager.paddingTop, pager.paddingRight, bottom)
+        }
     }
 
     /**
