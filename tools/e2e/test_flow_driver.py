@@ -68,6 +68,25 @@ class FlowSelectorsTest(unittest.TestCase):
                     f.main()
                 adb.assert_not_called()
 
+    def test_rotation_assertion_requires_observed_ui_orientation(self):
+        portrait = ET.Element("hierarchy", {"rotation": "0"})
+        landscape = ET.Element("hierarchy", {"rotation": "1"})
+        self.assertIs(f.require_rotation(landscape, 1), landscape)
+        self.assertIs(f.require_rotation(portrait, 0), portrait)
+        with self.assertRaisesRegex(AssertionError, "Emulator rotation did not change"):
+            f.require_rotation(portrait, 1)
+        with self.assertRaisesRegex(AssertionError, "Emulator rotation did not change"):
+            f.require_rotation(ET.Element("hierarchy"), 1)
+
+    def test_wait_rotation_fails_when_setting_only_did_not_rotate(self):
+        portrait = ET.Element("hierarchy", {"rotation": "0"})
+        landscape = ET.Element("hierarchy", {"rotation": "1"})
+        with patch.object(f, "hierarchy", return_value=portrait):
+            with self.assertRaisesRegex(AssertionError, "emulator/harness failure"):
+                f.wait_rotation(1, timeout=0)
+        with patch.object(f, "hierarchy", return_value=landscape):
+            self.assertIs(f.wait_rotation(1, timeout=0), landscape)
+
     def test_fixture_is_three_pages(self):
         pdf = build([["Fictional page 1"], ["Fictional page 2"], ["Fictional page 3"]])
         self.assertIn(b"/Count 3", pdf)
