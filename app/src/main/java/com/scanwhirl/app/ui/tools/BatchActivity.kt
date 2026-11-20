@@ -21,6 +21,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
@@ -36,6 +37,7 @@ import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.shell.ShellActivity
+import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
@@ -67,6 +69,24 @@ class BatchActivity : BaseActivity() {
     private var job: Job? = null
     @Volatile private var cancelRequested = false
     private var progressSheet: SwSheet? = null
+
+    /**
+     * H2-4: on Android 7-9 "Export as PDF" needs the runtime storage grant for the Documents
+     * folder. The chosen action waits here while Android shows its prompt.
+     */
+    private var pendingAction: (() -> Unit)? = null
+    private val storagePermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val action = pendingAction
+            pendingAction = null
+            if (granted) {
+                errorView.isVisible = false
+                action?.invoke()
+            } else {
+                errorView.text = getString(R.string.f7save_perm_denied_batch)
+                errorView.isVisible = true
+            }
+        }
 
     private var compressLevel = 1
     private var imagesFormat = ScanRepository.ImageExportFormat.JPG
@@ -540,6 +560,18 @@ class BatchActivity : BaseActivity() {
     // ---- run / summary ----------------------------------------------------
 
     private fun start(action: ScanRepository.BatchAction) {
+        // H2-4: "Export as PDF" is the batch action that writes into public Documents. Before
+        // Android 10 that needs the runtime storage grant, so it is asked for first, with a plain
+        // reason, instead of every document failing with a raw EACCES line.
+        if (action is ScanRepository.BatchAction.ExportPdf &&
+            DownloadSaver.needsLegacyStoragePermission(this)
+        ) {
+            pendingAction = { start(action) }
+            errorView.text = getString(R.string.f7save_perm_why_documents)
+            errorView.isVisible = true
+            storagePermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
         cancelRequested = false
         progressSheet = SwSheet.builder(this)
             .setTitle(R.string.tools_batch_progress_title)
