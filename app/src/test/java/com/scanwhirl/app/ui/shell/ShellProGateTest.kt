@@ -91,7 +91,7 @@ class ShellProGateTest {
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
-            // Free taps a Pro tool wherever it lives, so every job is opened first.
+            // Free taps a Pro tool wherever it lives; every job shows all of its tools.
             openAllToolsDoors(activity)
             for (id in proIds) {
                 val tile = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))

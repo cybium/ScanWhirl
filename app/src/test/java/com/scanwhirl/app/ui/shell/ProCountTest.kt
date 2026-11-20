@@ -71,7 +71,7 @@ class ProCountTest {
 
                 more.performClick()
                 idle()
-                // Every job opens its "All N tools" door, so the whole catalogue is on screen.
+                // T1 owner-approved 2026-11-20: the whole catalogue is on screen already.
                 openAllToolsDoors(activity)
                 val badges = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
                     .count { it.proTag.visibility == View.VISIBLE }
