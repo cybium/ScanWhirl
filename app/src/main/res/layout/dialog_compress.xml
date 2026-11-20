@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  UI-B3 (#7): the Compress setup sheet. Two explicit aims ("Choose quality" / "Aim for a file
-  size"), the existing quality estimates, and the exact-size field with a hint that stays put
-  and an inline error. The whole content scrolls so the field and the Compress button stay
+  UI-B3 (#7) + W2: the Compress setup sheet. Two explicit aims ("Choose quality" / "Aim for a
+  file size"), the existing quality estimates, and the exact-size field with a hint that stays
+  put and an inline error. The whole content scrolls so the field and the Compress button stay
   reachable at 200% type with the keyboard open.
+
+  W2 (lane 2): the sheet opens instantly and names the job before any estimate runs — the exact
+  source name, its page count and size, and its real first page only for an ordinary document
+  (locked/Vault/PDF-only documents keep the privacy placeholder). The estimates then fill in
+  row by row underneath, and the target field is usable from the first frame.
 -->
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/compressScroll"
@@ -20,6 +25,65 @@
         android:paddingHorizontal="24dp"
         android:paddingTop="12dp"
         android:paddingBottom="8dp">
+
+        <!-- W2: which document this sheet is about, from the first frame. -->
+        <LinearLayout
+            android:id="@+id/compressSourceRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="8dp">
+
+            <FrameLayout
+                android:id="@+id/compressSourceThumbFrame"
+                android:layout_width="56dp"
+                android:layout_height="78dp"
+                android:importantForAccessibility="no">
+
+                <ImageView
+                    android:id="@+id/compressSourceThumb"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/bg_thumb_paper" />
+
+                <ImageView
+                    android:id="@+id/compressSourceThumbGlyph"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/compressSourceName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textColor="@color/text_hologram_hi"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/compressSourceMeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textColor="@color/text_hologram_mid"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
 
         <RadioGroup
             android:id="@+id/compressModeGroup"

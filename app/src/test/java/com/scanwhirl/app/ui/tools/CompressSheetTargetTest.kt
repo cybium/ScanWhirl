@@ -17,6 +17,7 @@ import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -144,6 +145,22 @@ abstract class CompressSheetTargetBase {
                 )
                 val field = decor.findViewById<EditText>(R.id.editCompressTarget)
                 assertNotNull("the custom-size field is in the sheet", field)
+
+                // W2: the sheet also identifies its exact source, inside the same scroll.
+                val sourceRow = decor.findViewById<View>(R.id.compressSourceRow)
+                assertNotNull("W2: the sheet shows its source, not a generic title", sourceRow)
+                assertEquals(View.VISIBLE, sourceRow!!.visibility)
+                assertTrue("the identity row has height: ${sourceRow.height}px", sourceRow.height > 0)
+                val sourceName = decor.findViewById<TextView>(R.id.compressSourceName)
+                assertEquals("Compress setup", sourceName!!.text.toString())
+                assertTrue("the name is not squeezed to nothing", sourceName.width > 0)
+                val thumb = decor.findViewById<View>(R.id.compressSourceThumbFrame)
+                assertNotNull("W2: the source has its own paper thumbnail", thumb)
+                assertTrue(
+                    "the thumbnail is a real, visible paper size: ${thumb!!.height}px",
+                    thumb.height >= Math.round(48f * d)
+                )
+
                 // B3: the size field belongs to the "Aim for a file size" aim, so it is measured
                 // there (the quality aim shows the estimates instead).
                 decor.findViewById<View>(R.id.compressModeTarget).performClick()
