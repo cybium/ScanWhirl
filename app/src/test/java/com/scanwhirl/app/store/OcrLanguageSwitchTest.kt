@@ -1,7 +1,12 @@
 package com.scanwhirl.app.store
 
 import android.app.Application
+import android.content.Intent
+import android.widget.EditText
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.R
+import com.scanwhirl.app.ScanWhirlApp
+import com.scanwhirl.app.ui.OcrEditorActivity
 import com.scanwhirl.app.util.OcrBox
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrLanguage
@@ -9,7 +14,12 @@ import com.scanwhirl.app.util.OcrLanguageSettings
 import com.scanwhirl.app.util.OcrRawLine
 import com.scanwhirl.app.util.OcrRawPage
 import com.scanwhirl.app.util.OcrScript
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,10 +27,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * v2 UI: 08_text_ocr — the language setting and the re-recognition it triggers (the Text
@@ -100,6 +112,66 @@ class OcrLanguageSwitchTest {
         assertFalse("the English pass is replaced", hindi.contains("English headline"))
         assertFalse("stored text never keeps U+FFFD", hindi.contains('\uFFFD'))
         assertFalse("the pending marker is cleared", repo.ocrStore.isPending(id))
+    }
+
+    @Test
+    fun `confirmed Hindi reread wins over an English pass already reading the same JPEG`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Fictional public notice")
+        val originalReader = checkNotNull(OcrEngine.rawReader)
+        val englishStarted = CompletableDeferred<Unit>()
+        val releaseEnglish = CompletableDeferred<Unit>()
+        val releaseHindi = CompletableDeferred<Unit>()
+        val hindiCalls = AtomicInteger()
+        OcrEngine.rawReader = { file, script ->
+            when (script) {
+                OcrScript.LATIN -> {
+                    englishStarted.complete(Unit)
+                    releaseEnglish.await()
+                    originalReader(file, script)
+                }
+                OcrScript.DEVANAGARI -> {
+                    hindiCalls.incrementAndGet()
+                    releaseHindi.await()
+                    OcrRawPage(
+                        600, 800,
+                        listOf(OcrRawLine("सार्वजनिक सूचना", OcrBox(20, 40, 560, 70), script))
+                    )
+                }
+            }
+        }
+
+        // On IO, UNDISPATCHED runs the reread up to its first suspension: either it waits
+        // for the English indexer or it has already cleared the store and entered Hindi OCR.
+        // Keep Hindi suspended until the English pass has finished committing. No timing sleeps.
+        runBlocking(Dispatchers.IO) {
+            withTimeout(15_000) {
+                val indexer = ScanWhirlApp.from(app).indexer
+                OcrLanguageSettings.set(app, OcrLanguage.ENGLISH)
+                val english = async { indexer.index(id) }
+                englishStarted.await()
+                OcrLanguageSettings.set(app, OcrLanguage.HINDI)
+                val hindi = async(start = CoroutineStart.UNDISPATCHED) {
+                    OcrReindex(repo).reRecognise(id, OcrLanguage.HINDI)
+                }
+                releaseEnglish.complete(Unit)
+                assertEquals(0, english.await().failedPages)
+                releaseHindi.complete(Unit)
+                assertEquals(1, hindi.await())
+            }
+        }
+        assertEquals("the Hindi recognizer was invoked once", 1, hindiCalls.get())
+        assertEquals(
+            "the reread must publish Hindi, not the older English result",
+            "सार्वजनिक सूचना", repo.ocrDoc(id).getValue("page_000.jpg")
+        )
+        val intent = Intent(app, OcrEditorActivity::class.java)
+            .putExtra(OcrEditorActivity.EXTRA_DOC_ID, id)
+        Robolectric.buildActivity(OcrEditorActivity::class.java, intent).setup().use { controller ->
+            assertEquals(
+                "सार्वजनिक सूचना",
+                controller.get().findViewById<EditText>(R.id.editText).text.toString()
+            )
+        }
     }
 
     @Test
