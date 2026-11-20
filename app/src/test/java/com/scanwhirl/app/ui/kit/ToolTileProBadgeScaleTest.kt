@@ -158,7 +158,7 @@ abstract class ToolTileProBadgeBase {
         return out
     }
 
-    /** B4-TOOLS: the Pro chip on a full-width row sits under the name, never on the glyph. */
+    /** ATLAS-F2 (002): the Pro chip on a full-width row shares the name's line, after it. */
     private fun rowBadgeProblems(row: ToolRow, root: View, scale: Float): List<String> {
         val tag = row.proTag
         if (!tag.isVisible) return emptyList()
