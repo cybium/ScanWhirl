@@ -1,205 +1,568 @@
 package com.scanwhirl.app.util
 
+import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
+import java.security.DigestOutputStream
+import java.security.MessageDigest
 import java.util.Locale
 
-/**
- * Adds password protection to a ScanWhirl PDF using the modern standard handler:
- * **ISO 32000-2 V5 / R6, AESV3 (AES-256)** — see [PdfAes]. RC4 is no longer written; old
- * RC4-protected files still open in any PDF viewer and the old unlock path is unchanged.
- *
- * AES changes stream sizes (16-byte IV + PKCS#7 padding), so a protected file cannot be patched in
- * place: every object is copied, each stream body is re-encrypted and `/Length` is rewritten, and a
- * fresh xref table and trailer (`/Encrypt`, `/ID`) are produced. Page images stay byte-identical
- * once decrypted — only the PDF wrapper changes.
- *
- * @throws IOException when the source is not a PDF this writer understands, when the output fails
- *   its own structural verification, or when it cannot be published.
- */
+/** Protects single-revision, classic-xref PDFs with the standard V5/R6 AESV3 handler. */
 object PdfEncryptor {
-
-    /**
-     * One in-use object of a PDF with a classic xref table: byte region `[start, end)` and the xref
-     * generation number (needed to derive per-object RC4/AES-128 keys when decrypting).
-     */
     internal class Obj(val number: Int, val start: Int, val end: Int, val gen: Int = 0)
 
+    private val latin = Charsets.ISO_8859_1
+    private const val MAX_OBJECTS = 100_000
+    private const val MAX_NESTING = 64
+    private const val MAX_OBJECT_SYNTAX = 4 * 1024 * 1024
+    private const val MAX_NODES_PER_OBJECT = 64_000
+    private const val HEX_DIGITS = "0123456789ABCDEF"
+    private val headerPattern = Regex("%PDF-(1\\.[0-7]|2\\.0)(?:\\r\\n|\\r|\\n)")
+    private val tailPattern = Regex(
+        "(?:\\r\\n|\\r|\\n)startxref[ \\t]*(?:\\r\\n|\\r|\\n)" +
+            "([0-9]{1,15})[ \\t]*(?:\\r\\n|\\r|\\n)%%EOF[\\x00\\t\\n\\f\\r ]*\\z"
+    )
+    private val xrefEntryPattern = Regex("([0-9]{10}) ([0-9]{5}) ([nf])(?: \\n| \\r|\\r\\n)")
+    private val integer = Regex("[+-]?[0-9]+")
+    private val number = Regex("[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)")
+    private val trailerKeys = setOf("Size", "Root", "Info", "ID")
+    private val unsupportedNames = setOf("XRef", "ObjStm", "Crypt", "Sig", "DocTimeStamp", "ByteRange")
+
+    private fun unsupported(): Nothing = throw IOException("Not a PDF ScanWhirl can protect")
+
     /**
-     * Writes [dst] as an AES-256 protected copy of [src]. Output goes to `<dst name>.tmp`, is
-     * fsynced and structurally verified (with decryption) before the rename, so a failure leaves
-     * no partial file behind.
+     * Never modifies [src]. The private temporary output is published only after all objects have
+     * parsed, all strings and streams have been encrypted, and the fsynced bytes have been checked.
      */
     fun encrypt(src: File, dst: File, userPassword: String) {
-        require(src.exists() && src.length() > 0) { "PDF is empty" }
+        require(src.isFile && src.length() > 0) { "PDF is empty" }
         require(userPassword.isNotEmpty()) { "Password must not be empty" }
+        require(src.canonicalFile != dst.canonicalFile) { "Protect needs a separate output file" }
+        // Input, Latin-1 view, and per-stream cipher buffers are all in memory. Output is streamed.
+        val maxInputBytes = minOf(PdfImport.MAX_BYTES, Runtime.getRuntime().maxMemory() / 8)
+        if (src.length() > maxInputBytes) unsupported()
         val raw = src.readBytes()
+        val text = String(raw, latin)
+        val layout = readXref(text)
+        if (layout.entries.size == MAX_OBJECTS) unsupported() // reserve a slot for /Encrypt
         val encryption = PdfAes.create(userPassword)
-        // The same key the reader will derive: fail loudly instead of publishing a file nobody opens.
         val derived = PdfAes.userKey(userPassword, encryption.u, encryption.ue)
         if (derived == null || !derived.contentEquals(encryption.fileKey)) {
             throw IOException("The password could not be verified before writing")
         }
 
-        val protectedBytes = rewrite(raw, encryption)
-
         val parent = dst.absoluteFile.parentFile ?: throw IOException("No folder for ${dst.name}")
         parent.mkdirs()
-        val tmp = File(parent, dst.name + ".tmp")
+        val tmp = File.createTempFile("protect-", ".tmp", parent)
         try {
-            tmp.writeBytes(protectedBytes)
-            Durable.syncFile(tmp)
-            PdfVerifier.verify(tmp, decryption = encryption)
+            val digest = MessageDigest.getInstance("SHA-256")
+            FileOutputStream(tmp).use { file ->
+                val buffered = BufferedOutputStream(DigestOutputStream(file, digest), 64 * 1024)
+                val out = PdfOutput(buffered)
+                rewrite(raw, text, layout, encryption, out)
+                buffered.flush()
+                Durable.syncStream(file, tmp)
+            }
+            if (!Sha256.of(tmp).equals(toHex(digest.digest()), ignoreCase = true)) {
+                throw IOException("Protection could not be verified")
+            }
             if (!tmp.renameTo(dst)) throw IOException("Could not publish ${dst.name}")
             Durable.syncDir(parent)
-        } catch (e: Exception) {
+        } finally {
             tmp.delete()
-            throw e
         }
     }
 
-    /**
-     * Rewrites a plain generator PDF with [encryption] applied to every stream. Object boundaries
-     * come from the source xref table (never from marker scanning inside binary data), so a JPEG
-     * that happens to contain `endstream` cannot confuse it.
-     */
-    internal fun rewrite(raw: ByteArray, encryption: PdfAes.Encryption): ByteArray {
-        val objects = objects(raw)
-        if (objects.isEmpty()) throw IOException("Not a PDF ScanWhirl can protect")
+    private class PdfOutput(private val output: OutputStream) {
+        var position = 0L
+            private set
 
-        val latin = String(raw, Charsets.ISO_8859_1)
-        val firstObject = objects.minOf { it.start }
-        val out = ByteArrayOutputStream(raw.size + objects.size * 96 + 4096)
-        out.write(raw, 0, firstObject)
-
-        val offsets = HashMap<Int, Int>()
-        for (obj in objects.sortedBy { it.start }) {
-            offsets[obj.number] = out.size()
-            val marker = latin.indexOf(">>\nstream\n", obj.start)
-            if (marker < 0 || marker >= obj.end) {
-                // A dictionary or the page tree: copied untouched.
-                out.write(raw, obj.start, obj.end - obj.start)
-                continue
-            }
-            val dictEnd = marker + ">>\nstream\n".length
-            if (dictEnd > obj.end) throw IOException("Object ${obj.number} has a broken dictionary")
-            val dictText = latin.substring(obj.start, dictEnd)
-            val lengthMatch = Regex("/Length\\s+(\\d+)").find(dictText)
-                ?: throw IOException("Stream ${obj.number} has no /Length")
-            val oldLength = lengthMatch.groupValues[1].toIntOrNull()
-                ?: throw IOException("Stream ${obj.number} has an invalid /Length")
-            val bodyEnd = dictEnd + oldLength
-            if (bodyEnd > obj.end) throw IOException("Stream ${obj.number} runs past its object")
-            val plain = raw.copyOfRange(dictEnd, bodyEnd)
-            val encrypted = encryption.encryptStream(plain)
-            val newDict = dictText.substring(0, lengthMatch.range.first) +
-                "/Length ${encrypted.size}" +
-                dictText.substring(lengthMatch.range.last + 1)
-            out.write(newDict.toByteArray(Charsets.ISO_8859_1))
-            out.write(encrypted)
-            out.write(raw, bodyEnd, obj.end - bodyEnd)
+        fun write(bytes: ByteArray) {
+            output.write(bytes)
+            position += bytes.size
         }
 
-        val xrefOffset = out.size()
-        val size = objects.maxOf { it.number } + 1
-        val xref = StringBuilder()
-        xref.append("xref\n0 $size\n0000000000 65535 f \n")
-        for (number in 1 until size) {
-            val offset = offsets[number]
-            if (offset == null) {
-                xref.append("0000000000 00000 f \n")
+        fun write(text: String) = write(text.toByteArray(latin))
+    }
+
+    private fun rewrite(
+        raw: ByteArray, text: String, layout: Layout, encryption: PdfAes.Encryption, out: PdfOutput
+    ) {
+        // Drop comments and never copy arbitrary gaps, unindexed objects or old trailer bytes.
+        if (layout.trailer.values.keys.any { it !in trailerKeys }) unsupported()
+        val root = layout.trailer.values["Root"] as? Ref ?: unsupported()
+        val info = layout.trailer.values["Info"]?.let { it as? Ref ?: unsupported() }
+        val id = layout.trailer.values["ID"]
+        if (id != null && (id !is Arr || id.values.size != 2 || id.values.any { it !is Bytes })) unsupported()
+        layout.checkRef(root)
+        info?.let(layout::checkRef)
+
+        // AESV3 is defined by the Adobe PDF 1.7 extension and by ISO PDF 2.0. Advertise the
+        // standard extension on a 1.x catalog so older readers can recognise the encryption.
+        out.write("%PDF-${layout.outputVersion}\n%âãÏÓ\n")
+        val offsets = LongArray(layout.entries.size)
+        var pageTree: Ref? = null
+        val dictTypes = mutableMapOf<Int, String>()
+        for (obj in layout.objects) {
+            val parsed = readObject(text, obj)
+            checkValue(parsed.value, layout)
+            val dict = parsed.value as? Dict
+            val type = (dict?.values?.get("Type") as? Name)?.decoded
+            if (type != null) dictTypes[obj.number] = type
+            if (obj.number == root.number) {
+                if (type != "Catalog" || parsed.body != null || dict == null) unsupported()
+                pageTree = dict.values["Pages"] as? Ref ?: unsupported()
+                if (layout.outputVersion == "1.7") {
+                    val extensions = when (val current = dict.values["Extensions"]) {
+                        null -> Dict(linkedMapOf())
+                        is Dict -> current
+                        else -> unsupported()
+                    }
+                    val adobe = Dict(linkedMapOf("BaseVersion" to Name("1.7", "1.7"), "ExtensionLevel" to Atom("8")))
+                    val existing = extensions.values["ADBE"]
+                    if (existing == null) extensions.values["ADBE"] = adobe
+                    else {
+                        val fields = (existing as? Dict)?.values ?: unsupported()
+                        if ((fields["BaseVersion"] as? Name)?.decoded != "1.7") unsupported()
+                        val level = (fields["ExtensionLevel"] as? Atom)?.text?.toIntOrNull() ?: unsupported()
+                        if (level < 8) fields["ExtensionLevel"] = Atom("8")
+                    }
+                    dict.values["Extensions"] = extensions
+                }
+            }
+            if (obj.number == info?.number && (dict == null || parsed.body != null)) unsupported()
+            offsets[obj.number] = out.position
+            out.write("${obj.number} ${obj.gen} obj\n")
+            if (parsed.body != null) {
+                val plain = raw.copyOfRange(parsed.body.first, parsed.body.last + 1)
+                val encrypted = protectBytes(plain, encryption)
+                (dict ?: unsupported()).values["Length"] = Atom(encrypted.size.toString())
+                writeValue(out, dict, encryption)
+                out.write("\nstream\n")
+                out.write(encrypted)
+                out.write("\nendstream")
             } else {
-                xref.append(String.format(Locale.ROOT, "%010d 00000 n \n", offset))
+                writeValue(out, parsed.value, encryption)
+            }
+            out.write("\nendobj\n")
+        }
+        val pages = pageTree ?: unsupported()
+        if (dictTypes[pages.number] != "Pages") unsupported()
+
+        // The encryption dictionary and trailer ID are the only unencrypted strings we emit.
+        val encryptNumber = layout.entries.size
+        val encryptOffset = out.position
+        out.write("$encryptNumber 0 obj\n${encryption.encryptDict()}\nendobj\n")
+        val xrefOffset = out.position
+        if (xrefOffset > 9_999_999_999L) unsupported()
+        val size = encryptNumber + 1
+        out.write("xref\n0 $size\n")
+        // Keep generations and reconstruct the free list; no free object's original bytes are copied.
+        val free = layout.entries.indices.filter { !layout.entries[it].inUse } + 0
+        var nextFree = 1
+        for ((index, entry) in layout.entries.withIndex()) {
+            if (entry.inUse) out.write(String.format(Locale.ROOT, "%010d %05d n \n", offsets[index], entry.gen))
+            else out.write(String.format(Locale.ROOT, "%010d %05d f \n", free[nextFree++], entry.gen))
+        }
+        out.write(String.format(Locale.ROOT, "%010d 00000 n \n", encryptOffset))
+        val newId = toHex(encryption.fileId)
+        val infoEntry = info?.let { " /Info ${it.number} ${it.gen} R" }.orEmpty()
+        out.write("trailer\n<< /Size $size /Root ${root.number} ${root.gen} R$infoEntry " +
+            "/Encrypt $encryptNumber 0 R /ID [<$newId> <$newId>] >>\nstartxref\n$xrefOffset\n%%EOF\n")
+    }
+
+    private fun protectBytes(plain: ByteArray, encryption: PdfAes.Encryption): ByteArray {
+        // AESV3 uses exactly the same IV-prefixed CBC/PKCS#7 operation for strings and streams.
+        val cipher = encryption.encryptStream(plain)
+        if (!encryption.decryptStream(cipher).contentEquals(plain)) throw IOException("Protection could not be verified")
+        return cipher
+    }
+
+    private sealed interface Value
+    private class Dict(val values: LinkedHashMap<String, Value>) : Value
+    private class Arr(val values: List<Value>) : Value
+    private class Name(val encoded: String, val decoded: String) : Value
+    private class Atom(val text: String) : Value
+    private class Ref(val number: Int, val gen: Int) : Value
+    private class Bytes(val bytes: ByteArray) : Value
+
+    private fun checkValue(value: Value, layout: Layout) {
+        when (value) {
+            is Ref -> layout.checkRef(value)
+            is Name -> if (value.decoded in unsupportedNames) unsupported()
+            is Arr -> value.values.forEach { checkValue(it, layout) }
+            is Dict -> for ((key, child) in value.values) {
+                if (key in unsupportedNames) unsupported()
+                checkValue(child, layout)
+            }
+            else -> Unit
+        }
+    }
+
+    private fun writeValue(out: PdfOutput, value: Value, encryption: PdfAes.Encryption) {
+        when (value) {
+            is Atom -> out.write(value.text)
+            is Name -> out.write("/${value.encoded}")
+            is Ref -> out.write("${value.number} ${value.gen} R")
+            is Bytes -> out.write("<${toHex(protectBytes(value.bytes, encryption))}>")
+            is Arr -> {
+                out.write("[")
+                value.values.forEachIndexed { index, child ->
+                    if (index > 0) out.write(" ")
+                    writeValue(out, child, encryption)
+                }
+                out.write("]")
+            }
+            is Dict -> {
+                out.write("<<")
+                for ((key, child) in value.values) {
+                    // Re-escape decoded names, including delimiter bytes and '#'.
+                    out.write(" /${escapeName(key)} ")
+                    writeValue(out, child, encryption)
+                }
+                out.write(" >>")
             }
         }
-        out.write(xref.toString().toByteArray(Charsets.ISO_8859_1))
-
-        val root = Regex("/Root (\\d+) 0 R").find(trailerDictionary(latin))
-            ?.groupValues?.get(1)
-            ?: throw IOException("The PDF trailer has no /Root")
-        val id = PdfAes.hex(encryption.fileId)
-        val tail = "trailer\n<< /Size $size /Root $root 0 R /Encrypt ${encryption.encryptDict()} " +
-            "/ID [<$id> <$id>] >>\nstartxref\n$xrefOffset\n%%EOF\n"
-        out.write(tail.toByteArray(Charsets.ISO_8859_1))
-        return out.toByteArray()
     }
 
-    // ------------------------------------------------------------------
-    // Minimal parsing of generator-written PDFs (classic xref table)
-    // ------------------------------------------------------------------
-
-    /** In-use object regions, in file order, read through the xref table. */
-    internal fun objects(raw: ByteArray): List<Obj> {
-        val latin = String(raw, Charsets.ISO_8859_1)
-        val xrefOffset = xrefOffset(latin) ?: return emptyList()
-        val entries = xrefEntries(latin, xrefOffset) ?: return emptyList()
-        val sorted = entries.sortedBy { it.second }
-        return sorted.mapIndexed { i, (number, offset, gen) ->
-            val end = if (i + 1 < sorted.size) sorted[i + 1].second else xrefOffset
-            Obj(number, offset.toInt(), end.toInt(), gen)
-        }.filter { it.start in 0 until it.end && it.end <= raw.size }
+    private fun toHex(bytes: ByteArray): String = buildString(bytes.size * 2) {
+        for (b in bytes) append(HEX_DIGITS[(b.toInt() and 255) shr 4]).append(HEX_DIGITS[b.toInt() and 15])
     }
 
-    /**
-     * Every stream body with its object number (data range inclusive), for verification and tests.
-     * Same xref walk as [objects]; the region is then split on `>>\nstream\n` and `/Length`.
-     */
+    private fun escapeName(decoded: String): String = buildString {
+        for (c in decoded) {
+            if (c in '!'..'~' && !delimiter(c) && c != '#') append(c)
+            else append('#').append(HEX_DIGITS[c.code shr 4]).append(HEX_DIGITS[c.code and 15])
+        }
+    }
+
+    private class Entry(val offset: Long, val gen: Int, val inUse: Boolean)
+    private class Layout(
+        val outputVersion: String, val entries: List<Entry>, val objects: List<Obj>, val trailer: Dict
+    ) {
+        fun checkRef(ref: Ref) {
+            val entry = entries.getOrNull(ref.number) ?: unsupported()
+            if (!entry.inUse || entry.gen != ref.gen) unsupported()
+        }
+    }
+
+    private fun readXref(text: String): Layout {
+        val header = headerPattern.matchAt(text, 0) ?: unsupported()
+        val tailStart = (text.length - 1024).coerceAtLeast(0)
+        val tail = tailPattern.find(text.substring(tailStart)) ?: unsupported()
+        val trailerEnd = tailStart + tail.range.first + when {
+            tail.value.startsWith("\r\n") -> 2
+            else -> 1
+        }
+        val xrefAt = tail.groupValues[1].toLong()
+        if (xrefAt !in header.value.length.toLong() until trailerEnd.toLong()) unsupported()
+        if (!whitespace(text[xrefAt.toInt() - 1])) unsupported()
+        val xref = Cursor(text, xrefAt.toInt(), trailerEnd)
+        xref.expect("xref")
+        xref.skip()
+        val first = xref.word().toIntOrNull()
+        xref.skip()
+        val count = xref.word().toIntOrNull() ?: unsupported()
+        if (first != 0 || count !in 2..MAX_OBJECTS) unsupported()
+        while (xref.peek() == ' ' || xref.peek() == '\t') xref.pos++
+        xref.eol()
+        if (20L * count > trailerEnd - xref.pos) unsupported()
+        val entries = List(count) { index ->
+            val match = xrefEntryPattern.matchAt(text, xref.pos) ?: unsupported()
+            xref.pos += 20
+            val offset = match.groupValues[1].toLong()
+            val gen = match.groupValues[2].toInt()
+            val live = match.groupValues[3] == "n"
+            if (gen > 65535) unsupported()
+            if (live) {
+                if (index == 0 || gen == 65535 || offset !in header.value.length.toLong() until xrefAt) unsupported()
+                if (!whitespace(text[offset.toInt() - 1])) unsupported()
+            } else if (offset >= count || (index == 0 && gen != 65535)) unsupported()
+            Entry(offset, gen, live)
+        }
+        xref.skip()
+        xref.expect("trailer") // another subsection or an xref stream is unsupported
+        xref.skip()
+        val trailer = xref.value() as? Dict ?: unsupported()
+        xref.skip()
+        if (xref.pos != trailerEnd || (trailer.values["Size"] as? Atom)?.text?.toIntOrNull() != count) unsupported()
+
+        val live = entries.indices.filter { entries[it].inUse }.sortedBy { entries[it].offset }
+        if (live.isEmpty()) unsupported()
+        val objects = live.mapIndexed { i, n ->
+            val start = entries[n].offset.toInt()
+            val end = if (i + 1 < live.size) entries[live[i + 1]].offset.toInt() else xrefAt.toInt()
+            if (start >= end) unsupported()
+            Obj(n, start, end, entries[n].gen)
+        }
+        // Nothing but whitespace and comments is allowed outside indexed objects.
+        val prefix = Cursor(text, header.value.length, objects.first().start)
+        prefix.skip()
+        if (prefix.pos != objects.first().start) unsupported()
+        return Layout(if (header.groupValues[1] == "2.0") "2.0" else "1.7", entries, objects, trailer)
+    }
+
+    private class Parsed(val value: Value, val body: IntRange?)
+
+    private fun readObject(text: String, obj: Obj): Parsed {
+        val c = Cursor(text, obj.start, obj.end)
+        c.expectHeader(obj)
+        c.skip()
+        val value = c.value()
+        c.skip()
+        val stream = if (c.hasToken("stream")) {
+            val dict = value as? Dict ?: unsupported()
+            if (dict.values.keys.any { it == "F" || it == "FFilter" || it == "FDecodeParms" }) unsupported()
+            val length = (dict.values["Length"] as? Atom)?.text?.toLongOrNull() ?: unsupported()
+            c.expect("stream")
+            c.eol(stream = true)
+            val start = c.pos
+            if (length !in 0L..(obj.end - start).toLong()) unsupported()
+            c.pos += length.toInt()
+            val body = start until c.pos
+            if (c.peek() == '\r' || c.peek() == '\n') c.eol()
+            // The legacy ScanWhirl writer includes its last LF inside /Length for content streams.
+            else if (c.pos == start || text[c.pos - 1] != '\n') unsupported()
+            c.expect("endstream")
+            c.skip()
+            body
+        } else null
+        c.expect("endobj")
+        c.skip()
+        if (c.pos != obj.end) unsupported()
+        return Parsed(value, stream)
+    }
+
+    private fun whitespace(c: Char) = c == '\u0000' || c == '\t' || c == '\n' || c == '\u000c' || c == '\r' || c == ' '
+    private fun delimiter(c: Char) = c in "()<>[]{}/%"
+    private fun boundary(c: Char) = whitespace(c) || delimiter(c)
+    private fun hex(c: Char) = when (c) {
+        in '0'..'9' -> c - '0'
+        in 'a'..'f' -> c - 'a' + 10
+        in 'A'..'F' -> c - 'A' + 10
+        else -> unsupported()
+    }
+
+    /** Token scanner with PDF's byte grammar. Strings are decoded to bytes, not Unicode. */
+    private class Cursor(private val text: String, var pos: Int, private val end: Int) {
+        private var syntaxStart = pos
+        private var nodes = 0
+
+        fun peek(): Char? = if (pos < end) text[pos] else null
+        private fun starts(s: String) = end - pos >= s.length && text.startsWith(s, pos)
+        fun skip() {
+            while (pos < end) {
+                when {
+                    whitespace(text[pos]) -> pos++
+                    text[pos] == '%' -> {
+                        while (pos < end && text[pos] != '\r' && text[pos] != '\n') pos++
+                        if (pos == end) unsupported()
+                    }
+                    else -> return
+                }
+            }
+        }
+
+        fun hasToken(s: String): Boolean = starts(s) &&
+            (pos + s.length == end || boundary(text[pos + s.length]))
+
+        fun expect(s: String) {
+            if (!hasToken(s)) unsupported()
+            pos += s.length
+        }
+
+        fun expectHeader(obj: Obj) {
+            if (word().toIntOrNull() != obj.number) unsupported()
+            skip()
+            if (word().toIntOrNull() != obj.gen) unsupported()
+            skip()
+            expect("obj")
+        }
+
+        fun eol(stream: Boolean = false) {
+            if (starts("\r\n")) pos += 2
+            else if (peek() == '\n' || (!stream && peek() == '\r')) pos++
+            else unsupported()
+        }
+
+        fun word(): String {
+            val start = pos
+            while (pos < end && !boundary(text[pos])) {
+                if (pos - start >= 128) unsupported()
+                pos++
+            }
+            if (pos == start) unsupported()
+            return text.substring(start, pos)
+        }
+
+        private fun readName(): Name {
+            if (peek() != '/') unsupported()
+            val start = ++pos
+            val decoded = StringBuilder()
+            while (pos < end && !boundary(text[pos])) {
+                if (pos - start >= 4096) unsupported()
+                val c = text[pos++]
+                if (c == '#') {
+                    if (end - pos < 2) unsupported()
+                    val b = hex(text[pos++]) * 16 + hex(text[pos++])
+                    if (b == 0) unsupported()
+                    decoded.append(b.toChar())
+                } else decoded.append(c)
+            }
+            return Name(text.substring(start, pos), decoded.toString())
+        }
+
+        fun value(depth: Int = 0): Value {
+            if (depth == 0) syntaxStart = pos
+            if (++nodes > MAX_NODES_PER_OBJECT || depth > MAX_NESTING || pos - syntaxStart > MAX_OBJECT_SYNTAX) {
+                unsupported()
+            }
+            return when {
+                starts("<<") -> {
+                    pos += 2
+                    val fields = linkedMapOf<String, Value>()
+                    while (true) {
+                        skip()
+                        if (starts(">>")) {
+                            pos += 2
+                            break
+                        }
+                        val key = readName().decoded
+                        skip()
+                        if (fields.put(key, value(depth + 1)) != null) unsupported()
+                    }
+                    Dict(fields)
+                }
+                peek() == '[' -> {
+                    pos++
+                    val nodes = mutableListOf<Value>()
+                    while (true) {
+                        skip()
+                        if (peek() == ']') {
+                            pos++
+                            break
+                        }
+                        nodes += value(depth + 1)
+                    }
+                    Arr(nodes)
+                }
+                peek() == '/' -> readName()
+                peek() == '(' -> Bytes(literal())
+                peek() == '<' -> Bytes(hexString())
+                else -> atomOrRef()
+            }
+        }
+
+        private fun atomOrRef(): Value {
+            val word = word()
+            if (word == "true" || word == "false" || word == "null") return Atom(word)
+            if (!number.matches(word)) unsupported()
+            if (!integer.matches(word)) return Atom(word)
+            val afterWord = pos
+            skip()
+            if (peek()?.let { it in '0'..'9' || it == '+' || it == '-' } == true) {
+                val second = word()
+                skip()
+                if (hasToken("R")) {
+                    if (!integer.matches(second)) unsupported()
+                    pos++
+                    return Ref(word.toIntOrNull() ?: unsupported(), second.toIntOrNull() ?: unsupported())
+                }
+            }
+            pos = afterWord
+            return Atom(word)
+        }
+
+        private fun readByte(): Char {
+            if (pos >= end || pos - syntaxStart > MAX_OBJECT_SYNTAX) unsupported()
+            return text[pos++]
+        }
+
+        private fun hexString(): ByteArray {
+            pos++
+            val bytes = ByteArrayOutputStream()
+            var high = -1
+            while (true) {
+                val c = readByte()
+                if (c == '>') {
+                    if (high >= 0) bytes.write(high shl 4)
+                    return bytes.toByteArray()
+                }
+                if (whitespace(c)) continue
+                val nibble = hex(c)
+                if (high < 0) high = nibble
+                else {
+                    bytes.write((high shl 4) or nibble)
+                    high = -1
+                }
+            }
+        }
+
+        private fun literal(): ByteArray {
+            pos++
+            val bytes = ByteArrayOutputStream()
+            var parentheses = 1
+            while (true) {
+                when (val c = readByte()) {
+                    '(' -> { parentheses++; bytes.write(c.code) }
+                    ')' -> if (--parentheses == 0) return bytes.toByteArray() else bytes.write(c.code)
+                    '\r', '\n' -> {
+                        if (c == '\r' && peek() == '\n') pos++
+                        bytes.write('\n'.code)
+                    }
+                    '\\' -> when (val next = readByte()) {
+                        '\r' -> if (peek() == '\n') pos++
+                        '\n' -> Unit
+                        'n' -> bytes.write('\n'.code)
+                        'r' -> bytes.write('\r'.code)
+                        't' -> bytes.write('\t'.code)
+                        'b' -> bytes.write('\b'.code)
+                        'f' -> bytes.write(12)
+                        in '0'..'7' -> {
+                            var octal = next - '0'
+                            repeat(2) {
+                                val digit = peek()
+                                if (digit != null && digit in '0'..'7') {
+                                    octal = octal * 8 + (digit - '0')
+                                    pos++
+                                }
+                            }
+                            bytes.write(octal)
+                        }
+                        else -> bytes.write(next.code) // unrecognised escape: ignore the slash
+                    }
+                    else -> bytes.write(c.code)
+                }
+            }
+        }
+    }
+
+    /** Classic xref regions shared with the legacy decryptor; bad entries are never dropped. */
+    internal fun objects(raw: ByteArray): List<Obj> = try {
+        val text = String(raw, latin)
+        readXref(text).objects.onEach {
+            Cursor(text, it.start, it.end).expectHeader(it)
+        }
+    } catch (_: IOException) {
+        emptyList()
+    }
+
     internal fun objectStreamBodies(raw: ByteArray): List<Pair<Int, IntRange>> {
-        val latin = String(raw, Charsets.ISO_8859_1)
-        val ranges = mutableListOf<Pair<Int, IntRange>>()
-        for (obj in objects(raw)) {
-            val marker = latin.indexOf(">>\nstream\n", obj.start)
-            if (marker < 0 || marker >= obj.end) continue
-            val dictEnd = marker + ">>\nstream\n".length
-            val dictText = latin.substring(obj.start, dictEnd)
-            val length = Regex("/Length\\s+(\\d+)").find(dictText)
-                ?.groupValues?.get(1)?.toIntOrNull() ?: continue
-            if (dictEnd + length > obj.end) continue
-            ranges += obj.number to (dictEnd until dictEnd + length)
+        val text = String(raw, latin)
+        return objects(raw).mapNotNull { obj ->
+            // Legacy generated encrypted PDFs omit the LF after encrypted content. Keep the
+            // existing verifier helper compatible with those fixtures only; Protect never does.
+            val marker = "\nstream\n"
+            val at = text.indexOf(marker, obj.start)
+            if (at !in obj.start until obj.end) return@mapNotNull null
+            val from = at + marker.length
+            val length = Regex("/Length ([0-9]+)").find(text.substring(obj.start, at))
+                ?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+            if (from > obj.end || length > obj.end - from) return@mapNotNull null
+            obj.number to (from until from + length)
         }
-        return ranges
-    }
-
-    private fun xrefOffset(latin: String): Int? {
-        val marker = "startxref\n"
-        val at = latin.lastIndexOf(marker)
-        if (at < 0) return null
-        var end = at + marker.length
-        while (end < latin.length && latin[end].isDigit()) end++
-        return latin.substring(at + marker.length, end).toIntOrNull()
-    }
-
-    /** `(object number, offset, generation)` for every in-use entry; null when the table is not the writer's shape. */
-    private fun xrefEntries(latin: String, xrefOffset: Int): List<Triple<Int, Long, Int>>? {
-        if (xrefOffset <= 0 || xrefOffset >= latin.length) return null
-        var p = latin.indexOf('\n', xrefOffset) + 1 // past "xref\n"
-        val countLineEnd = latin.indexOf('\n', p)
-        if (p <= 0 || countLineEnd < 0) return null
-        val count = latin.substring(p, countLineEnd).trim().split(' ').lastOrNull()?.toIntOrNull()
-            ?: return null
-        p = countLineEnd + 1
-        val out = mutableListOf<Triple<Int, Long, Int>>()
-        for (i in 0 until count) {
-            if (p + 20 > latin.length) return null
-            val entry = latin.substring(p, p + 20)
-            val inUse = entry[17] == 'n'
-            if (i > 0 && inUse) {
-                val offset = entry.substring(0, 10).toLongOrNull() ?: return null
-                val gen = entry.substring(11, 16).toIntOrNull() ?: return null
-                out += Triple(i, offset, gen)
-            }
-            p += 20
-        }
-        return out
-    }
-
-    /** The source trailer dictionary, between `trailer` and `startxref`. */
-    private fun trailerDictionary(latin: String): String {
-        val at = latin.lastIndexOf("\ntrailer\n")
-        if (at < 0) return ""
-        val from = at + "\ntrailer\n".length
-        val to = latin.indexOf("\nstartxref\n", from)
-        return if (to < 0) latin.substring(from) else latin.substring(from, to)
     }
 }

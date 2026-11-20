@@ -50,10 +50,14 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
 
 class ScanRepository(private val context: Context) {
 
@@ -2201,7 +2205,7 @@ class ScanRepository(private val context: Context) {
                 OpFaults.at("$op:encrypted")
                 val lock = File(dir, LOCK_FILE)
                 val previousLock = if (lock.exists()) lock.readText() else null
-                Durable.atomicWriteText(lock, Prefs.sha256("pdf_lock:$password"))
+                Durable.atomicWriteText(lock, PdfLockVerifier.create(password))
                 OpFaults.at("$op:lock_written")
                 if (!enc.renameTo(File(dir, PdfProtection.PDF_FILE))) {
                     // Put the previous lock record back (protect: none, so the file is removed).
@@ -2255,9 +2259,9 @@ class ScanRepository(private val context: Context) {
     /**
      * Changes the password of a locked document after checking [current]. Same build-and-swap as
      * [protectPdf] (fault points `chpw:encrypted`, `chpw:lock_written`); `locked.meta` is overwritten
-     * with the new hash.
+     * with the new salted verifier.
      *
-     * Known limitation: a crash between the lock write and the swap leaves the NEW hash beside the
+     * Known limitation: a crash between the lock write and the swap leaves the NEW verifier beside the
      * old-password PDF. I3 still holds (both say locked), but only the old password opens the PDF.
      */
     suspend fun changePdfPassword(id: String, current: String, new: String): ScanDocument =
@@ -2402,12 +2406,80 @@ class ScanRepository(private val context: Context) {
         return rolledForward + swept
     }
 
-    /** Checks a user-entered password against the stored lock hash. */
+    /** Verifies a lock, upgrading an old verifier only after a successful password check. */
     fun verifyPdfPassword(id: String, password: String): Boolean {
-        val lockFile = File(File(docsDir, id), LOCK_FILE)
-        if (!lockFile.exists()) return true
-        val stored = lockFile.readText().trim()
-        return stored == Prefs.sha256("pdf_lock:$password")
+        val dir = File(docsDir, id)
+        val lockFile = File(dir, LOCK_FILE)
+        if (!lockFile.exists()) return PdfProtection.state(dir) == PdfProtection.State.NONE
+        val stored = readPdfLock(lockFile) ?: return false
+        if (!PdfLockVerifier.isLegacy(stored)) return PdfLockVerifier.verify(stored, password)
+        if (!MessageDigest.isEqual(stored.toByteArray(), Prefs.sha256("pdf_lock:$password").toByteArray())) {
+            return false
+        }
+        // A stale label on a plaintext file is upgraded by Repair or deleted by Remove lock.
+        // Do not mutate it just because a check succeeded (repair itself can still refuse).
+        if (PdfProtection.isEncodable(password) && PdfProtection.state(dir) == PdfProtection.State.LOCKED) {
+            try {
+                val upgraded = PdfLockVerifier.create(password)
+                synchronized(PDF_LOCK) {
+                    // A concurrent password change or unlock wins; never reintroduce an old lock.
+                    if (readPdfLock(lockFile) != stored) return false
+                    Durable.atomicWriteText(lockFile, upgraded)
+                    Durable.syncDir(dir)
+                }
+            } catch (_: IOException) {
+                // Full/unwritable storage must not prevent an existing lock from being opened.
+                // The old record stays valid and the next successful check retries migration.
+            }
+        }
+        return true
+    }
+
+    private fun readPdfLock(file: File): String? =
+        if (file.length() !in 1L..256L) null else runCatching { file.readText().trim() }.getOrNull()
+
+    private object PdfLockVerifier {
+        // A platform-independent record, including backups restored to API 24/25. The JCA
+        // SHA-256 variant is unavailable there. HMAC-SHA1 is not affected by SHA-1 collisions.
+        private const val FORMAT = "pbkdf2-sha1-v1"
+        private const val ITERATIONS = 1_300_000
+        private const val SALT_BYTES = 16
+        private const val KEY_BYTES = 20
+        private val random = SecureRandom()
+        private val legacy = Regex("[0-9a-f]{64}")
+
+        fun isLegacy(stored: String) = legacy.matches(stored)
+
+        fun create(password: String): String {
+            val salt = ByteArray(SALT_BYTES).also(random::nextBytes)
+            return "$FORMAT:${encode(salt)}:${encode(derive(password, salt))}"
+        }
+
+        fun verify(stored: String, password: String): Boolean {
+            if (!PdfProtection.isEncodable(password)) return false
+            val parts = stored.split(':', limit = 4)
+            if (parts.size != 3 || parts[0] != FORMAT) return false
+            val salt = decode(parts[1], SALT_BYTES) ?: return false
+            val expected = decode(parts[2], KEY_BYTES) ?: return false
+            return MessageDigest.isEqual(expected, derive(password, salt))
+        }
+
+        private fun derive(password: String, salt: ByteArray): ByteArray {
+            // ASCII Base64 gives the same UTF-8 password semantics across JCA providers.
+            val spec = PBEKeySpec(encode(password.toByteArray(Charsets.UTF_8)).toCharArray(), salt, ITERATIONS, KEY_BYTES * 8)
+            return try {
+                SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1").generateSecret(spec).encoded
+            } finally {
+                spec.clearPassword()
+            }
+        }
+
+        private fun encode(bytes: ByteArray) =
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+
+        private fun decode(value: String, size: Int): ByteArray? =
+            runCatching { android.util.Base64.decode(value, android.util.Base64.NO_WRAP) }.getOrNull()
+                ?.takeIf { it.size == size && encode(it) == value }
     }
 
     // ------------------------------------------------------------------
