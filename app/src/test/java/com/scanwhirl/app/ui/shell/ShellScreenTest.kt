@@ -141,7 +141,9 @@ class ShellScreenTest {
             idle()
             val dialog = ShadowDialog.getLatestDialog()
             assertNotNull("a tile must never be a dead end", dialog)
-            val title = dialog.findViewById<TextView>(R.id.swSheetTitle)
+            // UI-W6: PDF/A opens the shared document picker, which has its own title id.
+            val title = dialog.findViewById<TextView>(R.id.docPickerTitle)
+                ?: dialog.findViewById<TextView>(R.id.swSheetTitle)
             assertEquals(activity.getString(R.string.pdfa_pick), title.text.toString())
             dialog.dismiss()
         }

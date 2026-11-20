@@ -2,13 +2,9 @@ package com.scanwhirl.app.tools
 
 import android.content.Context
 import android.net.Uri
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.SwDialog
-import com.scanwhirl.app.ui.showSw
 import java.util.Locale
 
 /**
@@ -45,17 +41,24 @@ internal object FlowUtil {
         docs: List<ScanDocument>,
         onPicked: (ScanDocument) -> Unit
     ) {
-        if (docs.isEmpty()) {
-            Toast.makeText(activity, R.string.empty_title, Toast.LENGTH_SHORT).show()
-            return
-        }
-        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
-            .setTitle(titleRes)
-            .setOptions(docs.map { it.name }) { which, _ ->
-                onPicked(docs[which])
-            }
-            .setSecondary(android.R.string.cancel)
-            .build()
-            .show()
+        // UI-W6: every one-document chooser uses the shared searchable picker. Its rows carry a
+        // real first-page thumbnail, name, pages · size · date and the category; a protected
+        // source shows a lock and no metadata. The empty library is an explicit Scan route
+        // instead of a toast.
+        com.scanwhirl.app.ui.kit.DocumentPicker.show(
+            activity = activity,
+            title = activity.getString(titleRes),
+            docs = docs,
+            onEmptyScan = { openHome(activity) },
+            onPick = onPicked
+        )
+    }
+
+    /** The honest route out of an empty picker: Home, where Scan and Import live. */
+    fun openHome(activity: AppCompatActivity) {
+        activity.startActivity(
+            com.scanwhirl.app.ui.shell.ShellActivity.intent(activity)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        )
     }
 }
