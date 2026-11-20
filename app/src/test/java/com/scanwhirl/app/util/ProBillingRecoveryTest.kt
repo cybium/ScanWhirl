@@ -357,6 +357,8 @@ class ProBillingRecoveryTest {
      */
     @Test
     fun `already owned with a pending purchase stays locked and unacknowledged`() {
+        // PRO_PLAN.md: the successful confirming query must revoke even an earlier grant.
+        ProGate.setPro(app, true)
         gateway.launchResult = ProBilling.LaunchResult.ALREADY_OWNED
         gateway.purchases = listOf(
             ProBilling.Owned(

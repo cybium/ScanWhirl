@@ -1,8 +1,66 @@
+import java.security.KeyFactory
+import java.security.KeyPairGenerator
+import java.security.interfaces.RSAPublicKey
+import java.security.spec.X509EncodedKeySpec
+import java.util.Base64
 import java.util.Properties
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+fun requirePlayLicensingKey(encoded: String): String {
+    val key = runCatching {
+        val bytes = Base64.getDecoder().decode(encoded)
+        val parsed = KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(bytes))
+        (parsed as? RSAPublicKey)?.takeIf {
+            it.modulus.bitLength() >= 2048 && it.encoded.contentEquals(bytes)
+        }
+    }.getOrNull()
+    if (key == null) {
+        throw GradleException(
+            "Release requires ScanWhirl's Base64 RSA licensing public key in app/play_license_key.txt."
+        )
+    }
+    return Base64.getEncoder().encodeToString(key.encoded)
+}
+
+val configuredPlayLicensingKey = providers.fileContents(layout.projectDirectory.file("play_license_key.txt"))
+    .asText.getOrElse("").trim()
+// Debug can run entirely offline. Only encode parsed key material into Java source.
+val playLicensingKey = runCatching { requirePlayLicensingKey(configuredPlayLicensingKey) }.getOrDefault("")
+
+val verifyReleasePlayLicensingKey by tasks.registering {
+    inputs.property("playLicenseKey", configuredPlayLicensingKey)
+    doLast { requirePlayLicensingKey(configuredPlayLicensingKey) }
+}
+
+// Exercise the actual Gradle check without trying to sign a release or calling Play.
+val testPlayLicensingKeyValidation by tasks.registering {
+    inputs.property("playLicenseKey", configuredPlayLicensingKey)
+    doLast {
+        for (bad in listOf("", "PASTE_PLAY_LICENSING_PUBLIC_KEY_HERE", "AAAA", "invalid!")) {
+            check(runCatching { requirePlayLicensingKey(bad) }.exceptionOrNull() is GradleException)
+        }
+        val generated = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+        val publicKey = Base64.getEncoder().encodeToString(generated.public.encoded)
+        check(requirePlayLicensingKey(publicKey) == publicKey)
+
+        val committed = requirePlayLicensingKey(configuredPlayLicensingKey)
+        val committedKey = KeyFactory.getInstance("RSA")
+            .generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(committed))) as RSAPublicKey
+        check(committedKey.modulus.bitLength() == 2048) {
+            "The committed Play licensing public key must be RSA 2048."
+        }
+    }
+}
+
+tasks.configureEach {
+    when (name) {
+        "preReleaseBuild", "generateReleaseBuildConfig" -> dependsOn(verifyReleasePlayLicensingKey)
+        "testDebugUnitTest" -> dependsOn(testPlayLicensingKeyValidation)
+    }
 }
 
 android {
@@ -25,6 +83,7 @@ android {
         targetSdk = 36
         versionCode = 26111901
         versionName = "1.2.3"
+        buildConfigField("String", "PLAY_LICENSE_KEY_B64", "\"$playLicensingKey\"")
 
         // Pro features are unlocked in test builds so they can be tried free.
         buildConfigField(

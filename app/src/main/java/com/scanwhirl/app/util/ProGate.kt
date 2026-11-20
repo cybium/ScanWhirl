@@ -3,10 +3,8 @@ package com.scanwhirl.app.util
 import android.content.Context
 
 /**
- * Unlock flag for paid extras (one-time purchase; wired to Play Billing when
- * the extras ship). The rest of the app stays free.
- *
- * Remaining legitimate Pro features: encrypted Private (WP-14), Fit (WP-17).
+ * Device-local cache for paid extras. Existing installs keep this grant offline until Play can
+ * resolve ownership. Full Backup must not export or restore either key here.
  */
 object ProGate {
     private const val PREFS = "scanwhirl_prefs"
@@ -49,8 +47,12 @@ object ProGate {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return resolveProState(
             testBuild = testBuild,
-            override = prefs.getInt(KEY_TEST_OVERRIDE, 0),
-            purchased = prefs.getBoolean(KEY, false)
+            override = if (testBuild) readOverride(context) else 0,
+            purchased = try {
+                prefs.getBoolean(KEY, false)
+            } catch (_: ClassCastException) {
+                false // Older app versions could restore arbitrary preference types.
+            }
         )
     }
 
@@ -71,11 +73,16 @@ object ProGate {
     /** Test-build only: true when QA forced Free, false when forced Pro, null for default. */
     fun testOverride(context: Context): Boolean? {
         if (!com.scanwhirl.app.BuildConfig.TEST_BUILD) return null
-        return when (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_TEST_OVERRIDE, 0)) {
+        return when (readOverride(context)) {
             1 -> false
             2 -> true
             else -> null
         }
+    }
+
+    private fun readOverride(context: Context): Int = try {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_TEST_OVERRIDE, 0)
+    } catch (_: ClassCastException) {
+        0
     }
 }

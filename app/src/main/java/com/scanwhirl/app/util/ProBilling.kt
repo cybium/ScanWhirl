@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Base64
 import com.android.billingclient.api.AcknowledgePurchaseParams
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
@@ -15,7 +16,15 @@ import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
+import com.scanwhirl.app.BuildConfig
 import com.scanwhirl.app.R
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import java.security.GeneralSecurityException
+import java.security.KeyFactory
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
 
 /**
  * The one place Play Billing lives: one-time in-app product [PRODUCT_ID], the localized price,
@@ -126,7 +135,7 @@ object ProBilling {
             return LaunchResult.STARTED
         }
 
-        /** `null` = the query failed; an empty list = a real answer with nothing owned. */
+        /** `null` = failure or unverifiable answer; an empty list = verified absence. */
         fun queryPurchases(onResult: (List<Owned>?) -> Unit)
         fun acknowledge(purchase: Owned, onDone: (Boolean) -> Unit)
         fun close()
@@ -249,7 +258,7 @@ object ProBilling {
     private var priceRequest = 0
 
     /**
-     * Entitlement generation: bumped every time this process records a purchase. A negative
+     * Entitlement generation: bumped when a verified purchase arrives or is recorded. A negative
      * ownership snapshot that *started* before the bump is stale and must never revoke Pro.
      */
     @Volatile
@@ -619,9 +628,8 @@ object ProBilling {
      * it and only grant for a PURCHASED purchase). This confirms it and ends the Buy on every
      * path (R4):
      * - PURCHASED row: unlock and acknowledge (once) through the normal purchase handling;
-     * - PENDING only: never unlock or acknowledge, show the pending copy, stay due;
-     * - failed or empty answer: never unlock, show the connection copy, stay due so the next
-     *   foreground retries. A known paid entitlement is never revoked here.
+     * - PENDING only: reconcile entitlement, show the pending copy, stay due;
+     * - failed or empty answer: reconcile if authoritative; show the connection copy and stay due.
      */
     private fun reconcileOwned(app: Context, client: Gateway) {
         val startGeneration = generation
@@ -629,17 +637,14 @@ object ProBilling {
             onMain {
                 try {
                     val mine = owned?.filter { it.productId == PRODUCT_ID }
-                    val bought = mine?.filter { it.state == PurchaseState.PURCHASED }
-                    if (bought.isNullOrEmpty()) {
-                        // No entitlement can be granted from this answer; ask again later.
+                    val controller = buyController(app)
+                    val purchased = mine.orEmpty().any { it.state == PurchaseState.PURCHASED }
+                    val pending = mine.orEmpty().any { it.state == PurchaseState.PENDING }
+                    val showResult = purchased || (pending && startGeneration == generation)
+                    controller.applyOwned(mine, startGeneration, silent = !showResult)
+                    if (!showResult) {
                         reconcileDue = true
-                        if (mine != null && mine.any { it.state == PurchaseState.PENDING }) {
-                            buyController(app).handle(Event.Pending)
-                        } else {
-                            endBuy(State.Failed(app.getString(R.string.pro_error_connection)))
-                        }
-                    } else {
-                        buyController(app).applyOwned(mine, startGeneration, silent = false)
+                        endBuy(State.Failed(app.getString(R.string.pro_error_connection)))
                     }
                 } catch (t: Throwable) {
                     endBuy(State.Failed(app.getString(R.string.pro_error_play)))
@@ -887,8 +892,8 @@ object ProBilling {
 
         /**
          * Applies a restore / start-up query. `null` is a failed query: change nothing (a paying
-         * user offline or with Play busy must keep Pro). Only an OK answer that does not contain
-         * the product locks Pro, and only in a release build.
+         * user offline or with Play busy must keep Pro). A current, authoritative answer without
+         * a PURCHASED Pro row revokes the cache, including a pending-only snapshot (PRO_PLAN.md).
          *
          * [queryGeneration] is the entitlement generation captured when the query *started*. A
          * negative answer from before this process recorded a purchase is stale: the grant is
@@ -903,6 +908,8 @@ object ProBilling {
             val mine = purchases.filter { it.productId == PRODUCT_ID }
             val bought = mine.filter { it.state == PurchaseState.PURCHASED }
             if (bought.isEmpty()) {
+                if (queryGeneration != generation) return
+                record(false)
                 val pending = mine.any { it.state == PurchaseState.PENDING }
                 if (pending) {
                     // The payment can complete while this process is disconnected; keep asking
@@ -911,11 +918,10 @@ object ProBilling {
                     if (!silent) onState(State.Pending)
                     return
                 }
-                if (queryGeneration != generation) return
-                if (!testBuild) record(false)
                 if (!silent) onState(State.None)
                 return
             }
+            generation++
             acknowledgeThenUnlock(bought, silent)
         }
 
@@ -924,6 +930,9 @@ object ProBilling {
             if (purchase.productId != PRODUCT_ID) return
             when (purchase.state) {
                 PurchaseState.PURCHASED -> {
+                    // Even while we're waiting for acknowledgement, a query from before this
+                    // update must not revoke the newer purchase or invalidate its callback.
+                    generation++
                     if (purchase.acknowledged || AckLedger.isDone(purchase.token)) {
                         unlock()
                     } else {
@@ -1054,7 +1063,20 @@ object ProBilling {
  * The real client. Every call is wrapped by [ProBilling], so a phone without Play Store simply
  * reports unavailable instead of crashing.
  */
-private class PlayBilling(private val context: Context) : ProBilling.Gateway {
+internal class PlayBilling(
+    private val context: Context,
+    licenseKey: String = BuildConfig.PLAY_LICENSE_KEY_B64
+) : ProBilling.Gateway {
+
+    private val publicKey = try {
+        if (licenseKey.isBlank()) null else KeyFactory.getInstance("RSA").generatePublic(
+            X509EncodedKeySpec(Base64.decode(licenseKey, Base64.DEFAULT))
+        )
+    } catch (_: GeneralSecurityException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
 
     private var client: BillingClient? = null
     private var listener: ((ProBilling.Event) -> Unit)? = null
@@ -1077,12 +1099,7 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
         .setListener { result, purchases ->
             val code = result.responseCode
             when (code) {
-                BillingClient.BillingResponseCode.OK -> {
-                    val list = purchases.orEmpty()
-                    // An OK update with nothing usable must not leave Buy latched.
-                    if (list.isEmpty()) listener?.invoke(ProBilling.Event.Cancelled)
-                    else list.forEach { dispatch(it) }
-                }
+                BillingClient.BillingResponseCode.OK -> onPurchaseUpdate(purchases.orEmpty())
                 BillingClient.BillingResponseCode.USER_CANCELED -> {
                     lastError = null
                     listener?.invoke(ProBilling.Event.Cancelled)
@@ -1105,25 +1122,78 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
         .build()
         .also { client = it }
 
-    private fun stateOf(purchase: Purchase): ProBilling.PurchaseState = when (purchase.purchaseState) {
-        Purchase.PurchaseState.PURCHASED -> ProBilling.PurchaseState.PURCHASED
-        Purchase.PurchaseState.PENDING -> ProBilling.PurchaseState.PENDING
-        else -> ProBilling.PurchaseState.UNSPECIFIED
+    /** Play signs the raw JSON bytes. Do not interpret any fields until that signature verifies. */
+    private fun owned(purchase: Purchase): ProBilling.Owned? {
+        val key = publicKey ?: return null
+        val body = purchase.originalJson
+        val signature = purchase.signature
+        if (signature.isBlank()) return null
+        val valid = try {
+            // SHA1withRSA is the Play purchase signature format, not a new signing scheme.
+            Signature.getInstance("SHA1withRSA").run {
+                initVerify(key)
+                update(body.toByteArray(Charsets.UTF_8))
+                verify(Base64.decode(signature, Base64.DEFAULT))
+            }
+        } catch (_: GeneralSecurityException) {
+            false
+        } catch (_: IllegalArgumentException) {
+            false
+        }
+        if (!valid) return null
+
+        val json = try {
+            JSONObject(body)
+        } catch (_: JSONException) {
+            return null
+        }
+        if (json.opt("packageName") != context.packageName) return null
+        if (!isProProduct(json)) return null
+        val token = (json.opt(if (json.has("token")) "token" else "purchaseToken") as? String)
+            ?.takeIf(String::isNotBlank) ?: return null
+        if (json.has("purchaseToken") && json.opt("purchaseToken") != token) return null
+        // These are on-wire values, not the BillingClient PurchaseState constants.
+        // Purchase.getPurchaseState() treats unknown values as PURCHASED; do not do that.
+        val state = when (json.opt("purchaseState")) {
+            0 -> ProBilling.PurchaseState.PURCHASED
+            4 -> ProBilling.PurchaseState.PENDING
+            else -> return null
+        }
+        val acknowledged = if (json.has("acknowledged")) {
+            json.opt("acknowledged") as? Boolean ?: return null
+        } else false
+        return ProBilling.Owned(ProBilling.PRODUCT_ID, acknowledged, token, state)
     }
 
-    private fun owned(purchase: Purchase) = ProBilling.Owned(
-        productId = purchase.products.firstOrNull().orEmpty(),
-        acknowledged = purchase.isAcknowledged,
-        token = purchase.purchaseToken,
-        state = stateOf(purchase)
-    )
+    private fun isProProduct(json: JSONObject): Boolean {
+        if (json.has("productId") && json.opt("productId") != ProBilling.PRODUCT_ID) return false
+        if (json.has("productIds")) {
+            // ScanWhirl offers only one product; reject ambiguous or conflicting identifiers.
+            val ids = json.opt("productIds") as? JSONArray ?: return false
+            return ids.length() == 1 && ids.opt(0) == ProBilling.PRODUCT_ID
+        }
+        return json.has("productId")
+    }
 
-    private fun dispatch(purchase: Purchase) {
-        val owned = owned(purchase)
-        when (owned.state) {
-            ProBilling.PurchaseState.PURCHASED -> listener?.invoke(ProBilling.Event.Purchased(owned))
-            ProBilling.PurchaseState.PENDING -> listener?.invoke(ProBilling.Event.Pending)
-            else -> listener?.invoke(ProBilling.Event.Cancelled)
+    internal fun onPurchaseUpdate(purchases: List<Purchase>) {
+        val verified = purchases.mapNotNull(::owned)
+        val paid = verified.filter { it.state == ProBilling.PurchaseState.PURCHASED }
+        when {
+            paid.isNotEmpty() -> paid.forEach { listener?.invoke(ProBilling.Event.Purchased(it)) }
+            verified.any { it.state == ProBilling.PurchaseState.PENDING } ->
+                listener?.invoke(ProBilling.Event.Pending)
+            purchases.isEmpty() -> listener?.invoke(ProBilling.Event.Cancelled)
+            else -> listener?.invoke(ProBilling.Event.Failed(context.getString(R.string.pro_error_purchase)))
+        }
+    }
+
+    internal fun verifiedSnapshot(purchases: List<Purchase>): List<ProBilling.Owned>? {
+        if (publicKey == null) return null
+        val verified = purchases.mapNotNull(::owned)
+        // Rejected rows might hide ownership. Keep a verified grant if present, but never
+        // interpret a partially unverifiable answer as a refund or account change.
+        return verified.takeIf {
+            it.size == purchases.size || it.any { row -> row.state == ProBilling.PurchaseState.PURCHASED }
         }
     }
 
@@ -1235,7 +1305,7 @@ private class PlayBilling(private val context: Context) : ProBilling.Gateway {
                 onResult(null)
                 return@queryPurchasesAsync
             }
-            onResult(purchases.map { owned(it) })
+            onResult(verifiedSnapshot(purchases))
         }
     }
 

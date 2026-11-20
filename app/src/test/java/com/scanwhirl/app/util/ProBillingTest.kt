@@ -184,6 +184,16 @@ class ProBillingTest {
     }
 
     @Test
+    fun `older malformed billing preferences do not crash or grant Pro`() {
+        app.getSharedPreferences("scanwhirl_prefs", 0).edit()
+            .putString("pro_unlocked", "true")
+            .putString("pro_test_override", "force")
+            .apply()
+        assertFalse(ProGate.isPro(app, testBuild = false))
+        assertTrue(ProGate.isPro(app, testBuild = true))
+    }
+
+    @Test
     fun `a failed query keeps Pro (offline or Play busy)`() {
         ProGate.setPro(app, true)
         val gateway = FakeGateway()
@@ -210,7 +220,7 @@ class ProBillingTest {
     }
 
     @Test
-    fun `a pending purchase neither grants nor locks Pro`() {
+    fun `pending update is not revocation but a successful pending-only query is`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
         val controller = controller(gateway, testBuild = false, states = states)
@@ -224,7 +234,9 @@ class ProBillingTest {
             listOf(ProBilling.Owned("scanwhirl_pro", acknowledged = false, token = "p", state = ProBilling.PurchaseState.PENDING))
         )
         gateway.drain()
-        assertTrue("a pending purchase never locks an existing Pro", purchased())
+        // PRO_PLAN.md: a successful ownership query without a PURCHASED Pro row revokes.
+        assertFalse("the pending-only snapshot revokes stale Pro", purchased())
+        assertEquals(ProBilling.State.Pending, states.last())
         assertTrue("nothing is acknowledged before payment", gateway.acknowledged.isEmpty())
     }
 
@@ -428,6 +440,24 @@ class ProBillingTest {
         controller.applyOwned(emptyList(), queryGeneration = staleGeneration, silent = true)
 
         assertTrue("the fresh purchase must not be revoked by an older answer", purchased())
+    }
+
+    @Test
+    fun `an older pending snapshot does not interrupt a signed purchase waiting for ack`() {
+        val gateway = FakeGateway()
+        val states = mutableListOf<ProBilling.State>()
+        val controller = controller(gateway, testBuild = false, states = states)
+        val stale = ProBilling.generationForTests()
+        controller.handle(ProBilling.Event.Purchased(ProBilling.Owned(ProBilling.PRODUCT_ID, false, "new")))
+        controller.applyOwned(
+            listOf(ProBilling.Owned(ProBilling.PRODUCT_ID, false, "old", ProBilling.PurchaseState.PENDING)),
+            queryGeneration = stale
+        )
+        assertEquals(listOf(ProBilling.State.Finishing), states)
+        gateway.drain()
+        assertTrue(purchased())
+        assertEquals(listOf("new"), gateway.acknowledged)
+        assertEquals(ProBilling.State.Owned, states.last())
     }
 
     @Test
