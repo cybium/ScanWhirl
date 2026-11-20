@@ -49,7 +49,7 @@ class RestoreWarningLocalizationTest {
     @Test
     fun `a backup without the vault key reports it with the app string, not an English literal`() {
         val report = restoreArchiveWithoutVaultKey()
-        val expected = app.getString(R.string.backup_restore_no_vault_key)
+        val expected = app.getString(R.string.backup_vault_unverifiable_skipped)
         assertTrue(
             "the person must read the app's own warning; got: ${report.warnings}",
             report.warnings.contains(expected)
@@ -62,7 +62,7 @@ class RestoreWarningLocalizationTest {
     @Config(sdk = [35], qualifiers = "hi")
     fun `the restore warning is Hindi when the app is Hindi`() {
         val report = restoreArchiveWithoutVaultKey()
-        val expected = app.getString(R.string.backup_restore_no_vault_key)
+        val expected = app.getString(R.string.backup_vault_unverifiable_skipped)
         assertTrue("the Hindi string has Devanagari: [$expected]", expected.any { it.code in 0x0900..0x097F })
         assertTrue(
             "the person must read the Hindi warning; got: ${report.warnings}",
@@ -70,7 +70,7 @@ class RestoreWarningLocalizationTest {
         )
         assertTrue(
             "no English warning may leak into the Hindi report: ${report.warnings}",
-            report.warnings.none { it.contains("Vault key") }
+            report.warnings.none { it.contains("cannot be checked") }
         )
         assertNoInternals(report.warnings)
     }
@@ -84,7 +84,6 @@ class RestoreWarningLocalizationTest {
             literal.containsMatchIn(source)
         )
         for (key in listOf(
-            "backup_restore_no_vault_key",
             "backup_restore_vault_entry_failed",
             "backup_restore_settings_failed",
         )) {

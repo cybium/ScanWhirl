@@ -89,7 +89,7 @@ class FullBackupTest {
         android.util.Base64.encodeToString(s.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
 
     @Test
-    fun `round trip restores the library, the vault, signatures and settings`() {
+    fun `round trip restores library signatures and settings but skips unchecked vault`() {
         doc("doc_a", "Receipts", pages = 3, category = "Receipts")
         File(app.filesDir, "signatures").mkdirs()
         File(app.filesDir, "signatures/my-signature.png").writeBytes(byteArrayOf(1, 2, 3))
@@ -110,10 +110,12 @@ class FullBackupTest {
 
         val report = backup.restore(out, password)
         assertEquals(1, report.documents)
-        assertEquals(1, report.vaultEntries)
+        // S6A: junk/keyless adoption was unsafe; no unvalidated Vault state may be published.
+        assertEquals(0, report.vaultEntries)
         assertTrue("signatures restored", File(app.filesDir, "signatures/my-signature.png").isFile)
-        assertTrue(File(app.filesDir, "vault2/entry1/manifest.enc").isFile)
-        assertTrue(File(app.filesDir, "vault2/recovery.bin").isFile)
+        assertFalse(File(app.filesDir, "vault2/entry1/manifest.enc").exists())
+        assertFalse(File(app.filesDir, "vault2/recovery.bin").exists())
+        assertTrue(report.warnings.any { it.contains("cannot be checked") })
         assertEquals("hi", app.getSharedPreferences("scanwhirl_prefs", 0).getString("ocr_language", null))
 
         val restored = File(docsDir, "doc_a")
@@ -121,6 +123,63 @@ class FullBackupTest {
         assertEquals(3, restored.listFiles()!!.count { it.name.startsWith("page_") })
         assertTrue(File(restored, "scan.pdf").readBytes().contentEquals(byteArrayOf(37, 80, 68, 70)))
         assertTrue(File(restored, "ocr.txt").readText().contains("scanwhirl-ocr-v2"))
+    }
+
+    @Test
+    fun `recovery-code adoption validates entries but never imports deletion provenance`() {
+        val oldVault = vaultStore()
+        val setup = oldVault.setupConfirmed("246810")
+        doc("fictional_adopted", "Fictional adopted Vault entry")
+        val encryptedOriginal = File(docsDir, "fictional_adopted/scan.pdf").readBytes()
+        oldVault.addDocument("fictional_adopted")
+        // Even if a source backup contains a local pending marker, it is not local to this phone.
+        File(vaultDir, ".adding-fictional_adopted").writeText("v1\nfictional_adopted\nmanifest.enc\t3\nf0000.enc\t3\n")
+        oldVault.lock()
+        backup.write(out, setup.recoveryCode, FullBackup.Wrap.RECOVERY_CODE)
+        vaultDir.deleteRecursively()
+        val collision = doc("fictional_adopted", "Fictional unrelated library entry")
+        val libraryPdf = File(collision, "scan.pdf").apply { writeText("Fictional library bytes") }.readBytes()
+        val newVault = vaultStore()
+        val report = FullBackup(app, newVault).restore(out, setup.recoveryCode)
+        assertEquals(1, report.vaultEntries)
+        assertTrue(report.warnings.isEmpty())
+        assertFalse(File(vaultDir, ".adding-fictional_adopted").exists())
+        newVault.recover()
+        assertTrue(File(collision, "scan.pdf").readBytes().contentEquals(libraryPdf))
+        assertTrue(newVault.unlockWithRecovery(setup.recoveryCode))
+        assertTrue(newVault.openDocument("fictional_adopted").pdfFile.readBytes().contentEquals(encryptedOriginal))
+    }
+
+    @Test
+    fun `crafted keyless vault restore cannot delete colliding library or trash originals`() {
+        val repo = ScanRepository(app)
+        val library = doc("fictional_library", "Fictional library")
+        val trashSource = doc("fictional_trash", "Fictional trash")
+        fun bytes(dir: File) = dir.walkTopDown().filter { it.isFile }.associate {
+            it.relativeTo(dir).invariantSeparatorsPath to it.readBytes().toList()
+        }
+        val libraryBefore = bytes(library)
+        val trashBefore = bytes(trashSource)
+        val trashKey = repo.moveToTrash("fictional_trash")!!
+        vaultDir.mkdirs()
+        File(vaultDir, "recovery.bin").writeBytes(byteArrayOf(9, 9, 9))
+        File(vaultDir, "passcode.bin").writeBytes(byteArrayOf(8, 8))
+        listOf("fictional_library", "fictional_trash").forEach { id ->
+            File(vaultDir, id).mkdirs()
+            File(vaultDir, "$id/manifest.enc").writeBytes(byteArrayOf(4, 5, 6))
+        }
+        backup.write(out, password, FullBackup.Wrap.PASSWORD)
+        vaultDir.deleteRecursively()
+        val report = backup.restore(out, password)
+        VaultStore(app, repo, FakeVaultKeys()).recover()
+
+        assertEquals("Library bytes must survive opening locked Vault", libraryBefore, bytes(library))
+        assertTrue(repo.listTrash().any { it.key == trashKey })
+        val restored = repo.restoreFromTrash(trashKey)
+        assertEquals(trashBefore, bytes(File(docsDir, restored.id)))
+        assertEquals(0, report.vaultEntries)
+        assertFalse(vaultDir.exists())
+        assertTrue(report.warnings.any { it.contains("cannot be checked") })
     }
 
     @Test

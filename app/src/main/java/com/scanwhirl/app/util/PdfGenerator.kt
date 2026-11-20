@@ -164,8 +164,12 @@ object PdfGenerator {
 
                     // Text layer: only when geometry exists, has non-blank lines,
                     // matches the JPEG's pixel dimensions and really emits text.
+                    // H3-1: a PDF/A archive is image-only. The OCR layer's font is a
+                    // non-embedded base-14 Helvetica, which ISO 19005-2 6.2.11.3.1 forbids,
+                    // so a layer offered by a caller is never written into an archive.
                     val layer = textLayers[i]
-                    val layerContent = if (layer != null && layer.lines.any { it.text.isNotBlank() } &&
+                    val layerContent = if (pdfa == null && layer != null &&
+                        layer.lines.any { it.text.isNotBlank() } &&
                         layer.width == info.width && layer.height == info.height
                     ) {
                         PdfTextLayer.contentFor(layer, pageW, pageH)
