@@ -95,8 +95,11 @@ class MergeFlow(
             try {
                 val merged = repo.mergeDocuments(ids, name)
                 onMerged(merged)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // H5-3: cancellation (screen closed or recreated) is not a failure.
+                throw e
             } catch (e: Exception) {
-                host.toast("Merge failed: ${e.message}", Toast.LENGTH_LONG)
+                host.toast(activity.getString(R.string.merge_failed, e.message ?: ""), Toast.LENGTH_LONG)
             }
         }
     }

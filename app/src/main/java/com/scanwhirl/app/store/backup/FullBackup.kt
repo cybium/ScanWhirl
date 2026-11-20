@@ -424,17 +424,31 @@ class FullBackup(
         out.write(bytes)
     }
 
+    @androidx.annotation.VisibleForTesting
+    internal fun writeFileEntryForTest(out: DataOutputStream, path: String, file: File) =
+        writeFileEntry(out, path, file)
+
     /** Streams one file in 64 KiB pieces: a 5 MB page never sits in memory. */
     private fun writeFileEntry(out: DataOutputStream, path: String, file: File) {
         out.writeByte(ENTRY)
         out.writeUTF(path)
-        out.writeLong(file.length())
+        // F4 (found by the MiniMax calibration): the length is declared before the bytes, so
+        // exactly that many bytes must follow. A file that grows or shrinks while the backup runs
+        // (OCR text saved in the background, a page edit) used to corrupt the archive's framing
+        // silently: the backup looked fine and could not be restored. Now it fails honestly.
+        val declared = file.length()
+        out.writeLong(declared)
         FileInputStream(file).use { input ->
             val buffer = ByteArray(BUFFER)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
+            var left = declared
+            while (left > 0) {
+                val read = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
+                if (read < 0) throw java.io.IOException("A file changed while the backup was being written: $path")
                 out.write(buffer, 0, read)
+                left -= read
+            }
+            if (input.read() >= 0) {
+                throw java.io.IOException("A file changed while the backup was being written: $path")
             }
         }
     }
