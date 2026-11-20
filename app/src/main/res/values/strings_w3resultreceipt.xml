@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W3 result receipt: measured outcome, copy locations and verified Undo. -->
+<resources>
+    <string name="compress_result_at_limit">%1$s · Exactly at your %2$s limit</string>
+    <string name="w3_size_with_exact_bytes">%1$s (%2$d bytes)</string>
+    <string name="w3_where_library">In your Library: %1$s</string>
+    <string name="w3_where_app_output">Prepared in ScanWhirl. Save a copy to keep it.</string>
+    <string name="w3_where_documents">Also in Documents/ScanWhirl: %1$s</string>
+    <string name="w3_where_documents_existing">Already in Documents/ScanWhirl: %1$s</string>
+    <string name="w3_where_chosen">In the location you chose: %1$s</string>
+    <string name="w3_undo_not_removed">Could not remove every copy. Open Files to check.</string>
+    <string name="w3_result_undone_note">This result was undone.</string>
+</resources>

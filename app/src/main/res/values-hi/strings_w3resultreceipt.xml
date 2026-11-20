@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W3 result receipt: measured outcome, copy locations and verified Undo. -->
+<resources>
+    <string name="compress_result_at_limit">%1$s · ठीक आपकी %2$s सीमा पर</string>
+    <string name="w3_size_with_exact_bytes">%1$s (%2$d बाइट)</string>
+    <string name="w3_where_library">आपके दस्तावेज़ों में: %1$s</string>
+    <string name="w3_where_app_output">ScanWhirl में तैयार है। इसे रखने के लिए प्रति सहेजें।</string>
+    <string name="w3_where_documents">Documents/ScanWhirl में भी: %1$s</string>
+    <string name="w3_where_documents_existing">पहले से Documents/ScanWhirl में: %1$s</string>
+    <string name="w3_where_chosen">आपकी चुनी जगह में: %1$s</string>
+    <string name="w3_undo_not_removed">सभी प्रतियाँ नहीं हट सकीं। Files में जाँचें।</string>
+    <string name="w3_result_undone_note">यह नतीजा हटा दिया गया था।</string>
+</resources>
