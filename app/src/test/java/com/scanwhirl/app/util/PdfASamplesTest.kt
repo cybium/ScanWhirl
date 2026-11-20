@@ -66,7 +66,8 @@ class PdfASamplesTest {
         // 10 pages, no text.
         PdfGenerator.imagesToPdf(pages(10), File(out, "pdfa_02_ten_pages.pdf"), pdfa = mode("Ten pages"))
 
-        // 1 page with Latin OCR text (invisible, non-embedded Helvetica: the PDF/A-2 question).
+        // 1 page with Latin OCR text offered to the archive (H3-1: the archive stays image-only
+        // because the text layer's Helvetica is not embedded).
         val latin = OcrPage(
             1240, 1754,
             listOf(
@@ -79,7 +80,7 @@ class PdfASamplesTest {
             textLayers = mapOf(0 to latin), pdfa = mode("Latin text")
         )
 
-        // 1 page with Devanagari OCR text (searchable, /ActualText).
+        // 1 page with Devanagari OCR text offered to the archive (also left out: image-only).
         val hindi = OcrPage(
             1240, 1754,
             listOf(

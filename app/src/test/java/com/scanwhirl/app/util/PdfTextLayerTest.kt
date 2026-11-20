@@ -149,6 +149,22 @@ class PdfTextLayerTest {
     }
 
     @Test
+    fun `hindi only line is still carried in ActualText`() {
+        // H4-1: sanitize() maps Devanagari to spaces, so gating on the sanitised fallback dropped
+        // every pure-Hindi line before its /ActualText was written. A line with non-blank exact
+        // text must always be emitted: the fallback glyph run may be empty, the /ActualText may not.
+        val out = PdfTextLayer.contentFor(page(600, 800, line("कुल राशि", 20, 40, 560, 70)), 600, 800)
+        assertTrue("a Hindi-only line must emit /ActualText: $out", out.contains("/ActualText <FEFF"))
+        assertTrue(
+            "the exact Devanagari must be in /ActualText",
+            out.contains(PdfTextLayer.actualTextHex("कुल राशि")!!)
+        )
+        assertTrue("the marked content is closed", out.contains("EMC"))
+        assertTrue("one text-showing operation is still written", out.contains("Tj ET"))
+        assertFalse("no replacement characters", out.contains('\uFFFD'))
+    }
+
+    @Test
     fun `actualTextHex is UTF-16BE with a BOM`() {
         assertEquals("<FEFF092A093E0920>", PdfTextLayer.actualTextHex("पाठ"))
         assertEquals("<FEFF0041>", PdfTextLayer.actualTextHex("A"))
