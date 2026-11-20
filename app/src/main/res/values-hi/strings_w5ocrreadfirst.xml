@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- W5 read-first OCR (Hindi). Uses the judged glossary: नकल for copy,
+         सहेजें for save, कागज़ात for library, लिखा हुआ for text. -->
+    <string name="ocr_w5_page_of">पन्ना %1$d / %2$d</string>
+    <string name="ocr_w5_copy_page">पन्ना नकल करें</string>
+    <string name="ocr_w5_copy_all_pages">सभी पन्ने नकल करें</string>
+    <string name="ocr_w5_page_copied">नकल कर ली</string>
+    <string name="ocr_w5_all_copied">सभी पन्नों की नकल कर ली</string>
+    <string name="ocr_w5_edit_text">लिखा हुआ बदलें</string>
+    <string name="ocr_w5_done_editing">हो गया</string>
+    <string name="ocr_w5_save_edits">बदलाव सहेजें</string>
+    <string name="ocr_w5_edits_saved">बदलाव इस दस्तावेज़ में सहेजे गए</string>
+    <string name="ocr_w5_no_edits">सहेजने के लिए कोई बदलाव नहीं</string>
+    <string name="ocr_w5_not_in_library">यह लिखा हुआ किसी दस्तावेज़ में नहीं है, इसलिए कागज़ात में सहेजने के लिए कुछ नहीं है</string>
+    <string name="ocr_w5_txt_failed_kept">.txt फ़ाइल सहेजी नहीं जा सकी। आपका लिखा हुआ अब भी इस दस्तावेज़ में सहेजा है।</string>
+    <string name="ocr_w5_txt_failed_here">.txt फ़ाइल सहेजी नहीं जा सकी। आपका लिखा हुआ अभी भी यहीं है।</string>
+    <string name="ocr_w5_retry_txt">फिर कोशिश करें</string>
+    <string name="ocr_w5_reread_title">लिखा हुआ फिर पढ़ें?</string>
+    <string name="ocr_w5_reread_msg">फिर पढ़ने पर हर पन्ने का मौजूदा लिखा हुआ बदल जाएगा, आपके किए बदलाव भी। अगर उन्हें रखना है तो पहले बदलाव सहेजें।</string>
+    <string name="ocr_w5_reread_confirm">फिर पढ़ें</string>
+    <string name="ocr_w5_keep_editing">बदलाव जारी रखें</string>
+    <string name="ocr_w5_back_msg">अपने बदलाव इस दस्तावेज़ में रखें, .txt प्रति सहेजें, या बदलाव न रखें।</string>
+    <string name="ocr_w5_save_txt_and_close">.txt सहेजकर बंद करें</string>
+</resources>
