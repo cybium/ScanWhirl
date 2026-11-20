@@ -52,8 +52,20 @@ import java.util.UUID
 class FullBackup(
     private val context: Context,
     /** Injected by tests; the app uses the real one so entries land in this phone's Vault. */
-    vaultOverride: VaultStore? = null
+    vaultOverride: VaultStore? = null,
+    private val restoreLimits: RestoreLimits = RestoreLimits()
 ) {
+
+    /** Resource limits, not format limits. Overrides make small deterministic refusal tests possible. */
+    data class RestoreLimits(
+        val maxBytes: Long = MAX_ARCHIVE_BYTES,
+        val maxEntries: Int = 200_000,
+        val maxDepth: Int = 8,
+        val space: (File) -> Long = com.scanwhirl.app.util.BoundedCopy::availableSpace,
+        val checkCancelled: () -> Unit = {
+            if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException("Restore cancelled")
+        }
+    )
 
     private val vault: VaultStore by lazy {
         vaultOverride ?: run {
@@ -291,20 +303,36 @@ class FullBackup(
                         skip -= skipped
                     }
                     if (version >= 2) input.readUnsignedByte()
+                    val budget = BackupRestoreBudget(context, context.cacheDir, restoreLimits)
                     BufferedOutputStream(FileOutputStream(plain), BUFFER).use { out ->
-                        VaultCrypto.decryptStream(file, out, key)
+                        // Authentication still finishes before replay/publication, but an attacker
+                        // cannot grow this plaintext scratch file beyond the running budget.
+                        try {
+                            VaultCrypto.decryptStream(file, budget.output(out), key)
+                        } catch (error: VaultAuthException) {
+                            // Crypto deliberately wraps IO failures. Preserve our resource refusal
+                            // so the person hears "free space/limits", not "wrong password".
+                            val cause = error.cause
+                            if (cause is BackupResourceException) throw cause
+                            throw error
+                        }
                     }
                 }
             }
             replay(plain, staging)
-            val oldVaultKey = staging.resolve(VAULT_KEY_ENTRY).takeIf { it.isFile }?.readBytes()
+            val oldVaultKey = staging.resolve(VAULT_KEY_ENTRY).takeIf { it.isFile }?.let {
+                if (it.length() != 32L) throw VaultAuthException("Damaged backup key")
+                ByteArray(32).also { bytes -> DataInputStream(it.inputStream()).use { input -> input.readFully(bytes) } }
+            }
             staging.resolve(VAULT_KEY_ENTRY).delete()
             try {
+                restoreLimits.checkCancelled()
                 return applyStaging(staging, oldVaultKey)
             } finally {
                 oldVaultKey?.fill(0)
             }
         } finally {
+            key.fill(0)
             plain.delete()
             staging.deleteRecursively()
         }
@@ -455,23 +483,45 @@ class FullBackup(
     }
 
     private fun replay(archive: File, staging: File) {
+        val budget = BackupRestoreBudget(context, context.cacheDir, restoreLimits)
         DataInputStream(BufferedInputStream(FileInputStream(archive), BUFFER)).use { input ->
             var entries = 0
             while (true) {
+                restoreLimits.checkCancelled()
                 when (val tag = input.readUnsignedByte()) {
                     END -> {
                         if (input.read() != -1) throw VaultAuthException("Trailing backup archive data")
                         return
                     }
                     ENTRY -> {
-                        if (++entries > MAX_ENTRIES) throw VaultAuthException("The backup has too many files")
+                        if (++entries > restoreLimits.maxEntries) throw BackupResourceException(context)
                         val path = input.readUTF()
                         val size = input.readLong()
-                        if (size < 0 || size > MAX_ENTRY_BYTES) throw VaultAuthException("Damaged backup entry")
+                        if (size < 0) throw VaultAuthException("Damaged backup entry")
+                        if (size > MAX_ENTRY_BYTES) throw BackupResourceException(context)
+                        val segments = path.split('/')
+                        if (path.length > 1024 || segments.size > restoreLimits.maxDepth ||
+                            segments.any { it.isEmpty() || it == "." }) {
+                            throw BackupResourceException(context)
+                        }
+                        // Validate lengths BEFORE making a file or allocating key/JSON/text arrays.
+                        val cap = when {
+                            path == VAULT_KEY_ENTRY -> 32L
+                            path == "settings.json" || path == "manifest.json" -> MAX_SETTINGS_BYTES
+                            path.endsWith("/meta.txt") -> MAX_META_BYTES
+                            else -> MAX_ENTRY_BYTES
+                        }
+                        if (size > cap || (path == VAULT_KEY_ENTRY && size != 32L)) {
+                            throw BackupResourceException(context)
+                        }
+                        budget.requireFits(size)
                         val target = safeTarget(staging, path)
+                        // Check the private filesystem rather than retaining all attacker-supplied
+                        // names in a potentially very large in-memory duplicate set.
+                        if (target.exists()) throw VaultAuthException("Duplicate backup entry")
                         target.parentFile?.mkdirs()
                         BufferedOutputStream(FileOutputStream(target), BUFFER).use { out ->
-                            copyExact(input, out, size)
+                            copyExact(input, budget.output(out), size)
                         }
                     }
                     else -> throw VaultAuthException("Damaged backup (tag $tag)")
@@ -529,7 +579,7 @@ class FullBackup(
                 targetId = freeId()
                 val meta = File(dir, "meta.txt")
                 if (meta.isFile) {
-                    val lines = meta.readLines().toMutableList()
+                    val lines = readBoundedText(meta, MAX_META_BYTES).reader().readLines().toMutableList()
                     if (lines.isNotEmpty()) lines[0] = "$name (restored)"
                     Durable.atomicWriteText(meta, lines.joinToString("\n") + "\n")
                 }
@@ -665,7 +715,7 @@ class FullBackup(
         val settingsFile = staging.resolve("settings.json")
         if (settingsFile.isFile) {
             runCatching {
-                val json = JSONObject(settingsFile.readText())
+                val json = JSONObject(readBoundedText(settingsFile, MAX_SETTINGS_BYTES))
                 val edit = prefs.edit()
                 portableSettings.forEach { (key, type) ->
                     if (prefs.contains(key)) return@forEach
@@ -686,9 +736,28 @@ class FullBackup(
     }
 
     private fun nameOf(meta: File): String = try {
-        meta.readLines().firstOrNull()?.takeIf { it.isNotBlank() } ?: meta.parentFile?.name.orEmpty()
+        readBoundedText(meta, MAX_META_BYTES).lineSequence().firstOrNull()?.takeIf { it.isNotBlank() }
+            ?: meta.parentFile?.name.orEmpty()
     } catch (_: IOException) {
         meta.parentFile?.name.orEmpty()
+    }
+
+    /** Also bound the reads themselves, even if a local file changes after replay validation. */
+    private fun readBoundedText(file: File, cap: Long): String {
+        if (file.length() > cap) throw BackupResourceException(context)
+        val bytes = java.io.ByteArrayOutputStream()
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var total = 0L
+            while (true) {
+                val count = input.read(buffer, 0, minOf(buffer.size.toLong(), cap - total + 1).toInt())
+                if (count < 0) break
+                if (count.toLong() > cap - total) throw BackupResourceException(context)
+                bytes.write(buffer, 0, count)
+                total += count
+            }
+        }
+        return bytes.toString(Charsets.UTF_8.name())
     }
 
     private fun freeId(): String {
@@ -726,6 +795,14 @@ class FullBackup(
         private const val PREF_VAULT_PENDING = "vault_setup_confirm_pending"
         const val EXTENSION = "swbackup"
         const val MIME = "application/octet-stream"
+        /**
+         * A single picked backup is limited to 2 GiB (larger than the PDF import cap).
+         * Restore needs the encrypted ingress, authenticated plaintext and staged files at once;
+         * an unbounded archive is not safe on a budget phone. This does not change crypto framing.
+         */
+        const val MAX_ARCHIVE_BYTES = 2L * 1024 * 1024 * 1024
+        internal const val MAX_SETTINGS_BYTES = 1024L * 1024
+        internal const val MAX_META_BYTES = 64L * 1024
 
         private val MAGIC = "SWFULLB1".toByteArray(Charsets.UTF_8)
         private const val VERSION = 2
@@ -754,7 +831,48 @@ class FullBackup(
         }
         private const val END = 0
         private const val BUFFER = 64 * 1024
-        private const val MAX_ENTRIES = 200_000
         private const val MAX_ENTRY_BYTES = 512L * 1024 * 1024
     }
 }
+
+/** Running accounting for scratch output, including before each decrypted chunk reaches disk. */
+internal class BackupRestoreBudget(
+    private val context: Context?,
+    private val root: File,
+    private val limits: FullBackup.RestoreLimits
+) {
+    private var written = 0L
+
+    fun requireFits(bytes: Long) {
+        limits.checkCancelled()
+        if (bytes < 0 || bytes > limits.maxBytes - written) {
+            throw BackupResourceException(context)
+        }
+        if (limits.space(root) < HEADROOM + minOf(bytes, 64L * 1024)) {
+            throw BackupResourceException(context, noSpace = true)
+        }
+    }
+
+    fun output(out: java.io.OutputStream): java.io.OutputStream = object : java.io.OutputStream() {
+        override fun write(value: Int) {
+            requireFits(1)
+            out.write(value)
+            written++
+        }
+        override fun write(bytes: ByteArray, offset: Int, length: Int) {
+            requireFits(length.toLong())
+            out.write(bytes, offset, length)
+            written += length
+        }
+        override fun flush() = out.flush()
+    }
+
+    companion object {
+        // Beyond ingress's shared 16 MiB reserve, leave 64 MiB during scratch expansion.
+        const val HEADROOM = 64L * 1024 * 1024
+    }
+}
+
+class BackupResourceException(context: Context?, val noSpace: Boolean = false) : IOException(
+    context?.getString(if (noSpace) R.string.s6c_backup_no_space else R.string.s6c_backup_limits)
+)

@@ -35,6 +35,11 @@ class FullBackupIntegrityTest {
     private fun archive(): ByteArray = ByteArrayOutputStream().also { bytes ->
         DataOutputStream(bytes).apply {
             writeByte(1); writeUTF("documents/new/meta.txt")
+            val meta = "Fictional legacy document\n".toByteArray()
+            writeLong(meta.size.toLong()); write(meta)
+            // Keep the multi-chunk integrity payload in a page, not oversized metadata.
+            // This remains a valid archive under the independent restore resource limits.
+            writeByte(1); writeUTF("documents/new/page.jpg")
             writeLong(200000); write(ByteArray(200000) { (it / 65536 + it % 251).toByte() })
             writeByte(0)
         }
@@ -94,7 +99,8 @@ class FullBackupIntegrityTest {
         }
         try {
             assertEquals(1, FullBackup(app).restore(file, password).documents)
-            assertEquals(200000, File(app.filesDir, "documents/new/meta.txt").length().toInt())
+            assertEquals("Fictional legacy document\n", File(app.filesDir, "documents/new/meta.txt").readText())
+            assertEquals(200000, File(app.filesDir, "documents/new/page.jpg").length().toInt())
         } finally { key.fill(0); file.delete() }
     }
 
