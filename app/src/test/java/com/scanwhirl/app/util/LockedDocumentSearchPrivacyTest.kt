@@ -148,6 +148,20 @@ class LockedDocumentSearchPrivacyTest {
     }
 
     @Test
+    fun `page hits are never built for a vaulted document either`() {
+        val reads = mutableListOf<String>()
+        val vaulted = doc("vaultOnly", "Vault report", vaulted = true)
+        val out = HomePageMatches.build(
+            "zephyrquill", listOf(vaulted), setOf("vaultOnly")
+        ) { id ->
+            reads += id
+            mapOf("page_001.jpg" to "ZEPHYRQUILL")
+        }
+        assertTrue("a Vault row gets no page link", out.isEmpty())
+        assertTrue("Vault page OCR is never read for a row", reads.isEmpty())
+    }
+
+    @Test
     fun `end to end Home pipeline for a locked document touches no OCR path`() {
         val pageReads = mutableListOf<String>()
         val result = HomeFilter.applyDetailed(

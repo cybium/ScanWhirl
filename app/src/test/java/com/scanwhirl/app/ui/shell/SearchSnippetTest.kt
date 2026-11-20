@@ -11,6 +11,7 @@ import android.widget.EditText
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
@@ -23,11 +24,13 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -119,6 +122,41 @@ class SearchSnippetTest {
             current = current.parent as? View
         }
         return true
+    }
+
+    /** Lays the shell out as a phone would, so row geometry can be asserted. */
+    private fun layoutRoot(activity: ShellActivity): View {
+        val root = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+        val dm = activity.resources.displayMetrics
+        val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+        val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+        repeat(3) {
+            root.measure(w, h)
+            root.layout(0, 0, dm.widthPixels, dm.heightPixels)
+        }
+        return root
+    }
+
+    /** The child's top inside [root]'s coordinate space (layout offsets, never screen reads). */
+    private fun topIn(root: View, child: View): Int {
+        var value = 0
+        var view: View? = child
+        while (view != null && view !== root) {
+            value += view.top
+            view = view.parent as? View
+        }
+        return value
+    }
+
+    /** The child's left inside [root]'s coordinate space. */
+    private fun leftIn(root: View, child: View): Int {
+        var value = 0
+        var view: View? = child
+        while (view != null && view !== root) {
+            value += view.left
+            view = view.parent as? View
+        }
+        return value
     }
 
     private fun search(activity: ShellActivity, q: String) {
@@ -267,6 +305,206 @@ class SearchSnippetTest {
                 "no Vault text leaks into the row",
                 card.contentDescription?.toString().orEmpty().contains("VAULTONLYWORD")
             )
+        }
+    }
+
+    // ---- UI-W4: search identity ------------------------------------------
+
+    @Test
+    fun `one overflow keeps page and snippet under the name at compact width`() {
+        fixture(
+            "Compact scholarship",
+            ocr = filler(3) + mapOf(1 to "Counter reference ZEPHYRQUILL 77.")
+        )
+        launch { activity ->
+            search(activity, "zephyrquill")
+            waitFor("the text hit row appears") {
+                cards(activity).singleOrNull()?.let {
+                    shown(it.findViewById<TextView>(R.id.swSearchSnippet))
+                } == true
+            }
+            val card = cards(activity).single()
+            layoutRoot(activity)
+
+            assertFalse(
+                "at compact width Share folds into the named More",
+                card.shareButton.isVisible
+            )
+            assertTrue("the named More stays on the row", card.moreButton.isVisible)
+            assertEquals(
+                "exactly one trailing action remains",
+                1,
+                listOf(card.shareButton, card.moreButton).count { it.isVisible }
+            )
+
+            val nameBottom = topIn(card, card.nameView) + card.nameView.height
+            assertTrue(
+                "the page line is below the name (page top ${
+                    topIn(card, card.searchPage)
+                }, name bottom $nameBottom)",
+                topIn(card, card.searchPage) >= nameBottom
+            )
+            assertTrue(
+                "the snippet is below the name",
+                topIn(card, card.searchSnippet) >= nameBottom
+            )
+            assertTrue(
+                "the snippet starts under the name, not beside the overflow",
+                leftIn(card, card.searchSnippet) >= leftIn(card, card.nameView)
+            )
+            assertTrue(
+                "the snippet ends before the overflow control",
+                leftIn(card, card.searchSnippet) + card.searchSnippet.width <=
+                    leftIn(card, card.moreButton)
+            )
+        }
+    }
+
+    @Test
+    fun `share also folds into More at 200 percent font`() {
+        RuntimeEnvironment.setFontScale(2.0f)
+        try {
+            fixture("Large font note", ocr = filler(3))
+            launch { activity ->
+                search(activity, "large font")
+                waitFor("the name hit row appears") { cards(activity).size == 1 }
+                val card = cards(activity).single()
+                assertFalse("Share is folded at 200%", card.shareButton.isVisible)
+                assertTrue("More stays at 200%", card.moreButton.isVisible)
+            }
+        } finally {
+            RuntimeEnvironment.setFontScale(1.0f)
+        }
+    }
+
+    @Test
+    fun `near identical names differ by pages size and date in full`() {
+        fixture("Bill", pages = 1, ocr = filler(1))
+        fixture("Bill", pages = 3, ocr = filler(3))
+        launch { activity ->
+            search(activity, "bill")
+            waitFor("both same-name rows appear") {
+                cards(activity).count { it.doc?.name == "Bill" } == 2
+            }
+            layoutRoot(activity)
+            val rows = cards(activity).filter { it.doc?.name == "Bill" }
+            assertEquals(2, rows.size)
+
+            val metas = rows.map { it.metaView.text.toString() }
+            assertEquals("the meta line separates the two rows", 2, metas.toSet().size)
+            for (meta in metas) {
+                assertTrue("$meta names the pages", Regex("[0-9]+\\u00A0page").containsMatchIn(meta))
+                assertTrue("$meta names the size", Regex("[0-9]+\\u00A0(KB|MB|B)").containsMatchIn(meta))
+                assertTrue(
+                    "$meta names the date",
+                    meta.contains("Today") || meta.contains("Yesterday") ||
+                        Regex("[0-9]{1,2} [A-Z][a-z]{2}").containsMatchIn(meta)
+                )
+            }
+            for (row in rows) {
+                val layout = row.metaView.layout
+                assertNotNull("the meta was laid out", layout)
+                val laid = layout!!
+                for (line in 0 until laid.lineCount) {
+                    assertEquals(
+                        "the whole meta is readable at compact width",
+                        0,
+                        laid.getEllipsisCount(line)
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `a locked document is never found by its stored text and shows no thumbnail`() {
+        val secret = "SALARYSECRET"
+        val id = fixture(
+            "Pay slip",
+            ocr = filler(3) + mapOf(1 to "$secret 99 is on this page.")
+        )
+        kotlinx.coroutines.runBlocking { repo.protectPdf(id, "1234") }
+        launch { activity ->
+            search(activity, secret.lowercase())
+            waitFor("the locked-text query settles") {
+                cards(activity).isEmpty()
+            }
+            assertTrue(
+                "locked OCR is never a search route",
+                cards(activity).isEmpty()
+            )
+
+            search(activity, "pay slip")
+            waitFor("the locked row is still found by its name") {
+                cards(activity).singleOrNull()?.doc?.id == id
+            }
+            val card = cards(activity).single()
+            assertFalse(
+                "no page evidence for a locked row",
+                shown(card.findViewById<TextView>(R.id.swSearchPage))
+            )
+            assertFalse(
+                "no snippet for a locked row",
+                shown(card.findViewById<TextView>(R.id.swSearchSnippet))
+            )
+            assertNull("no page image is decoded for a locked row", card.thumbView.drawable)
+            assertTrue(
+                "the neutral placeholder is used instead",
+                shown(card.findViewById<View>(R.id.swDocThumbPlaceholder))
+            )
+            assertFalse(
+                "the locked OCR never enters the spoken row",
+                card.contentDescription?.toString().orEmpty().contains(secret)
+            )
+        }
+    }
+
+    @Test
+    fun `fast typing and clearing end on the current query with no stale row`() {
+        fixture("Alpha report", ocr = filler(2))
+        fixture("Beta report", ocr = filler(2))
+        launch { activity ->
+            waitFor("both documents load") { cards(activity).size == 2 }
+            val field = activity.findViewById<EditText>(R.id.swHomeSearch)
+            field.setText("alpha")
+            field.setText("bet")
+            field.setText("")
+            waitFor("clearing shows both documents again") { cards(activity).size == 2 }
+            assertEquals(
+                setOf("Alpha report", "Beta report"),
+                cards(activity).mapNotNull { it.doc?.name }.toSet()
+            )
+            assertTrue(
+                "no stale snippet survives on a cleared query",
+                cards(activity).none { shown(it.findViewById<TextView>(R.id.swSearchSnippet)) }
+            )
+
+            field.setText("beta")
+            waitFor("the last query wins") {
+                cards(activity).singleOrNull()?.doc?.name == "Beta report"
+            }
+            assertEquals("Beta report", cards(activity).single().doc?.name)
+        }
+    }
+
+    @Test
+    fun `five hundred documents stay capped and searchable`() {
+        val root = repo.docsDir
+        repeat(500) { index ->
+            val dir = File(root, "bulk%04d".format(index)).apply { mkdirs() }
+            File(dir, "meta.txt").writeText("Bulk file $index\n${1_700_000_000_000 + index}\nother\n")
+            File(dir, "page_000.jpg").writeBytes(ByteArray(8) { (it + 1).toByte() })
+        }
+        assertEquals(500, repo.listDocuments().size)
+        launch { activity ->
+            waitFor("the first page of rows renders") { cards(activity).isNotEmpty() }
+            assertEquals("the list is capped at one screen's worth", 60, cards(activity).size)
+
+            search(activity, "Bulk file 499")
+            waitFor("the unique name is found") {
+                cards(activity).singleOrNull()?.doc?.name == "Bulk file 499"
+            }
+            assertEquals("Bulk file 499", cards(activity).single().doc?.name)
         }
     }
 }

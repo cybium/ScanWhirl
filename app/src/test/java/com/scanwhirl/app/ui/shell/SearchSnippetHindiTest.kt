@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Looper
 import android.text.Spanned
 import android.text.style.StyleSpan
+import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
@@ -75,6 +76,27 @@ class SearchSnippetHindiTest {
         return (0 until list.childCount).mapNotNull { list.getChildAt(it) as? DocCard }
     }
 
+    private fun layoutRoot(activity: ShellActivity) {
+        val root = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+        val dm = activity.resources.displayMetrics
+        val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+        val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+        repeat(3) {
+            root.measure(w, h)
+            root.layout(0, 0, dm.widthPixels, dm.heightPixels)
+        }
+    }
+
+    private fun topIn(root: View, child: View): Int {
+        var value = 0
+        var view: View? = child
+        while (view != null && view !== root) {
+            value += view.top
+            view = view.parent as? View
+        }
+        return value
+    }
+
     @Test
     fun `Hindi row says पन्ना 2 with a bold snippet and opens that page`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "छात्रवृत्ति फ़ाइल")
@@ -123,6 +145,55 @@ class SearchSnippetHindiTest {
                 assertEquals(PdfViewerActivity::class.java.name, started.component?.className)
                 assertEquals(1, started.getIntExtra("start_page", -1))
                 assertEquals("page_001.jpg", started.getStringExtra("start_page_key"))
+            }
+        }
+    }
+
+    @Test
+    fun `Hindi row keeps page and snippet under the name with one overflow`() {
+        val id = DocFixtures.saved(repo, app, pages = 3, name = "छोटी फ़ाइल")
+        repo.ocrStore.putTexts(
+            id,
+            mapOf(
+                "page_000.jpg" to "पहला पन्ना।",
+                "page_001.jpg" to "Reference ZEPHYRQUILL 77, issued at the counter.",
+                "page_002.jpg" to "तीसरा पन्ना।"
+            )
+        )
+
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                waitFor("library loaded") { cards(activity).isNotEmpty() }
+                activity.findViewById<EditText>(R.id.swHomeSearch).setText("zephyrquill")
+                idle()
+                waitFor("Hindi text hit row") {
+                    cards(activity).singleOrNull()
+                        ?.findViewById<TextView>(R.id.swSearchSnippet)?.isVisible == true
+                }
+                val card = cards(activity).single()
+                layoutRoot(activity)
+
+                assertTrue(
+                    "Hindi row keeps one named overflow at compact width",
+                    card.moreButton.isVisible
+                )
+                assertTrue(
+                    "the direct Share folds into More in Hindi too",
+                    !card.shareButton.isVisible
+                )
+                val nameBottom = topIn(card, card.nameView) + card.nameView.height
+                assertTrue(
+                    "पन्ना 2 stays below the name",
+                    topIn(card, card.searchPage) >= nameBottom
+                )
+                assertTrue(
+                    "the Hindi snippet stays below the name",
+                    topIn(card, card.searchSnippet) >= nameBottom
+                )
+                assertEquals(
+                    "पन्ना 2",
+                    card.findViewById<TextView>(R.id.swSearchPage).text.toString()
+                )
             }
         }
     }

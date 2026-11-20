@@ -125,6 +125,13 @@ class LibraryScreen(
     private var category: String? = null
     private var revealId: String? = null
 
+    /**
+     * UI-W4: every render gets a token; only the newest pass may bind rows. Cancelling
+     * the previous job is not enough when a slow text read is already off the main
+     * thread, so fast typing or clearing can never re-show an older query's rows.
+     */
+    private var renderGeneration = 0
+
     /** T28: page + snippet evidence for the text hits currently shown, by document id. */
     private var rowEvidence: Map<String, DocSearchHit> = emptyMap()
 
@@ -1405,11 +1412,15 @@ class LibraryScreen(
         val needle = q.lowercase(Locale.getDefault())
         val textHits = HashSet<String>()
         val filtered = docs.filter { doc ->
-            val textHit = needle.isNotEmpty() &&
+            // UI-W4 privacy: a locked or Vault document is never searched by its OCR.
+            // Reading it here would also make the row an oracle for secret text, even
+            // when the snippet itself is later suppressed.
+            val textSearchable = !doc.isLocked && !doc.isVaulted
+            val textHit = needle.isNotEmpty() && textSearchable &&
                 runCatching { textCache.normalized(doc.id).contains(needle) }.getOrDefault(false)
-            // A locked/Vault document stays searchable by its visible name only for
-            // evidence purposes: its OCR never becomes a snippet or a page link.
-            if (textHit && !doc.isLocked && !doc.isVaulted) textHits += doc.id
+            // A locked/Vault document stays searchable by its visible name only: no
+            // snippet, no page link, no thumbnail evidence.
+            if (textHit) textHits += doc.id
             (folderFilter == null || doc.folder.equals(folderFilter, true)) &&
                 (categoryFilter == null || doc.category == categoryFilter) &&
                 (needle.isEmpty() || doc.name.lowercase(Locale.getDefault()).contains(needle) ||
@@ -1475,10 +1486,13 @@ class LibraryScreen(
      * still settle on one `idle()`.
      */
     private fun renderDocs() {
+        val generation = ++renderGeneration
         val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
         if (owner == null) {
             val visible = computeVisible(query, folder, category, sort)
-            applyDocs(visible.docs, computeRowEvidence(query, visible))
+            if (generation == renderGeneration) {
+                applyDocs(visible.docs, computeRowEvidence(query, visible))
+            }
             return
         }
         renderJob?.cancel()
@@ -1492,7 +1506,11 @@ class LibraryScreen(
                 val visible = computeVisible(q, f, c, s)
                 visible to computeRowEvidence(q, visible)
             }
-            if (isActive) applyDocs(shown.first.docs, shown.second)
+            // The token, not only the job's cancellation, decides: a blocking text read
+            // cannot be interrupted, so an older pass must never bind over a newer query.
+            if (isActive && generation == renderGeneration) {
+                applyDocs(shown.first.docs, shown.second)
+            }
         }
     }
 
