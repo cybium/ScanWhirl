@@ -47,8 +47,9 @@
     <string name="scanner_failed">Could not start scanner: %1$s</string>
 
     <string name="about_title">About ScanWhirl</string>
-    <!-- D-11 (2026-11-20): the camera scanner is a Google Play services module and can download once. -->
-    <string name="about_message">ScanWhirl %1$s\n\nScan documents with your camera and save them as PDFs. Your documents stay on this phone: no accounts, no ads, no servers. The camera scanner is provided by Google Play services and may download once.\n\nDeveloper: Cybium (github.com/cybium)\nSupport: cybiumsupport@gmail.com\nPrivacy policy: cybium.github.io/scanwhirl-privacy</string>
+    <!-- D-11 (2026-11-20): the camera scanner and English text reader are Google Play services
+         modules and can download once. C1 (2026-11-20 owner): one complete, short privacy line. -->
+    <string name="about_message">ScanWhirl %1$s\n\nYour documents stay on this phone: no accounts, no ads, no servers. The scanner and English text reading come from Google Play services, which may download once.\n\nDeveloper: Cybium (github.com/cybium)\nSupport: cybiumsupport@gmail.com\nPrivacy policy: cybium.github.io/scanwhirl-privacy</string>
     <string name="share_pdf">Share</string>
     <string name="delete">Delete</string>
     <string name="delete_title">Delete scan?</string>

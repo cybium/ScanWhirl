@@ -19,7 +19,7 @@ class SettingsActivity : BaseActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
 
-    /** L2: the "Text language" summary (built programmatically in [addTextLanguageRow]). */
+    /** L2: the "Text reading language" summary (built in [addTextLanguageRow]). */
     private lateinit var subOcrLanguage: android.widget.TextView
 
     private val pickWallpaper =
@@ -453,11 +453,13 @@ class SettingsActivity : BaseActivity() {
             }
         )
         val tag = com.scanwhirl.app.util.AppLanguage.currentTag(this)
-        binding.subLanguage.text = if (tag.isEmpty()) {
+        val appLanguage = if (tag.isEmpty()) {
             getString(R.string.language_system)
         } else {
             com.scanwhirl.app.util.AppLanguage.label(tag)
         }
+        // C1 (2026-11-20 owner): say what the row changes, not only the language name.
+        binding.subLanguage.text = getString(R.string.settings_language_summary, appLanguage)
         binding.subViewer.setText(
             if (Prefs.defaultViewer(this) == Prefs.VIEWER_SYSTEM) {
                 R.string.viewer_system
@@ -469,8 +471,10 @@ class SettingsActivity : BaseActivity() {
             if (Prefs.showWallpaper(this)) R.string.wallpaper_on else R.string.wallpaper_off
         )
         if (::subOcrLanguage.isInitialized) {
-            subOcrLanguage.setText(
-                ocrLanguageLabel(com.scanwhirl.app.util.OcrLanguageSettings.get(this))
+            // C1 (2026-11-20 owner): the second language row now says what it changes.
+            subOcrLanguage.text = getString(
+                R.string.settings_ocr_language_summary,
+                getString(ocrLanguageLabel(com.scanwhirl.app.util.OcrLanguageSettings.get(this)))
             )
         }
     }

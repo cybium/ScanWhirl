@@ -19,6 +19,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.util.AppLanguage
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
@@ -61,6 +62,11 @@ class ShellQaFixesTest {
     fun tearDown() {
         ProGate.setTestOverride(app, null)
         Prefs.setLibrarySort(app, Prefs.LIB_NEWEST)
+        // C1 owner 2026-11-20: never leak a chosen language into another test.
+        Prefs.setLocaleTag(app, "")
+        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+            androidx.core.os.LocaleListCompat.getEmptyLocaleList()
+        )
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -269,6 +275,47 @@ class ShellQaFixesTest {
             }
             assertTrue(labels.toString(), labels[0].contains("English"))
             assertTrue(labels.toString(), labels[1].contains("हिन्दी"))
+        }
+    }
+
+    @Test
+    fun `choosing Hindi in the language sheet switches the app language`() {
+        AppLanguage.apply(app, AppLanguage.ENGLISH)
+        launch { activity ->
+            activity.findViewById<TextView>(R.id.swLanguageChip).performClick()
+            idle()
+            val options = requireNotNull(ShadowDialog.getLatestDialog())
+                .findViewById<ViewGroup>(R.id.swSheetItems)
+            // Every row is a real checkable radio in TalkBack only when it is the chosen one.
+            assertTrue("English is the checked row", options.getChildAt(0).isSelected)
+            assertFalse("Hindi is not checked", options.getChildAt(1).isSelected)
+
+            options.getChildAt(1).performClick() // हिन्दी
+            idle()
+            assertEquals(
+                "the choice is saved through the same per-app locale path as Settings",
+                AppLanguage.HINDI,
+                Prefs.localeTag(app)
+            )
+            assertEquals(AppLanguage.HINDI, AppLanguage.currentTag(app))
+        }
+    }
+
+    @Test
+    fun `closing the language sheet changes nothing`() {
+        AppLanguage.apply(app, AppLanguage.ENGLISH)
+        launch { activity ->
+            val chosenBefore = AppLanguage.currentTag(activity)
+            val wordsBefore = activity.getString(R.string.shell_nav_library)
+            activity.findViewById<TextView>(R.id.swLanguageChip).performClick()
+            idle()
+            val dialog = requireNotNull(ShadowDialog.getLatestDialog())
+            dialog.dismiss()
+            idle()
+
+            assertEquals("closing the sheet keeps the language", chosenBefore, AppLanguage.currentTag(activity))
+            assertEquals("the screen keeps its words", wordsBefore, activity.getString(R.string.shell_nav_library))
+            assertEquals(AppLanguage.ENGLISH, Prefs.localeTag(app))
         }
     }
 

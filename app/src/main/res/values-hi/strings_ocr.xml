@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L2 OCR language and Hindi text. Hindi values await native review. -->
-    <string name="ocr_lang_title">लिखे हुए की भाषा</string>
+    <!-- C1 (2026-11-20 owner): the same concept as Settings -> "Text reading language". -->
+    <string name="ocr_lang_title">लिखावट पढ़ने की भाषा</string>
     <string name="ocr_lang_note">अंग्रेज़ी चुनने पर A, B, C जैसे अक्षरों में छपे शब्द पढ़े जाते हैं। अंग्रेज़ी + हिंदी चुनने पर ये और हिंदी के अक्षर, दोनों पढ़े जाते हैं। हिंदी चुनने पर सिर्फ़ देवनागरी पढ़ी जाती है। भाषा बदलने पर दस्तावेज़ फिर पढ़ा जाएगा और अभी तक न सहेजे गए बदलाव हट जाएँगे।</string>
     <string name="ocr_lang_english_hindi">अंग्रेज़ी + हिंदी</string>
     <string name="ocr_lang_hindi">हिंदी</string>
-    <string name="ocr_lang_saved">लिखे हुए की भाषा सहेजी गई</string>
+    <string name="ocr_lang_saved">लिखावट पढ़ने की भाषा सहेजी गई</string>
     <string name="ocr_lang_reading">दस्तावेज़ फिर पढ़ा जा रहा है…</string>
     <string name="ocr_lang_failed">दस्तावेज़ फिर नहीं पढ़ा जा सका: %1$s</string>
     <string name="ocr_hindi_pick">हिंदी में लिखा हुआ</string>
     <string name="ocr_hindi_reading">हिंदी में लिखा हुआ पढ़ा जा रहा है…</string>
     <string name="ocr_hindi_nothing">इन पन्नों पर कुछ लिखा हुआ नहीं मिला।</string>
-    <string name="settings_ocr_language">लिखे हुए की भाषा</string>
+    <string name="settings_ocr_language">लिखावट पढ़ने की भाषा</string>
 </resources>

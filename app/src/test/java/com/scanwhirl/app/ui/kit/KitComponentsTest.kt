@@ -1,6 +1,7 @@
 package com.scanwhirl.app.ui.kit
 
 import android.app.Application
+import android.content.res.Configuration
 import android.view.View
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -260,5 +261,44 @@ class KitComponentsTest {
     fun `TrustPill renders the offline promise`() {
         val pill = TrustPill.offlineNoAds(app)
         assertEquals(app.getString(R.string.trust_offline_no_ads), pill.text.toString())
+    }
+
+    /**
+     * C1 (2026-11-20 owner): the pills got shorter ("Private · No ads", "Private"). This pin
+     * proves each one, in both languages, still fits a 320 dp phone at 200 % font.
+     */
+    @Test
+    fun `the trust pills fit a 320 dp phone at 200 percent`() {
+        for (tag in listOf("en", "hi")) {
+            val config = Configuration(app.resources.configuration).apply {
+                fontScale = 2f
+                setLocale(java.util.Locale(tag, if (tag == "hi") "IN" else "US"))
+            }
+            val context = app.createConfigurationContext(config)
+            val density = context.resources.displayMetrics.density
+            val maxWidth = (320 * density).toInt()
+            val pills = listOf(
+                R.string.trust_offline_no_ads to TrustPill.offlineNoAds(context),
+                R.string.trust_all_offline to TrustPill.allOffline(context),
+                R.string.trust_offline to TrustPill.offline(context)
+            )
+            for ((label, pill) in pills) {
+                assertEquals(context.getString(label), pill.text.toString())
+                pill.measure(
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                )
+                assertTrue(
+                    "[$tag] \"${pill.text}\" needs ${pill.measuredWidth}px, " +
+                        "a 320 dp phone gives $maxWidth px",
+                    pill.measuredWidth <= maxWidth
+                )
+                assertEquals("[$tag] \"${pill.text}\" stays one line", 1, pill.lineCount)
+                assertTrue(
+                    "[$tag] the pill keeps its 13 dp text cap",
+                    pill.textSize <= 13f * density + 0.5f
+                )
+            }
+        }
     }
 }

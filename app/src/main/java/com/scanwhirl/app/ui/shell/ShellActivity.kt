@@ -730,9 +730,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     }
 
     private fun showAbout() {
-        // UI-B1 (#1): the Home trust pill moved here, so the promise is still one tap away
+        // UI-B1 (#1): the Home trust pill moved here, so the promise is one tap away
         // (IDENTITY.md: "No internet permission. No ads. No account."; the shipped short form
         // is the existing trust string, now stated on About and on the empty Library).
+        // C1 (2026-11-20 owner): about_message carries the complete short privacy line too;
+        // this last line keeps the shared trust pill on About.
         val message = getString(R.string.about_message, versionName()) +
             "\n\n" + getString(R.string.trust_offline_no_ads)
         SwSheet.builder(this)

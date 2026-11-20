@@ -128,7 +128,8 @@ class ExportHonestT37Test {
 
         assertTrue("the export must still fail honestly", failure.isFailure)
         val message = failure.exceptionOrNull()?.message.orEmpty()
-        assertTrue("must name the setting: $message", message.contains("Text language"))
+        // C1 owner 2026-11-20: the setting is now "Text reading language".
+        assertTrue("must name the setting: $message", message.contains("Text reading language"))
         assertTrue("must name Hindi: $message", message.contains("Hindi"))
         assertTrue("must say how to try again: $message", message.contains("try again", ignoreCase = true))
         assertFalse("no half written file", out.exists())
@@ -160,8 +161,9 @@ class ExportHonestT37Test {
 
         val enWord = en.getString(R.string.tools_word_no_text)
         val hiWord = hi.getString(R.string.tools_word_no_text)
-        assertTrue("the Word message must name the text language: $enWord", enWord.contains("Text language"))
-        assertTrue("the Hindi message must name the language setting: $hiWord", hiWord.contains("लिखे हुए की भाषा"))
+        // C1 owner 2026-11-20: the setting is now "Text reading language".
+        assertTrue("the Word message must name the text language: $enWord", enWord.contains("Text reading language"))
+        assertTrue("the Hindi message must name the language setting: $hiWord", hiWord.contains("लिखावट पढ़ने की भाषा"))
         assertTrue("the Hindi message must name Hindi: $hiWord", hiWord.contains("हिंदी"))
 
         val enResult = en.getString(R.string.tools_result_pptx_note)

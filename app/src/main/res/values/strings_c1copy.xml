@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- C1 (2026-11-20 owner): Settings has two language rows and they looked contradictory.
+         Each summary now names the current value and, in one short line, what the row changes. -->
+    <string name="settings_language_summary">%1$s · menus, buttons</string>
+    <string name="settings_ocr_language_summary">%1$s · text read from pages</string>
+</resources>

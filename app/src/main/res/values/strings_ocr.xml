@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- v2 UI: 08_text_ocr / 03_tools_hub - OCR language and Hindi text (lane L2). -->
-    <string name="ocr_lang_title">Text language</string>
+    <!-- C1 (2026-11-20 owner): "Text language" looked like a second app language in Settings.
+         The one concept is now named "text reading language" everywhere it is offered. -->
+    <string name="ocr_lang_title">Text reading language</string>
     <string name="ocr_lang_note">English reads Latin print. English + हिंदी reads both. हिंदी reads Devanagari only. Switching reads this document again and replaces unsaved edits.</string>
     <string name="ocr_lang_english_hindi">English + हिंदी</string>
     <string name="ocr_lang_hindi">हिंदी</string>
-    <string name="ocr_lang_saved">Text language saved</string>
+    <string name="ocr_lang_saved">Text reading language saved</string>
     <string name="ocr_lang_reading">Reading the document again…</string>
     <string name="ocr_lang_failed">Could not read the document again: %1$s</string>
     <string name="ocr_hindi_pick">Hindi text</string>
     <string name="ocr_hindi_reading">Reading Hindi text…</string>
     <string name="ocr_hindi_nothing">No text was found on these pages.</string>
-    <string name="settings_ocr_language">Text language</string>
+    <string name="settings_ocr_language">Text reading language</string>
 </resources>

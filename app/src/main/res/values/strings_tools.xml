@@ -65,9 +65,9 @@
     <string name="tools_excel_no_tables_title">No tables found</string>
     <string name="tools_excel_no_tables_msg">No page in this document has a table. You can export all the text instead.</string>
     <string name="tools_excel_export_all">Export all text instead</string>
-    <string name="tools_word_no_text">No text was recognised. If this page is in Hindi, set Text language to Hindi in Settings, then try again.</string>
+    <string name="tools_word_no_text">No text was recognised. If this page is in Hindi, set Text reading language to Hindi in Settings, then try again.</string>
     <string name="tools_word_no_text_title">No text found</string>
-    <string name="tools_word_change_language">Change text language</string>
+    <string name="tools_word_change_language">Change text reading language</string>
 
     <!-- v2 UI: 03_tools_hub - batch tools -->
     <string name="tools_batch_title">Batch tools</string>
