@@ -87,6 +87,10 @@
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:fadingEdgeLength="24dp"
+            android:paddingEnd="8dp"
+            android:requiresFadingEdge="horizontal"
             android:scrollbars="none">
 
             <com.google.android.material.chip.ChipGroup
@@ -170,10 +174,22 @@
         android:layout_weight="1">
 
         <!-- ================= FOCUS ================= -->
-        <LinearLayout
+        <!-- F1-FIT (atlas 2026-11-20): at 200 % text on a 320 dp phone the
+             panel is taller than the space left under the fixed chrome, so the
+             toolbar, the fifth tool and the previous/next arrows fell outside
+             the screen. The panel scrolls now; fillViewport keeps today's
+             one-screen composition when everything does fit. -->
+        <ScrollView
             android:id="@+id/focusPanel"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:orientation="vertical">
 
             <TextView
@@ -262,29 +278,22 @@
                 android:paddingHorizontal="10dp"
                 android:paddingVertical="4dp" />
 
-            <!-- fillViewport: equal tools at normal sizes; at 200 % text the
-                 single-line labels scroll instead of breaking mid-word. -->
-            <HorizontalScrollView
+            <!-- F1-FIT (atlas 2026-11-20): at 200 % text the fifth tool was
+                 clipped to an icon with no label. A FlowRowLayout keeps equal
+                 tools at normal sizes and wraps them to two rows when the
+                 labels stop fitting, instead of cropping one. -->
+            <com.scanwhirl.app.ui.FlowRowLayout
+                android:id="@+id/focusTools"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:fadingEdgeLength="32dp"
-                android:fillViewport="true"
-                android:requiresFadingEdge="horizontal"
-                android:scrollbars="none">
-
-            <LinearLayout
-                android:id="@+id/focusTools"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingHorizontal="6dp">
+                android:paddingHorizontal="6dp"
+                android:paddingBottom="2dp">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnToolCrop"
                     style="@style/Widget.ScanWhirl.Button.ReviewTool"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/crop_action"
                     app:icon="@drawable/ic_sw_crop" />
 
@@ -293,7 +302,6 @@
                     style="@style/Widget.ScanWhirl.Button.ReviewTool"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/review_tool_rotate"
                     app:icon="@drawable/ic_sw_rotate" />
 
@@ -302,7 +310,6 @@
                     style="@style/Widget.ScanWhirl.Button.ReviewTool"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/filter_action"
                     app:icon="@drawable/ic_sw_filter" />
 
@@ -311,7 +318,6 @@
                     style="@style/Widget.ScanWhirl.Button.ReviewTool"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/review_tool_add"
                     app:icon="@drawable/ic_sw_add_page" />
 
@@ -320,12 +326,11 @@
                     style="@style/Widget.ScanWhirl.Button.ReviewTool.Danger"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/delete"
                     app:icon="@drawable/ic_sw_delete" />
-            </LinearLayout>
-            </HorizontalScrollView>
+            </com.scanwhirl.app.ui.FlowRowLayout>
         </LinearLayout>
+        </ScrollView>
 
         <!-- ================= ARRANGE ================= -->
         <LinearLayout
@@ -385,27 +390,19 @@
                 android:textColor="@color/rv_ink_3"
                 android:textSize="12sp" />
 
-            <HorizontalScrollView
+            <!-- F1-FIT: same reflow rule as the Focus tools. -->
+            <com.scanwhirl.app.ui.FlowRowLayout
+                android:id="@+id/arrangeTools"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:fadingEdgeLength="32dp"
-                android:fillViewport="true"
-                android:requiresFadingEdge="horizontal"
-                android:scrollbars="none">
-
-            <LinearLayout
-                android:id="@+id/arrangeTools"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingHorizontal="6dp">
+                android:paddingHorizontal="6dp"
+                android:paddingBottom="2dp">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnArrEarlier"
                     style="@style/Widget.ScanWhirl.Button.ReviewTool"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/review_tool_earlier"
                     app:icon="@drawable/ic_sw_earlier" />
 
@@ -414,7 +411,6 @@
                     style="@style/Widget.ScanWhirl.Button.ReviewTool"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/review_tool_later"
                     app:icon="@drawable/ic_sw_later" />
 
@@ -423,7 +419,6 @@
                     style="@style/Widget.ScanWhirl.Button.ReviewTool"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/review_tool_move"
                     app:icon="@drawable/ic_sw_move_page" />
 
@@ -432,7 +427,6 @@
                     style="@style/Widget.ScanWhirl.Button.ReviewTool"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/review_tool_edit"
                     app:icon="@drawable/ic_sw_focus_page" />
 
@@ -441,11 +435,9 @@
                     style="@style/Widget.ScanWhirl.Button.ReviewTool.Danger"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/delete"
                     app:icon="@drawable/ic_sw_delete" />
-            </LinearLayout>
-            </HorizontalScrollView>
+            </com.scanwhirl.app.ui.FlowRowLayout>
 
             <!-- Multi-select (ticked checkboxes): bulk Rotate / Delete, labelled. -->
             <HorizontalScrollView
@@ -467,7 +459,6 @@
                     android:id="@+id/selCount"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:layout_marginEnd="8dp"
                     android:textColor="@color/rv_ink"
                     android:textSize="14sp"
