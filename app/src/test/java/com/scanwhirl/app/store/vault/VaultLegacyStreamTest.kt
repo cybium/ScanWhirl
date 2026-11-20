@@ -40,7 +40,8 @@ class VaultLegacyStreamTest {
             }
             assertNotNull(vault.openDocument(id))
             vault.exportBackup(archive)
-            root.copyRecursively(legacyEntry)
+            val legacySource = File(legacyEntry, id)
+            root.copyRecursively(legacySource)
             oldKey = key.copyOf()
             vault.wipeAll()
             val restored = VaultStore(app, repo, FakeVaultKeys(), VaultPasscodeGate(), iterations = 2000)
@@ -51,7 +52,7 @@ class VaultLegacyStreamTest {
             restored.setup("135790")
             restored.markConfirmationPassed()
             // Merge into an already set-up Vault actually decrypts and re-encrypts each file.
-            assertEquals(id, restored.restoreEntryFromBackup(legacyEntry, oldKey).id)
+            assertEquals(id, restored.restoreEntryFromBackup(legacySource, oldKey).id)
             assertNotNull(restored.openDocument(id))
             root.listFiles()!!.filter { it.extension == "enc" }.forEach {
                 assertEquals("restored payload and manifest use authenticated order", 2, it.readBytes()[4].toInt())

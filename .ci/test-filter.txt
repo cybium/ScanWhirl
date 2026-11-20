@@ -1,0 +1,1 @@
+com.scanwhirl.app.store.vault.StreamIntegrityTest,com.scanwhirl.app.store.vault.VaultLegacyStreamTest,com.scanwhirl.app.store.backup.FullBackupIntegrityTest
