@@ -32,10 +32,9 @@ object VaultBackup {
     private const val VERSION = 2
     private const val MIN_VERSION = 1
     private const val MAX_ENTRIES = 10_000
-    private const val MAX_FILES = 10_000
+    private const val MAX_FILES = VaultStore.MAX_ENTRY_RECORDS + 1
     private const val MAX_EXTRAS = 32
     private const val MAX_RECOVERY_BLOB = 4_096
-    private const val MAX_NAME = 255
     private const val COPY_BUFFER = 64 * 1024
 
     data class Contents(
@@ -106,7 +105,6 @@ object VaultBackup {
      * The caller verifies every entry with the unwrapped key before publishing it.
      */
     fun extract(src: File, into: File): Contents {
-        into.deleteRecursively()
         if (!into.mkdirs()) throw IOException("Could not prepare the restore folder")
         val root = into.canonicalFile
 
@@ -124,21 +122,25 @@ object VaultBackup {
             val entryCount = input.readInt()
             if (entryCount !in 0..MAX_ENTRIES) throw VaultAuthException("Damaged Vault backup")
             val ids = ArrayList<String>(entryCount)
+            val seenIds = HashSet<String>()
             repeat(entryCount) {
                 val id = input.readUTF()
-                requireToken(id, "entry")
-                val dir = File(root, id).apply { mkdirs() }
+                if (!VaultStore.isSafeEntryId(id) || !seenIds.add(id)) throw VaultAuthException("Damaged Vault backup")
+                val dir = VaultStore.containedFile(root, id)
+                if (!dir.mkdir()) throw IOException("Could not prepare the restore folder")
                 val fileCount = input.readInt()
                 if (fileCount !in 0..MAX_FILES) throw VaultAuthException("Damaged Vault backup")
+                val names = HashSet<String>()
                 repeat(fileCount) {
                     val name = input.readUTF()
-                    requireToken(name, "file")
-                    val length = input.readLong()
-                    if (length < 0) throw VaultAuthException("Damaged Vault backup")
-                    val dest = File(dir, name)
-                    if (!dest.canonicalPath.startsWith(dir.canonicalPath + File.separator)) {
+                    if ((name != "manifest.enc" && !VaultStore.isSafeStoredName(name)) || !names.add(name.lowercase())) {
                         throw VaultAuthException("Damaged Vault backup")
                     }
+                    val length = input.readLong()
+                    val maxPlainLength =
+                        if (name == "manifest.enc") VaultStore.MAX_MANIFEST_BYTES else VaultStore.MAX_RECORD_BYTES
+                    if (length !in 1..VaultCrypto.encryptedLength(maxPlainLength)) throw VaultAuthException("Damaged Vault backup")
+                    val dest = VaultStore.containedFile(dir, name)
                     FileOutputStream(dest).use { out -> copy(input, out, length) }
                 }
                 ids += id
@@ -150,17 +152,19 @@ object VaultBackup {
                 if (extraCount !in 0..MAX_EXTRAS) throw VaultAuthException("Damaged Vault backup")
                 repeat(extraCount) {
                     val name = input.readUTF()
-                    requireToken(name, "file")
+                    // The only extra ever written by VaultStore is the encrypted password list.
+                    if (name != VaultPasswords.FILE_NAME || extras.isNotEmpty()) throw VaultAuthException("Damaged Vault backup")
                     val length = input.readLong()
-                    if (length < 0) throw VaultAuthException("Damaged Vault backup")
-                    val dest = File(root, name)
-                    if (!dest.canonicalPath.startsWith(root.canonicalPath + File.separator)) {
+                    if (length !in 1..VaultCrypto.encryptedLength(VaultStore.MAX_MANIFEST_BYTES)) {
                         throw VaultAuthException("Damaged Vault backup")
                     }
+                    val dest = VaultStore.containedFile(root, name)
                     FileOutputStream(dest).use { out -> copy(input, out, length) }
                     extras += dest
                 }
             }
+            // Version 1 deliberately stops after the entries and has no extras to publish.
+            if (version >= 2 && input.read() != -1) throw VaultAuthException("Damaged Vault backup")
             return Contents(recoveryBlob, ids, extras)
         }
     }
@@ -176,12 +180,4 @@ object VaultBackup {
         }
     }
 
-    private fun requireToken(value: String, kind: String) {
-        if (value.isEmpty() || value.length > MAX_NAME ||
-            value == "." || value == ".." ||
-            value.any { it == '/' || it == '\\' || it == ':' || it.code < 32 }
-        ) {
-            throw VaultAuthException("Damaged Vault backup ($kind name)")
-        }
-    }
 }

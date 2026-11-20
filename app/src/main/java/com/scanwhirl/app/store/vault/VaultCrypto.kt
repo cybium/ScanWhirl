@@ -13,6 +13,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.security.GeneralSecurityException
+import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
@@ -104,10 +105,15 @@ object VaultCrypto {
         return out.toByteArray()
     }
 
-    fun decryptBytes(blob: ByteArray, key: ByteArray): ByteArray {
+    fun decryptBytes(blob: ByteArray, key: ByteArray, expectedLength: Long? = null): ByteArray {
         val out = ByteArrayOutputStream()
-        decrypt(ByteArrayInputStream(blob), out, key)
+        decrypt(ByteArrayInputStream(blob), out, key, expectedLength)
         return out.toByteArray()
+    }
+
+    internal fun encryptedLength(plainLength: Long): Long {
+        val chunks = if (plainLength == 0L) 0 else (plainLength - 1) / CHUNK_BYTES + 1
+        return 17 + plainLength + chunks * (1 + IV_BYTES + 4 + TAG_BITS / 8)
     }
 
     /**
@@ -137,12 +143,12 @@ object VaultCrypto {
         }
     }
 
-    fun decryptFile(src: File, dest: File, key: ByteArray) {
+    fun decryptFile(src: File, dest: File, key: ByteArray, expectedLength: Long? = null) {
         val part = File(dest.parentFile, "${dest.name}.part")
         try {
             part.parentFile?.mkdirs()
             FileOutputStream(part).use { fos ->
-                FileInputStream(src).use { fis -> decrypt(fis, fos, key) }
+                FileInputStream(src).use { fis -> decrypt(fis, fos, key, expectedLength) }
                 Durable.syncStream(fos, part)
             }
             if (!part.renameTo(dest)) throw IOException("Could not write ${dest.name}")
@@ -151,6 +157,18 @@ object VaultCrypto {
             dest.delete()
             throw e
         }
+    }
+
+    /** Authenticates an entry file and checks its digest without writing any plaintext to disk. */
+    internal fun verifyFile(src: File, key: ByteArray, expectedLength: Long, expectedSha: String) {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val output = object : OutputStream() {
+            override fun write(b: Int) = digest.update(b.toByte())
+            override fun write(b: ByteArray, off: Int, len: Int) = digest.update(b, off, len)
+        }
+        FileInputStream(src).use { decrypt(it, output, key, expectedLength) }
+        val actualSha = digest.digest().joinToString("") { "%02x".format(it) }
+        if (actualSha != expectedSha) throw VaultAuthException("The Vault copy does not match the original")
     }
 
     // ------------------------------------------------------------------
@@ -185,14 +203,16 @@ object VaultCrypto {
         out.flush()
     }
 
-    private fun decrypt(input: InputStream, output: OutputStream, key: ByteArray) {
+    private fun decrypt(input: InputStream, output: OutputStream, key: ByteArray, expectedLength: Long? = null) {
         val source = DataInputStream(input)
         try {
             if (source.readInt() != MAGIC) throw VaultAuthException("Not an encrypted Vault file")
             if (source.readUnsignedByte() != FORMAT_VERSION) throw VaultAuthException("Unsupported Vault file")
             if (source.readInt() != CHUNK_BYTES) throw VaultAuthException("Unsupported Vault chunk size")
             var remaining = source.readLong()
-            if (remaining < 0) throw VaultAuthException("Damaged Vault file")
+            if (remaining < 0 || (expectedLength != null && remaining != expectedLength)) {
+                throw VaultAuthException("Damaged Vault file")
+            }
 
             while (remaining > 0) {
                 val ivLength = source.readUnsignedByte()
@@ -200,6 +220,9 @@ object VaultCrypto {
                 val iv = ByteArray(ivLength).also { source.readFully(it) }
                 val cipherLength = source.readInt()
                 if (cipherLength < TAG_BITS / 8 || cipherLength > CHUNK_BYTES + TAG_BITS / 8) {
+                    throw VaultAuthException("Damaged Vault chunk")
+                }
+                if (expectedLength != null && cipherLength.toLong() != minOf(remaining, CHUNK_BYTES.toLong()) + TAG_BITS / 8) {
                     throw VaultAuthException("Damaged Vault chunk")
                 }
                 val encrypted = ByteArray(cipherLength).also { source.readFully(it) }
@@ -216,6 +239,7 @@ object VaultCrypto {
                 output.write(plain)
                 remaining -= plain.size
             }
+            if (expectedLength != null && source.read() != -1) throw VaultAuthException("Damaged Vault file")
             output.flush()
         } catch (e: VaultAuthException) {
             throw e
@@ -261,14 +285,19 @@ object VaultKeyWrap {
             if (iterations !in 1..10_000_000) throw VaultAuthException("Damaged Vault key file")
             val saltLength = data.readUnsignedByte()
             if (saltLength !in 8..64) throw VaultAuthException("Damaged Vault key file")
+            // ByteArrayInputStream.available() is exact. A wrap always carries one 32-byte key.
+            val expectedWrappedLength = VaultCrypto.encryptedLength(VaultCrypto.KEY_BYTES.toLong()).toInt()
+            if (data.available() != saltLength + Int.SIZE_BYTES + expectedWrappedLength) {
+                throw VaultAuthException("Damaged Vault key file")
+            }
             val salt = ByteArray(saltLength).also { data.readFully(it) }
             val wrappedLength = data.readInt()
-            if (wrappedLength <= 0) throw VaultAuthException("Damaged Vault key file")
+            if (wrappedLength != expectedWrappedLength) throw VaultAuthException("Damaged Vault key file")
             val wrapped = ByteArray(wrappedLength).also { data.readFully(it) }
 
             val derived = VaultCrypto.deriveKey(secret, salt, iterations)
             try {
-                VaultCrypto.decryptBytes(wrapped, derived)
+                VaultCrypto.decryptBytes(wrapped, derived, VaultCrypto.KEY_BYTES.toLong())
             } finally {
                 derived.fill(0)
             }

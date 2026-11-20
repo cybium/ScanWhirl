@@ -1,6 +1,7 @@
 package com.scanwhirl.app.store.vault
 
 import android.app.Application
+import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
@@ -22,6 +23,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.lang.reflect.InvocationTargetException
 import java.security.MessageDigest
 
 /**
@@ -75,6 +77,151 @@ class VaultStoreTest {
         gate = VaultPasscodeGate(clock = { now }),
         iterations = fastIterations
     )
+
+    @Test
+    fun `manifest parser rejects invalid paths and declarations without touching storage`() {
+        val vault = store()
+        val roots = listOf(
+            app.filesDir,
+            File(app.filesDir, "vault2"),
+            File(app.filesDir, "vault2/.incoming-fixture"),
+            File(app.cacheDir, "vault_open"),
+            File(app.cacheDir, "vault_verify")
+        )
+        roots.forEachIndexed { index, dir ->
+            dir.mkdirs()
+            File(dir, "sentinel").writeText("Fictional sentinel $index")
+        }
+        fun state() = roots.map(::snapshot)
+        val before = state()
+        val parse = VaultStore::class.java.getDeclaredMethod(
+            "parseManifest", ByteArray::class.java, String::class.java
+        ).apply { isAccessible = true }
+        fun encoded(value: String) = Base64.encodeToString(value.toByteArray(), Base64.NO_WRAP)
+        fun record(rel: String, stored: String, size: Long = 5) =
+            "file\t${encoded(rel)}\t$stored\t$size\t${"0".repeat(64)}"
+        fun manifest(records: List<String>, pdf: String = "document.pdf") =
+            (listOf("v1", "id\tfixture", "pdf\t${encoded(pdf)}") + records).joinToString("\n").toByteArray()
+        val correct = record("document.pdf", "f0000.enc")
+        val invalidNames = listOf("../x", "/x", "\\x", "\u0000", "", ".", "..")
+        val cases = buildList {
+            invalidNames.forEach { add(manifest(listOf(record("document.pdf", it)))) }
+            invalidNames.forEach { add(manifest(listOf(correct, record(it, "f0001.enc")))) }
+            add(manifest(listOf(correct, record("other.pdf", "f0000.enc"))))
+            add(manifest(listOf(correct, record("document.pdf", "f0001.enc"))))
+            add(manifest(listOf(correct), pdf = "missing.pdf"))
+            add(manifest(listOf(correct), pdf = "scan.pdf"))
+            add(manifest(listOf(correct, record("page_000.jpg", "f0001.enc")), pdf = "../scan.pdf"))
+            add(manifest(listOf(correct, record("large.pdf", "f0001.enc", Long.MAX_VALUE))))
+            add(manifest(listOf(correct) + List(10_000) { record("p$it.jpg", "f${it + 1}.enc") }))
+        }
+        val refused = cases.count { bytes ->
+            try {
+                parse.invoke(vault, bytes, "fixture")
+                false
+            } catch (e: InvocationTargetException) {
+                e.cause is VaultAuthException
+            }
+        }
+        assertEquals(before, state())
+        assertEquals(0, vault.count())
+        assertEquals("All invalid manifests must be rejected", cases.size, refused)
+    }
+
+    @Test
+    fun `a v1 page-only entry stays portable but never opens an undeclared PDF`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Fictional page-only entry")
+        assertTrue(repo.getDocument(id)!!.pdfFile.delete())
+        val vault = store()
+        val setup = vault.setupConfirmed("246810")
+        vault.addDocument(id)
+        val backup = File(app.cacheDir, "page-only.swvault")
+        vault.exportBackup(backup)
+        vault.wipeAll()
+        val restored = store()
+        assertEquals(listOf(id), restored.importBackup(backup, setup.recoveryCode).map { it.id })
+        assertThrows(VaultAuthException::class.java) { restored.openDocument(id) }
+        assertFalse(File(app.cacheDir, "vault_open/$id").exists())
+    }
+
+    @Test
+    fun `adoption preflight authenticates payloads without publishing or writing plaintext`() {
+        val goodId = DocFixtures.saved(repo, app, pages = 1, name = "Fictional valid entry")
+        val badId = DocFixtures.saved(repo, app, pages = 1, name = "Fictional damaged entry")
+        val vault = store()
+        vault.setupConfirmed("246810")
+        vault.addDocument(goodId)
+        vault.addDocument(badId)
+        val oldKey = VaultSession.keyOrNull()!!.copyOf()
+        val staged = File(app.cacheDir, "adoption-fixture")
+        val vaultRoot = File(app.filesDir, "vault2")
+        val valid = File(staged, goodId)
+        val damaged = File(staged, badId)
+        File(vaultRoot, goodId).copyRecursively(valid)
+        File(vaultRoot, badId).copyRecursively(damaged)
+        val changed = damaged.listFiles()!!.first { it.name.startsWith("f") }
+        val bytes = changed.readBytes()
+        bytes[bytes.lastIndex] = (bytes.last().toInt() xor 1).toByte()
+        changed.writeBytes(bytes)
+        vault.wipeAll()
+        val verify = File(app.cacheDir, "vault_verify").apply { mkdirs() }
+        File(verify, "sentinel").writeText("Fictional verification sentinel")
+        val initialStaging = snapshot(staged)
+        val initialCache = snapshot(verify)
+        try {
+            vault.validateStagedEntryForAdoption(valid, oldKey)
+            assertThrows(VaultAuthException::class.java) {
+                vault.validateStagedEntryForAdoption(damaged, oldKey)
+            }
+            assertEquals(initialStaging, snapshot(staged))
+            assertEquals(initialCache, snapshot(verify))
+            assertEquals(0, vault.count())
+            assertFalse(vault.isSetUp())
+        } finally {
+            oldKey.fill(0)
+        }
+    }
+
+    @Test
+    fun `reencryption refuses a damaged entry and still restores a valid entry byte for byte`() {
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Fictional restore entry")
+        val original = snapshot(File(app.filesDir, "documents/$id"))
+        val old = store()
+        old.setupConfirmed("246810")
+        old.addDocument(id)
+        val oldKey = VaultSession.keyOrNull()!!.copyOf()
+        val staged = File(app.cacheDir, "reencrypt-fixture/$id")
+        File(app.filesDir, "vault2/$id").copyRecursively(staged)
+        val payload = staged.listFiles()!!.first { it.name.startsWith("f") }
+        val validBytes = payload.readBytes()
+        val damaged = validBytes.copyOf()
+        damaged[damaged.lastIndex] = (damaged.last().toInt() xor 1).toByte()
+        payload.writeBytes(damaged)
+        old.wipeAll()
+        val vault = store()
+        vault.setupConfirmed("135790")
+        val vaultRoot = File(app.filesDir, "vault2")
+        val cache = File(app.cacheDir, "vault_verify").apply { mkdirs() }
+        val open = File(app.cacheDir, "vault_open").apply { mkdirs() }
+        val roots = listOf(vaultRoot, cache, open, staged.parentFile!!)
+        roots.forEach { File(it, "sentinel").writeText("Fictional sentinel") }
+        val before = roots.map(::snapshot)
+        try {
+            assertThrows(VaultAuthException::class.java) { vault.restoreEntryFromBackup(staged, oldKey) }
+            assertEquals(before, roots.map(::snapshot))
+            assertEquals(0, vault.count())
+            assertTrue(vaultRoot.listFiles()!!.none { it.isDirectory })
+            assertTrue(cache.listFiles()!!.none { it.isDirectory })
+
+            payload.writeBytes(validBytes)
+            val result = vault.restoreEntryFromBackup(staged, oldKey)
+            assertFalse(result.skipped)
+            assertEquals(id, result.id)
+            assertEquals(original, snapshot(vault.openDocument(id).dir))
+        } finally {
+            oldKey.fill(0)
+        }
+    }
 
     @Test
     fun `add to vault then open gives byte-identical files and lock wipes the plaintext copy`() {
