@@ -37,7 +37,6 @@ import com.scanwhirl.app.store.vault.VaultCrypto
 import com.scanwhirl.app.store.vault.VaultKeyChallenge
 import com.scanwhirl.app.store.vault.VaultKeyInvalidatedException
 import com.scanwhirl.app.store.vault.VaultLockedException
-import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.store.vault.VaultStaleReplacementException
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.ui.BaseActivity
@@ -310,14 +309,7 @@ class VaultActivity : BaseActivity() {
             promptShown = false
             render()
             maybePromptOnOpen()
-        } else if (store.isUnlocked()) {
-            VaultSession.onForeground()
         }
-    }
-
-    override fun onStop() {
-        if (!isChangingConfigurations) VaultSession.onBackground()
-        super.onStop()
     }
 
     // ------------------------------------------------------------------

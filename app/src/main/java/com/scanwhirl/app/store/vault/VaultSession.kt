@@ -12,6 +12,9 @@ package com.scanwhirl.app.store.vault
  */
 object VaultSession {
 
+    /** A controllable wall clock for lifecycle/reader regression tests. */
+    internal var clock: () -> Long = { System.currentTimeMillis() }
+
     @Volatile
     private var key: ByteArray? = null
 
@@ -20,13 +23,13 @@ object VaultSession {
     private var backgroundAt: Long = 0L
 
     /** True while unlocked and inside the background grace period. Expires lazily. */
-    fun isUnlocked(now: Long = System.currentTimeMillis()): Boolean = keyOrNull(now) != null
+    fun isUnlocked(now: Long = clock()): Boolean = keyOrNull(now) != null
 
     /**
      * The vault key, or null when locked. Callers must not keep or modify it; it is the
      * session's copy.
      */
-    internal fun keyOrNull(now: Long = System.currentTimeMillis()): ByteArray? {
+    internal fun keyOrNull(now: Long = clock()): ByteArray? {
         val current = key ?: return null
         if (VaultSessionPolicy.shouldRelock(backgroundAt, now)) {
             close()
@@ -51,12 +54,13 @@ object VaultSession {
     }
 
     /** The app went to the background: start the grace period if a key is held. */
-    fun onBackground(now: Long = System.currentTimeMillis()) {
+    fun onBackground(now: Long = clock()) {
         if (key != null) backgroundAt = now
     }
 
-    /** A Vault screen is in front again: the grace period no longer applies. */
-    fun onForeground() {
+    /** Validate the elapsed background grace BEFORE clearing its timestamp. */
+    fun onForeground(now: Long = clock()) {
+        keyOrNull(now)
         backgroundAt = 0L
     }
 }
