@@ -26,6 +26,7 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.bindCredentialSubmit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -324,24 +325,33 @@ class BackupActivity : BaseActivity() {
             .setMessage(R.string.backup_code_note)
             .setInput(hint = getString(R.string.backup_code_hint))
             .build()
-        sheet.setPrimaryStayOpen(R.string.backup_continue) {
-            val code = VaultCrypto.normalizeRecoveryCode(sheet.inputView?.text?.toString().orEmpty())
-            if (!VaultCrypto.isRecoveryCode(code)) {
-                toast(R.string.backup_code_wrong)
-                return@setPrimaryStayOpen
+        val input = checkNotNull(sheet.inputView)
+        sheet.bindCredentialSubmit(
+            this, input, R.string.backup_continue, dispatcher = Dispatchers.IO,
+            read = {
+                val code = VaultCrypto.normalizeRecoveryCode(input.text.toString())
+                if (VaultCrypto.isRecoveryCode(code)) code else {
+                    toast(R.string.backup_code_wrong)
+                    null
+                }
+            },
+            work = { code ->
+                // Prove the code before starting the separate archive-encryption operation.
+                val known = vault.unlockWithRecoveryForBackup(code) {
+                    withContext(Dispatchers.Main) { sheet.isShowing && !isFinishing && !isDestroyed }
+                }
+                if (known) VaultCrypto.formatRecoveryCode(code) else null
             }
-            // Proving the code now guarantees the file can be opened later: a typo would
-            // otherwise produce an undecryptable backup.
-            val known = runCatching { vault.unlockWithRecovery(code) }.getOrDefault(false)
-            if (!known) {
+        ) { code ->
+            if (code == null) {
                 toast(R.string.backup_code_wrong)
-                return@setPrimaryStayOpen
+                return@bindCredentialSubmit
             }
             sheet.dismiss()
-            create(VaultCrypto.formatRecoveryCode(code), FullBackup.Wrap.RECOVERY_CODE)
+            create(code, FullBackup.Wrap.RECOVERY_CODE)
         }
         sheet.setSecondary(R.string.backup_cancel) { }
-        sheet.secure().show()
+        sheet.show()
     }
 
     private fun askPassword() {

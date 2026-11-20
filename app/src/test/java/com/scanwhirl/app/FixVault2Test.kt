@@ -201,7 +201,7 @@ class FixVault2Test {
         assertEquals("Old PIN Vault", titleOf(legacy))
         legacy.need<EditText>(R.id.vaultLegacyPin).setText("1234")
         legacy.need<View>(R.id.swSheetPrimary).performClick()
-        idle()
+        assertTrue("the old PIN check finishes", await { !legacy.isShowing })
 
         val recovery = reachRecoveryCode()
         val code = recovery.need<TextView>(R.id.vaultRecoveryCode).text.toString()

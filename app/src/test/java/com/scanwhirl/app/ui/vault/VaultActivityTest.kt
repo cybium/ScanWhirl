@@ -571,7 +571,7 @@ class VaultActivityTest {
         assertEquals("Old PIN Vault", legacySheet.need<TextView>(R.id.swSheetTitle).text)
         legacySheet.need<EditText>(R.id.vaultLegacyPin).setText("1234")
         primary(legacySheet).performClick()
-        idle()
+        assertTrue("the old PIN check finishes", await { !legacySheet.isShowing })
 
         val setupSheet = sheet()
         assertEquals("Set up your Vault", setupSheet.need<TextView>(R.id.swSheetTitle).text)

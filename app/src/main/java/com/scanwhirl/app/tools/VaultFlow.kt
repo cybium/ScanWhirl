@@ -7,8 +7,7 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.SwDialog
-import com.scanwhirl.app.ui.showSw
+import com.scanwhirl.app.ui.kit.bindCredentialSubmit
 import com.scanwhirl.app.util.Prefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -51,14 +50,19 @@ class VaultFlow(
             )
             .setSecondary(android.R.string.cancel)
             .build()
-        sheet.inputView?.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        sheet.setPrimary(R.string.unlock_pdf_open) {
-            val pin = sheet.inputView?.text?.toString()?.trim().orEmpty()
-            if (Prefs.verifyVaultPin(activity, pin)) {
+        val input = checkNotNull(sheet.inputView)
+        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        sheet.bindCredentialSubmit(
+            activity, input, R.string.unlock_pdf_open,
+            read = { input.text.toString().trim() },
+            work = { Prefs.prepareVaultPinCheck(activity, it) }
+        ) { checked ->
+            if (checked != null && Prefs.acceptVaultPinCheck(activity, checked)) {
                 setVaultMode(true)
             } else {
                 Toast.makeText(activity, R.string.vault_pin_wrong, Toast.LENGTH_LONG).show()
             }
+            sheet.dismiss()
         }
         sheet.show()
     }
@@ -74,16 +78,28 @@ class VaultFlow(
             )
             .setSecondary(android.R.string.cancel)
             .build()
-        sheet.inputView?.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
-        sheet.setPrimary(R.string.save) {
-            val pin = sheet.inputView?.text?.toString()?.trim().orEmpty()
-            if (pin.length != 4 || !pin.all { it.isDigit() }) {
-                Toast.makeText(activity, R.string.vault_pin_invalid, Toast.LENGTH_LONG).show()
-            } else {
-                Prefs.setVaultPin(activity, pin)
-                Toast.makeText(activity, R.string.vault_pin_saved, Toast.LENGTH_SHORT).show()
-                onSuccess()
+        val input = checkNotNull(sheet.inputView)
+        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        sheet.bindCredentialSubmit(
+            activity, input, R.string.save, progressLabel = R.string.review_saving,
+            read = {
+                val pin = input.text.toString().trim()
+                if (pin.length == 4 && pin.all { it.isDigit() }) pin else {
+                    Toast.makeText(activity, R.string.vault_pin_invalid, Toast.LENGTH_LONG).show()
+                    sheet.dismiss()
+                    null
+                }
+            },
+            work = { Prefs.prepareVaultPin(it) }
+        ) { prepared ->
+            if (prepared == null) {
+                Toast.makeText(activity, R.string.r7_vault_pin_save_failed, Toast.LENGTH_LONG).show()
+                return@bindCredentialSubmit
             }
+            Prefs.savePreparedVaultPin(activity, prepared)
+            Toast.makeText(activity, R.string.vault_pin_saved, Toast.LENGTH_SHORT).show()
+            onSuccess()
+            sheet.dismiss()
         }
         sheet.show()
     }

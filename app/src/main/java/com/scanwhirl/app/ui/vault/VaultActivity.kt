@@ -46,6 +46,8 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.bindCredentialSubmit
+import com.scanwhirl.app.util.Prefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1193,13 +1195,14 @@ class VaultActivity : BaseActivity() {
         } else {
             sheet.setSecondary(R.string.vault_cancel)
         }
-        sheet.setPrimary(R.string.vault_legacy_continue)
-        sheet.keepOpenOnPrimary()
-        sheet.primaryButton.setOnClickListener {
-            val value = pin.text().trim()
-            if (!store.verifyLegacyPin(value)) {
+        sheet.bindCredentialSubmit(
+            this, pin.editText, R.string.vault_legacy_continue,
+            read = { pin.text().trim() },
+            work = { Prefs.prepareVaultPinCheck(this, it) }
+        ) { checked ->
+            if (checked == null || !Prefs.acceptVaultPinCheck(this, checked)) {
                 pin.setError(getString(R.string.vault_legacy_wrong))
-                return@setOnClickListener
+                return@bindCredentialSubmit
             }
             pin.setError(null)
             sheet.dismiss()

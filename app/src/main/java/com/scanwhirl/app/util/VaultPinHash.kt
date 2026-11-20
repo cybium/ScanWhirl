@@ -17,6 +17,11 @@ internal object VaultPinHash {
 
     const val ITERATIONS = 120_000
 
+    /** Test seam at the actual PBKDF2 call, including old SHA-256 record upgrades. */
+    @androidx.annotation.VisibleForTesting
+    @Volatile
+    internal var derivationProbe: (() -> Unit)? = null
+
     private const val PREFIX = "pbkdf2"
     private const val SALT_BYTES = 16
     private const val HASH_BYTES = 32
@@ -50,6 +55,7 @@ internal object VaultPinHash {
     }
 
     private fun derive(pin: String, salt: ByteArray, iterations: Int): ByteArray {
+        derivationProbe?.invoke()
         val spec = PBEKeySpec(pin.toCharArray(), salt, iterations, HASH_BYTES * 8)
         try {
             val algorithm = if (android.os.Build.VERSION.SDK_INT >= 26) {

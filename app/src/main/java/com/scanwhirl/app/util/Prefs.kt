@@ -139,9 +139,21 @@ object Prefs {
      * (`pbkdf2$<iterations>$<saltB64>$<hashB64>`), never the PIN itself and never plain SHA-256
      * (a 4-digit PIN is only 10,000 guesses for a bare digest). Security audit finding M-3.
      */
-    fun setVaultPin(c: Context, pin: String) {
+    fun setVaultPin(c: Context, pin: String) = savePreparedVaultPin(c, prepareVaultPin(pin))
+
+    internal class PreparedVaultPin internal constructor(internal val hash: String)
+
+    internal fun prepareVaultPin(pin: String): PreparedVaultPin {
         require(pin.length == 4 && pin.all { it.isDigit() }) { "PIN must be 4 digits" }
-        sp(c).edit().putString(KEY_VAULT_PIN, VaultPinHash.create(pin)).apply()
+        return PreparedVaultPin(VaultPinHash.create(pin))
+    }
+
+    private val vaultPinLock = Any()
+
+    internal fun savePreparedVaultPin(c: Context, prepared: PreparedVaultPin) {
+        synchronized(vaultPinLock) {
+            sp(c).edit().putString(KEY_VAULT_PIN, prepared.hash).apply()
+        }
     }
 
     /**
@@ -150,12 +162,28 @@ object Prefs {
      * not survive the first successful check.
      */
     fun verifyVaultPin(c: Context, pin: String): Boolean {
-        val stored = sp(c).getString(KEY_VAULT_PIN, null) ?: return false
-        val ok = VaultPinHash.verify(stored, pin)
-        if (ok && VaultPinHash.isLegacy(stored)) {
-            sp(c).edit().putString(KEY_VAULT_PIN, VaultPinHash.create(pin)).apply()
-        }
-        return ok
+        val checked = prepareVaultPinCheck(c, pin) ?: return false
+        return acceptVaultPinCheck(c, checked)
+    }
+
+    internal class VaultPinCheck internal constructor(
+        internal val expected: String,
+        internal val upgrade: String?
+    )
+
+    /** Derive and prepare any upgrade without writing until the caller accepts the result. */
+    internal fun prepareVaultPinCheck(c: Context, pin: String): VaultPinCheck? {
+        val stored = sp(c).getString(KEY_VAULT_PIN, null) ?: return null
+        if (!VaultPinHash.verify(stored, pin)) return null
+        return VaultPinCheck(stored, if (VaultPinHash.isLegacy(stored)) VaultPinHash.create(pin) else null)
+    }
+
+    internal fun acceptVaultPinCheck(c: Context, checked: VaultPinCheck): Boolean = synchronized(vaultPinLock) {
+        val prefs = sp(c)
+        // A concurrent PIN change wins over a stale successful check or SHA-256 upgrade.
+        if (prefs.getString(KEY_VAULT_PIN, null) != checked.expected) return@synchronized false
+        checked.upgrade?.let { prefs.edit().putString(KEY_VAULT_PIN, it).apply() }
+        true
     }
 
     internal fun sha256(input: String): String {
