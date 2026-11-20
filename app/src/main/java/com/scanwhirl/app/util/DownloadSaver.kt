@@ -4,6 +4,8 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
+import android.Manifest
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
@@ -55,6 +57,20 @@ object DownloadSaver {
     /** Pre-Q staging files: hidden, uniquely named per save (never a fixed `.part` name). */
     internal const val TEMP_PREFIX = ".scanwhirl-"
     internal const val TEMP_SUFFIX = ".part"
+
+    /**
+     * H2-4: before Android 10 a save writes into the public Documents/Downloads folder through a
+     * plain file, which needs the runtime WRITE_EXTERNAL_STORAGE grant (the manifest declares it
+     * with maxSdkVersion="28"). Android 10+ goes through MediaStore and needs no permission at all.
+     *
+     * Callers ask this before a save that a person started, so one honest prompt is shown instead
+     * of the write failing on EACCES. A caller with no screen of its own must skip the copy and
+     * say so rather than staying silent.
+     */
+    fun needsLegacyStoragePermission(context: Context): Boolean =
+        Build.VERSION.SDK_INT < 29 &&
+            context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
 
     /** A pre-Q staging file older than this belongs to a save that died; swept on the next save. */
     internal const val STALE_TEMP_AGE_MS = 60L * 60 * 1000

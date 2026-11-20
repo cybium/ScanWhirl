@@ -23,6 +23,12 @@ object AutoExport {
         if (!Prefs.autoCopyToDocuments(context) || !doc.pdfFile.exists() || doc.pdfFile.length() == 0L) return null
         // PM-3.1c: never copy a PDF whose lock record says "protected" while the PDF is not.
         if (PdfProtection.state(doc.pdfFile.parentFile!!) == PdfProtection.State.NEEDS_REPAIR) return null
+        // H2-4: on Android 7-9 the Documents copy needs the runtime storage grant. This runs right
+        // after a scan with no screen of its own to ask on, so it never prompts; it skips the copy
+        // and says so, instead of a copy the person switched on silently never appearing.
+        if (DownloadSaver.needsLegacyStoragePermission(context)) {
+            return context.getString(R.string.f7save_autocopy_no_permission)
+        }
         return try {
             val copy = DownloadSaver.savePdfFile(context, doc.pdfFile, DownloadSaver.pdfNameFor(doc.name))
             // T4.8: remember the copy so delete can remove it; failing to record it is not a failed export.
