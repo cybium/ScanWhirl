@@ -1,5 +1,7 @@
 package com.scanwhirl.app.util
 
+import org.apache.pdfbox.Loader
+import org.apache.pdfbox.text.PDFTextStripper
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -12,6 +14,7 @@ import org.robolectric.annotation.GraphicsMode
 import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
 import java.io.File
+import java.util.Locale
 import java.security.MessageDigest
 import java.text.Normalizer
 import javax.crypto.Cipher
@@ -225,5 +228,33 @@ class PdfEncryptorTest {
         assertTrue("content stream contains World", content.contains("World"))
         assertTrue("content stream contains Second", content.contains("Second"))
         assertTrue("encrypted file starts with %PDF-", encrypted.readText(Charsets.ISO_8859_1).startsWith("%PDF-"))
+        Loader.loadPDF(encrypted, "pw1234").use {
+            assertEquals(1, it.numberOfPages)
+            assertEquals("Hello World Second line", PDFTextStripper().getText(it).trim().replace(Regex("\\s+"), " "))
+        }
+    }
+
+    @Test
+    fun `generator shaped PDF does not leak a standalone string or the Info title`() {
+        val dir = tempDir("pdfaes-metadatatest")
+        val src = File(dir, "src.pdf")
+        PdfGenerator.imagesToPdf(listOf(makeJpeg(dir, "a.jpg", 620, 877)), src)
+        val raw = src.readText(Charsets.ISO_8859_1)
+        val xrefAt = raw.lastIndexOf("xref\n0 ")
+        val trailerAt = raw.lastIndexOf("trailer\n")
+        val entries = raw.substring(xrefAt, trailerAt).substringAfter('\n').substringAfter('\n')
+        val title = "Aadhaar - FAKE 9999"
+        val extra = "6 0 obj\n<< /Title ($title) >>\nendobj\n7 0 obj\n(Fictional standalone)\nendobj\n"
+        val sevenAt = xrefAt + extra.indexOf("7 0 obj")
+        src.writeText(raw.substring(0, xrefAt) + extra + "xref\n0 8\n" + entries +
+            String.format(Locale.ROOT, "%010d 00000 n \n%010d 00000 n \n", xrefAt, sevenAt) +
+            "trailer\n<< /Size 8 /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xrefAt + extra.length}\n%%EOF\n",
+            Charsets.ISO_8859_1)
+        val dst = File(dir, "enc.pdf")
+        PdfEncryptor.encrypt(src, dst, "pw1234")
+        val encrypted = dst.readText(Charsets.ISO_8859_1)
+        assertTrue("Protect left the Info title in plaintext", !encrypted.contains(title))
+        assertTrue("Protect left a standalone string in plaintext", !encrypted.contains("Fictional standalone"))
+        Loader.loadPDF(dst, "pw1234").use { assertEquals(title, it.documentInformation.title) }
     }
 }

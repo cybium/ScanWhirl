@@ -239,15 +239,18 @@ class PdfAesTest {
 
         assertEquals(true, PdfProtection.isEncrypted(dst))
         assertTrue(
-            "the /Encrypt value is a dictionary, not a naked key list",
-            dst.readText(Charsets.ISO_8859_1).contains("/Encrypt << /Filter /Standard")
+            "the /Encrypt value points to an indirect standard security dictionary",
+            dst.readText(Charsets.ISO_8859_1).let { pdf ->
+                val number = Regex("/Encrypt (\\d+) 0 R").find(pdf)?.groupValues?.get(1)
+                number != null && pdf.contains("\n$number 0 obj\n<< /Filter /Standard")
+            }
         )
 
         val bytes = dst.readBytes()
         val fileKey = refUserKey("pw1234", entry(dst, "U"), entry(dst, "UE"))
             ?: throw AssertionError("reference 2.B could not open the rewritten file")
         // The structure is only verifiable with the key: the streams are ciphertext now.
-        PdfVerifier.verify(dst, decryption = PdfAes.decryptor(fileKey))
+        PdfVerifier.verify(dst, decryption = PdfAes.decryptor(fileKey), eolBeforeContentEndstream = true)
         val bodies = PdfEncryptor.objectStreamBodies(bytes)
         val imageBody = bodies.first { it.first == 5 }
         assertArrayEquals(

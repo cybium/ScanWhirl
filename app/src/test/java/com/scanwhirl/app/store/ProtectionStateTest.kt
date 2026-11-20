@@ -110,6 +110,50 @@ class ProtectionStateTest {
     }
 
     // Pins ScanRepository.repairProtection.
+    @Test fun `new lock records are salted and existing lock records migrate after proof of password`() {
+        val first = DocFixtures.locked(repo, app, "1234")
+        val second = DocFixtures.locked(repo, app, "1234")
+        val firstLock = File(dirOf(first), "locked.meta")
+        val secondLock = File(dirOf(second), "locked.meta")
+        val weak = Prefs.sha256("pdf_lock:1234")
+        assertFalse(firstLock.readText().contains(weak))
+        assertFalse(firstLock.readText() == secondLock.readText())
+
+        firstLock.writeText(weak)
+        val originalPdf = Sha256.of(pdfOf(first))
+        assertFalse(repo.verifyPdfPassword(first, "4321"))
+        assertEquals(weak, firstLock.readText())
+        val sync = Durable.beforeFileSync
+        try {
+            Durable.beforeFileSync = { if (it.name == "locked.meta.tmp") throw java.io.IOException("test disk failure") }
+            assertTrue("a failed migration must not lock the owner out", repo.verifyPdfPassword(first, "1234"))
+            assertEquals(weak, firstLock.readText())
+            assertFalse(File(dirOf(first), "locked.meta.tmp").exists())
+        } finally {
+            Durable.beforeFileSync = sync
+        }
+        assertTrue(repo.verifyPdfPassword(first, "1234"))
+        assertFalse(firstLock.readText().contains(weak))
+        assertEquals(originalPdf, Sha256.of(pdfOf(first)))
+        assertTrue(ScanRepository(app).verifyPdfPassword(first, "1234"))
+        assertFalse(ScanRepository(app).verifyPdfPassword(first, "4321"))
+    }
+
+    @Test fun `unsupported pdf only library item is not replaced or indexed`() {
+        val id = DocFixtures.saved(repo, app)
+        for (page in repo.getDocument(id)!!.pageFiles) assertTrue(page.delete())
+        val pdf = pdfOf(id)
+        val latin = Charsets.ISO_8859_1
+        pdf.writeText(pdf.readText(latin).replace("/Root 1 0 R", "/Root 1 0 R /XRefStm 1"), latin)
+        assertTrue(repo.getDocument(id)!!.pageFiles.isEmpty())
+        val before = PdfInvariants.dirDigest(dirOf(id))
+        val failure = runCatching { runBlocking { repo.protectPdf(id, "1234") } }.exceptionOrNull()
+        assertEquals("Not a PDF ScanWhirl can protect", failure?.message)
+        assertEquals(before, PdfInvariants.dirDigest(dirOf(id)))
+        assertNull(repo.findLockedDocumentByHash(Sha256.of(pdf)))
+        PdfInvariants.assertNoOrphans(app, repo)
+    }
+
     @Test fun `repair with the right password encrypts and with a wrong one changes nothing`() {
         val id = repairable()
         val before = PdfInvariants.dirDigest(dirOf(id))
