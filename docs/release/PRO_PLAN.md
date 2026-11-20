@@ -22,8 +22,9 @@ Status: DECIDED for design; final copy waits for the Pro inventory (below).
    output, never as a blocking or extra step (JUDGE_WHY §5B).
 4. **Paywall screen:** Pro purchase (Play's localized price), **Continue free**, **Restore purchase**, a short list of
    what stays free. Nothing preselected; no live ratings (offline).
-5. **Price framing:** "{Play price} once. No subscription." India control ₹499; Play price experiment ₹299 vs ₹499
-   when eligible; judge it on Console revenue + refunds. No ₹/day, no competitor comparison, no anchor tier,
+5. **Price framing:** "{Play price} once. No subscription." **India price ₹299 (owner decision 2026-11-20; the owner
+   sets it in Play Console; the app shows only Play's localized price, no hard-coded number).** Any later experiment
+   is judged on Console revenue + refunds. No ₹/day, no competitor comparison, no anchor tier,
    no crossed-out or "launch" price, no countdown.
 6. **Never:** hostage output, trial watermark or lower quality, new caps on core, moving a free capability behind Pro,
    nagging, telemetry/server, auto-charge wording, guarantees we can't keep.
@@ -51,4 +52,4 @@ Play's authoritative answer (refund, chargeback, other account) and Pro follows 
 acknowledged exactly once, with automatic bounded retry (unacknowledged purchases are refunded by Play after 3 days).
 
 ## Existing tester product
-The 1.2.x console product at ₹100 stays for current testers until the price experiment starts.
+The 1.2.x console product was ₹100 for testers; the owner moves it to ₹299 for the next release (2026-11-20).
