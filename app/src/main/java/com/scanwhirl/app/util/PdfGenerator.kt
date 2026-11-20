@@ -163,10 +163,18 @@ object PdfGenerator {
                     offsets[pageObj] = position
 
                     // Text layer: only when geometry exists, has non-blank lines,
-                    // and matches the JPEG's pixel dimensions.
+                    // matches the JPEG's pixel dimensions and really emits text.
                     val layer = textLayers[i]
-                    val hasLayer = layer != null && layer.lines.any { it.text.isNotBlank() } &&
+                    val layerContent = if (layer != null && layer.lines.any { it.text.isNotBlank() } &&
                         layer.width == info.width && layer.height == info.height
+                    ) {
+                        PdfTextLayer.contentFor(layer, pageW, pageH)
+                    } else {
+                        ""
+                    }
+                    // H4-1: a page is layered only when its content stream carries text. Counting
+                    // the page before contentFor() ran claimed a layer for a page that emitted none.
+                    val hasLayer = layerContent.isNotBlank()
 
                     val resources = if (hasLayer) {
                         "/Resources << /XObject << /Im$i $imageObj 0 R >> ${PdfTextLayer.FONT_DICT} >>"
@@ -179,7 +187,7 @@ object PdfGenerator {
                         append("q\n$pageW 0 0 $pageH 0 0 cm\n/Im$i Do\nQ\n")
                         if (hasLayer) {
                             layeredPages.add(i)
-                            append(PdfTextLayer.contentFor(layer, pageW, pageH))
+                            append(layerContent)
                         }
                     }.toByteArray(Charsets.ISO_8859_1)
                     val contentBody = encryption?.encryptStream(content) ?: content
