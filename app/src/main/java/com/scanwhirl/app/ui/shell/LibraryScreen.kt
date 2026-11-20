@@ -117,6 +117,7 @@ class LibraryScreen(
     internal var lastUndoSnackbar: com.google.android.material.snackbar.Snackbar? = null
     private var recentHeader: View? = null
     private var folderScroll: View? = null
+    private lateinit var activeFilter: TextView
     private lateinit var noMatchView: TextView
     private lateinit var homeClear: ImageButton
 
@@ -124,6 +125,13 @@ class LibraryScreen(
     private var query = ""
     private var category: String? = null
     private var revealId: String? = null
+
+    /**
+     * UI-W4: every render gets a token; only the newest pass may bind rows. Cancelling
+     * the previous job is not enough when a slow text read is already off the main
+     * thread, so fast typing or clearing can never re-show an older query's rows.
+     */
+    private var renderGeneration = 0
 
     /** T28: page + snippet evidence for the text hits currently shown, by document id. */
     private var rowEvidence: Map<String, DocSearchHit> = emptyMap()
@@ -443,8 +451,10 @@ class LibraryScreen(
 
     /** v2 UI: 03_tools_hub — the Folders tool lands here with the folder row in view. */
     fun focusFolders() {
+        // UI-W4: the tool opens the explicit folder list instead of a toast that told the
+        // person to discover a long-press.
         renderFolders()
-        Toast.makeText(context, context.getString(R.string.folder_hint), Toast.LENGTH_SHORT).show()
+        showAllFolders()
     }
 
     /** v2 UI: 03_tools_hub — Batch rename: select two or more documents first. */
@@ -471,9 +481,12 @@ class LibraryScreen(
     private fun folderSection(): View {
         // Compact folder chips: one scrolling row under the search field. The A/अ language
         // chip moved up into the header (v4 header: mark, A/अ, search).
+        //
+        // UI-W4: the rail is followed by one plain sentence naming the active folder, so
+        // the current filter is identifiable without relying on chip colour alone (200 %,
+        // EN or HI). The sentence is hidden when no folder filter is active.
         val section = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = VERTICAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 val m = SwStyle.dp(context, 18f)
                 val top = if (resources.configuration.fontScale >= 1.6f) 0f else 4f
@@ -497,7 +510,27 @@ class LibraryScreen(
             setPadding(0, 0, SwStyle.dp(context, 18f), 0)
         }
         scroll.addView(folderRow)
+        // The scroll stays a direct child of the section that search mode hides, so the
+        // existing collapse test (and the visible behaviour) still sees the rail's parent.
         section.addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        activeFilter = SwStyle.text(
+            context,
+            // UI_PLAN 0.8: Hindi body/meta starts at 14sp.
+            if (AppLanguage.showingHindi(context)) 14f else 12.5f,
+            SwStyle.color(context, R.color.cyan_primary)
+        ).apply {
+            id = R.id.swActiveFilter
+            maxLines = if (resources.configuration.fontScale >= 1.6f) 3 else 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            val pad = SwStyle.dp(context, 2f)
+            setPadding(0, pad, 0, pad)
+            isVisible = false
+        }
+        section.addView(activeFilter, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         return section
     }
 
@@ -513,13 +546,25 @@ class LibraryScreen(
             renderDocs()
         }
         // "+ New folder" sits right after "All" so it never scrolls off-screen as folders grow.
+        // PRO_PLAN line 10-11 (accepted 11-18): creating a folder is FREE; tags stay Pro.
         folderChip(
             label = context.getString(R.string.folder_new),
             active = false,
             accent = true
         ) {
-            requirePro { newFolderSheet() }
+            newFolderSheet()
         }.id = R.id.swNewFolder
+        // UI-W4 Part B: an explicit, always-visible route to every folder (including the
+        // empty ones) so rename/delete never depends on discovering a long-press.
+        folderChip(
+            label = context.getString(R.string.folder_all_folders),
+            active = false
+        ) {
+            showAllFolders()
+        }.apply {
+            id = R.id.swAllFolders
+            contentDescription = context.getString(R.string.folder_all_folders_desc)
+        }
         for (name in folderNames) {
             val count = docs.count { it.folder.equals(name, true) }
             folderChip(label = "$name ($count)", active = folder.equals(name, true)) {
@@ -527,6 +572,7 @@ class LibraryScreen(
                 renderFolders()
                 renderDocs()
             }.setOnLongClickListener {
+                // Kept as a shortcut for the existing gesture, never the only route.
                 showFolderOptions(name)
                 true
             }
@@ -601,6 +647,101 @@ class LibraryScreen(
             .setSecondary(R.string.folder_delete) { confirmDeleteFolder(name) }
             .build()
         sheet.show()
+    }
+
+    /**
+     * UI-W4 Part B: the explicit folder list behind "All folders". Every folder (even an
+     * empty one) has a named row and its own More; the row filters the library, More opens
+     * the same rename/delete menu as the shortcut. Deleting only removes the folder, never
+     * a document ([ScanRepository.deleteFolder]).
+     */
+    private fun showAllFolders() {
+        val names = runCatching { repo.listFolders() }.getOrDefault(emptyList())
+        val list = LinearLayout(context).apply {
+            id = R.id.swFolderSheet
+            orientation = VERTICAL
+        }
+        var sheet: SwSheet? = null
+
+        if (names.isEmpty()) {
+            list.addView(
+                SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
+                    id = R.id.swFolderSheetEmpty
+                    text = context.getString(R.string.folder_none)
+                    setPadding(0, SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 6f))
+                },
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            )
+        }
+
+        val counts = docs.groupingBy { (it.folder ?: "").lowercase(Locale.getDefault()) }.eachCount()
+        for (name in names) {
+            val count = counts[name.lowercase(Locale.getDefault())] ?: 0
+            val row = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = SwStyle.dp(context, 48f)
+            }
+            val label = SwStyle.text(
+                context, 15f, SwStyle.color(context, R.color.text_hologram_hi)
+            ).apply {
+                text = "$name ($count)"
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                //noinspection WrongConstant
+                breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    sheet?.dismiss()
+                    folder = name
+                    renderFolders()
+                    renderDocs()
+                }
+            }
+            row.addView(label, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            val more = SwStyle.iconButton(
+                context, R.drawable.ic_sym_more_vert, SwStyle.color(context, R.color.text_hologram_mid)
+            ).apply {
+                contentDescription = context.getString(R.string.folder_more_desc, name)
+                layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
+                setPadding(
+                    SwStyle.dp(context, 12f), SwStyle.dp(context, 12f),
+                    SwStyle.dp(context, 12f), SwStyle.dp(context, 12f)
+                )
+                setOnClickListener {
+                    sheet?.dismiss()
+                    showFolderOptions(name)
+                }
+            }
+            row.addView(more)
+            list.addView(
+                row,
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = SwStyle.dp(context, 2f) }
+            )
+        }
+
+        val scroll = androidx.core.widget.NestedScrollView(context).apply {
+            isFillViewport = false
+            addView(list)
+        }
+        if (names.size > 7) {
+            scroll.layoutParams = LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                (resources.displayMetrics.heightPixels * 0.5f).toInt()
+            )
+        }
+        val built = SwSheet.builder(context)
+            .setTitle(R.string.folder_all_folders)
+            .setContent(scroll)
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+        // Folder creation stays reachable from the explicit list, in every tier.
+        built.setPrimary(R.string.folder_new) { post { newFolderSheet() } }
+        sheet = built
+        built.show()
     }
 
     private fun renameFolderSheet(name: String) {
@@ -1405,11 +1546,15 @@ class LibraryScreen(
         val needle = q.lowercase(Locale.getDefault())
         val textHits = HashSet<String>()
         val filtered = docs.filter { doc ->
-            val textHit = needle.isNotEmpty() &&
+            // UI-W4 privacy: a locked or Vault document is never searched by its OCR.
+            // Reading it here would also make the row an oracle for secret text, even
+            // when the snippet itself is later suppressed.
+            val textSearchable = !doc.isLocked && !doc.isVaulted
+            val textHit = needle.isNotEmpty() && textSearchable &&
                 runCatching { textCache.normalized(doc.id).contains(needle) }.getOrDefault(false)
-            // A locked/Vault document stays searchable by its visible name only for
-            // evidence purposes: its OCR never becomes a snippet or a page link.
-            if (textHit && !doc.isLocked && !doc.isVaulted) textHits += doc.id
+            // A locked/Vault document stays searchable by its visible name only: no
+            // snippet, no page link, no thumbnail evidence.
+            if (textHit) textHits += doc.id
             (folderFilter == null || doc.folder.equals(folderFilter, true)) &&
                 (categoryFilter == null || doc.category == categoryFilter) &&
                 (needle.isEmpty() || doc.name.lowercase(Locale.getDefault()).contains(needle) ||
@@ -1475,10 +1620,13 @@ class LibraryScreen(
      * still settle on one `idle()`.
      */
     private fun renderDocs() {
+        val generation = ++renderGeneration
         val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
         if (owner == null) {
             val visible = computeVisible(query, folder, category, sort)
-            applyDocs(visible.docs, computeRowEvidence(query, visible))
+            if (generation == renderGeneration) {
+                applyDocs(visible.docs, computeRowEvidence(query, visible))
+            }
             return
         }
         renderJob?.cancel()
@@ -1492,7 +1640,11 @@ class LibraryScreen(
                 val visible = computeVisible(q, f, c, s)
                 visible to computeRowEvidence(q, visible)
             }
-            if (isActive) applyDocs(shown.first.docs, shown.second)
+            // The token, not only the job's cancellation, decides: a blocking text read
+            // cannot be interrupted, so an older pass must never bind over a newer query.
+            if (isActive && generation == renderGeneration) {
+                applyDocs(shown.first.docs, shown.second)
+            }
         }
     }
 
@@ -1587,6 +1739,7 @@ class LibraryScreen(
      */
     private fun applyDocs(shown: List<ScanDocument>, hits: Map<String, DocSearchHit> = emptyMap()) {
         rowEvidence = hits
+        renderActiveFilter()
         val limit = shown.take(maxDocCards)
         val signatures = limit.map { signature(it) }
         val sameIds = limit.map { it.id } == renderedDocs.map { it.id }
@@ -1650,6 +1803,25 @@ class LibraryScreen(
      * collapses them so the empty state fits above the nav/disc. The creation tiles and quick
      * tools are gone from Home (UI-B1 #1): the Create sheet and the Tools tab own them now.
      */
+    /**
+     * UI-W4: the current folder filter is stated below the chip rail too. A coloured
+     * chip alone is not enough at 200 % or for TalkBack, and the rail may be scrolled
+     * past the selected chip.
+     */
+    private fun renderActiveFilter() {
+        if (!::activeFilter.isInitialized) return
+        val name = folder
+        activeFilter.isVisible = name != null
+        if (name == null) {
+            activeFilter.text = null
+            activeFilter.contentDescription = null
+        } else {
+            activeFilter.text = context.getString(R.string.folder_showing, name)
+            activeFilter.contentDescription =
+                context.getString(R.string.folder_filter_active, name)
+        }
+    }
+
     private fun updateChrome() {
         val searching = query.isNotBlank() ||
             (::searchInput.isInitialized && searchInput.hasFocus())

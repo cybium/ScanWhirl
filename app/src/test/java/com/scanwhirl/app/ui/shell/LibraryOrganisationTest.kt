@@ -229,7 +229,7 @@ class LibraryOrganisationTest {
     // ---- Pro gating -------------------------------------------------------
 
     @Test
-    fun `Free shows the Pro screen for New folder and Tags`() {
+    fun `Free creates a folder while Tags stay Pro`() {
         ProGate.setTestOverride(app, false)
         DocFixtures.saved(repo, app, pages = 1, name = "Gated")
         launch { activity ->
@@ -239,18 +239,27 @@ class LibraryOrganisationTest {
             newFolder.performClick()
             idle()
             assertTrue(
-                "New folder in Free opens the Pro screen",
-                activity.findViewById<View>(R.id.swProScreen)?.isVisible == true
+                "folder creation is free (PRO_PLAN line 10-11), not the Pro screen",
+                activity.findViewById<View>(R.id.swProScreen)?.isVisible != true
             )
-            activity.findViewById<View>(R.id.swProClose).performClick()
+            val create = ShadowDialog.getLatestDialog()
+            assertNotNull("the New folder sheet opens for Free", create)
+            create!!.findViewById<EditText>(R.id.swSheetInput).setText("Free folder")
+            create.findViewById<View>(R.id.swSheetPrimary).performClick()
             idle()
+            val deadline = System.currentTimeMillis() + 5000
+            while (!repo.listFolders().contains("Free folder") && System.currentTimeMillis() < deadline) {
+                idle()
+                Thread.sleep(10)
+            }
+            assertTrue("Free created the folder", repo.listFolders().contains("Free folder"))
 
             cards(activity).first().performLongClick()
             idle()
             activity.findViewById<View>(R.id.swSelTags).performClick()
             idle()
             assertTrue(
-                "Tags in Free opens the Pro screen",
+                "Tags stay Pro",
                 activity.findViewById<View>(R.id.swProScreen)?.isVisible == true
             )
         }

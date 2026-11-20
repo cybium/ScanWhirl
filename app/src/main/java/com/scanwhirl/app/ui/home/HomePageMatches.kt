@@ -62,9 +62,9 @@ object HomePageMatches {
         val out = LinkedHashMap<String, RowMatch>()
         for (doc in docs) {
             if (doc.id !in textHitIds) continue
-            // Privacy: a locked document's OCR is never read, so Home can show no page
-            // number, count, link or "matches across" note for it.
-            if (doc.isLocked) continue
+            // Privacy: a locked or Vault document's OCR is never read, so Home can show
+            // no page number, count, link or "matches across" note for it (UI-W4).
+            if (doc.isLocked || doc.isVaulted) continue
             val text = pages(doc.id)
             val result = PageTextMatches.find(query, doc.pageFiles.map { it.name }, text)
             val previews = result.hits.take(MAX_PREVIEWS).map { hit ->

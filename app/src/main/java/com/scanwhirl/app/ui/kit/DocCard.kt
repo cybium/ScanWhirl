@@ -75,6 +75,15 @@ class DocCard(context: Context) : LinearLayout(context) {
     private val metaLine: MetaLine
     private val actions: LinearLayout
 
+    /**
+     * UI-W4: at a compact width (or 200 % font) a row keeps one named overflow. The
+     * direct Share moves into the same Actions sheet as More, so the name, page line
+     * and snippet keep the full text column instead of being squeezed beside two icons.
+     */
+    private val compactRow: Boolean
+        get() = resources.configuration.screenWidthDp <= 360 ||
+            resources.configuration.fontScale >= 1.6f
+
     var doc: ScanDocument? = null
         private set
 
@@ -403,7 +412,9 @@ class DocCard(context: Context) : LinearLayout(context) {
         )
         shareButton.setOnClickListener { onShare() }
         moreButton.setOnClickListener { onMore() }
-        shareButton.isVisible = true
+        // UI-W4: one named overflow at compact width / large font, as the judged
+        // Library row specifies. Share is still one tap away inside More's sheet.
+        shareButton.isVisible = !compactRow
         moreButton.isVisible = true
         selectionBadge.isVisible = false
 
@@ -411,7 +422,10 @@ class DocCard(context: Context) : LinearLayout(context) {
         thumbView.setImageDrawable(null)
         thumbView.setBackgroundColor(SwStyle.color(context, R.color.sw_paper_thumb))
         val firstPage = document.pageFiles.firstOrNull()
-        val canShowPage = firstPage != null && firstPage.exists() && !document.isLocked
+        // A locked or Vault document never gets a page image in a search/library row:
+        // the neutral letter placeholder is the only tile it may show (UI-W4).
+        val canShowPage = firstPage != null && firstPage.exists() &&
+            !document.isLocked && !document.isVaulted
         showThumbPlaceholder(if (canShowPage) null else document)
         if (firstPage != null && canShowPage) {
             runCatching {
@@ -477,7 +491,7 @@ class DocCard(context: Context) : LinearLayout(context) {
      */
     fun setSelection(active: Boolean, checked: Boolean) {
         selectionBadge.isVisible = active && checked
-        shareButton.isVisible = !active
+        shareButton.isVisible = !active && !compactRow
         moreButton.isVisible = !active
         background = if (checked) {
             SwStyle.card(context, 18f).apply {

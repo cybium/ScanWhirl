@@ -220,9 +220,14 @@ class LibraryRailMetaFitTest {
                 val lay = layout!!
                 val avail = meta.width - meta.totalPaddingLeft - meta.totalPaddingRight
                 for (line in 0 until lay.lineCount) {
+                    // Ink width (getLineMax excludes trailing whitespace, which does not
+                    // paint). UI-W4 hides the direct Share at 200%, so the text column is
+                    // wider and a line can end on a space; counting that space would fail
+                    // a line that visibly fits.
                     assertTrue(
-                        "Hindi meta line $line is wider than its row",
-                        lay.getLineWidth(line) <= avail + 0.5f
+                        "Hindi meta line $line is ${lay.getLineMax(line).toInt()}px wide " +
+                            "but only ${avail}px fit (\"${meta.text}\")",
+                        lay.getLineMax(line) <= avail + 0.5f
                     )
                     assertEquals("Hindi meta is ellipsized", 0, lay.getEllipsisCount(line))
                 }

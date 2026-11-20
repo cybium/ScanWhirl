@@ -38,7 +38,11 @@ class ToolRegistryTest {
             ToolRegistry.all.count { it.pro && it.status != ToolStatus.SOON },
             ToolRegistry.proCount()
         )
-        assertEquals(16, ToolRegistry.proCount())
+        assertEquals(
+            "folder creation and move are FREE (PRO_PLAN line 10-11): tags are still Pro,",
+            15,
+            ToolRegistry.proCount()
+        )
     }
 
     // fixui: tiles removed (owner F6/F7/F20) - Book pages, Photos to PDF, Business card,
@@ -56,8 +60,8 @@ class ToolRegistryTest {
     }
 
     @Test
-    fun `seventeen tools are Pro`() {
-        assertEquals(17, ToolRegistry.all.count { it.pro })
+    fun `sixteen tools are Pro`() {
+        assertEquals(16, ToolRegistry.all.count { it.pro })
     }
 
     @Test
