@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- review: on-device recognition only, not manually entered writing -->
+    <string name="ocr_d04_phone_read">इसी फ़ोन पर लिखावट पढ़ी गई।</string>
+    <!-- review: the PDF has an actual writing layer -->
+    <string name="ocr_d04_searchable">लिखावट ढूँढी जा सकती है।</string>
+</resources>

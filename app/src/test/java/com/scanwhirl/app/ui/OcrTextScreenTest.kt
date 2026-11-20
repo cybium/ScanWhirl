@@ -46,6 +46,8 @@ class OcrTextScreenTest {
     private fun launch(block: (OcrEditorActivity) -> Unit) {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Invoice 0231")
         DocFixtures.withOcr(repo, id)
+        // The combined footer is a claim about the PDF, not just stored OCR.
+        assertTrue("fixture has a real searchable PDF", repo.makeSearchable(id))
         val intent = Intent(app, OcrEditorActivity::class.java)
             .putExtra(OcrEditorActivity.EXTRA_DOC_ID, id)
             .putExtra(OcrEditorActivity.EXTRA_TITLE, "Invoice 0231")
