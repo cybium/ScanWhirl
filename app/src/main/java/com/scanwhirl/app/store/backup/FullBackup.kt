@@ -3,6 +3,8 @@ package com.scanwhirl.app.store.backup
 import android.content.Context
 import android.util.Log
 import com.scanwhirl.app.BuildConfig
+import com.scanwhirl.app.store.vault.VaultControlBlobs
+import com.scanwhirl.app.store.vault.VaultPasswords
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.vault.VaultAuthException
@@ -228,7 +230,7 @@ class FullBackup(
         if (wrap != Wrap.RECOVERY_CODE) return null
         val code = VaultCrypto.normalizeRecoveryCode(secret)
         return runCatching {
-            VaultKeyWrap.open(File(vaultDir, "recovery.bin").readBytes(), code)
+            VaultKeyWrap.open(VaultControlBlobs.read(File(vaultDir, "recovery.bin"), VaultControlBlobs.MAX_WRAP_BYTES), code)
         }.getOrNull()
     }
 
@@ -442,6 +444,9 @@ class FullBackup(
         val files = vaultDir.walkTopDown()
             .onEnter { !it.name.startsWith(".") }
             .filter { it.isFile }
+            // Root transaction markers and unknown controls are never portable. onEnter only
+            // filters directories, so it cannot exclude a root .adding-* FILE by itself.
+            .filter { it.parentFile != vaultDir || VaultControlBlobs.rootLimit(it.name) != null }
             // The fingerprint wrap is bound to this phone's Keystore; restoring it would be dead
             // weight and could shadow a working wrap.
             .filterNot { it.name == "keystore.bin" }
@@ -513,6 +518,8 @@ class FullBackup(
                         // Validate lengths BEFORE making a file or allocating key/JSON/text arrays.
                         val cap = when {
                             path == VAULT_KEY_ENTRY -> 32L
+                            segments.size == 2 && segments[0] == "vault2" ->
+                                VaultControlBlobs.rootLimit(segments[1]) ?: MAX_ENTRY_BYTES
                             path == "settings.json" || path == "manifest.json" -> MAX_SETTINGS_BYTES
                             path.endsWith("/meta.txt") -> MAX_META_BYTES
                             else -> MAX_ENTRY_BYTES
@@ -632,6 +639,15 @@ class FullBackup(
         // 2. Vault: adopt the backup's identity into an empty Vault, or re-encrypt entry by entry
         //    into this phone's Vault with its own key.
         val restoredVault = staging.resolve("vault2")
+        // Local transaction markers are never portable authority, even in a keyed archive.
+        // Apply the root allowlist on every restore path, not just first-Vault adoption.
+        val unknownRoots = restoredVault.listFiles().orEmpty().filter {
+            it.name.startsWith(".") || (it.isFile && VaultControlBlobs.rootLimit(it.name) == null)
+        }
+        unknownRoots.forEach { it.deleteRecursively() }
+        if (unknownRoots.isNotEmpty()) {
+            warnings.add(context.getString(R.string.backup_vault_entries_rejected, unknownRoots.size))
+        }
         if (restoredVault.isDirectory && oldVaultKey == null) {
             // S6A: password-only backups of a locked Vault cannot authenticate its contents.
             // Skip the ENTIRE Vault part, including wraps/settings, before touching vaultDir.
@@ -651,8 +667,19 @@ class FullBackup(
                 restoredVault.listFiles()?.sortedBy { it.name }?.forEach { from ->
                     val to = File(vaultDir, from.name)
                     if (to.exists()) return@forEach
-                    if (from.name.startsWith(".")) return@forEach
-                    if (from.isDirectory && !isSafeId(from.name)) return@forEach
+                    if (from.name.startsWith(".") ||
+                        (from.isFile && VaultControlBlobs.rootLimit(from.name) == null) ||
+                        (from.isDirectory && !isSafeId(from.name))) {
+                        rejected++
+                        return@forEach
+                    }
+                    if (from.isFile) {
+                        val ok = runCatching {
+                            VaultControlBlobs.read(from, checkNotNull(VaultControlBlobs.rootLimit(from.name)))
+                            if (from.name == VaultPasswords.FILE_NAME) VaultPasswords.verifyFile(from, checkedVaultKey)
+                        }.isSuccess
+                        if (!ok) { rejected++; return@forEach }
+                    }
                     val wasDirectory = from.isDirectory
                     if (wasDirectory) {
                         // S5B (red-team): an adopted entry is checked before it is published,

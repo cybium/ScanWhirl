@@ -5,6 +5,8 @@ import android.util.Base64
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.Prefs
 import java.io.File
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
 
 /**
  * PDF passwords remembered for a document, for lanes that protect PDFs (design §4.2:
@@ -50,19 +52,40 @@ class VaultPasswords private constructor(context: Context) {
          */
         internal fun verifyFile(file: File, key: ByteArray) {
             if (!file.isFile || file.length() == 0L) return
-            parse(VaultCrypto.decryptBytes(file.readBytes(), key))
+            readEntries(file, key)
         }
 
         private fun parse(plain: ByteArray): MutableMap<String, String> {
-            val lines = String(plain, Charsets.UTF_8).lines().filter { it.isNotEmpty() }
-            if (lines.firstOrNull() != HEADER) throw VaultAuthException("Unsupported Vault password list")
-            val entries = LinkedHashMap<String, String>(lines.size)
-            lines.drop(1).forEach { line ->
+            if (plain.size > VaultControlBlobs.MAX_PASSWORD_PLAIN_BYTES) throw VaultAuthException("Damaged Vault password list")
+            val lines = String(plain, Charsets.UTF_8).lineSequence().filter { it.isNotEmpty() }.iterator()
+            if (!lines.hasNext() || lines.next() != HEADER) throw VaultAuthException("Unsupported Vault password list")
+            val entries = LinkedHashMap<String, String>()
+            var count = 0
+            lines.forEach { line ->
+                if (++count > VaultControlBlobs.MAX_PASSWORD_ENTRIES) throw VaultAuthException("Damaged Vault password list")
                 val parts = line.split('\t')
                 if (parts.size != 2) throw VaultAuthException("Damaged Vault password list")
                 entries[decode(parts[0])] = decode(parts[1])
             }
             return entries
+        }
+
+        private fun readEntries(file: File, key: ByteArray): MutableMap<String, String> {
+            val encrypted = VaultControlBlobs.read(file, VaultControlBlobs.MAX_PASSWORD_BYTES)
+            val plain = ByteArrayOutputStream()
+            // Refuse output BEFORE buffering it; do not trust the encrypted header's length.
+            val bounded = object : OutputStream() {
+                override fun write(value: Int) = write(byteArrayOf(value.toByte()), 0, 1)
+                override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                    if (length > VaultControlBlobs.MAX_PASSWORD_PLAIN_BYTES - plain.size()) {
+                        throw VaultAuthException("Damaged Vault password list")
+                    }
+                    plain.write(bytes, offset, length)
+                }
+            }
+            VaultCrypto.decryptStream(encrypted.inputStream(), bounded, key)
+            val bytes = plain.toByteArray()
+            return try { parse(bytes) } finally { bytes.fill(0) }
         }
 
         private fun decode(value: String): String =
@@ -135,16 +158,21 @@ class VaultPasswords private constructor(context: Context) {
     private fun read(key: ByteArray): MutableMap<String, String> {
         val file = file
         if (!file.isFile || file.length() == 0L) return LinkedHashMap()
-        return parse(VaultCrypto.decryptBytes(file.readBytes(), key))
+        return readEntries(file, key)
     }
 
     private fun write(entries: Map<String, String>, key: ByteArray) {
+        if (entries.size > VaultControlBlobs.MAX_PASSWORD_ENTRIES) throw VaultAuthException("Damaged Vault password list")
         val plain = buildString {
             appendLine(HEADER)
             entries.forEach { (id, password) ->
                 appendLine("${encode(id)}\t${encode(password)}")
             }
         }.toByteArray(Charsets.UTF_8)
+        if (plain.size > VaultControlBlobs.MAX_PASSWORD_PLAIN_BYTES) {
+            plain.fill(0)
+            throw VaultAuthException("Damaged Vault password list")
+        }
         val encrypted = VaultCrypto.encryptBytes(plain, key)
         plain.fill(0)
         val target = file
