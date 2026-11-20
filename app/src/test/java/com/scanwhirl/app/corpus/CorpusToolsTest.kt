@@ -884,7 +884,7 @@ class CorpusToolsTest {
                         val tokens = when (f.name) {
                             "tax_invoice_1p.pdf" -> listOf("6714.40")
                             "bank_statement_3p.pdf" -> listOf("24500.00")
-                            "marksheet_1p.pdf" -> listOf("513", "85.50")
+                            "marksheet_1p.pdf" -> listOf("513")
                             else -> emptyList()
                         }
                         for (token in tokens) {
@@ -896,6 +896,7 @@ class CorpusToolsTest {
                             (0 until nodes.length).map { nodes.item(it) as Element }
                         }
                         when (f.name) {
+                            "marksheet_1p.pdf" -> verifyMarksheetPercent(zip, values)
                             "bank_statement_3p.pdf" -> equal(45, rows.count {
                                 dateInStatement.containsMatchIn(it.textContent) &&
                                     "Opening Balance" !in it.textContent && "Closing Balance" !in it.textContent
@@ -952,6 +953,26 @@ class CorpusToolsTest {
     private val dateInStatement = Regex("""\b\d{2}/01/2026\b""")
     private val invoiceItems = listOf("A4 copier paper", "Ball pen", "File folder", "Stapler",
         "Highlighter set", "Notebook", "Whiteboard marker")
+
+    private fun verifyMarksheetPercent(zip: ZipFile, sheets: List<Document>) {
+        val cells = sheets.flatMap { sheet ->
+            val nodes = sheet.getElementsByTagNameNS("*", "c")
+            (0 until nodes.length).map { nodes.item(it) as Element }
+        }
+        val percentCell = cells.firstOrNull { cell ->
+            val value = cell.getElementsByTagNameNS("*", "v").item(0)?.textContent?.toDoubleOrNull()
+            value != null && abs(value - .855) < 1e-8 && cell.getAttribute("t") in setOf("", "n")
+        } ?: throw Mismatch("Missing numeric percentage .855 for 85.50%")
+        val styles = xml(zip, "xl/styles.xml")
+        val formats = styles.getElementsByTagNameNS("*", "cellXfs").item(0) as Element
+        val index = percentCell.getAttribute("s").toIntOrNull() ?: 0
+        val formatId = (formats.getElementsByTagNameNS("*", "xf").item(index) as? Element)?.getAttribute("numFmtId")
+        val custom = styles.getElementsByTagNameNS("*", "numFmt")
+        val formatCode = (0 until custom.length).map { custom.item(it) as Element }
+            .firstOrNull { it.getAttribute("numFmtId") == formatId }?.getAttribute("formatCode")
+        verify(formatId == "10" || formatCode == "0.00%",
+            "85.50% is stored as .855, but Excel display format ${formatCode ?: formatId} does not show two decimal places")
+    }
 
     // This is a fixture adapter, not a substitute OCR engine; no inference from pixels.
     private fun Fixture.seedText(f: File, doc: ScanDocument): List<String> =
