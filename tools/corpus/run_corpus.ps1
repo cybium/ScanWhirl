@@ -1,5 +1,5 @@
 # Private corpus run. The regular gate never opts in. No corpus bytes enter the mirror.
-param([string]$CorpusPath = "")
+param([string]$CorpusPath = "", [string]$Tools = "")
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $lane = Split-Path $root -Leaf
@@ -17,7 +17,9 @@ function WslPath($path) {
 if ($lane -notmatch '^[a-zA-Z0-9-]+$') { throw "Unsupported lane name" }
 $wslRoot = WslPath $root
 $wslCorpus = WslPath $corpus
+if ($Tools -and $Tools -notmatch '^[a-z_]+(,[a-z_]+)*$') { throw "Use comma-separated matrix IDs for -Tools" }
 $results = Join-Path $corpus "RESULTS"
+if ($Tools) { $results = Join-Path $results ("repro-" + $Tools.Replace(',', '-')) }
 $wslResults = WslPath $results
 $mirror = "/home/cybium/swbuild/$lane"
 
@@ -61,7 +63,7 @@ try {
     $runStatus = Join-Path $results "run-status.txt"
     Set-Content $runStatus "Running $revision since $(Get-Date -Format o); earlier reports are not a result for this run."
     $sync = "mkdir -p '$mirror' && rsync -a --delete --exclude=/.git --exclude=/.gradle --exclude=/.kotlin --exclude=/build --exclude=/app/build --exclude=/builds --exclude=/keystore --exclude=/local.properties --exclude=/keystore.properties '$wslRoot/' '$mirror/'"
-    $run = "cd '$mirror' && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=2300m -Dscanwhirl.corpus=true '-Dscanwhirl.corpus.path=$wslCorpus' '-Dscanwhirl.corpus.out=$wslResults' '-Dscanwhirl.corpus.revision=$revision' --no-daemon --tests '*CorpusToolsTest*'"
+    $run = "cd '$mirror' && JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/home/cybium/android-sdk ./gradlew :app:testDebugUnitTest -PtestBuild -PtestHeap=2300m -Dscanwhirl.corpus=true '-Dscanwhirl.corpus.path=$wslCorpus' '-Dscanwhirl.corpus.out=$wslResults' '-Dscanwhirl.corpus.revision=$revision' '-Dscanwhirl.corpus.only=$Tools' --no-daemon --tests '*CorpusToolsTest*'"
     # Keep the Gradle exit code (verification failures are deliberately nonzero).
     $ErrorActionPreference = "Continue"
     wsl -d Ubuntu bash -lc "$sync && $run" 2>&1 | Tee-Object -FilePath (Join-Path $results "gradle.log")

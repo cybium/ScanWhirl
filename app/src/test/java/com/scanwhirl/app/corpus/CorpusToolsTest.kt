@@ -177,10 +177,14 @@ class CorpusToolsTest {
         corpus = File(requireNotNull(System.getProperty("scanwhirl.corpus.path"))).canonicalFile
         output = File(System.getProperty("scanwhirl.corpus.out") ?: File(corpus, "RESULTS").path)
         check(output.isDirectory || output.mkdirs())
-        val cases = readMatrix() + Case("import_pdf_negative", File(corpus, "pdf_broken_truncated")
+        val allCases = readMatrix() + Case("import_pdf_negative", File(corpus, "pdf_broken_truncated")
             .listFiles { f -> f.isFile && f.extension == "pdf" }!!.sortedBy { it.name }
             .map { it.relativeTo(corpus).invariantSeparatorsPath },
             "Reject as damaged/empty without publishing a document; a recoverable PDF must open with all original pages.")
+        val selection = System.getProperty("scanwhirl.corpus.only").orEmpty().split(',').map(String::trim)
+            .filter(String::isNotEmpty).toSet()
+        check(selection.all { selected -> allCases.any { it.id == selected } }) { "Unknown selected corpus tool(s): $selection" }
+        val cases = if (selection.isEmpty()) allCases else allCases.filter { it.id in selection }
         val shaCell = Regex(",([a-f0-9]{64}),\\d+,")
         expectedHashes = File(corpus, "SOURCES.csv").useLines { lines ->
             lines.drop(1).mapNotNull { row ->
@@ -855,8 +859,10 @@ class CorpusToolsTest {
                         val text = texts(xml(zip, "word/document.xml"), "t").joinToString("\n")
                         verify(text.isNotBlank(), "empty Word text")
                         if (f.name == "column_markers_1p.pdf") {
-                            val positions = listOf("LEFT-ALPHA", "LEFT-BETA", "LEFT-GAMMA", "RIGHT-DELTA",
-                                "RIGHT-EPSILON", "RIGHT-ZETA").map(text::indexOf)
+                            // The matrix abbreviates the labels; the corpus generator prints
+                            // LEFT-COLUMN-ALPHA etc. Check the literals actually in the source.
+                            val positions = listOf("LEFT-COLUMN-ALPHA", "LEFT-COLUMN-BETA", "LEFT-COLUMN-GAMMA",
+                                "RIGHT-COLUMN-DELTA", "RIGHT-COLUMN-EPSILON", "RIGHT-COLUMN-ZETA").map(text::indexOf)
                             verify(positions.all { it >= 0 } && positions.zipWithNext().all { (a, b) -> a < b },
                                 "Word column marker order: positions=$positions")
                         }
@@ -935,11 +941,12 @@ class CorpusToolsTest {
         val words = when (f.name) {
             "accented_names_2p.pdf" -> listOf("José Müller", "Ānand Rāo")
             "municipal_circular_2p.pdf" -> listOf("Municipal Corporation")
-            "marksheet_1p.pdf" -> listOf("513", "85.50%")
-            "rent_agreement_3p.pdf" -> listOf("Rohan Gupta")
+            "marksheet_1p.pdf" -> listOf("Rohan Gupta", "513", "85.50%")
+            "rent_agreement_3p.pdf" -> listOf("Receipt of Deposit")
             else -> emptyList()
         }
-        for (word in words) verify(word in text, "export is missing '$word'")
+        val normalized = java.text.Normalizer.normalize(text.replace(Regex("\\s+"), " "), java.text.Normalizer.Form.NFC)
+        for (word in words) verify(word in normalized, "export is missing '$word'")
     }
 
     private val dateInStatement = Regex("""\b\d{2}/01/2026\b""")
@@ -1180,6 +1187,9 @@ class CorpusToolsTest {
     private fun summary(finished: Boolean): String = buildString {
         appendLine("# ScanWhirl corpus results")
         appendLine("\nRevision `$revision`; completed all rows: $finished. Generated ${Instant.now()}.")
+        System.getProperty("scanwhirl.corpus.only")?.takeIf { it.isNotBlank() }?.let {
+            appendLine("Selected rerun of `$it` only; not a full corpus run.")
+        }
         appendLine("Matrix SHA-256: `${sha(File(corpus, "TOOL_MATRIX.md"))}`.")
         hostImportProblem?.let { error ->
             val cause = generateSequence(error) { it.cause }.last()

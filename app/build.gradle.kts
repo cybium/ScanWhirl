@@ -111,7 +111,7 @@ android {
                 }
                 if (corpusRun) {
                     it.systemProperty("scanwhirl.corpus", "true")
-                    for (key in listOf("path", "out", "revision")) {
+                    for (key in listOf("path", "out", "revision", "only")) {
                         System.getProperty("scanwhirl.corpus.$key")?.let { value ->
                             it.systemProperty("scanwhirl.corpus.$key", value)
                         }

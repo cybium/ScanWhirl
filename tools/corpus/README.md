@@ -10,6 +10,8 @@ powershell -NoProfile -File tools\corpus\run_corpus.ps1
 FIFO build lock as `tools/gate.ps1`, rsyncs only the source worktree into WSL and
 reads the external corpus in place. It does not use GitHub Actions or a phone.
 The regular test gate filters out this package unless `-Dscanwhirl.corpus=true`.
+For a targeted reproduction use `-Tools to_word,to_text` (one comma-separated string).
+Targeted results go to their own `RESULTS/repro-…` folder and never replace the full run.
 
 The suite prints the actual revision (with `-dirty` for a changed checkout) in
 `RESULTS/RESULTS.md`, writes one row per matrix input in `RESULTS/results.csv`,
