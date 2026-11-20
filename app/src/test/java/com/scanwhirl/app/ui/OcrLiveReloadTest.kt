@@ -239,6 +239,57 @@ class OcrLiveReloadTest {
     }
 
     @Test
+    fun `recreation after a Hindi reread displays fresh OCR without an unsaved warning`() {
+        val id = seed("HRT HYO old Latin OCR")
+        val hindi = "\u092d\u093e\u0930\u0924 \u0938\u0930\u0915\u093e\u0930"
+        Robolectric.buildActivity(OcrEditorActivity::class.java, intent(id)).setup().use { c ->
+            assertFalse(
+                "Android must not auto-restore old EditText text over fresh repository OCR",
+                c.get().findViewById<EditText>(R.id.editText).isSaveEnabled
+            )
+            assertEquals(
+                "HRT HYO old Latin OCR",
+                c.get().findViewById<EditText>(R.id.editText).text.toString()
+            )
+            // Recognition completes while the previous activity is stopped: the
+            // saved baseline is old, but the repository now contains real Hindi.
+            c.pause().stop()
+            repo.updateOcrPages(id, mapOf("page_000.jpg" to hindi))
+            c.recreate()
+            val refreshed = c.get()
+            assertEquals(
+                "the current stored OCR must win over an untouched stale baseline",
+                hindi,
+                refreshed.findViewById<EditText>(R.id.editText).text.toString()
+            )
+            // No manual edits: pressing Back must finish, not show Save/Discard.
+            refreshed.onBackPressedDispatcher.onBackPressed()
+            assertTrue("fresh OCR is not an unsaved manual edit", refreshed.isFinishing)
+            assertEquals(hindi, repo.ocrDoc(id)["page_000.jpg"])
+        }
+    }
+
+    @Test
+    fun `recreation keeps a real unsaved correction instead of replacing it`() {
+        val id = seed("original saved line")
+        Robolectric.buildActivity(OcrEditorActivity::class.java, intent(id)).setup().use { c ->
+            val first = c.get()
+            first.findViewById<View>(R.id.btnEditText).performClick()
+            first.findViewById<EditText>(R.id.editText).setText("manual unsaved correction")
+            c.recreate()
+            val after = c.get()
+            assertEquals(
+                "only an explicitly edited page carries its old baseline",
+                "manual unsaved correction",
+                after.findViewById<EditText>(R.id.editText).text.toString()
+            )
+            after.onBackPressedDispatcher.onBackPressed()
+            assertFalse("manual edits still require confirmation", after.isFinishing)
+            assertEquals("original saved line", repo.ocrDoc(id)["page_000.jpg"])
+        }
+    }
+
+    @Test
     fun `pages that used up their automatic retries say so`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Damaged page")
         val calls = AtomicInteger()

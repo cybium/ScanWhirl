@@ -164,7 +164,11 @@ class OcrEditorActivity : BaseActivity() {
                 for ((key, value) in restored) {
                     if (!dirtyPages.containsKey(key)) pageTexts[key] = fresh[key] ?: value
                 }
-                originalTexts = fresh + restored
+                // Only pages the person actually edited retain their old baseline.
+                // For untouched pages, a completed OCR re-read (or a background update)
+                // is already the new saved truth. Restoring every old baseline would
+                // mark freshly recognized Hindi as an unsaved edit after recreation.
+                originalTexts = fresh + restored.filterKeys { dirtyPages.containsKey(it) }
             }
             for (key in dirtyPages.keySet()) {
                 pageTexts[key] = dirtyPages.getString(key) ?: ""
@@ -211,6 +215,14 @@ class OcrEditorActivity : BaseActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("currentPageKey", currentPageKey)
+        // The person explicitly confirmed replacing OCR corrections. During our own
+        // re-read/recreate, NEVER persist the old text baseline into the new screen:
+        // it would be restored on top of the Devanagari result just written to disk.
+        // For ordinary rotations (rereading == false), preserve unsaved user edits.
+        if (rereading) {
+            outState.putString(STATE_PROBLEM, readProblem)
+            return
+        }
         val dirtyPages = Bundle()
         for ((key, value) in pageTexts) {
             val orig = originalTexts[key] ?: ""

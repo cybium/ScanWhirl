@@ -2,10 +2,10 @@
 <!-- Full Backup 2.0 (Me -> Backup & restore). -->
 <resources>
     <string name="me_backup">Backup &amp; restore</string>
-    <string name="me_backup_summary">One encrypted file with every scan, the Vault and your settings</string>
+    <string name="me_backup_summary">Encrypted backup of scans and settings. Vault included only when ready; check warnings.</string>
 
     <string name="backup_title">Backup &amp; restore</string>
-    <string name="backup_explain">One encrypted file with every scan, the Vault, signatures and settings. Restore it on a new phone to bring them back.</string>
+    <string name="backup_explain">Create an encrypted local backup of scans, signatures and settings. Vault files are included only when ready. Check warnings before relying on the backup.</string>
     <string name="backup_never">No backup yet</string>
     <string name="backup_today">Last backup: today</string>
     <string name="backup_one_day">Last backup: yesterday</string>

@@ -46,7 +46,7 @@
     <string name="home_chip_all">All %1$d</string>
     <string name="home_chip_category">%1$s %2$d</string>
     <string name="home_empty_title">Scan your first document</string>
-    <string name="home_empty_body">Your scans stay on this phone. No account, no upload.</string>
+    <string name="home_empty_body">Your scans stay on this phone. No account needed; documents are not automatically uploaded.</string>
     <string name="home_no_match">No documents match your search.</string>
     <string name="home_page_count">%1$d pages</string>
     <string name="home_protected">Protected</string>

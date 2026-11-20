@@ -170,8 +170,11 @@
             android:visibility="gone" />
     </FrameLayout>
 
+    <!-- Text + dirty edits are restored explicitly from repo/bundle by OcrEditorActivity.
+         Android widget auto-restore would overwrite fresh OCR after Read again. -->
     <EditText
         android:id="@+id/editText"
+        android:saveEnabled="false"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginStart="12dp"
