@@ -2,6 +2,7 @@ package com.scanwhirl.app.tools
 
 import android.content.Context
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
@@ -39,6 +40,7 @@ internal object FlowUtil {
         activity: AppCompatActivity,
         titleRes: Int,
         docs: List<ScanDocument>,
+        @StringRes noEligibleTitle: Int? = null,
         onPicked: (ScanDocument) -> Unit
     ) {
         // UI-W6: every one-document chooser uses the shared searchable picker. Its rows carry a
@@ -49,6 +51,7 @@ internal object FlowUtil {
             activity = activity,
             title = activity.getString(titleRes),
             docs = docs,
+            noEligibleTitle = noEligibleTitle,
             onEmptyScan = { openHome(activity) },
             onPick = onPicked
         )

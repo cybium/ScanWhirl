@@ -1,5 +1,6 @@
 package com.scanwhirl.app.tools
 
+import android.graphics.Rect
 import android.net.Uri
 import android.view.Gravity
 import android.view.KeyEvent
@@ -163,7 +164,7 @@ class CompressFlow(
 
         val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.compress_level_title)
-            .setContent(dialogBinding.root)
+            .setScrollableContent(dialogBinding.root)
             .setSecondary(android.R.string.cancel)
             .build()
         val session = ++sheetSeq
@@ -174,8 +175,11 @@ class CompressFlow(
         val measured = BooleanArray(levels.size)
 
         fun showError(res: Int) {
-            dialogBinding.compressTargetError.text = activity.getString(res)
-            dialogBinding.compressTargetError.isVisible = true
+            dialogBinding.compressTargetError.apply {
+                text = activity.getString(res)
+                isVisible = true
+                post { if (isShown) requestRectangleOnScreen(Rect(0, 0, width, height)) }
+            }
         }
 
         fun clearError() {
@@ -278,14 +282,10 @@ class CompressFlow(
         // B3: with the keyboard up the sheet resizes and scrolls the field into view instead of
         // hiding it behind the IME at 200% type.
         sheet.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        dialogBinding.editCompressTarget.setOnFocusChangeListener { _, focused ->
+        dialogBinding.editCompressTarget.setOnFocusChangeListener { field, focused ->
             if (focused) {
-                dialogBinding.compressScroll.post {
-                    val rect = android.graphics.Rect()
-                    dialogBinding.editCompressTarget.getDrawingRect(rect)
-                    dialogBinding.compressScroll.requestChildRectangleOnScreen(
-                        dialogBinding.editCompressTarget, rect, false
-                    )
+                field.post {
+                    field.requestRectangleOnScreen(Rect(0, 0, field.width, field.height))
                 }
             }
         }
