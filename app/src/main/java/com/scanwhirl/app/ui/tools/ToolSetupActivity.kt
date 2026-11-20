@@ -1032,11 +1032,11 @@ class ToolSetupActivity : BaseActivity() {
      * is told what removing the protection does before anything is changed.
      */
     private fun promptUnlock(doc: ScanDocument) {
-        UnlockSheet.show(
+        UnlockSheet.showWithGrant(
             activity = this,
             documentName = doc.name,
-            verify = { candidate -> repo.verifyPdfPassword(doc.id, candidate) },
-            onUnlocked = { password -> unlockAndSelect(doc, password) }
+            verify = { candidate -> repo.checkPdfPassword(doc.id, candidate) },
+            onUnlocked = { grant -> unlockAndSelect(doc, grant) }
         )
     }
 
@@ -1046,14 +1046,14 @@ class ToolSetupActivity : BaseActivity() {
      * Back and an outside tap leave the document encrypted and this row unselected; only the
      * primary button reaches [removeProtectionAndSelect].
      */
-    private fun unlockAndSelect(doc: ScanDocument, password: String) {
+    private fun unlockAndSelect(doc: ScanDocument, grant: ScanRepository.PdfPasswordGrant) {
         SwSheet.builder(this)
             .setTitle(R.string.tools_setup_unlock_consent_title)
             .setMessage(
                 getString(R.string.tools_setup_unlock_consent_body, getString(tool.title))
             )
             .setPrimary(R.string.tools_setup_unlock_consent_primary) {
-                removeProtectionAndSelect(doc, password)
+                removeProtectionAndSelect(doc, grant)
             }
             .setSecondary(R.string.sheet_cancel)
             .build()
@@ -1061,11 +1061,11 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     /** Runs only after the explicit yes: unlocks the library copy and picks it for the tool. */
-    private fun removeProtectionAndSelect(doc: ScanDocument, password: String) {
+    private fun removeProtectionAndSelect(doc: ScanDocument, grant: ScanRepository.PdfPasswordGrant) {
         progressOverlay.isVisible = true
         lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, password) }
+                withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, grant) }
                 docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
                 if (tool.id == "merge" || tool.id == "zip") {
                     selected += doc.id

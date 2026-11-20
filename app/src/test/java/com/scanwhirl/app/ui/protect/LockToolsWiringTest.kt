@@ -1,7 +1,10 @@
 package com.scanwhirl.app.ui.protect
 
+import android.app.Activity
 import android.app.Application
 import android.app.Dialog
+import android.content.Intent
+import android.net.Uri
 import android.os.Looper
 import android.view.View
 import android.widget.LinearLayout
@@ -28,6 +31,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
+import java.io.File
 
 /**
  * The Tools tiles "Protect PDF" and "Unlock PDF" (and the Home quick tool "Protect") must open a
@@ -112,8 +116,54 @@ class LockToolsWiringTest {
                 "the Protect sheet is the password form",
                 sheet.findViewById<android.view.View>(R.id.protectPassword)
             )
+            sheet.dismiss()
+            idle()
+            scenario.onActivity { activity ->
+                val targets = ArrayList<View>()
+                activity.window.decorView.findViewsWithText(
+                    targets, app.getString(R.string.lock_choose_document), View.FIND_VIEWS_WITH_TEXT
+                )
+                val choose = targets.singleOrNull { it.isShown && it.isClickable && it.isFocusable }
+                assertNotNull("dismissing Protect must leave a reachable Choose a document action", choose)
+                choose!!.performClick()
+                assertNotNull("the action reopens the picker", latestDialog()?.findViewById<View>(R.id.docPickerSearch))
+            }
         } finally {
             scenario.close()
+        }
+    }
+
+    @Test
+    fun `dismissing a device PDF refusal finishes the tool activity`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Unprotected test PDF")
+        val pdf = requireNotNull(repo.getDocument(id)).pdfFile
+        val input = File(app.cacheDir, "r2lock-device-fixture.pdf")
+        pdf.copyTo(input, overwrite = true)
+        val before = input.readBytes()
+        ActivityScenario.launch<LockToolsActivity>(
+            LockToolsActivity.intent(app, LockToolsActivity.MODE_UNLOCK)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                val chooser = requireNotNull(latestDialog())
+                chooser.findViewById<View>(R.id.docPickerExtra).performClick()
+                val shadow = shadowOf(activity)
+                val request = requireNotNull(shadow.nextStartedActivityForResult)
+                shadow.receiveResult(request.intent, Activity.RESULT_OK, Intent().setData(Uri.fromFile(input)))
+                assertTrue("refusal dialog opened", waitUntil {
+                    latestDialog()?.let { it !== chooser && it.isShowing &&
+                        it.findViewById<View>(android.R.id.button1) != null } == true
+                })
+                val refusal = latestDialog()!!
+                assertEquals(
+                    app.getString(R.string.unlock_pdf_not_ours_msg),
+                    refusal.findViewById<TextView>(android.R.id.message).text.toString()
+                )
+                assertTrue("the tool stays alive until the message is dismissed", !activity.isFinishing)
+                refusal.findViewById<View>(android.R.id.button1).performClick()
+                idle()
+                assertTrue("the title-only tool should close and return to its caller", activity.isFinishing)
+                assertTrue("the refused file remains untouched", before.contentEquals(input.readBytes()))
+            }
         }
     }
 
