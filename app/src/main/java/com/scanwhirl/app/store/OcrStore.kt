@@ -80,7 +80,10 @@ class OcrStore(private val docsDir: File) {
     private val queueFile: File
         get() = File(docsDir.parentFile ?: docsDir, "ocr_pending_queue.txt")
 
-    private fun pageKeyFor(index: Int): String = "page_%03d.jpg".format(index)
+    // H4-3: page files are always named with Locale.ROOT (ASCII digits). Using the default
+    // locale here produced "page_००५.jpg" on a Marathi/Arabic phone, so the shifted keys matched
+    // no page and every later page lost its recognised text.
+    private fun pageKeyFor(index: Int): String = String.format(java.util.Locale.ROOT, "page_%03d.jpg", index)
 
     // ------------------------------------------------------------------
     // Internal write helpers

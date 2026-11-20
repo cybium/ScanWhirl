@@ -35,14 +35,14 @@ class ResizeFlow(
     fun start(uri: Uri) {
         val bytes = FlowUtil.readUriBytes(activity, uri) ?: run {
             Toast.makeText(
-                activity, activity.getString(R.string.resize_failed, "unreadable image"),
+                activity, activity.getString(R.string.resize_failed, activity.getString(R.string.f8_reason_unreadable)),
                 Toast.LENGTH_LONG
             ).show()
             return
         }
         val size = ImageTools.imageSize(bytes) ?: run {
             Toast.makeText(
-                activity, activity.getString(R.string.resize_failed, "not an image"),
+                activity, activity.getString(R.string.resize_failed, activity.getString(R.string.f8_reason_not_image)),
                 Toast.LENGTH_LONG
             ).show()
             return
@@ -198,8 +198,13 @@ class ResizeFlow(
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
             } catch (e: Exception) {
+                // H2-5: localized prefix + localized reason; a raw JVM message is never shown.
+                val reason = if (ImageTools.isTooLargePhoto(e)) R.string.f8_reason_too_large
+                else R.string.f8_reason_unreadable
                 Toast.makeText(
-                    activity, activity.getString(R.string.resize_failed, e.message), Toast.LENGTH_LONG
+                    activity,
+                    activity.getString(R.string.resize_failed, activity.getString(reason)),
+                    Toast.LENGTH_LONG
                 ).show()
             } finally {
                 progress.dismiss()

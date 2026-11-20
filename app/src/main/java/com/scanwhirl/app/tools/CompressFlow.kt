@@ -439,7 +439,7 @@ class CompressFlow(
                 throw e
             } catch (e: Exception) {
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             } finally {
                 progress.dismiss()
@@ -467,7 +467,7 @@ class CompressFlow(
                 throw e
             } catch (e: Exception) {
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             } finally {
                 progress.dismiss()
@@ -550,7 +550,7 @@ class CompressFlow(
                 throw e
             } catch (e: Exception) {
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             }
         }
@@ -593,7 +593,7 @@ class CompressFlow(
             } catch (e: Exception) {
                 sheet?.dismiss()
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             }
         }
@@ -645,7 +645,7 @@ class CompressFlow(
             } catch (e: Exception) {
                 sheet?.dismiss()
                 Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
+                    activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             }
         }
@@ -663,6 +663,15 @@ class CompressFlow(
 
     /** Never grows a page: keeps the original bytes when they already fit the share. */
     private fun fitToShare(orig: ByteArray, share: Long): ByteArray = SizeFit.fitToShare(orig, share)
+
+    /**
+     * H2-5: the toast keeps its localized prefix and names a localized reason. The raw
+     * exception message (English system/JVM text) is never shown.
+     */
+    private fun failureReason(e: Throwable): String = activity.getString(
+        if (ImageTools.isTooLargePhoto(e)) R.string.f8_reason_too_large
+        else R.string.f8_reason_unreadable
+    )
 
     internal companion object {
 
