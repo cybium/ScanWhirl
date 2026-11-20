@@ -19,6 +19,9 @@ class PdfProtectInteropTest {
     private val form = "Fictional form 1230"
     private val page = "Fictional page text"
     private val password = "test fixture password"
+    private fun textHex(value: String) = value.toByteArray(latin).joinToString("") {
+        String.format(Locale.ROOT, "%02x", it.toInt() and 255)
+    }
 
     private fun imported(
         generation: Int = 0,
@@ -32,7 +35,7 @@ class PdfProtectInteropTest {
         contentDict: String = ""
     ): String {
         val content = "BT /F1 12 Tf 30 200 Td ($page) Tj ET"
-        val hexForm = PdfAes.hex(form.toByteArray(latin)).dropLast(1) // odd digit is padded with zero
+        val hexForm = textHex(form).dropLast(1) // odd digit is padded with zero
         val objects = listOf(
             "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [8 0 R] >> /Fixture 9 0 R >>",
             "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
@@ -90,7 +93,7 @@ class PdfProtectInteropTest {
         Loader.loadPDF(src).use { assertEquals(title, it.documentInformation.title) }
         PdfEncryptor.encrypt(src, dst, password)
         val raw = dst.readText(latin)
-        for (secret in listOf(title, "Fictional note", form, PdfAes.hex(form.toByteArray(latin)), page)) {
+        for (secret in listOf(title, "Fictional note", form, textHex(form), page)) {
             assertFalse("Plain PDF bytes include fixture string: $secret", raw.contains(secret, ignoreCase = true))
         }
         assertTrue(Regex("(?m)^\\d{10} 00003 n").containsMatchIn(raw))

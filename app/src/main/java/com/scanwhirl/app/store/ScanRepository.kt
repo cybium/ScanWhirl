@@ -2407,29 +2407,36 @@ class ScanRepository(private val context: Context) {
     }
 
     /** Verifies a lock, upgrading an old verifier only after a successful password check. */
-    fun verifyPdfPassword(id: String, password: String): Boolean = synchronized(PDF_LOCK) {
+    fun verifyPdfPassword(id: String, password: String): Boolean {
         val dir = File(docsDir, id)
         val lockFile = File(dir, LOCK_FILE)
-        if (!lockFile.exists()) return@synchronized PdfProtection.state(dir) == PdfProtection.State.NONE
-        if (lockFile.length() !in 1L..256L) return@synchronized false
-        val stored = runCatching { lockFile.readText().trim() }.getOrNull() ?: return@synchronized false
-        if (!PdfLockVerifier.isLegacy(stored)) return@synchronized PdfLockVerifier.verify(stored, password)
+        if (!lockFile.exists()) return PdfProtection.state(dir) == PdfProtection.State.NONE
+        val stored = readPdfLock(lockFile) ?: return false
+        if (!PdfLockVerifier.isLegacy(stored)) return PdfLockVerifier.verify(stored, password)
         if (!MessageDigest.isEqual(stored.toByteArray(), Prefs.sha256("pdf_lock:$password").toByteArray())) {
-            return@synchronized false
+            return false
         }
         // A stale label on a plaintext file is upgraded by Repair or deleted by Remove lock.
         // Do not mutate it just because a check succeeded (repair itself can still refuse).
         if (PdfProtection.isEncodable(password) && PdfProtection.state(dir) == PdfProtection.State.LOCKED) {
             try {
-                Durable.atomicWriteText(lockFile, PdfLockVerifier.create(password))
-                Durable.syncDir(dir)
+                val upgraded = PdfLockVerifier.create(password)
+                synchronized(PDF_LOCK) {
+                    // A concurrent password change or unlock wins; never reintroduce an old lock.
+                    if (readPdfLock(lockFile) != stored) return false
+                    Durable.atomicWriteText(lockFile, upgraded)
+                    Durable.syncDir(dir)
+                }
             } catch (_: IOException) {
                 // Full/unwritable storage must not prevent an existing lock from being opened.
                 // The old record stays valid and the next successful check retries migration.
             }
         }
-        true
+        return true
     }
+
+    private fun readPdfLock(file: File): String? =
+        if (file.length() !in 1L..256L) null else runCatching { file.readText().trim() }.getOrNull()
 
     private object PdfLockVerifier {
         // A platform-independent record, including backups restored to API 24/25. The JCA

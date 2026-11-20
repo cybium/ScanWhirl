@@ -19,6 +19,7 @@ object PdfEncryptor {
     private const val MAX_NESTING = 64
     private const val MAX_OBJECT_SYNTAX = 4 * 1024 * 1024
     private const val MAX_NODES_PER_OBJECT = 64_000
+    private const val HEX_DIGITS = "0123456789ABCDEF"
     private val headerPattern = Regex("%PDF-(1\\.[0-7]|2\\.0)(?:\\r\\n|\\r|\\n)")
     private val tailPattern = Regex(
         "(?:\\r\\n|\\r|\\n)startxref[ \\t]*(?:\\r\\n|\\r|\\n)" +
@@ -65,7 +66,7 @@ object PdfEncryptor {
                 buffered.flush()
                 Durable.syncStream(file, tmp)
             }
-            if (!Sha256.of(tmp).equals(PdfAes.hex(digest.digest()), ignoreCase = true)) {
+            if (!Sha256.of(tmp).equals(toHex(digest.digest()), ignoreCase = true)) {
                 throw IOException("Protection could not be verified")
             }
             if (!tmp.renameTo(dst)) throw IOException("Could not publish ${dst.name}")
@@ -167,7 +168,7 @@ object PdfEncryptor {
             else out.write(String.format(Locale.ROOT, "%010d %05d f \n", free[nextFree++], entry.gen))
         }
         out.write(String.format(Locale.ROOT, "%010d 00000 n \n", encryptOffset))
-        val newId = PdfAes.hex(encryption.fileId)
+        val newId = toHex(encryption.fileId)
         val infoEntry = info?.let { " /Info ${it.number} ${it.gen} R" }.orEmpty()
         out.write("trailer\n<< /Size $size /Root ${root.number} ${root.gen} R$infoEntry " +
             "/Encrypt $encryptNumber 0 R /ID [<$newId> <$newId>] >>\nstartxref\n$xrefOffset\n%%EOF\n")
@@ -206,7 +207,7 @@ object PdfEncryptor {
             is Atom -> out.write(value.text)
             is Name -> out.write("/${value.encoded}")
             is Ref -> out.write("${value.number} ${value.gen} R")
-            is Bytes -> out.write("<${PdfAes.hex(protectBytes(value.bytes, encryption))}>")
+            is Bytes -> out.write("<${toHex(protectBytes(value.bytes, encryption))}>")
             is Arr -> {
                 out.write("[")
                 value.values.forEachIndexed { index, child ->
@@ -227,11 +228,14 @@ object PdfEncryptor {
         }
     }
 
+    private fun toHex(bytes: ByteArray): String = buildString(bytes.size * 2) {
+        for (b in bytes) append(HEX_DIGITS[(b.toInt() and 255) shr 4]).append(HEX_DIGITS[b.toInt() and 15])
+    }
+
     private fun escapeName(decoded: String): String = buildString {
-        val digits = "0123456789ABCDEF"
         for (c in decoded) {
             if (c in '!'..'~' && !delimiter(c) && c != '#') append(c)
-            else append('#').append(digits[c.code shr 4]).append(digits[c.code and 15])
+            else append('#').append(HEX_DIGITS[c.code shr 4]).append(HEX_DIGITS[c.code and 15])
         }
     }
 
