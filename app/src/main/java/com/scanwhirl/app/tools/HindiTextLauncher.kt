@@ -24,8 +24,10 @@ import kotlinx.coroutines.launch
 object HindiTextLauncher {
 
     fun open(activity: AppCompatActivity, repo: ScanRepository) {
-        val docs = repo.listDocuments().filter { !it.isLocked && !it.isVaulted }
-        FlowUtil.pickScan(activity, R.string.ocr_hindi_pick, docs) { doc ->
+        val all = repo.listDocuments()
+        val docs = all.filter { !it.isLocked && !it.isVaulted }
+        val noEligible = R.string.r3fit_no_hindi_text_source.takeIf { all.isNotEmpty() && docs.isEmpty() }
+        FlowUtil.pickScan(activity, R.string.ocr_hindi_pick, docs, noEligibleTitle = noEligible) { doc ->
             run(activity, repo, doc.id)
         }
     }

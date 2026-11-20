@@ -112,7 +112,8 @@ class TrashActivity : BaseActivity() {
         binding.trashEmptyTitle.setText(if (error) R.string.trash_error_title else R.string.trash_empty_title)
         binding.trashEmptyBody.setText(if (error) R.string.trash_error_body else R.string.trash_empty_body)
         binding.btnTrashRetry.isVisible = error
-        binding.toolbar.subtitle = if (empty) null else {
+        binding.trashCount.isVisible = !empty
+        binding.trashCount.text = if (empty) null else {
             resources.getQuantityString(R.plurals.trash_count, items.size, items.size)
         }
     }
