@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.VaultReaderSessionTest,com.scanwhirl.app.store.vault.VaultSessionTest

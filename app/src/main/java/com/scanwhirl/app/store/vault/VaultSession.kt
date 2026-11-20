@@ -55,8 +55,9 @@ object VaultSession {
         if (key != null) backgroundAt = now
     }
 
-    /** A Vault screen is in front again: the grace period no longer applies. */
-    fun onForeground() {
+    /** Validate the elapsed background grace BEFORE clearing its timestamp. */
+    fun onForeground(now: Long = System.currentTimeMillis()) {
+        keyOrNull(now)
         backgroundAt = 0L
     }
 }
