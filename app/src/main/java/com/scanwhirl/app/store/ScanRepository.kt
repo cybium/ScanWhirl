@@ -2433,7 +2433,7 @@ class ScanRepository(private val context: Context) {
     /**
      * Removes protection after [checkPdfPassword] accepted the password: the KDF is not run a second
      * time, and the lock record the grant was made for must still be the one on disk
-     * (compare-and-swap under [PDF_LOCK]), so an authorization never outlives a password change.
+     * (compare-and-swap under [PDF_LOCK]), so an authorization never outlives the record it checked.
      */
     suspend fun unlockPdf(id: String, grant: PdfPasswordGrant): ScanDocument =
         withContext(Dispatchers.IO) { unlockVerified(id, grant) }
@@ -2730,10 +2730,13 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
-     * A one-use proof that [checkPdfPassword] accepted a document's password, together with the exact
-     * lock record it checked. [unlockPdf] and [changePdfPassword] re-check that record under
-     * [PDF_LOCK] instead of deriving the KDF again, so one attempt derives once and an authorization
-     * can never be reused after a password change or an unlock.
+     * A lock-record-bound proof that [checkPdfPassword] accepted a document's password, together
+     * with the exact lock record it checked. [unlockPdf] and [changePdfPassword] re-check that record
+     * under [PDF_LOCK] instead of deriving the KDF again, so one attempt derives once.
+     *
+     * It carries no consumption state: the grant stays valid exactly as long as the record it names
+     * is still the one on disk (so it may be used more than once, e.g. to build the same preview
+     * twice) and is refused as soon as a password change or an unlock has replaced that record.
      */
     class PdfPasswordGrant internal constructor(
         val docId: String,
@@ -2984,7 +2987,8 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Same preview after [checkPdfPassword] accepted the password. The lock record must still be the
-     * one the grant covers, so a password change made in between is never bypassed.
+     * one the grant covers, so a password change made in between is never bypassed. The grant is not
+     * consumed: calling this again with the same grant is fine while the record is unchanged.
      */
     suspend fun unlockedPreviewPdf(id: String, grant: PdfPasswordGrant): File =
         withContext(Dispatchers.IO) {

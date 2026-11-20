@@ -93,7 +93,7 @@ class UnlockSheetOffMainTest {
 
     /**
      * End to end with the real repository: the 1 300 000-iteration PBKDF2 of the lock check must
-     * run on a background thread, and the right password unlocks through the one-use grant.
+     * run on a background thread, and the right password unlocks through the lock-record-bound grant.
      */
     @Test
     fun `the sheet checks the password off the main thread and unlocks once`() {

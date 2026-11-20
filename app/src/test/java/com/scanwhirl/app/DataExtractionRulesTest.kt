@@ -2,6 +2,7 @@ package com.scanwhirl.app
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
@@ -42,7 +43,7 @@ class DataExtractionRulesTest {
     }
 
     @Test
-    fun `cloud backup and device transfer exclude every app domain`() {
+    fun `cloud backup and device transfer exclude every app domain in full`() {
         val sections = sections(File("src/main/res/xml/data_extraction_rules.xml"))
         assertEquals(
             "both extraction sections must be present",
@@ -50,24 +51,40 @@ class DataExtractionRulesTest {
             sections.keys
         )
         for ((section, excluded) in sections) {
-            assertTrue(
-                "$section must exclude every domain; missing: ${domains - excluded}",
-                excluded.containsAll(domains)
-            )
+            assertFullExclusions(section, excluded)
         }
     }
 
     @Test
-    fun `the older full backup rules exclude every app domain`() {
+    fun `the older full backup rules exclude every app domain in full`() {
         val file = File("src/main/res/xml/backup_rules.xml")
         assertTrue("${file.path} is missing", file.isFile)
         val root = parse(file).documentElement
         assertEquals("full-backup-content", root.tagName)
-        val excluded = excludes(root)
-        assertTrue("missing: ${domains - excluded}", excluded.containsAll(domains))
+        assertFalse("full-backup-content must not include anything", hasInclude(root))
+        assertFullExclusions("full-backup-content", excludes(root))
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * An `<exclude>` without `path="."` covers only that one subdirectory: a file written elsewhere in
+     * the domain would still be copied. Every domain must therefore be excluded exactly once, in full.
+     */
+    private fun assertFullExclusions(where: String, excluded: Map<String, String>) {
+        assertEquals(
+            "$where must exclude every domain; missing: ${domains - excluded.keys}",
+            domains.toSet(),
+            excluded.keys
+        )
+        for ((domain, path) in excluded) {
+            assertEquals(
+                "$where <exclude domain=\"$domain\"> must cover the whole domain with path=\".\"",
+                ".",
+                path
+            )
+        }
+    }
 
     private fun applicationElement(manifest: File): Element {
         val root = parse(manifest).documentElement
@@ -76,12 +93,12 @@ class DataExtractionRulesTest {
         return apps.item(0) as Element
     }
 
-    /** section tag -> set of excluded domains, for cloud-backup and device-transfer. */
-    private fun sections(file: File): Map<String, Set<String>> {
+    /** section tag -> (domain -> path) declared by its `<exclude>` elements. */
+    private fun sections(file: File): Map<String, Map<String, String>> {
         assertTrue("${file.path} is missing", file.isFile)
         val root = parse(file).documentElement
         assertEquals("data-extraction-rules", root.tagName)
-        val out = linkedMapOf<String, Set<String>>()
+        val out = linkedMapOf<String, Map<String, String>>()
         val children = root.childNodes
         for (i in 0 until children.length) {
             val el = children.item(i) as? Element ?: continue
@@ -92,15 +109,20 @@ class DataExtractionRulesTest {
         return out
     }
 
-    private fun excludes(section: Element): Set<String> {
-        val out = mutableSetOf<String>()
+    /**
+     * domain -> its `path` attribute, in declaration order. An `<exclude>` with no domain, with no
+     * path, or repeating a domain fails here: each domain must be named exactly once.
+     */
+    private fun excludes(section: Element): Map<String, String> {
+        val out = linkedMapOf<String, String>()
         val children = section.childNodes
         for (i in 0 until children.length) {
             val el = children.item(i) as? Element ?: continue
             if (el.tagName != "exclude") continue
             val domain = el.getAttribute("domain")
             assertTrue("an <exclude> has no domain", domain.isNotEmpty())
-            out.add(domain)
+            assertTrue("an <exclude> has no path", el.hasAttribute("path"))
+            assertNull("domain $domain is excluded more than once", out.put(domain, el.getAttribute("path")))
         }
         return out
     }

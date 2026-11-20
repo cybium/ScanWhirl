@@ -129,7 +129,7 @@
 
     <string name="pro_title_prefix">ScanWhirl </string>
     <string name="pro_title_pro">Pro</string>
-    <string name="pro_sub">The complete PDF suite. On your phone. Yours forever.</string>
+    <string name="pro_sub">The complete PDF suite. On your phone. One payment.</string>
     <!-- PRC-001: no rupee amount in the app. The amount is Play's localized price; until it
          arrives the price line says where the price comes from. -->
     <string name="pro_price_play">Price shown by Google Play</string>
@@ -299,7 +299,7 @@
     <string name="me_pro_active">ScanWhirl Pro is active</string>
     <string name="me_pro_active_summary">Thank you. Every Pro tool is unlocked.</string>
     <string name="pro_active_sub">Every Pro tool is unlocked. Thank you!</string>
-    <string name="pro_sub_compact">Every Pro tool, one payment, yours forever.</string>
+    <string name="pro_sub_compact">Every Pro tool, one payment, no subscription.</string>
     <string name="pro_more_tools">See all %1$d Pro tools</string>
     <string name="settings_test_free">Testing: act as a Free user</string>
     <string name="settings_test_free_summary">Test builds only. Shows the Pro gate.</string>

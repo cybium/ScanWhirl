@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 /**
  * S4B (independent re-review, MAJOR 1): the 1 300 000-iteration PBKDF2 lock check is a suspending
  * call that runs off the main thread, one attempt derives once, a dismissed check changes nothing,
- * and an authorization is never reused after a concurrent password change.
+ * and an authorization is bound to the lock record it checked rather than used up by one call.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -160,6 +160,11 @@ class PdfPasswordOffMainTest {
         val grant = runBlocking { repo.checkPdfPassword(id, "1234") }!!
         runBlocking { repo.changePdfPassword(id, "1234", "5678") }
 
+        val previewRefused = runCatching { runBlocking { repo.unlockedPreviewPdf(id, grant) } }
+        assertTrue(
+            "a stale grant must not preview the document, got ${previewRefused.exceptionOrNull()}",
+            previewRefused.exceptionOrNull() is PdfProtection.WrongPassword
+        )
         val refused = runCatching { runBlocking { repo.unlockPdf(id, grant) } }
         assertTrue(
             "a stale grant must be refused, got ${refused.exceptionOrNull()}",
@@ -167,6 +172,30 @@ class PdfPasswordOffMainTest {
         )
         assertTrue("the document stays locked", repo.getDocument(id)!!.isLocked)
         assertTrue(repo.verifyPdfPassword(id, "5678"))
+    }
+
+    /**
+     * The grant is bound to the lock record, not used up by one call: while that record is unchanged
+     * the same grant may build the preview twice without deriving the KDF again. (The refusal half —
+     * a grant stops working once a password change replaced its record — is pinned by
+     * `a grant is refused after the password changed`.)
+     */
+    @Test
+    fun `one grant previews twice while the lock record is unchanged`() {
+        val id = DocFixtures.locked(repo, app, password = "1234")
+        var derivations = 0
+        ScanRepository.lockDerivationProbe = { derivations++ }
+
+        val grant = runBlocking { repo.checkPdfPassword(id, "1234") }!!
+        assertEquals("the check derives exactly once", 1, derivations)
+
+        val first = runBlocking { repo.unlockedPreviewPdf(id, grant) }
+        val second = runBlocking { repo.unlockedPreviewPdf(id, grant) }
+
+        assertTrue("the first preview is a written file", first.isFile && first.length() > 0)
+        assertTrue("the second preview is a written file", second.isFile && second.length() > 0)
+        assertEquals("neither preview derives the KDF again", 1, derivations)
+        assertTrue("the document is still locked", repo.getDocument(id)!!.isLocked)
     }
 
     /**
