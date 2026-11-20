@@ -173,9 +173,48 @@ class PdfAesTest {
         assertEquals("adb", String(block, 9, 3, Charsets.ISO_8859_1))
     }
 
+    /**
+     * Algorithm 13 also fixes bytes 4-7 of the plaintext permission block at FF FF FF FF. A block
+     * that decrypts with the right key, the right /P and "adb" but a different constant has been
+     * rewritten by something else (a permission editor, a corrupted /Encrypt dictionary) and must
+     * be refused instead of trusted.
+     */
     @Test
-    fun `unicode passwords are NFKC normalised as UTF-8 and cut at 127 bytes`() {
-        // NFKC maps the ligature ﬁ (U+FB01) to "fi": both spellings are the same password.
+    fun `a Perms block whose fixed FF vector was changed is refused`() {
+        val key = ByteArray(32) { (it * 7 + 1).toByte() }
+        val permissions = PdfAes.P_DEFAULT
+        val ecb = Cipher.getInstance("AES/ECB/NoPadding")
+        ecb.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"))
+        fun sealed(block: ByteArray): ByteArray = ecb.doFinal(block)
+        val fixed = ByteArray(16)
+        for (i in 0..3) fixed[i] = ((permissions ushr (8 * i)) and 0xFF).toByte()
+        for (i in 4..7) fixed[i] = 0xFF.toByte()
+        fixed[8] = 'T'.code.toByte()
+        fixed[9] = 'a'.code.toByte()
+        fixed[10] = 'd'.code.toByte()
+        fixed[11] = 'b'.code.toByte()
+        fixed[12] = 0x11
+        fixed[13] = 0x22
+        fixed[14] = 0x33
+        fixed[15] = 0x44
+
+        assertTrue("the untouched vector must verify", PdfAes.permsValid(key, sealed(fixed), permissions, true))
+        for (index in 4..7) {
+            val changed = fixed.copyOf()
+            changed[index] = 0x00
+            assertFalse(
+                "byte $index of the fixed vector was altered",
+                PdfAes.permsValid(key, sealed(changed), permissions, true)
+            )
+        }
+        // The trailing four bytes are defined as random: changing them is not a failure.
+        val randomPart = fixed.copyOf()
+        randomPart[15] = 0x55
+        assertTrue("the random tail is not part of the fixed vector", PdfAes.permsValid(key, sealed(randomPart), permissions, true))
+    }
+
+    @Test
+    fun `unicode passwords are NFKC normalised as UTF-8 and cut at 127 bytes`() {        // NFKC maps the ligature ﬁ (U+FB01) to "fi": both spellings are the same password.
         val enc = PdfAes.create("ﬁle密码123")
         assertNotNull("NFKC equivalent spelling opens", PdfAes.userKey("file密码123", enc.u, enc.ue))
         assertNull("a different password stays wrong", PdfAes.userKey("file密码124", enc.u, enc.ue))
