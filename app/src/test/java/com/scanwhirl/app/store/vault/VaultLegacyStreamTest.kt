@@ -22,6 +22,8 @@ class VaultLegacyStreamTest {
         val vault = VaultStore(app, repo, FakeVaultKeys(), VaultPasscodeGate(), iterations = 2000)
         VaultSession.close()
         val archive = File(app.cacheDir, "fictional-old.swvault")
+        val legacyEntry = File(app.cacheDir, "fictional-old-entry")
+        var oldKey: ByteArray? = null
         try {
             val id = DocFixtures.saved(repo, app, pages = 1, name = "Fictional old Vault file")
             val setup = vault.setup("246810")
@@ -38,18 +40,27 @@ class VaultLegacyStreamTest {
             }
             assertNotNull(vault.openDocument(id))
             vault.exportBackup(archive)
+            root.copyRecursively(legacyEntry)
+            oldKey = key.copyOf()
             vault.wipeAll()
             val restored = VaultStore(app, repo, FakeVaultKeys(), VaultPasscodeGate(), iterations = 2000)
+            // Portable import adopts the old key and ciphertext without re-encrypting.
+            assertEquals(listOf(id), restored.importBackup(archive, setup.recoveryCode).map { it.id })
+            assertNotNull(restored.openDocument(id))
+            restored.wipeAll()
             restored.setup("135790")
             restored.markConfirmationPassed()
-            assertEquals(listOf(id), restored.importBackup(archive, setup.recoveryCode).map { it.id })
+            // Merge into an already set-up Vault actually decrypts and re-encrypts each file.
+            assertEquals(id, restored.restoreEntryFromBackup(legacyEntry, oldKey).id)
             assertNotNull(restored.openDocument(id))
             root.listFiles()!!.filter { it.extension == "enc" }.forEach {
                 assertEquals("restored payload and manifest use authenticated order", 2, it.readBytes()[4].toInt())
             }
         } finally {
             VaultSession.close()
+            oldKey?.fill(0)
             archive.delete()
+            legacyEntry.deleteRecursively()
             File(app.filesDir, "vault2").deleteRecursively()
             File(app.cacheDir, "vault_open").deleteRecursively()
             app.getSharedPreferences("scanwhirl_prefs", 0).edit().clear().commit()
