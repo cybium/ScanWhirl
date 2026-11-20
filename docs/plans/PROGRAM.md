@@ -95,3 +95,6 @@ understand Rs 299 one-time + restore purchase); target >= 85 % unaided completio
 - R1 Pro value + paywall psychology (India, ₹299-499 one-time, ethical: no dark patterns, Play policy).
 - R2 UI/UX principles for a document app on budget Android (Material 3 / expressive motion, accessibility, Hindi).
 - C1 Code vs current docs (context7 + Google docs): Play Billing, MediaStore/SAF, photo picker, FileProvider.
+
+**6.5 Owner brainstorm 2026-11-20 (lead decisions):** no INTERNET permission / Google sign-in / own server this release (Play Billing already ties Pro to the Google account; sign-in cannot stop repackaging without server-side checks, which break the no-account promise). Post-release: one-tap 'Save backup to Google Drive' through the system picker (works without INTERNET); OCR label 'Hindi / Marathi (Devanagari)'; more UI languages only bundled with native review. This release: short trust copy 'Private · No ads', Settings 'App language' vs 'Text reading language', A/अ opens an English/हिन्दी chooser (lane c1copy).
+
