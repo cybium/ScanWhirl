@@ -64,6 +64,25 @@ class FullBackupBudgetTest {
 
     @Test fun `short key is refused too`() = refused("vault-key.bin" to ByteArray(31))
 
+    @Test fun `keyed archive oversized control blobs fail before publication`() {
+        for ((name, size) in listOf("recovery.bin" to 4097, "passcode.bin" to 4097,
+                "passwords.bin" to (2 * 1024 * 1024 + 1))) {
+            refused("vault-key.bin" to ByteArray(32) { it.toByte() },
+                "documents/new/meta.txt" to "New\n".toByteArray(),
+                "vault2/$name" to ByteArray(size))
+        }
+    }
+
+    @Test fun `unknown root file and injected adding marker are skipped and reported`() {
+        val source = archive("vault-key.bin" to ByteArray(32) { it.toByte() },
+            "vault2/unknown.bin" to byteArrayOf(1),
+            "vault2/.adding-fictional" to "v1\nfictional\n".toByteArray())
+        val report = FullBackup(app).restore(source, password)
+        assertFalse(File(app.filesDir, "vault2/unknown.bin").exists())
+        assertFalse(File(app.filesDir, "vault2/.adding-fictional").exists())
+        assertTrue("Both rejected root files must be reported", report.warnings.any { it.contains("2") })
+    }
+
     @Test fun `settings larger than one MiB are refused before publishing documents`() =
         refused("documents/new/meta.txt" to "New\n".toByteArray(), "settings.json" to ByteArray(1024 * 1024 + 1))
 
@@ -122,6 +141,8 @@ class FullBackupBudgetTest {
         val method = FullBackup::class.java.getDeclaredMethod("replay", File::class.java, File::class.java)
         method.isAccessible = true
         listOf("vault-key.bin" to 10_000_000L, "settings.json" to 1_048_577L,
+            "vault2/recovery.bin" to 4097L, "vault2/passcode.bin" to 4097L,
+            "vault2/passwords.bin" to 2_097_153L,
             "documents/new/page.jpg" to 536_870_913L,
             "documents/new/meta.txt" to 65_537L).forEachIndexed { i, (path, length) ->
             val raw = File(app.cacheDir, "declared-$i")
