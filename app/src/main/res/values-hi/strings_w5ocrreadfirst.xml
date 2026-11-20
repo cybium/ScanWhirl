@@ -17,7 +17,7 @@
     <string name="ocr_w5_txt_failed_here">.txt फ़ाइल सहेजी नहीं जा सकी। आपका लिखा हुआ अभी भी यहीं है।</string>
     <string name="ocr_w5_retry_txt">फिर कोशिश करें</string>
     <string name="ocr_w5_reread_title">लिखा हुआ फिर पढ़ें?</string>
-    <string name="ocr_w5_reread_msg">फिर पढ़ने पर हर पन्ने का मौजूदा लिखा हुआ बदल जाएगा, आपके किए बदलाव भी। अगर उन्हें रखना है तो पहले बदलाव सहेजें।</string>
+    <string name="ocr_w5_reread_msg">दोबारा पढ़ने पर हर पन्ने की मौजूदा लिखावट बदलेगी, आपके सुधार भी। उन्हें रखना चाहते हैं तो पहले सहेजें।</string>
     <string name="ocr_w5_reread_confirm">फिर पढ़ें</string>
     <string name="ocr_w5_keep_editing">बदलाव जारी रखें</string>
     <string name="ocr_w5_back_msg">अपने बदलाव इस दस्तावेज़ में रखें, .txt प्रति सहेजें, या बदलाव न रखें।</string>

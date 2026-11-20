@@ -5,7 +5,7 @@
     <string name="f7save_perm_why_documents">इस Android संस्करण में फ़ाइल को Documents में प्रति के रूप में रखने के लिए भंडार की अनुमति चाहिए। जारी रखने के लिए अनुमति दें।</string>
     <string name="f7save_perm_denied_documents">सहेजा नहीं गया: इस Android संस्करण में Documents के लिए भंडार की अनुमति चाहिए। सेटिंग में अनुमति देकर फिर कोशिश करें।</string>
     <string name="f7save_perm_denied_batch">सहेजा नहीं गया: PDF रखने के लिए इस Android संस्करण में Documents के लिए भंडार की अनुमति चाहिए। सेटिंग में अनुमति देकर फिर कोशिश करें।</string>
-    <string name="f7save_autocopy_no_permission">ScanWhirl में सहेजा गया। Documents में प्रति नहीं बनी: इस Android संस्करण में भंडार की अनुमति चाहिए। नए स्कैन की प्रति के लिए सेटिंग में अनुमति दें।</string>
+    <string name="f7save_autocopy_no_permission">ScanWhirl में सहेजा गया, लेकिन Documents में प्रति नहीं बनी। फ़ाइलों तक पहुँच की अनुमति देकर अगली बार कोशिश करें।</string>
     <string name="f7save_picker_write_failed">चुनी हुई फ़ाइल नहीं लिखी जा सकी</string>
     <string name="f7save_picker_write_failed_left">चुनी हुई फ़ाइल नहीं लिखी जा सकी और उसकी खाली प्रति भी नहीं हटाई जा सकी</string>
 </resources>

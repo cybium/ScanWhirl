@@ -18,7 +18,7 @@
     <string name="vault_locked_title">तिजोरी पर ताला है</string>
     <string name="vault_locked_body">अपनी निजी फ़ाइलें देखने के लिए उँगली का निशान लगाएँ या गुप्त नंबर डालें।</string>
     <string name="vault_not_setup_title">आपकी निजी जगह</string>
-    <string name="vault_not_setup_body">निजी फ़ाइलें रखने के लिए तिजोरी बनाएँ। फ़ाइलें देखने के लिए पहले तिजोरी खोलनी होगी।</string>
+    <string name="vault_not_setup_body">फ़ाइलें इस फ़ोन पर कूटबद्ध रखने के लिए तिजोरी बनाएँ। बाद में खोलने के लिए गुप्त नंबर या उँगली के निशान की ज़रूरत होगी।</string>
     <string name="vault_banner_fingerprint">उँगली के निशान से खुली · 2 मिनट में फिर ताला</string>
     <string name="vault_banner_passcode">गुप्त नंबर से खुली · 2 मिनट में फिर ताला</string>
     <string name="vault_banner_recovery">तिजोरी वापस खोलने के कोड से खुली · 2 मिनट में फिर ताला</string>
@@ -114,7 +114,7 @@
 
     <string name="vault_open">खोलें</string>
     <string name="vault_remove">तिजोरी की प्रति मिटाएँ</string>
-    <string name="vault_remove_note">तिजोरी की यह प्रति हमेशा के लिए मिट जाएगी। कागज़ात में इसकी प्रति पहले ही हटाई जा चुकी है।</string>
+    <string name="vault_remove_note">तिजोरी की यह कूटबद्ध प्रति हमेशा के लिए मिटेगी। कागज़ात वाली प्रति पहले ही हटाई जा चुकी है।</string>
     <string name="vault_removed">तिजोरी से हटा दिया</string>
     <string name="vault_open_failed">यह दस्तावेज़ नहीं खुल सका: %1$s</string>
 
