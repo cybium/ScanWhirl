@@ -568,15 +568,42 @@ class FullBackup(
                     File(vaultDir, name).delete()
                     File(vaultDir, "$name.tmp").delete()
                 }
+                var rejected = 0
+                var unchecked = 0
                 restoredVault.listFiles()?.sortedBy { it.name }?.forEach { from ->
                     val to = File(vaultDir, from.name)
                     if (to.exists()) return@forEach
                     if (from.name.startsWith(".")) return@forEach
                     if (from.isDirectory && !isSafeId(from.name)) return@forEach
                     val wasDirectory = from.isDirectory
+                    if (wasDirectory) {
+                        // S5B (red-team): an adopted entry is checked before it is published,
+                        // exactly like a merged one: manifest, contained paths and every declared
+                        // file authenticated against its size and digest. A damaged or crafted
+                        // entry is skipped and reported, never counted as restored.
+                        if (oldVaultKey != null) {
+                            val ok = runCatching { vault.validateStagedEntryForAdoption(from, oldVaultKey) }.isSuccess
+                            if (!ok) {
+                                rejected++
+                                return@forEach
+                            }
+                        } else {
+                            // A password backup of a locked Vault carries no key, so its entries
+                            // cannot be checked now; Vault validates each one when it is opened.
+                            unchecked++
+                        }
+                    }
                     if (from.renameTo(to)) {
                         if (wasDirectory) vaultEntries++ else extras++
+                    } else if (wasDirectory && oldVaultKey == null) {
+                        unchecked--
                     }
+                }
+                if (rejected > 0) {
+                    warnings.add(context.getString(R.string.backup_vault_entries_rejected, rejected))
+                }
+                if (unchecked > 0) {
+                    warnings.add(context.getString(R.string.backup_vault_entries_unchecked, unchecked))
                 }
                 // The restore typed the backup's recovery code, so the adopted Vault is known:
                 // a pending marker left by an interrupted setup is not owed any more.
