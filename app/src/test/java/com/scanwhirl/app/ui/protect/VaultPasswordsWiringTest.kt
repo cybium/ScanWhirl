@@ -125,9 +125,14 @@ class VaultPasswordsWiringTest {
     }
 
     private fun clickItem(index: Int) {
+        // UI-W6: the document chooser is the shared searchable picker (rows in docPickerList).
         val d = ShadowDialog.getLatestDialog()
-        if (d is AlertDialog) d.listView.performItemClick(null, index, 0)
-        else d.findViewById<ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
+        val picker = d.findViewById<android.view.ViewGroup>(R.id.docPickerList)
+        when {
+            picker != null -> picker.getChildAt(index).performClick()
+            d is AlertDialog -> d.listView.performItemClick(null, index, 0)
+            else -> d.findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
+        }
         idle()
     }
 

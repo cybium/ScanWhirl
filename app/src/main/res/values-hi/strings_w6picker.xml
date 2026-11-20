@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- w6picker lane strings (Hindi). Wording follows next/docs/review/JUDGE_HINDI.md. -->
+<resources>
+    <string name="w6_picker_search_hint">दस्तावेज़ खोजें</string>
+    <string name="w6_picker_no_match_title">कोई दस्तावेज़ नहीं मिला</string>
+    <string name="w6_picker_no_match_body">दूसरा नाम आज़माएँ, या खोज मिटाएँ।</string>
+    <string name="w6_picker_clear_search">खोज मिटाएँ</string>
+    <string name="w6_picker_empty_title">अभी कोई दस्तावेज़ नहीं</string>
+    <string name="w6_picker_empty_body">पहले दस्तावेज़ स्कैन करें या PDF आयात करें, फिर यह औज़ार दोबारा खोलें।</string>
+    <string name="w6_picker_empty_scan">दस्तावेज़ स्कैन करें</string>
+    <string name="w6_picker_empty_import">PDF आयात करें</string>
+    <string name="w6_picker_locked_reason">सुरक्षित PDF</string>
+    <string name="w6_picker_vault_reason">तिजोरी में</string>
+    <string name="w6_picker_row_locked">%1$s, सुरक्षित PDF</string>
+    <string name="w6_picker_row_vault">%1$s, तिजोरी में</string>
+    <string name="w6_picker_row_desc">%1$s, %2$s, %3$s</string>
+    <string name="w6_unlock_empty_body">कागज़ात में कोई सुरक्षित PDF नहीं। इसके बजाय PDF फ़ाइल खोलें।</string>
+    <plurals name="w6_picker_doc_meta">
+        <item quantity="one">%1$d पन्ना · %2$s · %3$s</item>
+        <item quantity="other">%1$d पन्ने · %2$s · %3$s</item>
+    </plurals>
+</resources>
