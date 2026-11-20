@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r3fit_no_locked">किसी भी दस्तावेज़ पर पासवर्ड नहीं है</string>
+    <string name="r3fit_no_protectable">आपके सभी दस्तावेज़ पासवर्ड से सुरक्षित हैं</string>
+    <string name="r3fit_no_hindi_text_source">पढ़ने के लिए कोई बिना पासवर्ड वाला दस्तावेज़ नहीं है</string>
+    <string name="r3fit_no_insert_source">पन्ने लेने के लिए कोई दूसरा बिना पासवर्ड वाला दस्तावेज़ नहीं है</string>
+    <string name="r3fit_no_page_tool_target">पन्नों में बदलाव के लिए कोई बिना पासवर्ड वाला दस्तावेज़ नहीं है</string>
+</resources>

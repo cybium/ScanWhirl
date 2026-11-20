@@ -174,6 +174,30 @@ class SwSheet private constructor(
         contentContainer.isVisible = true
     }
 
+    /**
+     * Opt in to one viewport for the whole form. Even in a short keyboard-resized window the
+     * title and actions can scroll away, rather than leaving too little room for a field.
+     */
+    private fun setScrollableContent(content: androidx.core.widget.NestedScrollView): SwSheet = apply {
+        val root = view as LinearLayout
+        val column = LinearLayout(view.context).apply { orientation = LinearLayout.VERTICAL }
+        // Reuse the existing viewport (and its scrollbar) rather than nesting scroll views.
+        val form = checkNotNull(content.getChildAt(0))
+        content.removeView(form)
+        setContent(form)
+        while (root.childCount > 0) {
+            val child = root.getChildAt(0)
+            root.removeViewAt(0)
+            column.addView(child)
+        }
+        content.addView(column, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        root.addView(content, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+    }
+
     /** A quiet text field for rename / merge-name sheets. */
     fun setInput(
         initial: String? = null,
@@ -392,6 +416,9 @@ class SwSheet private constructor(
         fun setMessage(text: CharSequence) = apply { sheet.setMessage(text) }
         fun setMessage(res: Int) = apply { sheet.setMessage(res) }
         fun setContent(content: View) = apply { sheet.setContent(content) }
+        fun setScrollableContent(content: androidx.core.widget.NestedScrollView) = apply {
+            sheet.setScrollableContent(content)
+        }
         fun setInput(
             initial: String? = null,
             hint: CharSequence? = null,

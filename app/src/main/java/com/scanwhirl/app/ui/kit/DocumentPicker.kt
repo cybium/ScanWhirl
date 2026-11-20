@@ -17,6 +17,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -47,6 +48,7 @@ class DocumentPicker private constructor(
     private val activity: AppCompatActivity,
     private val dialog: BottomSheetDialog,
     private val docs: List<ScanDocument>,
+    @StringRes private val noEligibleTitle: Int?,
     private val onPick: (ScanDocument) -> Unit,
     private val onDismiss: (() -> Unit)?
 ) {
@@ -289,22 +291,29 @@ class DocumentPicker private constructor(
         for (doc in filtered) list.addView(row(doc))
 
         val noMatch = docs.isNotEmpty() && filtered.isEmpty()
-        val empty = docs.isEmpty()
-        val showEmpty = empty || noMatch
+        val showEmpty = filtered.isEmpty()
+        val emptyLibrary = docs.isEmpty() && noEligibleTitle == null
         (view.findViewById<View>(R.id.docPickerScroll))?.isVisible = !showEmpty
         emptyHost.isVisible = showEmpty
         if (showEmpty) {
             emptyTitle.text = view.context.getString(
-                if (noMatch) R.string.w6_picker_no_match_title else R.string.w6_picker_empty_title
+                when {
+                    noMatch -> R.string.w6_picker_no_match_title
+                    noEligibleTitle != null -> noEligibleTitle
+                    else -> R.string.w6_picker_empty_title
+                }
             )
-            emptyBody.text = view.context.getString(
-                if (noMatch) R.string.w6_picker_no_match_body else R.string.w6_picker_empty_body
-            )
+            emptyBody.text = when {
+                noMatch -> view.context.getString(R.string.w6_picker_no_match_body)
+                emptyLibrary -> view.context.getString(R.string.w6_picker_empty_body)
+                else -> null
+            }
+            emptyBody.isVisible = noMatch || emptyLibrary
             // A search with no match offers only Clear; a truly empty library offers the
             // host's real Scan/Import routes (never a fake one).
             clearSearch.isVisible = noMatch
-            emptyScan.isVisible = !noMatch && hasScanAction
-            emptyImport.isVisible = !noMatch && hasImportAction
+            emptyScan.isVisible = emptyLibrary && hasScanAction
+            emptyImport.isVisible = emptyLibrary && hasImportAction
         }
     }
 
@@ -510,6 +519,8 @@ class DocumentPicker private constructor(
          * @param extraAction a fixed last action (e.g. "From a PDF file") that is not a document.
          * @param onEmptyScan what the empty state's Scan action does; null hides it.
          * @param onEmptyImport what the empty state's Import action does; null hides it.
+         * @param noEligibleTitle title for a nonempty library with no eligible documents.
+         * Pass it only when the library is not empty and [docs] is the empty filtered list.
          * @param onPick runs after the sheet closes, with the exact [ScanDocument] tapped.
          * @param onDismiss runs only when the sheet closes without a pick (Back, Close, outside).
          */
@@ -520,11 +531,12 @@ class DocumentPicker private constructor(
             extraAction: ExtraAction? = null,
             onEmptyScan: (() -> Unit)? = null,
             onEmptyImport: (() -> Unit)? = null,
+            @StringRes noEligibleTitle: Int? = null,
             onPick: (ScanDocument) -> Unit,
             onDismiss: (() -> Unit)? = null
         ): DocumentPicker {
             val dialog = BottomSheetDialog(activity)
-            val picker = DocumentPicker(activity, dialog, docs, onPick, onDismiss)
+            val picker = DocumentPicker(activity, dialog, docs, noEligibleTitle, onPick, onDismiss)
             picker.view.findViewById<TextView>(R.id.docPickerTitle)?.text = title
             picker.hasScanAction = onEmptyScan != null
             picker.hasImportAction = onEmptyImport != null

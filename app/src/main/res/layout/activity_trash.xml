@@ -25,6 +25,16 @@
     </com.google.android.material.appbar.AppBarLayout>
 
     <TextView
+        android:id="@+id/trashCount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="4dp"
+        android:textColor="@color/rv_ink_2"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <TextView
         android:id="@+id/trashHeaderNote"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

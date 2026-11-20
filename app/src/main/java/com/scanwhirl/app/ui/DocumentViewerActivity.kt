@@ -1071,9 +1071,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     private fun pickDocumentForInsert() {
-        val docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
-            .filter { it.id != docId && !it.isLocked && !it.isVaulted }
-        FlowUtil.pickScan(this, R.string.insert_pages_title, docs) { source ->
+        val all = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+        val docs = all.filter { it.id != docId && !it.isLocked && !it.isVaulted }
+        val noEligible = R.string.r3fit_no_insert_source.takeIf { all.isNotEmpty() && docs.isEmpty() }
+        FlowUtil.pickScan(this, R.string.insert_pages_title, docs, noEligibleTitle = noEligible) { source ->
             // Copies, never moves: the source document keeps every page.
             askInsertPosition(source.pageFiles)
         }
@@ -1916,11 +1917,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         private fun openPicker(activity: android.app.Activity, insert: Boolean) {
             if (activity !is androidx.appcompat.app.AppCompatActivity) return
-            val docs = runCatching { ScanRepository(activity).listDocuments() }
-                .getOrDefault(emptyList())
-                .filter { !it.isLocked && !it.isVaulted }
+            val all = runCatching { ScanRepository(activity).listDocuments() }.getOrDefault(emptyList())
+            val docs = all.filter { !it.isLocked && !it.isVaulted }
             if (docs.isEmpty()) {
-                Toast.makeText(activity, R.string.empty_title, Toast.LENGTH_SHORT).show()
+                val message = if (all.isEmpty()) R.string.empty_title else R.string.r3fit_no_page_tool_target
+                Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
                 return
             }
             FlowUtil.pickScan(activity, R.string.tool_pick_document, docs) { doc ->

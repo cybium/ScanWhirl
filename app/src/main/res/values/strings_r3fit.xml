@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r3fit_no_locked">None of your documents are password-protected</string>
+    <string name="r3fit_no_protectable">All your documents are already password-protected</string>
+    <string name="r3fit_no_hindi_text_source">No unlocked documents to read</string>
+    <string name="r3fit_no_insert_source">No other unlocked documents to copy pages from</string>
+    <string name="r3fit_no_page_tool_target">No unlocked documents for page changes</string>
+</resources>

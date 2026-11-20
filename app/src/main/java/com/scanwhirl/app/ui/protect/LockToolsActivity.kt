@@ -103,6 +103,7 @@ class LockToolsActivity : BaseActivity(), HomeHost {
                 activity = this,
                 title = getString(R.string.lock_choose_document),
                 docs = protectable,
+                noEligibleTitle = R.string.r3fit_no_protectable.takeIf { all.isNotEmpty() && protectable.isEmpty() },
                 onEmptyScan = { FlowUtil.openHome(this) },
                 onPick = { doc -> flow.protectDocument(doc) },
                 onDismiss = { finish() }
@@ -113,8 +114,11 @@ class LockToolsActivity : BaseActivity(), HomeHost {
                 activity = this,
                 title = getString(R.string.lock_choose_document),
                 docs = locked,
-                extraAction = DocumentPicker.ExtraAction(getString(R.string.lock_from_pdf)) {
-                    pickPdf.launch("application/pdf")
+                noEligibleTitle = R.string.r3fit_no_locked.takeIf { all.isNotEmpty() && locked.isEmpty() },
+                extraAction = if (all.isEmpty()) null else {
+                    DocumentPicker.ExtraAction(getString(R.string.lock_from_pdf)) {
+                        pickPdf.launch("application/pdf")
+                    }
                 },
                 onEmptyScan = { FlowUtil.openHome(this) },
                 onEmptyImport = { pickPdf.launch("application/pdf") },
