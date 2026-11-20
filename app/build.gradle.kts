@@ -97,6 +97,7 @@ android {
             // skipped test as a failure. The test itself also Assume-guards on the property.
             val atlasRun = ((project.findProperty("scanwhirl.atlas") as String?)
                 ?: System.getProperty("scanwhirl.atlas")) == "true"
+            val corpusRun = System.getProperty("scanwhirl.corpus") == "true"
             all {
                 it.maxHeapSize = (project.findProperty("testHeap") as String?) ?: "1536m"
                 it.forkEvery = (project.findProperty("testForkEvery") as String?)?.toLongOrNull() ?: 40L
@@ -107,6 +108,18 @@ android {
                 )
                 if (!atlasRun) {
                     it.filter { excludeTestsMatching("com.scanwhirl.app.atlas.*") }
+                }
+                if (corpusRun) {
+                    it.systemProperty("scanwhirl.corpus", "true")
+                    for (key in listOf("path", "out", "revision", "only")) {
+                        System.getProperty("scanwhirl.corpus.$key")?.let { value ->
+                            it.systemProperty("scanwhirl.corpus.$key", value)
+                        }
+                    }
+                    // Fixtures live outside the repo and may change with no Gradle input change.
+                    it.outputs.upToDateWhen { false }
+                } else {
+                    it.filter { excludeTestsMatching("com.scanwhirl.app.corpus.*") }
                 }
             }
         }
@@ -168,4 +181,5 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core-ktx:1.6.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("org.apache.pdfbox:pdfbox:3.0.8") // Independent corpus oracle; never in the APK.
 }
