@@ -10,7 +10,6 @@ import com.scanwhirl.app.store.vault.VaultKeyWrap
 import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.util.Durable
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -339,18 +338,33 @@ class FullBackup(
         put("documents", docsDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.size ?: 0)
     }.toString()
 
+    // Only portable user choices from Prefs, with the same types on both sides. Entitlement,
+    // billing, Vault/security policy, QA flags, local URIs and internal markers are device-local.
+    private enum class SettingType { TEXT, TOGGLE }
+
+    private val portableSettings get() = mapOf(
+        "theme_mode" to SettingType.TEXT,
+        "font_style" to SettingType.TEXT,
+        "default_viewer" to SettingType.TEXT,
+        "sort_mode" to SettingType.TEXT,
+        "library_sort" to SettingType.TEXT,
+        "locale_tag" to SettingType.TEXT,
+        "ocr_language" to SettingType.TEXT,
+        "accent_theme" to SettingType.TEXT,
+        "quick_tools" to SettingType.TEXT,
+        "auto_enhance_scan" to SettingType.TOGGLE,
+        "auto_copy_to_documents" to SettingType.TOGGLE,
+        "make_searchable" to SettingType.TOGGLE,
+        "gallery_auto_crop" to SettingType.TOGGLE
+    )
+
     private fun settings(): String = JSONObject().apply {
-        prefs.all.forEach { (key, value) ->
-            // Device state, not settings: the legacy PIN hash and the non-secret "setup not
-            // checked yet" marker both belong to this phone only.
-            if (key == "vault_pin_sha256" || key == PREF_VAULT_PENDING) return@forEach
-            when (value) {
-                is String -> put(key, value)
-                is Boolean -> put(key, value)
-                is Int -> put(key, value)
-                is Long -> put(key, value)
-                is Float -> put(key, value.toDouble())
-                is Set<*> -> put(key, JSONArray(value.toList()))
+        val values = prefs.all
+        portableSettings.forEach { (key, type) ->
+            val value = values[key]
+            when (type) {
+                SettingType.TEXT -> if (value is String) put(key, value) else Unit
+                SettingType.TOGGLE -> if (value is Boolean) put(key, value) else Unit
             }
         }
     }.toString()
@@ -609,24 +623,18 @@ class FullBackup(
             }
         }
 
-        // 4. Settings: only keys this phone does not have (a fresh install gets them all).
+        // 4. Settings: only known portable preferences, and never replace a choice on this phone.
         val settingsFile = staging.resolve("settings.json")
         if (settingsFile.isFile) {
             runCatching {
                 val json = JSONObject(settingsFile.readText())
                 val edit = prefs.edit()
-                json.keys().forEach { key ->
-                    if (key == "vault_pin_sha256" || prefs.contains(key)) return@forEach
-                    when (val value = json.get(key)) {
-                        is Boolean -> edit.putBoolean(key, value)
-                        is Int -> edit.putInt(key, value)
-                        is Long -> edit.putLong(key, value)
-                        is Double -> edit.putFloat(key, value.toFloat())
-                        is String -> edit.putString(key, value)
-                        is JSONArray -> edit.putStringSet(
-                            key, (0 until value.length()).map { value.getString(it) }.toSet()
-                        )
-                        else -> Unit
+                portableSettings.forEach { (key, type) ->
+                    if (prefs.contains(key)) return@forEach
+                    val value = json.opt(key)
+                    when (type) {
+                        SettingType.TEXT -> if (value is String) edit.putString(key, value) else Unit
+                        SettingType.TOGGLE -> if (value is Boolean) edit.putBoolean(key, value) else Unit
                     }
                 }
                 edit.apply()
