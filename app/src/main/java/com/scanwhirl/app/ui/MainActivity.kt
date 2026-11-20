@@ -1592,8 +1592,10 @@ class MainActivity : BaseActivity(), HomeHost {
                     ids.mapNotNull { id -> allDocs.firstOrNull { it.id == id } }
                 }
                 val out = withContext(Dispatchers.IO) {
-                    val dir = File(cacheDir, "documents/share").apply { mkdirs() }
-                    val file = File(dir, "ScanWhirl ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())}.zip")
+                    val file = ShareUtils.newShareTarget(
+                        this@MainActivity,
+                        "ScanWhirl ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())}.zip"
+                    )
                     ZipExporter.export(docs, file)
                     file
                 }

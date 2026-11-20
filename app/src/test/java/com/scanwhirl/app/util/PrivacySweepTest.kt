@@ -60,11 +60,32 @@ class PrivacySweepTest {
         }
     }
 
+    /**
+     * X3-SHARECOPY: a share copy is the one cache entry a recipient app may still be reading
+     * after ScanWhirl's process went away. Young copies are kept for the retention window;
+     * only stale ones are reclaimed at cold start.
+     */
     @Test
-    fun `share copies inside the cache documents dir are removed`() {
-        val shared = file("documents/share/Annual Report.pdf")
+    fun `a share a recipient may still read survives the cold start`() {
+        val shared = file(
+            "documents/share/x3-${System.currentTimeMillis()}-abcd/Aadhaar front - FAKE.pdf"
+        )
+        val viewer = file("documents/preview.pdf")
         PrivacySweep.run(app)
-        assertFalse("a shared copy must not survive the process", shared.exists())
+        assertTrue("a young share copy must stay readable", shared.exists())
+        assertFalse("the rest of the cache is still swept", viewer.exists())
+    }
+
+    @Test
+    fun `share copies older than the keep window are swept at cold start`() {
+        val old = System.currentTimeMillis() - ShareUtils.SHARE_KEEP_MS - 60_000L
+        val shared = file("documents/share/x3-$old-abcd/Annual Report.pdf")
+        shared.parentFile!!.setLastModified(old)
+        shared.setLastModified(old)
+
+        PrivacySweep.run(app)
+
+        assertFalse("a stale share copy is reclaimed", shared.exists())
     }
 
     /**
