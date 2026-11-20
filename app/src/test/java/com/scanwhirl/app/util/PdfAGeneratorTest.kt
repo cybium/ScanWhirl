@@ -20,8 +20,9 @@ import java.util.TimeZone
 
 /**
  * v2 UI: 03_tools_hub — the PDF/A-2b writer: OutputIntent, XMP, matching dates, trailer ID, no
- * encryption, and the plain writer staying exactly as it was. veraPDF validates the real files
- * in `PdfASamplesTest` (host check); these are the structure guarantees in the gate.
+ * encryption, image-only pages (no non-embedded font), and the plain writer staying exactly as
+ * it was. The separate `PdfAConformanceTest` covers the H3-1 honesty rules; veraPDF validates
+ * the produced files on the host (lane checkpoint), never in the gate.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -132,14 +133,15 @@ class PdfAGeneratorTest {
     }
 
     @Test
-    fun `invisible text including Devanagari is written into the archive`() {
+    fun `an archive never carries the non-embedded text layer`() {
         write(withText = true)
         val text = text()
-        assertTrue(text.contains("/ActualText <FEFF"))
-        // Devanagari travels as UTF-16BE inside ActualText (that is what extractors read).
-        assertTrue(text.contains("<FEFF09150941093200200930093E0936093F"))
-        assertTrue(text.contains("BT /F1"))
-        assertTrue("the page draws its image", text.contains("/Im0 Do"))
+        // ISO 19005-2 6.2.11.3.1: every font must be embedded. The OCR layer's base-14
+        // Helvetica is not, so the archive is written image-only and honestly says so.
+        assertFalse("no font dictionary may ship", text.contains("/BaseFont"))
+        assertFalse("no invisible text may ship", text.contains("/ActualText"))
+        assertFalse("no text-showing operator may ship", text.contains("BT /F1"))
+        assertTrue("the page still draws its image", text.contains("/Im0 Do"))
     }
 
     @Test

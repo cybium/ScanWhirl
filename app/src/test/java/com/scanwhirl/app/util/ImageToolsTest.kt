@@ -118,6 +118,20 @@ class ImageToolsTest {
     }
 
     @Test
+    fun `a size above 2 GB is refused instead of saturating`() {
+        // H3-7: Double.roundToInt() used to saturate 3 GB at Int.MAX_VALUE (2 GiB) and the run
+        // then chased a number the person never asked for. The parser keeps Long precision and
+        // rejects anything above the same 2 GB ceiling the Compress sheet names.
+        assertNull("5000 MB is over the ceiling", ImageTools.parseSizeInput("5000 MB"))
+        assertNull("3000 MB is over the ceiling", ImageTools.parseSizeInput("3000 MB"))
+        assertEquals(
+            "exactly 2 GB is still a real target, not an Int overflow",
+            2L * 1024L * 1024L * 1024L,
+            ImageTools.parseSizeInput("2048 MB")
+        )
+    }
+
+    @Test
     fun `resize with both fields null keeps original dimensions`() {
         val src = jpeg(640, 480)
         val out = ImageTools.resize(src, ImageTools.ResizeOptions(width = null, height = null))

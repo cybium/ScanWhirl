@@ -2,7 +2,7 @@
 <resources>
     <!-- v2 UI: 03_tools_hub - Save as PDF/A (lane L2). -->
     <string name="pdfa_pick">Save as PDF/A</string>
-    <string name="pdfa_note">PDF/A-2b for archiving. Keeps the look, no password.</string>
+    <string name="pdfa_note">PDF/A-2b for archiving. Keeps the look, no password. The archive is image-only: recognised text is not included.</string>
     <string name="pdfa_create">Create PDF/A copy</string>
     <string name="pdfa_locked">This document is password-protected. Save as PDF/A needs an unprotected document.</string>
     <string name="pdfa_failed">Could not create the PDF/A copy: %1$s</string>

@@ -19,9 +19,9 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * v2 UI: 03_tools_hub — "Save as PDF/A" produces a verified archive from a real document, with
- * its invisible OCR text layer when searchable PDFs are on, and refuses a protected document
- * with a clear message (PDF/A never carries encryption).
+ * v2 UI: 03_tools_hub — "Save as PDF/A" produces a verified archive from a real document,
+ * image-only (a PDF/A archive may not carry the non-embedded OCR font), and refuses a protected
+ * document with a clear message (PDF/A never carries encryption).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -59,7 +59,8 @@ class PdfAExportTest {
         assertTrue(text.startsWith("%PDF-1.7"))
         assertTrue(text.contains("/S /GTS_PDFA1"))
         assertTrue(text.contains("<pdfaid:conformance>B</pdfaid:conformance>"))
-        assertTrue("the invisible text layer is carried", text.contains("/ActualText <FEFF"))
+        assertFalse("PDF/A-2b needs embedded fonts: the archive is image-only", text.contains("/ActualText"))
+        assertFalse("no non-embedded font may ship in the archive", text.contains("/BaseFont"))
         assertTrue(text.contains("/Title (Annual Report)"))
         assertFalse(text.contains("/Encrypt"))
         assertTrue("the source document is untouched", repo.getDocument(id) != null)
