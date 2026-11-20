@@ -218,6 +218,47 @@ class ImageToolsTest {
         assertEquals(1, Regex("pHYs").findAll(String(twice, Charsets.ISO_8859_1)).count())
     }
 
+    /**
+     * H2-8: a gallery photo [normalizePage] does not know (here a 24-bit BMP, like a
+     * HEIC/AVIF from a phone camera) must still come back inside the same page bound
+     * every other page has (3000 px per side, 6 MP), never at full resolution.
+     */
+    @Test
+    fun `gallery fallback decodes an unknown format inside the page bound`() {
+        val out = ImageTools.normalizeGalleryPhoto(ImportFixtures.bmp(3600, 1800))
+        val size = ImageTools.imageSize(out)
+        assertNotNull("the fallback produced a JPEG", size)
+        val (w, h) = size!!
+        assertTrue("longest side ${maxOf(w, h)} must stay within 3000 px", maxOf(w, h) <= 3000)
+        assertTrue(
+            "pixels $w x $h must stay within ${ImageTools.MAX_PAGE_PIXELS}",
+            w.toLong() * h <= ImageTools.MAX_PAGE_PIXELS
+        )
+        ImportFixtures.assertJpeg(out).recycle()
+    }
+
+    /**
+     * H2-8: an exhausted heap inside the fallback is a refusal, not a crash. The seam
+     * stands in for the platform decoder on a phone with too little memory.
+     */
+    @Test
+    fun `gallery fallback turns out of memory into a too large photo`() {
+        ImageTools.galleryDecode = { _, _ -> throw OutOfMemoryError("forced for the test") }
+        try {
+            var failure: Throwable? = null
+            try {
+                ImageTools.normalizeGalleryPhoto(ImportFixtures.bmp(40, 30))
+                fail("an unbounded decode would have killed the process")
+            } catch (e: ImageTools.PhotoTooLargeException) {
+                failure = e
+            }
+            assertNotNull("the typed refusal is what the screen localizes", failure)
+            assertTrue(ImageTools.isTooLargePhoto(failure!!))
+        } finally {
+            ImageTools.galleryDecode = null
+        }
+    }
+
     private fun noiseBitmap(w: Int, h: Int, seed: Long): Bitmap {
         val rnd = java.util.Random(seed)
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)

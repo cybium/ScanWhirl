@@ -42,6 +42,42 @@ object ImportFixtures {
         return file.readBytes()
     }
 
+    /**
+     * A minimal uncompressed 24-bit BMP: a real, decodable picture whose container is
+     * not one [ImageTools.normalizePage] knows, like a HEIC from a phone camera (H2-8).
+     */
+    fun bmp(width: Int, height: Int): ByteArray {
+        val rowBytes = ((width * 3 + 3) / 4) * 4
+        val size = 54 + rowBytes * height
+        val out = ByteArray(size)
+        out[0] = 'B'.code.toByte()
+        out[1] = 'M'.code.toByte()
+        fun put32(at: Int, value: Int) {
+            out[at] = (value and 0xFF).toByte()
+            out[at + 1] = ((value shr 8) and 0xFF).toByte()
+            out[at + 2] = ((value shr 16) and 0xFF).toByte()
+            out[at + 3] = ((value shr 24) and 0xFF).toByte()
+        }
+        put32(2, size)
+        put32(10, 54)
+        put32(14, 40)   // BITMAPINFOHEADER
+        put32(18, width)
+        put32(22, height)
+        out[26] = 1     // planes
+        out[28] = 24    // bits per pixel
+        put32(34, rowBytes * height)
+        for (y in 0 until height) {
+            val row = 54 + y * rowBytes
+            for (x in 0 until width) {
+                val at = row + x * 3
+                out[at] = (x * 255 / width).toByte()       // blue
+                out[at + 1] = (y * 255 / height).toByte()  // green
+                out[at + 2] = 200.toByte()                 // red
+            }
+        }
+        return out
+    }
+
     fun assertJpeg(bytes: ByteArray): Bitmap {
         assertEquals(0xFF, bytes[0].toInt() and 255)
         assertEquals(0xD8, bytes[1].toInt() and 255)

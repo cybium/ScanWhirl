@@ -261,21 +261,89 @@ object ImageTools {
      * [normalizePage] does not know. Decode it with the platform decoder and
      * re-encode a real JPEG, so photo import never dies on a modern phone's
      * default camera format. Unreadable bytes still fail with a clear message.
+     *
+     * H2-8: the fallback keeps the same bound as every other page ([WORK_DIM] /
+     * [MAX_PAGE_PIXELS]) and turns an exhausted heap into
+     * [PhotoTooLargeException], so a 48 MP HEIC can never kill the process.
      */
     fun normalizeGalleryPhoto(bytes: ByteArray): ByteArray {
         return try {
             normalizePage(bytes)
         } catch (e: IllegalArgumentException) {
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                ?: throw IllegalArgumentException(
-                    "This photo cannot be read. Choose a JPG or PNG image and try again.", e
-                )
-            try {
-                encodeJpeg(bitmap, 92)
-            } finally {
-                bitmap.recycle()
-            }
+            galleryFallback(bytes, e)
         }
+    }
+
+    /**
+     * A photo whose pixels do not fit this phone's memory. It carries no user-facing
+     * English: the import screen turns it into a localized reason (H2-8).
+     */
+    class PhotoTooLargeException(cause: Throwable? = null) :
+        IllegalArgumentException("photo too large to decode safely", cause)
+
+    /**
+     * Test seam for the fallback decode only (the normal path is untouched): lets a
+     * test hand back a known bitmap or throw [OutOfMemoryError]. Null = BitmapFactory.
+     */
+    @Volatile
+    internal var galleryDecode: ((ByteArray, BitmapFactory.Options) -> Bitmap?)? = null
+
+    /** Bounded decode of a container [normalizePage] rejects (HEIC/HEIF, BMP, GIF, ...). */
+    private fun galleryFallback(bytes: ByteArray, rejected: IllegalArgumentException): ByteArray {
+        fun unreadable(): IllegalArgumentException = IllegalArgumentException(
+            "This photo cannot be read. Choose a JPG or PNG image and try again.", rejected
+        )
+        // Header pass: sample before decoding, exactly like the normal page path.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        try {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        } catch (e: OutOfMemoryError) {
+            throw PhotoTooLargeException(e)
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw unreadable()
+        val sample = pageSampleSize(bounds.outWidth, bounds.outHeight)
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        val bitmap = try {
+            (galleryDecode ?: ::decodeBytes)(bytes, options)
+        } catch (e: OutOfMemoryError) {
+            throw PhotoTooLargeException(e)
+        } ?: throw unreadable()
+        try {
+            // A decoder that ignored inSampleSize is refused instead of encoded.
+            if (bitmap.width > WORK_DIM || bitmap.height > WORK_DIM ||
+                bitmap.width.toLong() * bitmap.height > MAX_PAGE_PIXELS
+            ) {
+                throw PhotoTooLargeException()
+            }
+            return try {
+                encodeJpeg(bitmap, 92)
+            } catch (e: OutOfMemoryError) {
+                throw PhotoTooLargeException(e)
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun decodeBytes(bytes: ByteArray, options: BitmapFactory.Options): Bitmap? =
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+    /**
+     * H2-8: true when a failure (or anything it wraps) means "this picture does not fit
+     * this phone", so the screen can show a localized reason instead of English text.
+     */
+    fun isTooLargePhoto(failure: Throwable): Boolean {
+        var cause: Throwable? = failure
+        var depth = 0
+        while (cause != null && depth < 8) {
+            if (cause is PhotoTooLargeException || cause is OutOfMemoryError) return true
+            cause = cause.cause
+            depth++
+        }
+        return false
     }
 
     /**

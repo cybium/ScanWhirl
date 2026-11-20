@@ -1057,12 +1057,40 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 } else {
                     SwSheet.builder(this@ShellActivity)
                         .setTitle(getString(R.string.import_title))
-                        .setMessage(e.message ?: getString(R.string.import_failed_save))
+                        .setMessage(importFailureMessage(e))
                         .setPrimary(R.string.sheet_got_it)
                         .build()
                         .show()
                 }
             }
+        }
+    }
+
+    /**
+     * H2-5: the live Import route names the reason in the person's language, from the
+     * reviewed import_failed_* strings. The library's English sentence (or any other
+     * exception's JVM text) is never shown; only the category is logged.
+     */
+    internal fun importFailureMessage(e: Throwable): String {
+        val failure = e as? PdfImport.ImportException
+        android.util.Log.w("ScanWhirlImport", "import failed: ${failure?.reason ?: e.javaClass.simpleName}")
+        return when (failure?.reason) {
+            PdfImport.Reason.PASSWORD -> getString(R.string.import_failed_password)
+            PdfImport.Reason.DAMAGED -> if (failure.page > 0) {
+                getString(R.string.import_failed_page, failure.page, failure.pages)
+            } else {
+                getString(R.string.import_failed_damaged)
+            }
+            PdfImport.Reason.EMPTY -> getString(R.string.import_failed_empty)
+            PdfImport.Reason.TOO_LARGE ->
+                getString(R.string.import_failed_too_large, (PdfImport.MAX_BYTES / (1024 * 1024)).toInt())
+            PdfImport.Reason.LOW_MEMORY -> getString(R.string.import_failed_low_memory)
+            PdfImport.Reason.TOO_MANY_PAGES ->
+                getString(R.string.import_failed_too_many, failure.pages, PdfImport.MAX_PAGES)
+            PdfImport.Reason.NO_SPACE -> getString(R.string.import_failed_no_space)
+            PdfImport.Reason.NO_ACCESS -> getString(R.string.import_failed_no_access)
+            PdfImport.Reason.READ_FAILED -> getString(R.string.import_failed_read)
+            PdfImport.Reason.SAVE_FAILED, null -> getString(R.string.import_failed_save)
         }
     }
 

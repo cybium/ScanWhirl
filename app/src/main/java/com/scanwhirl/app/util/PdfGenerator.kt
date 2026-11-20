@@ -163,14 +163,22 @@ object PdfGenerator {
                     offsets[pageObj] = position
 
                     // Text layer: only when geometry exists, has non-blank lines,
-                    // and matches the JPEG's pixel dimensions.
+                    // matches the JPEG's pixel dimensions and really emits text.
                     // H3-1: a PDF/A archive is image-only. The OCR layer's font is a
                     // non-embedded base-14 Helvetica, which ISO 19005-2 6.2.11.3.1 forbids,
                     // so a layer offered by a caller is never written into an archive.
                     val layer = textLayers[i]
-                    val hasLayer = pdfa == null && layer != null &&
+                    val layerContent = if (pdfa == null && layer != null &&
                         layer.lines.any { it.text.isNotBlank() } &&
                         layer.width == info.width && layer.height == info.height
+                    ) {
+                        PdfTextLayer.contentFor(layer, pageW, pageH)
+                    } else {
+                        ""
+                    }
+                    // H4-1: a page is layered only when its content stream carries text. Counting
+                    // the page before contentFor() ran claimed a layer for a page that emitted none.
+                    val hasLayer = layerContent.isNotBlank()
 
                     val resources = if (hasLayer) {
                         "/Resources << /XObject << /Im$i $imageObj 0 R >> ${PdfTextLayer.FONT_DICT} >>"
@@ -183,7 +191,7 @@ object PdfGenerator {
                         append("q\n$pageW 0 0 $pageH 0 0 cm\n/Im$i Do\nQ\n")
                         if (hasLayer) {
                             layeredPages.add(i)
-                            append(PdfTextLayer.contentFor(layer, pageW, pageH))
+                            append(layerContent)
                         }
                     }.toByteArray(Charsets.ISO_8859_1)
                     val contentBody = encryption?.encryptStream(content) ?: content

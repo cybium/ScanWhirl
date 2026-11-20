@@ -273,6 +273,16 @@ class ScanLauncher(
     /** Copying stopped part-way; [dir] holds the pages that did arrive. */
     internal class PartialStaging(val dir: File, cause: Throwable) : IOException(cause.message, cause)
 
+    /**
+     * H2-8: photo [page] (1-based) could not be added, with a reason the screen shows in
+     * the person's language. No user-facing English travels in the message.
+     */
+    internal class StageFailure(
+        val page: Int,
+        val tooLarge: Boolean,
+        cause: Throwable?
+    ) : IOException(cause?.message, cause)
+
     /** Copies the scanned page URIs into a staging folder, then opens the review screen. */
     fun stageAndReview(uris: List<Uri>) {        val progress = host.showProgress()
         activity.lifecycleScope.launch {
@@ -289,7 +299,9 @@ class ScanLauncher(
                                     // HEIC/HEIF photos from a phone gallery are re-encoded here.
                                     .writeBytes(ImageTools.normalizeGalleryPhoto(bytes))
                             } catch (e: Exception) {
-                                throw IllegalArgumentException("Page ${index + 1}: ${e.message}", e)
+                                throw StageFailure(index + 1, ImageTools.isTooLargePhoto(e), e)
+                            } catch (e: OutOfMemoryError) {
+                                throw StageFailure(index + 1, true, e)
                             }
                         }
                         staging
@@ -311,9 +323,30 @@ class ScanLauncher(
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
             } catch (e: Exception) {
+                // H2-5/H2-8: a localized reason, never the library's English/JVM text.
+                val failed = e as? StageFailure
+                val tooLarge = failed?.tooLarge ?: ImageTools.isTooLargePhoto(e)
+                val reason = if (failed != null && failed.page > 0) {
+                    activity.getString(
+                        if (tooLarge) R.string.f8_stage_page_too_large else R.string.f8_stage_page_unreadable,
+                        failed.page
+                    )
+                } else {
+                    activity.getString(if (tooLarge) R.string.f8_reason_too_large else R.string.f8_reason_unreadable)
+                }
                 Toast.makeText(
                     activity,
-                    activity.getString(R.string.stage_failed, e.message),
+                    activity.getString(R.string.stage_failed, reason),
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: OutOfMemoryError) {
+                // H2-8: an Error is not an Exception, so without this the process died. The
+                // staging folder above is already deleted, so nothing partial is left behind.
+                Toast.makeText(
+                    activity,
+                    activity.getString(
+                        R.string.stage_failed, activity.getString(R.string.f8_reason_too_large)
+                    ),
                     Toast.LENGTH_LONG
                 ).show()
             } finally {
