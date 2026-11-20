@@ -8,20 +8,30 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.scanwhirl.app.R
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.ceil
 
 /**
  * v2 Unlock sheet — mockup `09_unlock_sheet`, design `70` §4.2.
  *
  * A password field with the tries-left error, then five wrong tries start a 30-second pause that
- * doubles ([TryCooldown]). Open calls [verify]; a right password closes the sheet and hands the
- * password to [onUnlocked]. "Remove protection…" asks the same password, then shows a second
- * confirmation before [onRemoveProtection] runs — never one tap.
+ * doubles ([TryCooldown]). [verify] is a suspending check: the sheet runs it on
+ * [Dispatchers.Default] (the lock's PBKDF2 must never block the main thread), shows a progress
+ * state, accepts only one check at a time and drops a result whose sheet was dismissed meanwhile.
+ * A right password closes the sheet and hands the password to [onUnlocked]. "Remove protection…"
+ * asks the same password, then shows a second confirmation before [onRemoveProtection] runs —
+ * never one tap.
  *
  * "Use password saved in Vault" is present but hidden until L2's Vault can answer
  * ([vaultAvailable] / [onUseVault]); a button that cannot work is not drawn.
@@ -31,7 +41,7 @@ object UnlockSheet {
     fun show(
         activity: AppCompatActivity,
         documentName: String,
-        verify: (String) -> Boolean,
+        verify: suspend (String) -> Boolean,
         cooldown: TryCooldown = TryCooldown(),
         vaultAvailable: Boolean = false,
         onUnlocked: (password: String) -> Unit,
@@ -71,11 +81,43 @@ object UnlockSheet {
         val fieldIdle = R.drawable.bg_protect_field
         val fieldError = R.drawable.bg_protect_field_error
 
+        // Progress state for the off-main check: a thin indeterminate line above Open.
+        val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            visibility = View.GONE
+            contentDescription = activity.getString(R.string.unlock_checking)
+        }
+        val column = (root as? android.view.ViewGroup)?.getChildAt(0) as? android.widget.LinearLayout
+        column?.addView(
+            progress,
+            column.indexOfChild(open),
+            android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                (3 * activity.resources.displayMetrics.density).toInt()
+            )
+        )
+
+        var checking = false
+        var check: Job? = null
+
         val handler = Handler(Looper.getMainLooper())
         dialog.setOnDismissListener {
             handler.removeCallbacksAndMessages(null)
+            // Dismissed mid-check: the derivation is cancelled and its result is never applied.
+            check?.cancel()
+            check = null
+            checking = false
             // Closed for any reason: the typed password leaves the view.
             field.setText("")
+        }
+
+        fun setChecking(value: Boolean) {
+            checking = value
+            progress.visibility = if (value) View.VISIBLE else View.GONE
+            val allowed = !value && cooldown.canTry()
+            open.isEnabled = allowed
+            remove.isEnabled = allowed && onRemoveProtection != null
+            vault.isEnabled = allowed && vaultAvailable && onUseVault != null
         }
 
         var revealed = false
@@ -110,8 +152,10 @@ object UnlockSheet {
         fun tickPause() {
             val left = cooldown.remainingPauseMs()
             if (left <= 0L && cooldown.canTry()) {
-                open.isEnabled = true
-                remove.isEnabled = onRemoveProtection != null
+                if (!checking) {
+                    open.isEnabled = true
+                    remove.isEnabled = onRemoveProtection != null
+                }
                 field.setBackgroundResource(fieldIdle)
                 error.visibility = View.GONE
                 return
@@ -130,6 +174,8 @@ object UnlockSheet {
         }
 
         fun attempt(removeProtection: Boolean) {
+            // One check at a time: a second tap while the KDF runs is ignored, not queued.
+            if (checking) return
             if (!cooldown.canTry()) {
                 tickPause()
                 return
@@ -138,25 +184,38 @@ object UnlockSheet {
             // An empty password is a real password: an owner-only document (empty user password)
             // opens with it. [verify] decides — it must never be pre-empted here, or such a file
             // becomes impossible to open.
-            if (verify(text)) {
-                if (!removeProtection) {
-                    openWith(text)
-                } else {
-                    confirmRemove(activity) {
-                        dialog.dismiss()
-                        onRemoveProtection?.invoke(text)
-                    }
+            setChecking(true)
+            check = activity.lifecycleScope.launch {
+                val ok = try {
+                    withContext(Dispatchers.Default) { verify(text) }
+                } catch (c: CancellationException) {
+                    throw c
+                } catch (_: Exception) {
+                    false
                 }
-                return
-            }
-            val pause = cooldown.registerFailure()
-            if (pause > 0L) {
-                showError(activity.getString(R.string.unlock_wrong_paused, pause / 1000))
-                tickPause()
-            } else {
-                showError(
-                    activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
-                )
+                // Dismissed while the derivation ran: nothing is decided and nothing is applied.
+                if (!dialog.isShowing) return@launch
+                setChecking(false)
+                if (ok) {
+                    if (!removeProtection) {
+                        openWith(text)
+                    } else {
+                        confirmRemove(activity) {
+                            dialog.dismiss()
+                            onRemoveProtection?.invoke(text)
+                        }
+                    }
+                    return@launch
+                }
+                val pause = cooldown.registerFailure()
+                if (pause > 0L) {
+                    showError(activity.getString(R.string.unlock_wrong_paused, pause / 1000))
+                    tickPause()
+                } else {
+                    showError(
+                        activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
+                    )
+                }
             }
         }
 

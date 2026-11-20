@@ -65,6 +65,18 @@ class PasswordPrivacyTest {
 
     private fun idle() = org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
 
+    /** S4B: the sheet's password check is a suspending PBKDF2 off the main thread. */
+    private fun await(timeoutMs: Long = 15_000, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            idle()
+            if (condition()) return true
+            Thread.sleep(10)
+        }
+        idle()
+        return condition()
+    }
+
     private fun fixture(name: String): ByteArray =
         javaClass.getResourceAsStream("/pdf_encrypted/$name")!!.use { it.readBytes() }
 
@@ -223,6 +235,8 @@ class PasswordPrivacyTest {
         assertEquals("", dialog.view<EditText>(R.id.unlockPassword).text.toString())
         dialog.findViewById<MaterialButton>(R.id.unlockOpen)!!.performClick()
 
+        assertTrue("the verifier decides", await { verifyCalls == 1 })
+        assertTrue("the sheet applies the result", await { unlocked.isNotEmpty() })
         assertEquals("the verifier decided, not the sheet", 1, verifyCalls)
         assertEquals("the empty password is handed over", listOf(""), unlocked)
         assertFalse("the sheet closes", dialog.isShowing)
@@ -244,9 +258,9 @@ class PasswordPrivacyTest {
         )
         dialog.findViewById<MaterialButton>(R.id.unlockOpen)!!.performClick()
 
-        assertTrue("nothing opened with a blank password", unlocked.isEmpty())
         val error = dialog.view<TextView>(R.id.unlockError)
-        assertEquals(View.VISIBLE, error.visibility)
+        assertTrue("the wrong-password line is applied", await { error.visibility == View.VISIBLE })
+        assertTrue("nothing opened with a blank password", unlocked.isEmpty())
         assertTrue("the tries-left line is shown", error.text.contains("tries left"))
         assertNotNull("the sheet stays open", ShadowDialog.getLatestDialog())
     }

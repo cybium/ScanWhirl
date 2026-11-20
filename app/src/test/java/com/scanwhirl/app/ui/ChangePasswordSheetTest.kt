@@ -109,6 +109,18 @@ class ChangePasswordSheetTest {
         d.findViewById<EditText>(R.id.unlockPassword)!!.setText(text)
         d.findViewById<View>(R.id.swSheetPrimary)!!.performClick()
         idle()
+        // S4B: the current-password check is a suspending PBKDF2 off the main thread. Wait until
+        // it has been applied (the button leaves its "Checking password…" label, or the sheet
+        // closes) before the next step.
+        val checkingLabel = app.getString(R.string.unlock_checking)
+        assertTrue(
+            "the check finishes",
+            pollUntil {
+                val sheet = currentPasswordSheet()
+                sheet == null ||
+                    sheet.findViewById<TextView>(R.id.swSheetPrimary)?.text?.toString() != checkingLabel
+            }
+        )
     }
 
     @Test
