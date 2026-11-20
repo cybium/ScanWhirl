@@ -15,8 +15,23 @@ object PdfEncryptor {
     internal class Obj(val number: Int, val start: Int, val end: Int, val gen: Int = 0)
 
     private val latin = Charsets.ISO_8859_1
-    private const val MAX_OBJECTS = 100_000
-    private const val MAX_NESTING = 64
+
+    /**
+     * Shared structural limits of ScanWhirl's PDF reader/writer pair. [PdfDecryptor] (lane S4A)
+     * enforces the same two values, and its round-trip test references them here, so a file this
+     * writer produces is always inside what the reader accepts.
+     *
+     *  - [MAX_XREF_ROWS]: the largest classic xref table we index (10-digit offsets, 100 000 rows).
+     *    Checked in [readXref] BEFORE any output byte is created. The writer reserves one extra row
+     *    for its own /Encrypt object, so a source with exactly 100 000 rows is refused: everything
+     *    Protect writes stays at or below the limit the reader accepts.
+     *  - [MAX_NESTING]: the deepest array/dictionary nesting inside one object. Checked by parsing
+     *    every indexed object BEFORE the temporary output is opened ([validateOnly]), so a refusal
+     *    never leaves a partially written file to publish.
+     */
+    internal const val MAX_XREF_ROWS = 100_000
+    internal const val MAX_NESTING = 64
+
     private const val MAX_OBJECT_SYNTAX = 4 * 1024 * 1024
     private const val MAX_NODES_PER_OBJECT = 64_000
     private const val HEX_DIGITS = "0123456789ABCDEF"
@@ -47,7 +62,10 @@ object PdfEncryptor {
         val raw = src.readBytes()
         val text = String(raw, latin)
         val layout = readXref(text)
-        if (layout.entries.size == MAX_OBJECTS) unsupported() // reserve a slot for /Encrypt
+        if (layout.entries.size == MAX_XREF_ROWS) unsupported() // reserve a slot for /Encrypt
+        // Refuse an over-deep or malformed object before the private temporary exists: every limit
+        // and the whole syntax are proven here, and the parse is repeated while emitting.
+        validateOnly(text, layout)
         val encryption = PdfAes.create(userPassword)
         val derived = PdfAes.userKey(userPassword, encryption.u, encryption.ue)
         if (derived == null || !derived.contentEquals(encryption.fileKey)) {
@@ -266,7 +284,7 @@ object PdfEncryptor {
         val first = xref.word().toIntOrNull()
         xref.skip()
         val count = xref.word().toIntOrNull() ?: unsupported()
-        if (first != 0 || count !in 2..MAX_OBJECTS) unsupported()
+        if (first != 0 || count !in 2..MAX_XREF_ROWS) unsupported()
         while (xref.peek() == ' ' || xref.peek() == '\t') xref.pos++
         xref.eol()
         if (20L * count > trailerEnd - xref.pos) unsupported()
@@ -306,6 +324,19 @@ object PdfEncryptor {
     }
 
     private class Parsed(val value: Value, val body: IntRange?)
+
+    /**
+     * Parses every indexed object once before the output temporary is created, so
+     * [MAX_XREF_ROWS], [MAX_NESTING] and the object syntax are all refused fail-closed before any
+     * byte of the protected PDF exists. [rewrite] parses again while emitting; the encryption of
+     * the stream bodies dominates the cost either way.
+     */
+    private fun validateOnly(text: String, layout: Layout) {
+        for (obj in layout.objects) {
+            val parsed = readObject(text, obj)
+            checkValue(parsed.value, layout)
+        }
+    }
 
     private fun readObject(text: String, obj: Obj): Parsed {
         val c = Cursor(text, obj.start, obj.end)

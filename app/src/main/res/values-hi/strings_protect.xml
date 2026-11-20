@@ -47,6 +47,7 @@
     <string name="unlock_remove_msg">यह PDF अब बिना पासवर्ड खुलेगी। इसके पन्ने जैसे हैं वैसे ही रहेंगे।</string>
     <string name="unlock_remove_confirm">सुरक्षा हटाएँ</string>
     <string name="unlock_removed">पासवर्ड हट गया। PDF खुल गई।</string>
+    <string name="unlock_checking">पासवर्ड जाँचा जा रहा है…</string>
 
     <!-- L3: the Tools/Home Protect and Unlock tiles' document chooser. -->
     <string name="lock_from_pdf">PDF फ़ाइल से</string>

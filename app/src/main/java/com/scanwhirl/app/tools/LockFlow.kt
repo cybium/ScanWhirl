@@ -29,7 +29,9 @@ import com.scanwhirl.app.util.PdfDecryptor
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.ceil
@@ -79,24 +81,29 @@ class LockFlow(
 
     /** Mockup 09: the tries-left sheet. "Open" unlocks the stored document in place. */
     private fun promptUnlockScan(doc: ScanDocument) {
+        val holder = GrantHolder()
         UnlockSheet.show(
             activity = activity,
             documentName = doc.name,
-            verify = { candidate -> repo.verifyPdfPassword(doc.id, candidate) },
+            verify = { candidate ->
+                repo.checkPdfPassword(doc.id, candidate).also { holder.value = it } != null
+            },
             cooldown = cooldownFor(doc.id),
             vaultAvailable = VaultPasswordsFlow.has(activity, doc.id),
-            onUnlocked = { password -> runUnlockScan(doc, password) },
-            onRemoveProtection = { password -> runUnlockScan(doc, password) },
-            onUseVault = { useVaultPassword(doc) { password -> runUnlockScan(doc, password) } }
+            onUnlocked = { if (!holder.consume(doc.id) { runUnlockScan(doc, it) }) lostGrant() },
+            onRemoveProtection = { if (!holder.consume(doc.id) { runUnlockScan(doc, it) }) lostGrant() },
+            onUseVault = { useVaultPassword(doc) { grant -> runUnlockScan(doc, grant) } }
         )
     }
 
-    private fun runUnlockScan(doc: ScanDocument, password: String) {
+    private fun runUnlockScan(doc: ScanDocument, grant: ScanRepository.PdfPasswordGrant) {
         activity.lifecycleScope.launch {
             val progress = host.showProgress()
             try {
+                // The sheet already checked the password; the grant is applied once, without a
+                // second 1 300 000-iteration derivation.
                 withContext(Dispatchers.IO) {
-                    repo.unlockPdf(doc.id, password)
+                    repo.unlockPdf(doc.id, grant)
                     // The clean PDF no longer needs the remembered password.
                     VaultPasswordsFlow.forget(activity, doc.id)
                 }
@@ -119,13 +126,17 @@ class LockFlow(
 
     /** Mockup 05 with the "Change password" title: the current password is checked first. */
     private fun promptChangePassword(doc: ScanDocument) {
+        val holder = GrantHolder()
         promptCurrentPassword(
             activity = activity,
             docName = doc.name,
             cooldown = cooldownFor(doc.id),
-            verify = { current -> repo.verifyPdfPassword(doc.id, current) }
-        ) { current ->
-            promptNewPasswordForScan(doc, current = current)
+            verify = { current ->
+                repo.checkPdfPassword(doc.id, current).also { holder.value = it } != null
+            }
+        ) { _ ->
+            val checked = holder.take()
+            if (checked == null) lostGrant() else promptNewPasswordForScan(doc, granted = checked)
         }
     }
 
@@ -192,12 +203,12 @@ class LockFlow(
     }
 
     /**
-     * Mockup 05. [current] is the verified current password when changing it; null when protecting
+     * Mockup 05. [granted] is the verified current password when changing it; null when protecting
      * for the first time. The sheet only calls back with a password that is long enough and typed
      * twice the same, so no validation happens here.
      */
-    private fun promptNewPasswordForScan(doc: ScanDocument, current: String? = null) {
-        val changing = current != null
+    private fun promptNewPasswordForScan(doc: ScanDocument, granted: ScanRepository.PdfPasswordGrant? = null) {
+        val changing = granted != null
         ProtectSheet.show(
             activity = activity,
             doc = ProtectSheet.Doc(
@@ -215,7 +226,7 @@ class LockFlow(
                 val progress = host.showProgress()
                 try {
                     val updated = withContext(Dispatchers.IO) {
-                        if (changing) repo.changePdfPassword(doc.id, current!!, password)
+                        if (changing) repo.changePdfPassword(doc.id, granted!!, password)
                         else repo.protectPdf(doc.id, password)
                     }
                     progress.dismiss()
@@ -256,17 +267,23 @@ class LockFlow(
         runCatching { VaultStore(activity, repo).isSetUp() }.getOrDefault(false)
 
     /**
-     * Fills the Unlock sheet from the Vault. A missing, stale or unreadable entry never closes
-     * the sheet: the owner can still type the password.
+     * Fills the Unlock sheet from the Vault. A missing, stale or unreadable entry never closes the
+     * sheet: the owner can still type the password. The stored password is checked off the main
+     * thread (one derivation) and handed on as a grant.
      */
-    private fun useVaultPassword(doc: ScanDocument, open: (String) -> Unit) {
+    private fun useVaultPassword(doc: ScanDocument, open: (ScanRepository.PdfPasswordGrant) -> Unit) {
         VaultPasswordsFlow.readForUnlock(activity, doc.id) { password ->
-            when {
-                password == null ->
-                    Toast.makeText(activity, R.string.vault_password_missing, Toast.LENGTH_LONG).show()
-                !repo.verifyPdfPassword(doc.id, password) ->
+            if (password == null) {
+                Toast.makeText(activity, R.string.vault_password_missing, Toast.LENGTH_LONG).show()
+                return@readForUnlock
+            }
+            activity.lifecycleScope.launch {
+                val grant = repo.checkPdfPassword(doc.id, password)
+                if (grant == null) {
                     Toast.makeText(activity, R.string.vault_password_stale, Toast.LENGTH_LONG).show()
-                else -> open(password)
+                } else {
+                    open(grant)
+                }
             }
         }
     }
@@ -474,33 +491,37 @@ class LockFlow(
 
     /** Mockup 09 for a file in storage: a right password exports a clean copy next to it. */
     private fun promptDeviceUnlock(doc: ScanDocument, uri: Uri) {
+        val holder = GrantHolder()
         UnlockSheet.show(
             activity = activity,
             documentName = doc.name,
-            verify = { candidate -> repo.verifyPdfPassword(doc.id, candidate) },
+            verify = { candidate ->
+                repo.checkPdfPassword(doc.id, candidate).also { holder.value = it } != null
+            },
             cooldown = cooldownFor(doc.id),
             vaultAvailable = VaultPasswordsFlow.has(activity, doc.id),
-            onUnlocked = { password -> runUnlockDevicePdf(doc, uri, password) },
-            onRemoveProtection = { password -> runUnlockDevicePdf(doc, uri, password) },
-            onUseVault = { useVaultPassword(doc) { password -> runUnlockDevicePdf(doc, uri, password) } }
+            onUnlocked = { if (!holder.consume(doc.id) { runUnlockDevicePdf(doc, uri, it) }) lostGrant() },
+            onRemoveProtection = { if (!holder.consume(doc.id) { runUnlockDevicePdf(doc, uri, it) }) lostGrant() },
+            onUseVault = { useVaultPassword(doc) { grant -> runUnlockDevicePdf(doc, uri, grant) } }
         )
     }
 
     /** Exports a clean (password-free) copy of the locked scan's pages. */
-    private fun runUnlockDevicePdf(doc: ScanDocument, uri: Uri, password: String) {
+    private fun runUnlockDevicePdf(
+        doc: ScanDocument,
+        uri: Uri,
+        grant: ScanRepository.PdfPasswordGrant
+    ) {
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
-                if (!repo.verifyPdfPassword(doc.id, password)) {
-                    progress.dismiss()
-                    Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
-                    return@launch
-                }
+                // The sheet's grant is the authorization: no second derivation, and a password
+                // change made in between is refused by the repository's compare-and-swap.
                 val before = withContext(Dispatchers.IO) {
                     activity.contentResolver.openFileDescriptor(uri, "r")
                         ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
                 }
-                val clean = withContext(Dispatchers.IO) { repo.unlockedPreviewPdf(doc.id) }
+                val clean = withContext(Dispatchers.IO) { repo.unlockedPreviewPdf(doc.id, grant) }
                 progress.dismiss()
                 activity.startActivity(
                     ExportResultActivity.intent(
@@ -518,6 +539,9 @@ class LockFlow(
                         docId = doc.id // T4.8: record the saved copy on this document
                     )
                 )
+            } catch (e: PdfProtection.WrongPassword) {
+                progress.dismiss()
+                Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 progress.dismiss()
                 Toast.makeText(
@@ -529,21 +553,45 @@ class LockFlow(
         }
     }
 
+    /**
+     * Holds the authorization a sheet's off-main check produced. It is consumed exactly once: a
+     * dismissed or duplicated callback can never act on a password that was verified earlier.
+     */
+    private class GrantHolder {
+        @Volatile var value: ScanRepository.PdfPasswordGrant? = null
+
+        fun take(): ScanRepository.PdfPasswordGrant? = value.also { value = null }
+
+        fun consume(docId: String, action: (ScanRepository.PdfPasswordGrant) -> Unit): Boolean {
+            val grant = take() ?: return false
+            if (grant.docId != docId) return false
+            action(grant)
+            return true
+        }
+    }
+
+    /** The sheet reported success but its one-use grant is gone: fail closed, never re-check implicitly. */
+    private fun lostGrant() {
+        Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
+    }
+
     companion object {
         /** Per-document, per-process pacing (an id is only reused within one app run). */
         private val cooldowns = HashMap<String, TryCooldown>()
 
         /**
          * Asks for the document's current password in an [SwSheet] with the kit's [PasswordField]
-         * (mockup 09's field, strength meter off). With [verify], a wrong password stays in the sheet
-         * and follows the Unlock sheet's tries-left and pause pacing ([cooldown]); without it the text
-         * is handed to [onEntered] unchecked, as before.
+         * (mockup 09's field, strength meter off). [verify] is a suspending check run on
+         * [Dispatchers.Default] with a progress state and one check at a time: the lock's PBKDF2
+         * never runs on the main thread. A wrong password stays in the sheet and follows the Unlock
+         * sheet's tries-left and pause pacing ([cooldown]); without [verify] the text is handed to
+         * [onEntered] unchecked, as before.
          */
         fun promptCurrentPassword(
             activity: AppCompatActivity,
             docName: String,
             cooldown: TryCooldown = TryCooldown(),
-            verify: ((String) -> Boolean)? = null,
+            verify: (suspend (String) -> Boolean)? = null,
             onEntered: (String) -> Unit
         ) {
             val field = PasswordField(activity).apply {
@@ -560,6 +608,24 @@ class LockFlow(
                 .build()
 
             val handler = Handler(Looper.getMainLooper())
+            val idleLabel = activity.getString(R.string.continue_label)
+            val checkingLabel = activity.getString(R.string.unlock_checking)
+            var checking = false
+            var check: Job? = null
+
+            fun setChecking(value: Boolean) {
+                checking = value
+                sheet.primaryButton.isEnabled = !value && cooldown.canTry()
+                sheet.primaryButton.text = if (value) checkingLabel else idleLabel
+            }
+
+            // Closed for any reason: the derivation is cancelled and its result is never applied.
+            sheet.setOnDismissListener {
+                handler.removeCallbacksAndMessages(null)
+                check?.cancel()
+                check = null
+                checking = false
+            }
 
             fun clearError() {
                 field.setError(null)
@@ -569,7 +635,7 @@ class LockFlow(
                 if (!sheet.isShowing) return
                 val left = cooldown.remainingPauseMs()
                 if (left <= 0L && cooldown.canTry()) {
-                    sheet.primaryButton.isEnabled = true
+                    if (!checking) sheet.primaryButton.isEnabled = true
                     field.setError(null)
                     return
                 }
@@ -582,12 +648,15 @@ class LockFlow(
 
             fun attempt() {
                 val text = field.text()
-                if (verify == null) {
+                val verifier = verify
+                if (verifier == null) {
                     handler.removeCallbacksAndMessages(null)
                     sheet.dismiss()
                     onEntered(text)
                     return
                 }
+                // One check at a time: a second tap while the KDF runs is ignored, not queued.
+                if (checking) return
                 if (!cooldown.canTry()) {
                     tickPause()
                     return
@@ -598,23 +667,35 @@ class LockFlow(
                     )
                     return
                 }
-                if (verify(text)) {
-                    cooldown.reset()
-                    handler.removeCallbacksAndMessages(null)
-                    sheet.dismiss()
-                    onEntered(text)
-                    return
-                }
-                val pause = cooldown.registerFailure()
-                if (pause > 0L) {
-                    field.setError(
-                        activity.getString(R.string.unlock_wrong_paused, pause / 1000)
-                    )
-                    tickPause()
-                } else {
-                    field.setError(
-                        activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
-                    )
+                setChecking(true)
+                check = activity.lifecycleScope.launch {
+                    val ok = try {
+                        withContext(Dispatchers.Default) { verifier(text) }
+                    } catch (c: CancellationException) {
+                        throw c
+                    } catch (_: Exception) {
+                        false
+                    }
+                    if (!sheet.isShowing) return@launch
+                    setChecking(false)
+                    if (ok) {
+                        cooldown.reset()
+                        handler.removeCallbacksAndMessages(null)
+                        sheet.dismiss()
+                        onEntered(text)
+                        return@launch
+                    }
+                    val pause = cooldown.registerFailure()
+                    if (pause > 0L) {
+                        field.setError(
+                            activity.getString(R.string.unlock_wrong_paused, pause / 1000)
+                        )
+                        tickPause()
+                    } else {
+                        field.setError(
+                            activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
+                        )
+                    }
                 }
             }
 

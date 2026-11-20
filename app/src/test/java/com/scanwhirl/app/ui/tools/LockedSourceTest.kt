@@ -78,6 +78,11 @@ class LockedSourceTest {
                 sheet.findViewById<EditText>(R.id.unlockPassword).setText("1234")
                 sheet.findViewById<View>(R.id.unlockOpen).performClick()
                 idle()
+                // S4B: the check runs off the main thread; the consent sheet follows it.
+                assertTrue(
+                    "the consent sheet follows the password check",
+                    waitUntil { ShadowDialog.getLatestDialog() != sheet }
+                )
                 // SAFE-UNLOCK-CONSENT: the password only proves the file opens. Taking the
                 // protection off the library copy needs the explicit yes on the next sheet.
                 val consent = requireNotNull(ShadowDialog.getLatestDialog()) { "no consent sheet" }
@@ -114,7 +119,9 @@ class LockedSourceTest {
                 idle()
                 assertTrue(
                     "the wrong-password line is shown",
-                    sheet.findViewById<View>(R.id.unlockError).visibility == View.VISIBLE
+                    waitUntil {
+                        sheet.findViewById<View>(R.id.unlockError).visibility == View.VISIBLE
+                    }
                 )
             }
         }
