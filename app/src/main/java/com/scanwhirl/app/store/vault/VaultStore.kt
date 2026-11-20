@@ -5,6 +5,7 @@ import android.util.Base64
 import com.scanwhirl.app.store.OpFaults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.Sha256
 import kotlinx.coroutines.currentCoroutineContext
@@ -60,6 +61,31 @@ class VaultStore(
         private const val STAGING_PREFIX = ".incoming-"
         private const val RESTORE_PREFIX = ".restore-"
         private const val MANIFEST_VERSION = "v1"
+        // VaultBackup allows 10,000 files per entry, one of which is the manifest.
+        internal const val MAX_ENTRY_RECORDS = 9_999
+        internal const val MAX_MANIFEST_BYTES = 8L * 1024 * 1024
+        internal const val MAX_RECORD_BYTES = 1024L * 1024 * 1024
+        private val STORED_NAME = Regex("[A-Za-z0-9._-]{1,255}")
+        private val SHA256 = Regex("[a-f0-9]{64}")
+
+        internal fun isSafeEntryId(id: String): Boolean =
+            id.isNotEmpty() && id.length <= 64 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+
+        internal fun isSafeStoredName(name: String): Boolean =
+            STORED_NAME.matches(name) && !name.startsWith('.') &&
+                !name.endsWith('.') && !name.endsWith(".part", ignoreCase = true) &&
+                !name.equals(MANIFEST_FILE, ignoreCase = true) &&
+                !name.equals("$MANIFEST_FILE.tmp", ignoreCase = true)
+
+        /** Reject aliases as well as escapes; record names must identify distinct actual files. */
+        internal fun containedFile(root: File, relative: String): File {
+            val base = root.canonicalFile
+            val child = File(base, relative).absoluteFile
+            if (!child.path.startsWith(base.path + File.separator) || child.canonicalFile != child) {
+                throw VaultAuthException("Damaged Vault entry")
+            }
+            return child
+        }
     }
 
     data class Setup(val recoveryCode: String) {
@@ -114,8 +140,8 @@ class VaultStore(
         val createdAt: Long,
         val addedAt: Long,
         val pageCount: Int,
-        /** Relative path of the document PDF inside the entry (its name comes from the document). */
-        val pdf: String,
+        /** Declared PDF member; legacy page-only documents have no PDF. */
+        val pdf: String?,
         val files: List<FileRecord>
     ) {
         fun toEntry() = Entry(
@@ -433,10 +459,11 @@ class VaultStore(
                 createdAt = doc.createdAt,
                 addedAt = System.currentTimeMillis(),
                 pageCount = doc.pageCount,
-                pdf = doc.pdfFile.relativeTo(src).invariantSeparatorsPath,
+                pdf = doc.pdfFile.takeIf { it.isFile }?.relativeTo(src)?.invariantSeparatorsPath,
                 files = files
             )
-            Durable.atomicWrite(File(staging, MANIFEST_FILE), VaultCrypto.encryptBytes(manifest.encode(), key))
+            validateManifest(manifest)
+            writeManifest(staging, manifest, key)
             OpFaults.at("vault:encrypted")
 
             verifyEntry(staging, manifest, key)
@@ -474,23 +501,27 @@ class VaultStore(
     fun openDocument(id: String): Opened = synchronized(LOCK) {
         val key = requireKey()
         requireCompleted()
-        val entryDir = File(vaultDir, id)
+        if (!isSafeEntryId(id)) throw VaultAuthException("Damaged Vault entry")
+        val entryDir = containedFile(vaultDir, id)
         if (!entryDir.isDirectory) throw IOException("This document is not in the Vault")
         val manifest = readManifest(entryDir, key)
-        val target = File(openDir, id)
+        val pdfMember = manifest.pdf ?: throw VaultAuthException("Damaged Vault entry")
+        val sources = resolveEntryFiles(entryDir, manifest)
+        val target = containedFile(openDir, id)
+        val destinations = manifest.files.map { record ->
+            containedFile(target, "${record.rel}.part")
+            containedFile(target, record.rel)
+        }
+        val pdf = containedFile(target, pdfMember)
         target.deleteRecursively()
         if (!target.mkdirs()) throw IOException("Could not open this document")
 
         try {
-            val basePath = target.canonicalPath + File.separator
-            manifest.files.forEach { record ->
-                val dest = File(target, record.rel)
-                if (!dest.canonicalPath.startsWith(basePath)) {
-                    throw VaultAuthException("Damaged Vault entry")
-                }
+            manifest.files.forEachIndexed { index, record ->
+                val dest = destinations[index]
                 dest.parentFile?.mkdirs()
-                VaultCrypto.decryptFile(File(entryDir, record.stored), dest, key)
-                if (dest.length() != record.size || Sha256.of(dest) != record.sha) {
+                VaultCrypto.decryptFile(sources[index], dest, key, record.size)
+                if (Sha256.of(dest) != record.sha) {
                     throw VaultAuthException("The Vault copy does not match the original")
                 }
             }
@@ -502,8 +533,7 @@ class VaultStore(
         val pageFiles = manifest.files
             .filter { it.rel.startsWith("page_") && it.rel.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg", "png") }
             .sortedBy { it.rel }
-            .map { File(target, it.rel) }
-        val pdf = File(target, manifest.pdf)
+            .map { containedFile(target, it.rel) }
         Opened(id = id, name = manifest.name, dir = target, pageFiles = pageFiles, pdfFile = pdf)
     }
 
@@ -591,9 +621,9 @@ class VaultStore(
             val key = VaultKeyWrap.open(contents.recoveryBlob, VaultCrypto.normalizeRecoveryCode(recoveryCode))
 
             val verified = contents.entryIds.map { id ->
-                val dir = File(staging, id)
+                val dir = containedFile(staging, id)
                 val manifest = readManifest(dir, key)
-                verifyEntry(dir, manifest, key)
+                verifyEntry(dir, manifest, key, adopting = true)
                 manifest
             }
             // The remembered passwords are encrypted with the same key: prove they open before
@@ -605,14 +635,14 @@ class VaultStore(
             val moved = ArrayList<File>()
             try {
                 verified.forEach { manifest ->
-                    val from = File(staging, manifest.id)
-                    val to = File(vaultDir, manifest.id)
+                    val from = containedFile(staging, manifest.id)
+                    val to = containedFile(vaultDir, manifest.id)
                     if (to.exists()) throw IOException("This document is already in the Vault")
                     if (!from.renameTo(to)) throw IOException("Could not restore this document")
                     moved += to
                 }
                 contents.extras.forEach { extra ->
-                    val to = File(vaultDir, extra.name)
+                    val to = containedFile(vaultDir, extra.name)
                     if (extra.name == VaultPasswords.FILE_NAME && to.exists()) to.delete()
                     if (!extra.renameTo(to)) throw IOException("Could not restore the Vault settings")
                 }
@@ -756,6 +786,11 @@ class VaultStore(
     /** What happened to one backup entry during [restoreEntryFromBackup]. */
     data class RestoredEntry(val id: String?, val name: String?, val skipped: Boolean)
 
+    /** Check all declared files before Full Backup adopts a staging directory as-is. */
+    internal fun validateStagedEntryForAdoption(source: File, oldKey: ByteArray) = synchronized(LOCK) {
+        verifyEntry(source, readManifest(source, oldKey), oldKey, adopting = true)
+    }
+
     /**
      * Re-encrypts one Vault entry from a full backup into this phone's Vault.
      *
@@ -773,8 +808,9 @@ class VaultStore(
     fun restoreEntryFromBackup(source: File, oldKey: ByteArray): RestoredEntry = synchronized(LOCK) {
         val key = requireKey()
         val sourceManifest = readManifest(source, oldKey)
-        val target = File(vaultDir, sourceManifest.id)
-        if (!isSafeEntryId(sourceManifest.id) || target.exists()) {
+        val sources = resolveEntryFiles(source, sourceManifest)
+        val target = containedFile(vaultDir, sourceManifest.id)
+        if (target.exists()) {
             return RestoredEntry(null, null, true)
         }
         val taken = entryDirs().mapNotNull { dir ->
@@ -783,8 +819,15 @@ class VaultStore(
         val name = if (sourceManifest.name in taken) "${sourceManifest.name} (restored)" else sourceManifest.name
         val manifest = sourceManifest.copy(name = name)
 
-        val work = File(File(context.cacheDir, "vault_verify"), UUID.randomUUID().toString())
-        val staging = File(vaultDir, "$STAGING_PREFIX${manifest.id}-${UUID.randomUUID().toString().take(8)}")
+        val workRoot = containedFile(context.cacheDir, "vault_verify")
+        val work = containedFile(workRoot, UUID.randomUUID().toString())
+        val staging = containedFile(vaultDir, "$STAGING_PREFIX${manifest.id}-${UUID.randomUUID().toString().take(8)}")
+        val plain = containedFile(work, "plain.bin")
+        containedFile(work, "plain.bin.part")
+        val destinations = manifest.files.map { record ->
+            containedFile(staging, "${record.stored}.part")
+            containedFile(staging, record.stored)
+        }
         if (!work.mkdirs() || !staging.mkdirs()) {
             work.deleteRecursively()
             staging.deleteRecursively()
@@ -792,19 +835,16 @@ class VaultStore(
         }
         var published = false
         try {
-            val plain = File(work, "plain.bin")
-            manifest.files.forEach { record ->
-                val from = File(source, record.stored)
-                if (!from.isFile) throw VaultAuthException("The backup's Vault entry is incomplete")
+            manifest.files.forEachIndexed { index, record ->
                 plain.delete()
-                VaultCrypto.decryptFile(from, plain, oldKey)
-                if (plain.length() != record.size || Sha256.of(plain) != record.sha) {
+                VaultCrypto.decryptFile(sources[index], plain, oldKey, record.size)
+                if (Sha256.of(plain) != record.sha) {
                     throw VaultAuthException("The backup's Vault entry does not match its manifest")
                 }
-                VaultCrypto.encryptFile(plain, File(staging, record.stored), key)
+                VaultCrypto.encryptFile(plain, destinations[index], key)
                 plain.delete()
             }
-            Durable.atomicWrite(File(staging, MANIFEST_FILE), VaultCrypto.encryptBytes(manifest.encode(), key))
+            writeManifest(staging, manifest, key)
             verifyEntry(staging, manifest, key)
             if (!staging.renameTo(target)) throw IOException("Could not restore this Vault entry")
             published = true
@@ -815,33 +855,47 @@ class VaultStore(
         }
     }
 
-    private fun isSafeEntryId(id: String): Boolean =
-        id.isNotEmpty() && id.length <= 64 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
-
     private fun entryDir(id: String): File = File(vaultDir, id)
 
-    private fun verifyEntry(entryDir: File, manifest: Manifest, key: ByteArray) {
-        val verifyRoot = File(context.cacheDir, "vault_verify")
-        val work = File(verifyRoot, UUID.randomUUID().toString())
-        work.mkdirs()
-        try {
-            val check = File(work, "check.bin")
-            manifest.files.forEach { record ->
-                check.delete()
-                VaultCrypto.decryptFile(File(entryDir, record.stored), check, key)
-                if (check.length() != record.size || Sha256.of(check) != record.sha) {
+    private fun resolveEntryFiles(entryDir: File, manifest: Manifest): List<File> =
+        manifest.files.map { record ->
+            containedFile(entryDir, record.stored).also { file ->
+                if (!file.isFile || file.length() != VaultCrypto.encryptedLength(record.size)) {
                     throw VaultAuthException("The Vault copy does not match the original")
                 }
             }
-        } finally {
-            work.deleteRecursively()
+        }
+
+    private fun verifyEntry(entryDir: File, manifest: Manifest, key: ByteArray, adopting: Boolean = false) {
+        val sources = resolveEntryFiles(entryDir, manifest)
+        if (adopting) {
+            val declared = manifest.files.mapTo(mutableSetOf(MANIFEST_FILE)) { it.stored }
+            if (entryDir.list()?.toSet() != declared) throw VaultAuthException("Damaged Vault entry")
+        }
+        manifest.files.forEachIndexed { index, record ->
+            VaultCrypto.verifyFile(sources[index], key, record.size, record.sha)
         }
     }
 
     private fun readManifest(entryDir: File, key: ByteArray): Manifest {
-        val blob = File(entryDir, MANIFEST_FILE)
-        if (!blob.isFile) throw VaultAuthException("Damaged Vault entry")
-        return parseManifest(VaultCrypto.decryptBytes(blob.readBytes(), key), entryDir.name)
+        val dir = containedFile(entryDir.absoluteFile.parentFile ?: throw VaultAuthException("Damaged Vault entry"), entryDir.name)
+        val blob = containedFile(dir, MANIFEST_FILE)
+        if (!blob.isFile || blob.length() !in 1..VaultCrypto.encryptedLength(MAX_MANIFEST_BYTES)) {
+            throw VaultAuthException("Damaged Vault entry")
+        }
+        val encrypted = blob.readBytes()
+        val plain = VaultCrypto.decryptBytes(encrypted, key)
+        if (encrypted.size.toLong() != VaultCrypto.encryptedLength(plain.size.toLong())) {
+            throw VaultAuthException("Damaged Vault entry")
+        }
+        return parseManifest(plain, entryDir.name)
+    }
+
+    private fun writeManifest(entryDir: File, manifest: Manifest, key: ByteArray) {
+        val bytes = manifest.encode()
+        if (bytes.size > MAX_MANIFEST_BYTES) throw VaultAuthException("Damaged Vault entry")
+        containedFile(entryDir, "$MANIFEST_FILE.tmp")
+        Durable.atomicWrite(containedFile(entryDir, MANIFEST_FILE), VaultCrypto.encryptBytes(bytes, key))
     }
 
     private fun Manifest.encode(): ByteArray = buildString {
@@ -851,7 +905,7 @@ class VaultStore(
         appendLine("created\t$createdAt")
         appendLine("added\t$addedAt")
         appendLine("pages\t$pageCount")
-        appendLine("pdf\t${b64(pdf)}")
+        appendLine("pdf\t${b64(pdf ?: PdfProtection.PDF_FILE)}")
         files.forEach { record ->
             appendLine("file\t${b64(record.rel)}\t${record.stored}\t${record.size}\t${record.sha}")
         }
@@ -861,8 +915,9 @@ class VaultStore(
         Base64.encodeToString(value.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
 
     private fun parseManifest(bytes: ByteArray, expectedId: String): Manifest {
-        val lines = String(bytes, Charsets.UTF_8).lines().filter { it.isNotEmpty() }
-        if (lines.firstOrNull() != MANIFEST_VERSION) throw VaultAuthException("Unsupported Vault entry")
+        if (bytes.size > MAX_MANIFEST_BYTES) throw VaultAuthException("Damaged Vault entry")
+        val lines = String(bytes, Charsets.UTF_8).lineSequence().iterator()
+        if (!lines.hasNext() || lines.next() != MANIFEST_VERSION) throw VaultAuthException("Unsupported Vault entry")
         var id: String? = null
         var name: String? = null
         var created = 0L
@@ -870,8 +925,13 @@ class VaultStore(
         var pages = 0
         var pdf: String? = null
         val files = ArrayList<FileRecord>()
-        lines.drop(1).forEach { line ->
-            val parts = line.split('\t')
+        val fields = HashSet<String>()
+        lines.forEach { line ->
+            if (line.isEmpty()) return@forEach
+            val parts = line.split('\t', limit = 6)
+            if (parts[0] != "file" && (parts.size != 2 || !fields.add(parts[0]))) {
+                throw VaultAuthException("Damaged Vault entry")
+            }
             when (parts[0]) {
                 "id" -> id = parts.getOrNull(1)
                 "name" -> name = parts.getOrNull(1)?.let { decode(it) }
@@ -880,7 +940,7 @@ class VaultStore(
                 "pages" -> pages = parts.getOrNull(1)?.toIntOrNull() ?: 0
                 "pdf" -> pdf = parts.getOrNull(1)?.let { decode(it) }
                 "file" -> {
-                    if (parts.size != 5) throw VaultAuthException("Damaged Vault entry")
+                    if (parts.size != 5 || files.size >= MAX_ENTRY_RECORDS) throw VaultAuthException("Damaged Vault entry")
                     files += FileRecord(
                         rel = decode(parts[1]),
                         stored = parts[2],
@@ -892,19 +952,61 @@ class VaultStore(
         }
         val parsedId = id ?: throw VaultAuthException("Damaged Vault entry")
         if (parsedId != expectedId) throw VaultAuthException("Damaged Vault entry")
+        val pdfField = pdf ?: throw VaultAuthException("Damaged Vault entry")
+        // V1 writers used ScanRepository's fixed scan.pdf path even for page-only documents.
+        // Normalize that one legacy placeholder to absence, never to a usable path.
+        val pdfMember = pdfField.takeUnless {
+            it == PdfProtection.PDF_FILE && files.none { file -> file.rel == PdfProtection.PDF_FILE }
+        }
         return Manifest(
             id = parsedId,
             name = name ?: parsedId,
             createdAt = created,
             addedAt = added,
             pageCount = pages,
-            pdf = pdf ?: throw VaultAuthException("Damaged Vault entry"),
+            pdf = pdfMember,
             files = files
-        )
+        ).also(::validateManifest)
     }
 
-    private fun decode(value: String): String =
+    private fun validateManifest(manifest: Manifest) {
+        val stored = HashSet<String>()
+        val relatives = HashSet<String>()
+        val directories = HashSet<String>()
+        if (!isSafeEntryId(manifest.id) || manifest.files.size !in 1..MAX_ENTRY_RECORDS) {
+            throw VaultAuthException("Damaged Vault entry")
+        }
+        manifest.files.forEach { record ->
+            val segments = record.rel.split('/', limit = 33)
+            if (!isSafeStoredName(record.stored) || !stored.add(record.stored.lowercase()) ||
+                record.rel.length !in 1..4096 || record.rel.any { it == '\\' || it == ':' || it.code < 32 } ||
+                segments.size > 32 || segments.any { it.isEmpty() || it == "." || it == ".." || it.length > 255 } ||
+                !relatives.add(record.rel) || record.size !in 0..MAX_RECORD_BYTES || !SHA256.matches(record.sha)
+            ) {
+                throw VaultAuthException("Damaged Vault entry")
+            }
+            var slash = record.rel.indexOf('/')
+            while (slash != -1) {
+                directories.add(record.rel.substring(0, slash))
+                slash = record.rel.indexOf('/', slash + 1)
+            }
+        }
+        val validPdf = manifest.pdf?.let { it in relatives } ?: manifest.files.any {
+            '/' !in it.rel && it.size > 0 && (it.rel.endsWith(".jpg", true) || it.rel.endsWith(".jpeg", true))
+        }
+        if (!validPdf || relatives.any {
+                it in directories || "$it.part" in relatives || "$it.part" in directories
+            }
+        ) {
+            throw VaultAuthException("Damaged Vault entry")
+        }
+    }
+
+    private fun decode(value: String): String = try {
         String(Base64.decode(value, Base64.NO_WRAP), Charsets.UTF_8)
+    } catch (e: IllegalArgumentException) {
+        throw VaultAuthException("Damaged Vault entry", e)
+    }
 }
 
 /**
