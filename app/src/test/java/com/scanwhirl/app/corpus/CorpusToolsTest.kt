@@ -1,25 +1,35 @@
 package com.scanwhirl.app.corpus
 
-import android.app.Application
+import android.app.Activity
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.ProviderInfo
 import android.graphics.Color
 import android.net.Uri
+import android.os.Looper
+import android.view.View
+import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import androidx.exifinterface.media.ExifInterface
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.ScanRepository.ImportDecision
+import com.scanwhirl.app.store.vault.FakeVaultKeys
+import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.tools.PdfAExport
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.launchTool
+import com.scanwhirl.app.ui.tools.PassportActivity
+import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException
@@ -29,7 +39,9 @@ import org.apache.pdfbox.text.PDFTextStripper
 import org.apache.pdfbox.text.TextPosition
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowContentResolver
@@ -42,12 +54,13 @@ import java.util.Locale
 import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Document
+import org.w3c.dom.Element
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], application = Application::class)
+@Config(sdk = [35], application = ScanWhirlApp::class)
 class CorpusToolsTest {
     private class Mismatch(message: String) : AssertionError(message)
     private class NeedsDevice(message: String) : Exception(message)
@@ -70,7 +83,7 @@ class CorpusToolsTest {
     private lateinit var expectedHashes: Map<String, String>
     private var hostImportProblem: Throwable? = null
     private val rows = mutableListOf<Row>()
-    private val app get() = ApplicationProvider.getApplicationContext<Application>()
+    private val app get() = ApplicationProvider.getApplicationContext<ScanWhirlApp>()
     private val revision get() = System.getProperty("scanwhirl.corpus.revision", "unrecorded")
 
     private fun readMatrix(): List<Case> {
@@ -389,6 +402,8 @@ class CorpusToolsTest {
             "split", "extract", "duplicate_pages", "insert_pages", "folders" -> editLibrary(id, f)
             "compress", "resize", "remove_metadata", "id_card" -> transform(id, f)
             "protect", "unlock", "pdfa" -> secure(id, f)
+            "passport" -> passport(f)
+            "vault" -> vault(f)
             "pdf_to_images", "long_image", "to_powerpoint", "to_word", "to_excel", "to_text", "searchable_pdf" ->
                 export(id, f)
             "sign", "add_text", "draw", "highlight", "watermark", "page_numbers", "stamp", "redact" ->
@@ -460,6 +475,81 @@ class CorpusToolsTest {
     private fun pageFiles(doc: ScanDocument, expected: List<String>) =
         equal(expected, doc.pageFiles.map(::sha), "exact page-image order/content")
 
+    // These two result screens resolve the repo from the Application. Keep their real callbacks,
+    // but route reads/writes to this case's isolated files and restore the default immediately.
+    private suspend fun <T> Fixture.withUiRepository(block: suspend () -> T): T {
+        val field = ScanWhirlApp::class.java.getDeclaredField("repository").apply { isAccessible = true }
+        val old = app.repository
+        field.set(app, repo)
+        try { return block() } finally { field.set(app, old) }
+    }
+
+    private suspend fun awaitUi(label: String, ready: () -> Boolean) {
+        val stop = System.nanoTime() + 12_000_000_000L
+        do {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (ready()) return
+            delay(15)
+        } while (System.nanoTime() < stop)
+        throw Mismatch("Timed out waiting for $label")
+    }
+
+    private suspend fun Fixture.passport(f: File) {
+        settings = "Passport photo; return gallery test URI; accept default crop; test 35:45 ratio without assuming a DPI"
+        withUiRepository {
+            val controller = Robolectric.buildActivity(PassportActivity::class.java, PassportActivity.intent(app)).setup()
+            try {
+                val activity = controller.get()
+                val shadow = shadowOf(activity)
+                val picker = requireNotNull(shadow.nextStartedActivityForResult) { "Passport gallery picker did not open" }
+                shadow.receiveResult(picker.intent, Activity.RESULT_OK, Intent().setData(Uri.fromFile(f)))
+                awaitUi("passport gallery decode") {
+                    activity.findViewById<View>(R.id.toolSetupProgress).visibility == View.GONE
+                }
+                verify(!activity.isFinishing, "gallery portrait could not be decoded")
+                activity.findViewById<View>(R.id.toolCropApply).performClick()
+                awaitUi("passport result") { repo.listDocuments().isNotEmpty() }
+                val doc = repo.listDocuments().single()
+                pdf(doc, 1)
+                val output = image(doc.pageFiles.single())
+                verify(abs(output.width - output.height * 35.0 / 45.0) <= 2.0,
+                    "crop does not match 35:45 ratio (${output.width}×${output.height})")
+                detail = "Emitted ${output.width}×${output.height} px. No fixed pixel preset is assumed; face centering needs visual review."
+            } finally {
+                controller.pause().stop().destroy()
+            }
+        }
+    }
+
+    private suspend fun Fixture.vault(f: File) {
+        settings = "VaultStore; setup confirmation; fake hardware key provider; wrong and valid passcode; lock and reopen"
+        val source = tracked(f)
+        val digest = sha(source.pdfFile)
+        val pass = 104242.toString() // fictional fixture passcode; never a device credential
+        val vault = VaultStore(context, repo, keys = FakeVaultKeys(), iterations = 2000)
+        try {
+            vault.setup(pass)
+            vault.markConfirmationPassed()
+            vault.lock()
+            verify(!vault.unlockWithPasscode(pass.reversed()).ok, "wrong passcode opened the Vault")
+            equal(digest, sha(source.pdfFile), "failed unlock leaves Library intact")
+            verify(vault.unlockWithPasscode(pass).ok, "correct passcode did not open the Vault")
+            val entry = vault.addDocument(source.id)
+            equal(source.pageCount, entry.pageCount, "Vault page count")
+            verify(repo.getDocument(source.id) == null && !source.pdfFile.exists(), "plaintext remains in Library")
+            verify(repo.listTrash().isEmpty(), "plaintext remains in Trash after Vault move")
+            val opened = vault.openDocument(entry.id)
+            record(opened.pdfFile)
+            equal(digest, sha(opened.pdfFile), "Vault round-trip PDF")
+            equal(source.pageCount, count(opened.pdfFile), "independent reopened PDF page count")
+            vault.lock()
+            verify(!opened.dir.exists(), "plaintext cache survived lock")
+            detail = "Encrypted storage path tested; real device credentials, cancel and export confirmation remain for G."
+        } finally {
+            vault.lock()
+        }
+    }
+
     private suspend fun Fixture.transform(id: String, f: File) {
         when (id) {
             "id_card" -> {
@@ -512,8 +602,24 @@ class CorpusToolsTest {
                     similar(image(pair.first), image(pair.second), "compressed page ${i + 1}")
                 }
                 val actual = result.pdfFile.length()
+                withUiRepository {
+                    val intent = ToolResultActivity.intent(app, "compress", docIds = listOf(result.id),
+                        targetBytes = target, beforeBytes = doc.pdfFile.length(), sourceKept = true)
+                    val controller = Robolectric.buildActivity(ToolResultActivity::class.java, intent).setup()
+                    try {
+                        val activity = controller.get()
+                        val actualLine = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString().lineSequence().first()
+                        val expectedLine = activity.getString(
+                            if (actual <= target) R.string.compress_result_under_limit else R.string.compress_result_over_limit,
+                            StatusLine.formatBytes(actual), StatusLine.formatBytes(target)
+                        )
+                        equal(expectedLine, actualLine, "target result wording from measured bytes")
+                    } finally {
+                        controller.pause().stop().destroy()
+                    }
+                }
                 detail = "Measured $actual bytes, target $target, library input ${doc.pdfFile.length()} bytes. " +
-                    (if (actual <= target) "Target met. " else "Target missed. ") + "Result-screen wording not verified."
+                    (if (actual <= target) "Target met. " else "Target missed. ") + "Actual result reported it correctly."
                 Loader.loadPDF(f).use { source ->
                     if (PDFTextStripper().getText(source).isNotBlank()) {
                         Loader.loadPDF(result.pdfFile).use {
@@ -625,6 +731,9 @@ class CorpusToolsTest {
                     equal("B", xml.getElementsByTagNameNS(ns, "conformance").item(0)?.textContent, "PDF/A level")
                     for (page in it.pages) {
                         val resources = page.resources
+                        val images = resources.xObjectNames.map { name -> resources.getXObject(name) }.filterIsInstance<PDImageXObject>()
+                        verify(images.none { img -> img.cosObject.containsKey(org.apache.pdfbox.cos.COSName.SMASK) },
+                            "PDF/A page image contains a soft mask")
                         for (name in resources.extGStateNames) {
                             val state = resources.getExtGState(name)
                             verify((state.strokingAlphaConstant ?: 1f) == 1f &&
@@ -703,8 +812,13 @@ class CorpusToolsTest {
                     xml(zip, "_rels/.rels")
                     val presentation = xml(zip, "ppt/presentation.xml")
                     equal(doc.pageCount, presentation.getElementsByTagNameNS("*", "sldId").length, "PPT slide count")
+                    val size = presentation.getElementsByTagNameNS("*", "sldSz").item(0) as Element
+                    val slideWidth = size.getAttribute("cx").toLong()
+                    val slideHeight = size.getAttribute("cy").toLong()
+                    val aspect = slideWidth.toDouble() / slideHeight
+                    verify(listOf(16.0 / 9, 4.0 / 3).any { abs(it - aspect) < .001 }, "unexpected PPT slide ratio $aspect")
                     for (i in 1..doc.pageCount) {
-                        xml(zip, "ppt/slides/slide$i.xml")
+                        val slide = xml(zip, "ppt/slides/slide$i.xml")
                         val rels = xml(zip, "ppt/slides/_rels/slide$i.xml.rels")
                         val imageRel = rels.getElementsByTagNameNS("*", "Relationship")
                         val target = (0 until imageRel.length).map { imageRel.item(it) as org.w3c.dom.Element }
@@ -714,6 +828,13 @@ class CorpusToolsTest {
                         val decoded = zip.getInputStream(embedded).use(::image)
                             ?: throw Mismatch("Unreadable embedded slide image")
                         similar(image(doc.pageFiles[i - 1]), decoded, "slide $i embedded page")
+                        val picture = slide.getElementsByTagNameNS("*", "pic").item(0) as Element
+                        val ext = picture.getElementsByTagNameNS("*", "ext").item(0) as Element
+                        val width = ext.getAttribute("cx").toLong()
+                        val height = ext.getAttribute("cy").toLong()
+                        verify(width in 1..slideWidth && height in 1..slideHeight &&
+                            abs(width.toDouble() / height - decoded.width.toDouble() / decoded.height) < .01,
+                            "slide $i does not fit its picture without stretching")
                     }
                 }
             }
@@ -764,6 +885,23 @@ class CorpusToolsTest {
                             verify(values.flatMap { texts(it, "v") }
                                 .any { it.toDoubleOrNull() == token.toDouble() }, "missing numeric cell $token")
                         }
+                        val rows = values.flatMap { sheet ->
+                            val nodes = sheet.getElementsByTagNameNS("*", "row")
+                            (0 until nodes.length).map { nodes.item(it) as Element }
+                        }
+                        when (f.name) {
+                            "bank_statement_3p.pdf" -> equal(45, rows.count {
+                                dateInStatement.containsMatchIn(it.textContent) &&
+                                    "Opening Balance" !in it.textContent && "Closing Balance" !in it.textContent
+                            }, "bank XLSX transaction rows")
+                            "tax_invoice_1p.pdf" -> equal(7, invoiceItems.count { it in text }, "invoice XLSX line items")
+                            "stock_register_6p.pdf" -> equal(120, Regex("""Item\s+\d{3}\b""").findAll(text)
+                                .map { it.value }.toSet().size, "distinct stock items in XLSX")
+                            "wide_table_10col_1p.pdf" -> equal(14, rows.count {
+                                val cells = it.getElementsByTagNameNS("*", "c")
+                                cells.length == 10 && (cells.item(0).textContent.trim().toIntOrNull() ?: 0) in 1..14
+                            }, "wide-table data rows with 10 cells")
+                        }
                     }
                 } else {
                     // The editor export is a device flow; exercise the production save path with its
@@ -797,12 +935,16 @@ class CorpusToolsTest {
         val words = when (f.name) {
             "accented_names_2p.pdf" -> listOf("José Müller", "Ānand Rāo")
             "municipal_circular_2p.pdf" -> listOf("Municipal Corporation")
-            "marksheet_1p.pdf" -> listOf("513")
+            "marksheet_1p.pdf" -> listOf("513", "85.50%")
             "rent_agreement_3p.pdf" -> listOf("Rohan Gupta")
             else -> emptyList()
         }
         for (word in words) verify(word in text, "export is missing '$word'")
     }
+
+    private val dateInStatement = Regex("""\b\d{2}/01/2026\b""")
+    private val invoiceItems = listOf("A4 copier paper", "Ball pen", "File folder", "Stapler",
+        "Highlighter set", "Notebook", "Whiteboard marker")
 
     // This is a fixture adapter, not a substitute OCR engine; no inference from pixels.
     private fun Fixture.seedText(f: File, doc: ScanDocument): List<String> =
@@ -859,14 +1001,23 @@ class CorpusToolsTest {
         settings = if (id == "redact") "Manual opaque black redaction; vector-sensitive line boxes, whole page for unverifiable raster coordinates"
             else "$mark; keep original; ${if (id in setOf("watermark", "page_numbers")) "all pages" else "page 1"}"
         val doc = tracked(f)
-        val before = sha(doc.pdfFile)
+        var before = sha(doc.pdfFile)
         if (id == "redact") {
             val table = File(f.parentFile, "REDACTION_GROUND_TRUTH.txt").readText()
             val values = Regex("(?m)^  [^:\\n]+: ([^\\r\\n]+)").findAll(table).map { it.groupValues[1].trim() }
                 .flatMap { it.split(Regex("\\s{2,}IFSC:\\s*")) }.filter { it.length >= 6 }.toSet()
             verify(values.isNotEmpty(), "missing redaction ground truth")
             seedText(f, doc)
+            // Give vector cases a real, independently checked text layer to strip, rather
+            // than accepting an output with no text when its Library input already had none.
+            repo.makeSearchable(doc.id)
+            before = sha(doc.pdfFile)
             val geometry = repo.ocrGeometry(doc.id)
+            val sourceText = Loader.loadPDF(doc.pdfFile).use { PDFTextStripper().getText(it) }
+            val visibleTokens = values.filter { token -> geometry.values.any { page -> page.lines.any { token in it.text } } }
+            if (visibleTokens.isNotEmpty()) check(visibleTokens.any { it in sourceText }) {
+                "redaction setup did not produce a selectable source token"
+            }
             val fullPage = PageStamp.Box(0f, 0f, 1f, 1f)
             val edits = doc.pageFiles.mapIndexed { i, page ->
                 val geo = geometry[page.name]
@@ -1063,6 +1214,7 @@ class CorpusToolsTest {
         appendLine("\n## Workstream G device steps")
         appendLine("Use only the test APK and QA corpus folder, with G holding the phone lock. " +
             "Perform the listed recipe once per CSV input, compare to its matrix expectation, and capture only test output.")
+        appendLine("See also DEVICE_G.md for the phone checks of the Vault credential/export UI, manual portrait positioning, and Android PDF import.")
         for ((tool, group) in rows.filter { it.status == Status.DEVICE_ONLY }.groupBy { it.tool }) {
             appendLine("\n- **$tool**: ${group.first().settings}")
         }
@@ -1081,8 +1233,6 @@ class CorpusToolsTest {
         "qr_code" -> "Tools > QR code > Scan; show the fixture to the camera. Compare decoded text to qr_images/QR_PAYLOADS.txt and ensure no link, payment, dial or Wi-Fi action occurs automatically."
         "read_text" -> "Import the fixture, open it and choose Text > Read. Select the source language, copy result, compare to OCR_GROUND_TRUTH.txt; do not change device-wide settings."
         "searchable_pdf" -> "Import the fixture, read text in its language, then Tools > Searchable PDF. Save a copy and extract text with PDFBox; compare original page images and locate the fixture terms."
-        "vault" -> "Import the fixture into test Library, record PDF SHA, then move to Vault. Cancel credential prompt once and verify no move. Retry, authenticate in test app, verify Library absence and retrieve a confirmed export with matching SHA."
-        "passport" -> "Tools > Passport photo > choose the fixture; select a preset, center face with crop, save. Measure emitted image dimensions and inspect background and stretch; try sideways/group photo separately."
         else -> null
     }
 }

@@ -20,6 +20,9 @@ the generated documents. Do not commit the corpus or its reports.
 
 Rows are at the engine or repository boundary, not end-to-end UI tests.
 A PASS for a Coming-soon tile tests dispatch, not an unshipped conversion.
+Compression checks the real result screen against measured bytes; passport checks
+the gallery-to-crop output ratio, not biometric acceptance. The Vault adapter tests
+the real storage engine with a test key-store stand-in, not device authentication.
 Word and Excel can use PDFBox-extracted vector text as labelled OCR **input**
 to the app exporter; they do not measure real OCR. A PDF/A result checks
 structure, not formal conformance. Where Android's PDF renderer is unavailable
