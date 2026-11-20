@@ -60,6 +60,7 @@ class VaultStore(
         private const val MANIFEST_FILE = "manifest.enc"
         private const val STAGING_PREFIX = ".incoming-"
         private const val RESTORE_PREFIX = ".restore-"
+        private const val ADDING_PREFIX = ".adding-"
         private const val MANIFEST_VERSION = "v1"
         // VaultBackup allows 10,000 files per entry, one of which is the manifest.
         internal const val MAX_ENTRY_RECORDS = 9_999
@@ -469,8 +470,20 @@ class VaultStore(
             verifyEntry(staging, manifest, key)
             OpFaults.at("vault:verified")
 
+            // S6A: local provenance, fsynced BEFORE publication. Backup restore never creates
+            // this marker; a matching entry id alone is not authority to delete an original.
+            val pending = buildString {
+                appendLine("v1")
+                appendLine(docId)
+                staging.listFiles()!!.sortedBy { it.name }.forEach { file ->
+                    appendLine("${file.name}\t${file.length()}")
+                }
+            }
+            Durable.atomicWriteText(File(vaultDir, "$ADDING_PREFIX$docId"), pending)
+            Durable.syncDir(vaultDir)
             if (!staging.renameTo(target)) throw IOException("Could not add this document to the Vault")
             published = true
+            Durable.syncDir(vaultDir)
             OpFaults.at("vault:published")
 
             val trashKey = repo.moveToTrash(docId)
@@ -484,6 +497,7 @@ class VaultStore(
                 } catch (_: Exception) {
                 }
             }
+            clearCompletedAdd(docId)
             manifest.toEntry()
         } catch (e: Exception) {
             if (!published) {
@@ -492,6 +506,7 @@ class VaultStore(
                 // The original is still in the library; drop the half-finished entry.
                 target.deleteRecursively()
             }
+            if (!target.exists()) File(vaultDir, "$ADDING_PREFIX$docId").delete()
             // When the move to Trash already happened, the complete entry is kept and
             // recover() finishes the purge.
             throw e
@@ -665,9 +680,7 @@ class VaultStore(
     /**
      * Startup recovery, safe while locked:
      *  - drops abandoned staging folders;
-     *  - finishes an add that died after the encrypted entry was published: the library
-     *    original is moved to Trash and purged (the verified encrypted entry is the copy);
-     *  - purges a Trash copy of anything now in the Vault, so no plaintext outlives it;
+     *  - finishes only locally marked adds whose published encrypted files are complete;
      *  - wipes decrypted cache copies while the Vault is locked.
      */
     fun recover() = synchronized(LOCK) {
@@ -684,23 +697,64 @@ class VaultStore(
             return@synchronized
         }
 
-        entryDirs().forEach { dir ->
-            val id = dir.name
-            if (File(repo.docsDir, id).exists()) {
-                try {
+        // S6A: restored/adopted entries and legacy (pre-marker) entries have no deletion
+        // authority. A legacy Library original may remain: a privacy leftover is preferable
+        // to irreversible data loss while locked and unable to authenticate the manifest.
+        vaultDir.listFiles()?.filter { it.isFile && it.name.startsWith(ADDING_PREFIX) }?.forEach { marker ->
+            val id = marker.name.removePrefix(ADDING_PREFIX)
+            if (!validPendingAdd(marker, id)) {
+                // Fail closed permanently; a later restore must not revive stale authority.
+                marker.delete()
+                return@forEach
+            }
+            try {
+                if (File(repo.docsDir, id).exists()) {
                     val key = repo.moveToTrash(id)
                     if (key != null) repo.deleteFromTrash(key)
-                } catch (_: Exception) {
                 }
+                repo.listTrash().filter { it.originalId == id }.forEach { item ->
+                    repo.deleteFromTrash(item.key)
+                }
+                clearCompletedAdd(id)
+            } catch (_: Exception) {
+                // Keep the local marker so an interrupted purge can be retried.
             }
         }
-        repo.listTrash().forEach { item ->
-            if (File(vaultDir, item.originalId).isDirectory) {
-                try {
-                    repo.deleteFromTrash(item.key)
-                } catch (_: Exception) {
-                }
+    }
+
+    /** Structural validation is possible while locked; the marker was created after verification. */
+    private fun validPendingAdd(marker: File, id: String): Boolean = runCatching {
+        if (!isSafeEntryId(id) || marker.length() !in 1..(1024L * 1024) ||
+            containedFile(vaultDir, marker.name) != marker.absoluteFile
+        ) return@runCatching false
+        val lines = marker.readLines()
+        if (lines.size !in 4..(MAX_ENTRY_RECORDS + 3) || lines[0] != "v1" || lines[1] != id) {
+            return@runCatching false
+        }
+        val dir = containedFile(vaultDir, id)
+        if (!dir.isDirectory) return@runCatching false
+        val names = HashSet<String>()
+        for (line in lines.drop(2)) {
+            val parts = line.split('\t')
+            if (parts.size != 2) return@runCatching false
+            val name = parts[0]
+            if ((name != MANIFEST_FILE && !isSafeStoredName(name)) || !names.add(name)) {
+                return@runCatching false
             }
+            val size = parts[1].toLongOrNull() ?: return@runCatching false
+            val limit = if (name == MANIFEST_FILE) MAX_MANIFEST_BYTES else MAX_RECORD_BYTES
+            val file = containedFile(dir, name)
+            if (size !in 1..VaultCrypto.encryptedLength(limit) || !file.isFile || file.length() != size) {
+                return@runCatching false
+            }
+        }
+        MANIFEST_FILE in names && dir.list()?.toSet() == names
+    }.getOrDefault(false)
+
+    private fun clearCompletedAdd(id: String) {
+        if (!File(repo.docsDir, id).exists() && repo.listTrash().none { it.originalId == id }) {
+            File(vaultDir, "$ADDING_PREFIX$id").delete()
+            Durable.syncDir(vaultDir)
         }
     }
 
