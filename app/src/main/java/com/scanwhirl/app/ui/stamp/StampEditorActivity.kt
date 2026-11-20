@@ -83,6 +83,16 @@ class StampEditorActivity : BaseActivity() {
 
         private const val DISABLED_ALPHA = 0.38f
 
+        // H5-1: recreation (rotation, dark mode, font size, language) must not lose user work.
+        private const val KEY_MARKS_FILE = "com.scanwhirl.app.ui.stamp.MARKS_FILE"
+        private const val KEY_PENDING_PHOTO = "com.scanwhirl.app.ui.stamp.PENDING_PHOTO"
+        private const val KEY_INK_KIND = "com.scanwhirl.app.ui.stamp.INK_KIND"
+        private const val KEY_HIDE_MODE = "com.scanwhirl.app.ui.stamp.HIDE_MODE"
+        private const val KEY_HIDE_LABEL = "com.scanwhirl.app.ui.stamp.HIDE_LABEL"
+
+        /** Cache folder for the serialised editor while the screen is being recreated. */
+        private const val STATE_DIR = "stamp_editor"
+
         /** Intent for a screen or the Tools hub: open [docId] with [tool] already armed. */
         fun intent(context: android.content.Context, docId: String, tool: String? = null): Intent =
             Intent(context, StampEditorActivity::class.java)
@@ -100,7 +110,10 @@ class StampEditorActivity : BaseActivity() {
     private enum class InkKind { SIGNATURE, STAMP }
 
     private var inkKind = InkKind.SIGNATURE
-    private var pendingPhotoFile: File? = null
+    internal var pendingPhotoFile: File? = null
+
+    /** H5-1: the file holding this screen's marks while it is being recreated. */
+    private var stateFile: File? = null
 
     private val inkGallery = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@registerForActivityResult
@@ -177,6 +190,7 @@ class StampEditorActivity : BaseActivity() {
         }
         document = doc
         editor = StampEditorState(doc.pageCount)
+        if (savedInstanceState != null) restoreEditorState(savedInstanceState)
 
         binding.toolbar.setNavigationOnClickListener { confirmExit() }
         binding.toolbar.setNavigationContentDescription(androidx.appcompat.R.string.abc_action_bar_up_description)
@@ -249,7 +263,86 @@ class StampEditorActivity : BaseActivity() {
         })
 
         showPage()
-        applyRequestedTool(intent.getStringExtra(EXTRA_TOOL))
+        if (savedInstanceState == null) {
+            applyRequestedTool(intent.getStringExtra(EXTRA_TOOL))
+        } else {
+            // H5-1: the entry tool belongs to the first launch only; a recreation re-joins a
+            // Save that was already going instead of offering a second copy.
+            resumeRunningSave()
+        }
+    }
+
+    // ------------------------------------------------------------------ recreation (H5-1)
+
+    /**
+     * H5-1: no `android:configChanges` is declared, so rotation, dark mode, a font-size change
+     * and a language change all destroy this screen. The marks are too large to trust to a
+     * Bundle (freehand points, imported stamps), so they are written to a small file in the
+     * cache folder whose path travels in the Bundle; the file is deleted as soon as it is read.
+     */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        if (!::editor.isInitialized || !::document.isInitialized) return
+        outState.putString(KEY_PENDING_PHOTO, pendingPhotoFile?.path)
+        outState.putString(KEY_INK_KIND, inkKind.name)
+        outState.putBoolean(KEY_HIDE_MODE, hideMode)
+        outState.putInt(KEY_HIDE_LABEL, hideLabelRes)
+        val dir = File(cacheDir, STATE_DIR).apply { mkdirs() }
+        val file = File(dir, "state_${document.id}_${UUID.randomUUID().toString().take(8)}.bin")
+        try {
+            java.io.DataOutputStream(
+                java.io.BufferedOutputStream(java.io.FileOutputStream(file))
+            ).use { editor.writeTo(it) }
+            stateFile?.delete()
+            stateFile = file
+            outState.putString(KEY_MARKS_FILE, file.path)
+        } catch (_: Exception) {
+            file.delete()
+        }
+    }
+
+    /** H5-1: read back everything [onSaveInstanceState] kept, before the screen is drawn. */
+    private fun restoreEditorState(saved: Bundle) {
+        // The camera app writes this file while the screen is away: keep the path even before
+        // the bytes exist, or a recreation during capture would drop the photo again.
+        pendingPhotoFile = saved.getString(KEY_PENDING_PHOTO)?.let(::File)
+        inkKind = saved.getString(KEY_INK_KIND)
+            ?.let { name -> InkKind.values().firstOrNull { it.name == name } }
+            ?: InkKind.SIGNATURE
+        hideMode = saved.getBoolean(KEY_HIDE_MODE, false)
+        hideLabelRes = saved.getInt(KEY_HIDE_LABEL, R.string.private_info_label)
+        val file = saved.getString(KEY_MARKS_FILE)?.let(::File) ?: return
+        try {
+            java.io.DataInputStream(
+                java.io.BufferedInputStream(java.io.FileInputStream(file))
+            ).use { editor.readFrom(it) }
+        } catch (_: Exception) {
+            // Unreadable state never blocks the document: the editor opens on a clean page.
+        } finally {
+            file.delete()
+        }
+    }
+
+    /**
+     * H5-1: after a recreation during Save, wait for the same write instead of starting a second
+     * one, so the library never gains a silent duplicate. The marks stay on screen meanwhile.
+     */
+    private fun resumeRunningSave() {
+        val pending = StampSaveRunner.pendingFor(document.id) ?: return
+        saving = true
+        binding.saveCopy.setText(R.string.stamp_saving)
+        refreshSelection()
+        lifecycleScope.launch { deliverSave(pending.await()) }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Only a real close discards the state; a recreation needs it after this returns.
+        if (!isFinishing) return
+        stateFile?.delete()
+        // The write keeps running after a real close, but its promise must not linger: a later
+        // screen for this document would otherwise join a save it never started.
+        if (::document.isInitialized) StampSaveRunner.consume(document.id)
     }
 
     // ------------------------------------------------------------------ tools
@@ -787,41 +880,50 @@ class StampEditorActivity : BaseActivity() {
         saving = true
         binding.saveCopy.isEnabled = false
         binding.saveCopy.setText(R.string.stamp_saving)
+        val docId = document.id
+        val sourceName = document.name
         val edits = editor.edits()
-        lifecycleScope.launch {
-            try {
-                val copy = withContext(Dispatchers.IO) {
-                    val suggested = if (hideMode) {
-                        val existing = repo.listDocuments(includeVaulted = true).map { it.name }
-                        OutputNames.forTool(
-                            document.name,
-                            getString(hideLabelRes),
-                            existing
-                        )
-                    } else {
-                        null
-                    }
-                    repo.stampDocument(document.id, edits, suggested)
+        val hide = hideMode
+        val labelRes = hideLabelRes
+        val app = applicationContext
+        // H5-1: the copy is written on a scope that outlives this screen. A recreation re-joins
+        // the same job (resumeRunningSave) instead of cancelling it and silently leaving either a
+        // half-written file or a second copy after the person presses Save again.
+        val pending = StampSaveRunner.pendingFor(docId) ?: StampSaveRunner.submit(docId) {
+            withContext(Dispatchers.IO) {
+                val writer = ScanRepository(app)
+                val suggested = if (hide) {
+                    val existing = writer.listDocuments(includeVaulted = true).map { it.name }
+                    OutputNames.forTool(sourceName, app.getString(labelRes), existing)
+                } else {
+                    null
                 }
-                setResult(
-                    RESULT_OK,
-                    Intent().putExtra(EXTRA_NEW_DOC_ID, copy.id)
-                )
-                Toast.makeText(
-                    this@StampEditorActivity,
-                    if (hideMode) getString(R.string.private_info_saved, copy.name)
-                    else getString(R.string.stamp_saved, copy.name),
-                    Toast.LENGTH_LONG
-                ).show()
-                finish()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                saving = false
-                binding.saveCopy.setText(R.string.stamp_save_copy)
-                binding.saveCopy.isEnabled = true
-                note(getString(R.string.stamp_save_failed, e.message ?: ""))
+                writer.stampDocument(docId, edits, suggested)
             }
+        }
+        lifecycleScope.launch { deliverSave(pending.await()) }
+    }
+
+    /** Reports the finished save on whichever instance of the screen is alive, exactly once. */
+    private fun deliverSave(result: Result<ScanDocument>) {
+        StampSaveRunner.consume(document.id)
+        result.onSuccess { copy ->
+            setResult(
+                RESULT_OK,
+                Intent().putExtra(EXTRA_NEW_DOC_ID, copy.id)
+            )
+            Toast.makeText(
+                this,
+                if (hideMode) getString(R.string.private_info_saved, copy.name)
+                else getString(R.string.stamp_saved, copy.name),
+                Toast.LENGTH_LONG
+            ).show()
+            finish()
+        }.onFailure { error ->
+            saving = false
+            binding.saveCopy.setText(R.string.stamp_save_copy)
+            binding.saveCopy.isEnabled = true
+            note(getString(R.string.stamp_save_failed, error.message ?: ""))
         }
     }
 
@@ -1101,5 +1203,51 @@ class StampEditorActivity : BaseActivity() {
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
         return BitmapFactory.decodeFile(page.path, options)
+    }
+}
+
+/**
+ * H5-1: one Save, shared by every instance of the Stamp editor.
+ *
+ * The screen has no `android:configChanges`, so a rotation, dark-mode switch, font-size change or
+ * language change destroys it mid-save. A write tied to the dying screen would be cancelled —
+ * leaving either a half-written staging file or, after the person presses Save again, a silent
+ * duplicate in the library. This runner keeps the single write on a scope that outlives the
+ * screen and hands the same promise to the recreated screen, which waits for it and reports it
+ * exactly once.
+ */
+internal object StampSaveRunner {
+
+    private val scope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate
+    )
+
+    private var docId: String? = null
+    private var pending: kotlinx.coroutines.CompletableDeferred<Result<ScanDocument>>? = null
+
+    /** The save already running for [id], if any: the recreated screen joins it. */
+    fun pendingFor(id: String): kotlinx.coroutines.CompletableDeferred<Result<ScanDocument>>? =
+        pending?.takeIf { docId == id }
+
+    /** Starts [block] once on the process scope; returns the promise every screen can await. */
+    fun submit(
+        id: String,
+        block: suspend () -> ScanDocument
+    ): kotlinx.coroutines.CompletableDeferred<Result<ScanDocument>> {
+        val promise = kotlinx.coroutines.CompletableDeferred<Result<ScanDocument>>()
+        docId = id
+        pending = promise
+        scope.launch {
+            promise.complete(runCatching { block() })
+        }
+        return promise
+    }
+
+    /** Drops the finished save so a later Save starts fresh. */
+    fun consume(id: String) {
+        if (docId == id) {
+            docId = null
+            pending = null
+        }
     }
 }

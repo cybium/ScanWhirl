@@ -113,10 +113,51 @@ class ToolSetupActivity : BaseActivity() {
         tool = found
         toolId = id
         nameText = ""
+        // H5-2: a recreation (rotation, dark mode, font size, language) must come back on the
+        // same document with the same typed values, never on whatever is newest.
+        if (savedInstanceState != null) restoreSetupState(savedInstanceState)
         // C07: draw the screen first, then stat the library off the main thread.
         setContentView(buildRoot())
         render()
-        loadDocs(firstLoad = true)
+        loadDocs(firstLoad = savedInstanceState == null)
+    }
+
+    // ---- recreation (H5-2) ------------------------------------------------
+
+    /**
+     * H5-2: the screen has no `android:configChanges`, so every rotation / theme / font-size /
+     * language change recreates it. Without this it silently fell back to the newest document
+     * and cleared the typed ranges, name and target size, so Run could work on the wrong file.
+     */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        if (!::tool.isInitialized) return
+        outState.putStringArrayList(KEY_SELECTED, ArrayList(selected))
+        outState.putString(KEY_FORMAT, format.name)
+        outState.putInt(KEY_QUALITY, quality)
+        outState.putInt(KEY_LEVEL, level)
+        outState.putString(KEY_RANGES, rangesText)
+        outState.putString(KEY_NAME, nameText)
+        outState.putString(KEY_TARGET, targetText)
+        outState.putBoolean(KEY_WORD_PICTURES, wordPictures)
+        outState.putBoolean(KEY_EXCEL_TABLES, excelTablesOnly)
+    }
+
+    private fun restoreSetupState(saved: Bundle) {
+        selected.clear()
+        saved.getStringArrayList(KEY_SELECTED)?.let { selected.addAll(it) }
+        format = saved.getString(KEY_FORMAT)
+            ?.let { name ->
+                ScanRepository.ImageExportFormat.values().firstOrNull { it.name == name }
+            }
+            ?: format
+        quality = saved.getInt(KEY_QUALITY, quality)
+        level = saved.getInt(KEY_LEVEL, level)
+        rangesText = saved.getString(KEY_RANGES).orEmpty()
+        nameText = saved.getString(KEY_NAME).orEmpty()
+        targetText = saved.getString(KEY_TARGET).orEmpty()
+        wordPictures = saved.getBoolean(KEY_WORD_PICTURES, false)
+        excelTablesOnly = saved.getBoolean(KEY_EXCEL_TABLES, true)
     }
 
     override fun onResume() {
@@ -1345,6 +1386,17 @@ class ToolSetupActivity : BaseActivity() {
         const val CHIP_TAG = "swChip"
         /** Material's disabled alpha: a disabled button at full alpha still looks tappable. */
         private const val DISABLED_ALPHA = 0.38f
+
+        // H5-2: recreation state, so the screen keeps its document and typed values.
+        private const val KEY_SELECTED = "com.scanwhirl.app.ui.tools.SELECTED"
+        private const val KEY_FORMAT = "com.scanwhirl.app.ui.tools.FORMAT"
+        private const val KEY_QUALITY = "com.scanwhirl.app.ui.tools.QUALITY"
+        private const val KEY_LEVEL = "com.scanwhirl.app.ui.tools.LEVEL"
+        private const val KEY_RANGES = "com.scanwhirl.app.ui.tools.RANGES"
+        private const val KEY_NAME = "com.scanwhirl.app.ui.tools.NAME"
+        private const val KEY_TARGET = "com.scanwhirl.app.ui.tools.TARGET"
+        private const val KEY_WORD_PICTURES = "com.scanwhirl.app.ui.tools.WORD_PICTURES"
+        private const val KEY_EXCEL_TABLES = "com.scanwhirl.app.ui.tools.EXCEL_TABLES"
         private const val DOCX_MIME =
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         private const val PPTX_MIME =

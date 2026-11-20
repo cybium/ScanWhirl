@@ -1,6 +1,8 @@
 package com.scanwhirl.app.ui.stamp
 
 import com.scanwhirl.app.util.PageStamp
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import kotlin.math.max
 import kotlin.math.min
 
@@ -179,6 +181,205 @@ class StampEditorState(val pageCount: Int) {
 
     // ------------------------------------------------------------------
 
+    /**
+     * H5-1: writes every mark, the visible page and the selection, so a recreation (rotation,
+     * dark mode, a font-size change, a language change, a low-memory kill) rebuilds exactly the
+     * editor that was on screen instead of an empty one. The format is the app's own binary
+     * state file — the same build writes and reads it, and [readFrom] refuses anything else.
+     */
+    fun writeTo(out: DataOutputStream) {
+        out.writeInt(VERSION)
+        out.writeInt(pageCount)
+        out.writeInt(currentPage)
+        out.writeInt(selected ?: -1)
+        for (list in pages) {
+            out.writeInt(list.size)
+            for (mark in list) writeMark(out, mark)
+        }
+    }
+
+    /** Restores what [writeTo] wrote; throws when the bytes are not a matching editor state. */
+    fun readFrom(input: DataInputStream) {
+        check(input.readInt() == VERSION) { "Unknown stamp editor state" }
+        check(input.readInt() == pageCount) { "The stamp editor state belongs to another document" }
+        val page = input.readInt().coerceIn(0, pageCount - 1)
+        val selectedIndex = input.readInt()
+        for (index in pages.indices) {
+            val count = input.readInt()
+            pages[index].clear()
+            repeat(count) { pages[index] += readMark(input) }
+        }
+        currentPage = page
+        selected = selectedIndex.takeIf { it in pages[currentPage].indices }
+        // The undo history is per-screen work; a recreation restores the marks, not the steps.
+        undoStack.clear()
+        redoStack.clear()
+    }
+
+    private fun writeMark(out: DataOutputStream, mark: PageStamp.Mark) {
+        when (mark) {
+            is PageStamp.Mark.Signature -> {
+                out.writeUTF(TAG_SIGNATURE)
+                writeStrokes(out, mark.strokes)
+                writeBox(out, mark.box)
+                out.writeInt(mark.color)
+                out.writeFloat(mark.width)
+                out.writeFloat(mark.rotation)
+            }
+            is PageStamp.Mark.Picture -> {
+                out.writeUTF(TAG_PICTURE)
+                out.writeUTF(mark.file.path)
+                writeBox(out, mark.box)
+                out.writeFloat(mark.rotation)
+            }
+            is PageStamp.Mark.Text -> {
+                out.writeUTF(TAG_TEXT)
+                out.writeUTF(mark.text)
+                writeBox(out, mark.box)
+                out.writeInt(mark.color)
+                out.writeFloat(mark.size)
+                out.writeBoolean(mark.bold)
+                out.writeFloat(mark.rotation)
+                out.writeUTF(mark.align.name)
+            }
+            is PageStamp.Mark.Freehand -> {
+                out.writeUTF(TAG_FREEHAND)
+                writeStrokes(out, mark.strokes)
+                out.writeInt(mark.color)
+                out.writeFloat(mark.width)
+            }
+            is PageStamp.Mark.Highlight -> {
+                out.writeUTF(TAG_HIGHLIGHT)
+                writeBox(out, mark.box)
+                out.writeInt(mark.color)
+                out.writeFloat(mark.opacity)
+            }
+            is PageStamp.Mark.Watermark -> {
+                out.writeUTF(TAG_WATERMARK)
+                out.writeUTF(mark.text)
+                out.writeInt(mark.color)
+                out.writeFloat(mark.opacity)
+                out.writeFloat(mark.angle)
+                out.writeFloat(mark.size)
+            }
+            is PageStamp.Mark.PageNumber -> {
+                out.writeUTF(TAG_PAGE_NUMBER)
+                out.writeUTF(mark.position.name)
+                out.writeUTF(mark.format)
+                out.writeInt(mark.startAt)
+                out.writeInt(mark.color)
+                out.writeFloat(mark.size)
+            }
+            is PageStamp.Mark.Badge -> {
+                out.writeUTF(TAG_BADGE)
+                out.writeUTF(mark.kind.name)
+                writeBox(out, mark.box)
+                out.writeBoolean(mark.date != null)
+                mark.date?.let { out.writeUTF(it) }
+                out.writeBoolean(mark.color != null)
+                mark.color?.let { out.writeInt(it) }
+            }
+            is PageStamp.Mark.Redact -> {
+                out.writeUTF(TAG_REDACT)
+                writeBox(out, mark.box)
+                out.writeInt(mark.color)
+            }
+        }
+    }
+
+    private fun readMark(input: DataInputStream): PageStamp.Mark =
+        when (val tag = input.readUTF()) {
+            TAG_SIGNATURE -> PageStamp.Mark.Signature(
+                strokes = readStrokes(input),
+                box = readBox(input),
+                color = input.readInt(),
+                width = input.readFloat(),
+                rotation = input.readFloat()
+            )
+            TAG_PICTURE -> PageStamp.Mark.Picture(
+                file = java.io.File(input.readUTF()),
+                box = readBox(input),
+                rotation = input.readFloat()
+            )
+            TAG_TEXT -> PageStamp.Mark.Text(
+                text = input.readUTF(),
+                box = readBox(input),
+                color = input.readInt(),
+                size = input.readFloat(),
+                bold = input.readBoolean(),
+                rotation = input.readFloat(),
+                align = PageStamp.TextAlign.valueOf(input.readUTF())
+            )
+            TAG_FREEHAND -> PageStamp.Mark.Freehand(
+                strokes = readStrokes(input),
+                color = input.readInt(),
+                width = input.readFloat()
+            )
+            TAG_HIGHLIGHT -> PageStamp.Mark.Highlight(
+                box = readBox(input),
+                color = input.readInt(),
+                opacity = input.readFloat()
+            )
+            TAG_WATERMARK -> PageStamp.Mark.Watermark(
+                text = input.readUTF(),
+                color = input.readInt(),
+                opacity = input.readFloat(),
+                angle = input.readFloat(),
+                size = input.readFloat()
+            )
+            TAG_PAGE_NUMBER -> PageStamp.Mark.PageNumber(
+                position = PageStamp.Position.valueOf(input.readUTF()),
+                format = input.readUTF(),
+                startAt = input.readInt(),
+                color = input.readInt(),
+                size = input.readFloat()
+            )
+            TAG_BADGE -> PageStamp.Mark.Badge(
+                kind = PageStamp.BadgeKind.valueOf(input.readUTF()),
+                box = readBox(input),
+                date = if (input.readBoolean()) input.readUTF() else null,
+                color = if (input.readBoolean()) input.readInt() else null
+            )
+            TAG_REDACT -> PageStamp.Mark.Redact(box = readBox(input), color = input.readInt())
+            else -> throw IllegalStateException("Unknown mark in the stamp editor state: $tag")
+        }
+
+    private fun writeBox(out: DataOutputStream, box: PageStamp.Box) {
+        out.writeFloat(box.left)
+        out.writeFloat(box.top)
+        out.writeFloat(box.right)
+        out.writeFloat(box.bottom)
+    }
+
+    private fun readBox(input: DataInputStream) = PageStamp.Box(
+        input.readFloat(),
+        input.readFloat(),
+        input.readFloat(),
+        input.readFloat()
+    )
+
+    private fun writeStrokes(out: DataOutputStream, strokes: List<PageStamp.Stroke>) {
+        out.writeInt(strokes.size)
+        for (stroke in strokes) {
+            out.writeInt(stroke.points.size)
+            for (point in stroke.points) {
+                out.writeFloat(point.x)
+                out.writeFloat(point.y)
+            }
+        }
+    }
+
+    private fun readStrokes(input: DataInputStream): List<PageStamp.Stroke> =
+        List(input.readInt()) {
+            PageStamp.Stroke(
+                List(input.readInt()) {
+                    PageStamp.Point(input.readFloat(), input.readFloat())
+                }
+            )
+        }
+
+    // ------------------------------------------------------------------
+
     private data class Snapshot(
         val pages: List<List<PageStamp.Mark>>,
         val page: Int,
@@ -250,5 +451,18 @@ class StampEditorState(val pageCount: Int) {
         const val MIN_SIZE = 0.02f
         const val EPSILON = 0.00001f
         const val MAX_HISTORY = 50
+
+        /** Bumped only when [writeTo] / [readFrom] change layout. */
+        const val VERSION = 1
+
+        const val TAG_SIGNATURE = "signature"
+        const val TAG_PICTURE = "picture"
+        const val TAG_TEXT = "text"
+        const val TAG_FREEHAND = "freehand"
+        const val TAG_HIGHLIGHT = "highlight"
+        const val TAG_WATERMARK = "watermark"
+        const val TAG_PAGE_NUMBER = "pageNumber"
+        const val TAG_BADGE = "badge"
+        const val TAG_REDACT = "redact"
     }
 }
