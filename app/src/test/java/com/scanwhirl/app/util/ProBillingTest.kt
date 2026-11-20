@@ -210,7 +210,7 @@ class ProBillingTest {
     }
 
     @Test
-    fun `a pending purchase neither grants nor locks Pro`() {
+    fun `pending update is not revocation but a successful pending-only query is`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
         val controller = controller(gateway, testBuild = false, states = states)
@@ -224,7 +224,9 @@ class ProBillingTest {
             listOf(ProBilling.Owned("scanwhirl_pro", acknowledged = false, token = "p", state = ProBilling.PurchaseState.PENDING))
         )
         gateway.drain()
-        assertTrue("a pending purchase never locks an existing Pro", purchased())
+        // PRO_PLAN.md: a successful ownership query without a PURCHASED Pro row revokes.
+        assertFalse("the pending-only snapshot revokes stale Pro", purchased())
+        assertEquals(ProBilling.State.Pending, states.last())
         assertTrue("nothing is acknowledged before payment", gateway.acknowledged.isEmpty())
     }
 

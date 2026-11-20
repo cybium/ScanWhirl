@@ -9,6 +9,8 @@ import com.scanwhirl.app.store.vault.VaultCrypto
 import com.scanwhirl.app.store.vault.VaultPasscodeGate
 import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.store.vault.VaultStore
+import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.Prefs
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,6 +26,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.RandomAccessFile
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 
 /**
  * Full Backup 2.0: one AES-256-GCM file with the library, the Vault, signatures/stamps and
@@ -117,6 +121,79 @@ class FullBackupTest {
         assertEquals(3, restored.listFiles()!!.count { it.name.startsWith("page_") })
         assertTrue(File(restored, "scan.pdf").readBytes().contentEquals(byteArrayOf(37, 80, 68, 70)))
         assertTrue(File(restored, "ocr.txt").readText().contains("scanwhirl-ocr-v2"))
+    }
+
+    @Test
+    fun `older backups cannot copy entitlement or device state to a fresh install`() {
+        writeLegacySettings(
+            """{"pro_unlocked":true,"pro_test_override":2,"pro_ack_ledger":["fixture"],
+                "vault_setup_confirm_pending":true,"qa_flag":true,"ocr_language":"hi"}"""
+        )
+        backup.restore(out, password)
+
+        assertFalse(ProGate.isPro(app, testBuild = false))
+        assertEquals(mapOf("ocr_language" to "hi"), app.getSharedPreferences("scanwhirl_prefs", 0).all)
+    }
+
+    @Test
+    fun `older backups cannot break startup with type mismatches`() {
+        writeLegacySettings(
+            """{"locale_tag":false,"theme_mode":["dark"],"make_searchable":"false",
+                "gallery_auto_crop":0,"ocr_language":"hi","auto_enhance_scan":false}"""
+        )
+        val report = backup.restore(out, password)
+
+        assertEquals("", Prefs.localeTag(app))
+        assertEquals(Prefs.THEME_DARK, Prefs.themeMode(app))
+        assertTrue(Prefs.makeSearchable(app))
+        assertTrue(Prefs.galleryAutoCrop(app))
+        assertEquals("hi", Prefs.ocrLanguage(app))
+        assertFalse(Prefs.autoEnhanceScan(app))
+        assertTrue(report.warnings.isEmpty())
+    }
+
+    @Test
+    fun `new backups never export entitlement or device state or wrong typed preferences`() {
+        app.getSharedPreferences("scanwhirl_prefs", 0).edit()
+            .putBoolean("pro_unlocked", true)
+            .putInt("pro_test_override", 2)
+            .putStringSet("pro_ack_ledger", setOf("fixture"))
+            .putString("vault_pin_sha256", "fictional")
+            .putBoolean("vault_setup_confirm_pending", true)
+            .putBoolean("qa_flag", true)
+            .putInt("locale_tag", 3)
+            .putString("ocr_language", "hi")
+            .apply()
+
+        val settings = FullBackup::class.java.getDeclaredMethod("settings").apply { isAccessible = true }
+        assertEquals("""{"ocr_language":"hi"}""", settings.invoke(backup))
+    }
+
+    private fun writeLegacySettings(json: String) {
+        val bytes = ByteArrayOutputStream()
+        DataOutputStream(bytes).use { data ->
+            val settings = json.toByteArray()
+            data.writeByte(1)
+            data.writeUTF("settings.json")
+            data.writeLong(settings.size.toLong())
+            data.write(settings)
+            data.writeByte(0)
+        }
+        val salt = VaultCrypto.newSalt()
+        val iterations = VaultCrypto.PBKDF2_ITERATIONS
+        val key = VaultCrypto.deriveKey(password, salt, iterations)
+        out.outputStream().use { file ->
+            val header = DataOutputStream(file)
+            header.writeBytes("SWFULLB1")
+            header.writeByte(2)
+            header.writeByte(1)
+            header.writeInt(iterations)
+            header.writeByte(salt.size)
+            header.write(salt)
+            header.writeByte(0)
+            val archive = bytes.toByteArray()
+            VaultCrypto.encryptStream(archive.inputStream(), archive.size.toLong(), file, key)
+        }
     }
 
     @Test
