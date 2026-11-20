@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- w7createtools lane strings, Hindi: same keys and wording intent as values/strings_w7createtools.xml. -->
+<resources>
+    <string name="w7_tools_empty_title">कोई औज़ार उपलब्ध नहीं</string>
+    <string name="w7_tools_empty_body">इस बिल्ड में अभी कोई औज़ार तैयार नहीं है। आपके दस्तावेज़ लाइब्रेरी में सुरक्षित हैं।</string>
+    <string name="w7_tools_error_title">औज़ार लोड नहीं हो सके</string>
+    <string name="w7_tools_error_body">औज़ारों की सूची बनाते समय कुछ गड़बड़ हुई। आपके दस्तावेज़ों पर कोई असर नहीं पड़ा।</string>
+    <string name="w7_tools_retry">फिर कोशिश करें</string>
+</resources>
