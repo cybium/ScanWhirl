@@ -112,7 +112,7 @@ class XlsxWriterTest {
         assertTrue(workbook.contains("<sheet name=\"Page 2\" sheetId=\"2\" r:id=\"rId2\"/>"))
         val styles = text(parts, "xl/styles.xml")
         assertTrue("rupee format", styles.contains("\u20B9"))
-        assertTrue("percent format", styles.contains("formatCode=\"0%\""))
+        assertTrue("percent format keeps two decimals", styles.contains("formatCode=\"0.00%\""))
         val sheet = text(parts, "xl/worksheets/sheet1.xml")
         assertTrue(sheet.contains("<c r=\"A1\" t=\"inlineStr\"><is><t xml:space=\"preserve\">Invoice</t></is></c>"))
         assertTrue("integer cell with a number format", sheet.contains("<c r=\"B3\" s=\"1\"><v>2</v></c>"))
@@ -127,6 +127,8 @@ class XlsxWriterTest {
         assertEquals(XlsxWriter.Numeric(4560.0, XlsxWriter.NumberKind.RUPEE), XlsxWriter.parseNumeric("₹4,560"))
         assertEquals(XlsxWriter.Numeric(1234.5, XlsxWriter.NumberKind.DECIMAL), XlsxWriter.parseNumeric("1,234.50"))
         assertEquals(XlsxWriter.Numeric(0.12, XlsxWriter.NumberKind.PERCENT), XlsxWriter.parseNumeric("12%"))
+        assertEquals(XlsxWriter.Numeric(0.855, XlsxWriter.NumberKind.PERCENT), XlsxWriter.parseNumeric("85.50%"))
+        assertEquals(XlsxWriter.Numeric(24500.0, XlsxWriter.NumberKind.DECIMAL), XlsxWriter.parseNumeric("24,500.00"))
         assertEquals(XlsxWriter.Numeric(123456.0, XlsxWriter.NumberKind.DECIMAL), XlsxWriter.parseNumeric("1,23,456.00"))
         assertEquals(XlsxWriter.Numeric(123.0, XlsxWriter.NumberKind.INTEGER), XlsxWriter.parseNumeric("123"))
         assertEquals(XlsxWriter.Numeric(-1000.0, XlsxWriter.NumberKind.DECIMAL), XlsxWriter.parseNumeric("-1,000"))
@@ -135,6 +137,36 @@ class XlsxWriterTest {
         assertNull("a reference with a leading zero is text", XlsxWriter.parseNumeric("007"))
         assertNull("words are text", XlsxWriter.parseNumeric("₹12 each"))
         assertNull(XlsxWriter.parseNumeric(""))
+    }
+
+    @Test
+    fun `a label and its value in one OCR cell become text plus a real number`() {
+        val file = out("split.xlsx")
+        XlsxWriter.write(
+            file,
+            listOf(
+                XlsxWriter.Sheet(
+                    "Page 1",
+                    listOf(
+                        listOf("Percentage: 85.50% Result: PASS"),
+                        listOf("Opening balance 24,500.00"),
+                        listOf("Total 1,23,456.00"),
+                        listOf("A4 copier paper"),
+                        listOf("Class X, March 2026")
+                    )
+                )
+            )
+        )
+        val sheet = text(entries(file), "xl/worksheets/sheet1.xml")
+        val row3 = sheet.substringAfter("<row r=\"3\">", "MISSING").substringBefore("</row>")
+        assertTrue("label stays", sheet.contains("Percentage:"))
+        assertTrue("result stays", sheet.contains("Result: PASS"))
+        assertTrue("85.50% is a numeric .855: $row3", sheet.contains("<v>0.855</v>"))
+        assertTrue("percent cell has the two-decimal style", sheet.contains("<c r=\"B1\" s=\"3\"><v>0.855</v></c>"))
+        assertTrue("Indian grouping is one number: $row3", sheet.contains("<v>123456</v>"))
+        assertTrue("balance is one number", sheet.contains("<v>24500</v>"))
+        assertTrue("A4 is not split into letter and number", sheet.contains("A4 copier paper"))
+        assertTrue("a plain year stays text", sheet.contains("Class X, March 2026"))
     }
 
     @Test

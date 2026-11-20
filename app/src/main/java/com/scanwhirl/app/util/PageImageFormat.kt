@@ -4,7 +4,7 @@ import java.util.zip.CRC32
 
 /** Container checks supplement Android decoders, which can accept truncated images. */
 internal object PageImageFormat {
-    enum class Format { JPEG, PNG, WEBP }
+    enum class Format { JPEG, PNG, WEBP, HEIF }
 
     private fun invalid(): Nothing = throw IllegalArgumentException(
         "This image is damaged or incomplete. Download it again or choose another PNG, JPEG or WebP image."
@@ -23,8 +23,32 @@ internal object PageImageFormat {
             checkWebp(bytes)
             Format.WEBP
         }
+        isHeif(bytes) -> Format.HEIF
         else -> throw IllegalArgumentException("Cannot read this image. Choose a complete PNG, JPEG or WebP image.")
     }
+
+    /**
+     * HEIC/HEIF is the default camera format on recent iPhones and some Androids. The bytes are
+     * an ISO-BMFF `ftyp` box; the platform decoder decides whether this phone can render them.
+     * The box length is validated so a truncated file is not offered as a supported image.
+     */
+    fun isHeif(bytes: ByteArray): Boolean {
+        if (bytes.size < 16 || text(bytes, 4) != "ftyp") return false
+        val size = u32(bytes, 0, false)
+        if (size < 16 || size > bytes.size) return false
+        val major = text(bytes, 8)
+        val brands = HEIF_BRANDS.toMutableSet().apply { add(major) }
+        var pos = 16
+        while (pos + 4 <= minOf(size.toInt(), bytes.size)) {
+            brands += text(bytes, pos)
+            pos += 4
+        }
+        return HEIF_BRANDS.any { it in brands }
+    }
+
+    private val HEIF_BRANDS = setOf(
+        "heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"
+    )
 
     /** Walk segments AND scan data; a SOF header alone does not prove a complete JPEG. */
     fun checkJpeg(bytes: ByteArray) {
