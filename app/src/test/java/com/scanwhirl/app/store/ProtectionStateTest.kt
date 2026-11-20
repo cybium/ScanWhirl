@@ -110,6 +110,26 @@ class ProtectionStateTest {
     }
 
     // Pins ScanRepository.repairProtection.
+    @Test fun `new lock records are salted and existing lock records migrate after proof of password`() {
+        val first = DocFixtures.locked(repo, app, "1234")
+        val second = DocFixtures.locked(repo, app, "1234")
+        val firstLock = File(dirOf(first), "locked.meta")
+        val secondLock = File(dirOf(second), "locked.meta")
+        val weak = Prefs.sha256("pdf_lock:1234")
+        assertFalse(firstLock.readText().contains(weak))
+        assertFalse(firstLock.readText() == secondLock.readText())
+
+        firstLock.writeText(weak)
+        val originalPdf = Sha256.of(pdfOf(first))
+        assertFalse(repo.verifyPdfPassword(first, "4321"))
+        assertEquals(weak, firstLock.readText())
+        assertTrue(repo.verifyPdfPassword(first, "1234"))
+        assertFalse(firstLock.readText().contains(weak))
+        assertEquals(originalPdf, Sha256.of(pdfOf(first)))
+        assertTrue(ScanRepository(app).verifyPdfPassword(first, "1234"))
+        assertFalse(ScanRepository(app).verifyPdfPassword(first, "4321"))
+    }
+
     @Test fun `repair with the right password encrypts and with a wrong one changes nothing`() {
         val id = repairable()
         val before = PdfInvariants.dirDigest(dirOf(id))
