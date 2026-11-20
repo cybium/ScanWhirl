@@ -20,6 +20,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.scanwhirl.app.R
@@ -79,6 +80,7 @@ class PdfViewerActivity : BaseActivity() {
     /** C01: the off-main preview build and its progress sheet. */
     private var loadProgress: com.scanwhirl.app.ui.kit.SwProgress? = null
     private var previewJob: kotlinx.coroutines.Job? = null
+    private val pickedCopy by lazy { ViewModelProvider(this)[PickedPdfCopy::class.java] }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -130,6 +132,24 @@ class PdfViewerActivity : BaseActivity() {
      * rotation or a re-open reuses it instead of re-encoding every page.
      */
     private fun startOpen(savedInstanceState: Bundle?) {
+        val uri = intent.data
+        if (intent.getStringExtra(EXTRA_DOC_ID) == null &&
+            intent.getStringExtra(EXTRA_PATH) == null && uri != null) {
+            previewJob = lifecycleScope.launch {
+                try {
+                    tempPdf = pickedCopy.open(applicationContext, uri).await()
+                    if (!isFinishing && !isDestroyed) afterOpen(savedInstanceState)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val text = (e as? com.scanwhirl.app.util.BoundedCopy.Refused)?.message
+                        ?: getString(R.string.l1_copy_unreadable)
+                    Toast.makeText(this@PdfViewerActivity, text, Toast.LENGTH_LONG).show()
+                    finish()
+                }
+            }
+            return
+        }
         val docId = intent.getStringExtra(EXTRA_DOC_ID)
         val repository = (application as ScanWhirlApp).repository
         val doc = docId?.let { repository.getDocument(it) }
@@ -313,7 +333,7 @@ class PdfViewerActivity : BaseActivity() {
         }
         renderer = null
         pfd = null
-        tempPdf?.delete()
+        // The ViewModel owns picked-file scratch and releases it only on a real exit.
         tempPdf = null
         super.onDestroy()
     }
@@ -374,21 +394,8 @@ class PdfViewerActivity : BaseActivity() {
                 title = title.ifBlank { "PDF" }
                 // SAF providers often return a pipe; PdfRenderer needs a
                 // seekable file, so copy once into cache and open that.
-                val dir = File(cacheDir, "pdf_open").apply { mkdirs() }
-                val tmp = File(dir, "view_${System.nanoTime()}.pdf")
-                try {
-                    contentResolver.openInputStream(data)?.use { input ->
-                        java.io.FileOutputStream(tmp).use { out -> input.copyTo(out) }
-                    } ?: throw NoPdfException(R.string.pdf_missing)
-                    if (tmp.length() == 0L) throw NoPdfException(R.string.pdf_missing)
-                } catch (e: NoPdfException) {
-                    tmp.delete()
-                    throw e
-                } catch (e: Exception) {
-                    tmp.delete()
-                    throw NoPdfException(R.string.pdf_missing)
-                }
-                tempPdf = tmp
+                val tmp = tempPdf?.takeIf { it.isFile && it.length() > 0L }
+                    ?: throw NoPdfException(R.string.pdf_missing)
                 ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
             }
             else -> throw NoPdfException(R.string.pdf_missing)

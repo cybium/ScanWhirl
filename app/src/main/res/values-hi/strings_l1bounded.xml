@@ -1,0 +1,8 @@
+<resources>
+    <!-- review -->
+    <string name="l1_copy_too_large">यह फ़ाइल यहाँ खोलने के लिए बहुत बड़ी है। छोटी फ़ाइल चुनें।</string>
+    <!-- review -->
+    <string name="l1_copy_no_space">यह फ़ाइल खोलने के लिए पर्याप्त जगह खाली नहीं है। कुछ जगह खाली करके फिर कोशिश करें।</string>
+    <!-- review -->
+    <string name="l1_copy_unreadable">यह फ़ाइल पढ़ी नहीं जा सकी। इसे फिर चुनें या कोई दूसरी फ़ाइल आज़माएँ।</string>
+</resources>

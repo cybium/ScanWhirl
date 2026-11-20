@@ -124,6 +124,7 @@ object PdfImport {
             throw ImportException(Reason.NO_SPACE, "Not enough storage to read this PDF")
         }
         val tmp = File(dir, "seek_${System.nanoTime()}.pdf")
+        BoundedCopy.retain(tmp)
         try {
             val input = try {
                 context.contentResolver.openInputStream(uri)
@@ -179,7 +180,7 @@ object PdfImport {
             }
             return fd.use { block(it, total) }
         } finally {
-            tmp.delete()
+            BoundedCopy.release(tmp)
         }
     }
 
