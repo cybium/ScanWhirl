@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.PdfDecryptorLegacyTest,com.scanwhirl.app.util.PdfDecryptorTest,com.scanwhirl.app.util.PdfAesTest,com.scanwhirl.app.util.PdfEncryptorTest

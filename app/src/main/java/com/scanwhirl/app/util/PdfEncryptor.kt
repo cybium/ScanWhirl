@@ -20,8 +20,11 @@ import java.util.Locale
  */
 object PdfEncryptor {
 
-    /** One in-use object of a generator-written PDF: byte region `[start, end)`. */
-    internal class Obj(val number: Int, val start: Int, val end: Int)
+    /**
+     * One in-use object of a PDF with a classic xref table: byte region `[start, end)` and the xref
+     * generation number (needed to derive per-object RC4/AES-128 keys when decrypting).
+     */
+    internal class Obj(val number: Int, val start: Int, val end: Int, val gen: Int = 0)
 
     /**
      * Writes [dst] as an AES-256 protected copy of [src]. Output goes to `<dst name>.tmp`, is
@@ -132,9 +135,9 @@ object PdfEncryptor {
         val xrefOffset = xrefOffset(latin) ?: return emptyList()
         val entries = xrefEntries(latin, xrefOffset) ?: return emptyList()
         val sorted = entries.sortedBy { it.second }
-        return sorted.mapIndexed { i, (number, offset) ->
+        return sorted.mapIndexed { i, (number, offset, gen) ->
             val end = if (i + 1 < sorted.size) sorted[i + 1].second else xrefOffset
-            Obj(number, offset.toInt(), end.toInt())
+            Obj(number, offset.toInt(), end.toInt(), gen)
         }.filter { it.start in 0 until it.end && it.end <= raw.size }
     }
 
@@ -167,8 +170,8 @@ object PdfEncryptor {
         return latin.substring(at + marker.length, end).toIntOrNull()
     }
 
-    /** `(object number, offset)` for every in-use entry; null when the table is not the writer's shape. */
-    private fun xrefEntries(latin: String, xrefOffset: Int): List<Pair<Int, Long>>? {
+    /** `(object number, offset, generation)` for every in-use entry; null when the table is not the writer's shape. */
+    private fun xrefEntries(latin: String, xrefOffset: Int): List<Triple<Int, Long, Int>>? {
         if (xrefOffset <= 0 || xrefOffset >= latin.length) return null
         var p = latin.indexOf('\n', xrefOffset) + 1 // past "xref\n"
         val countLineEnd = latin.indexOf('\n', p)
@@ -176,14 +179,15 @@ object PdfEncryptor {
         val count = latin.substring(p, countLineEnd).trim().split(' ').lastOrNull()?.toIntOrNull()
             ?: return null
         p = countLineEnd + 1
-        val out = mutableListOf<Pair<Int, Long>>()
+        val out = mutableListOf<Triple<Int, Long, Int>>()
         for (i in 0 until count) {
             if (p + 20 > latin.length) return null
             val entry = latin.substring(p, p + 20)
             val inUse = entry[17] == 'n'
             if (i > 0 && inUse) {
                 val offset = entry.substring(0, 10).toLongOrNull() ?: return null
-                out += i to offset
+                val gen = entry.substring(11, 16).toIntOrNull() ?: return null
+                out += Triple(i, offset, gen)
             }
             p += 20
         }
