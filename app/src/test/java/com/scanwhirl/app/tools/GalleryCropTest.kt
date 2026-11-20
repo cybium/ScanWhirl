@@ -150,12 +150,15 @@ class GalleryCropTest {
         GalleryCrop.startOverride = { scannerStarted = true; true }
         launch { activity ->
             // UI-B1 (#2): photos start from the Create sheet now, not a Home tile.
+            // W7: the Create sheet's photos row opens the OS photo picker directly (never the
+            // scanner), so this auto-crop/keep choice is reached through the Library's Import
+            // sheet instead. The feature and the remembered choice are unchanged.
             fun openPhotos() {
-                activity.findViewById<View>(R.id.swNavScan).performClick()
+                activity.findViewById<View>(R.id.swEmptyImport).performClick()
                 idle()
-                val create = ShadowDialog.getLatestDialog()
-                assertNotNull("the Create sheet opens", create)
-                create!!.findViewById<View>(R.id.swCreatePhotos).performClick()
+                val importSheet = ShadowDialog.getLatestDialog()
+                assertNotNull("the Library import sheet opens", importSheet)
+                importSheet!!.findViewById<View>(R.id.importPhotos).performClick()
                 idle()
             }
             // Auto-crop (remembered default) -> the gallery scanner.

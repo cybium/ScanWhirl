@@ -221,36 +221,59 @@ class LibraryCreateSheetTest {
         }
     }
 
+    /**
+     * W7 (WINNER_SPEC lane 7: "One tap from named PDF import to correct picker"): this test
+     * used to pin the old two-step route, where the photos row opened the Add photos sheet.
+     * That sheet is superseded for Create: its Auto-crop option started the Play-services
+     * scanner, so the row could start the wrong source. The choice itself still exists on the
+     * Library's Add photos route.
+     */
     @Test
-    fun `Import photos entry opens the existing Add photos sheet`() {
+    fun `Import photos entry opens the photo picker in one tap`() {
         launch { activity ->
             val dialog = openSheet(activity)
             entry(dialog, R.id.swCreatePhotos).performClick()
             idle()
             assertFalse("the Create sheet closes first", dialog.isShowing)
-            val next = ShadowDialog.getLatestDialog()
-            assertNotNull("the Add photos choice opens", next)
-            assertTrue(next!!.isShowing)
+            val req = shadowOf(activity).nextStartedActivityForResult
+            assertNotNull("the photos row opens the OS photo picker", req)
             assertEquals(
-                activity.getString(R.string.photos_add_title),
-                next.findViewById<TextView>(R.id.swSheetTitle).text.toString()
+                android.content.Intent.ACTION_GET_CONTENT,
+                req!!.intent.action
             )
-            next.dismiss()
+            assertEquals("image/*", req.intent.type)
+            assertNull(
+                "no photo-choice sheet stands in the way",
+                ShadowDialog.getLatestDialog()?.takeIf { it.isShowing && it !== dialog }
+            )
         }
     }
 
+    /**
+     * W7 (same spec line): this test used to pin the two-step Import chooser (Photos or PDF)
+     * behind the named PDF row. A row that already says "Import PDF" must open the PDF picker
+     * itself; the Library's own Add sheet keeps the two-option chooser.
+     */
     @Test
-    fun `Import PDF entry opens the existing import chooser`() {
+    fun `Import PDF entry opens the PDF picker in one tap`() {
         launch { activity ->
             val dialog = openSheet(activity)
             entry(dialog, R.id.swCreateImport).performClick()
             idle()
-            val next = ShadowDialog.getLatestDialog()
-            assertNotNull("the Import chooser opens", next)
-            assertTrue(next!!.isShowing)
-            assertNotNull("the PDF row is there", next.findViewById<View>(R.id.importPdf))
-            assertNotNull("the photos row is there", next.findViewById<View>(R.id.importPhotos))
-            next.dismiss()
+            val req = shadowOf(activity).nextStartedActivityForResult
+            assertNotNull("the PDF row opens the OS PDF picker itself", req)
+            assertEquals(
+                android.content.Intent.ACTION_OPEN_DOCUMENT,
+                req!!.intent.action
+            )
+            assertTrue(
+                req.intent.getStringArrayExtra(android.content.Intent.EXTRA_MIME_TYPES)
+                    ?.contains("application/pdf") == true
+            )
+            assertNull(
+                "no intermediate import chooser",
+                ShadowDialog.getLatestDialog()?.takeIf { it.isShowing && it !== dialog }
+            )
         }
     }
 

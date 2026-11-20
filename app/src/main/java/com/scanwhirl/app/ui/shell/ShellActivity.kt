@@ -141,7 +141,20 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private val pickGalleryImages = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
-    ) { uris -> importPhotos(uris) }
+    ) { uris ->
+        val fromCreate = pickerReturnFocus
+        pickerReturnFocus = false
+        importPhotos(uris)
+        // W7: a cancelled photo picker imports nothing and hands focus back to Create.
+        if (uris.isEmpty() && fromCreate) focusCreateDisc()
+    }
+
+    /**
+     * W7: true while a picker opened from the Create sheet (or a Create-labelled import) is in
+     * front. A Cancel then returns keyboard and TalkBack focus to the Create button instead of
+     * leaving it nowhere.
+     */
+    private var pickerReturnFocus = false
 
     /**
      * v2 UI: 01_home_A — every photo import (Home and Tools) lands in Review with
@@ -157,7 +170,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private val pickImportPdf = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { uri -> if (uri != null) importPdf(uri) }
+    ) { uri ->
+        val fromCreate = pickerReturnFocus
+        pickerReturnFocus = false
+        if (uri != null) importPdf(uri) else if (fromCreate) focusCreateDisc()
+    }
 
     private val pickCompressPdf = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -755,7 +772,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         override fun onCreateImport() {
             ImportSheet.show(
                 this@ShellActivity,
-                onPhotos = { pickGalleryImages.launch("image/*") },
+                // W7: the Create sheet's photos row now opens the OS photo picker in one tap.
+                // The auto-crop / keep-as-they-are choice keeps its own route here, so the
+                // ML Kit gallery auto-crop is still reachable (Library's Import, then Photos).
+                onPhotos = { showPhotoImportSheet() },
                 onPdf = { pickImportPdf.launch(arrayOf("application/pdf")) }
             )
         }
@@ -776,6 +796,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
      * UI-B1 (#2): the centre Scan action opens one Create sheet. Every row routes to the same
      * launcher the old Home tiles used; QR keeps the registry's Pro gate through launchTool.
      * Back/Close/outside tap launches nothing and returns focus to the Scan button.
+     *
+     * W7: Import PDF and Import photos are one tap each — the named row opens its own OS
+     * picker. No second Photos/PDF chooser stands between the row and the picker, and the
+     * photos route can no longer reach the Play-services scanner through "Auto-crop pages"
+     * (that option stays in the Library's Add photos sheet).
      */
     private fun showCreateSheet() {
         val sheet = CreateSheet(this, object : CreateSheet.Actions {
@@ -793,28 +818,33 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 ToolRegistry.byId("qr_code")?.let { this@ShellActivity.launchTool(it) }
             }
 
-            override fun onImportPhotos() = showPhotoImportSheet()
+            override fun onImportPhotos() {
+                pickerReturnFocus = true
+                pickGalleryImages.launch("image/*")
+            }
 
             override fun onImportPdf() {
-                ImportSheet.show(
-                    this@ShellActivity,
-                    onPhotos = { pickGalleryImages.launch("image/*") },
-                    onPdf = { pickImportPdf.launch(arrayOf("application/pdf")) }
-                )
+                pickerReturnFocus = true
+                pickImportPdf.launch(arrayOf("application/pdf"))
             }
         })
         sheet.show { chosenSomething ->
             if (chosenSomething) return@show
-            val disc = findViewById<View>(R.id.swNavScan) ?: return@show
             // Back or Close launches nothing: keyboard and TalkBack focus return to Scan.
-            disc.post {
-                disc.requestFocus()
-                androidx.core.view.ViewCompat.performAccessibilityAction(
-                    disc,
-                    android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS,
-                    null
-                )
-            }
+            focusCreateDisc()
+        }
+    }
+
+    /** W7: focus back on the Create button, the control that opened the sheet or picker. */
+    private fun focusCreateDisc() {
+        val disc = findViewById<View>(R.id.swNavScan) ?: return
+        disc.post {
+            disc.requestFocus()
+            androidx.core.view.ViewCompat.performAccessibilityAction(
+                disc,
+                android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS,
+                null
+            )
         }
     }
 
@@ -1043,11 +1073,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         when (tool.id) {
             "scan" -> scanLauncher.launchScanner()
             "photos_pdf" -> showPhotoImportSheet()
-            "import_pdf" -> ImportSheet.show(
-                this,
-                onPhotos = { pickGalleryImages.launch("image/*") },
-                onPdf = { pickImportPdf.launch(arrayOf("application/pdf")) }
-            )
+            // W7: the tool row named Import PDF opens the PDF picker itself, exactly like the
+            // Create sheet's row. No intermediate chooser.
+            "import_pdf" -> {
+                pickerReturnFocus = true
+                pickImportPdf.launch(arrayOf("application/pdf"))
+            }
             "merge" -> mergeFlow.showMergeChooser()
             "compress" -> compressFlow.start()
             "resize" -> pickResizeImage.launch("image/*")

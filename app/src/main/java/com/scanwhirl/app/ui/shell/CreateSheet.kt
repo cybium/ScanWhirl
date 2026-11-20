@@ -271,7 +271,7 @@ class CreateSheet(
     // ---- large text: full width rows --------------------------------------
 
     private fun row(entry: Entry, index: Int): View {
-        val view = entryRow(entry, iconSize = 24f, labelSp = 15f)
+        val view = entryRow(entry, iconSize = 24f, labelSp = 15f, lines = 3)
         val params = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -280,7 +280,7 @@ class CreateSheet(
         return view
     }
 
-    private fun entryRow(entry: Entry, iconSize: Float, labelSp: Float): View {
+    private fun entryRow(entry: Entry, iconSize: Float, labelSp: Float, lines: Int = 2): View {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -304,7 +304,7 @@ class CreateSheet(
             ).apply { marginEnd = SwStyle.dp(context, 12f) }
         )
         row.addView(
-            label(entry, labelSp, Gravity.START),
+            label(entry, labelSp, Gravity.START, lines),
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         )
         if (entry.pro && !ProGate.isPro(context)) {
@@ -328,11 +328,11 @@ class CreateSheet(
         layoutParams = FrameLayout.LayoutParams(size, size)
     }
 
-    private fun label(entry: Entry, sizeSp: Float, gravity: Int): TextView =
+    private fun label(entry: Entry, sizeSp: Float, gravity: Int, lines: Int = 2): TextView =
         SwStyle.text(context, sizeSp, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
             text = context.getString(entry.label)
             this.gravity = gravity
-            maxLines = 2
+            this.maxLines = lines
             // A label wraps between words, never inside one (Devanagari matras stay whole).
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
             //noinspection WrongConstant
