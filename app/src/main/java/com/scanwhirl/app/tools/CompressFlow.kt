@@ -434,6 +434,9 @@ class CompressFlow(
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
                 showCompressResult(out, before, after, sourceKept = true)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // H5-3: cancellation (screen closed or recreated) is not a failure.
+                throw e
             } catch (e: Exception) {
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
@@ -458,6 +461,9 @@ class CompressFlow(
                 val out = repo.createDocument("${doc.name} (compressed)", pages)
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // H5-3: cancellation (screen closed or recreated) is not a failure.
+                throw e
             } catch (e: Exception) {
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
@@ -537,6 +543,9 @@ class CompressFlow(
                     }
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
             } catch (e: Exception) {
                 Toast.makeText(

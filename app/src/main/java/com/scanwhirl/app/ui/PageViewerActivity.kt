@@ -154,8 +154,10 @@ class PageViewerActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
-        // Leaving the screen makes any pending delete permanent.
-        commitPendingDelete()
+        // Leaving the screen makes any pending delete permanent. A rotation / dark-mode / font
+        // change only recreates the screen: hunt H5-5 - committing then deleted the page for good
+        // inside its Undo window. The page simply stays (same guard as DocumentViewerActivity).
+        if (isChangingConfigurations) restorePendingDelete() else commitPendingDelete()
         // Stop full-page decodes: a thread that outlives the screen would decode into a dead
         // context (and, in tests, into a closed Robolectric class loader).
         fullExecutor.shutdownNow()
@@ -542,6 +544,19 @@ class PageViewerActivity : BaseActivity() {
                     Toast.LENGTH_LONG
                 ).show()
             }
+        }
+    }
+
+    /**
+     * Hunt H5-5: a configuration change ends this screen inside the Undo window, and the
+     * recreated screen cannot offer that Undo any more. The pending page is put back exactly as
+     * Undo would (an unsaved scan's hidden `.del` file is renamed back), so nothing is lost.
+     */
+    private fun restorePendingDelete() {
+        val path = pendingDelete ?: return
+        pendingDelete = null
+        if (stagingDir != null) {
+            File(path + DEL_SUFFIX).takeIf { it.exists() }?.renameTo(File(path))
         }
     }
 

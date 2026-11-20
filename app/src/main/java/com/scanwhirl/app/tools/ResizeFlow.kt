@@ -194,6 +194,9 @@ class ResizeFlow(
                         warning = null
                     )
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // H5-3: cancellation (screen closed or recreated) is not a failure.
+                throw e
             } catch (e: Exception) {
                 Toast.makeText(
                     activity, activity.getString(R.string.resize_failed, e.message), Toast.LENGTH_LONG
