@@ -134,6 +134,11 @@ class OcrFlow(
 
     /** M06: "recognition unavailable" is explained, not shown as a raw ML Kit error. */
     private fun showFailure(e: Exception) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
+        if (e is com.scanwhirl.app.util.BoundedCopy.Refused) {
+            Toast.makeText(activity, e.message, Toast.LENGTH_LONG).show()
+            return
+        }
         val text = if (OcrEngine.isUnavailable(e)) {
             activity.getString(R.string.ocr_unavailable_toast)
         } else {

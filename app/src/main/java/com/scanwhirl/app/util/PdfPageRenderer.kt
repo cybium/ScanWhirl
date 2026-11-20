@@ -9,7 +9,6 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import java.io.File
-import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 /**
@@ -51,15 +50,12 @@ object PdfPageRenderer {
         val dir = File(context.cacheDir, "pdf_fd").apply { mkdirs() }
         val tmp = File(dir, "seek_${System.nanoTime()}.pdf")
         try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(tmp).use { out -> input.copyTo(out) }
-            } ?: throw IllegalStateException("Could not open PDF")
-            require(tmp.length() > 0L) { "PDF is empty" }
+            BoundedCopy.requireOk(BoundedCopy.copy(context, uri, tmp), context)
             ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
                 return block(fd)
             }
         } finally {
-            tmp.delete()
+            BoundedCopy.release(tmp)
         }
     }
 
