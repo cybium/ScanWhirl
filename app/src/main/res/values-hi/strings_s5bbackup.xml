@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backup_vault_entries_rejected">सुरक्षा जाँच में विफल होने से छोड़ी गई तिजोरी की फ़ाइलें: %1$d</string>
+    <string name="backup_vault_entries_unchecked">बिना जाँच के बहाल हुई तिजोरी की फ़ाइलें, क्योंकि इस प्रति में तिजोरी की चाबी नहीं है: %1$d। हर फ़ाइल खोलते समय जाँची जाती है।</string>
+</resources>

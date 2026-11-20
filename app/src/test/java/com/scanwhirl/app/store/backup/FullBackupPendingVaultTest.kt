@@ -2,6 +2,7 @@ package com.scanwhirl.app.store.backup
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.vault.FakeVaultKeys
 import com.scanwhirl.app.store.vault.VaultCrypto
@@ -251,6 +252,36 @@ class FullBackupPendingVaultTest {
         assertFalse(
             "an adopted Vault is not left pending: the restore typed the backup's code",
             vaultStore().isConfirmationPending()
+        )
+    }
+
+    @Test
+    fun `S5B adopting a Vault skips and reports a damaged entry instead of counting it`() {
+        val oldVault = vaultStore()
+        val setup = oldVault.setup("246810")
+        oldVault.markConfirmationPassed()
+        doc("doc_good", "Payslip")
+        oldVault.addDocument("doc_good")
+        val before = vaultDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty().toSet()
+        doc("doc_bad", "Lease")
+        oldVault.addDocument("doc_bad")
+        val badEntry = vaultDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty()
+            .single { it !in before }
+        // Damage one encrypted payload of the second entry (its largest file).
+        val payload = badEntry.listFiles().orEmpty().filter { it.isFile }.maxByOrNull { it.length() }!!
+        val bytes = payload.readBytes()
+        bytes[bytes.size - 1] = (bytes[bytes.size - 1].toInt() xor 0x5A).toByte()
+        payload.writeBytes(bytes)
+        FullBackup(app, oldVault).write(out, setup.recoveryCode, FullBackup.Wrap.RECOVERY_CODE)
+
+        File(app.filesDir, "vault2").deleteRecursively()
+        val report = FullBackup(app).restore(out, setup.recoveryCode)
+
+        assertEquals("only the intact entry is adopted", 1, report.vaultEntries)
+        assertFalse("the damaged entry is not published", File(vaultDir, badEntry.name).exists())
+        assertTrue(
+            "the person is told one Vault file was skipped: ${report.warnings}",
+            report.warnings.contains(app.getString(R.string.backup_vault_entries_rejected, 1))
         )
     }
 }
