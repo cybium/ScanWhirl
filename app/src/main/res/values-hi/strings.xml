@@ -209,7 +209,7 @@
     <string name="compress_result_over_limit">%1$s · आपकी %2$s सीमा से ऊपर</string>
     <string name="compress_result_size_unknown">आकार मापा नहीं जा सका</string>
     <string name="compress_result_before">पहले: %1$s</string>
-    <string name="compress_result_source_kept">मूल फ़ाइल कागज़ात में सुरक्षित है।</string>
+    <string name="compress_result_source_kept">मूल कागज़ात में सुरक्षित है।</string>
     <string name="compress_undo">यह प्रति हटाएँ</string>
     <string name="compress_undo_removed">यह छोटी की गई प्रति हटा दी गई।</string>
     <string name="compress_undo_removed_with_copy">यह छोटी की गई प्रति और उसकी Documents प्रति हटा दी गई।</string>
