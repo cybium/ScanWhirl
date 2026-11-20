@@ -833,6 +833,20 @@ class ScanReviewActivity : BaseActivity() {
         }
         if (arrangeMode) binding.pageGrid.scrollToPage(currentIndex)
         else if (pages.isNotEmpty()) renderCurrent()
+        if (!arrangeMode) binding.focusPanel.post { ensureStageMinHeight() }
+    }
+
+    /**
+     * F1-FIT: the Focus panel scrolls once the labels no longer fit (200 % text
+     * on a narrow phone). A weight-1 stage then measures to zero, which would
+     * hide the page completely, so it keeps a real preview height instead.
+     */
+    private fun ensureStageMinHeight() {
+        val stage = binding.focusStage
+        val min = (160 * resources.displayMetrics.density).toInt()
+        if (stage.height < min && stage.layoutParams.height != min) {
+            stage.layoutParams = stage.layoutParams.also { it.height = min }
+        }
     }
 
     /** Makes [index] the current page (Focus page, filmstrip ring, Arrange ring). */

@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v2 UI: 07_reader_dock — Share · Pages · Text · Sign · More, floating over
+<!-- v2 UI: 07_reader_dock - Share | Pages | Text | Sign | More, floating over
      the page with the page strip above it. Included by the reader so the dock
-     never steals height from the PDF. -->
+     never steals height from the PDF.
+
+     F1-FIT (atlas 2026-11-20): five equal cells at a fixed 66 dp height turned
+     "Share" into "Shar" and pushed the pill past both screen edges at 200 %
+     text. The row is a FlowRowLayout now: one evenly spread row while every
+     label fits, otherwise two rows with full words, and the pill grows with
+     them (the reader reserves that height under the page). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/readerDockRoot"
@@ -29,26 +35,28 @@
             android:paddingEnd="14dp" />
     </HorizontalScrollView>
 
-    <LinearLayout
+    <com.scanwhirl.app.ui.FlowRowLayout
         android:id="@+id/readerDock"
         android:layout_width="match_parent"
-        android:layout_height="66dp"
+        android:layout_height="wrap_content"
         android:background="@drawable/bg_sw_reader_dock"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
         android:paddingStart="6dp"
-        android:paddingEnd="6dp">
+        android:paddingEnd="6dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
 
         <LinearLayout
             android:id="@+id/readerDockShare"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:contentDescription="@string/share_pdf"
             android:focusable="true"
             android:gravity="center"
+            android:minHeight="64dp"
+            android:minWidth="48dp"
             android:orientation="vertical">
 
             <ImageView
@@ -63,6 +71,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:fontFamily="@font/manrope"
+                android:maxLines="2"
                 android:text="@string/share_pdf"
                 android:textColor="@color/text_hologram_hi"
                 android:textSize="11.5sp"
@@ -71,14 +80,16 @@
 
         <LinearLayout
             android:id="@+id/readerDockPages"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:contentDescription="@string/reader_dock_pages"
             android:focusable="true"
             android:gravity="center"
+            android:minHeight="64dp"
+            android:minWidth="48dp"
             android:orientation="vertical">
 
             <ImageView
@@ -93,6 +104,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:fontFamily="@font/manrope"
+                android:maxLines="2"
                 android:text="@string/reader_dock_pages"
                 android:textColor="@color/text_hologram_hi"
                 android:textSize="11.5sp"
@@ -101,14 +113,16 @@
 
         <LinearLayout
             android:id="@+id/readerDockText"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:contentDescription="@string/reader_dock_text"
             android:focusable="true"
             android:gravity="center"
+            android:minHeight="64dp"
+            android:minWidth="48dp"
             android:orientation="vertical">
 
             <ImageView
@@ -123,6 +137,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:fontFamily="@font/manrope"
+                android:maxLines="2"
                 android:text="@string/reader_dock_text"
                 android:textColor="@color/text_hologram_hi"
                 android:textSize="11.5sp"
@@ -131,14 +146,16 @@
 
         <LinearLayout
             android:id="@+id/readerDockSign"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:contentDescription="@string/reader_dock_sign"
             android:focusable="true"
             android:gravity="center"
+            android:minHeight="64dp"
+            android:minWidth="48dp"
             android:orientation="vertical">
 
             <ImageView
@@ -153,6 +170,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:fontFamily="@font/manrope"
+                android:maxLines="2"
                 android:text="@string/reader_dock_sign"
                 android:textColor="@color/text_hologram_hi"
                 android:textSize="11.5sp"
@@ -161,14 +179,16 @@
 
         <LinearLayout
             android:id="@+id/readerDockMore"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:contentDescription="@string/reader_dock_more"
             android:focusable="true"
             android:gravity="center"
+            android:minHeight="64dp"
+            android:minWidth="48dp"
             android:orientation="vertical">
 
             <ImageView
@@ -183,10 +203,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:fontFamily="@font/manrope"
+                android:maxLines="2"
                 android:text="@string/reader_dock_more"
                 android:textColor="@color/text_hologram_hi"
                 android:textSize="11.5sp"
                 android:textStyle="bold" />
         </LinearLayout>
-    </LinearLayout>
+    </com.scanwhirl.app.ui.FlowRowLayout>
 </LinearLayout>
