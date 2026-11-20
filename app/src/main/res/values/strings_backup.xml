@@ -36,7 +36,7 @@
     <string name="backup_failed">The backup could not be written.</string>
     <string name="backup_saved">Backup saved</string>
     <string name="backup_ready">Backup ready</string>
-    <string name="backup_ready_note">%1$d MB, encrypted. Save it to your phone or share it with Drive.</string>
+    <string name="backup_ready_note">%1$s, encrypted. Save it to your phone or share it with Drive.</string>
     <string name="backup_save_device">Save to device</string>
     <string name="backup_share">Share</string>
     <string name="backup_share_title">Save the backup</string>

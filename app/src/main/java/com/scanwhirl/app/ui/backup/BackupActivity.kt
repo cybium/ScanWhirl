@@ -409,7 +409,11 @@ class BackupActivity : BaseActivity() {
 
     /** The size note, then one line per warning the write reported. */
     private fun readyMessage(file: File): String {
-        val sizeNote = getString(R.string.backup_ready_note, (file.length() / (1024 * 1024)).toInt())
+        val sizeNote = getString(
+            R.string.backup_ready_note,
+            // F3 (hunt H6-5): a real size ("412 kB"), never a truncated "0 MB".
+            android.text.format.Formatter.formatShortFileSize(this, file.length())
+        )
         return (listOf(sizeNote) + pendingWarnings).joinToString("\n")
     }
 

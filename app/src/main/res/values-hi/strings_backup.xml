@@ -36,7 +36,7 @@
     <string name="backup_failed">प्रति सहेजी नहीं जा सकी।</string>
     <string name="backup_saved">प्रति सहेजी गई</string>
     <string name="backup_ready">प्रति तैयार</string>
-    <string name="backup_ready_note">%1$d MB। पासवर्ड या कोड के बिना पढ़ी नहीं जा सकती। फ़ोन में सहेजें या Drive से भेजें।</string>
+    <string name="backup_ready_note">%1$s। पासवर्ड या कोड के बिना पढ़ी नहीं जा सकती। फ़ोन में सहेजें या Drive से भेजें।</string>
     <string name="backup_save_device">फ़ोन में सहेजें</string>
     <string name="backup_share">भेजें</string>
     <string name="backup_share_title">प्रति सहेजें</string>

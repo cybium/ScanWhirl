@@ -14,7 +14,7 @@
         <item quantity="one">%d फ़ाइल</item>
         <item quantity="other">%d फ़ाइलें</item>
     </plurals>
-    <string name="vault_stats_body">AES-256 · चाबी इस फ़ोन की सुरक्षित जगह में बंद रहती है\nऐप छोड़ते ही तिजोरी पर ताला लग जाता है</string>
+    <string name="vault_stats_body">AES-256 · सिर्फ़ आपके पासकोड से खुलती है\nऐप छोड़ने के 2 मिनट बाद तिजोरी पर ताला लग जाता है</string>
     <string name="vault_locked_title">तिजोरी पर ताला है</string>
     <string name="vault_locked_body">अपनी निजी फ़ाइलें देखने के लिए उँगली का निशान लगाएँ या गुप्त नंबर डालें।</string>
     <string name="vault_not_setup_title">आपकी निजी जगह</string>
