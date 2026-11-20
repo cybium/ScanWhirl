@@ -31,6 +31,9 @@ Thumbs.db
 # Local build artifacts kept out of Git
 builds/
 
+# Real-Android E2E output (tools/e2e/smoke.sh writes screenshots here on the runner)
+artifacts/
+
 docs/audit/*/evidence/
 
 

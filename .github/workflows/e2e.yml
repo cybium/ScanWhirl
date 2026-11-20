@@ -1,0 +1,150 @@
+# ScanWhirl real-Android end-to-end smoke test on GitHub's free public-repo runners.
+#
+# Why this exists: the Robolectric gate proves logic but never starts the app on a
+# real Android system image. A green gate has shipped UI that only fails on a
+# device (a missing view, a crash on launch, a Hindi label that never renders,
+# a 2.0x font scale that clips the bottom bar). This workflow installs the same
+# debug/test APK the phone uses (package com.scanwhirl.app.test) on an emulator
+# for API 35 and API 36 and walks the shell.
+#
+# No secrets, no signing, no Play publication: -PtestBuild only. The repository
+# is public, so Actions minutes are free; still, one leg is capped at 40 minutes
+# and the emulator is a throwaway AVD that is never reused.
+#
+# Triggers:
+#   * push to ci/e2e-*            - tools/e2e/run_e2e.ps1 pushes a worktree
+#                                   snapshot here and prints the run URL;
+#   * workflow_dispatch (input)   - run it for any branch/tag/SHA by hand.
+name: e2e
+
+on:
+  push:
+    branches: ["ci/e2e-*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or SHA to test (empty = the commit that triggered the run)"
+        required: false
+        default: ""
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # One APK for both emulator legs: a second Gradle build would cost minutes
+    # for no extra evidence.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Assemble the test APK (com.scanwhirl.app.test)
+        run: ./gradlew :app:assembleDebug -PtestBuild --no-daemon -q
+
+      - name: Verify the APK is the test package and record its hash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          AAPT2=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/*/aapt2 | sort -V | tail -n1)
+          "$AAPT2" dump badging "$APK" | head -n 3 | tee badging.txt
+          grep -q "package: name='com.scanwhirl.app.test'" badging.txt
+          sha256sum "$APK" | tee apk-sha256.txt
+          {
+            echo "### Test APK"
+            echo '```'
+            cat badging.txt apk-sha256.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # One flat folder so the artifact layout below is just <name>/app-debug.apk.
+          mkdir -p dist-apk
+          cp "$APK" apk-sha256.txt dist-apk/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-apk
+          path: dist-apk/
+          retention-days: 7
+
+  e2e:
+    # API 35 = the current mainstream Android; API 36 = the newest system image
+    # (the app compiles and targets 36, so it must also run there).
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [35, 36]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-apk
+          path: test-apk
+
+      # Fail in seconds, not after an emulator boot, if the artifact is unexpected.
+      - name: Check the test APK
+        run: |
+          set -euo pipefail
+          ls -l test-apk
+          test -s test-apk/app-debug.apk
+          sha256sum -c <(sed "s#app/build/outputs/apk/debug/app-debug.apk#test-apk/app-debug.apk#" test-apk/apk-sha256.txt)
+
+      # The runner VM exposes /dev/kvm; the emulator needs the group perms.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Emulator smoke (API ${{ matrix.api-level }})
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          # A real phone shape (1080x2400, 411 dpi): the UI is designed for it, and
+          # the default "test" AVD is a 320x640 panel that no customer has.
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 900
+          emulator-options: >-
+            -no-window -no-audio -no-boot-anim -no-snapshot
+            -gpu swiftshader_indirect -camera-back none -camera-front none
+          script: |
+            bash tools/e2e/smoke.sh
+        env:
+          API_LEVEL: ${{ matrix.api-level }}
+          APK: ${{ github.workspace }}/test-apk/app-debug.apk
+          OUT: ${{ github.workspace }}/artifacts/${{ matrix.api-level }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-api${{ matrix.api-level }}
+          path: artifacts/
+          retention-days: 7
