@@ -38,15 +38,8 @@ $tmpIndex = Join-Path $env:TEMP ("sw-e2e-index-" + $Lane + "-" + $PID)
 $env:GIT_INDEX_FILE = $tmpIndex
 git -C $root read-tree HEAD
 git -C $root add -A -- . ':!60_CORE_ENGINE_GUIDE.md' ':!LANE_BLOCKED.md' 2>$null
-# Always run the lead's reviewed workflow/scripts when the main checkout has them,
-# so an old lane cannot test a stale smoke script.
-foreach ($rel in @(".github/workflows/e2e.yml", "tools/e2e/smoke.sh", "tools/e2e/uitool.py", "tools/e2e/make_pdf.py")) {
-    $src = Join-Path "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current" $rel
-    if (-not (Test-Path $src)) { continue }
-    if ($root -eq "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current") { continue }
-    $blob = git -C $root hash-object -w $src
-    git -C $root update-index --add --cacheinfo "100644,$blob,$rel"
-}
+# Snapshot the selected lane's harness as well as its app. Substituting scripts
+# from another checkout silently tests different code and blocks harness lanes.
 $tree = git -C $root write-tree
 Remove-Item Env:GIT_INDEX_FILE; Remove-Item $tmpIndex -ErrorAction SilentlyContinue
 $parent = git -C $root rev-parse HEAD

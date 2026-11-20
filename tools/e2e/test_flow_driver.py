@@ -1,0 +1,86 @@
+"""Offline harness negatives; no adb/device is invoked."""
+import unittest
+from unittest.mock import patch
+import xml.etree.ElementTree as ET
+
+import flow_driver as f
+from make_pdf import build
+
+
+class FlowSelectorsTest(unittest.TestCase):
+    def node(self, **attrs):
+        return ET.Element("node", {"bounds": "[10,20][110,120]", **attrs})
+
+    def test_exact_text_does_not_match_substring(self):
+        self.assertTrue(f.match(self.node(text="Merge"), text="Merge"))
+        self.assertFalse(f.match(self.node(text="Merge PDF files"), text="Merge"))
+        self.assertFalse(f.match(self.node(text="Merge"), desc="Merge"))
+
+    def test_description_and_hindi_match(self):
+        self.assertTrue(f.match(self.node(**{"content-desc": "कागज़ात"}), desc="कागज़ात"))
+
+    def test_missing_and_zero_area_controls_fail_closed(self):
+        root = ET.Element("hierarchy")
+        root.append(self.node(text="Compress", bounds="[0,0][0,0]"))
+        with self.assertRaises(AssertionError):
+            f.find(root, text="Compress")
+        with self.assertRaises(AssertionError):
+            f.find(root, text="Cancel")
+
+    def test_visibility_rejects_clipping_and_sub48dp(self):
+        with patch.object(f, "adb", return_value="Physical size: 1080x2400"):
+            self.assertIn("height=100px", f.visible(self.node(), 100))
+            with self.assertRaises(AssertionError):
+                f.visible(self.node(bounds="[0,2300][300,2450]"))
+            with self.assertRaises(AssertionError):
+                f.visible(self.node(), 144)
+
+    def test_tap_uses_current_accessible_ancestor_bounds(self):
+        root = ET.Element("hierarchy")
+        parent = self.node(clickable="true", bounds="[100,200][500,400]")
+        label = self.node(text="Compress")
+        root.append(parent)
+        parent.append(label)
+        with patch.object(f, "adb") as adb:
+            f.tap_node(root, label)
+            adb.assert_called_once_with("shell", "input", "tap", 300, 300)
+
+    def test_system_list_row_without_clickable_parent_uses_label_not_window(self):
+        root = ET.Element("hierarchy")
+        window = self.node(clickable="false", bounds="[0,0][1080,2400]")
+        label = self.node(text="Downloads", clickable="false", bounds="[168,617][714,668]")
+        root.append(window)
+        window.append(label)
+        with patch.object(f, "adb") as adb:
+            f.tap_node(root, label)
+            adb.assert_called_once_with("shell", "input", "tap", 441, 642)
+
+    def test_local_execution_is_rejected_before_any_adb(self):
+        with patch.dict(f.os.environ, {"GITHUB_ACTIONS": "false"}), patch.object(f, "adb") as adb:
+            with self.assertRaises(AssertionError):
+                f.main()
+            adb.assert_not_called()
+
+    def test_physical_serial_rejected_before_any_adb(self):
+        with patch.dict(f.os.environ, {"GITHUB_ACTIONS": "true", "ANDROID_SERIAL": "physical-not-allowed"}):
+            with patch.object(f, "adb") as adb:
+                with self.assertRaises(AssertionError):
+                    f.main()
+                adb.assert_not_called()
+
+    def test_fixture_is_three_pages(self):
+        pdf = build([["Fictional page 1"], ["Fictional page 2"], ["Fictional page 3"]])
+        self.assertIn(b"/Count 3", pdf)
+        self.assertEqual(pdf.count(b"/Type /Page "), 3)
+
+    def test_source_owned_copy_parity(self):
+        for lang in ("en", "hi"):
+            s = f.strings(lang)
+            for key in ("shell_nav_me", "shell_nav_vault", "vault_tab_relock", "tool_compress",
+                        "compress_level_title", "compress_action", "home_search_hint", "tools_search_hint"):
+                self.assertTrue(s[key], (lang, key))
+            self.assertIn("2", s["vault_tab_relock"])
+
+
+if __name__ == "__main__":
+    unittest.main()

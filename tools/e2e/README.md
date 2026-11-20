@@ -9,6 +9,7 @@ shows up here.
 | --- | --- |
 | `.github/workflows/e2e.yml` | build one test APK, then run the smoke on API 35 and API 36 (matrix) |
 | `tools/e2e/smoke.sh` | everything that happens inside the booted emulator (adb only) |
+| `tools/e2e/flows.sh` / `flow_driver.py` | F1–F9 device checklist journeys after smoke, text/description driven |
 | `tools/e2e/uitool.py` | uiautomator dump / find-by-view-id / tap / screenshot sanity |
 | `tools/e2e/make_pdf.py` | writes the two self-authored PDF fixtures at run time |
 | `tools/e2e/run_e2e.ps1` | push a worktree snapshot to `ci/e2e-<name>` and print the run URL |
@@ -43,6 +44,27 @@ Per API level (35 and 36, `google_apis` x86_64 image):
    asserts the process is still alive;
 6. writes `artifacts/<api>/summary.md` (PASS/FAIL table) and uploads the whole
    folder (screenshots, XML, logcat) for seven days.
+
+Then `flows.sh` runs the migrated device checklist on the **same** emulator/APK:
+generated three-page PDF import through the system Downloads picker; complete
+Tools catalogue and two recent tools in order; Settings and A/अ language chooser;
+EN/HI trust pills at 200%; EN/HI Compress first-frame action bounds (48 dp,
+reported in pixels) and a real target-size result; page-delete Undo plus rotation;
+encrypted backup creation and a nonzero-size receipt (no restore); EN/HI Vault
+copy; and cold start with a verified item in Trash. Each check appends a PASS/FAIL
+row to `summary.md` and retains named screenshots/XML (`F1_*` ... `F9_*`).
+Secure backup screenshots may be black: their XML is the evidence.
+
+These journeys accept only `com.scanwhirl.app.test`, `GITHUB_ACTIONS=true`, and
+one `emulator-*` device with `ro.kernel.qemu=1`. They never use the physical phone.
+Only self-generated fictional documents are imported. No app source or app data
+is injected. A missing accessible control is a failed check, not a coordinate
+fallback or a reason to modify production source.
+
+Harness-only negative tests (no adb):
+`python -m unittest discover -s tools/e2e -p test_flow_driver.py -v`.
+The runner snapshots the selected lane's harness exactly; it no longer substitutes
+workflow/scripts from another checkout.
 
 The job fails on any FAIL row: a crash, an ANR, a screen that never appears, a
 blank screenshot, a missing language, or the app process dying.
@@ -82,7 +104,7 @@ ANRs are still fatal - they come from logcat, not from the dialog.
 
 - Play Billing, the ML Kit OCR model download and the document scanner need the
   Play Store, which the `google_apis` image does not ship. Those flows stay on
-  the physical-phone checks.
+   outside this emulator checklist; no worker physical-phone pass is authorized.
 - The Vault is only opened as a screen; PIN entry and decryption are Robolectric
   and phone-session territory.
 - Screenshots prove layout, not correctness of content. Read the artifact when
