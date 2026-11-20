@@ -165,29 +165,18 @@ object DownloadSaver {
     }
 
     /** Appends " (2)", " (3)", … until [candidate] is free. */
-    fun uniqueName(candidate: String, taken: (String) -> Boolean): String {
-        if (!taken(candidate)) return candidate
-        val dot = candidate.lastIndexOf('.')
-        val stem = if (dot > 0) candidate.substring(0, dot) else candidate
-        val ext = if (dot > 0) candidate.substring(dot) else ""
-        var n = 2
-        while (taken("$stem ($n)$ext")) n++
-        return "$stem ($n)$ext"
-    }
+    fun uniqueName(candidate: String, taken: (String) -> Boolean): String =
+        ExportNames.uniqueName(candidate, taken)
 
-    private fun sanitize(name: String): String {
-        val cleaned = name.replace(Regex("[\\\\/:*?\"<>|\\n\\r\\t]"), "_").trim().trim('_')
-        return cleaned.ifBlank { "Document" }.take(60)
-    }
+    /** A name without an extension: illegal characters replaced, 60 code points at most (H2-3). */
+    private fun sanitize(name: String): String = ExportNames.sanitizeBase(name, "Document")
 
     /** "Document 1.pdf" */
     fun pdfNameFor(docTitle: String): String = sanitize(docTitle) + ".pdf"
 
     /** `Name.ext` and `Name (n).ext`, the names a save of [requested] can end up with. */
     internal fun familyRegex(requested: String): Regex {
-        val dot = requested.lastIndexOf('.')
-        val stem = if (dot > 0) requested.substring(0, dot) else requested
-        val ext = if (dot > 0) requested.substring(dot) else ""
+        val (stem, ext) = ExportNames.splitKnownSuffix(requested)
         return Regex(
             "^${Regex.escape(stem)}( \\(\\d+\\))?${Regex.escape(ext)}$",
             RegexOption.IGNORE_CASE
@@ -224,8 +213,14 @@ object DownloadSaver {
      * the copy in Files can still be opened by tapping it.
      */
     fun saveFile(context: Context, source: File, displayName: String, mime: String): SavedFile {
-        var name = sanitize(displayName.ifBlank { source.name })
-        if (!name.contains('.') && source.extension.isNotBlank()) name += ".${source.extension}"
+        // H2-3: only the base name is limited; a known extension (".pdf", ".jpg.zip") always survives.
+        var name = ExportNames.sanitizeFileName(displayName.ifBlank { source.name }, "Document")
+        val sourceExt = source.extension
+        if (sourceExt.isNotBlank() && !ExportNames.hasKnownExtension(name) &&
+            !name.endsWith(".$sourceExt", ignoreCase = true)
+        ) {
+            name += ".$sourceExt"
+        }
         return export(context, { FileInputStream(source) }, name, documents(mime))
     }
 
