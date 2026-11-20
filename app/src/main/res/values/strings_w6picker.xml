@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- w6picker lane strings: the shared document picker. English first, Hindi parity in values-hi. -->
+<resources>
+    <string name="w6_picker_search_hint">Search documents</string>
+    <string name="w6_picker_no_match_title">No documents found</string>
+    <string name="w6_picker_no_match_body">Try another name, or clear the search.</string>
+    <string name="w6_picker_clear_search">Clear search</string>
+    <string name="w6_picker_empty_title">No documents yet</string>
+    <string name="w6_picker_empty_body">Scan a document or import a PDF first, then open this tool again.</string>
+    <string name="w6_picker_empty_scan">Scan a document</string>
+    <string name="w6_picker_empty_import">Import PDF</string>
+    <string name="w6_picker_locked_reason">Protected PDF</string>
+    <string name="w6_picker_vault_reason">In Vault</string>
+    <string name="w6_picker_row_locked">%1$s, protected PDF</string>
+    <string name="w6_picker_row_vault">%1$s, in Vault</string>
+    <string name="w6_picker_row_desc">%1$s, %2$s, %3$s</string>
+    <string name="w6_unlock_empty_body">No protected PDFs in your library. Open a PDF file instead.</string>
+    <plurals name="w6_picker_doc_meta">
+        <item quantity="one">%1$d page · %2$s · %3$s</item>
+        <item quantity="other">%1$d pages · %2$s · %3$s</item>
+    </plurals>
+</resources>

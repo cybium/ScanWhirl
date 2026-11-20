@@ -88,11 +88,15 @@ class LockUiTest {
 
     private fun clickItem(index: Int) {
         val dialog = ShadowDialog.getLatestDialog()
-        // v2 UI: 08_text_ocr — the scan picker is a SwSheet; LockFlow's own list
-        // is still an AlertDialog until L3 merges its sheet.
+        // UI-W6: the document chooser is the shared searchable picker (rows in docPickerList).
+        // LockFlow's own source list and actions stay AlertDialog / SwSheet.
+        val picker = dialog.findViewById<android.view.ViewGroup>(R.id.docPickerList)
         val items = dialog.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
-        if (items != null) items.getChildAt(index).performClick()
-        else (dialog as AlertDialog).listView.performItemClick(null, index, 0)
+        when {
+            picker != null -> picker.getChildAt(index).performClick()
+            items != null -> items.getChildAt(index).performClick()
+            else -> (dialog as AlertDialog).listView.performItemClick(null, index, 0)
+        }
         idle()
     }
 

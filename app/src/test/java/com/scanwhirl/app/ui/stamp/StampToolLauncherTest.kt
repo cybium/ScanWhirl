@@ -40,8 +40,11 @@ class StampToolLauncherTest {
     private val repo get() = ScanRepository(context)
 
     private fun clickItem(index: Int) {
-        // v2 UI: 03_tools_hub — the shared chooser is now a kit SwSheet (rows in swSheetItems).
-        ShadowDialog.getLatestDialog().findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
+        // UI-W6: Stamp/Redact use the shared searchable picker (rows in docPickerList).
+        val dialog = ShadowDialog.getLatestDialog()
+        val picker = dialog.findViewById<android.view.ViewGroup>(R.id.docPickerList)
+        if (picker != null) picker.getChildAt(index).performClick()
+        else dialog.findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
         shadowOf(Looper.getMainLooper()).idle()
     }
 
@@ -66,8 +69,10 @@ class StampToolLauncherTest {
         StampToolLauncher.open(host, "redact")
 
         val chooser = requireNotNull(ShadowDialog.getLatestDialog()) { "a document chooser opens" }
-        // v2 UI: 03_tools_hub — Merge/Compress' chooser is reused; it is a kit SwSheet now.
-        val rows = chooser.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
+        // UI-W6: the shared picker lists the saved document in docPickerList.
+        val rows = requireNotNull(chooser.findViewById<android.view.ViewGroup>(R.id.docPickerList)) {
+            "the chooser is the shared document picker"
+        }
         assertEquals("the saved document is listed", 1, rows.childCount)
         clickItem(0)
 

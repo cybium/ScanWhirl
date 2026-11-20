@@ -178,9 +178,12 @@ class ShellProGateTest {
             idle()
             val dialog = ShadowDialog.getLatestDialog()
             assertNotNull(dialog)
+            // UI-W6: the shared document picker carries its own title id.
+            val title = dialog.findViewById<android.widget.TextView>(R.id.docPickerTitle)
+                ?: dialog.findViewById(R.id.swSheetTitle)
             assertEquals(
                 activity.getString(R.string.pdfa_pick),
-                dialog.findViewById<android.widget.TextView>(R.id.swSheetTitle).text.toString()
+                title.text.toString()
             )
             dialog.dismiss()
         }

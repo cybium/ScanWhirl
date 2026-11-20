@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- w6picker lane: ids for the shared document picker. Kept in the lane's own file. -->
+<resources>
+    <item name="docPickerSheetRoot" type="id" />
+    <item name="docPickerTitle" type="id" />
+    <item name="docPickerClose" type="id" />
+    <item name="docPickerSearch" type="id" />
+    <item name="docPickerScroll" type="id" />
+    <item name="docPickerList" type="id" />
+    <item name="docPickerRow" type="id" />
+    <item name="docPickerThumb" type="id" />
+    <item name="docPickerLock" type="id" />
+    <item name="docPickerCheck" type="id" />
+    <item name="docPickerName" type="id" />
+    <item name="docPickerMeta" type="id" />
+    <item name="docPickerCategory" type="id" />
+    <item name="docPickerExtra" type="id" />
+    <item name="docPickerEmpty" type="id" />
+    <item name="docPickerEmptyTitle" type="id" />
+    <item name="docPickerEmptyBody" type="id" />
+    <item name="docPickerEmptyScan" type="id" />
+    <item name="docPickerEmptyImport" type="id" />
+    <item name="docPickerNoMatch" type="id" />
+    <item name="docPickerClear" type="id" />
+</resources>

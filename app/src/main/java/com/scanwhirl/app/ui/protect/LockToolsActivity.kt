@@ -13,12 +13,12 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
+import com.scanwhirl.app.tools.FlowUtil
 import com.scanwhirl.app.ui.BaseActivity
-import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.applySystemBarsPadding
+import com.scanwhirl.app.ui.kit.DocumentPicker
 import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.ui.kit.SwStyle
-import com.scanwhirl.app.ui.showSw
 
 /**
  * The Tools/Home "Protect PDF" and "Unlock PDF" entries: a document chooser, then the real sheet.
@@ -78,48 +78,33 @@ class LockToolsActivity : BaseActivity(), HomeHost {
 
     private fun showChooser() {
         val all = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
-        var chosen = false
         if (mode == MODE_PROTECT) {
-            val protectable = all.filter { !it.isLocked }
-            if (protectable.isEmpty()) {
-                showEmpty()
-                return
-            }
-            SwDialog.sheet(this)
-                .setTitle(R.string.lock_choose_document)
-                .setItems(protectable.map { it.name }.toTypedArray()) { _, which ->
-                    chosen = true
-                    flow.protectDocument(protectable[which])
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .setOnDismissListener { if (!chosen) finish() }
-                .showSw(isSheet = true)
+            val protectable = all.filter { !it.isLocked && !it.isVaulted }
+            // UI-W6: the shared picker replaces the name-only list, so two similar names can
+            // never be confused. A protected/Vault file is excluded (Protect needs an open one).
+            DocumentPicker.show(
+                activity = this,
+                title = getString(R.string.lock_choose_document),
+                docs = protectable,
+                onEmptyScan = { FlowUtil.openHome(this) },
+                onPick = { doc -> flow.protectDocument(doc) },
+                onDismiss = { finish() }
+            )
         } else {
-            val locked = all.filter { it.isLocked }
-            val labels = locked.map { it.name } + getString(R.string.lock_from_pdf)
-            SwDialog.sheet(this)
-                .setTitle(R.string.lock_choose_document)
-                .setItems(labels.toTypedArray()) { _, which ->
-                    chosen = true
-                    if (which < locked.size) {
-                        flow.unlockDocument(locked[which])
-                    } else {
-                        pickPdf.launch("application/pdf")
-                    }
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .setOnDismissListener { if (!chosen) finish() }
-                .showSw(isSheet = true)
+            val locked = all.filter { it.isLocked && !it.isVaulted }
+            DocumentPicker.show(
+                activity = this,
+                title = getString(R.string.lock_choose_document),
+                docs = locked,
+                extraAction = DocumentPicker.ExtraAction(getString(R.string.lock_from_pdf)) {
+                    pickPdf.launch("application/pdf")
+                },
+                onEmptyScan = { FlowUtil.openHome(this) },
+                onEmptyImport = { pickPdf.launch("application/pdf") },
+                onPick = { doc -> flow.unlockDocument(doc) },
+                onDismiss = { finish() }
+            )
         }
-    }
-
-    private fun showEmpty() {
-        SwDialog.card(this)
-            .setTitle(if (mode == MODE_PROTECT) R.string.tool_protect else R.string.tool_unlock)
-            .setMessage(R.string.lock_no_documents)
-            .setPositiveButton(android.R.string.ok) { _, _ -> finish() }
-            .setOnDismissListener { finish() }
-            .showSw(isSheet = false)
     }
 
     private fun dp(value: Int): Int = SwStyle.dp(this, value.toFloat())

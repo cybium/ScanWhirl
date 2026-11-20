@@ -218,7 +218,7 @@ class UiSmokeTest {
                     .getChildAt(0).performClick()
                 val picker = ShadowDialog.getLatestDialog()
                 assertTrue(
-                    "scan picker should be showing",
+                    "the multi-select scan picker should be showing",
                     picker.isShowing && picker.findViewById<android.view.View>(R.id.swSheetItems) != null
                 )
                 picker.dismiss()

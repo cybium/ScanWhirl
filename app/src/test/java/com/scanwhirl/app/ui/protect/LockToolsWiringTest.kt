@@ -2,7 +2,10 @@ package com.scanwhirl.app.ui.protect
 
 import android.app.Application
 import android.app.Dialog
-import androidx.appcompat.app.AlertDialog
+import android.os.Looper
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -92,11 +95,17 @@ class LockToolsWiringTest {
             LockToolsActivity.intent(app, LockToolsActivity.MODE_PROTECT)
         )
         try {
-            val chooser = latestAlert()
+            val chooser = latestDialog()
             assertNotNull("the document chooser opens", chooser)
-            assertTrue("the chooser lists the free document",
-                (chooser!!.listView.adapter?.count ?: 0) >= 1)
-            chooser.listView.performItemClick(null, 0, 0)
+            assertNotNull(
+                "UI-W6: the chooser is the shared searchable picker",
+                chooser!!.findViewById<android.view.View>(R.id.docPickerSearch)
+            )
+            assertTrue(
+                "the chooser lists the free document",
+                waitUntil { pickerRows(chooser).isNotEmpty() }
+            )
+            pickerRows(chooser).first().performClick()
             val sheet = ShadowDialog.getLatestDialog()
             assertNotNull("the Protect sheet opens", sheet)
             assertNotNull(
@@ -115,17 +124,18 @@ class LockToolsWiringTest {
             LockToolsActivity.intent(app, LockToolsActivity.MODE_UNLOCK)
         )
         try {
-            val chooser = latestAlert()
+            val chooser = latestDialog()
             assertNotNull("the document chooser opens", chooser)
-            val adapter = chooser!!.listView.adapter
-            assertNotNull("the chooser has items", adapter)
-            assertEquals(
-                "From a PDF file is the last row",
-                app.getString(R.string.lock_from_pdf),
-                adapter?.getItem((adapter.count - 1))
+            assertTrue(
+                "the locked document is listed",
+                waitUntil { pickerRows(chooser!!).isNotEmpty() }
             )
-            assertTrue("the locked document is listed", adapter!!.count >= 2)
-            chooser.listView.performItemClick(null, 0, 0)
+            assertEquals("one protected document", 1, pickerRows(chooser!!).size)
+            val extra = requireNotNull(chooser.findViewById<TextView>(R.id.docPickerExtra)) {
+                "From a PDF file is the picker's own last action"
+            }
+            assertEquals(app.getString(R.string.lock_from_pdf), extra.text.toString())
+            pickerRows(chooser).first().performClick()
             val sheet = ShadowDialog.getLatestDialog()
             assertNotNull("the Unlock sheet opens", sheet)
             assertNotNull(
@@ -137,9 +147,24 @@ class LockToolsWiringTest {
         }
     }
 
-    private fun latestAlert(): AlertDialog? {
-        val dialog: Dialog? = ShadowDialog.getLatestDialog()
-        return dialog as? AlertDialog
+    private fun latestDialog(): Dialog? = ShadowDialog.getLatestDialog()
+
+    private fun pickerRows(dialog: Dialog): List<LinearLayout> {
+        val list = dialog.findViewById<LinearLayout>(R.id.docPickerList) ?: return emptyList()
+        return (0 until list.childCount).mapNotNull { list.getChildAt(it) as? LinearLayout }
+    }
+
+    private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    private fun waitUntil(timeoutMs: Long = 8_000, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            idle()
+            if (condition()) return true
+            Thread.sleep(25)
+        }
+        idle()
+        return condition()
     }
 
     private class RecordingHost : ToolHost {
