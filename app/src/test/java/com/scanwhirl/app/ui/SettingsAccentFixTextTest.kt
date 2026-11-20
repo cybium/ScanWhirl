@@ -2,15 +2,11 @@ package com.scanwhirl.app.ui
 
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -18,50 +14,43 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * H11 (found on device, 1.2.2): Settings > Accent looked tappable (chevron) but did
- * nothing. It is not wired yet, so the row must not offer a tap: no chevron, no
- * ripple, no focus, and the "coming soon" subtitle stays.
+ * ATLAS-F2 (014_settings_2.0): Settings showed a greyed "Accent / Cyan · Gold coming soon"
+ * row. The product rule is that an unbuilt capability is not shown at all, so the row is gone
+ * (not merely disabled) and nothing in Settings still promises a future accent.
+ *
+ * Replaces the H11 test that guarded the coming-soon row: that guard protected the same
+ * unbuilt feature this rule now forbids.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class SettingsAccentFixTextTest {
 
-    private fun imagesIn(view: ViewGroup): List<View> {
-        val found = mutableListOf<View>()
-        for (i in 0 until view.childCount) {
-            val child = view.getChildAt(i)
-            if (child is ImageView) found += child
-            if (child is ViewGroup) found += imagesIn(child)
-        }
-        return found
+    private fun textViews(root: View, out: MutableList<TextView> = mutableListOf()): List<TextView> {
+        if (root is TextView) out += root
+        if (root is ViewGroup) for (i in 0 until root.childCount) textViews(root.getChildAt(i), out)
+        return out
     }
 
     @Test
-    fun `the accent row offers no tap affordance and keeps the coming-soon note`() {
+    fun `Settings shows no unbuilt accent row and no coming-soon promise`() {
         ApplicationProvider.getApplicationContext<android.app.Application>()
         Robolectric.buildActivity(SettingsActivity::class.java).setup().use { controller ->
             val activity = controller.get()
-            val row = activity.findViewById<View>(R.id.rowAccent)
-            assertNotNull("Settings shows the Accent row", row)
-            assertFalse("the row is not clickable", row.isClickable)
-            assertFalse("the row cannot take focus", row.isFocusable)
-            assertTrue("a not-yet-wired row looks muted", row.alpha < 1f)
-            assertNull("no selectable/ripple background", row.background)
+            assertNull(
+                "the unbuilt Accent row must not exist in Settings",
+                activity.findViewById<View>(R.id.rowAccent)
+            )
+            assertNull(
+                "no coming-soon subtitle is left behind",
+                activity.findViewById<View>(R.id.subAccent)
+            )
+            val promised = textViews(activity.window.decorView)
+                .filter { it.isShown }
+                .map { it.text?.toString().orEmpty() }
+                .filter { it.contains("coming soon", ignoreCase = true) }
             assertFalse(
-                "tapping the row does not pretend to do something",
-                row.performClick()
-            )
-            assertEquals(
-                "no chevron or other arrow suggests a screen behind it",
-                0,
-                imagesIn(row as ViewGroup).size
-            )
-
-            val subtitle = activity.findViewById<TextView>(R.id.subAccent)
-            assertNotNull("the coming-soon subtitle stays", subtitle)
-            assertTrue(
-                "the subtitle says it is not available yet: ${subtitle.text}",
-                subtitle.text.toString().contains("coming soon", ignoreCase = true)
+                "Settings must not announce a feature that does not exist: $promised",
+                promised.isNotEmpty()
             )
         }
     }

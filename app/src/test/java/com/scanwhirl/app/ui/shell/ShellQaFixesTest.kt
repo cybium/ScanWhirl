@@ -324,16 +324,22 @@ class ShellQaFixesTest {
             for (row in ToolsHubScreen.rows(body)) {
                 val tag = row.proTag
                 if (!tag.isVisible) continue
-                // B4-TOOLS: a row's Pro chip sits under the name, never on the 40dp glyph.
+                // ATLAS-F2 (002): the Pro chip shares the tool's line, right after the name.
+                // It used to drop under the label and read as a separate row.
                 val iconRect = rectIn(row.iconBox)
                 val tagRect = rectIn(tag)
+                val labelRect = rectIn(row.labelView)
                 assertFalse(
                     "${row.tool?.id} tag overlaps its icon ($tagRect vs $iconRect)",
                     Rect.intersects(iconRect, tagRect)
                 )
                 assertTrue(
-                    "${row.tool?.id} tag sits under its name",
-                    tagRect.top >= rectIn(row.labelView).bottom
+                    "${row.tool?.id} tag sits on its name's line ($tagRect vs $labelRect)",
+                    minOf(tagRect.bottom, labelRect.bottom) > maxOf(tagRect.top, labelRect.top)
+                )
+                assertTrue(
+                    "${row.tool?.id} tag follows the name ($tagRect vs $labelRect)",
+                    tagRect.left >= labelRect.right - 1
                 )
                 checked++
             }

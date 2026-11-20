@@ -186,6 +186,11 @@ class LibraryScreen(
         chipScroll = HorizontalScrollView(context).apply {
             id = R.id.swChipScroll
             isHorizontalScrollBarEnabled = false
+            // ATLAS-F2 (001): a rail wider than the phone must say so. The fading edge is the
+            // affordance that more chips continue past the screen edge, instead of the last
+            // chip looking sliced off.
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(SwStyle.dp(context, 24f))
             addView(
                 chipRow,
                 android.widget.FrameLayout.LayoutParams(
@@ -478,11 +483,18 @@ class LibraryScreen(
         val scroll = HorizontalScrollView(context).apply {
             id = R.id.swFolderScroll
             isHorizontalScrollBarEnabled = false
+            // ATLAS-F2 (001): same affordance as the category rail — folders keep going past
+            // the edge instead of the last one looking cut in half.
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(SwStyle.dp(context, 24f))
         }
         folderRow = LinearLayout(context).apply {
             id = R.id.swFolderRow
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            // ATLAS-F2 (001): end padding so the last folder chip can rest wholly inside the
+            // rail instead of touching the screen edge after a swipe.
+            setPadding(0, 0, SwStyle.dp(context, 18f), 0)
         }
         scroll.addView(folderRow)
         section.addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
@@ -538,6 +550,12 @@ class LibraryScreen(
             // M8 (device sweep): "All" measured 44dp wide, under the 48dp touch floor.
             minimumWidth = SwStyle.dp(context, 48f)
             gravity = Gravity.CENTER
+            // ATLAS-F2: a chip never breaks a word or cuts one with an ellipsis. A long name
+            // stays whole; the rail scrolls instead.
+            ellipsize = null
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
             background = SwStyle.pill(
                 context,
                 color,
@@ -551,7 +569,7 @@ class LibraryScreen(
         }
         folderRow.addView(
             chip,
-            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
+            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
                 .apply { marginEnd = SwStyle.dp(context, 8f) }
         )
         return chip
@@ -1310,6 +1328,11 @@ class LibraryScreen(
                 minimumHeight = SwStyle.dp(context, 48f)
                 minimumWidth = SwStyle.dp(context, 48f)
                 gravity = Gravity.CENTER
+                // ATLAS-F2: like the folder chips, whole words only, and grow instead of clipping.
+                ellipsize = null
+                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                //noinspection WrongConstant
+                breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
                 background = SwStyle.pill(
                     context,
                     if (active) SwStyle.color(context, R.color.cyan_primary) else SwStyle.color(context, R.color.text_hologram_mid),
@@ -1331,7 +1354,7 @@ class LibraryScreen(
             }
             chipRow.addView(
                 chip,
-                LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
                     .apply { marginEnd = SwStyle.dp(context, 8f) }
             )
         }
@@ -1654,7 +1677,12 @@ class LibraryScreen(
     }
 
     private fun metaFor(doc: ScanDocument): String {
-        val pages = resources.getQuantityString(com.scanwhirl.app.R.plurals.pages, doc.pageCount, doc.pageCount)
+        // ATLAS-F2 (001): a number stays with its unit. "4 KB" and "1 page" use a
+        // non-breaking space, so a wrapped meta breaks only at the " · " separators
+        // ("1 page ·" / "4 KB ·" / "Today"), never between 4 and KB.
+        val pages = resources.getQuantityString(
+            com.scanwhirl.app.R.plurals.pages, doc.pageCount, doc.pageCount
+        ).replace(' ', '\u00A0')
         val tags = if (doc.tags.isEmpty()) "" else " · " + doc.tags.take(2).joinToString(" ") { "#$it" }
         return "$pages · ${size(doc)} · ${whenDay(doc)}$tags"
     }
@@ -1664,9 +1692,9 @@ class LibraryScreen(
             if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
         }.getOrDefault(0L)
         return when {
-            bytes >= 1024 * 1024 -> String.format(Locale.getDefault(), "%.1f MB", bytes / 1048576f)
-            bytes >= 1024 -> "${bytes / 1024} KB"
-            bytes > 0 -> "$bytes B"
+            bytes >= 1024 * 1024 -> String.format(Locale.getDefault(), "%.1f\u00A0MB", bytes / 1048576f)
+            bytes >= 1024 -> "${bytes / 1024}\u00A0KB"
+            bytes > 0 -> "$bytes\u00A0B"
             else -> "—"
         }
     }

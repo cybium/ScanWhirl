@@ -117,7 +117,47 @@ class CreateSheet(
                 ).apply { topMargin = SwStyle.dp(context, 10f) }
             )
         }
-        return column
+        // ATLAS-F2 (005): at 200 % the entries made the sheet taller than the screen and the
+        // last row ("Import PDF") was cut at the bottom edge. The entries scroll inside a
+        // bounded area, so the whole sheet fits and every row — the last one included — can be
+        // brought fully into view by swiping.
+        return BoundedScroll(context).apply {
+            val screen = context.resources.displayMetrics.heightPixels
+            maxHeight = (screen * MAX_HEIGHT_FRACTION).toInt()
+            isFillViewport = false
+            isVerticalScrollBarEnabled = true
+            clipToPadding = false
+            setPadding(0, 0, 0, SwStyle.dp(context, 6f))
+            addView(
+                column,
+                android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+    }
+
+    /**
+     * A vertical scroll view that is as tall as its content, never taller than [maxHeight].
+     * The sheet title and buttons stay outside it, so the dialog itself never grows past the
+     * screen at large system fonts.
+     */
+    private class BoundedScroll(context: Context) :
+        android.widget.ScrollView(context) {
+
+        var maxHeight: Int = 0
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            if (maxHeight > 0 && measuredHeight > maxHeight) {
+                super.onMeasure(
+                    widthMeasureSpec,
+                    android.view.View.MeasureSpec.makeMeasureSpec(
+                        maxHeight, android.view.View.MeasureSpec.AT_MOST
+                    )
+                )
+            }
+        }
     }
 
     /** The one filled action: the camera scan, styled like the kit's primary. */
@@ -334,5 +374,10 @@ class CreateSheet(
         dialog?.dismiss()
         dialog = null
         entry.action()
+    }
+
+    private companion object {
+        /** The entries never take more than this share of the screen; title/buttons sit outside. */
+        const val MAX_HEIGHT_FRACTION = 0.58f
     }
 }
