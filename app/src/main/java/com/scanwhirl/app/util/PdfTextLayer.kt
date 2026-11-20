@@ -19,6 +19,8 @@ import java.util.Locale
  *    marked content). Every conforming extractor (MuPDF, Poppler, Acrobat) returns that text,
  *    so Devanagari, curly quotes, "₹" and any other Unicode survive extraction. The `Tj`
  *    inside is the visual fallback and stays inside the invisible Helvetica/WinAnsi glyphs.
+ *    A line that sanitises to nothing (pure Devanagari) still emits one invisible space glyph,
+ *    because extractors attach `/ActualText` to the first glyph of the marked content.
  *  - The fallback is sanitised (never adds characters, never splits a surrogate pair), so a
  *    viewer that ignores `/ActualText` still gets readable Latin text and no replacement
  *    characters.
@@ -139,21 +141,28 @@ object PdfTextLayer {
             // The exact text is trimmed of control characters only; the fallback is sanitised.
             val exact = exactLine(line.text)
             if (exact.isBlank()) continue
+            // H4-1: the gate is the exact line, never the sanitised fallback. sanitize() maps
+            // Devanagari (and every other character outside Latin-1) to a space, so a pure-Hindi
+            // line used to be skipped together with the /ActualText that exists to carry it.
             val clean = sanitize(exact)
-            if (clean.isBlank()) continue
             val fallback = if (clean.length > MAX_CHARS_PER_LINE) {
                 val cut = clean.lastIndexOf(' ', MAX_CHARS_PER_LINE - 1)
                 val trimmed = if (cut >= 0) clean.substring(0, cut) else clean.substring(0, MAX_CHARS_PER_LINE)
-                if (trimmed.isBlank()) continue else trimmed
+                trimmed
             } else {
                 clean
             }
+            // H4-1: a pure-Hindi line sanitises to "" and used to be skipped with its /ActualText.
+            // It must be emitted. The fallback keeps one glyph (a space) because extractors attach
+            // /ActualText to the first glyph of the marked content (PDFBox does; an empty () Tj
+            // carries no glyph at all and the line would still be lost). The glyph is invisible.
+            val glyphRun = if (fallback.isBlank()) " " else fallback
             val exactForActual = if (exact.length > MAX_CHARS_PER_LINE * 4) {
                 exact.take(MAX_CHARS_PER_LINE * 4).let { safeCut(it) }
             } else {
                 exact
             }
-            out.append(textOp(line.copy(text = fallback), exactForActual, sx, sy, pageW, pageH))
+            out.append(textOp(line.copy(text = glyphRun), exactForActual, sx, sy, pageW, pageH))
             emitted++
         }
         return out.toString()
