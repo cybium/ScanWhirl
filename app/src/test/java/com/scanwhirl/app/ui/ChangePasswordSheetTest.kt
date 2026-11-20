@@ -65,11 +65,15 @@ class ChangePasswordSheetTest {
     }
 
     private fun clickItem(index: Int) {
-        // v2 UI: 09_unlock_sheet — choosers are kit SwSheets after L1's sweep (rows in swSheetItems);
-        // L3's own lists may still be AlertDialogs, so both are handled.
+        // UI-W6: the document chooser is the shared searchable picker (rows in docPickerList).
+        // LockFlow's own source list and actions stay AlertDialog / SwSheet.
         val d = ShadowDialog.getLatestDialog()
-        if (d is AlertDialog) d.listView.performItemClick(null, index, 0)
-        else d.findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
+        val picker = d.findViewById<android.view.ViewGroup>(R.id.docPickerList)
+        when {
+            picker != null -> picker.getChildAt(index).performClick()
+            d is AlertDialog -> d.listView.performItemClick(null, index, 0)
+            else -> d.findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
+        }
         idle()
     }
 

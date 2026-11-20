@@ -58,8 +58,14 @@ class StampToolWiringTest {
     )
 
     private fun clickItem(index: Int) {
-        // v2 UI: 03_tools_hub — the shared chooser is now a kit SwSheet (rows in swSheetItems).
-        ShadowDialog.getLatestDialog().findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
+        // UI-W6: Stamp/Redact use the shared searchable picker (rows in docPickerList).
+        val dialog = ShadowDialog.getLatestDialog()
+        val picker = dialog.findViewById<android.view.ViewGroup>(R.id.docPickerList)
+        if (picker != null) {
+            picker.getChildAt(index).performClick()
+        } else {
+            dialog.findViewById<android.view.ViewGroup>(R.id.swSheetItems).getChildAt(index).performClick()
+        }
         shadowOf(Looper.getMainLooper()).idle()
     }
 
@@ -77,7 +83,11 @@ class StampToolWiringTest {
             val chooser = requireNotNull(ShadowDialog.getLatestDialog()) {
                 "$toolId must ask for a document first"
             }
-            assertEquals("$toolId lists the library", 1, chooser.findViewById<android.view.ViewGroup>(R.id.swSheetItems).childCount)
+            assertEquals(
+                "$toolId lists the library",
+                1,
+                chooser.findViewById<android.view.ViewGroup>(R.id.docPickerList)?.childCount
+            )
             clickItem(0)
 
             val started = requireNotNull(shadowOf(host).nextStartedActivity) {

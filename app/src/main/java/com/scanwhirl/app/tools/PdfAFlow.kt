@@ -59,13 +59,27 @@ object PdfAFlow {
         }
         SwSheet.builder(activity)
             .setTitle(R.string.tool_pdfa)
-            .setMessage(R.string.pdfa_note)
+            .setMessage(confirmIdentity(activity, doc) + "\n\n" + activity.getString(R.string.pdfa_note))
             .setPrimary(R.string.pdfa_create) {
                 create(activity, repo, doc)
             }
             .setSecondary(android.R.string.cancel)
             .build()
             .show()
+    }
+
+    /**
+     * UI-W6: the chosen source is reviewed before anything is written, by name and pages · size,
+     * so two similar library names cannot silently produce the wrong archive copy.
+     */
+    private fun confirmIdentity(activity: AppCompatActivity, doc: ScanDocument): String {
+        val size = doc.cachedSize.takeIf { it > 0 } ?: doc.pdfFile.length()
+        return activity.resources.getQuantityString(
+            R.plurals.tools_setup_doc_meta,
+            doc.pageCount,
+            doc.pageCount,
+            com.scanwhirl.app.util.StatusLine.formatBytes(size)
+        ).let { "${doc.name}\n$it" }
     }
 
     private fun create(activity: AppCompatActivity, repo: ScanRepository, doc: ScanDocument) {
