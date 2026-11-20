@@ -26,7 +26,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.scanwhirl.app.R
@@ -34,6 +36,7 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.databinding.ActivityOcrEditorBinding
 import com.scanwhirl.app.store.OcrIndexer
 import com.scanwhirl.app.store.OcrReindex
+import com.scanwhirl.app.store.OcrTextEvents
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.OcrCleanup
@@ -83,6 +86,12 @@ class OcrEditorActivity : BaseActivity() {
     private var currentPageKey: String = ""
     private var isDirty: Boolean = false
     private var cacheFileToDelete: File? = null
+    /**
+     * D9-1: pages whose stored text changed under this session while the person had edited
+     * them. Held until the person chooses (never replaced silently) — key -> new stored text.
+     */
+    private val pendingNewText = linkedMapOf<String, String>()
+    private var newTextSheet: com.scanwhirl.app.ui.kit.SwSheet? = null
     /** M06: pages with no stored text entry ("not read"), as opposed to read-but-empty. */
     private val unreadKeys = linkedSetOf<String>()
     /** Why pages are unread, from the last indexing pass: [PROBLEM_UNAVAILABLE] / [PROBLEM_FAILED]. */
@@ -145,7 +154,18 @@ class OcrEditorActivity : BaseActivity() {
             return
         }
         savedInstanceState?.let { state ->
+            val baseline = state.getBundle(STATE_BASELINE)
             val dirtyPages = state.getBundle("dirtyPages") ?: Bundle()
+            if (baseline != null) {
+                val fresh = originalTexts
+                val restored = baseline.keySet().associateWith { baseline.getString(it) ?: "" }
+                // Pages the person did not touch keep the store's current text; only the
+                // baseline they were loaded against is restored.
+                for ((key, value) in restored) {
+                    if (!dirtyPages.containsKey(key)) pageTexts[key] = fresh[key] ?: value
+                }
+                originalTexts = fresh + restored
+            }
             for (key in dirtyPages.keySet()) {
                 pageTexts[key] = dirtyPages.getString(key) ?: ""
             }
@@ -165,6 +185,12 @@ class OcrEditorActivity : BaseActivity() {
         if (resources.configuration.fontScale > 1.5f) binding.ocrFootNote.maxLines = 2
         binding.btnOcrRetry.setOnClickListener { retryReading() }
         showPage(currentPageKey)
+        // D9-1: agree with the store before the screen is used (a re-read may have finished
+        // while this screen was in the back stack or across a rotation).
+        syncWithStore()
+        // D9-1: from now on the screen follows the stored text (a re-read, a tool or a retry
+        // may finish while this screen is open).
+        watchStoreChanges()
 
         // Dirty-state back handling. In read mode with no edits, Back leaves the screen.
         onBackPressedDispatcher.addCallback(
@@ -191,6 +217,12 @@ class OcrEditorActivity : BaseActivity() {
             if (value != orig) dirtyPages.putString(key, value)
         }
         outState.putBundle("dirtyPages", dirtyPages)
+        // D9-1: the baseline this session loaded, not the store's current text. After a
+        // rotation a page read again meanwhile must still be reported as changed, never
+        // silently written over by Save.
+        val baseline = Bundle()
+        for ((key, value) in originalTexts) baseline.putString(key, value)
+        outState.putBundle(STATE_BASELINE, baseline)
         outState.putString(STATE_PROBLEM, readProblem)
     }
 
@@ -238,6 +270,131 @@ class OcrEditorActivity : BaseActivity() {
         pageTexts["temp"] = text
         originalTexts = mapOf("temp" to text)
         currentPageKey = "temp"
+    }
+
+    // ------------------------------------------------------------------
+    // D9-1: follow the stored text
+    // ------------------------------------------------------------------
+
+    /** Reloads the stored text when a re-read, a tool or a retry changes it while open. */
+    private fun watchStoreChanges() {
+        if (docId == null) return
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                OcrTextEvents.revision.collect { syncWithStore() }
+            }
+        }
+    }
+
+    /**
+     * D9-1: makes the screen agree with the store.
+     *
+     * Pages the person has not edited in this session take the stored text (a re-read that
+     * finished elsewhere must show up here, never the old text). Pages they DID edit are never
+     * replaced silently: the new text is held in [pendingNewText] and they are asked.
+     */
+    private fun syncWithStore() {
+        val id = docId ?: return
+        if (saving || rereading || retrying || isFinishing) return
+        val stored = runCatching { repo.ocrDoc(id) }.getOrNull() ?: return
+        val doc = runCatching { repo.getDocument(id) }.getOrNull()
+        val keys = (
+            (doc?.pageFiles?.map { it.name } ?: emptyList()) + stored.keys + pageTexts.keys
+            ).distinct().sorted().ifEmpty { listOf("page_000.jpg") }
+
+        var currentPageChanged = false
+        for (key in keys) {
+            val fresh = stored[key] ?: continue
+            val loaded = originalTexts[key] ?: ""
+            val current = pageTexts[key] ?: ""
+            when {
+                // The store did not change for this page.
+                fresh == loaded -> Unit
+                // Already showing the new text (e.g. after a rotation): just re-baseline it.
+                current == fresh -> originalTexts = originalTexts + (key to fresh)
+                // Not edited here: take the newly stored text.
+                current == loaded -> {
+                    originalTexts = originalTexts + (key to fresh)
+                    pageTexts[key] = fresh
+                    unreadKeys.remove(key)
+                    if (key == currentPageKey) currentPageChanged = true
+                }
+                // Edited here: never replace without asking.
+                else -> pendingNewText[key] = fresh
+            }
+        }
+        // A page the store now has is readable again, whatever the last pass said.
+        unreadKeys.retainAll { it !in stored }
+        if (currentPageChanged) {
+            pageHistories.remove(currentPageKey)
+            applyingHistory = true
+            editText.setText(pageTexts[currentPageKey] ?: "")
+            editText.setSelection(0)
+            applyingHistory = false
+        }
+        setupPageTabs()
+        recomputeDirty()
+        updateWordCount()
+        updateStatus()
+        updateSubtitle()
+        askAboutNewText()
+    }
+
+    /** D9-1: the person edited pages that were read again. Ask before replacing anything. */
+    private fun askAboutNewText() {
+        if (pendingNewText.isEmpty() || isFinishing) return
+        if (newTextSheet?.isShowing == true) return
+        val keys = pendingNewText.keys.sorted()
+        val pages = keys.joinToString(", ") { pageNumberOf(it).toString() }
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.ocr_g1text_new_text_title)
+            .setMessage(getString(R.string.ocr_g1text_new_text_msg, pages))
+            .setPrimary(R.string.ocr_g1text_use_new) { adoptNewText(keys) }
+            .setSecondary(R.string.ocr_g1text_keep_mine) { keepEditedText(keys) }
+            .build()
+        newTextSheet = sheet
+        sheet.show()
+    }
+
+    /** The person chose the newly read text: their in-session edit is replaced, by consent. */
+    private fun adoptNewText(keys: List<String>) {
+        newTextSheet = null
+        var currentPageChanged = false
+        for (key in keys) {
+            val fresh = pendingNewText.remove(key) ?: continue
+            originalTexts = originalTexts + (key to fresh)
+            pageTexts[key] = fresh
+            pageHistories.remove(key)
+            unreadKeys.remove(key)
+            if (key == currentPageKey) currentPageChanged = true
+        }
+        if (currentPageChanged) {
+            applyingHistory = true
+            editText.setText(pageTexts[currentPageKey] ?: "")
+            editText.setSelection(0)
+            applyingHistory = false
+        }
+        setupPageTabs()
+        recomputeDirty()
+        updateWordCount()
+        updateStatus()
+        updateSubtitle()
+    }
+
+    /**
+     * The person kept their edit. The store text is acknowledged as the new baseline, so
+     * "Save edits" writes their text once — they have just said they want it.
+     */
+    private fun keepEditedText(keys: List<String>) {
+        newTextSheet = null
+        for (key in keys) {
+            val fresh = pendingNewText.remove(key) ?: continue
+            originalTexts = originalTexts + (key to fresh)
+        }
+        recomputeDirty()
+        updateWordCount()
+        updateStatus()
+        updateSubtitle()
     }
 
     // ------------------------------------------------------------------
@@ -858,6 +1015,8 @@ class OcrEditorActivity : BaseActivity() {
     private fun updateStatus() {
         val total = pageTexts.size
         val unread = unreadKeys.size
+        val id = docId
+        val retriesUsedUp = id != null && unread > 0 && retriesUsedUp(id)
         val message: String? = when {
             retrying -> getString(R.string.ocr_status_retrying)
             docId == null ->
@@ -865,6 +1024,7 @@ class OcrEditorActivity : BaseActivity() {
             unread == 0 ->
                 if (originalTexts.values.all { it.isBlank() }) getString(R.string.ocr_status_no_text) else null
             readProblem == PROBLEM_UNAVAILABLE -> getString(R.string.ocr_status_unavailable)
+            retriesUsedUp -> getString(R.string.ocr_g1text_retries_used)
             unread >= total -> getString(R.string.ocr_status_not_read)
             else -> resources.getQuantityString(
                 R.plurals.ocr_status_partial, total,
@@ -876,6 +1036,13 @@ class OcrEditorActivity : BaseActivity() {
         binding.ocrStatusText.text = message
         val canRetry = docId != null && unread > 0 && !retrying
         binding.btnOcrRetry.isVisible = canRetry
+    }
+
+    /** F-02: true when the stored retry budget for an unread page is used up. */
+    private fun retriesUsedUp(id: String): Boolean = try {
+        ScanWhirlApp.from(this).indexer.retryExhausted(id)
+    } catch (_: Exception) {
+        false
     }
 
     /**
@@ -890,7 +1057,8 @@ class OcrEditorActivity : BaseActivity() {
         updateStatus()
         lifecycleScope.launch {
             val report = try {
-                ScanWhirlApp.from(this@OcrEditorActivity).indexer.index(id)
+                // An explicit Try again gives every page a fresh automatic retry budget (F-02).
+                ScanWhirlApp.from(this@OcrEditorActivity).indexer.index(id, resetAttempts = true)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -1041,18 +1209,31 @@ class OcrEditorActivity : BaseActivity() {
             Toast.makeText(this, R.string.ocr_w5_not_in_library, Toast.LENGTH_LONG).show()
             return
         }
+        // D9-1: never write text this screen has not seen replaced underneath.
+        syncWithStore()
+        if (pendingNewText.isNotEmpty()) {
+            askAboutNewText()
+            return
+        }
         val changedPages = pageTexts.filter { (k, v) -> v != (originalTexts[k] ?: "") }
         if (changedPages.isEmpty()) {
             Toast.makeText(this, R.string.ocr_w5_no_edits, Toast.LENGTH_SHORT).show()
             if (finishAfter) finish()
             return
         }
+        val baseline = originalTexts
         saving = true
         lifecycleScope.launch {
             try {
-                withContext(NonCancellable + Dispatchers.IO) {
-                    checkNotNull(repo.updateOcrPages(id, changedPages.toMap())) {
-                        "Document no longer exists"
+                when (writeChangedPages(id, changedPages, baseline)) {
+                    WriteOutcome.WRITTEN -> Unit
+                    WriteOutcome.DOCUMENT_MISSING ->
+                        throw IllegalStateException("Document no longer exists")
+                    WriteOutcome.CHANGED_UNDERNEATH -> {
+                        // The store changed under us (a re-read landed): ask, never overwrite.
+                        finishSaveAttempt()
+                        syncWithStore()
+                        return@launch
                     }
                 }
                 originalTexts = originalTexts + changedPages
@@ -1078,6 +1259,29 @@ class OcrEditorActivity : BaseActivity() {
             }
         }
     }
+
+    /**
+     * D9-1: writes [changes] only when the store still holds [baseline] for every page in it.
+     * [WriteOutcome.CHANGED_UNDERNEATH] means a re-read finished underneath: the caller asks
+     * instead of silently replacing the freshly stored text.
+     */
+    private suspend fun writeChangedPages(
+        id: String,
+        changes: Map<String, String>,
+        baseline: Map<String, String>
+    ): WriteOutcome = withContext(NonCancellable + Dispatchers.IO) {
+        if (changes.isEmpty()) return@withContext WriteOutcome.WRITTEN
+        if (!File(repo.docsDir, id).isDirectory) return@withContext WriteOutcome.DOCUMENT_MISSING
+        val stored = repo.ocrDoc(id)
+        val changedUnderneath = changes.keys.any { key ->
+            (stored[key] ?: "") != (baseline[key] ?: "")
+        }
+        if (changedUnderneath) return@withContext WriteOutcome.CHANGED_UNDERNEATH
+        checkNotNull(repo.updateOcrPages(id, changes)) { "Document no longer exists" }
+        WriteOutcome.WRITTEN
+    }
+
+    private enum class WriteOutcome { WRITTEN, CHANGED_UNDERNEATH, DOCUMENT_MISSING }
 
     /** W5: the .txt write failed but the library text is kept; Retry is next to it. */
     private fun showTxtFailure() {
@@ -1130,10 +1334,16 @@ class OcrEditorActivity : BaseActivity() {
      * write succeeded. A failed write is reported and the edits stay in the editor.
      */
     private fun saveDocumentTxt(id: String, finishAfterSave: Boolean) {
+        if (saving) return
+        syncWithStore()
+        if (pendingNewText.isNotEmpty()) {
+            askAboutNewText()
+            return
+        }
         val changedPages = pageTexts.filter { (k, v) -> v != (originalTexts[k] ?: "") }
+        val baseline = originalTexts
         val title = docTitle ?: getString(R.string.ocr_screen_title)
         val fileName = "${sanitizeTitle(title)} - text.txt"
-        if (saving) return
         saving = true
         findViewById<View>(R.id.btnSave).isEnabled = false
         lifecycleScope.launch {
@@ -1141,9 +1351,15 @@ class OcrEditorActivity : BaseActivity() {
             //    storage permission, so a permission prompt cannot lose an edit.
             try {
                 if (changedPages.isNotEmpty()) {
-                    withContext(NonCancellable + Dispatchers.IO) {
-                        checkNotNull(repo.updateOcrPages(id, changedPages.toMap())) {
-                            "Document no longer exists"
+                    when (writeChangedPages(id, changedPages, baseline)) {
+                        WriteOutcome.WRITTEN -> Unit
+                        WriteOutcome.DOCUMENT_MISSING ->
+                            throw IllegalStateException("Document no longer exists")
+                        WriteOutcome.CHANGED_UNDERNEATH -> {
+                            // A re-read landed underneath: ask before anything is overwritten.
+                            finishSaveAttempt()
+                            syncWithStore()
+                            return@launch
                         }
                     }
                     // Typed text for an unread page is now that page's stored text.
@@ -1425,6 +1641,8 @@ class OcrEditorActivity : BaseActivity() {
         const val PROBLEM_UNAVAILABLE = "unavailable"
         const val PROBLEM_FAILED = "failed"
         private const val STATE_PROBLEM = "readProblem"
+        /** D9-1: the text this session was loaded against, kept across a rotation. */
+        private const val STATE_BASELINE = "baselineTexts"
 
         fun problemOf(report: OcrIndexer.IndexReport): String? = when {
             report.unavailable -> PROBLEM_UNAVAILABLE
