@@ -31,10 +31,12 @@ import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.tools.MergeFlow
 import com.scanwhirl.app.tools.ResizeFlow
 import com.scanwhirl.app.tools.ScanLauncher
+import com.scanwhirl.app.ui.DocumentActionDispatcher
 import com.scanwhirl.app.ui.DocumentActionsSheet
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.ImportSheet
 import com.scanwhirl.app.ui.OcrEditorActivity
+import com.scanwhirl.app.ui.ProtectionDialogs
 import com.scanwhirl.app.ui.SettingsActivity
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.TrashActivity
@@ -762,7 +764,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
         override fun onAllTools() = showTab(Tab.TOOLS)
         override fun onOpenDoc(doc: ScanDocument) = openDocument(doc.id)
-        override fun onShareDoc(doc: ScanDocument) = ShareUtils.share(this@ShellActivity, doc)
+        override fun onShareDoc(doc: ScanDocument) = shareRow(doc)
         override fun onShareDocs(docs: List<ScanDocument>) = shareDocuments(docs)
         override fun onProRequired() = showPro()
         override fun onMoreDoc(doc: ScanDocument) = showDocActions(doc)
@@ -842,6 +844,23 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private fun openDocument(id: String) {
         startActivity(DocumentViewerActivity.intent(this, id))
+    }
+
+    /**
+     * W1: a Library row's Share is the same bound output as the document panel's: the row's id is
+     * re-read at the tap, an inconsistent lock is repaired instead of exported silently, an
+     * unsaved draft asks first, and a vanished file says so instead of opening an empty chooser.
+     */
+    private fun shareRow(doc: ScanDocument) {
+        ProtectionDialogs.guardExport(this, repo, doc, onResolved = { library.reload() }) {
+            DocumentActionDispatcher.dispatch(
+                activity = this,
+                repo = repo,
+                docId = doc.id,
+                action = DocumentActionDispatcher.Action.SHARE,
+                onFinishEditing = { bound -> openDocument(bound.id) }
+            ) { bound -> ShareUtils.share(this, bound) }
+        }
     }
 
     /**
