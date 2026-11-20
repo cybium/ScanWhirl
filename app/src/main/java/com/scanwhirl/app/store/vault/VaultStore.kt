@@ -914,7 +914,7 @@ class VaultStore(
     private fun resolveEntryFiles(entryDir: File, manifest: Manifest): List<File> =
         manifest.files.map { record ->
             containedFile(entryDir, record.stored).also { file ->
-                if (!file.isFile || file.length() != VaultCrypto.encryptedLength(record.size)) {
+                if (!file.isFile || !VaultCrypto.isEncryptedFileLength(file, record.size)) {
                     throw VaultAuthException("The Vault copy does not match the original")
                 }
             }
@@ -939,7 +939,7 @@ class VaultStore(
         }
         val encrypted = blob.readBytes()
         val plain = VaultCrypto.decryptBytes(encrypted, key)
-        if (encrypted.size.toLong() != VaultCrypto.encryptedLength(plain.size.toLong())) {
+        if (!VaultCrypto.isEncryptedLength(encrypted.size.toLong(), plain.size.toLong(), encrypted[4].toInt())) {
             throw VaultAuthException("Damaged Vault entry")
         }
         return parseManifest(plain, entryDir.name)
