@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- t1tools lane strings: the Tools tab "Recent tools" row. English first, Hindi parity in values-hi. -->
+<resources>
+    <!-- T1 (owner-approved 2026-11-20): the tools this person launched last, above the seven jobs. -->
+    <string name="tools_recent_title">Recent tools</string>
+</resources>
