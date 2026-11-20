@@ -505,8 +505,13 @@ class LibraryRowActionsTest {
 
     // --- helpers -------------------------------------------------------------
 
-    /** Where ShareUtils puts the file it hands to the chooser (cache, provider-readable). */    private fun sharedCopy(name: String): File =
-        File(app.cacheDir, "documents/share/" + ShareUtils.sanitizeName(name) + ".pdf")
+    /** Where ShareUtils puts the file it hands to the chooser (cache, provider-readable). */
+    private fun sharedCopy(name: String): File {
+        val shareDir = File(app.cacheDir, "documents/share")
+        val fileName = ShareUtils.sanitizeName(name) + ".pdf"
+        return shareDir.walkTopDown().firstOrNull { it.isFile && it.name == fileName }
+            ?: File(shareDir, fileName)
+    }
 
     private fun findById(root: View, id: Int): View? {
         if (root.id == id) return root

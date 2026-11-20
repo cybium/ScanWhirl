@@ -10,9 +10,23 @@ import androidx.core.content.FileProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import java.io.File
+import java.util.UUID
 
 /** Shares a scan's PDF (or its pages) under the document's own name. */
 object ShareUtils {
+
+    /**
+     * How long a share copy must stay readable. A recipient app reads its content:// URI
+     * lazily, and Android can restart our process to serve it, so a copy is never deleted
+     * while a recent share may still be in flight. The cold-start sweep follows the same rule.
+     */
+    internal const val SHARE_KEEP_MS = 24L * 60 * 60 * 1000
+
+    /** FileProvider cache tree for outgoing files (registered as "cache_docs"). */
+    private const val SHARE_ROOT = "documents/share"
+
+    /** Per-share folder names start with this marker, then the creation time. */
+    private const val TOKEN_PREFIX = "x3-"
 
     fun share(context: Context, doc: ScanDocument) {
         when {
@@ -102,13 +116,69 @@ object ShareUtils {
     }
 
     /**
-     * Copies [src] under its display name inside the registered FileProvider cache tree
-     * (cacheDir/documents/… matches the "cache_docs" path).
+     * A fresh folder for one outgoing share, inside the FileProvider cache tree. Every share
+     * gets its own folder, so two documents with the same display name never touch the same
+     * file: the recipient still sees the human file name, and a slow recipient keeps reading
+     * its own bytes even after another document with the same name is shared.
      */
+    fun newShareDirectory(context: Context): File {
+        pruneShareCopies(context)
+        val root = File(context.cacheDir, SHARE_ROOT).apply { mkdirs() }
+        val token = "$TOKEN_PREFIX${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
+        return File(root, token).apply { mkdirs() }
+    }
+
+    /** A unique outgoing file path under its display name; long names keep their extension. */
+    fun newShareTarget(context: Context, displayName: String): File =
+        File(newShareDirectory(context), shareFileName(displayName))
+
+    /**
+     * Sanitises the stem (60 characters, as [sanitize] always did) but keeps a short, plain
+     * extension, so a long document name still reaches the recipient as a `.pdf`/`.jpg`.
+     */
+    internal fun shareFileName(displayName: String): String {
+        val dot = displayName.lastIndexOf('.')
+        val ext = if (dot > 0) displayName.substring(dot + 1) else ""
+        val keepExt = ext.length in 1..6 && ext.all { it.isLetterOrDigit() }
+        val base = if (keepExt) displayName.substring(0, dot) else displayName
+        return sanitize(base) + if (keepExt) ".$ext" else ""
+    }
+
+    /**
+     * Age-based cleanup of old share copies. Never deletes a copy younger than
+     * [SHARE_KEEP_MS], because a recipient (or Android restarting our provider) may still
+     * read a recent URI. Returns how many entries were removed.
+     */
+    internal fun pruneShareCopies(
+        context: Context,
+        now: Long = System.currentTimeMillis()
+    ): Int {
+        val root = File(context.cacheDir, SHARE_ROOT)
+        if (!root.isDirectory) return 0
+        val entries = root.listFiles() ?: return 0
+        var removed = 0
+        entries.forEach { entry ->
+            val age = now - createdOf(entry)
+            if (age < SHARE_KEEP_MS) return@forEach
+            val gone = if (entry.isDirectory) entry.deleteRecursively() else entry.delete()
+            if (gone) removed++
+        }
+        return removed
+    }
+
+    /** A per-share folder carries its creation time as a token prefix; legacy files use mtime. */
+    private fun createdOf(entry: File): Long {
+        if (entry.name.startsWith(TOKEN_PREFIX)) {
+            entry.name.removePrefix(TOKEN_PREFIX).substringBefore('-').toLongOrNull()
+                ?.let { return it }
+        }
+        return entry.lastModified()
+    }
+
+    /** Copies [src] into a fresh share folder under its display name. */
     private fun namedCopy(context: Context, src: File, displayName: String): File {
-        val dir = File(context.cacheDir, "documents/share").apply { mkdirs() }
-        val out = File(dir, displayName)
-        src.copyTo(out, overwrite = true)
+        val out = newShareTarget(context, displayName)
+        src.copyTo(out, overwrite = false)
         return out
     }
 

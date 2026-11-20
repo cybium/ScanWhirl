@@ -258,8 +258,12 @@ abstract class DocumentWorkspaceBase {
     )
 
     /** Where ShareUtils puts the file it hands to the chooser (cache, provider-readable). */
-    private fun sharedCopy(name: String): File =
-        File(app.cacheDir, "documents/share/" + ShareUtils.sanitizeName(name) + ".pdf")
+    private fun sharedCopy(name: String): File {
+        val dir = File(app.cacheDir, "documents/share")
+        val fileName = ShareUtils.sanitizeName(name) + ".pdf"
+        return dir.walkTopDown().firstOrNull { it.isFile && it.name == fileName }
+            ?: File(dir, fileName)
+    }
 
     private fun contrast(fg: Int, bg: Int): Double {
         fun channel(v: Int): Double {

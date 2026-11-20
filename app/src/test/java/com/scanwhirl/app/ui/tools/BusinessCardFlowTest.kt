@@ -202,7 +202,7 @@ class BusinessCardFlowTest {
             }
             val shareDir = File(app.cacheDir, "documents/share")
             assertTrue("the vCard is written", waitUntil {
-                shareDir.listFiles()?.any { it.name.endsWith(".vcf") } == true
+                shareDir.walkTopDown().any { it.isFile && it.name.endsWith(".vcf") }
             })
             assertTrue("the sharesheet opens", waitUntil {
                 var opened = false
@@ -212,7 +212,8 @@ class BusinessCardFlowTest {
                 opened
             })
         }
-        val vcf = File(app.cacheDir, "documents/share").listFiles()!!.first { it.name.endsWith(".vcf") }
+        val vcf = File(app.cacheDir, "documents/share").walkTopDown()
+            .first { it.isFile && it.name.endsWith(".vcf") }
         val text = vcf.readText()
         assertTrue("vCard header: $text", text.startsWith("BEGIN:VCARD\r\nVERSION:3.0\r\n"))
         assertTrue(text.contains("FN:Rahul Sharma"))
