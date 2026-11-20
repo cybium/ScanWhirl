@@ -8,6 +8,7 @@ import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.SimulatedProcessDeath
 import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.Durable
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -391,6 +392,91 @@ class VaultStoreTest {
         val resumed = store.unlockWithPasscode("246810")
         assertTrue(resumed.ok)
         assertTrue(store.isUnlocked())
+    }
+
+    @Test
+    fun `pending marker sync failure leaves library intact and publishes nothing`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Fictional sync failure")
+        val before = snapshot(File(repo.docsDir, id))
+        val vault = store()
+        vault.setupConfirmed("246810")
+        var synced = false
+        Durable.beforeFileSync = { file ->
+            if (file.name == ".adding-$id.tmp") {
+                synced = true
+                throw java.io.IOException("Fictional disk failure")
+            }
+        }
+        try {
+            assertThrows(Durable.SyncException::class.java) { vault.addDocument(id) }
+        } finally {
+            Durable.resetForTests()
+        }
+        assertTrue("Marker contents must be fsynced", synced)
+        vault.lock()
+        vault.recover()
+        assertEquals(before, snapshot(File(repo.docsDir, id)))
+        assertFalse(vault.hasEntry(id))
+        assertFalse(File(app.filesDir, "vault2/.adding-$id").exists())
+    }
+
+    @Test
+    fun `local pending add recovers after publish and trash while locked`() {
+        listOf("vault:published", "vault:trashed").forEach { step ->
+            val id = DocFixtures.saved(repo, app, pages = 1, name = "Fictional interrupted add $step")
+            val vault = store()
+            if (!vault.isSetUp()) vault.setupConfirmed("246810") else vault.unlockWithPasscode("246810")
+            Faults.dieAtOp(step)
+            assertThrows(SimulatedProcessDeath::class.java) { vault.addDocument(id) }
+            Faults.resetAll()
+            assertTrue("S6A local provenance must precede publication", File(app.filesDir, "vault2/.adding-$id").isFile)
+            vault.lock()
+            vault.recover()
+            assertNull(repo.getDocument(id))
+            assertTrue(repo.listTrash().none { it.originalId == id })
+            assertFalse(File(app.filesDir, "vault2/.adding-$id").exists())
+            assertTrue(vault.unlockWithPasscode("246810").ok)
+            assertTrue(vault.openDocument(id).pdfFile.isFile)
+        }
+    }
+
+    @Test
+    fun `unmarked vault entries never delete matching library or trash documents`() {
+        val libraryId = DocFixtures.saved(repo, app, pages = 1, name = "Fictional library collision")
+        val trashId = DocFixtures.saved(repo, app, pages = 1, name = "Fictional trash collision")
+        val before = snapshot(File(repo.docsDir, libraryId))
+        val trashBefore = snapshot(File(repo.docsDir, trashId))
+        val trashKey = repo.moveToTrash(trashId)!!
+        val vault = store()
+        vault.setupConfirmed("246810")
+        listOf(libraryId, trashId).forEach { id ->
+            File(app.filesDir, "vault2/$id").mkdirs()
+            File(app.filesDir, "vault2/$id/manifest.enc").writeText("Fictional untrusted entry")
+        }
+        vault.lock()
+        vault.recover()
+        assertEquals(before, snapshot(File(repo.docsDir, libraryId)))
+        assertTrue(repo.listTrash().any { it.key == trashKey })
+        val restored = repo.restoreFromTrash(trashKey)
+        assertEquals(trashBefore, snapshot(File(repo.docsDir, restored.id)))
+    }
+
+    @Test
+    fun `incomplete published local entry never authorizes original deletion`() {
+        listOf(false, true).forEach { truncate ->
+            val id = DocFixtures.saved(repo, app, pages = 1, name = "Fictional incomplete entry")
+            val before = snapshot(File(repo.docsDir, id))
+            val vault = store()
+            if (!vault.isSetUp()) vault.setupConfirmed("246810") else vault.unlockWithPasscode("246810")
+            Faults.dieAtOp("vault:published")
+            assertThrows(SimulatedProcessDeath::class.java) { vault.addDocument(id) }
+            Faults.resetAll()
+            val payload = File(app.filesDir, "vault2/$id").listFiles()!!.first { it.name.startsWith("f") }
+            if (truncate) payload.writeBytes(byteArrayOf(1)) else payload.delete()
+            vault.lock()
+            vault.recover()
+            assertEquals(before, snapshot(File(repo.docsDir, id)))
+        }
     }
 
     @Test

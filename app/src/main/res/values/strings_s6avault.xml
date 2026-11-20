@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backup_vault_unverifiable_skipped">This backup\'s Vault part was not restored because it cannot be checked. Restore the backup with its recovery code to include the Vault.</string>
+</resources>
