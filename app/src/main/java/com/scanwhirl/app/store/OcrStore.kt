@@ -5,6 +5,8 @@ import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Sha256
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock as withCoroutineLock
 import kotlin.concurrent.withLock
 import java.io.File
 import java.io.IOException
@@ -43,6 +45,9 @@ class OcrStore(private val docsDir: File) {
     companion object {
         private val lock = ReentrantLock()
 
+        private class RecognitionLock(val mutex: Mutex = Mutex(), var users: Int = 0)
+        private val recognitionLocks = mutableMapOf<File, RecognitionLock>()
+
         /** Atomic writes performed since [resetWriteCountForTests]; a test seam for write counts. */
         private val writeCount = java.util.concurrent.atomic.AtomicInteger()
 
@@ -54,6 +59,22 @@ class OcrStore(private val docsDir: File) {
     }
 
     private fun docDir(id: String): File = File(docsDir, id)
+
+    // Repository instances share a library. Hold this across recognition and publish, never the
+    // file lock. Retain the entry until the last caller (including any waiter) has left.
+    internal suspend fun <T> withRecognitionLock(id: String, action: suspend () -> T): T {
+        val dir = docDir(id).absoluteFile
+        val entry = synchronized(recognitionLocks) {
+            recognitionLocks.getOrPut(dir) { RecognitionLock() }.also { it.users++ }
+        }
+        try {
+            return entry.mutex.withCoroutineLock { action() }
+        } finally {
+            synchronized(recognitionLocks) {
+                if (--entry.users == 0) recognitionLocks.remove(dir)
+            }
+        }
+    }
 
     /** One small file listing documents that carry an `ocr_pending` marker (see [pendingQueue]). */
     private val queueFile: File
@@ -544,17 +565,26 @@ class OcrStore(private val docsDir: File) {
         }?.sortedByDescending { it.lastModified() }?.mapNotNull { it.name } ?: emptyList()
 
     /**
-     * Drops every page's text and geometry (a re-recognition in another language) and marks the
-     * document pending, so the indexer reads every page again. One atomic rewrite of each file.
+     * Clears OCR for a reread. Without explicit permission to replace corrections, keep text
+     * without matching recognition geometry: it may be manually entered or corrected.
      */
-    fun clearAll(id: String) {
-        lock.withLock {
-            val dir = docDir(id)
-            if (!dir.isDirectory) return@withLock
-            File(dir, TEXT_FILE).delete()
-            File(dir, GEO_FILE).delete()
+    internal fun clearForReread(id: String, replaceCorrections: Boolean): Set<String> = lock.withLock {
+        val dir = docDir(id)
+        if (!dir.isDirectory) return@withLock emptySet()
+        val keep = if (replaceCorrections) emptyMap() else {
+            val texts = readTextStrict(id)
+            texts - readGeoStrict(id, texts).keys
         }
+        if (keep.isEmpty()) {
+            val textFile = File(dir, TEXT_FILE)
+            if (textFile.exists() && !textFile.delete()) throw IOException("Could not clear OCR text")
+        } else {
+            writeTexts(id, keep)
+        }
+        val geoFile = File(dir, GEO_FILE)
+        if (geoFile.exists() && !geoFile.delete()) throw IOException("Could not clear OCR geometry")
         markPending(id)
+        keep.keys
     }
 
     fun isPending(id: String): Boolean = File(docDir(id), PENDING_FILE).exists()

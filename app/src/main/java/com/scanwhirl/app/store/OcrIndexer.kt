@@ -131,13 +131,17 @@ class OcrIndexer(
      * is rethrown.
      */
     suspend fun index(docId: String): IndexReport = mutex.withLock {
+        store.withRecognitionLock(docId) { indexDocument(docId) }
+    }
+
+    private suspend fun indexDocument(docId: String): IndexReport {
+        val doc = repo.loadDocument(File(docsDir, docId))
+            ?: return IndexReport(0, 0, 0, false)
+
         _state.value = IndexState(docId, 0, 0, 0)
         var failedPages = 0
         var superseded = false
         var unavailable = false
-
-        val doc = repo.loadDocument(File(docsDir, docId))
-            ?: return@withLock IndexReport(0, 0, 0, false)
 
         val existingText = store.readText(docId)
         val existingGeo = store.readGeo(docId)
@@ -211,7 +215,7 @@ class OcrIndexer(
         // them once (the old code scanned every page for every stored key).
         val storedText = store.readText(docId)
         val stored = doc.pageFiles.count { it.name in storedText }
-        return@withLock IndexReport(total, stored, failedPages, unavailable)
+        return IndexReport(total, stored, failedPages, unavailable)
     }
 
     private suspend fun consumerLoop() {
