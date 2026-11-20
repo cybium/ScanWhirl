@@ -358,6 +358,12 @@ class FullBackup(
         "gallery_auto_crop" to SettingType.TOGGLE
     )
 
+    /**
+     * T1 (owner-approved 2026-11-20): the exact keys a Full Backup carries, so a test can prove
+     * the device-local "Recent tools" habit (Prefs.KEY_RECENT_TOOLS) is not one of them.
+     */
+    internal fun portableSettingKeys(): Set<String> = portableSettings.keys
+
     private fun settings(): String = JSONObject().apply {
         val values = prefs.all
         portableSettings.forEach { (key, type) ->

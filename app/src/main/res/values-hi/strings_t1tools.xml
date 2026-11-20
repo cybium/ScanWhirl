@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- t1tools lane strings, Hindi: same keys as values/strings_t1tools.xml.
+     The Tools tab is "काम" (HindiGlossaryTermsTest), so recents read "हाल के काम" - no loanwords. -->
+<resources>
+    <string name="tools_recent_title">हाल के काम</string>
+</resources>

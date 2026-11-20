@@ -300,42 +300,14 @@ class W7CreateImportRoutingTest : W7CreateBase() {
 }
 
 // ---------------------------------------------------------------------------
-// Tools hub: the "All N tools" door keeps focus and the group on screen.
+// Tools hub: nothing hidden — every tool of every job is on the first render.
+// (T1 owner-approved 2026-11-20: the "All N tools" door was removed.)
 // ---------------------------------------------------------------------------
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h740dp-xhdpi")
 class W7ToolsExpansionTest : W7CreateBase() {
-
-    /**
-     * Robolectric's window is in touch mode and its accessibility manager is off, so neither the
-     * keyboard nor the TalkBack focus path works on its own. A real TalkBack user has touch
-     * exploration on; this turns that on so the hub's own focus call is exercised as they see it.
-     */
-    private fun enableTalkBack() {
-        val am = app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
-        val shadow = shadowOf(am)
-        shadow.setEnabled(true)
-        shadow.setTouchExplorationEnabled(true)
-    }
-
-    @After
-    fun disableTalkBack() {
-        val am = app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
-        val shadow = shadowOf(am)
-        shadow.setEnabled(false)
-        shadow.setTouchExplorationEnabled(false)
-    }
-
-    /** The one view that holds accessibility (TalkBack) focus under [root], or null. */
-    private fun a11yFocus(root: View): View? {
-        if (root.isAccessibilityFocused) return root
-        if (root is ViewGroup) {
-            for (i in 0 until root.childCount) a11yFocus(root.getChildAt(i))?.let { return it }
-        }
-        return null
-    }
 
     private fun toolsTab(block: (ShellActivity, ViewGroup) -> Unit) {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
@@ -349,97 +321,37 @@ class W7ToolsExpansionTest : W7CreateBase() {
         }
     }
 
+    /**
+     * T1 owner-approved 2026-11-20: no hidden tools. Every job lists all of its tools on the
+     * first render — no "All N tools" door, no expansion state, nothing behind an extra tap.
+     */
     @Test
-    fun `expanding All N tools keeps focus inside the expanded job`() {
-        enableTalkBack()
-        toolsTab { activity, body ->
-            val door = ToolsHubScreen.doors(body).first()
-            val card = door.parent as ViewGroup
-            val cardIndex = body.indexOfChild(card)
-            val jobRowsBefore = ToolsHubScreen.rows(card).size
-            door.performClick()
-            idle()
-            layoutRoot(activity)
-
-            val newCard = body.getChildAt(cardIndex) as ViewGroup
-            val focus = a11yFocus(newCard) ?: a11yFocus(body)
-            assertNotNull(
-                "expanding must not drop keyboard or TalkBack focus to nothing",
-                focus
-            )
-            assertTrue(
-                "focus stays inside the job that was expanded (focus=$focus)",
-                isInside(focus!!, newCard)
-            )
-            assertTrue(
-                "the expanded job now lists more rows ($jobRowsBefore -> " +
-                    "${ToolsHubScreen.rows(newCard).size})",
-                ToolsHubScreen.rows(newCard).size > jobRowsBefore
-            )
-            // The revealed row is the first one a person could not see before.
-            val revealed = ToolsHubScreen.rows(newCard)[ToolsHubScreen.PREVIEW_ROWS]
+    fun `every catalogue tool is visible with zero extra taps`() {
+        toolsTab { _, body ->
+            val ready = ToolRegistry.all
+                .filter { it.status == com.scanwhirl.app.ui.kit.ToolStatus.READY }
+            val rows = ToolsHubScreen.rows(body)
             assertEquals(
-                "focus lands on the first newly shown row",
-                revealed,
-                focus
+                "the whole READY catalogue is on the first render",
+                ready.map { it.id }.sorted(),
+                rows.mapNotNull { it.tool?.id }.sorted()
             )
-        }
-    }
-
-    @Test
-    fun `expanding All N tools keeps the expanded job where it was on screen`() {
-        toolsTab { activity, body ->
-            val scroll = shellScroll(body)
-            val door = ToolsHubScreen.doors(body).first()
-            val card = door.parent as ViewGroup
-            val cardIndex = body.indexOfChild(card)
-            val cardTopInContent = rectIn(card, scroll).top + scroll.scrollY
-            // A person has scrolled so the door is on screen.
-            scroll.scrollTo(0, (cardTopInContent - dp(80f)).coerceAtLeast(0))
-            idle()
-            val before = rectIn(card, scroll).top
-
-            door.performClick()
-            idle()
-            layoutRoot(activity)
-
-            val after = rectIn(body.getChildAt(cardIndex) as ViewGroup, scroll).top
-            assertTrue(
-                "the expanded group must not jump on screen (was $before, now $after)",
-                abs(after - before) <= dp(24f)
+            assertEquals("no job is listed twice", ready.size, rows.size)
+            for (row in rows) {
+                assertTrue("${row.tool?.id} must launch in one tap", row.hasOnClickListeners())
+                assertTrue(
+                    "${row.tool?.id} keeps a 48dp row (${row.height / density}dp)",
+                    row.height >= dp(48f)
+                )
+            }
+            val texts = allText(body)
+            assertFalse(
+                "an \"All N tools\" door survives in the hub",
+                (1..50).any { n -> texts.any { it == app.getString(R.string.tools_job_all, n) } }
             )
-        }
-    }
-
-    @Test
-    fun `Show fewer keeps focus on the same door`() {
-        enableTalkBack()
-        toolsTab { activity, body ->
-            val door = ToolsHubScreen.doors(body).first()
-            val cardIndex = body.indexOfChild(door.parent as ViewGroup)
-            door.performClick()
-            idle()
-            layoutRoot(activity)
-            val expandedCard = body.getChildAt(cardIndex) as ViewGroup
-            val fullCount = ToolsHubScreen.rows(expandedCard).size
-            assertTrue("the whole job is listed after the door", fullCount > ToolsHubScreen.PREVIEW_ROWS)
-
-            val fewer = expandedCard.getChildAt(expandedCard.childCount - 1) as View
-            fewer.performClick()
-            idle()
-            layoutRoot(activity)
-
-            val newCard = body.getChildAt(cardIndex) as ViewGroup
-            val focus = a11yFocus(newCard)
-            assertNotNull("collapsing must not drop focus", focus)
-            assertTrue(
-                "focus returns to the door that now reads All N tools (focus=$focus)",
-                allText(focus!!).contains(app.getString(R.string.tools_job_all, fullCount))
-            )
-            assertEquals(
-                "the job collapses back to its preview rows",
-                ToolsHubScreen.PREVIEW_ROWS,
-                ToolsHubScreen.rows(newCard).size
+            assertFalse(
+                "a \"Show fewer\" door survives in the hub",
+                texts.any { it == app.getString(R.string.tools_job_fewer) }
             )
         }
     }
@@ -473,20 +385,12 @@ class W7ToolsExpansionTest : W7CreateBase() {
     }
 
     @Test
-    fun `every job row is a READY tool and the door counts only READY tools`() {
-        toolsTab { activity, body ->
+    fun `every job row is a READY tool and nothing else`() {
+        toolsTab { _, body ->
             val ready = ToolRegistry.all
                 .filter { it.status == com.scanwhirl.app.ui.kit.ToolStatus.READY }
                 .map { it.id }
                 .sorted()
-            // Expand every door so nothing hides behind a preview.
-            var guard = 0
-            while (guard++ < 20) {
-                val door = ToolsHubScreen.doors(body).firstOrNull() ?: break
-                door.performClick()
-                idle()
-                layoutRoot(activity)
-            }
             val shown = ToolsHubScreen.rows(body).mapNotNull { it.tool?.id }.sorted()
             assertEquals(
                 "the hub lists exactly the READY tools of the registry",
@@ -778,8 +682,9 @@ class W7ToolsStateHindiTest : W7ToolsStateBase() {
 }
 
 /**
- * 320dp is the narrowest phone the app supports. The door labels ("All N tools" / "Show fewer")
- * and the no-results Clear action must stay whole at 200 % on that width.
+ * 320dp is the narrowest phone the app supports. T1 owner-approved 2026-11-20: nothing is
+ * hidden at any width (no "All N tools" door), and the no-results Clear action must stay whole
+ * at 200 % on that width.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -787,7 +692,7 @@ class W7ToolsStateHindiTest : W7ToolsStateBase() {
 class W7ToolsNarrowTest : W7CreateBase() {
 
     @Test
-    fun `door and Clear labels stay whole at 200 percent on 320dp`() {
+    fun `the whole catalogue is visible and Clear stays whole at 200 percent on 320dp`() {
         RuntimeEnvironment.setFontScale(2.0f)
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -797,28 +702,24 @@ class W7ToolsNarrowTest : W7CreateBase() {
                 layoutRoot(activity)
                 val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
 
-                val door = ToolsHubScreen.doors(body).first()
-                val card = door.parent as ViewGroup
-                door.performClick()
-                idle()
-                layoutRoot(activity)
-                val fewer = card.getChildAt(card.childCount - 1) as View
-                for (label in labelsIn(fewer)) {
-                    val layout = label.layout ?: continue
+                val ready = ToolRegistry.all
+                    .count { it.status == com.scanwhirl.app.ui.kit.ToolStatus.READY }
+                val rows = ToolsHubScreen.rows(body)
+                assertEquals("every shipping tool shows at 320dp and 200 %", ready, rows.size)
+                for (row in rows) {
+                    assertTrue(
+                        "${row.tool?.id} keeps a 48dp row at 320dp (${row.height / density}dp)",
+                        row.height >= dp(48f)
+                    )
+                    val layout = row.labelView.layout ?: continue
                     for (line in 0 until layout.lineCount) {
                         assertEquals(
-                            "\"${label.text}\" is ellipsized at 200 % on 320dp",
+                            "\"${row.labelView.text}\" is ellipsized at 200 % on 320dp",
                             0,
                             layout.getEllipsisCount(line)
                         )
                     }
-                    assertTrue(
-                        "\"${label.text}\" is clipped at 200 % on 320dp",
-                        layout.height + label.totalPaddingTop + label.totalPaddingBottom <=
-                            label.height + 1
-                    )
                 }
-                assertTrue("the door keeps a 48dp target", fewer.height >= dp(48f))
 
                 val search = activity.findViewById<EditText>(R.id.swToolsSearch)
                 search.setText("zzzqqq")
