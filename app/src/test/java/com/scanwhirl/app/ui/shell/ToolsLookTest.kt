@@ -174,19 +174,20 @@ abstract class ToolsLookBase {
     @Test
     fun `the tools tab renders no Coming soon tile and every row has an action`() {
         toolsTab { _, body ->
-            val rows = ToolsHubScreen.rows(body)
+            // T2 owner 2026-11-21: icon grid
+            val rows = ToolsHubScreen.tiles(body)
             assertTrue("the hub renders rows", rows.isNotEmpty())
             val soon = rows.filter { it.tool?.status == ToolStatus.SOON }
             assertTrue("no Coming soon row in the hub: ${soon.map { it.tool?.id }}", soon.isEmpty())
             for (row in rows) {
                 assertTrue("${row.tool?.id} must do something", row.hasOnClickListeners())
             }
-            // A row is the full width of its job card, not a column in a grid.
+            // T2 owner 2026-11-21: icon grid
             for (row in rows) {
                 val card = row.parent as View
                 assertEquals(
-                    "row ${row.tool?.id} fills its card",
-                    card.width - card.paddingLeft - card.paddingRight,
+                    "tile ${row.tool?.id} fills one of five columns",
+                    (card.width - card.paddingLeft - card.paddingRight) / 5,
                     row.width
                 )
             }
@@ -220,7 +221,7 @@ abstract class ToolsLookBase {
             RuntimeEnvironment.setFontScale(scale)
             toolsTab { _, body ->
                 val bad = mutableListOf<String>()
-                for (row in ToolsHubScreen.rows(body)) {
+                for (row in ToolsHubScreen.tiles(body)) {
                     val label = row.labelView
                     val layout = label.layout
                     if (layout == null) {
@@ -243,7 +244,11 @@ abstract class ToolsLookBase {
                         bad += "${label.text}: clipped (${layout.height}px in ${label.height}px)"
                     }
                     val sp = label.textSize / scaledDensity
-                    if (sp < 14.4f || sp > 15.6f) bad += "${label.text}: label ${sp}sp"
+                    // T2 owner 2026-11-21: icon grid
+                    val expectedPx = android.util.TypedValue.applyDimension(
+                        android.util.TypedValue.COMPLEX_UNIT_SP, 12.5f, label.resources.displayMetrics
+                    )
+                    if (abs(label.textSize - expectedPx) > 1f) bad += "${label.text}: label ${sp}sp"
                 }
                 assertTrue(
                     "row labels at ${scale}x on 360dp: ${bad.joinToString(" | ")}",
@@ -320,7 +325,7 @@ class ToolsDensityTest {
 
                 val visible = mutableListOf<String>()
                 val bad = mutableListOf<String>()
-                for (row in ToolsHubScreen.rows(body)) {
+                for (row in ToolsHubScreen.tiles(body)) {
                     val rect = Rect(0, 0, row.width, row.height)
                     (root as ViewGroup).offsetDescendantRectToMyCoords(row, rect)
                     if (rect.top >= content.top && rect.bottom <= content.bottom) {

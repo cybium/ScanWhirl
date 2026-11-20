@@ -176,7 +176,8 @@ class ShellQaFixesTest {
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
-            val tile = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
+            // T2 owner 2026-11-21: icon grid
+            val tile = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
                 .first { it.tool?.id == "searchable_pdf" }
             tile.performClick()
             idle()
@@ -217,7 +218,7 @@ class ShellQaFixesTest {
             idle()
             // fixui: tiles removed (owner F6/F7/F20) - Enhance is gone; To text opens the same
             // document chooser, so the search sheet is still what this test covers.
-            ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
+            ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
                 .first { it.tool?.id == "to_text" }
                 .performClick()
             idle()
@@ -368,26 +369,21 @@ class ShellQaFixesTest {
                 return r
             }
             var checked = 0
-            for (row in ToolsHubScreen.rows(body)) {
+            // T2 owner 2026-11-21: icon grid
+            for (row in ToolsHubScreen.tiles(body)) {
                 val tag = row.proTag
                 if (!tag.isVisible) continue
                 // ATLAS-F2 (002): the Pro chip shares the tool's line, right after the name.
                 // It used to drop under the label and read as a separate row.
-                val iconRect = rectIn(row.iconBox)
+                val iconRect = rectIn(row.iconView)
                 val tagRect = rectIn(tag)
                 val labelRect = rectIn(row.labelView)
                 assertFalse(
                     "${row.tool?.id} tag overlaps its icon ($tagRect vs $iconRect)",
                     Rect.intersects(iconRect, tagRect)
                 )
-                assertTrue(
-                    "${row.tool?.id} tag sits on its name's line ($tagRect vs $labelRect)",
-                    minOf(tagRect.bottom, labelRect.bottom) > maxOf(tagRect.top, labelRect.top)
-                )
-                assertTrue(
-                    "${row.tool?.id} tag follows the name ($tagRect vs $labelRect)",
-                    tagRect.left >= labelRect.right - 1
-                )
+                assertFalse("${row.tool?.id} tag covers its label", Rect.intersects(tagRect, labelRect))
+                assertTrue("${row.tool?.id} corner badge stays above label", tagRect.bottom <= labelRect.top)
                 checked++
             }
             assertTrue("some rows carry a tag ($checked)", checked > 0)
@@ -413,11 +409,12 @@ class ShellQaFixesTest {
                 (root as ViewGroup).offsetDescendantRectToMyCoords(v, r)
                 return r.left
             }
-            val rows = ToolsHubScreen.rows(body)
+            // T2 owner 2026-11-21: icon grid
+            val rows = ToolsHubScreen.tiles(body)
             val tagged = rows.count { it.proTag.isVisible }
             assertTrue("the hub mixes tagged and untagged rows", tagged in 1 until rows.size)
-            val iconLefts = rows.map { left(it.iconBox) }.toSet()
-            val labelLefts = rows.map { left(it.labelView) }.toSet()
+            val iconLefts = rows.map { left(it.iconBox) - left(it) }.toSet()
+            val labelLefts = rows.map { left(it.labelView) - left(it) }.toSet()
             assertEquals("every row's icon starts in one column: $iconLefts", 1, iconLefts.size)
             assertEquals("every row's name starts in one column: $labelLefts", 1, labelLefts.size)
         }

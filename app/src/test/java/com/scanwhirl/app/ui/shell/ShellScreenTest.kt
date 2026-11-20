@@ -117,7 +117,8 @@ class ShellScreenTest {
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
             openAllToolsDoors(activity)
-            val tiles = ToolsHubScreen.rows(body)
+            // T2 owner 2026-11-21: icon grid
+            val tiles = ToolsHubScreen.tiles(body)
             val shipped = ToolRegistry.all.filter { it.status != ToolStatus.SOON }
             assertEquals(shipped.size, tiles.size)
             assertEquals(shipped.size, tiles.mapNotNull { it.tool?.id }.toSet().size)
@@ -136,7 +137,7 @@ class ShellScreenTest {
             idle()
             val body = activity.findViewById<View>(R.id.swToolsBody)
             openAllToolsDoors(activity)
-            val tile = ToolsHubScreen.rows(body).first { it.tool?.id == "pdfa" }
+            val tile = ToolsHubScreen.tiles(body).first { it.tool?.id == "pdfa" }
             tile.performClick()
             idle()
             val dialog = ShadowDialog.getLatestDialog()

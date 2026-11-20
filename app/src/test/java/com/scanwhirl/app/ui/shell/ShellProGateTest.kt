@@ -94,7 +94,8 @@ class ShellProGateTest {
             // Free taps a Pro tool wherever it lives; every job shows all of its tools.
             openAllToolsDoors(activity)
             for (id in proIds) {
-                val tile = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
+                // T2 owner 2026-11-21: icon grid
+                val tile = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
                     .firstOrNull { it.tool?.id == id }
                 assertNotNull("$id tile is missing", tile)
                 tile!!.performClick()
@@ -156,7 +157,7 @@ class ShellProGateTest {
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
             openAllToolsDoors(activity)
-            val toWord = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
+            val toWord = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
                 .first { it.tool?.id == "to_word" }
             toWord.performClick()
             idle()
@@ -172,7 +173,7 @@ class ShellProGateTest {
             )
 
             // v2 UI: 03_tools_hub - Save as PDF/A ships now: in Pro it opens its real picker.
-            val pdfa = ToolsHubScreen.rows(activity.findViewById(R.id.swToolsBody))
+            val pdfa = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
                 .first { it.tool?.id == "pdfa" }
             pdfa.performClick()
             idle()

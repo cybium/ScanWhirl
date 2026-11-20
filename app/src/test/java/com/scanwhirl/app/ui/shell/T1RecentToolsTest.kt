@@ -12,7 +12,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.ToolJob
 import com.scanwhirl.app.ui.kit.ToolRegistry
-import com.scanwhirl.app.ui.kit.ToolRow
+import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
@@ -109,9 +109,10 @@ abstract class T1RecentToolsBase {
         ((card as ViewGroup).getChildAt(0) as ViewGroup).getChildAt(0) as TextView
 
     /** The Recent card's rows, in screen order. */
-    protected fun recentRows(body: ViewGroup): List<ToolRow> {
+    // T2 owner 2026-11-21: icon grid
+    protected fun recentRows(body: ViewGroup): List<ToolTile> {
         val card = recentCard(body) ?: return emptyList()
-        return ToolsHubScreen.rows(card)
+        return ToolsHubScreen.tiles(card)
     }
 
     protected fun allText(root: View): List<String> {
@@ -124,8 +125,8 @@ abstract class T1RecentToolsBase {
         return out
     }
 
-    protected fun toolRow(body: ViewGroup, id: String): ToolRow? =
-        ToolsHubScreen.rows(body).firstOrNull { it.tool?.id == id }
+    protected fun toolRow(body: ViewGroup, id: String): ToolTile? =
+        ToolsHubScreen.tiles(body).firstOrNull { it.tool?.id == id }
 
     protected fun storeRawRecents(value: String) {
         app.getSharedPreferences("scanwhirl_prefs", android.content.Context.MODE_PRIVATE)
@@ -174,7 +175,7 @@ abstract class T1RecentToolsBase {
             assertEquals(
                 "one tap each, newest first",
                 listOf("merge", "compress"),
-                ToolsHubScreen.rows(card).map { it.tool?.id }
+                ToolsHubScreen.tiles(card).map { it.tool?.id }
             )
         }
     }
@@ -274,7 +275,7 @@ abstract class T1RecentToolsBase {
     fun `every catalogue tool is visible with zero extra taps`() {
         toolsTab { _, body ->
             val ready = ToolRegistry.all.filter { it.status == ToolStatus.READY }
-            val rows = ToolsHubScreen.rows(body)
+            val rows = ToolsHubScreen.tiles(body)
             assertEquals(
                 "every READY tool is a row on the first render",
                 ready.map { it.id }.sorted(),
@@ -381,15 +382,11 @@ class T1RecentToolsNarrowTest : T1RecentToolsBase() {
                     heading.height + 1
             )
 
-            val rows = ToolsHubScreen.rows(card)
+            val rows = ToolsHubScreen.tiles(card)
             assertEquals("all six recent tools stay visible", launched.reversed(), rows.map { it.tool?.id })
             for (row in rows) {
-                val content = (row.parent as View)
-                assertEquals(
-                    "a recent row fills its card",
-                    content.width - content.paddingLeft - content.paddingRight,
-                    row.width
-                )
+                assertEquals("Recent tiles stay in ONE row", 0, row.top)
+                assertTrue("Recent tiles keep 48dp width", row.width >= dp(48f))
                 assertTrue(
                     "${row.tool?.id} keeps a 48dp target (${row.height / density}dp)",
                     row.height >= dp(48f)
