@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r1import_keep_message">You can restore this copy from Trash for 30 days. The original PDF is not changed.</string>
+</resources>
