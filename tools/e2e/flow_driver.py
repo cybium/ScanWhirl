@@ -66,6 +66,33 @@ def wait(timeout=35, **want):
             time.sleep(0.5)
 
 
+def require_rotation(root, expected):
+    """The UI dump's rotation is observed state, not the requested Settings value.
+
+    Never claim a configuration-change recovery PASS until the emulator truly
+    changed its display orientation. A mere settings write is not evidence.
+    """
+    observed = root.get("rotation")
+    assert observed == str(expected), (
+        f"Emulator rotation did not change: expected {expected}, observed {observed!r}; "
+        "this is an emulator/harness failure, not proof of app data loss"
+    )
+    return root
+
+
+def wait_rotation(expected, timeout=12):
+    deadline = time.monotonic() + timeout
+    last = "no hierarchy yet"
+    while True:
+        try:
+            return require_rotation(hierarchy(), expected)
+        except AssertionError as exc:
+            last = str(exc)
+            if time.monotonic() >= deadline:
+                raise AssertionError(last) from exc
+            time.sleep(0.3)
+
+
 def tap_node(root, node):
     target = node
     parents = {child: parent for parent in root.iter() for child in parent}
@@ -316,6 +343,7 @@ def f5():
 
 def f6():
     open_doc()
+    require_rotation(hierarchy(), 0)
     # Accessible thumbnail descriptions are authored by the app's page adapter.
     root = hierarchy()
     candidates = [n for n in root.iter("node")
@@ -336,16 +364,32 @@ def f6():
     find(pending_root, text="Undo")
     find(pending_root, regex=r"^1 / 2$")
     (OUT / "F6_delete_window.xml").write_bytes(pending)
-    adb("shell", "settings", "put", "system", "user_rotation", "1")
+    # Writing Settings.System.USER_ROTATION did not rotate API 35 in the original
+    # CI run: XML stayed rotation=0, so Undo merely timed out and F6 falsely
+    # blamed PageViewer. WindowManager's explicit lock requests real rotation.
+    adb("shell", "cmd", "window", "user-rotation", "lock", "1")
     elapsed = time.monotonic() - started
     (OUT / "F6_timing.txt").write_text(f"Delete-to-rotation command completed in {elapsed:.3f}s", encoding="utf-8")
     assert elapsed < 3.0, f"Harness too slow for Undo window: {elapsed:.3f}s; not an app-defect claim"
-    wait(regex=r"^1 / 3$")
-    capture("F6_rotated")
-    adb("shell", "settings", "put", "system", "user_rotation", "0")
-    wait(regex=r"^1 / 3$")
-    capture("F6_restored")
-    return f"Viewer 1 / 3 → 1 / 2 + Undo → rotated 1 / 3; delete-to-rotation {elapsed:.3f}s"
+    try:
+        # Fail as an emulator/harness issue when the system never really
+        # rotates; do NOT turn an unchanged page count into a pass.
+        rotated = wait_rotation(1)
+        (OUT / "F6_actual_rotation.xml").write_bytes(ET.tostring(rotated, encoding="utf-8"))
+        # A real rotation recreates the Activity; PageViewer's config-change
+        # guard must restore the deferred deletion of page one.
+        wait(timeout=18, regex=r"^1 / 3$")
+        capture("F6_rotated")
+        adb("shell", "cmd", "window", "user-rotation", "lock", "0")
+        wait_rotation(0)
+        wait(regex=r"^1 / 3$")
+        capture("F6_restored")
+    finally:
+        # CI-only disposable emulator; always undo orientation overrides for
+        # F7–F9 even when the assertions above fail.
+        adb("shell", "cmd", "window", "user-rotation", "lock", "0")
+        adb("shell", "cmd", "window", "user-rotation", "free")
+    return f"Viewer 1 / 3 → 1 / 2 + Undo → actual rotation=1 and 1 / 3; delete-to-rotation {elapsed:.3f}s"
 
 
 def f7():
@@ -434,6 +478,8 @@ def main():
                     traceback.print_exc()
             print(rows[-1], flush=True)
     finally:
+        adb("shell", "cmd", "window", "user-rotation", "lock", "0")
+        adb("shell", "cmd", "window", "user-rotation", "free")
         adb("shell", "settings", "put", "system", "user_rotation", "0")
         adb("shell", "settings", "put", "system", "font_scale", "1.0")
         adb("shell", "cmd", "locale", "set-app-locales", PKG, "--locales", "en")

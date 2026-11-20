@@ -75,6 +75,15 @@ capture() { # tag label
     fi
 }
 
+# The uiautomator hierarchy contains the *observed* display orientation.
+# A successful Settings.System.USER_ROTATION write did not actually rotate API 35
+# in run 44817491671. Never call a portrait screenshot "landscape" again.
+xml_rotation() {
+    python3 -c 'import sys,xml.etree.ElementTree as ET;print(ET.parse(sys.argv[1]).getroot().get("rotation","missing"))' "$1" 2>/dev/null || echo "invalid"
+}
+
+rotate_lock() { adb shell cmd window user-rotation lock "$1" >/dev/null 2>&1; }
+
 tap_id() { # view-id
     local out xy
     if ! out=$(python3 "$HERE/uitool.py" find --id "$1" --verbose 2>/dev/null); then
@@ -354,23 +363,44 @@ adb shell settings put system font_scale 1.0 >/dev/null 2>&1
 set_language en >/dev/null 2>&1
 if launch_until_library 90; then
     pid_before=$(adb shell pidof "$PKG" | tr -d '\r')
-    adb shell settings put system user_rotation 1 >/dev/null 2>&1
-    sleep 4
-    pid_after=$(adb shell pidof "$PKG" | tr -d '\r')
-    if [ -n "$pid_after" ] && [ "$pid_after" = "$pid_before" ] && wait_id swNavLibrary 45; then
-        capture "rotation_landscape" "rotation/library-landscape"
-        note "process $pid_before survived the rotation"
+    if rotate_lock 1; then
+        sleep 4
+        pid_after=$(adb shell pidof "$PKG" | tr -d '\r')
+        if [ -n "$pid_after" ] && [ "$pid_after" = "$pid_before" ] && wait_id swNavLibrary 45; then
+            if shoot "rotation_landscape"; then
+                observed=$(xml_rotation "$OUT/rotation_landscape.xml")
+                if [ "$observed" = "1" ]; then
+                    record "rotation/library-landscape" PASS "$SHOT_DETAIL; actual hierarchy rotation=1"
+                    note "process $pid_before survived an ACTUAL rotation"
+                else
+                    record "rotation/library-landscape" FAIL "WindowManager rotation not applied; observed=$observed; $SHOT_DETAIL"
+                fi
+            else
+                record "rotation/library-landscape" FAIL "blank/unreadable rotated frame: $SHOT_DETAIL"
+            fi
+        else
+            record "rotation/library-landscape" FAIL "app did not survive rotation (pid $pid_before -> ${pid_after:-dead})"
+            shoot "rotation_failed" || true
+        fi
     else
-        record "rotation/library-landscape" FAIL "app did not survive rotation (pid $pid_before -> ${pid_after:-dead})"
-        shoot "rotation_failed" || true
+        record "rotation/library-landscape" FAIL "Android WindowManager refused explicit rotation lock"
     fi
-    adb shell settings put system user_rotation 0 >/dev/null 2>&1
-    sleep 3
-    if wait_id swNavLibrary 45; then
-        capture "rotation_portrait" "rotation/library-back-to-portrait"
+    if rotate_lock 0; then
+        sleep 3
+        if wait_id swNavLibrary 45 && shoot "rotation_portrait"; then
+            observed=$(xml_rotation "$OUT/rotation_portrait.xml")
+            if [ "$observed" = "0" ]; then
+                record "rotation/library-back-to-portrait" PASS "$SHOT_DETAIL; actual hierarchy rotation=0"
+            else
+                record "rotation/library-back-to-portrait" FAIL "still not portrait; observed rotation=$observed"
+            fi
+        else
+            record "rotation/library-back-to-portrait" FAIL "Library/portrait screenshot did not return"
+        fi
     else
-        record "rotation/library-back-to-portrait" FAIL "Library did not come back in portrait"
+        record "rotation/library-back-to-portrait" FAIL "Android WindowManager refused portrait rotation lock"
     fi
+    adb shell cmd window user-rotation free >/dev/null 2>&1 || true
 else
     record "rotation/library-landscape" FAIL "could not relaunch the app for the rotation check"
 fi
