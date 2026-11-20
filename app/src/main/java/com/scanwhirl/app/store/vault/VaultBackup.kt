@@ -1,6 +1,9 @@
 package com.scanwhirl.app.store.vault
 
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.store.backup.BackupRestoreBudget
+import com.scanwhirl.app.store.backup.FullBackup
+import com.scanwhirl.app.store.backup.BackupResourceException
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -104,11 +107,21 @@ object VaultBackup {
      * Extracts a backup into [into] (a private staging directory), never trusting names.
      * The caller verifies every entry with the unwrapped key before publishing it.
      */
-    fun extract(src: File, into: File): Contents {
+    fun extract(src: File, into: File, limits: FullBackup.RestoreLimits = FullBackup.RestoreLimits()): Contents {
         if (!into.mkdirs()) throw IOException("Could not prepare the restore folder")
-        val root = into.canonicalFile
+        try {
+            return extractStaged(src, into.canonicalFile, limits)
+        } catch (failure: Throwable) {
+            into.deleteRecursively()
+            throw failure
+        }
+    }
 
+    private fun extractStaged(src: File, root: File, limits: FullBackup.RestoreLimits): Contents {
+        val budget = BackupRestoreBudget(null, root, limits)
         DataInputStream(BufferedInputStream(FileInputStream(src))).use { input ->
+            limits.checkCancelled()
+            var files = 0
             val magic = ByteArray(MAGIC.size).also { input.readFully(it) }
             if (!magic.contentEquals(MAGIC)) throw VaultAuthException("Not a ScanWhirl Vault backup")
             val version = input.readInt()
@@ -132,6 +145,8 @@ object VaultBackup {
                 if (fileCount !in 0..MAX_FILES) throw VaultAuthException("Damaged Vault backup")
                 val names = HashSet<String>()
                 repeat(fileCount) {
+                    limits.checkCancelled()
+                    if (++files > limits.maxEntries) throw BackupResourceException(null)
                     val name = input.readUTF()
                     if ((name != "manifest.enc" && !VaultStore.isSafeStoredName(name)) || !names.add(name.lowercase())) {
                         throw VaultAuthException("Damaged Vault backup")
@@ -140,8 +155,9 @@ object VaultBackup {
                     val maxPlainLength =
                         if (name == "manifest.enc") VaultStore.MAX_MANIFEST_BYTES else VaultStore.MAX_RECORD_BYTES
                     if (length !in 1..VaultCrypto.encryptedLength(maxPlainLength)) throw VaultAuthException("Damaged Vault backup")
+                    budget.requireFits(length)
                     val dest = VaultStore.containedFile(dir, name)
-                    FileOutputStream(dest).use { out -> copy(input, out, length) }
+                    FileOutputStream(dest).use { out -> copy(input, budget.output(out), length) }
                 }
                 ids += id
             }
@@ -151,6 +167,8 @@ object VaultBackup {
                 val extraCount = input.readInt()
                 if (extraCount !in 0..MAX_EXTRAS) throw VaultAuthException("Damaged Vault backup")
                 repeat(extraCount) {
+                    limits.checkCancelled()
+                    if (++files > limits.maxEntries) throw BackupResourceException(null)
                     val name = input.readUTF()
                     // The only extra ever written by VaultStore is the encrypted password list.
                     if (name != VaultPasswords.FILE_NAME || extras.isNotEmpty()) throw VaultAuthException("Damaged Vault backup")
@@ -158,8 +176,9 @@ object VaultBackup {
                     if (length !in 1..VaultCrypto.encryptedLength(VaultStore.MAX_MANIFEST_BYTES)) {
                         throw VaultAuthException("Damaged Vault backup")
                     }
+                    budget.requireFits(length)
                     val dest = VaultStore.containedFile(root, name)
-                    FileOutputStream(dest).use { out -> copy(input, out, length) }
+                    FileOutputStream(dest).use { out -> copy(input, budget.output(out), length) }
                     extras += dest
                 }
             }

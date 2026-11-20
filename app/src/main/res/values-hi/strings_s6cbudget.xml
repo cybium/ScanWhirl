@@ -1,0 +1,10 @@
+<resources>
+    <!-- review -->
+    <string name="s6c_backup_limits">यह प्रति बहाल करने की सुरक्षित सीमाओं से बड़ी है। कुछ भी बहाल नहीं किया गया।</string>
+    <!-- review -->
+    <string name="s6c_backup_too_large">यह प्रति बहाल करने की 2 GB सीमा से बड़ी है। कुछ भी बहाल नहीं किया गया।</string>
+    <!-- review -->
+    <string name="s6c_backup_no_space">इस प्रति को तैयार करने के लिए पर्याप्त खाली जगह नहीं है। कुछ जगह खाली करके फिर कोशिश करें। कुछ भी बहाल नहीं किया गया।</string>
+    <!-- review -->
+    <string name="s6c_backup_unreadable">यह प्रति पढ़ी नहीं जा सकी। कुछ भी बहाल नहीं किया गया।</string>
+</resources>
