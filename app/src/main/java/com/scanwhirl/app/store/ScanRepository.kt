@@ -1762,7 +1762,10 @@ class ScanRepository(private val context: Context) {
             require(bytes.isNotEmpty()) { "Page ${index + 1} is empty" }
         }
         val docName = name?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() } ?: nextDocumentName()
-        buildAndPublish(docName, null, pageBytes.sumOf { it.size.toLong() }) { staging ->
+        // H3-6: an explicitly named copy is still a new document. Ask for the same unique name
+        // the tool-output rule gives, so two "… (compressed)" runs are distinguishable.
+        val uniqueName = OutputNames.uniqueName(docName, existingDocumentNames())
+        buildAndPublish(uniqueName, null, pageBytes.sumOf { it.size.toLong() }) { staging ->
             pageBytes.forEachIndexed { i, bytes -> stagePageBytes(bytes, staging, i) }
         }
     }
@@ -3548,8 +3551,9 @@ class ScanRepository(private val context: Context) {
      *  1. the source is only read; a locked source is refused (its password cannot re-encrypt);
      *  2. [duplicateDocument] makes the copy, so a failure can never leave the library half-edited;
      *  3. each page is decoded once (≤ 3000 px), marked and swapped through [PageReplace];
-     *  4. a page carrying a redaction loses its OCR text/geometry and its kept `.orig`, then is
-     *     re-queued for recognition — the old text and unredacted pixels are not in the copy;
+     *  4. every marked page loses its kept `.orig` (a filter must never restore the unmarked
+     *     pixels); a page carrying a redaction also loses its OCR text/geometry and is re-queued
+     *     for recognition — the old text and unredacted pixels are not in the copy;
      *  5. the PDF is regenerated and verified before the copy is handed back.
      *
      * Any failure deletes the unfinished copy and leaves the source byte-identical.
@@ -3590,9 +3594,13 @@ class ScanRepository(private val context: Context) {
                 val page = pages[index]
                 val marks = pageEdits.flatMap { it.marks }
                 PageStamp.applyPage(page, marks, index + 1, pages.size)
+                // H3-3: any burned-in mark makes the kept `.orig` stale. Leaving it beside a
+                // marked page let a later filter (even Original) rebuild the page from pixels
+                // that never had the signature/watermark. Redaction additionally drops the
+                // recognised text, because the old text described the hidden pixels.
+                File(page.parentFile, page.nameWithoutExtension + ".orig").delete()
                 if (marks.any { it is PageStamp.Mark.Redact }) {
                     // I9/E10: no unredacted pixels and no recognised text survive in the copy.
-                    File(page.parentFile, page.nameWithoutExtension + ".orig").delete()
                     ocrStore.invalidate(copy.id, page.name)
                 }
             }

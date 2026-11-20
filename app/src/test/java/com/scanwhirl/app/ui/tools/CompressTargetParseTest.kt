@@ -1,7 +1,9 @@
 package com.scanwhirl.app.ui.tools
 
 import com.scanwhirl.app.tools.CompressTarget
+import com.scanwhirl.app.util.ImageTools
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -65,5 +67,17 @@ class CompressTargetParseTest {
         )
         val parsed = CompressTarget.parse("7 KB") as CompressTarget.Result.Bytes
         assertTrue("the parsed target is a positive byte count", parsed.value > 0L)
+    }
+
+    @Test
+    fun `the tools hub and the Compress sheet agree on huge targets`() {
+        // H3-7: the hub and Batch used ImageTools.parseSizeInput, which saturated through Int.
+        // Both now name the same 2 GB ceiling as the sheet instead of accepting "5000 MB".
+        assertNull("5000 MB must not become 2 GiB", ImageTools.parseSizeInput("5000 MB"))
+        assertEquals(
+            "2 GB exactly is a valid target in both parsers",
+            CompressTarget.MAX_BYTES,
+            ImageTools.parseSizeInput("2048 MB")
+        )
     }
 }

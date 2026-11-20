@@ -46,6 +46,15 @@ object OutputNames {
     }
 
     /**
+     * Applies the same " (2)", " (3)", ... rule to a name a caller already built in full.
+     * H3-6: Compress-to-target passes its own "<name> (compressed)" and still gets a unique one.
+     */
+    fun uniqueName(candidate: String, existingNames: Collection<String>): String {
+        val base = candidate.trim().replace(Regex("\\s+"), " ").ifBlank { "Scan" }
+        return unique(base, existingNames)
+    }
+
+    /**
      * Owner F9: a split output is "<document name> part 1", "<name> part 2", ... in page order.
      * [partWord] is localised by the caller (Hindi: "भाग"). A name that a previous split already
      * gave a part suffix is cleaned first, so parts never stack.
