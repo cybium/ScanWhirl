@@ -249,6 +249,39 @@ class BackupHonestyTest {
     }
 
     @Test
+    fun `restoring a backup never claims a backup was made today`() {
+        // An archive from another phone, written without going through this screen.
+        doc("doc_old", "Old phone doc")
+        val archive = File(app.cacheDir, "source-for-restore.swbackup")
+        FullBackup(app).write(archive, password, FullBackup.Wrap.PASSWORD)
+        cleanFiles()
+        assertEquals("this phone has never saved a backup", 0L, lastBackupPref())
+
+        val uri = Uri.parse("content://scanwhirl-test/restore.swbackup")
+        shadowOf(app.contentResolver)
+            .registerInputStream(uri, java.io.ByteArrayInputStream(archive.readBytes()))
+
+        val activity = launch()
+        activity.findViewById<TextView>(R.id.backupRestore).performClick()
+        idle()
+        val request = shadowOf(activity).nextStartedActivityForResult
+        assertNotNull("Restore opens the file picker", request)
+        shadowOf(activity).receiveResult(request.intent, Activity.RESULT_OK, Intent().setData(uri))
+
+        val secretSheet = awaitSheet(app.getString(R.string.backup_restore))
+        secretSheet.findViewById<EditText>(R.id.backupPassword).setText(password)
+        secretSheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
+        awaitSheet(app.getString(R.string.backup_restored))
+
+        assertEquals(
+            "a restore is not a backup: the freshness line must not say 'today'",
+            0L,
+            lastBackupPref()
+        )
+        archive.delete()
+    }
+
+    @Test
     fun `the backup screen stays protected from screenshots`() {
         val activity = launch()
         assertTrue(
@@ -258,6 +291,14 @@ class BackupHonestyTest {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /** A fictional library document in the shape the app writes (no real user media). */
+    private fun doc(id: String, name: String) {
+        val dir = File(File(app.filesDir, "documents"), id).apply { mkdirs() }
+        File(dir, "meta.txt").writeText("$name\n${System.currentTimeMillis()}\nOther\n")
+        File(dir, "scan.pdf").writeBytes(byteArrayOf(37, 80, 68, 70))
+        File(dir, "page_000.jpg").writeBytes(ByteArray(256) { it.toByte() })
+    }
 
     private fun findBack(activity: Activity): View? {
         val expected = activity.getString(R.string.backup_back)

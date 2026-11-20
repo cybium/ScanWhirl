@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- G2-HONESTY (F-05): वापस लाने की चेतावनियाँ दोनों भाषाओं में दिखती हैं; तकनीकी त्रुटि
+         सिर्फ़ लॉग में श्रेणी के रूप में जाती है, कभी स्क्रीन पर नहीं. -->
+    <string name="backup_restore_no_vault_key">इस प्रति में तिजोरी की चाबी नहीं है, इसलिए तिजोरी की फ़ाइलें वापस नहीं आईं।</string>
+    <string name="backup_restore_vault_entry_failed">तिजोरी की एक फ़ाइल वापस नहीं आ सकी। यह प्रति फिर से वापस लाने की कोशिश करें।</string>
+    <string name="backup_restore_settings_failed">सेटिंग वापस नहीं आ सकीं।</string>
+</resources>

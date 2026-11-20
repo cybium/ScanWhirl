@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- G2-HONESTY (F-05): restore warnings are user-visible sentences in both app languages.
+         Internal exception detail is logged by category only, never shown here. -->
+    <string name="backup_restore_no_vault_key">This backup does not carry the Vault key, so its Vault files were not restored.</string>
+    <string name="backup_restore_vault_entry_failed">A Vault file could not be restored. Try restoring this backup again.</string>
+    <string name="backup_restore_settings_failed">Settings could not be restored.</string>
+</resources>
