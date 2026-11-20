@@ -12,6 +12,8 @@ import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -54,6 +56,7 @@ import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -110,8 +113,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** F5/W2: this viewer is the first look at a just-imported document. */
     private var freshImport = false
 
-    /** F5/W2: the import question was already asked (Keep or Discard), never ask twice. */
+    /** F5/W2: the import question was already shown. A failed move allows a retry. */
     private var freshImportAsked = false
+    private var importTrashInProgress = false
 
     /**
      * T44: the user has acted on this import (saved a copy to Documents, shared it, or changed the
@@ -1565,8 +1569,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     // ------------------------------------------------------------------
 
     private fun handleEditorBack() {
+        if (importTrashInProgress) return
         // T44: the question only exists for an import the user has not touched. Once acted on
-        // (a saved copy, a share, an edit) the import is kept, never offered for deletion.
+        // (a saved copy, a share, an edit) the import is kept, never offered for Trash here.
         if (freshImport && !freshImportAsked && !importKept) {
             askKeepImported()
             return
@@ -1586,9 +1591,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /**
      * F5/W2: an imported PDF is in the library the moment it arrives, so leaving the first look
-     * asks first. Keep leaves it like any other document; Delete removes exactly this one document
-     * (and its unlocked preview) and nothing else. T44: it is never asked once the user acted on
-     * the import, and its destructive answer says "delete", not "discard changes".
+     * asks first. Keep leaves it like any other document; Move to Trash is reversible.
+     * T44: it is never asked once the user has acted on the import.
      */
     private fun askKeepImported() {
         val id = docId
@@ -1602,28 +1606,61 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             return
         }
         freshImportAsked = true
-        SwSheet.builder(this)
+        val sheet = SwSheet.builder(this)
             .setTitle(R.string.fixflow_import_keep_title)
-            .setMessage(R.string.fixflow_import_keep_msg)
+            .setMessage(R.string.r1import_keep_message)
             .setPrimary(R.string.fixflow_keep) { finish() }
-            .setSecondary(R.string.fixflow_import_discard) { discardImported(id) }
+            .setSecondary(R.string.trash_move) { moveImportToTrash(id) }
             .build()
-            .show()
+        val actions = sheet.view as LinearLayout
+        val trash = sheet.secondaryButton
+        // The bottom-centre area belongs to the safe answer, not the Trash action.
+        // This sheet alone puts a quiet, wrapping start-aligned action above that area.
+        actions.removeView(trash)
+        actions.addView(trash, actions.indexOfChild(sheet.primaryButton), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@DocumentViewerActivity, 8f) })
+        trash.apply {
+            val padding = SwStyle.dp(this@DocumentViewerActivity, 8f)
+            minimumWidth = SwStyle.dp(this@DocumentViewerActivity, 48f)
+            setPaddingRelative(padding, padding, padding, padding)
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            isFocusable = true
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = Button::class.java.name
+                }
+            }
+        }
+        (sheet.primaryButton.layoutParams as LinearLayout.LayoutParams).topMargin = SwStyle.dp(this, 40f)
+        sheet.show()
     }
 
-    private fun discardImported(id: String) {
-        // T44: never delete an import the user has acted on, whatever asked.
+    private fun moveImportToTrash(id: String) {
+        if (importTrashInProgress) return
+        // T44: never move an import the user has acted on, whatever asked.
         if (importKept) {
             finish()
             return
         }
+        importTrashInProgress = true
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) { runCatching { repo.deleteDocument(id) } }
+            val moved = withContext(NonCancellable + Dispatchers.IO) {
+                TrashActions.moveAll(repo, listOf(id))
+            }
+            importTrashInProgress = false
+            if (moved.keys.isEmpty()) {
+                freshImportAsked = false
+                TrashActions.showMoved(this@DocumentViewerActivity, binding.root, null, moved) {}
+                return@launch
+            }
+            TrashActions.post(moved)
             finish()
         }
     }
 
-    /** T44: this import is the user's now; Back must never offer to delete it again. */
+    /** T44: this import is the user's now; Back must never offer to move it to Trash. */
     private fun noteImportUsed() {
         if (freshImport) importKept = true
     }
