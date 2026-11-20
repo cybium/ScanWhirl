@@ -27,6 +27,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.CompressTarget
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +37,6 @@ import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.shell.ShellActivity
-import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
@@ -441,9 +441,20 @@ class BatchActivity : BaseActivity() {
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
             val size = target.text.toString().trim()
-            val targetBytes = if (size.isEmpty()) null else ImageTools.parseSizeInput(size)
-            if (size.isNotEmpty() && targetBytes == null) {
-                sheet.setMessage(R.string.tools_setup_bad_target)
+            // H3-7: same parser and ceiling as the Compress sheet; a huge target is named, not
+            // silently turned into 2 GiB by Int saturation.
+            val parsed = if (size.isEmpty()) null else CompressTarget.parse(size)
+            val measured = parsed as? CompressTarget.Result.Bytes
+            val targetBytes = when (parsed) {
+                null, CompressTarget.Result.Blank -> null
+                is CompressTarget.Result.Bytes -> parsed.value
+                else -> null
+            }
+            if (size.isNotEmpty() && measured == null) {
+                sheet.setMessage(
+                    if (parsed == CompressTarget.Result.TooLarge) R.string.compress_target_too_large
+                    else R.string.tools_setup_bad_target
+                )
             } else {
                 sheet.dismiss()
                 val (quality, maxDim) = when (compressLevel) {

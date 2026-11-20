@@ -31,6 +31,9 @@ object ImageTools {
         0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
     )
 
+    /** Same ceiling the Compress sheet names: a target above 2 GB is refused, not saturated. */
+    const val MAX_SIZE_BYTES = 2L * 1024L * 1024L * 1024L
+
     data class ResizeOptions(
         /** null = keep original dimension (or derive from the other axis when keeping ratio). */
         val width: Int? = null,
@@ -342,20 +345,26 @@ object ImageTools {
 
     /**
      * Parses a human size like "500 KB", "3 MB", "1.5m" or a bare number (treated as KB).
-     * Returns bytes, or null when the text is empty/unparseable.
+     * Returns bytes, or null when the text is empty/unparseable or above [MAX_SIZE_BYTES].
+     *
+     * H3-7: the result used to go through `Double.roundToInt()`, which saturates at
+     * `Int.MAX_VALUE` — "5000 MB" silently became 2 GiB. Long arithmetic keeps the value honest
+     * and a size over the 2 GB ceiling is refused (the Compress sheet names the same limit).
      */
     fun parseSizeInput(text: String?): Long? {
         val cleaned = text?.trim()?.lowercase()?.replace(" ", "") ?: return null
         if (cleaned.isEmpty()) return null
         val match = Regex("(\\d+(?:\\.\\d+)?)(kb|mb|k|m|b)?").matchEntire(cleaned) ?: return null
         val value = match.groupValues[1].toDoubleOrNull() ?: return null
+        if (!value.isFinite()) return null
         val bytes = when (match.groupValues[2]) {
             "mb", "m" -> value * 1_048_576.0
             "kb", "k" -> value * 1024.0
             "b" -> value
             else -> value * 1024.0 // bare number = KB
         }
-        return bytes.roundToInt().coerceAtLeast(1).toLong()
+        if (!bytes.isFinite() || bytes > MAX_SIZE_BYTES) return null
+        return bytes.toLong().coerceAtLeast(1L)
     }
 
     /** Resolves output size from the options and encodes (JPEG/PNG, optional size cap + DPI tag). */

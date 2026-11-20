@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.PdfAConformanceTest,com.scanwhirl.app.util.PdfAGeneratorTest,com.scanwhirl.app.store.PdfAExportTest,com.scanwhirl.app.util.StampKeptOriginalTest,com.scanwhirl.app.util.ImageToolsTest,com.scanwhirl.app.store.CompressTargetNamingTest,com.scanwhirl.app.ui.tools.CompressTargetParseTest,com.scanwhirl.app.HindiGlossaryTermsTest

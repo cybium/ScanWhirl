@@ -458,7 +458,8 @@ class CompressFlow(
                     doc.pageFiles.sumOf { it.length() }
                 }
                 val pages = withContext(Dispatchers.IO) { fitFilesToTotal(doc.pageFiles, target) }
-                val out = repo.createDocument("${doc.name} (compressed)", pages)
+                // H3-6: the shared output rule, so two target copies never share a name.
+                val out = repo.createDocument(repo.outputName(doc.name, "Compressed"), pages)
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true)
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -634,7 +635,7 @@ class CompressFlow(
                     }
                 }
                 val pages = fitJpegsToTotal(rendered, target)
-                val out = repo.createDocument("$baseName (compressed)", pages)
+                val out = repo.createDocument(repo.outputName(baseName, "Compressed"), pages)
                 sheet?.dismiss()
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target)
