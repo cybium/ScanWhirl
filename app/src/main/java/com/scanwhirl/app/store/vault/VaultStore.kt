@@ -7,6 +7,8 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.Sha256
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.io.File
 import java.io.IOException
 import java.util.UUID
@@ -251,10 +253,42 @@ class VaultStore(
         } catch (e: Exception) {
             null
         } ?: return false
+        finishRecoveryUnlock(key)
+    }
+
+    /**
+     * The backup code sheet checks a snapshot off-main, before it accepts any unlock effects.
+     * [accept] runs after derivation and can refuse a dismissed sheet. Neither the session nor
+     * the attempt gate is touched by a wrong code, a cancelled check, or a replaced recovery wrap.
+     */
+    internal suspend fun unlockWithRecoveryForBackup(code: String, accept: suspend () -> Boolean): Boolean {
+        if (!VaultCrypto.isRecoveryCode(code)) return false
+        val file = File(vaultDir, RECOVERY_FILE)
+        val blob = synchronized(LOCK) { runCatching { file.readBytes() }.getOrNull() } ?: return false
+        val key = try {
+            VaultKeyWrap.open(blob, VaultCrypto.normalizeRecoveryCode(code))
+        } catch (_: VaultAuthException) {
+            return false
+        }
+        try {
+            if (!accept()) return false
+            val jobContext = currentCoroutineContext()
+            return synchronized(LOCK) {
+                if (!file.isFile || !file.readBytes().contentEquals(blob)) return@synchronized false
+                // Commit point. The following existing unlock transaction must not be interrupted.
+                jobContext.ensureActive()
+                finishRecoveryUnlock(key)
+            }
+        } finally {
+            key.fill(0)
+        }
+    }
+
+    private fun finishRecoveryUnlock(key: ByteArray): Boolean {
         gate.onSuccess()
         VaultSession.open(key)
         migrateRestoredLegacy()
-        true
+        return true
     }
 
     /**

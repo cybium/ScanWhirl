@@ -200,7 +200,7 @@ class FixVault2ReworkTest {
             val legacy = sheet()
             legacy.need<EditText>(R.id.vaultLegacyPin).setText(legacyPin)
             legacy.need<View>(R.id.swSheetPrimary).performClick()
-            idle()
+            assertTrue("the old PIN check finishes", await { !legacy.isShowing })
         }
         val setup = sheet()
         assertEquals(setupTitle, titleOf(setup))

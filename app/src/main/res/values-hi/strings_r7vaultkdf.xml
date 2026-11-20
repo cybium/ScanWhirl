@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- review -->
+    <string name="r7_vault_pin_save_failed">तिजोरी का PIN सहेजा नहीं जा सका। फिर से कोशिश करें।</string>
+</resources>
