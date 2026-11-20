@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W2 (lane 2): strings for the fast, identified Compress set sheet. -->
+<resources>
+    <!-- A level whose background estimate has not landed yet. -->
+    <string name="compress_est_pending">%1$s · estimating…</string>
+    <!-- A level whose estimate could not be measured; the level stays selectable. -->
+    <string name="compress_est_failed">%1$s · size not measured</string>
+    <!-- Inline size checks for the "Aim for a file size" field. -->
+    <string name="compress_target_zero">Enter a size above 0 KB</string>
+    <string name="compress_target_too_large">That size is too large. Try a smaller size.</string>
+</resources>

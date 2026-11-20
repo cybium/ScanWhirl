@@ -1,0 +1,69 @@
+package com.scanwhirl.app.ui.tools
+
+import com.scanwhirl.app.tools.CompressTarget
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * W2 (winner spec lane 2): the "Aim for a file size" field must never turn a bad or overflowing
+ * number into a real target. The shared `ImageTools.parseSizeInput` rounds through Int, so
+ * "999999999999999999999 MB" became a 1-byte target there; the Compress sheet parses its own
+ * input and rejects blank, zero, unreadable and overflowing sizes by name.
+ */
+class CompressTargetParseTest {
+
+    @Test
+    fun `blank input asks for a size`() {
+        assertEquals(CompressTarget.Result.Blank, CompressTarget.parse(null))
+        assertEquals(CompressTarget.Result.Blank, CompressTarget.parse(""))
+        assertEquals(CompressTarget.Result.Blank, CompressTarget.parse("   "))
+    }
+
+    @Test
+    fun `zero is rejected, not silently accepted`() {
+        assertEquals(CompressTarget.Result.Zero, CompressTarget.parse("0"))
+        assertEquals(CompressTarget.Result.Zero, CompressTarget.parse("0 KB"))
+        assertEquals(CompressTarget.Result.Zero, CompressTarget.parse("0.0001 KB"))
+    }
+
+    @Test
+    fun `unreadable text is rejected`() {
+        assertEquals(CompressTarget.Result.Invalid, CompressTarget.parse("abc"))
+        assertEquals(CompressTarget.Result.Invalid, CompressTarget.parse("20KBg"))
+        assertEquals(CompressTarget.Result.Invalid, CompressTarget.parse("-5"))
+        assertEquals(CompressTarget.Result.Invalid, CompressTarget.parse("1,5 MB"))
+        assertEquals(CompressTarget.Result.Invalid, CompressTarget.parse("KB"))
+    }
+
+    @Test
+    fun `a size that is too large for the job is rejected, never wrapped`() {
+        assertEquals(
+            CompressTarget.Result.TooLarge,
+            CompressTarget.parse("999999999999999999999 MB")
+        )
+        assertEquals(
+            CompressTarget.Result.TooLarge,
+            CompressTarget.parse("999999999999999999999999999999999999 KB")
+        )
+        assertEquals("above the 2 GB ceiling", CompressTarget.Result.TooLarge, CompressTarget.parse("3000 MB"))
+    }
+
+    @Test
+    fun `a real size is the exact number of bytes`() {
+        assertEquals(CompressTarget.Result.Bytes(7L * 1024L), CompressTarget.parse("7 KB"))
+        assertEquals(CompressTarget.Result.Bytes(700L * 1024L), CompressTarget.parse("700 KB"))
+        assertEquals(CompressTarget.Result.Bytes(700L * 1024L), CompressTarget.parse(" 700kb "))
+        assertEquals(CompressTarget.Result.Bytes(3L * 1024L * 1024L), CompressTarget.parse("3 MB"))
+        assertEquals("a bare number means KB, as the hint says", CompressTarget.Result.Bytes(512_000L), CompressTarget.parse("500"))
+        assertEquals(CompressTarget.Result.Bytes(1536L), CompressTarget.parse("1.5"))
+        assertEquals(CompressTarget.Result.Bytes(2L), CompressTarget.parse("2 b"))
+        assertEquals(
+            "exactly at the ceiling is still a size",
+            CompressTarget.Result.Bytes(CompressTarget.MAX_BYTES),
+            CompressTarget.parse("2048 MB")
+        )
+        val parsed = CompressTarget.parse("7 KB") as CompressTarget.Result.Bytes
+        assertTrue("the parsed target is a positive byte count", parsed.value > 0L)
+    }
+}

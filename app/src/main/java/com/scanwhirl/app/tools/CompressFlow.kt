@@ -2,9 +2,13 @@ package com.scanwhirl.app.tools
 
 import android.net.Uri
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.widget.RadioButton
 import android.widget.Toast
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -12,21 +16,31 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.DialogCompressBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.SwDialog
+import com.scanwhirl.app.ui.home.DocThumbBinder
+import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
-import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.StatusLine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 
 /**
  * test26 T2.2 — Compress tool, moved verbatim out of `MainActivity`.
+ *
+ * W2 (winner spec lane 2): the set sheet opens at once and says which document it is about —
+ * exact name, page count and size, with a real first page only for an ordinary document. The
+ * four level estimates are measured in the background and fill in row by row; the "Aim for a
+ * file size" field and the Compress button work from the first frame. A late estimate from a
+ * sheet for another document is discarded, never painted into the current one.
  *
  * @param pickPdf launches the SAF PDF picker (the launcher stays registered
  *   in the Activity); its result comes back through [startFromFile].
@@ -57,6 +71,15 @@ class CompressFlow(
     /** The pages chosen in the device-PDF gate (null until a device PDF is picked). */
     private var devicePages: List<Int>? = null
 
+    /** The estimate job of this flow's sheet; cancelled the moment that sheet closes. */
+    private var estimateJob: Job? = null
+
+    /** The sheet this flow last opened. A fresh open replaces it. */
+    private var activeSheet: SwSheet? = null
+
+    /** Bumped for every sheet this flow opens; an older sheet's callbacks are ignored. */
+    private var sheetSeq: Long = 0L
+
     fun start() {
         devicePages = null
         // No saved scans yet: the source is necessarily an external file.
@@ -75,7 +98,7 @@ class CompressFlow(
                 when (which) {
                     0 -> FlowUtil.pickScan(
                         activity, R.string.compress_pick_scan, docs()
-                    ) { doc -> estimateForScan(doc) }
+                    ) { doc -> startWith(doc) }
                     1 -> pickPdf()
                 }
             }
@@ -91,91 +114,41 @@ class CompressFlow(
      */
     fun startWith(doc: ScanDocument) {
         devicePages = null
-        estimateForScan(doc)
-    }
-
-    /** Compress sample pages at each level, then show the choice with sizes. */
-    private fun estimateForScan(doc: ScanDocument) {
-        val progress = host.showProgress(R.string.compress_estimating)
-        activity.lifecycleScope.launch {
-            try {
-                val estimates = withContext(Dispatchers.IO) {
-                    val sampleFiles = listOfNotNull(
-                        doc.pageFiles.firstOrNull(),
-                        doc.pageFiles.getOrNull(doc.pageFiles.size / 2)
-                    ).distinct()
-                    val samples = sampleFiles.map { it.readBytes() }
-                    levels.map { level ->
-                        val avg = samples.map {
-                            ImageTools.recompressJpeg(it, level.quality, level.maxDim).size.toLong()
-                        }.average()
-                        (avg * doc.pageCount * 1.02 + 1024).toLong()
-                    }
-                }
-                progress.dismiss()
-                pickLevel(estimates,
-                    onChosen = { level -> runCompressScan(doc, level) },
-                    onTarget = { target -> runCompressScanToTarget(doc, target) })
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
-                ).show()
+        openSheet(
+            identity = CompressIdentity.of(doc),
+            onChosen = { level -> runCompressScan(doc, level) },
+            onTarget = { target -> runCompressScanToTarget(doc, target) },
+            startEstimate = { session, onLevel, onFailed ->
+                startScanEstimate(doc, session, onLevel, onFailed)
             }
-        }
-    }
-
-    /** Render page 1 of an external PDF at each level, extrapolate, then choose. */
-    private fun estimateForPdfFile(uri: Uri) {
-        val progress = host.showProgress(R.string.compress_estimating)
-        activity.lifecycleScope.launch {
-            try {
-                val estimates = withContext(Dispatchers.IO) {
-                    // One seekable copy: SAF pipes cannot be rendered directly.
-                    PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
-                        val count = PdfPageRenderer.pageCount(fd)
-                        levels.map { level ->
-                            val first = PdfPageRenderer.renderPageJpeg(
-                                fd, devicePages?.firstOrNull() ?: 0,
-                                level.dpi, level.maxDim ?: 4096, level.quality
-                            )
-                            val pages = devicePages?.size ?: count
-                            (first.size.toDouble() * pages * 1.02 + 1024).toLong()
-                        }
-                    }
-                }
-                progress.dismiss()
-                pickLevel(estimates,
-                    onChosen = { level -> runCompressFile(uri, level) },
-                    onTarget = { target -> runCompressFileToTarget(uri, target) })
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    activity, activity.getString(R.string.compress_failed, e.message), Toast.LENGTH_LONG
-                ).show()
-            }
-        }
+        )
     }
 
     /**
-     * UI-B3 (#7): the level picker with two explicit aims.
+     * W2: the set sheet. Built and shown before a single estimate runs: identity first, then
+     * the two aims, the four level rows (each starting as "estimating…") and the target field.
      *
-     * "Choose quality" keeps the measured estimates below it; "Aim for a file size" shows the
-     * exact-size field with a hint that stays put and an inline error. Only the selected aim
-     * runs: a stale typed size is ignored in quality mode, and a size typed for target mode is
-     * never silently replaced by a level. The primary button is "Compress", and the keyboard's
-     * Done runs the same single submit (a second Done or a race with the button never runs twice).
+     * [startEstimate] is called after the sheet is on screen and reports each level separately
+     * through its callbacks; both callbacks are ignored once this sheet is no longer the active
+     * one, so a slow estimate can never land in a sheet for another document.
      */
-    private fun pickLevel(estimates: List<Long>, onChosen: (Level) -> Unit, onTarget: (Long) -> Unit) {
+    private fun openSheet(
+        identity: CompressIdentity,
+        onChosen: (Level) -> Unit,
+        onTarget: (Long) -> Unit,
+        startEstimate: (Long, (Int, Long?) -> Unit, () -> Unit) -> Unit
+    ) {
         val dialogBinding = DialogCompressBinding.inflate(activity.layoutInflater)
-        levels.forEachIndexed { i, level ->
-            val button = RadioButton(activity).apply {
+        bindIdentity(dialogBinding, identity)
+        // A new sheet replaces any earlier one in this flow: its estimates are no longer wanted.
+        estimateJob?.cancel()
+        estimateJob = null
+
+        val levelNames = levels.map { activity.getString(it.nameRes) }
+        val rows = levels.indices.map { index ->
+            RadioButton(activity).apply {
                 id = View.generateViewId()
-                text = activity.getString(
-                    R.string.compress_est_item,
-                    activity.getString(level.nameRes),
-                    StatusLine.formatBytes(estimates.getOrElse(i) { 0L })
-                )
+                text = activity.getString(R.string.compress_est_pending, levelNames[index])
                 // B2-M3 (device sweep 2026-11-19): a bare RadioButton was a 32dp-high row.
                 // The rule is 48dp minimum on every touch target; the visual density stays,
                 // the row just gets breathing room around the same text.
@@ -184,8 +157,8 @@ class CompressFlow(
                 val padV = SwStyle.dp(activity, 8f)
                 setPadding(SwStyle.dp(activity, 4f), padV, SwStyle.dp(activity, 4f), padV)
             }
-            dialogBinding.levelGroup.addView(button)
         }
+        rows.forEach { dialogBinding.levelGroup.addView(it) }
         (dialogBinding.levelGroup.getChildAt(1) as? RadioButton)?.isChecked = true
 
         val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
@@ -193,9 +166,12 @@ class CompressFlow(
             .setContent(dialogBinding.root)
             .setSecondary(android.R.string.cancel)
             .build()
+        val session = ++sheetSeq
+        activeSheet = sheet
 
         // B3: the job runs at most once per sheet, however it is started.
         var submitted = false
+        val measured = BooleanArray(levels.size)
 
         fun showError(res: Int) {
             dialogBinding.compressTargetError.text = activity.getString(res)
@@ -217,6 +193,34 @@ class CompressFlow(
             clearError()
         }
 
+        /** True while this sheet is still the one on screen (never a replaced or closed one). */
+        fun current(): Boolean = session == sheetSeq && activeSheet?.isShowing == true
+
+        fun showEstimate(index: Int, bytes: Long?) {
+            if (!current()) return
+            measured[index] = true
+            rows[index].text = if (bytes == null) {
+                activity.getString(R.string.compress_est_failed, levelNames[index])
+            } else {
+                activity.getString(
+                    R.string.compress_est_item,
+                    levelNames[index],
+                    StatusLine.formatBytes(bytes)
+                )
+            }
+        }
+
+        fun showFailedEstimates() {
+            if (!current()) return
+            rows.indices.forEach { index ->
+                if (!measured[index]) {
+                    rows[index].text = activity.getString(
+                        R.string.compress_est_failed, levelNames[index]
+                    )
+                }
+            }
+        }
+
         fun submit() {
             if (submitted) return
             if (!targetMode()) {
@@ -229,19 +233,21 @@ class CompressFlow(
                 onChosen(levels.getOrElse(if (index >= 0) index else 1) { levels[1] })
                 return
             }
-            val targetText = dialogBinding.editCompressTarget.text?.toString().orEmpty().trim()
-            if (targetText.isEmpty()) {
-                showError(R.string.compress_target_required)
-                return
+            when (
+                val parsed = CompressTarget.parse(
+                    dialogBinding.editCompressTarget.text?.toString()
+                )
+            ) {
+                CompressTarget.Result.Blank -> showError(R.string.compress_target_required)
+                CompressTarget.Result.Invalid -> showError(R.string.resize_invalid_target)
+                CompressTarget.Result.Zero -> showError(R.string.compress_target_zero)
+                CompressTarget.Result.TooLarge -> showError(R.string.compress_target_too_large)
+                is CompressTarget.Result.Bytes -> {
+                    submitted = true
+                    sheet.dismiss()
+                    onTarget(parsed.value)
+                }
             }
-            val target = ImageTools.parseSizeInput(targetText)
-            if (target == null || target <= 0L) {
-                showError(R.string.resize_invalid_target)
-                return
-            }
-            submitted = true
-            sheet.dismiss()
-            onTarget(target)
         }
 
         dialogBinding.compressModeGroup.setOnCheckedChangeListener { _, _ -> applyMode() }
@@ -252,7 +258,7 @@ class CompressFlow(
             override fun afterTextChanged(s: android.text.Editable?) = Unit
         })
         dialogBinding.editCompressTarget.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
                 submit()
                 // A Done that did not run (an invalid size) stays in the field to be fixed.
                 true
@@ -262,9 +268,7 @@ class CompressFlow(
         }
         // The keyboard's Done is the same action as the button; it never starts a second run.
         dialogBinding.editCompressTarget.setOnKeyListener { _, keyCode, event ->
-            if (keyCode == android.view.KeyEvent.KEYCODE_ENTER && event.action ==
-                android.view.KeyEvent.ACTION_DOWN
-            ) {
+            if (keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN) {
                 submit()
                 true
             } else {
@@ -273,7 +277,7 @@ class CompressFlow(
         }
         // B3: with the keyboard up the sheet resizes and scrolls the field into view instead of
         // hiding it behind the IME at 200% type.
-        sheet.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        sheet.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         dialogBinding.editCompressTarget.setOnFocusChangeListener { _, focused ->
             if (focused) {
                 dialogBinding.compressScroll.post {
@@ -285,9 +289,140 @@ class CompressFlow(
                 }
             }
         }
+        sheet.setOnDismissListener {
+            // Closing the sheet ends its estimates too: nothing may paint or run afterwards.
+            estimateJob?.cancel()
+            estimateJob = null
+            if (activeSheet === sheet) activeSheet = null
+        }
         applyMode()
         sheet.setPrimaryStayOpen(R.string.compress_action) { submit() }
         sheet.show()
+        startEstimate(
+            session,
+            { index, bytes -> showEstimate(index, bytes) },
+            { showFailedEstimates() }
+        )
+    }
+
+    /** W2: the exact source, before any measurement. */
+    private fun bindIdentity(binding: DialogCompressBinding, identity: CompressIdentity) {
+        binding.compressSourceName.text = identity.name
+        binding.compressSourceMeta.text = activity.resources.getQuantityString(
+            R.plurals.page_count_and_date,
+            identity.pageCount,
+            identity.pageCount,
+            StatusLine.formatBytes(identity.sizeBytes)
+        )
+        val doc = identity.doc
+        if (doc != null) {
+            // DocThumbBinder is the app's one privacy decision: page image only for an ordinary
+            // document, a lock/private placeholder for a locked or Vault document.
+            DocThumbBinder.bind(
+                binding.compressSourceThumb,
+                binding.compressSourceThumbGlyph,
+                doc
+            )
+        } else {
+            binding.compressSourceThumb.setImageResource(R.drawable.bg_thumb_vault)
+            binding.compressSourceThumbGlyph.setImageResource(R.drawable.ic_sw_pdf_file)
+            binding.compressSourceThumbGlyph.isVisible = true
+        }
+    }
+
+    /**
+     * Measures each level on two sample pages and reports it as soon as it is known. The seam
+     * ([estimateForTest]) lets a test hold a level back or fail it without touching the UI.
+     */
+    private fun startScanEstimate(
+        doc: ScanDocument,
+        session: Long,
+        onLevel: (Int, Long?) -> Unit,
+        onFailed: () -> Unit
+    ) {
+        val seam = estimateForTest
+        estimateJob = activity.lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    if (seam != null) {
+                        for (index in levels.indices) {
+                            if (session != sheetSeq) return@withContext
+                            val bytes = runCatching { seam.invoke(doc, index) }.getOrNull()
+                            withContext(Dispatchers.Main) { onLevel(index, bytes) }
+                        }
+                        return@withContext
+                    }
+                    val samples = listOfNotNull(
+                        doc.pageFiles.firstOrNull(),
+                        doc.pageFiles.getOrNull(doc.pageFiles.size / 2)
+                    ).distinct().map { it.readBytes() }
+                    if (samples.isEmpty()) {
+                        withContext(Dispatchers.Main) { onFailed() }
+                        return@withContext
+                    }
+                    levels.forEachIndexed { index, level ->
+                        if (session != sheetSeq) return@withContext
+                        currentCoroutineContext().ensureActive()
+                        val average = samples.map {
+                            ImageTools.recompressJpeg(it, level.quality, level.maxDim)
+                                .size.toLong()
+                        }.average()
+                        val bytes = (average * doc.pageCount * 1.02 + 1024).toLong()
+                        withContext(Dispatchers.Main) { onLevel(index, bytes) }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onFailed() }
+            }
+        }
+    }
+
+    /** Renders page 1 of an external PDF at each level, one level at a time, and reports it. */
+    private fun startPdfEstimate(
+        uri: Uri,
+        pageIndex: Int,
+        pages: Int,
+        session: Long,
+        onLevel: (Int, Long?) -> Unit,
+        onFailed: () -> Unit
+    ) {
+        estimateJob = activity.lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    // One seekable copy: SAF pipes cannot be rendered directly.
+                    PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
+                        for (index in levels.indices) {
+                            if (session != sheetSeq) return@withSeekablePdf
+                            currentCoroutineContext().ensureActive()
+                            val level = levels[index]
+                            val rendered = runCatching {
+                                PdfPageRenderer.renderPageJpeg(
+                                    fd, pageIndex, level.dpi,
+                                    level.maxDim ?: 4096, level.quality
+                                )
+                            }.getOrNull()
+                            val bytes = rendered?.let {
+                                (it.size.toDouble() * pages * 1.02 + 1024).toLong()
+                            }
+                            withContext(Dispatchers.Main) { onLevel(index, bytes) }
+                            if (bytes == null) {
+                                // The same render failed: the remaining levels cannot be sized.
+                                for (rest in index + 1 until levels.size) {
+                                    withContext(Dispatchers.Main) { onLevel(rest, null) }
+                                }
+                                return@withSeekablePdf
+                            }
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onFailed() }
+            }
+        }
     }
 
     private fun runCompressScan(doc: ScanDocument, level: Level) {
@@ -382,7 +517,25 @@ class CompressFlow(
                     is ScanRepository.ImportDecision.Pages -> decision.indices
                     ScanRepository.ImportDecision.Cancel -> return@launch
                 }
-                estimateForPdfFile(uri)
+                val pages = devicePages.orEmpty()
+                val name = withContext(Dispatchers.IO) { FlowUtil.devicePdfName(repo, uri) }
+                val size = withContext(Dispatchers.IO) {
+                    runCatching {
+                        activity.contentResolver.openFileDescriptor(uri, "r")
+                            ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
+                    }.getOrDefault(0L)
+                }
+                openSheet(
+                    identity = CompressIdentity.ofPdf(name, pages.size, size),
+                    onChosen = { level -> runCompressFile(uri, level) },
+                    onTarget = { target -> runCompressFileToTarget(uri, target) },
+                    startEstimate = { session, onLevel, onFailed ->
+                        startPdfEstimate(
+                            uri, pages.firstOrNull() ?: 0, pages.size,
+                            session, onLevel, onFailed
+                        )
+                    }
+                )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -500,6 +653,94 @@ class CompressFlow(
 
     /** Never grows a page: keeps the original bytes when they already fit the share. */
     private fun fitToShare(orig: ByteArray, share: Long): ByteArray = SizeFit.fitToShare(orig, share)
+
+    internal companion object {
+
+        /**
+         * Test seam: measures one level of one scan. Throw (or return null) to fail a level;
+         * block to hold it back. Null means the real two-sample measurement runs.
+         */
+        @VisibleForTesting
+        internal var estimateForTest: ((ScanDocument, Int) -> Long?)? = null
+    }
+}
+
+/**
+ * W2: what the set sheet says the job is about, before a single estimate runs. The page image is
+ * allowed only for an ordinary document — [DocThumbBinder.kindFor] decides, so a locked, Vault or
+ * PDF-only source keeps a placeholder.
+ */
+internal data class CompressIdentity(
+    val name: String,
+    val pageCount: Int,
+    val sizeBytes: Long,
+    val thumbKind: DocThumbBinder.Kind,
+    val doc: ScanDocument? = null
+) {
+
+    /** A real first page only when the document itself may show one. */
+    val showsPageImage: Boolean get() = thumbKind == DocThumbBinder.Kind.PAGE
+
+    companion object {
+
+        internal fun of(doc: ScanDocument) = CompressIdentity(
+            name = doc.name,
+            pageCount = doc.pageCount,
+            sizeBytes = sizeOf(doc),
+            thumbKind = DocThumbBinder.kindFor(doc),
+            doc = doc
+        )
+
+        internal fun ofPdf(name: String, pageCount: Int, sizeBytes: Long) = CompressIdentity(
+            name = name,
+            pageCount = pageCount,
+            sizeBytes = sizeBytes,
+            thumbKind = DocThumbBinder.Kind.PDF_ONLY
+        )
+
+        /** The PDF's bytes when it exists, otherwise its pages' bytes. Never a guess. */
+        internal fun sizeOf(doc: ScanDocument): Long =
+            if (doc.pdfFile.exists() && doc.pdfFile.length() > 0) doc.pdfFile.length()
+            else doc.pageFiles.sumOf { it.length() }
+    }
+}
+
+/**
+ * W2: a typed "aim for a size" parsed without ever wrapping. Blank, unreadable, zero and
+ * overflowing sizes are each rejected and named inline; a huge number can never silently become
+ * a tiny target (the shared [ImageTools.parseSizeInput] rounds through Int).
+ */
+internal object CompressTarget {
+
+    /** Above 2 GB a "compress to this size" is a mistake, not a target worth chasing. */
+    const val MAX_BYTES = 2L * 1024L * 1024L * 1024L
+
+    sealed class Result {
+        object Blank : Result()
+        object Invalid : Result()
+        object Zero : Result()
+        object TooLarge : Result()
+        data class Bytes(val value: Long) : Result()
+    }
+
+    private val SIZE = Regex("(\\d+(?:\\.\\d+)?)(kb|mb|k|m|b)?")
+
+    fun parse(text: String?): Result {
+        val cleaned = text?.trim()?.lowercase(Locale.ROOT)?.replace(" ", "").orEmpty()
+        if (cleaned.isEmpty()) return Result.Blank
+        val match = SIZE.matchEntire(cleaned) ?: return Result.Invalid
+        val number = match.groupValues[1].toDoubleOrNull() ?: return Result.Invalid
+        if (!number.isFinite()) return Result.TooLarge
+        val bytes = when (match.groupValues[2]) {
+            "mb", "m" -> number * 1024.0 * 1024.0
+            "kb", "k" -> number * 1024.0
+            "b" -> number
+            else -> number * 1024.0 // bare number = KB
+        }
+        if (!bytes.isFinite() || bytes > MAX_BYTES.toDouble()) return Result.TooLarge
+        val whole = bytes.toLong()
+        return if (whole < 1L) Result.Zero else Result.Bytes(whole)
+    }
 }
 
 /**
