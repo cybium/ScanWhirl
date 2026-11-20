@@ -153,12 +153,28 @@ class VerifierTests(unittest.TestCase):
                 with zipfile.ZipFile(path, "w") as archive:
                     archive.writestr("base/manifest/AndroidManifest.xml", ManifestTests().manifest())
                     archive.writestr("META-INF/FIXTURE.RSA", b"not a real certificate")
-                    archive.writestr("base/lib/fixture/libtest.so", elf(alignment=alignment))
+                    archive.writestr("base/lib/arm64-v8a/libtest.so", elf(alignment=alignment))
                 with patch("tools.release.verify_aab.signer", return_value=(["TEST-FINGERPRINT"], "Synthetic")):
                     good, report = verify(path, 26112001, "1.3.0")
                 self.assertEqual(expected, good, report)
                 self.assertIn(f"p_align=[{alignment}]", report)
                 self.assertIn("ZIP data offset=", report)
+
+    def test_64bit_4096_fails_and_32bit_4096_is_info(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "fixture.aab"
+            for abi in ("arm64-v8a", "x86_64", "armeabi-v7a", "x86"):
+                with zipfile.ZipFile(path, "w") as archive:
+                    archive.writestr("base/manifest/AndroidManifest.xml", ManifestTests().manifest())
+                    archive.writestr("META-INF/FIXTURE.RSA", b"not a real certificate")
+                    archive.writestr(f"base/lib/{abi}/libtest.so",
+                                     elf(bits=1 if abi in ("armeabi-v7a", "x86") else 2, alignment=4096))
+                with patch("tools.release.verify_aab.signer", return_value=(["TEST"], "Synthetic")):
+                    good, report = verify(path, 26112001, "1.3.0")
+                is_32bit = abi in ("armeabi-v7a", "x86")
+                self.assertEqual(is_32bit, good, report)
+                self.assertIn(f"{'INFO' if is_32bit else 'FAIL'} base/lib/{abi}", report)
+                self.assertIn("https://developer.android.com/guide/practices/page-sizes", report)
 
     def test_missing_certificate_tool_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp:

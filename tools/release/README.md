@@ -16,7 +16,10 @@ python tools/release/assemble_release.py --sha <full-frozen-SHA> --aab <signed.a
 
 Verifier checks package, expected version, minSdk 24 / targetSdk 36 (overridable
 with `--min-sdk` / `--target-sdk`), permissions, backup/debug/test flags, and every
-native library's PT_LOAD alignment. AAPT2 protobuf manifest parsing follows
+native library's PT_LOAD alignment. 16 KB is required for arm64-v8a/x86_64;
+armeabi-v7a/x86 values are INFO, per the lead-approved
+[64-bit page-size requirement](https://developer.android.com/guide/practices/page-sizes).
+Malformed ELF and unknown ABIs still fail closed. AAPT2 protobuf manifest parsing follows
 [AOSP Resources.proto](https://github.com/aosp-mirror/platform_frameworks_base/blob/master/tools/aapt2/Resources.proto).
 The supported module set is base-only, failing closed on additional modules.
 Malformed or missing evidence is a failure. ZIP compression and actual local

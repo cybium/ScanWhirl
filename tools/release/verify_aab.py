@@ -14,6 +14,9 @@ import zipfile
 
 ANDROID = "http://schemas.android.com/apk/res/android"
 FORBIDDEN = {"android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"}
+PAGE_SIZE_DOC = "https://developer.android.com/guide/practices/page-sizes"
+ABIS_64 = {"arm64-v8a", "x86_64"}
+ABIS_32 = {"armeabi-v7a", "x86"}
 
 
 def sha256(path):
@@ -233,10 +236,17 @@ def verify(path, code, name, min_sdk=24, target_sdk=36, bundletool=None):
             errors.append("AAB has no signature block")
         libs = [i for i in archive.infolist() if re.search(r"(^|/)lib/.+\.so$", i.filename)]
         lines.append(f"Native libraries: {len(libs)}")
+        lines.append("16 KB PT_LOAD required for arm64-v8a/x86_64; "
+                     f"32-bit armeabi-v7a/x86 alignment is informational. Policy: {PAGE_SIZE_DOC}")
         for info in libs:
             try:
                 aligns = elf_load_alignments(archive.read(info))
-                good = all(a >= 16384 and a & (a - 1) == 0 for a in aligns)
+                abi = info.filename.split("/lib/", 1)[1].split("/", 1)[0]
+                if abi not in ABIS_64 | ABIS_32:
+                    raise ValueError(f"unsupported native ABI {abi}")
+                valid = all(a > 0 and a & (a - 1) == 0 for a in aligns)
+                good = valid and (abi in ABIS_32 or all(a >= 16384 for a in aligns))
+                status = "INFO" if good and abi in ABIS_32 else ("PASS" if good else "FAIL")
                 raw.seek(info.header_offset)
                 header = raw.read(30)
                 if header[:4] != b"PK\x03\x04":
@@ -244,7 +254,7 @@ def verify(path, code, name, min_sdk=24, target_sdk=36, bundletool=None):
                 filename_len, extra_len = struct.unpack_from("<HH", header, 26)
                 data_offset = info.header_offset + 30 + filename_len + extra_len
                 method = "stored" if info.compress_type == 0 else f"compressed(method={info.compress_type})"
-                lines.append(f"{'PASS' if good else 'FAIL'} {info.filename}: PT_LOAD p_align={aligns}; "
+                lines.append(f"{status} {info.filename}: PT_LOAD p_align={aligns}; "
                              f"{method}; ZIP data offset={data_offset}; offset%16384={data_offset % 16384}")
                 if not good:
                     errors.append(f"{info.filename}: ELF PT_LOAD alignment below 16 KB/invalid")
