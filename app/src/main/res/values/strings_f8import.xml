@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  F8-IMPORT (hunt H2-5 / H2-8): short, localized reasons for import and tool failures.
+  They follow the localized prefix already shown (import_failed_*, stage_failed,
+  compress_failed, resize_failed) so a raw system or library message is never shown.
+  Import PDF itself maps PdfImport.Reason to the existing import_failed_* strings.
+-->
+<resources>
+    <string name="f8_reason_unreadable">the file could not be read or written</string>
+    <string name="f8_reason_too_large">the file is too large for this phone</string>
+    <string name="f8_reason_not_image">this file is not an image</string>
+    <string name="f8_stage_page_unreadable">Page %1$d: this photo could not be read. Choose it again, or pick a different photo.</string>
+    <string name="f8_stage_page_too_large">Page %1$d: this photo is too large for this phone. Pick a smaller photo or use a JPG.</string>
+</resources>
