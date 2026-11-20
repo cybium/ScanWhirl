@@ -83,9 +83,18 @@ class VaultSessionTest {
     fun `coming back to a screen inside the grace period keeps the key`() {
         store.setup("246810")
         VaultSession.onBackground(1_000L)
-        VaultSession.onForeground()
+        VaultSession.onForeground(50_000L)
         assertTrue(VaultSession.isUnlocked(50_000_000L))
         assertNotNull(VaultSession.keyOrNull(50_000_000L))
+    }
+
+    @Test
+    fun `foreground cannot erase an expired background deadline`() {
+        store.setup("246810")
+        VaultSession.onBackground(1_000L)
+        VaultSession.onForeground(121_000L)
+        assertFalse(VaultSession.isUnlocked(121_000L))
+        assertNull(VaultSession.keyOrNull(121_000L))
     }
 
     @Test
