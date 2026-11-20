@@ -1233,7 +1233,8 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     private fun baseName(doc: ScanDocument): String =
-        com.scanwhirl.app.util.ShareUtils.sanitizeName(doc.name).substringBeforeLast('.').ifBlank { "Scan" }
+        // H2-7: only a known extension is removed ("12.05.2025 Rent receipt" stays whole).
+        com.scanwhirl.app.util.ExportNames.baseName(doc.name)
 
     private fun outputDir(): File =
         File(cacheDir, "documents/tools/${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}")

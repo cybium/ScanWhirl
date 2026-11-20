@@ -21,7 +21,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
@@ -616,23 +615,25 @@ class BatchActivity : BaseActivity() {
     }
 
     private fun shareAll(results: List<ScanRepository.BatchItem>) {
-        val files = mutableListOf<File>()
+        // H2-1: (stored file, outgoing name). A library PDF is always stored as scan.pdf, so it
+        // goes out under its document's own name; export files already carry theirs.
+        val items = mutableListOf<Pair<File, String>>()
         for (item in results.filter { it.ok }) {
-            files += item.files
+            item.files.forEach { items += it to it.name }
             val doc = item.outputId?.let { runCatching { repo.getDocument(it) }.getOrNull() }
-            if (doc != null) files += doc.pdfFile
+            if (doc != null) items += ShareUtils.documentItems(listOf(doc))
             if (item.outputId == null && item.files.isEmpty() && item.savedName != null) {
-                runCatching { repo.getDocument(item.docId) }.getOrNull()?.let { files += it.pdfFile }
+                runCatching { repo.getDocument(item.docId) }.getOrNull()
+                    ?.let { items += ShareUtils.documentItems(listOf(it)) }
             }
         }
-        val uris = files.filter { it.isFile }.distinct().mapNotNull { file ->
-            runCatching { FileProvider.getUriForFile(this, "$packageName.fileprovider", file) }.getOrNull()
-        }
+        val shareable = items.filter { it.first.isFile }.distinctBy { it.first }
+        val uris = ShareUtils.namedUris(this, shareable)
         if (uris.isEmpty()) {
             Toast.makeText(this, R.string.tools_result_nothing, Toast.LENGTH_SHORT).show()
             return
         }
-        val type = if (files.all { it.name.endsWith(".pdf") }) "application/pdf" else "*/*"
+        val type = if (items.all { it.second.endsWith(".pdf") }) "application/pdf" else "*/*"
         val intent = if (uris.size == 1) {
             Intent(Intent.ACTION_SEND).apply {
                 this.type = type

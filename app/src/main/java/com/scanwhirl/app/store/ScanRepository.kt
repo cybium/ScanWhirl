@@ -16,6 +16,7 @@ import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.DocxWriter
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.ExportNames
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.OcrEngine
@@ -37,7 +38,6 @@ import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ReadingOrder
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
-import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.TableDetect
 import com.scanwhirl.app.util.XlsxWriter
 import kotlinx.coroutines.CancellationException
@@ -3159,9 +3159,8 @@ class ScanRepository(private val context: Context) {
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
         if (!outDir.exists() && !outDir.mkdirs()) throw IOException("Could not prepare the images")
-        val base = ShareUtils.sanitizeName(
-            baseName?.trim()?.takeIf { it.isNotBlank() } ?: doc.name
-        ).substringBeforeLast('.').ifBlank { "Scan" }
+        // H2-7: only a known extension is removed ("12.05.2025 Rent receipt" stays whole).
+        val base = ExportNames.baseName(baseName?.trim()?.takeIf { it.isNotBlank() } ?: doc.name)
         val written = mutableListOf<File>()
         val context = currentCoroutineContext()
         try {
@@ -4112,14 +4111,14 @@ class ScanRepository(private val context: Context) {
                     }
                     is BatchAction.PdfToImages -> {
                         val zipName = uniqueName(
-                            "${ShareUtils.sanitizeName(doc.name)} - images.zip", takenNames
+                            "${ExportNames.baseName(doc.name)} - images.zip", takenNames
                         )
                         val out = File(outDir, zipName)
                         pdfToImages(doc.id, action.format, zip = true, outFile = out)
                         BatchItem(id, name, true, files = listOf(out))
                     }
                     BatchAction.ToWord -> {
-                        val out = File(outDir, uniqueName("${ShareUtils.sanitizeName(doc.name)}.docx", takenNames))
+                        val out = File(outDir, uniqueName(ExportNames.fileName(doc.name, "docx"), takenNames))
                         exportWord(doc.id, out)
                         BatchItem(id, name, true, files = listOf(out))
                     }
@@ -4153,6 +4152,7 @@ class ScanRepository(private val context: Context) {
         val out = File(outDir, "ScanWhirl images.zip")
         val failures = mutableMapOf<String, String>()
         val processed = mutableListOf<String>()
+        val folders = ExportNames.Allocator()
         try {
             java.util.zip.ZipOutputStream(FileOutputStream(out)).use { aggregate ->
                 for ((index, id) in ids.withIndex()) {
@@ -4171,7 +4171,8 @@ class ScanRepository(private val context: Context) {
                     try {
                         pdfToImages(doc.id, format, zip = true, outFile = temp)
                         java.util.zip.ZipFile(temp).use { zip ->
-                            val folder = ShareUtils.sanitizeName(doc.name)
+                            // H2-6: two documents with the same name get their own folder.
+                            val folder = folders.folder(ExportNames.baseName(doc.name))
                             zip.entries().toList().forEach { entry ->
                                 aggregate.putNextEntry(java.util.zip.ZipEntry("$folder/${entry.name}"))
                                 zip.getInputStream(entry).use { it.copyTo(aggregate) }
