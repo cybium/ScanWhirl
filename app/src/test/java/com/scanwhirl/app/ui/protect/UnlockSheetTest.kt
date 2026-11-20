@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -32,6 +33,18 @@ import org.robolectric.shadows.ShadowDialog
 class UnlockSheetTest {
 
     private var controller: ActivityController<ProtectHostActivity>? = null
+
+    /** The check is a suspending PBKDF2: pump the main looper until the result is applied. */
+    private fun await(timeoutMs: Long = 15_000, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            if (condition()) return true
+            Thread.sleep(10)
+        }
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        return condition()
+    }
 
     private fun host(): AppCompatActivity {
         val c = Robolectric.buildActivity(ProtectHostActivity::class.java).setup()
@@ -85,7 +98,7 @@ class UnlockSheetTest {
         dialog.view<MaterialButton>(R.id.unlockOpen).performClick()
 
         val error = dialog.view<TextView>(R.id.unlockError)
-        assertEquals(View.VISIBLE, error.visibility)
+        assertTrue("the error is applied after the background check", await { error.visibility == View.VISIBLE })
         assertTrue("the line says how many tries are left", error.text.contains("4 tries left"))
         assertTrue("nothing opened", unlocked.isEmpty())
         assertNotNull(ShadowDialog.getLatestDialog())
@@ -100,6 +113,7 @@ class UnlockSheetTest {
         dialog.view<EditText>(R.id.unlockPassword).setText("1234")
         dialog.view<MaterialButton>(R.id.unlockOpen).performClick()
 
+        assertTrue("the right password is applied", await { unlocked.isNotEmpty() })
         assertEquals(listOf("1234"), unlocked)
         assertFalse("the sheet is gone after a right password", dialog.isShowing)
     }
@@ -112,17 +126,22 @@ class UnlockSheetTest {
         val dialog = sheet(activity, cooldown = cooldown, unlocked = unlocked)
         val field = dialog.view<EditText>(R.id.unlockPassword)
         val open = dialog.view<MaterialButton>(R.id.unlockOpen)
+        val error = dialog.view<TextView>(R.id.unlockError)
 
-        repeat(4) {
+        repeat(4) { index ->
             field.setText("nope")
             open.performClick()
+            val left = 4 - index
+            assertTrue(
+                "try ${index + 1} is checked and shows $left tries left",
+                await { error.visibility == View.VISIBLE && error.text.contains("$left tries left") }
+            )
         }
         assertTrue("still open before the fifth try", open.isEnabled)
         field.setText("nope")
         open.performClick()
 
-        assertFalse("Open is paused", open.isEnabled)
-        val error = dialog.view<TextView>(R.id.unlockError)
+        assertTrue("the pause is announced", await { !open.isEnabled && error.text.contains("paused") })
         assertTrue("the line explains the pause", error.text.contains("paused for 30 seconds"))
         assertTrue(unlocked.isEmpty())
         dialog.dismiss()
@@ -136,6 +155,9 @@ class UnlockSheetTest {
         dialog.view<EditText>(R.id.unlockPassword).setText("1234")
         dialog.view<MaterialButton>(R.id.unlockRemove).performClick()
 
+        assertTrue("a second confirmation is shown after the check", await {
+            ShadowDialog.getLatestDialog() != null && ShadowDialog.getLatestDialog() !== dialog
+        })
         assertTrue("nothing removed on the first tap", removed.isEmpty())
         val confirm = ShadowDialog.getLatestDialog()
         assertNotNull("a second confirmation is shown", confirm)

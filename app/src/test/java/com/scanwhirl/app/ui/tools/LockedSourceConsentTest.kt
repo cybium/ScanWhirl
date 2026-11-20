@@ -134,6 +134,13 @@ class LockedSourceConsentTest {
         sheet.findViewById<EditText>(R.id.unlockPassword).setText(password)
         sheet.findViewById<View>(R.id.unlockOpen).performClick()
         idle()
+        // S4B: the password check is a suspending PBKDF2 off the main thread. Wait until it is
+        // applied: the error line shows, the sheet closes, or the consent sheet opens.
+        waitUntil {
+            !sheet.isShowing ||
+                sheet.findViewById<View>(R.id.unlockError)?.visibility == View.VISIBLE ||
+                ShadowDialog.getLatestDialog() !== sheet
+        }
     }
 
     /** The consent sheet: the newest dialog must be the SwSheet with its primary button. */

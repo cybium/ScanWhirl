@@ -115,11 +115,18 @@ class ScanRepository(private val context: Context) {
          */
         @Volatile internal var decryptPdf: (ByteArray, String) -> ByteArray = PdfDecryptor::decrypt
 
+        /**
+         * Test seam (task S4B): called on the thread that runs the PDF-lock PBKDF2, so a test can
+         * prove the 1 300 000-iteration derivation never happens on the main thread.
+         */
+        @Volatile internal var lockDerivationProbe: (() -> Unit)? = null
+
         internal fun resetTestSeams() {
             usableSpace = ::probeUsableSpace
             trashFault = {}
             importFault = {}
             decryptPdf = PdfDecryptor::decrypt
+            lockDerivationProbe = null
         }
 
         /** An import staging folder untouched this long belongs to an import that died. */
@@ -2226,60 +2233,173 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun unlockPdf(id: String, password: String): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
-            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            if (!doc.isLocked) return@withContext doc
             if (!verifyPdfPassword(id, password)) {
                 throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
             }
-            if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
-            synchronized(PDF_LOCK) {
-                val work = OpStaging.create(context.filesDir)
-                try {
-                    val plain = File(work, "plain.pdf")
-                    val layered = writePdf(dir, plain)
-                    OpFaults.at("unlock:built")
-                    if (!plain.renameTo(File(dir, PdfProtection.PDF_FILE))) {
-                        throw IOException("Could not unlock the PDF")
-                    }
-                    OpFaults.at("unlock:swapped")
-                    File(dir, LOCK_FILE).delete()
-                    updateTextLayerFlag(dir, layered)
-                    Durable.syncDir(dir)
-                    OpStaging.release(work)
-                } catch (e: Exception) {
-                    OpStaging.release(work)
-                    throw e
-                }
-            }
-            pruneLockIndex()
-            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after unlock")
+            unlockVerified(id)
         }
 
     /**
-     * Changes the password of a locked document after checking [current]. Same build-and-swap as
-     * [protectPdf] (fault points `chpw:encrypted`, `chpw:lock_written`); `locked.meta` is overwritten
-     * with the new salted verifier.
-     *
-     * Known limitation: a crash between the lock write and the swap leaves the NEW verifier beside the
-     * old-password PDF. I3 still holds (both say locked), but only the old password opens the PDF.
+     * Removes protection after [checkPdfPassword] accepted the password: the KDF is not run a second
+     * time, and the lock record the grant was made for must still be the one on disk
+     * (compare-and-swap under [PDF_LOCK]), so an authorization never outlives a password change.
      */
-    suspend fun changePdfPassword(id: String, current: String, new: String): ScanDocument =
-        withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
-            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-            if (!verifyPdfPassword(id, current)) {
-                throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
+    suspend fun unlockPdf(id: String, grant: PdfPasswordGrant): ScanDocument =
+        withContext(Dispatchers.IO) { unlockVerified(id, grant) }
+
+    private fun unlockVerified(id: String, grant: PdfPasswordGrant? = null): ScanDocument {
+        val dir = File(docsDir, id)
+        val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+        if (!doc.isLocked) return doc
+        if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
+        synchronized(PDF_LOCK) {
+            if (grant != null) requireLockRecord(dir, grant)
+            val work = OpStaging.create(context.filesDir)
+            try {
+                val plain = File(work, "plain.pdf")
+                val layered = writePdf(dir, plain)
+                OpFaults.at("unlock:built")
+                if (!plain.renameTo(File(dir, PdfProtection.PDF_FILE))) {
+                    throw IOException("Could not unlock the PDF")
+                }
+                OpFaults.at("unlock:swapped")
+                File(dir, LOCK_FILE).delete()
+                updateTextLayerFlag(dir, layered)
+                Durable.syncDir(dir)
+                OpStaging.release(work)
+            } catch (e: Exception) {
+                OpStaging.release(work)
+                throw e
             }
+        }
+        pruneLockIndex()
+        return loadDocument(dir) ?: throw IllegalStateException("Scan vanished after unlock")
+    }
+
+    /**
+     * Changes the password of a locked document after checking [current] (one PBKDF2 for the check,
+     * one for the new verifier, both off the caller's thread).
+     *
+     * Crash safety: the PDF swap and the verifier write are covered by a [PasswordSwap] marker in
+     * private staging, repaired by [recoverOperations] at the next start. The destructive step is
+     * the PDF rename; after it the marker alone can finish the job, so a process death can no longer
+     * leave the new verifier beside the old PDF. Fault points `chpw:encrypted`, `chpw:marker`,
+     * `chpw:swapped`.
+     */
+    suspend fun changePdfPassword(id: String, current: String, new: String): ScanDocument {
+        val grant = checkPdfPassword(id, current)
+            ?: throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
+        return changePdfPassword(id, grant, new)
+    }
+
+    /** Same, after [checkPdfPassword] accepted [grant]'s password: the current password is not re-derived. */
+    suspend fun changePdfPassword(id: String, grant: PdfPasswordGrant, new: String): ScanDocument =
+        withContext(Dispatchers.IO) {
             require(new.isNotBlank()) { "Password must not be empty" }
             if (!PdfProtection.isEncodable(new)) {
                 throw IllegalArgumentException(context.getString(R.string.password_charset))
             }
+            val dir = File(docsDir, id)
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            if (!doc.isLocked) throw IllegalStateException("Not protected")
             if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
-            encryptInto(dir, doc, new, "chpw")
+            swapPasswordVerified(dir, doc, grant, new)
             recordLockIndex(File(dir, PdfProtection.PDF_FILE), id)
             loadDocument(dir)!!
         }
+
+    /**
+     * The verified password change: build and verify the new PDF in private staging, then swap it in
+     * under a marker that names the old and the new verifier and both PDF digests.
+     *
+     *  1. `enc.pdf` is built, verified and fsynced in [OpStaging];
+     *  2. the marker is written and fsynced (the only place the new verifier survives a kill);
+     *  3. `enc.pdf` is renamed over `scan.pdf` — the one destructive step;
+     *  4. `locked.meta` is replaced with the new verifier;
+     *  5. the marker is deleted and the staging folder released.
+     *
+     * A death before 3 leaves the old PDF and the old verifier (the marker is swept; nothing changed).
+     * A death after 3 is rolled forward by [recoverOperations], which reads the new verifier from the
+     * marker alone.
+     */
+    private fun swapPasswordVerified(
+        dir: File,
+        doc: ScanDocument,
+        grant: PdfPasswordGrant,
+        new: String
+    ) = synchronized(PDF_LOCK) {
+        require(grant.docId == dir.name) { "Authorization is for another document" }
+        val lock = File(dir, LOCK_FILE)
+        val current = if (lock.exists()) readPdfLock(lock) else null
+        // Compare-and-swap: the password the owner proved is still the one on disk.
+        if (current == null || current != grant.lockRecord) {
+            throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
+        }
+        val work = OpStaging.create(context.filesDir)
+        try {
+            val plain = File(work, "plain.pdf")
+            if (doc.pageFiles.isNotEmpty()) {
+                writePdf(dir, plain)
+            } else {
+                require(doc.pdfFile.exists() && doc.pdfFile.length() > 0L) { "PDF missing" }
+                Durable.copyFile(doc.pdfFile, plain)
+            }
+            val enc = File(work, "enc.pdf")
+            PdfEncryptor.encrypt(plain, enc, new)
+            Durable.syncFile(enc)
+            if (PdfProtection.isEncrypted(enc) != true) throw IOException("Protection could not be verified")
+            OpFaults.at("chpw:encrypted")
+
+            val newRecord = PdfLockVerifier.create(new)
+            val pdf = File(dir, PdfProtection.PDF_FILE)
+            val previousDigest = Sha256.of(pdf)
+            val newDigest = Sha256.of(enc)
+            Durable.atomicWriteText(
+                File(work, PasswordSwap.MARKER),
+                PasswordSwap.write(dir.name, current, newRecord, previousDigest, newDigest)
+            )
+            Durable.syncDir(work)
+            OpFaults.at("chpw:marker")
+
+            if (!enc.renameTo(pdf)) throw IOException("Could not change the PDF password")
+            Durable.syncDir(dir)
+            OpFaults.at("chpw:swapped")
+
+            Durable.atomicWriteText(lock, newRecord)
+            Durable.syncDir(dir)
+            File(work, PasswordSwap.MARKER).delete()
+            Durable.syncDir(work)
+            OpStaging.release(work)
+        } catch (e: Exception) {
+            // The marker and the staged PDF stay for the next start; a real kill skips this too.
+            OpStaging.release(work)
+            throw e
+        }
+    }
+
+    /**
+     * Finishes a password change that died after the PDF swap (see [swapPasswordVerified]).
+     * Only the destructive step needs repair: once `scan.pdf` is the new file, the marker alone
+     * names the verifier that must replace the old one. A death before the swap changed nothing
+     * (the marker, staging and old verifier are swept).
+     */
+    private fun recoverPasswordSwap(work: File) {
+        val swap = PasswordSwap.read(work) ?: return
+        val dir = File(docsDir, swap.id)
+        if (!dir.isDirectory) return
+        val pdf = File(dir, PdfProtection.PDF_FILE)
+        val lock = File(dir, LOCK_FILE)
+        synchronized(PDF_LOCK) {
+            val digest = runCatching { Sha256.of(pdf) }.getOrNull()
+            if (digest == swap.newPdfSha256) {
+                if (readPdfLock(lock) != swap.newRecord) {
+                    Durable.atomicWriteText(lock, swap.newRecord)
+                    Durable.syncDir(dir)
+                }
+                recordLockIndex(pdf, swap.id)
+            }
+        }
+    }
 
     fun protectionState(id: String): PdfProtection.State = PdfProtection.state(File(docsDir, id))
 
@@ -2377,6 +2497,12 @@ class ScanRepository(private val context: Context) {
             }
         }
 
+        // 1b. Finish a password change that died between its PDF swap and its verifier write: the
+        // marker names the new verifier, so no second KDF run and no plaintext is needed.
+        for (dir in stagingRoot.listFiles { f -> f.isDirectory }.orEmpty()) {
+            recoverPasswordSwap(dir)
+        }
+
         // 2. Finish published draft seals (create-only Save as new, or a completed Replace).
         docsDir.listFiles { f -> f.isDirectory }.orEmpty().forEach { dir ->
             val seal = OpStaging.readSeal(dir) ?: return@forEach
@@ -2406,15 +2532,69 @@ class ScanRepository(private val context: Context) {
         return rolledForward + swept
     }
 
+    /**
+     * A one-use proof that [checkPdfPassword] accepted a document's password, together with the exact
+     * lock record it checked. [unlockPdf] and [changePdfPassword] re-check that record under
+     * [PDF_LOCK] instead of deriving the KDF again, so one attempt derives once and an authorization
+     * can never be reused after a password change or an unlock.
+     */
+    class PdfPasswordGrant internal constructor(
+        val docId: String,
+        internal val lockRecord: String?
+    )
+
+    /**
+     * Checks [password] for document [id] on a background dispatcher, upgrading an old verifier only
+     * after a successful check (the migration is a compare-and-swap under [PDF_LOCK]). Returns the
+     * grant a follow-up [unlockPdf] / [changePdfPassword] can act on without deriving again, or null
+     * when the password is wrong or the lock is unreadable.
+     *
+     * Cancelling the calling coroutine (the owner dismissed the sheet) stops the migration: a
+     * cancelled check leaves the record exactly as it was.
+     */
+    suspend fun checkPdfPassword(id: String, password: String): PdfPasswordGrant? =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            val lockFile = File(dir, LOCK_FILE)
+            if (!lockFile.exists()) {
+                return@withContext if (PdfProtection.state(dir) == PdfProtection.State.NONE) {
+                    PdfPasswordGrant(id, null)
+                } else null
+            }
+            val stored = readPdfLock(lockFile) ?: return@withContext null
+            val coroutine = currentCoroutineContext()
+            val effective = checkStoredLock(dir, lockFile, stored, password) {
+                coroutine.ensureActive()
+            } ?: return@withContext null
+            PdfPasswordGrant(id, effective)
+        }
+
     /** Verifies a lock, upgrading an old verifier only after a successful password check. */
     fun verifyPdfPassword(id: String, password: String): Boolean {
         val dir = File(docsDir, id)
         val lockFile = File(dir, LOCK_FILE)
         if (!lockFile.exists()) return PdfProtection.state(dir) == PdfProtection.State.NONE
         val stored = readPdfLock(lockFile) ?: return false
-        if (!PdfLockVerifier.isLegacy(stored)) return PdfLockVerifier.verify(stored, password)
+        return checkStoredLock(dir, lockFile, stored, password) != null
+    }
+
+    /**
+     * The single verifier check. Returns the lock record that is valid from now on (the upgraded one
+     * after a migration) or null when the password does not match.
+     *
+     * [beforeMigration] runs inside [PDF_LOCK] just before the legacy record is replaced, so a
+     * cancelled check can abort before any byte changes.
+     */
+    private fun checkStoredLock(
+        dir: File,
+        lockFile: File,
+        stored: String,
+        password: String,
+        beforeMigration: () -> Unit = {}
+    ): String? {
+        if (!PdfLockVerifier.isLegacy(stored)) return if (PdfLockVerifier.verify(stored, password)) stored else null
         if (!MessageDigest.isEqual(stored.toByteArray(), Prefs.sha256("pdf_lock:$password").toByteArray())) {
-            return false
+            return null
         }
         // A stale label on a plaintext file is upgraded by Repair or deleted by Remove lock.
         // Do not mutate it just because a check succeeded (repair itself can still refuse).
@@ -2423,20 +2603,88 @@ class ScanRepository(private val context: Context) {
                 val upgraded = PdfLockVerifier.create(password)
                 synchronized(PDF_LOCK) {
                     // A concurrent password change or unlock wins; never reintroduce an old lock.
-                    if (readPdfLock(lockFile) != stored) return false
+                    if (readPdfLock(lockFile) != stored) return null
+                    beforeMigration()
                     Durable.atomicWriteText(lockFile, upgraded)
                     Durable.syncDir(dir)
                 }
+                return upgraded
             } catch (_: IOException) {
                 // Full/unwritable storage must not prevent an existing lock from being opened.
                 // The old record stays valid and the next successful check retries migration.
             }
         }
-        return true
+        return stored
+    }
+
+    /** The lock record a grant was made for is still the one on disk (compare-and-swap). */
+    private fun requireLockRecord(dir: File, grant: PdfPasswordGrant) {
+        require(grant.docId == dir.name) { "Authorization is for another document" }
+        val lock = File(dir, LOCK_FILE)
+        val record = if (lock.exists()) readPdfLock(lock) else null
+        if (record != grant.lockRecord) {
+            throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
+        }
     }
 
     private fun readPdfLock(file: File): String? =
         if (file.length() !in 1L..256L) null else runCatching { file.readText().trim() }.getOrNull()
+
+    /**
+     * The recovery marker of an interrupted password change, kept in private [OpStaging] (never
+     * beside a document). It records the verifier before and after the change and the digest of
+     * both possible `scan.pdf` bodies, which is enough to finish the change after a process death
+     * without the password and without touching the page sources.
+     */
+    private object PasswordSwap {
+        const val MARKER = ".password-swap"
+        private const val HEADER = "scanwhirl-password-swap-v1"
+        private val idPattern = Regex("[A-Za-z0-9_-]{1,64}")
+        private val sha256Pattern = Regex("[0-9a-f]{64}")
+
+        class Swap(
+            val id: String,
+            val oldRecord: String,
+            val newRecord: String,
+            val previousPdfSha256: String,
+            val newPdfSha256: String
+        )
+
+        fun write(
+            id: String,
+            oldRecord: String,
+            newRecord: String,
+            previousPdfSha256: String,
+            newPdfSha256: String
+        ): String = buildString {
+            append(HEADER).append('\n')
+            append("id=").append(id).append('\n')
+            append("old=").append(oldRecord).append('\n')
+            append("new=").append(newRecord).append('\n')
+            append("pdf=").append(previousPdfSha256).append('\n')
+            append("newPdf=").append(newPdfSha256).append('\n')
+        }
+
+        /** Any missing, torn or unexpected field returns null: an unreadable marker never guesses. */
+        fun read(work: File): Swap? {
+            val file = File(work, MARKER)
+            if (file.length() !in 1L..2048L) return null
+            val lines = runCatching { file.readLines() }.getOrNull() ?: return null
+            if (lines.firstOrNull() != HEADER) return null
+            val values = HashMap<String, String>()
+            for (line in lines.drop(1)) {
+                val eq = line.indexOf('=')
+                if (eq <= 0) return null
+                values[line.substring(0, eq)] = line.substring(eq + 1)
+            }
+            val id = values["id"]?.takeIf { idPattern.matches(it) } ?: return null
+            val oldRecord = values["old"]?.takeIf { it.length in 1..256 } ?: return null
+            val newRecord = values["new"]?.takeIf { it.length in 1..256 } ?: return null
+            val previous = values["pdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
+            val next = values["newPdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
+            return Swap(id, oldRecord, newRecord, previous, next)
+        }
+    }
 
     private object PdfLockVerifier {
         // A platform-independent record, including backups restored to API 24/25. The JCA
@@ -2465,6 +2713,7 @@ class ScanRepository(private val context: Context) {
         }
 
         private fun derive(password: String, salt: ByteArray): ByteArray {
+            lockDerivationProbe?.invoke()
             // ASCII Base64 gives the same UTF-8 password semantics across JCA providers.
             val spec = PBEKeySpec(encode(password.toByteArray(Charsets.UTF_8)).toCharArray(), salt, ITERATIONS, KEY_BYTES * 8)
             return try {
@@ -2530,6 +2779,21 @@ class ScanRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            val outDir = File(context.cacheDir, "documents").apply { mkdirs() }
+            val preview = File(outDir, "preview_$id.pdf")
+            writePdf(dir, preview)
+            preview
+        }
+
+    /**
+     * Same preview after [checkPdfPassword] accepted the password. The lock record must still be the
+     * one the grant covers, so a password change made in between is never bypassed.
+     */
+    suspend fun unlockedPreviewPdf(id: String, grant: PdfPasswordGrant): File =
+        withContext(Dispatchers.IO) {
+            val dir = File(docsDir, id)
+            val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+            synchronized(PDF_LOCK) { requireLockRecord(dir, grant) }
             val outDir = File(context.cacheDir, "documents").apply { mkdirs() }
             val preview = File(outDir, "preview_$id.pdf")
             writePdf(dir, preview)
