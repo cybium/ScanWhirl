@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.XlsxWriterTest,com.scanwhirl.app.store.ToolsEngineTest,com.scanwhirl.app.util.PageNormalizationTest

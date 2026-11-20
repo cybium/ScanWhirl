@@ -622,6 +622,33 @@ class ToolsEngineTest {
     }
 
     @Test
+    fun `removeMetadata keeps recognised text searchable in the clean copy`() {
+        val id = DocFixtures.saved(repo, app, pages = 1)
+        val pageFile = repo.getDocument(id)!!.pageFiles.single()
+        val page = pageFile.name
+        val (w, h) = requireNotNull(com.scanwhirl.app.util.PageReplace.bounds(pageFile))
+        repo.ocrStore.putPage(
+            id, page, "Marks: 85.50%",
+            OcrPage(w, h, listOf(OcrLine("Marks: 85.50%", 10, 10, w - 10, 40)))
+        )
+        assertTrue("fixture must be searchable first", repo.makeSearchable(id))
+        val sourceText = repo.ocrDoc(id)[page]
+        assertTrue("fixture must carry text", !sourceText.isNullOrBlank())
+
+        val clean = runBlocking { repo.removeMetadata(id) }
+
+        assertEquals("recognised text must survive the clean copy", sourceText, repo.ocrDoc(clean.id)[page])
+        assertTrue(
+            "the clean copy must still be marked as searchable",
+            File(repo.docsDir, clean.id + "/text_layer.flag").isFile
+        )
+        val embedded = org.apache.pdfbox.Loader.loadPDF(clean.pdfFile).use {
+            org.apache.pdfbox.text.PDFTextStripper().getText(it)
+        }
+        assertTrue("selectable text lost from the clean PDF: $embedded", embedded.contains("85.50%"))
+    }
+
+    @Test
     fun `removeMetadata failure publishes nothing`() {
         val id = DocFixtures.saved(repo, app, pages = 1)
         val before = repo.listDocuments().map { it.id }.toSet()
