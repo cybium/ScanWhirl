@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- review: S6A, existing recovery-code terminology retained -->
+    <string name="backup_vault_unverifiable_skipped">इस प्रति में तिजोरी का हिस्सा बहाल नहीं हुआ, क्योंकि उसकी जाँच नहीं हो सकती। तिजोरी की फ़ाइलें भी बहाल करने के लिए तिजोरी वापस खोलने के कोड से प्रति बहाल करें।</string>
+</resources>

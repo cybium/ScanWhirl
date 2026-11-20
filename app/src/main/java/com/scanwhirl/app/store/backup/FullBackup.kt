@@ -573,7 +573,12 @@ class FullBackup(
         // 2. Vault: adopt the backup's identity into an empty Vault, or re-encrypt entry by entry
         //    into this phone's Vault with its own key.
         val restoredVault = staging.resolve("vault2")
-        if (restoredVault.isDirectory) {
+        if (restoredVault.isDirectory && oldVaultKey == null) {
+            // S6A: password-only backups of a locked Vault cannot authenticate its contents.
+            // Skip the ENTIRE Vault part, including wraps/settings, before touching vaultDir.
+            warnings.add(context.getString(R.string.backup_vault_unverifiable_skipped))
+        } else if (restoredVault.isDirectory) {
+            val checkedVaultKey = checkNotNull(oldVaultKey)
             val targetSetUp = File(vaultDir, "recovery.bin").let { it.isFile && it.length() > 0 }
             if (!targetSetUp) {
                 vaultDir.mkdirs()
@@ -584,7 +589,6 @@ class FullBackup(
                     File(vaultDir, "$name.tmp").delete()
                 }
                 var rejected = 0
-                var unchecked = 0
                 restoredVault.listFiles()?.sortedBy { it.name }?.forEach { from ->
                     val to = File(vaultDir, from.name)
                     if (to.exists()) return@forEach
@@ -596,29 +600,18 @@ class FullBackup(
                         // exactly like a merged one: manifest, contained paths and every declared
                         // file authenticated against its size and digest. A damaged or crafted
                         // entry is skipped and reported, never counted as restored.
-                        if (oldVaultKey != null) {
-                            val ok = runCatching { vault.validateStagedEntryForAdoption(from, oldVaultKey) }.isSuccess
-                            if (!ok) {
-                                rejected++
-                                return@forEach
-                            }
-                        } else {
-                            // A password backup of a locked Vault carries no key, so its entries
-                            // cannot be checked now; Vault validates each one when it is opened.
-                            unchecked++
+                        val ok = runCatching { vault.validateStagedEntryForAdoption(from, checkedVaultKey) }.isSuccess
+                        if (!ok) {
+                            rejected++
+                            return@forEach
                         }
                     }
                     if (from.renameTo(to)) {
                         if (wasDirectory) vaultEntries++ else extras++
-                    } else if (wasDirectory && oldVaultKey == null) {
-                        unchecked--
                     }
                 }
                 if (rejected > 0) {
                     warnings.add(context.getString(R.string.backup_vault_entries_rejected, rejected))
-                }
-                if (unchecked > 0) {
-                    warnings.add(context.getString(R.string.backup_vault_entries_unchecked, unchecked))
                 }
                 // The restore typed the backup's recovery code, so the adopted Vault is known:
                 // a pending marker left by an interrupted setup is not owed any more.
@@ -632,16 +625,13 @@ class FullBackup(
                 // and the report says the Vault part waits for the same code check as everything
                 // else. The archive is not touched, so restoring it again afterwards merges.
                 warnings.add(context.getString(R.string.vault_pending_restore_deferred))
-            } else if (oldVaultKey == null) {
-                // F-05: a localized sentence; the person never sees an internal string.
-                warnings.add(context.getString(R.string.backup_restore_no_vault_key))
             } else if (!vault.isUnlocked()) {
                 vaultLocked = true
             } else {
                 restoredVault.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }
                     ?.sortedBy { it.name }
                     ?.forEach { dir ->
-                        runCatching { vault.restoreEntryFromBackup(dir, oldVaultKey) }
+                        runCatching { vault.restoreEntryFromBackup(dir, checkedVaultKey) }
                             .onSuccess { result ->
                                 if (result.skipped) skipped++ else vaultReencrypted++
                             }
