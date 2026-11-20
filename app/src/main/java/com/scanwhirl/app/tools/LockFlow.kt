@@ -147,7 +147,8 @@ class LockFlow(
     fun unlockDocument(doc: ScanDocument) = promptUnlockScan(doc)
 
     /** Mockup 09 for a PDF from storage (the "From a PDF file" row of the Unlock chooser). */
-    fun unlockDevicePdfFile(uri: Uri) = unlockDevicePdf(uri)
+    fun unlockDevicePdfFile(uri: Uri, onRefusalDismiss: () -> Unit) =
+        unlockDevicePdf(uri, onRefusalDismiss)
 
     /**
      * The import dead-end fix: a password-protected PDF opens the Unlock sheet, then its
@@ -459,7 +460,7 @@ class LockFlow(
      * protected file; any other PDF stays untouched with an honest explanation (we cannot break
      * other people's passwords).
      */
-    private fun unlockDevicePdf(uri: Uri) {
+    private fun unlockDevicePdf(uri: Uri, onRefusalDismiss: () -> Unit = {}) {
         val progress = host.showProgress(R.string.unlock_pdf_title)
         activity.lifecycleScope.launch {
             try {
@@ -475,6 +476,7 @@ class LockFlow(
                         .setMessage(R.string.unlock_pdf_not_ours_msg)
                         .setPositiveButton(android.R.string.ok, null)
                         .showSw(isSheet = false)
+                        .setOnDismissListener { onRefusalDismiss() }
                     return@launch
                 }
                 promptDeviceUnlock(doc, uri)
