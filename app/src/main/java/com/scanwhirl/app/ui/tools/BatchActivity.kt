@@ -21,12 +21,14 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.CompressTarget
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +38,7 @@ import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.shell.ShellActivity
-import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
@@ -67,6 +69,24 @@ class BatchActivity : BaseActivity() {
     private var job: Job? = null
     @Volatile private var cancelRequested = false
     private var progressSheet: SwSheet? = null
+
+    /**
+     * H2-4: on Android 7-9 "Export as PDF" needs the runtime storage grant for the Documents
+     * folder. The chosen action waits here while Android shows its prompt.
+     */
+    private var pendingAction: (() -> Unit)? = null
+    private val storagePermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val action = pendingAction
+            pendingAction = null
+            if (granted) {
+                errorView.isVisible = false
+                action?.invoke()
+            } else {
+                errorView.text = getString(R.string.f7save_perm_denied_batch)
+                errorView.isVisible = true
+            }
+        }
 
     private var compressLevel = 1
     private var imagesFormat = ScanRepository.ImageExportFormat.JPG
@@ -441,9 +461,20 @@ class BatchActivity : BaseActivity() {
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
             val size = target.text.toString().trim()
-            val targetBytes = if (size.isEmpty()) null else ImageTools.parseSizeInput(size)
-            if (size.isNotEmpty() && targetBytes == null) {
-                sheet.setMessage(R.string.tools_setup_bad_target)
+            // H3-7: same parser and ceiling as the Compress sheet; a huge target is named, not
+            // silently turned into 2 GiB by Int saturation.
+            val parsed = if (size.isEmpty()) null else CompressTarget.parse(size)
+            val measured = parsed as? CompressTarget.Result.Bytes
+            val targetBytes = when (parsed) {
+                null, CompressTarget.Result.Blank -> null
+                is CompressTarget.Result.Bytes -> parsed.value
+                else -> null
+            }
+            if (size.isNotEmpty() && measured == null) {
+                sheet.setMessage(
+                    if (parsed == CompressTarget.Result.TooLarge) R.string.compress_target_too_large
+                    else R.string.tools_setup_bad_target
+                )
             } else {
                 sheet.dismiss()
                 val (quality, maxDim) = when (compressLevel) {
@@ -540,6 +571,18 @@ class BatchActivity : BaseActivity() {
     // ---- run / summary ----------------------------------------------------
 
     private fun start(action: ScanRepository.BatchAction) {
+        // H2-4: "Export as PDF" is the batch action that writes into public Documents. Before
+        // Android 10 that needs the runtime storage grant, so it is asked for first, with a plain
+        // reason, instead of every document failing with a raw EACCES line.
+        if (action is ScanRepository.BatchAction.ExportPdf &&
+            DownloadSaver.needsLegacyStoragePermission(this)
+        ) {
+            pendingAction = { start(action) }
+            errorView.text = getString(R.string.f7save_perm_why_documents)
+            errorView.isVisible = true
+            storagePermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
         cancelRequested = false
         progressSheet = SwSheet.builder(this)
             .setTitle(R.string.tools_batch_progress_title)

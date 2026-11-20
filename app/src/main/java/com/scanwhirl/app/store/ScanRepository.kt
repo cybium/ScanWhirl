@@ -8,6 +8,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import androidx.core.net.toUri
 import com.scanwhirl.app.R
+import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.OcrStore
@@ -1862,7 +1863,10 @@ class ScanRepository(private val context: Context) {
             require(bytes.isNotEmpty()) { "Page ${index + 1} is empty" }
         }
         val docName = name?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() } ?: nextDocumentName()
-        buildAndPublish(docName, null, pageBytes.sumOf { it.size.toLong() }) { staging ->
+        // H3-6: an explicitly named copy is still a new document. Ask for the same unique name
+        // the tool-output rule gives, so two "… (compressed)" runs are distinguishable.
+        val uniqueName = OutputNames.uniqueName(docName, existingDocumentNames())
+        buildAndPublish(uniqueName, null, pageBytes.sumOf { it.size.toLong() }) { staging ->
             pageBytes.forEachIndexed { i, bytes -> stagePageBytes(bytes, staging, i) }
         }
     }
@@ -2243,10 +2247,13 @@ class ScanRepository(private val context: Context) {
      * document in memory. Pages are rendered one at a time into private staging (the shared
      * huge-PDF gate and space check apply), then each page is re-fitted from disk, and the
      * verified folder is published once. Only a cancel publishes nothing.
+     *
+     * [sourceName] is the picked file's name; the copy is named through [outputName], so two
+     * runs on the same file never share a name (H3-6, the same rule as a saved scan).
      */
     suspend fun importPdfToTarget(
         uri: Uri,
-        name: String?,
+        sourceName: String?,
         indices: List<Int>,
         targetBytes: Long,
         dpi: Float = 150f,
@@ -2256,8 +2263,9 @@ class ScanRepository(private val context: Context) {
     ): ScanDocument? {
         require(targetBytes > 0) { "Target size must be positive" }
         require(indices.isNotEmpty()) { "No pages selected" }
-        val docName = name?.trim()?.replace('\n', ' ')
+        val base = sourceName?.trim()?.replace('\n', ' ')
             ?.takeIf { it.isNotBlank() } ?: nextDocumentName()
+        val docName = outputName(base, "Compressed")
         return withPlannedPdfPages(
             uris = listOf(uri),
             dpi = dpi,
@@ -3088,7 +3096,7 @@ class ScanRepository(private val context: Context) {
         val id = dir.name
         val pages = pageFilesIn(dir)
         val searchable = layered && pages.withIndex().all { (index, _) ->
-            geo.containsKey("page_%03d.jpg".format(index))
+            geo.containsKey(String.format(Locale.ROOT, "page_%03d.jpg", index))
         }
         val flag = File(dir, "text_layer.flag")
         if (searchable) {
@@ -3136,8 +3144,10 @@ class ScanRepository(private val context: Context) {
             false
         } else {
             val textLayers = if (Prefs.makeSearchable(context)) {
-                pages.indices.filter { geo.containsKey("page_%03d.jpg".format(it)) }
-                    .associate { i -> i to geo["page_%03d.jpg".format(i)]!! }
+                pages.indices.filter {
+                    geo.containsKey(String.format(Locale.ROOT, "page_%03d.jpg", it))
+                }
+                    .associate { i -> i to geo[String.format(Locale.ROOT, "page_%03d.jpg", i)]!! }
             } else {
                 emptyMap()
             }
@@ -3530,42 +3540,83 @@ class ScanRepository(private val context: Context) {
     data class ExcelExport(
         val file: File?,
         val tablePages: Int,
-        val totalPages: Int
+        val totalPages: Int,
+        /** Page indices (0-based) the recogniser could not read; their sheets say so honestly. */
+        val unreadPages: List<Int> = emptyList()
     )
 
     /**
      * Writes a `.xlsx` workbook: one sheet per page ("Page 1", ...). A page whose stored OCR
      * geometry forms a table becomes a cell grid; other pages export one line per cell.
      * [tablesOnly] keeps only the pages with a table (and writes nothing at all when no page has
-     * one). Pages with no stored OCR are recognised now with the app's existing on-device engine.
+     * one). Pages with no stored OCR are recognised now with the app's existing on-device engine,
+     * in the user's Text-language setting, and the result is kept (as To Word does). A page whose
+     * stored text has no geometry (typed in the Text screen, or corrected after recognition)
+     * exports exactly that text and is never re-read.
      */
     suspend fun exportExcel(
         id: String,
         outFile: File,
         tablesOnly: Boolean = false,
-        noTableNote: String = "No table found on this page."
+        noTableNote: String = "No table found on this page.",
+        unreadNote: String? = null
     ): ExcelExport = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
-        val stored = ocrStore.readGeo(id)
+        val storedText = ocrStore.readText(id)
+        val storedGeo = ocrStore.readGeo(id)
+        // H4-5: a page the recogniser never read has no table claim to make, so it says so instead
+        // of "no table found on this page".
+        val unreadNoteText = unreadNote ?: context.getString(R.string.tools_excel_unread_page)
+        val unreadPages = mutableListOf<Int>()
         val pages = ArrayList<OcrPage>(doc.pageFiles.size)
-        for (page in doc.pageFiles) {
+        for ((index, page) in doc.pageFiles.withIndex()) {
             currentCoroutineContext().ensureActive()
-            val ocr = stored[page.name] ?: runCatching { OcrEngine.recognizeFile(page).page }
-                .getOrElse { OcrPage(0, 0, emptyList()) }
-            pages += ocr
+            val geo = storedGeo[page.name]
+            val text = storedText[page.name]
+            pages += when {
+                // Geometry is dropped by the store whenever the text is edited, so a page that still
+                // has geometry is the page the user sees.
+                geo != null -> geo
+                // H4-2: text without geometry is the user's own entry or correction. Export it and
+                // never replace it with a fresh read of the image.
+                text != null -> textOnlyOcrPage(text)
+                else -> {
+                    val result = try {
+                        OcrEngine.recognizeFile(page, com.scanwhirl.app.util.OcrLanguageSettings.get(appContext()))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    } catch (_: OutOfMemoryError) {
+                        null
+                    }
+                    if (result == null) {
+                        unreadPages += index
+                        OcrPage(0, 0, emptyList())
+                    } else {
+                        // H4-2: keep what was read, exactly like To Word, so the Text screen shows
+                        // it and the next export needs no second English pass.
+                        ocrStore.putPage(id, page.name, result.text, result.page)
+                        result.page
+                    }
+                }
+            }
         }
         val tables = pages.map { TableDetect.detect(it) }
         val tablePages = tables.count { it != null }
         if (tablesOnly && tablePages == 0) {
-            return@withContext ExcelExport(file = null, tablePages = 0, totalPages = pages.size)
+            return@withContext ExcelExport(
+                file = null, tablePages = 0, totalPages = pages.size, unreadPages = unreadPages
+            )
         }
         val sheets = pages.mapIndexedNotNull { index, ocr ->
             val table = tables[index]
             when {
                 table != null -> XlsxWriter.Sheet("Page ${index + 1}", table.rows)
                 tablesOnly -> null
+                index in unreadPages -> XlsxWriter.Sheet("Page ${index + 1}", listOf(listOf(unreadNoteText)))
                 else -> XlsxWriter.Sheet(
                     "Page ${index + 1}",
                     ocr.lines.filter { it.text.isNotBlank() }.map { listOf(it.text) }
@@ -3574,8 +3625,14 @@ class ScanRepository(private val context: Context) {
             }
         }
         XlsxWriter.write(outFile, sheets)
-        ExcelExport(file = outFile, tablePages = tablePages, totalPages = pages.size)
+        ExcelExport(
+            file = outFile, tablePages = tablePages, totalPages = pages.size, unreadPages = unreadPages
+        )
     }
+
+    /** A page known only by its stored text: one line per cell, no geometry to build a table from. */
+    private fun textOnlyOcrPage(text: String): OcrPage =
+        OcrPage(0, 0, text.lines().dropLastWhile { it.isBlank() }.map { OcrLine(it, 0, 0, 0, 0) })
 
     /** A page for a slide, turned upright by [uprightRotation]: at most 2000 px, JPEG 90. */
     private fun slidePageJpeg(page: File, uprightRotation: Int): ByteArray {
@@ -3649,8 +3706,9 @@ class ScanRepository(private val context: Context) {
      *  1. the source is only read; a locked source is refused (its password cannot re-encrypt);
      *  2. [duplicateDocument] makes the copy, so a failure can never leave the library half-edited;
      *  3. each page is decoded once (≤ 3000 px), marked and swapped through [PageReplace];
-     *  4. a page carrying a redaction loses its OCR text/geometry and its kept `.orig`, then is
-     *     re-queued for recognition — the old text and unredacted pixels are not in the copy;
+     *  4. every marked page loses its kept `.orig` (a filter must never restore the unmarked
+     *     pixels); a page carrying a redaction also loses its OCR text/geometry and is re-queued
+     *     for recognition — the old text and unredacted pixels are not in the copy;
      *  5. the PDF is regenerated and verified before the copy is handed back.
      *
      * Any failure deletes the unfinished copy and leaves the source byte-identical.
@@ -3691,9 +3749,13 @@ class ScanRepository(private val context: Context) {
                 val page = pages[index]
                 val marks = pageEdits.flatMap { it.marks }
                 PageStamp.applyPage(page, marks, index + 1, pages.size)
+                // H3-3: any burned-in mark makes the kept `.orig` stale. Leaving it beside a
+                // marked page let a later filter (even Original) rebuild the page from pixels
+                // that never had the signature/watermark. Redaction additionally drops the
+                // recognised text, because the old text described the hidden pixels.
+                File(page.parentFile, page.nameWithoutExtension + ".orig").delete()
                 if (marks.any { it is PageStamp.Mark.Redact }) {
                     // I9/E10: no unredacted pixels and no recognised text survive in the copy.
-                    File(page.parentFile, page.nameWithoutExtension + ".orig").delete()
                     ocrStore.invalidate(copy.id, page.name)
                 }
             }

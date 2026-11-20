@@ -12,12 +12,15 @@ import java.util.TimeZone
  *  - a `GTS_PDFA1` OutputIntent whose `/DestOutputProfile` is an embedded **sRGB ICC profile**
  *    (`res/raw/srgb.icc`, zlib-licensed, see `docs/licenses/icc-sRGB-zlib.txt`);
  *  - an **XMP metadata packet** with `pdfaid:part = 2`, `pdfaid:conformance = B`, `dc:title`
- *    and `xmp:CreateDate` / `xmp:ModifyDate` / `pdf:Producer` that **match the Info dictionary**;
+ *    and `xmp:CreateDate` / `xmp:ModifyDate` / `xmp:CreatorTool` / `pdf:Producer` that **match the
+ *    Info dictionary** (every Info entry is mirrored, ISO 19005-2 6.7.3);
  *  - a document **`/ID`** in the trailer, no encryption, no transparency (pages are plain JPEG).
  *
- * Everything here is pure text/byte building, so the structure can be unit-tested without a
- * PDF reader; [PdfGenerator] writes the objects, [PdfAValidator] (host check) and veraPDF
- * confirm compliance on the produced files.
+ * The archive is **image-only**: the recognised text layer's base-14 Helvetica is not embedded,
+ * and PDF/A-2b requires every font to be embedded (6.2.11.3.1), so [PdfGenerator] never writes a
+ * text layer into an archive. Everything here is pure text/byte building, so the structure can be
+ * unit-tested without a PDF reader; [PdfGenerator] writes the objects and veraPDF is the external
+ * host check for the produced files.
  */
 object PdfA {
 
@@ -97,6 +100,7 @@ object PdfA {
             append("   <xmp:CreateDate>").append(created).append("</xmp:CreateDate>\n")
             append("   <xmp:ModifyDate>").append(modified).append("</xmp:ModifyDate>\n")
             append("   <xmp:MetadataDate>").append(modified).append("</xmp:MetadataDate>\n")
+            append("   <xmp:CreatorTool>").append(PRODUCER).append("</xmp:CreatorTool>\n")
             append("   <pdf:Producer>").append(PRODUCER).append("</pdf:Producer>\n")
             append("  </rdf:Description>\n")
             append(" </rdf:RDF>\n")
@@ -111,7 +115,7 @@ object PdfA {
             "/OutputCondition (${pdfString(identifier)}) /Info (${pdfString(identifier)}) " +
             "/DestOutputProfile $iccObjectNumber 0 R"
 
-    /** The Info dictionary body (without `<< >>`); all four entries are mirrored in the XMP. */
+    /** The Info dictionary body (without `<< >>`); every entry is mirrored in the XMP. */
     fun infoDict(mode: Mode): String =
         "/Title (${pdfString(mode.title)}) /Producer (${pdfString(PRODUCER)}) " +
             "/Creator (${pdfString(PRODUCER)}) " +

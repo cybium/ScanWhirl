@@ -1,11 +1,14 @@
 ﻿package com.scanwhirl.app.ui.tools
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -42,6 +45,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 
 /**
  * v2 UI: 03_tools_hub — the result of every L4 tool.
@@ -74,6 +78,23 @@ class ToolResultActivity : BaseActivity() {
     private lateinit var saveAs: ActivityResultLauncher<String>
     private var toolId = ""
     private var note: String? = null
+
+    /**
+     * H2-4: on Android 7-9 a Documents copy needs the runtime storage grant. The save this screen
+     * asked for waits here while Android shows its prompt, so the answer continues the same tap.
+     */
+    private var pendingSave: (() -> Unit)? = null
+    private val storagePermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val action = pendingSave
+            pendingSave = null
+            if (granted) {
+                clearFail()
+                action?.invoke()
+            } else {
+                fail(getString(R.string.f7save_perm_denied_documents))
+            }
+        }
 
     /** T05: the size Compress was asked for, so the result can say it was not reached. */
     private var targetBytes: Long? = null
@@ -138,7 +159,7 @@ class ToolResultActivity : BaseActivity() {
             chosenLocationName = state.getString(KEY_CHOSEN_NAME)
             documentsExistingName = state.getString(KEY_EXISTING_NAME)
         }
-        saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(mime)) { uri ->
+        saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(pickerMime())) { uri ->
             uri ?: return@registerForActivityResult
             saveTo(uri)
         }
@@ -828,6 +849,15 @@ class ToolResultActivity : BaseActivity() {
      * and an Undo that removes only the copy this save created.
      */
     private fun alsoSave() {
+        // H2-4: before Android 10 this copy lands in the public Documents folder through a plain
+        // file, which needs the runtime storage grant. Ask with a plain reason instead of letting
+        // the write fail on EACCES and showing its raw system text.
+        if (DownloadSaver.needsLegacyStoragePermission(this)) {
+            pendingSave = { alsoSave() }
+            fail(getString(R.string.f7save_perm_why_documents))
+            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
         val source = sourceForSave() ?: return fail(getString(R.string.tools_result_nothing))
         if (!source.isFile || source.length() == 0L) {
             return fail(getString(R.string.tools_result_nothing))
@@ -879,9 +909,18 @@ class ToolResultActivity : BaseActivity() {
     }
 
     /** The type the Documents copy is indexed with: a document's PDF, a ZIP, or the result's own. */
-    private fun saveMimeFor(name: String): String = when {
+    private fun saveMimeFor(name: String): String =
+        if (name.endsWith(".zip", ignoreCase = true)) "application/zip" else pickerMime()
+
+    /**
+     * H2-2: the type the system Save-as picker is asked for must match the bytes it will receive.
+     * Several results are one ZIP; a single document result is its PDF; a single exported file
+     * keeps its own type. Before this, a multi-document result asked for application/pdf and the
+     * picker saved ZIP bytes as "Split.zip.pdf".
+     */
+    private fun pickerMime(): String = when {
+        docIds.size > 1 || files.size > 1 -> "application/zip"
         docIds.size == 1 -> "application/pdf"
-        name.endsWith(".zip", ignoreCase = true) -> "application/zip"
         else -> mime
     }
 
@@ -922,31 +961,88 @@ class ToolResultActivity : BaseActivity() {
 
     private fun saveTo(uri: Uri) {
         val source = sourceForSave() ?: return fail(getString(R.string.tools_result_nothing))
-        val displayName = suggestedName() ?: source.name
+        val suggested = suggestedName() ?: source.name
+        clearFail()
         lifecycleScope.launch {
             try {
                 val verified = withContext(Dispatchers.IO) {
+                    // H2-2: the picker has already created the document. If anything below fails,
+                    // that empty or half-written file must be removed again (see the catch).
                     contentResolver.openOutputStream(uri)?.use { out ->
                         source.inputStream().use { it.copyTo(out) }
                         out.flush()
-                    } ?: throw IllegalStateException("No access to the destination")
+                    } ?: throw IOException("No access to the destination")
                     // W3: the location is named only after the written bytes were read back and
                     // match the produced file, not just because the picker returned a URI.
                     writtenBytesMatch(uri, source)
                 }
-                if (!verified) throw IllegalStateException("The copy could not be verified")
-                chosenLocationName = displayName
+                if (!verified) throw IOException("The copy could not be verified")
+                // H2-2: the provider may have adjusted the extension or numbered the name, and the
+                // person may have typed another name in the picker. The receipt names the file
+                // that really exists, never the suggestion we asked for.
+                val created = withContext(Dispatchers.IO) { createdName(uri, suggested) }
+                chosenLocationName = created
                 refreshLocationLines()
                 Toast.makeText(
                     this@ToolResultActivity,
-                    getString(R.string.tools_result_saved, displayName),
+                    getString(R.string.tools_result_saved, created),
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                fail(getString(R.string.tools_result_save_failed, e.message ?: ""))
+                // H2-2: no half-written document is left in the folder the person chose. The
+                // failure is said in the app's own words, never as a raw system message.
+                val removed = withContext(Dispatchers.IO) { removeCreatedDocument(uri) }
+                fail(
+                    when {
+                        e is SecurityException -> getString(R.string.f7save_perm_denied_documents)
+                        !removed -> getString(
+                            R.string.tools_result_save_failed,
+                            getString(R.string.f7save_picker_write_failed_left)
+                        )
+                        else -> getString(
+                            R.string.tools_result_save_failed,
+                            getString(R.string.f7save_picker_write_failed)
+                        )
+                    }
+                )
             }
+        }
+    }
+
+    /** H2-2: the name the created file really has; the suggestion is only the fallback. */
+    private fun createdName(uri: Uri, fallback: String): String = try {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst() && cursor.columnCount > 0 && !cursor.isNull(0)) {
+                    cursor.getString(0)
+                } else {
+                    null
+                }
+            }
+            ?.takeIf { it.isNotBlank() }
+            ?: fallback
+    } catch (_: Exception) {
+        fallback
+    }
+
+    /**
+     * H2-2: removes the document the picker created for a copy that then failed, so no empty or
+     * partial file stays in the folder the person chose. A Documents provider is asked through
+     * [DocumentsContract]; any other provider through the resolver's own delete.
+     */
+    private fun removeCreatedDocument(uri: Uri): Boolean {
+        val removedByProvider = try {
+            DocumentsContract.deleteDocument(contentResolver, uri)
+        } catch (_: Exception) {
+            false
+        }
+        if (removedByProvider) return true
+        return try {
+            contentResolver.delete(uri, null, null) > 0
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -1113,6 +1209,12 @@ class ToolResultActivity : BaseActivity() {
     private fun fail(message: String) {
         errorView.text = message
         errorView.isVisible = true
+    }
+
+    /** H2-4: a granted permission clears the reason line it was asked with. */
+    private fun clearFail() {
+        errorView.text = ""
+        errorView.isVisible = false
     }
 
     private fun defaultMime(): String = when {
