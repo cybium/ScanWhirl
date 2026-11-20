@@ -178,6 +178,16 @@ class VaultPasswordsWiringTest {
         dialog.findViewById<EditText>(R.id.unlockPassword)!!.setText(password)
         dialog.findViewById<View>(R.id.swSheetPrimary)!!.performClick()
         idle()
+        // S4B: the current-password check is a suspending PBKDF2 off the main thread. Wait until
+        // it has been applied (the error line, the sheet closing, or the next sheet opening).
+        assertTrue(
+            "the current-password check finishes",
+            pollUntil {
+                !dialog.isShowing ||
+                    ShadowDialog.getLatestDialog() !== dialog ||
+                    dialog.findViewById<View>(R.id.swPasswordError)?.visibility == View.VISIBLE
+            }
+        )
     }
 
     private fun assertNoPlaintext(password: String) {
@@ -437,6 +447,12 @@ class VaultPasswordsWiringTest {
                 sheet!!.findViewById<EditText>(R.id.unlockPassword).setText("1234")
                 sheet.findViewById<View>(R.id.unlockRemove).performClick()
             }
+            idle()
+            // S4B: the password check runs off the main thread; the confirmation follows it.
+            assertTrue(
+                "the confirmation follows the check",
+                pollUntil { ShadowDialog.getLatestDialog() !== sheet }
+            )
             idle()
 
             // The second confirmation: its buttons carry no ids, so find the confirm by its text.

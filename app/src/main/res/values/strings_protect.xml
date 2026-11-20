@@ -47,6 +47,7 @@
     <string name="unlock_remove_msg">This PDF will open without a password from now on. Its pages stay exactly as they are.</string>
     <string name="unlock_remove_confirm">Remove protection</string>
     <string name="unlock_removed">Password removed. The PDF is unlocked.</string>
+    <string name="unlock_checking">Checking password…</string>
 
     <!-- L3: the Tools/Home Protect and Unlock tiles' document chooser. -->
     <string name="lock_from_pdf">From a PDF file</string>
