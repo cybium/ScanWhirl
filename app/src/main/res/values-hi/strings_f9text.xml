@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- F9-TEXT: To Excel wording for a page the recogniser could not read (H4-5).
+     A failed read is not the same as a page that has no table. -->
+<resources>
+    <string name="tools_excel_unread_page">यह पन्ना पढ़ा नहीं जा सका, इसलिए इसमें से कोई तालिका नहीं निकाली गई।</string>
+</resources>

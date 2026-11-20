@@ -8,6 +8,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import androidx.core.net.toUri
 import com.scanwhirl.app.R
+import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.OcrStore
@@ -2942,7 +2943,7 @@ class ScanRepository(private val context: Context) {
         val id = dir.name
         val pages = pageFilesIn(dir)
         val searchable = layered && pages.withIndex().all { (index, _) ->
-            geo.containsKey("page_%03d.jpg".format(index))
+            geo.containsKey(String.format(Locale.ROOT, "page_%03d.jpg", index))
         }
         val flag = File(dir, "text_layer.flag")
         if (searchable) {
@@ -2990,8 +2991,10 @@ class ScanRepository(private val context: Context) {
             false
         } else {
             val textLayers = if (Prefs.makeSearchable(context)) {
-                pages.indices.filter { geo.containsKey("page_%03d.jpg".format(it)) }
-                    .associate { i -> i to geo["page_%03d.jpg".format(i)]!! }
+                pages.indices.filter {
+                    geo.containsKey(String.format(Locale.ROOT, "page_%03d.jpg", it))
+                }
+                    .associate { i -> i to geo[String.format(Locale.ROOT, "page_%03d.jpg", i)]!! }
             } else {
                 emptyMap()
             }
@@ -3379,42 +3382,83 @@ class ScanRepository(private val context: Context) {
     data class ExcelExport(
         val file: File?,
         val tablePages: Int,
-        val totalPages: Int
+        val totalPages: Int,
+        /** Page indices (0-based) the recogniser could not read; their sheets say so honestly. */
+        val unreadPages: List<Int> = emptyList()
     )
 
     /**
      * Writes a `.xlsx` workbook: one sheet per page ("Page 1", ...). A page whose stored OCR
      * geometry forms a table becomes a cell grid; other pages export one line per cell.
      * [tablesOnly] keeps only the pages with a table (and writes nothing at all when no page has
-     * one). Pages with no stored OCR are recognised now with the app's existing on-device engine.
+     * one). Pages with no stored OCR are recognised now with the app's existing on-device engine,
+     * in the user's Text-language setting, and the result is kept (as To Word does). A page whose
+     * stored text has no geometry (typed in the Text screen, or corrected after recognition)
+     * exports exactly that text and is never re-read.
      */
     suspend fun exportExcel(
         id: String,
         outFile: File,
         tablesOnly: Boolean = false,
-        noTableNote: String = "No table found on this page."
+        noTableNote: String = "No table found on this page.",
+        unreadNote: String? = null
     ): ExcelExport = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
-        val stored = ocrStore.readGeo(id)
+        val storedText = ocrStore.readText(id)
+        val storedGeo = ocrStore.readGeo(id)
+        // H4-5: a page the recogniser never read has no table claim to make, so it says so instead
+        // of "no table found on this page".
+        val unreadNoteText = unreadNote ?: context.getString(R.string.tools_excel_unread_page)
+        val unreadPages = mutableListOf<Int>()
         val pages = ArrayList<OcrPage>(doc.pageFiles.size)
-        for (page in doc.pageFiles) {
+        for ((index, page) in doc.pageFiles.withIndex()) {
             currentCoroutineContext().ensureActive()
-            val ocr = stored[page.name] ?: runCatching { OcrEngine.recognizeFile(page).page }
-                .getOrElse { OcrPage(0, 0, emptyList()) }
-            pages += ocr
+            val geo = storedGeo[page.name]
+            val text = storedText[page.name]
+            pages += when {
+                // Geometry is dropped by the store whenever the text is edited, so a page that still
+                // has geometry is the page the user sees.
+                geo != null -> geo
+                // H4-2: text without geometry is the user's own entry or correction. Export it and
+                // never replace it with a fresh read of the image.
+                text != null -> textOnlyOcrPage(text)
+                else -> {
+                    val result = try {
+                        OcrEngine.recognizeFile(page, com.scanwhirl.app.util.OcrLanguageSettings.get(appContext()))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    } catch (_: OutOfMemoryError) {
+                        null
+                    }
+                    if (result == null) {
+                        unreadPages += index
+                        OcrPage(0, 0, emptyList())
+                    } else {
+                        // H4-2: keep what was read, exactly like To Word, so the Text screen shows
+                        // it and the next export needs no second English pass.
+                        ocrStore.putPage(id, page.name, result.text, result.page)
+                        result.page
+                    }
+                }
+            }
         }
         val tables = pages.map { TableDetect.detect(it) }
         val tablePages = tables.count { it != null }
         if (tablesOnly && tablePages == 0) {
-            return@withContext ExcelExport(file = null, tablePages = 0, totalPages = pages.size)
+            return@withContext ExcelExport(
+                file = null, tablePages = 0, totalPages = pages.size, unreadPages = unreadPages
+            )
         }
         val sheets = pages.mapIndexedNotNull { index, ocr ->
             val table = tables[index]
             when {
                 table != null -> XlsxWriter.Sheet("Page ${index + 1}", table.rows)
                 tablesOnly -> null
+                index in unreadPages -> XlsxWriter.Sheet("Page ${index + 1}", listOf(listOf(unreadNoteText)))
                 else -> XlsxWriter.Sheet(
                     "Page ${index + 1}",
                     ocr.lines.filter { it.text.isNotBlank() }.map { listOf(it.text) }
@@ -3423,8 +3467,14 @@ class ScanRepository(private val context: Context) {
             }
         }
         XlsxWriter.write(outFile, sheets)
-        ExcelExport(file = outFile, tablePages = tablePages, totalPages = pages.size)
+        ExcelExport(
+            file = outFile, tablePages = tablePages, totalPages = pages.size, unreadPages = unreadPages
+        )
     }
+
+    /** A page known only by its stored text: one line per cell, no geometry to build a table from. */
+    private fun textOnlyOcrPage(text: String): OcrPage =
+        OcrPage(0, 0, text.lines().dropLastWhile { it.isBlank() }.map { OcrLine(it, 0, 0, 0, 0) })
 
     /** A page for a slide, turned upright by [uprightRotation]: at most 2000 px, JPEG 90. */
     private fun slidePageJpeg(page: File, uprightRotation: Int): ByteArray {
