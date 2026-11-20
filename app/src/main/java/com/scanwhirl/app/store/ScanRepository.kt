@@ -1323,7 +1323,13 @@ class ScanRepository(private val context: Context) {
             val name = OutputNames.forTool(doc.name, label, existingDocumentNames())
             val chosen = indices.map { doc.pageFiles[it] }
             buildAndPublish(name, doc.category, chosen.sumOf { it.length() }) { staging ->
-                chosen.forEachIndexed { i, f -> stagePageCopy(f, staging, i) }
+                val pageMap = LinkedHashMap<String, String>()
+                chosen.forEachIndexed { i, f ->
+                    pageMap[stagePageCopy(f, staging, i).name] = f.name
+                }
+                // H3-5: the pages are copied byte for byte, so their recognised text and line
+                // geometry belong to the new document too — searchable before the app restarts.
+                carryOcr(id, staging, pageMap, pageMap.keys)
             }
         }
 
@@ -1739,6 +1745,101 @@ class ScanRepository(private val context: Context) {
         return out
     }
 
+    /**
+     * F11 (H3-5) test seam: called with the number of page byte arrays this compress holds at
+     * that instant. The streaming paths never exceed one, however many pages the document has;
+     * the all-at-once `SizeFit.compressPages` would report the whole document.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal var onLivePageBytes: ((Int) -> Unit)? = null
+
+    /**
+     * F11 (H3-5): carries the source document's recognised text onto [staging] pages, so a
+     * Compress/Split/Extract output is searchable the moment it is published instead of only
+     * after a restart and a background re-recognition. Compressing changes pixels, not words;
+     * splitting/extracting only renumbers pages.
+     *
+     * [pageMap] is output page name -> source page name; [keepGeometry] names the output pages
+     * whose pixels kept the source's exact size. Geometry is dropped elsewhere on purpose: line
+     * boxes from a downscaled page would be misplaced, and the PDF writer only layers a page
+     * whose geometry matches its JPEG.
+     */
+    private fun carryOcr(
+        sourceId: String,
+        staging: File,
+        pageMap: Map<String, String>,
+        keepGeometry: Set<String>
+    ) {
+        val texts = ocrStore.readText(sourceId)
+        if (texts.isEmpty()) return
+        val geo = ocrStore.readGeo(sourceId)
+        val outTexts = LinkedHashMap<String, String>()
+        val outGeo = LinkedHashMap<String, OcrPage>()
+        for ((dst, src) in pageMap) {
+            val text = texts[src] ?: continue
+            outTexts[dst] = text
+            if (dst in keepGeometry) geo[src]?.let { outGeo[dst] = it }
+        }
+        if (outTexts.isNotEmpty()) {
+            OcrStore(OpStaging.root(context.filesDir)).putAll(staging.name, outTexts, outGeo)
+        }
+    }
+
+    /**
+     * F11 (H3-2): writes one compressed page per source page into [staging] — one page's bytes
+     * alive at a time, never a `List<ByteArray>` of the whole document — and carries the source's
+     * recognised text across (H3-5).
+     */
+    private suspend fun stageCompressedPages(
+        id: String,
+        doc: ScanDocument,
+        staging: File,
+        compress: (index: Int, page: File) -> ByteArray
+    ) {
+        val geo = ocrStore.readGeo(id)
+        val pageMap = LinkedHashMap<String, String>()
+        val keepGeometry = LinkedHashSet<String>()
+        doc.pageFiles.forEachIndexed { i, file ->
+            currentCoroutineContext().ensureActive()
+            onLivePageBytes?.invoke(1)
+            val bytes = compress(i, file)
+            val out = stagePageBytes(bytes, staging, i)
+            onLivePageBytes?.invoke(0)
+            pageMap[out.name] = file.name
+            val layer = geo[file.name]
+            if (layer != null) {
+                val info = runCatching { PdfGenerator.readJpegInfo(bytes) }.getOrNull()
+                if (info != null && info.width == layer.width && info.height == layer.height) {
+                    keepGeometry += out.name
+                }
+            }
+        }
+        carryOcr(id, staging, pageMap, keepGeometry)
+    }
+
+    /**
+     * F11 (H3-2): re-fits the page JPEGs already written into [staging] so the finished PDF hits
+     * [target]. Each page is read, fitted and written back on its own; the whole document is
+     * never in memory (the old `SizeFit.compressBytes` held every page and a second copy).
+     * Internal so a test can drive it with a staging folder and count live page bytes.
+     */
+    internal suspend fun fitStagedPagesToTarget(staging: File, target: Long) {
+        val pages = pageFilesIn(staging)
+        if (pages.isEmpty()) throw IOException("No pages to compress")
+        val sizes = pages.map { it.length().coerceAtLeast(1L) }
+        val sum = sizes.sum().coerceAtLeast(1L)
+        val budget = (target - (pages.size * 600L + 1000L)).coerceAtLeast(2048L)
+        pages.forEachIndexed { i, file ->
+            currentCoroutineContext().ensureActive()
+            onLivePageBytes?.invoke(1)
+            val bytes = file.readBytes()
+            val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
+            val fitted = SizeFit.fitToShare(bytes, share)
+            if (fitted !== bytes) Durable.writeFile(file, fitted)
+            onLivePageBytes?.invoke(0)
+        }
+    }
+
     /** "Merged PDF <timestamp>" when no name is given. */
     private fun defaultMergedName(prefix: String): String =
         "$prefix ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())}"
@@ -1779,9 +1880,10 @@ class ScanRepository(private val context: Context) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         buildAndPublish(outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }) { staging ->
-            // One page's bytes are alive at a time; the source list is never materialised.
-            doc.pageFiles.forEachIndexed { i, file ->
-                stagePageBytes(ImageTools.recompressJpeg(file.readBytes(), quality, maxDim), staging, i)
+            // H3-5: the words survive compression; text (and geometry where the pixels kept their
+            // size) is carried to the copy so it is searchable right away.
+            stageCompressedPages(id, doc, staging) { _, file ->
+                ImageTools.recompressJpeg(file.readBytes(), quality, maxDim)
             }
         }
     }
@@ -1789,7 +1891,8 @@ class ScanRepository(private val context: Context) {
     /**
      * Compresses to a total-size target, one page at a time. The old path built a `List<ByteArray>`
      * for every page first — a 2000-page book held the whole document (hundreds of MB) in memory.
-     * Here only the current page's bytes and bitmap are alive.
+     * Here only the current page's bytes and bitmap are alive, and the recognised text is carried
+     * to the copy (H3-5).
      */
     suspend fun compressScanToTarget(id: String, targetBytes: Long): ScanDocument =
         withContext(Dispatchers.IO) {
@@ -1802,10 +1905,9 @@ class ScanRepository(private val context: Context) {
             buildAndPublish(
                 outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }
             ) { staging ->
-                doc.pageFiles.forEachIndexed { i, file ->
-                    currentCoroutineContext().ensureActive()
+                stageCompressedPages(id, doc, staging) { i, file ->
                     val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
-                    stagePageBytes(SizeFit.fitToShare(file.readBytes(), share), staging, i)
+                    SizeFit.fitToShare(file.readBytes(), share)
                 }
             }
         }
@@ -2139,6 +2241,54 @@ class ScanRepository(private val context: Context) {
         uri, name, dpi, maxDim, quality, vaulted = false,
         onPlan = null, onPage = onPage, preset = ImportDecision.Pages(indices)
     )
+
+    /**
+     * F11 (H3-2): compresses a picked PDF to a total-size target without ever holding the whole
+     * document in memory. Pages are rendered one at a time into private staging (the shared
+     * huge-PDF gate and space check apply), then each page is re-fitted from disk, and the
+     * verified folder is published once. Only a cancel publishes nothing.
+     *
+     * [sourceName] is the picked file's name; the copy is named through [outputName], so two
+     * runs on the same file never share a name (H3-6, the same rule as a saved scan).
+     */
+    suspend fun importPdfToTarget(
+        uri: Uri,
+        sourceName: String?,
+        indices: List<Int>,
+        targetBytes: Long,
+        dpi: Float = 150f,
+        maxDim: Int = 2048,
+        quality: Int = 85,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): ScanDocument? {
+        require(targetBytes > 0) { "Target size must be positive" }
+        require(indices.isNotEmpty()) { "No pages selected" }
+        val base = sourceName?.trim()?.replace('\n', ' ')
+            ?.takeIf { it.isNotBlank() } ?: nextDocumentName()
+        val docName = outputName(base, "Compressed")
+        return withPlannedPdfPages(
+            uris = listOf(uri),
+            dpi = dpi,
+            maxDim = maxDim,
+            quality = quality,
+            preset = ImportDecision.Pages(indices)
+        ) { planned ->
+            buildAndPublish(docName, null, 0L) { staging ->
+                val total = planned.sumOf { it.indices.size }
+                var done = 0
+                for (pdf in planned) {
+                    if (pdf.indices.isEmpty()) continue
+                    PdfImport.renderPages(pdf.source, staging, pdf.indices, usableSpace(docsDir)) { pageDone, _ ->
+                        OpFaults.at("op:page:${done + pageDone - 1}")
+                        onPage(done + pageDone, total)
+                    }
+                    done += pdf.indices.size
+                }
+                if (done == 0) throw IllegalStateException("No pages to compress")
+                fitStagedPagesToTarget(staging, targetBytes)
+            }
+        }
+    }
 
     /** Vault import with the shared huge-PDF gate. */
     suspend fun importPdfIntoVaultPlanned(
@@ -3078,7 +3228,12 @@ class ScanRepository(private val context: Context) {
                     context.getString(com.scanwhirl.app.R.string.split_part_word)
                 )
                 buildAndPublish(name, doc.category, chosen.sumOf { it.length() }) { staging ->
-                    chosen.forEachIndexed { i, f -> stagePageCopy(f, staging, i) }
+                    val pageMap = LinkedHashMap<String, String>()
+                    chosen.forEachIndexed { i, f ->
+                        pageMap[stagePageCopy(f, staging, i).name] = f.name
+                    }
+                    // H3-5: a byte-identical page keeps its recognised text and line geometry.
+                    carryOcr(id, staging, pageMap, pageMap.keys)
                 }
             }
         }

@@ -291,15 +291,23 @@ class SearchIndexBackfillTest {
     }
 
     @Test
-    fun `the startup pass also queues a document whose output dropped its text`() = runBlocking {
-        // A compressed copy is re-encoded, so its old coordinates/text cannot be reused:
-        // buildAndPublish leaves it pending instead. The startup pass must pick it up.
+    fun `the startup pass also recognises a document that carries no text`() = runBlocking {
+        // H3-5: a Compress/Split/Extract output now carries its source text, so a fresh copy is
+        // no longer the example of a text-less document. A library restored from an older build's
+        // backup can still hold one: text gone, marker present. The startup pass must pick it up.
         val id = saved("Booklet", pages = 2)
         withText(id, "Line 1: The quick brown fox")
         val compressed = repo.compressScan(id, quality = 70, maxDim = null)
+        assertTrue("H3-5: the compressed copy carries its text", repo.hasOcr(compressed.id))
+        assertFalse(
+            "H3-5: and it is not queued for a pointless re-recognition",
+            repo.ocrStore.isPending(compressed.id)
+        )
 
-        assertFalse("a re-encoded copy starts without text", repo.hasOcr(compressed.id))
-        assertTrue("and it is queued for recognition", repo.ocrStore.isPending(compressed.id))
+        // Exactly what an older build left behind: no ocr.txt and a pending marker.
+        File(File(docsDir, compressed.id), "ocr.txt").delete()
+        repo.ocrStore.markPending(compressed.id)
+        assertFalse("fixture starts without stored text", repo.hasOcr(compressed.id))
 
         val idx = indexer(autoRun = true)
         LibraryIndexBackfill.run(app, repo, idx, powerSave = { false })
