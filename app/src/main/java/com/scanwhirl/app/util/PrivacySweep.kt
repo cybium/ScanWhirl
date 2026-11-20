@@ -17,6 +17,10 @@ import java.io.File
  * launch never needs them, so they are deleted before any screen is shown — unless a backup or
  * restore is running in this process right now.
  *
+ * Outgoing share copies are the exception: a recipient app reads its content:// URI lazily and
+ * Android may restart this process to serve it. They are therefore reclaimed by age in
+ * [ShareUtils.pruneShareCopies] (after 24 h), not wiped on sight.
+ *
  * Only app-owned cache directories are touched; the library (`filesDir/documents`), the Vault
  * (`filesDir/vault2`) and user exports are never included.
  */
@@ -26,7 +30,6 @@ object PrivacySweep {
     internal val CACHE_DIRS = listOf(
         "vault_open",
         "vault_verify",
-        "documents",
         "pdfa",
         "exports",
         "fullbackup"
@@ -80,6 +83,18 @@ object PrivacySweep {
             if (name == "fullbackup" && jobRunning) return@forEach
             val dir = File(cache, name)
             if (dir.exists() && dir.deleteRecursively()) removed++
+        }
+        // `documents` is the FileProvider tree: viewer/batch scratch plus the per-share copies.
+        // Everything except the share folder is scratch and is wiped; share copies follow the
+        // retention rule so a recipient still reading one keeps its bytes.
+        val documents = File(cache, "documents")
+        if (documents.isDirectory) {
+            documents.listFiles()?.forEach { child ->
+                if (child.name == "share") return@forEach
+                val gone = if (child.isDirectory) child.deleteRecursively() else child.delete()
+                if (gone) removed++
+            }
+            removed += ShareUtils.pruneShareCopies(context)
         }
         cache.listFiles()?.forEach { file ->
             val plainFile = file.isFile && CACHE_FILE_PREFIXES.any { file.name.startsWith(it) }

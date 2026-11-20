@@ -436,9 +436,8 @@ class BusinessCardActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) {
-                    val dir = File(cacheDir, "documents/share").apply { mkdirs() }
                     val safe = ShareUtils.sanitizeName(contact.name).ifBlank { "contact" }
-                    val out = File(dir, "$safe.vcf")
+                    val out = ShareUtils.newShareTarget(this@BusinessCardActivity, "$safe.vcf")
                     Durable.writeFile(out, ContactParser.vCard(contact).toByteArray(Charsets.UTF_8))
                     out
                 }
