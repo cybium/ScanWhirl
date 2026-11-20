@@ -86,6 +86,13 @@ class PageViewerActivity : BaseActivity() {
         binding.pager.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         binding.pager.adapter = pagerAdapter
+        // F1-FIT: the dock floats over the pager, so the page must be able to sit
+        // fully above it — measured, not a guessed constant, because the dock now
+        // wraps to two rows at large text.
+        binding.pageDock.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            reserveDockSpace()
+        }
+        binding.pageDock.post { reserveDockSpace() }
         snapHelper = PagerSnapHelper().also { it.attachToRecyclerView(binding.pager) }
         binding.pager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
@@ -159,6 +166,26 @@ class PageViewerActivity : BaseActivity() {
     private fun reload(): Boolean {
         val dir = stagingDir
         return if (dir != null) reloadStaging(dir) else reloadSaved()
+    }
+
+    /**
+     * F1-FIT: keeps the whole page above the floating dock. The dock wraps to a
+     * second row at large text, so its height is measured here instead of being
+     * guessed — a fixed padding would hide the bottom of the page behind it.
+     */
+    private fun reserveDockSpace() {
+        val dock = binding.pageDock
+        if (dock.height <= 0) return
+        val gap = (12 * resources.displayMetrics.density).toInt()
+        val bottom = dock.height + gap
+        if (binding.pager.paddingBottom != bottom) {
+            binding.pager.setPadding(
+                binding.pager.paddingLeft,
+                binding.pager.paddingTop,
+                binding.pager.paddingRight,
+                bottom
+            )
+        }
     }
 
     private fun reloadSaved(): Boolean {

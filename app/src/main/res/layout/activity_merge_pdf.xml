@@ -39,14 +39,16 @@
         android:clipToPadding="false"
         android:padding="8dp" />
 
-    <!-- test25 Phase 5D: inset floating glass dock. -->
-    <LinearLayout
+    <!-- test25 Phase 5D: inset floating glass dock.
+         F1-FIT (atlas 2026-11-20): at 200 % text "Merge" broke into "Mer / ge".
+         The row is a FlowRowLayout now: side by side while both labels fit,
+         otherwise one full-width action per row. -->
+    <com.scanwhirl.app.ui.FlowRowLayout
+        android:id="@+id/mergeDock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="8dp"
         android:background="@drawable/bg_dock_glass"
-        android:gravity="end"
-        android:orientation="horizontal"
         android:padding="12dp">
 
         <com.google.android.material.button.MaterialButton
@@ -54,6 +56,8 @@
             style="@style/Widget.ScanWhirl.Button.Secondary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginHorizontal="4dp"
+            android:layout_marginVertical="2dp"
             android:text="@string/add_pdf"
             app:icon="@drawable/ic_document" />
 
@@ -61,9 +65,10 @@
             android:id="@+id/btnMerge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginHorizontal="4dp"
+            android:layout_marginVertical="2dp"
             android:enabled="false"
             android:text="@string/merge_action"
             app:icon="@drawable/ic_merge" />
-    </LinearLayout>
+    </com.scanwhirl.app.ui.FlowRowLayout>
 </LinearLayout>
