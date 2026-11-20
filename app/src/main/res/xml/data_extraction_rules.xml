@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- G2-HONESTY (F-03, lead decision): Android 12+ honours this file even though
+     android:allowBackup="false"; on some manufacturers device-to-device transfer would otherwise
+     copy app-private documents, prefs and Vault blobs. Both cloud backup and phone-to-phone
+     transfer copy NOTHING: every domain is excluded. ScanWhirl's own encrypted backup file is the
+     only supported way to move a library (Me > Backup & restore). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

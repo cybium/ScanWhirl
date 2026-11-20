@@ -1,6 +1,7 @@
 package com.scanwhirl.app.store.backup
 
 import android.content.Context
+import android.util.Log
 import com.scanwhirl.app.BuildConfig
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -637,8 +638,10 @@ class FullBackup(
                             .onSuccess { result ->
                                 if (result.skipped) skipped++ else vaultReencrypted++
                             }
-                            .onFailure { error ->
-                                warnings.add("A Vault file could not be restored: ${error.message ?: "damaged"}.")
+                            .onFailure {
+                                // F-05: log the category only; the person reads a stable sentence.
+                                Log.w(TAG, "vault entry restore failed")
+                                warnings.add(context.getString(R.string.backup_restore_vault_entry_failed))
                             }
                     }
             }
@@ -673,7 +676,10 @@ class FullBackup(
                     }
                 }
                 edit.apply()
-            }.onFailure { warnings.add("Settings could not be restored.") }
+            }.onFailure {
+                Log.w(TAG, "settings restore failed")
+                warnings.add(context.getString(R.string.backup_restore_settings_failed))
+            }
         }
 
         return Report(documents, skipped, vaultEntries, vaultReencrypted, extras, vaultLocked, warnings)
@@ -713,6 +719,7 @@ class FullBackup(
 
     companion object {
         const val MIN_PASSWORD = 10
+        private const val TAG = "FullBackup"
         const val PREF_LAST_BACKUP = "full_backup_last_at"
         const val PREF_REMIND = "full_backup_remind"
         /** The non-secret "Vault setup not checked yet" marker (Prefs); device state only. */

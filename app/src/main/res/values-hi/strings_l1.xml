@@ -257,7 +257,7 @@
     <string name="vault_tab_not_setup">अभी बनी नहीं</string>
     <string name="vault_tab_locked">ताला लगा है</string>
     <string name="vault_tab_aes">इस फ़ोन पर AES-256</string>
-    <string name="vault_tab_relock">ऐप छोड़ने पर अपने आप ताला</string>
+    <string name="vault_tab_relock">उँगली का निशान या गुप्त नंबर से खुलती है · 2 मिनट बाद ताला</string>
 
     <plurals name="vault_tab_unlocked">
         <item quantity="one">%1$d दस्तावेज़ · खुली है</item>

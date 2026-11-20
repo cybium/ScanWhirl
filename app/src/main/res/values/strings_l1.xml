@@ -261,7 +261,7 @@
     <string name="vault_tab_not_setup">Not set up yet</string>
     <string name="vault_tab_locked">Locked</string>
     <string name="vault_tab_aes">AES-256 on this phone</string>
-    <string name="vault_tab_relock">Locks itself when you leave</string>
+    <string name="vault_tab_relock">Fingerprint or passcode to unlock · relocks 2 minutes after you leave</string>
 
     <plurals name="vault_tab_unlocked">
         <item quantity="one">%1$d document · unlocked</item>

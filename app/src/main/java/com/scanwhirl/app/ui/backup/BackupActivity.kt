@@ -528,7 +528,8 @@ class BackupActivity : BaseActivity() {
             val report = withContext(Dispatchers.IO) { runCatching { backup.restore(file, secret) } }
             file.delete()
             report.onSuccess { r ->
-                backup.markBackedUp()
+                // A restore is not a backup: only a durable backup WRITE (saveTo above) may move
+                // the "last backup" freshness line and postpone the reminder (F-04).
                 refresh()
                 val message = buildString {
                     append(buildParts(r))
