@@ -1008,7 +1008,7 @@ object PdfDecryptor {
         val cap = minOf(raw.size.toLong() * 4 + (1L shl 20), MAX_OUTPUT_BYTES)
         val out = ByteArrayOutputStream(minOf(raw.size + raw.size / 4 + 4096, 64 * 1024 * 1024))
         out.write(raw, 0, first)
-        val offsets = HashMap<Int, Int>()
+        val offsets = HashMap<Int, WrittenObject>()
         var highest = 0
 
         for (entry in objects) {
@@ -1018,10 +1018,16 @@ object PdfDecryptor {
             if (out.size().toLong() + (entry.end - entry.offset).toLong() * 2 + 64 > cap) {
                 throw Unsupported("This PDF would grow too large to decrypt safely")
             }
-            offsets[entry.number] = out.size()
+            val offset = out.size()
+            writeObject(raw, entry, scheme, encryptObject, out)
+            offsets[entry.number] = WrittenObject(offset, entry.gen)
             highest = maxOf(highest, entry.number)
-            writeObject(raw, entry, scheme, out)
         }
+
+        val root = trailerReference(xref, "Root", offsets)
+        val info = if (xref.trailer.dict?.containsKey("Info") == true) {
+            trailerReference(xref, "Info", offsets)
+        } else null
 
         val size = highest + 1
         if (size > MAX_XREF_ROWS) throw Unsupported("This PDF has too many object numbers to rewrite")
@@ -1030,30 +1036,20 @@ object PdfDecryptor {
         val table = StringBuilder()
         table.append("xref\n0 ").append(size).append('\n')
         table.append("0000000000 65535 f \n")
-        val byNumber = HashMap<Int, Entry>()
-        for (entry in objects) byNumber[entry.number] = entry
         for (number in 1 until size) {
-            val offset = offsets[number]
-            val entry = byNumber[number]
-            if (offset == null || entry == null) {
+            val entry = offsets[number]
+            if (entry == null) {
                 table.append("0000000000 00000 f \n")
             } else {
-                table.append(String.format(Locale.ROOT, "%010d %05d n \n", offset, entry.gen))
+                table.append(String.format(Locale.ROOT, "%010d %05d n \n", entry.offset, entry.gen))
             }
         }
         out.write(table.toString().toByteArray(Charsets.ISO_8859_1))
 
-        val root = trailerReference(xref, "Root")
-        val info = xref.trailer.dict?.get("Info")
-        val infoEntry = info?.let { value ->
-            if (value.refNumber < 0) null else xref.entries.firstOrNull {
-                it.number == value.refNumber && it.gen == value.refGen
-            }
-        }
         val tail = StringBuilder("trailer\n<< /Size ").append(size)
         tail.append(" /Root ").append(root.number).append(' ').append(root.gen).append(" R")
-        if (infoEntry != null) {
-            tail.append(" /Info ").append(infoEntry.number).append(' ').append(infoEntry.gen).append(" R")
+        if (info != null) {
+            tail.append(" /Info ").append(info.number).append(' ').append(info.gen).append(" R")
         }
         val id = xref.trailer.dict?.get("ID")?.array
         if (id != null && id.isNotEmpty()) {
@@ -1069,21 +1065,34 @@ object PdfDecryptor {
         return out.toByteArray()
     }
 
+    private class WrittenObject(val offset: Int, val gen: Int)
     private class TrailerRef(val number: Int, val gen: Int)
 
-    private fun trailerReference(xref: Xref, name: String): TrailerRef {
+    private fun trailerReference(xref: Xref, name: String, offsets: Map<Int, WrittenObject>): TrailerRef {
         val value = xref.trailer.dict?.get(name)
             ?: throw Unsupported("The PDF trailer has no /$name")
         if (value.refNumber < 0) throw Unsupported("The PDF trailer's /$name is not a reference")
-        val entry = xref.entries.firstOrNull { it.number == value.refNumber }
-            ?: throw Unsupported("The PDF trailer's /$name points at a missing object")
+        val entry = offsets[value.refNumber]
+            ?: throw Unsupported("The PDF trailer's /$name points at an object not written to the output")
         if (entry.gen != value.refGen) {
             throw Unsupported("The PDF trailer's /$name does not match its object generation")
         }
-        return TrailerRef(entry.number, entry.gen)
+        return TrailerRef(value.refNumber, entry.gen)
     }
 
-    private fun writeObject(raw: ByteArray, entry: Entry, scheme: Scheme, out: ByteArrayOutputStream) {
+    /** Only parsed object values are traversed; string and stream contents are not PDF references. */
+    private fun referencesObject(value: Pv, number: Int): Boolean =
+        value.refNumber == number ||
+            value.dict?.values?.any { referencesObject(it, number) } == true ||
+            value.array?.any { referencesObject(it, number) } == true
+
+    private fun writeObject(
+        raw: ByteArray,
+        entry: Entry,
+        scheme: Scheme,
+        encryptObject: Int,
+        out: ByteArrayOutputStream
+    ) {
         val c = Cursor(raw, entry.offset, entry.end)
         if (readUInt(c) == null) throw Unsupported("A PDF object has no number")
         c.skip()
@@ -1093,6 +1102,9 @@ object PdfDecryptor {
         c.skip()
         val valueStart = c.pos
         val value = parseValue(c, 0)
+        if (encryptObject >= 0 && referencesObject(value, encryptObject)) {
+            throw Unsupported("A PDF object references the removed /Encrypt object")
+        }
         val map = value.dict
 
         if (map != null) {
