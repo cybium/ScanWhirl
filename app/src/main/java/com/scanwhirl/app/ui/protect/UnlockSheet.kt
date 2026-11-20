@@ -15,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.scanwhirl.app.R
+import com.scanwhirl.app.store.ScanRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -47,6 +48,31 @@ object UnlockSheet {
         onUnlocked: (password: String) -> Unit,
         onRemoveProtection: ((password: String) -> Unit)? = null,
         onUseVault: (() -> Unit)? = null
+    ): BottomSheetDialog = showChecked(
+        activity, documentName, { candidate -> if (verify(candidate)) candidate else null },
+        cooldown, vaultAvailable, onUnlocked, onRemoveProtection, onUseVault
+    )
+
+    /** Library callers get the proof, not the typed password, for the follow-up action. */
+    internal fun showWithGrant(
+        activity: AppCompatActivity,
+        documentName: String,
+        verify: suspend (String) -> ScanRepository.PdfPasswordGrant?,
+        onUnlocked: (ScanRepository.PdfPasswordGrant) -> Unit,
+        onRemoveProtection: ((ScanRepository.PdfPasswordGrant) -> Unit)? = null
+    ): BottomSheetDialog = showChecked(
+        activity, documentName, verify, TryCooldown(), false, onUnlocked, onRemoveProtection, null
+    )
+
+    private fun <T : Any> showChecked(
+        activity: AppCompatActivity,
+        documentName: String,
+        verify: suspend (String) -> T?,
+        cooldown: TryCooldown,
+        vaultAvailable: Boolean,
+        onUnlocked: (T) -> Unit,
+        onRemoveProtection: ((T) -> Unit)?,
+        onUseVault: (() -> Unit)?
     ): BottomSheetDialog {
         val dialog = BottomSheetDialog(activity)
         val root = LayoutInflater.from(activity).inflate(R.layout.sheet_unlock, null)
@@ -167,10 +193,10 @@ object UnlockSheet {
             handler.postDelayed({ tickPause() }, 1000L)
         }
 
-        fun openWith(text: String) {
+        fun openWith(checked: T) {
             cooldown.reset()
             dialog.dismiss()
-            onUnlocked(text)
+            onUnlocked(checked)
         }
 
         fun attempt(removeProtection: Boolean) {
@@ -186,23 +212,25 @@ object UnlockSheet {
             // becomes impossible to open.
             setChecking(true)
             check = activity.lifecycleScope.launch {
-                val ok = try {
+                val checked = try {
                     withContext(Dispatchers.Default) { verify(text) }
                 } catch (c: CancellationException) {
                     throw c
                 } catch (_: Exception) {
-                    false
+                    null
                 }
                 // Dismissed while the derivation ran: nothing is decided and nothing is applied.
                 if (!dialog.isShowing) return@launch
                 setChecking(false)
-                if (ok) {
+                if (checked != null) {
                     if (!removeProtection) {
-                        openWith(text)
+                        openWith(checked)
                     } else {
                         confirmRemove(activity) {
-                            dialog.dismiss()
-                            onRemoveProtection?.invoke(text)
+                            if (dialog.isShowing) {
+                                dialog.dismiss()
+                                onRemoveProtection?.invoke(checked)
+                            }
                         }
                     }
                     return@launch

@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.material.button.MaterialButton
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
@@ -44,14 +45,14 @@ class LockToolsActivity : BaseActivity(), HomeHost {
 
     private val pickPdf = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri ?: return@registerForActivityResult
-        flow.unlockDevicePdfFile(uri)
+        flow.unlockDevicePdfFile(uri) { finish() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_PROTECT
         setContentView(buildRoot())
-        showChooser()
+        if (savedInstanceState == null) showChooser()
     }
 
     private fun buildRoot(): LinearLayout = LinearLayout(this).apply {
@@ -74,6 +75,22 @@ class LockToolsActivity : BaseActivity(), HomeHost {
             },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         )
+        // The chooser closes before it opens the next sheet or the Android file picker.
+        // Returning here (for example after cancelling Protect) must leave a usable screen.
+        val choose = MaterialButton(this@LockToolsActivity).apply {
+            setText(R.string.lock_choose_document)
+            isAllCaps = false
+            minimumHeight = dp(48)
+            minHeight = dp(48)
+            isFocusableInTouchMode = true
+            setOnClickListener { showChooser() }
+        }
+        addView(
+            choose,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = dp(16) }
+        )
+        choose.requestFocus()
     }
 
     private fun showChooser() {

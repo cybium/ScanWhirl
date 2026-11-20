@@ -14,6 +14,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
+import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.ui.shell.ShellActivity
@@ -34,6 +35,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 import kotlin.math.roundToInt
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * SAFE-UNLOCK-CONSENT — choose a password-protected document as a tool source (Compress,
@@ -67,6 +69,7 @@ class LockedSourceConsentTest {
 
     @After
     fun tearDown() {
+        Faults.resetAll()
         RuntimeEnvironment.setFontScale(1.0f)
     }
 
@@ -255,6 +258,12 @@ class LockedSourceConsentTest {
 
     @Test
     fun `the primary button removes the password and selects the document`() {
+        val attempts = AtomicInteger()
+        val main = AtomicInteger()
+        ScanRepository.lockDerivationProbe = {
+            attempts.incrementAndGet()
+            if (Looper.myLooper() == Looper.getMainLooper()) main.incrementAndGet()
+        }
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
             scenario.onActivity { activity ->
                 readyWithPlainPick(activity)
@@ -273,6 +282,8 @@ class LockedSourceConsentTest {
             scenario.onActivity { activity ->
                 assertTrue("the unlocked document becomes the pick", waitUntil { ticked(activity, protectedId) })
                 assertFalse("Compress keeps one source", ticked(activity, plainId))
+                assertEquals("no password derivation on the UI thread", 0, main.get())
+                assertEquals("consent reuses the proof instead of deriving again", 1, attempts.get())
             }
         }
     }
