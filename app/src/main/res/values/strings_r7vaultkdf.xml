@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r7_vault_pin_save_failed">Could not save the Vault PIN. Try again.</string>
+</resources>

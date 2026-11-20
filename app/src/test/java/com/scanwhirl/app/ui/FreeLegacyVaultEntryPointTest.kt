@@ -132,7 +132,7 @@ class FreeLegacyVaultEntryPointTest {
         val primary = dialog.findViewById<View>(R.id.swSheetPrimary)
         if (primary != null) primary.performClick()
         else (dialog as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertTrue("the PIN check finishes", pollUntil { !dialog.isShowing })
     }
 
     private fun waitForHome(scenario: ActivityScenario<MainActivity>, docs: Int) {
