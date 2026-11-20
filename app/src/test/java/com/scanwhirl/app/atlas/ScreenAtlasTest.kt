@@ -144,6 +144,23 @@ class ScreenAtlasTest {
     private val notes = ArrayList<String>()
     private var navTruncated = false
 
+    /**
+     * A contiguous slice of `baseSpecs()` to render in this JVM, from `ATLAS_SLICE=from:to` (env, because
+     * Gradle test tasks inherit the environment but not arbitrary -D properties without a build script
+     * change). Empty = the whole atlas. The full 136-shot run needs ~3 GB RSS and the 3.5 GB WSL VM
+     * (2 GB swap, Windows host at 7.4 GB) OOM-killed it twice at shot 78 and 93 on 2026-11-20; each slice
+     * stays near 1 GB, and tools/atlas/merge_atlas.py stitches the per-slice JSON back into atlas.json.
+     */
+    private fun sliceRange(): IntRange {
+        val raw = System.getenv("ATLAS_SLICE")?.trim().orEmpty()
+        if (raw.isEmpty()) return 0 until Int.MAX_VALUE
+        val parts = raw.split(":").mapNotNull { it.trim().toIntOrNull() }
+        require(parts.size == 2 && parts[0] >= 0 && parts[1] > parts[0]) { "ATLAS_SLICE must be from:to, got '$raw'" }
+        return parts[0] until parts[1]
+    }
+
+    private val slicing = System.getenv("ATLAS_SLICE")?.isNotBlank() == true
+
     // ---------------------------------------------------------------- fixture
 
     @Before
@@ -234,16 +251,21 @@ class ScreenAtlasTest {
         val specs = baseSpecs()
         // Stable numbering: base screens first, in spec order; discovered sheets follow.
         specs.forEach { indexOf.getOrPut(it.key) { nextIndex++ } }
+        // A slice renders only its own base specs (and the sheets they discover). Indices above were seeded
+        // from the whole list, so base numbers never depend on the slice; sheet numbers get a per-slice
+        // block (100, 1100, 2100 ...) so two slices can never hand out the same number.
+        val mine = specs.filterIndexed { i, _ -> i in sliceRange() }
+        if (slicing) nextIndex = 100 + sliceRange().first * 100
 
         // Phase A+B: render every base screen at both font scales.
         for (scale in SCALES) {
             RuntimeEnvironment.setFontScale(scale)
-            for (spec in specs) renderBase(spec, scale)
+            for (spec in mine) renderBase(spec, scale)
         }
 
         // Phase C: press every visible button once (scale 1.0), discover sheets.
         RuntimeEnvironment.setFontScale(1.0f)
-        for (spec in specs) {
+        for (spec in mine) {
             if (navBudget <= 0) { navTruncated = true; break }
             navigateBase(spec)
         }
@@ -1279,7 +1301,9 @@ class ScreenAtlasTest {
             JSONObject().apply { put("screen", name); put("kind", kind); put("reason", why) }
         }))
         root.put("startedFrom", JSONArray(specs.map { it.key }))
-        File(outDir, "atlas.json").writeText(root.toString(2))
+        // A sliced run writes its own file; merge_atlas.py joins them into atlas.json.
+        val name = if (slicing) "atlas_slice_${sliceRange().first}.json" else "atlas.json"
+        File(outDir, name).writeText(root.toString(2))
     }
 
     private fun slug(s: String): String =
