@@ -10,6 +10,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import java.nio.ByteBuffer
 import java.nio.file.Files
 
 /**
@@ -88,6 +89,25 @@ class VaultCryptoTest {
         assertArrayEquals(vaultKey, VaultKeyWrap.open(blob, code))
         assertThrows(VaultAuthException::class.java) {
             VaultKeyWrap.open(blob, "AAAAAAAAAAAAAAAAAAAAAAAA")
+        }
+    }
+
+    @Test
+    fun `a wrap with trailing data is refused before deriving a key`() {
+        val code = VaultCrypto.generateRecoveryCode()
+        val blob = VaultKeyWrap.seal(key, code, VaultCrypto.newSalt(), iterations = 2_000)
+        var derivations = 0
+        VaultCrypto.derivationProbe = { derivations++ }
+        try {
+            assertThrows(VaultAuthException::class.java) { VaultKeyWrap.open(blob + 0.toByte(), code) }
+            assertThrows(VaultAuthException::class.java) { VaultKeyWrap.open(blob.dropLast(1).toByteArray(), code) }
+            val lengthOffset = 5 + Int.SIZE_BYTES + 1 + VaultCrypto.SALT_BYTES
+            val incorrectLength = blob.copyOf()
+            ByteBuffer.wrap(incorrectLength).apply { putInt(lengthOffset, getInt(lengthOffset) + 1) }
+            assertThrows(VaultAuthException::class.java) { VaultKeyWrap.open(incorrectLength, code) }
+            assertEquals(0, derivations)
+        } finally {
+            VaultCrypto.derivationProbe = null
         }
     }
 
