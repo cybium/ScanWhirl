@@ -1,6 +1,7 @@
 package com.scanwhirl.app.store.vault
 
 import android.app.Application
+import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
@@ -22,6 +23,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.lang.reflect.InvocationTargetException
 import java.security.MessageDigest
 
 /**
@@ -75,6 +77,54 @@ class VaultStoreTest {
         gate = VaultPasscodeGate(clock = { now }),
         iterations = fastIterations
     )
+
+    @Test
+    fun `manifest parser rejects invalid paths and declarations without touching storage`() {
+        val vault = store()
+        val roots = listOf(
+            app.filesDir,
+            File(app.filesDir, "vault2"),
+            File(app.filesDir, "vault2/.incoming-fixture"),
+            File(app.cacheDir, "vault_open"),
+            File(app.cacheDir, "vault_verify")
+        )
+        roots.forEachIndexed { index, dir ->
+            dir.mkdirs()
+            File(dir, "sentinel").writeText("Fictional sentinel $index")
+        }
+        fun state() = roots.map(::snapshot)
+        val before = state()
+        val parse = VaultStore::class.java.getDeclaredMethod(
+            "parseManifest", ByteArray::class.java, String::class.java
+        ).apply { isAccessible = true }
+        fun encoded(value: String) = Base64.encodeToString(value.toByteArray(), Base64.NO_WRAP)
+        fun record(rel: String, stored: String, size: Long = 5) =
+            "file\t${encoded(rel)}\t$stored\t$size\t${"0".repeat(64)}"
+        fun manifest(records: List<String>, pdf: String = "document.pdf") =
+            (listOf("v1", "id\tfixture", "pdf\t${encoded(pdf)}") + records).joinToString("\n").toByteArray()
+        val correct = record("document.pdf", "f0000.enc")
+        val invalidNames = listOf("../x", "/x", "\\x", "\u0000", "", ".", "..")
+        val cases = buildList {
+            invalidNames.forEach { add(manifest(listOf(record("document.pdf", it)))) }
+            invalidNames.forEach { add(manifest(listOf(correct, record(it, "f0001.enc")))) }
+            add(manifest(listOf(correct, record("other.pdf", "f0000.enc"))))
+            add(manifest(listOf(correct, record("document.pdf", "f0001.enc"))))
+            add(manifest(listOf(correct), pdf = "missing.pdf"))
+            add(manifest(listOf(correct, record("large.pdf", "f0001.enc", Long.MAX_VALUE))))
+            add(manifest(listOf(correct) + List(10_000) { record("p$it.jpg", "f${it + 1}.enc") }))
+        }
+        val refused = cases.count { bytes ->
+            try {
+                parse.invoke(vault, bytes, "fixture")
+                false
+            } catch (e: InvocationTargetException) {
+                e.cause is VaultAuthException
+            }
+        }
+        assertEquals(before, state())
+        assertEquals(0, vault.count())
+        assertEquals("All invalid manifests must be rejected", cases.size, refused)
+    }
 
     @Test
     fun `add to vault then open gives byte-identical files and lock wipes the plaintext copy`() {

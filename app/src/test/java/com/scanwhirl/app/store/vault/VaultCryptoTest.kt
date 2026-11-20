@@ -92,6 +92,20 @@ class VaultCryptoTest {
     }
 
     @Test
+    fun `a wrap with trailing data is refused before deriving a key`() {
+        val code = VaultCrypto.generateRecoveryCode()
+        val blob = VaultKeyWrap.seal(key, code, VaultCrypto.newSalt(), iterations = 2_000)
+        var derivations = 0
+        VaultCrypto.derivationProbe = { derivations++ }
+        try {
+            assertThrows(VaultAuthException::class.java) { VaultKeyWrap.open(blob + 0.toByte(), code) }
+            assertEquals(0, derivations)
+        } finally {
+            VaultCrypto.derivationProbe = null
+        }
+    }
+
+    @Test
     fun `recovery codes are 24 unambiguous characters grouped in fours`() {
         val code = VaultCrypto.generateRecoveryCode()
         assertEquals(24, code.length)
