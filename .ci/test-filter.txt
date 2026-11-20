@@ -1,0 +1,1 @@
+com.scanwhirl.app.HindiGlossaryTermsTest,com.scanwhirl.app.HindiStringsHygieneTest,com.scanwhirl.app.StringFormatContractTest,com.scanwhirl.app.StringsNoLongDashTest,com.scanwhirl.app.ui.tools.Compress*

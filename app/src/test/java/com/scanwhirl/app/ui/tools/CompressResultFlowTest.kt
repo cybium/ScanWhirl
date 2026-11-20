@@ -11,6 +11,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.CompressFlow
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.util.StatusLine
 import org.junit.Assert.assertArrayEquals
@@ -153,6 +154,27 @@ class CompressResultFlowTest {
     }
 
     // ---- 3. an unreachable target is still said out loud -------------------
+
+    @Test
+    fun `compress still ends on the result when no estimate can be measured`() {
+        // W2: level estimates are a convenience, never a gate.
+        CompressFlow.estimateForTest = { _, _ ->
+            throw IllegalStateException("that page could not be re-encoded")
+        }
+        try {
+            val (started, source) = compressFromDocumentMore(name = "No estimate")
+            assertEquals(
+                "W2: a failed estimate must not block the compress",
+                ToolResultActivity::class.java.name,
+                started.component?.className
+            )
+            val ids = started.getStringArrayListExtra(EXTRA_DOC_IDS).orEmpty()
+            assertEquals("still one new document", 1, ids.size)
+            assertNotEquals("never the source", source.id, ids.single())
+        } finally {
+            CompressFlow.estimateForTest = null
+        }
+    }
 
     @Test
     fun `a compress that cannot reach the typed size says so on the shared result`() {
