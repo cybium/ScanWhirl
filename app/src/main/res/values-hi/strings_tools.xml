@@ -64,9 +64,9 @@
     <string name="tools_excel_no_tables_title">कोई तालिका नहीं मिली</string>
     <string name="tools_excel_no_tables_msg">इस दस्तावेज़ के किसी पन्ने पर तालिका नहीं है। आप इसके बजाय सारा लिखा हुआ सहेज सकते हैं।</string>
     <string name="tools_excel_export_all">इसके बजाय सारा लिखा हुआ सहेजें</string>
-    <string name="tools_word_no_text">कोई लिखा हुआ नहीं पहचाना गया। अगर यह पन्ना हिंदी में है, तो सेटिंग में लिखे हुए की भाषा हिंदी करें और फिर कोशिश करें।</string>
+    <string name="tools_word_no_text">कोई लिखा हुआ नहीं पहचाना गया। अगर यह पन्ना हिंदी में है, तो सेटिंग में लिखावट पढ़ने की भाषा हिंदी करें और फिर कोशिश करें।</string>
     <string name="tools_word_no_text_title">कोई लिखा हुआ नहीं मिला</string>
-    <string name="tools_word_change_language">लिखे हुए की भाषा बदलें</string>
+    <string name="tools_word_change_language">लिखावट पढ़ने की भाषा बदलें</string>
 
     <string name="tools_import_plan_title">इस PDF में %1$d पन्ने हैं</string>
     <string name="tools_import_plan_msg">लगभग %1$s चाहिए; %2$s खाली है। सब लाएँ या कुछ पन्ने चुनें।</string>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- C1 (2026-11-20 owner): हिंदी में भी दोनों पंक्तियों की एक-एक छोटी व्याख्या। -->
+    <string name="settings_language_summary">%1$s · मेन्यू, बटन</string>
+    <string name="settings_ocr_language_summary">%1$s · पन्नों से पढ़ी लिखावट</string>
+</resources>

@@ -73,13 +73,15 @@ class ExportHonestWordUiTest {
                 assertTrue("the no-text sheet must appear", waitUntil {
                     val dialog = ShadowDialog.getLatestDialog()
                     dialog?.findViewById<TextView>(R.id.swSheetMessage)
-                        ?.text?.toString()?.contains("Text language") == true
+                        // C1 owner 2026-11-20: the setting is now "Text reading language".
+                        ?.text?.toString()?.contains("Text reading language") == true
                 })
                 val dialog = requireNotNull(ShadowDialog.getLatestDialog())
                 val message = dialog.findViewById<TextView>(R.id.swSheetMessage).text.toString()
                 assertTrue("the sheet must say what to do: $message", message.contains("Hindi"))
                 val primary = dialog.findViewById<TextView>(R.id.swSheetPrimary)
-                assertEquals("Change text language", primary.text.toString())
+                // C1 owner 2026-11-20: the button names the same setting.
+                assertEquals("Change text reading language", primary.text.toString())
 
                 primary.performClick()
                 val started = shadowOf(app).nextStartedActivity

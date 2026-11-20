@@ -2,13 +2,14 @@
 <resources>
     <!-- L1 shell and kit: Hindi. Each value carries a review marker for a native speaker. -->
     <!-- D-11 (2026-11-20): स्कैनर और QR पढ़ने वाला हिस्सा Google Play services से चलता है और पहली
-         बार खुद को फ़ोन पर ले सकता है, इसलिए ये पिल काम की जगह बताते हैं, नेटवर्क की गारंटी नहीं देते। -->
-    <string name="trust_offline_no_ads">फ़ोन पर ही · विज्ञापन नहीं</string>
+         बार खुद को फ़ोन पर ले सकता है, इसलिए ये पिल काम की जगह बताते हैं, नेटवर्क की गारंटी नहीं देते।
+         C1 (2026-11-20 owner): छोटा और साफ़ - "निजी" और "निजी · विज्ञापन नहीं"। -->
+    <string name="trust_offline_no_ads">निजी · विज्ञापन नहीं</string>
     <string name="language_chip_desc">भाषा बदलें</string>
-    <string name="trust_all_offline">सब कुछ इसी फ़ोन पर</string>
+    <string name="trust_all_offline">निजी</string>
     <string name="trust_no_ads">कोई विज्ञापन नहीं</string>
     <string name="trust_no_account">कोई खाता नहीं</string>
-    <string name="trust_offline">फ़ोन पर ही</string>
+    <string name="trust_offline">निजी</string>
 
     <string name="shell_nav_library">कागज़ात</string>
     <string name="shell_nav_tools">काम</string>

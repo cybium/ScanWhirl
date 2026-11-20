@@ -3,16 +3,18 @@
     <!-- L1 shell & kit strings (70_APP_DESIGN.md §1-§3). -->
     <!-- D-11 (2026-11-20): the camera scanner, QR reader and English text reader are Google Play
          services modules that can fetch themselves once, so these pills say where the work happens
-         instead of promising that no network is ever used. -->
-    <string name="trust_offline_no_ads">On this phone · No ads</string>
-    <string name="trust_all_offline">All on this phone</string>
+         instead of promising that no network is ever used.
+         C1 (2026-11-20 owner): "On this phone" was long and crowded, so the pills now say
+         "Private", and the one line that also names ads says "Private · No ads". -->
+    <string name="trust_offline_no_ads">Private · No ads</string>
+    <string name="trust_all_offline">Private</string>
     <!-- Home language chip: the visible label and sheet title are bilingual on purpose. -->
     <string name="language_chip_label" translatable="false">A/अ</string>
     <string name="language_chip_title" translatable="false">Language · भाषा</string>
     <string name="language_chip_desc">Change language</string>
     <string name="trust_no_ads">No ads</string>
     <string name="trust_no_account">No account</string>
-    <string name="trust_offline">On phone</string>
+    <string name="trust_offline">Private</string>
 
     <string name="shell_nav_library">Library</string>
     <string name="shell_nav_tools">Tools</string>
