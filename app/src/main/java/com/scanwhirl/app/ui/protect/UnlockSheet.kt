@@ -53,6 +53,14 @@ object UnlockSheet {
             )
         }
         val field = root.findViewById<EditText>(R.id.unlockPassword)
+        // The XML field already says no to autofill; repeat it at runtime with the saved-state
+        // opt-out so a restored window can never carry the typed password.
+        field.isSaveEnabled = false
+        field.freezesText = false
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            field.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO
+            field.setAutofillHints()
+        }
         val showButton = root.findViewById<ImageButton>(R.id.unlockPasswordShow)
         val error = root.findViewById<TextView>(R.id.unlockError)
         val open = root.findViewById<MaterialButton>(R.id.unlockOpen)
@@ -64,7 +72,11 @@ object UnlockSheet {
         val fieldError = R.drawable.bg_protect_field_error
 
         val handler = Handler(Looper.getMainLooper())
-        dialog.setOnDismissListener { handler.removeCallbacksAndMessages(null) }
+        dialog.setOnDismissListener {
+            handler.removeCallbacksAndMessages(null)
+            // Closed for any reason: the typed password leaves the view.
+            field.setText("")
+        }
 
         var revealed = false
         showButton.setOnClickListener {
@@ -123,12 +135,9 @@ object UnlockSheet {
                 return
             }
             val text = field.text.toString()
-            if (text.isEmpty()) {
-                showError(
-                    activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
-                )
-                return
-            }
+            // An empty password is a real password: an owner-only document (empty user password)
+            // opens with it. [verify] decides — it must never be pre-empted here, or such a file
+            // becomes impossible to open.
             if (verify(text)) {
                 if (!removeProtection) {
                     openWith(text)
