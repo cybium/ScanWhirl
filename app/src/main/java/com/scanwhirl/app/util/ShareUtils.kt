@@ -31,12 +31,58 @@ object ShareUtils {
     fun share(context: Context, doc: ScanDocument) {
         when {
             doc.pdfFile.exists() -> {
-                val named = namedCopy(context, doc.pdfFile, sanitize(doc.name) + ".pdf")
+                val named = namedCopy(context, doc.pdfFile, documentFileName(doc))
                 shareSingle(context, named, "application/pdf")
             }
             doc.pageFiles.isNotEmpty() -> sharePages(context, doc)
             else -> Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** The name a document's PDF carries when it leaves the app: its own name, never `scan.pdf`. */
+    private fun documentFileName(doc: ScanDocument): String =
+        ExportNames.fileName(doc.name, "pdf", "scan")
+
+    /** (stored file, outgoing name) for each document that has a PDF, for shares and ZIPs. */
+    fun documentItems(docs: List<ScanDocument>): List<Pair<File, String>> =
+        docs.filter { it.pdfFile.isFile }.map { it.pdfFile to documentFileName(it) }
+
+    /** (file, outgoing name) for files that already carry the name they should be handed out under. */
+    fun fileItems(files: List<File>): List<Pair<File, String>> =
+        files.filter { it.isFile }.map { it to it.name }
+
+    /**
+     * H2-1: copies every item into ONE fresh share folder under its own display name and returns
+     * the FileProvider URIs in the same order. Names that collide (ignoring case) are numbered
+     * ("Rent.pdf", "Rent (2).pdf"). The stored library files are never exposed or renamed. An
+     * item that cannot be copied is skipped, like an unreadable one always was.
+     */
+    fun namedUris(context: Context, items: List<Pair<File, String>>): List<Uri> {
+        val usable = items.filter { it.first.isFile }
+        if (usable.isEmpty()) return emptyList()
+        val dir = newShareDirectory(context)
+        val names = ExportNames.Allocator()
+        val uris = ArrayList<Uri>(usable.size)
+        for ((file, displayName) in usable) {
+            val out = File(dir, names.file(shareFileName(displayName)))
+            val uri = runCatching {
+                file.copyTo(out, overwrite = false)
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", out)
+            }.getOrNull()
+            if (uri != null) uris += uri else out.delete()
+        }
+        return uris
+    }
+
+    /** Library multi-select Share: every document's PDF under its own name in one chooser. */
+    fun shareDocuments(context: Context, docs: List<ScanDocument>) {
+        val uris = namedUris(context, documentItems(docs))
+        if (uris.isEmpty()) {
+            Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = multiShareIntent(context, uris, "application/pdf")
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
     }
 
     /** Shares any file with an explicit MIME type (ZIP, PDF, image, …). */
@@ -136,13 +182,8 @@ object ShareUtils {
      * Sanitises the stem (60 characters, as [sanitize] always did) but keeps a short, plain
      * extension, so a long document name still reaches the recipient as a `.pdf`/`.jpg`.
      */
-    internal fun shareFileName(displayName: String): String {
-        val dot = displayName.lastIndexOf('.')
-        val ext = if (dot > 0) displayName.substring(dot + 1) else ""
-        val keepExt = ext.length in 1..6 && ext.all { it.isLetterOrDigit() }
-        val base = if (keepExt) displayName.substring(0, dot) else displayName
-        return sanitize(base) + if (keepExt) ".$ext" else ""
-    }
+    internal fun shareFileName(displayName: String): String =
+        ExportNames.sanitizeFileName(displayName, "scan")
 
     /**
      * Age-based cleanup of old share copies. Never deletes a copy younger than
@@ -182,8 +223,6 @@ object ShareUtils {
         return out
     }
 
-    private fun sanitize(name: String): String {
-        val cleaned = name.replace(Regex("[\\\\/:*?\"<>|\\n\\r\\t]"), "_").trim().trim('_')
-        return cleaned.ifBlank { "scan" }.take(60)
-    }
+    /** A name without an extension: illegal characters replaced, 60 code points at most (H2-3). */
+    private fun sanitize(name: String): String = ExportNames.sanitizeBase(name, "scan")
 }

@@ -35,14 +35,13 @@ import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OfficeFileCounts
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
+import com.scanwhirl.app.util.ZipExporter
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 /**
  * v2 UI: 03_tools_hub — the result of every L4 tool.
@@ -796,21 +795,20 @@ class ToolResultActivity : BaseActivity() {
             return
         }
         if (docs.size > 1) {
-            shareUris(docs.map { it.pdfFile }, "application/pdf")
+            shareUris(ShareUtils.documentItems(docs), "application/pdf")
             return
         }
         if (files.isEmpty()) return fail(getString(R.string.tools_result_nothing))
         if (files.size == 1) {
             ShareUtils.shareFile(this, files.first(), mime)
         } else {
-            shareUris(files, mime)
+            shareUris(ShareUtils.fileItems(files), mime)
         }
     }
 
-    private fun shareUris(sources: List<File>, type: String) {
-        val uris = sources.filter { it.isFile }.map {
-            FileProvider.getUriForFile(this, "$packageName.fileprovider", it)
-        }
+    /** H2-1: [items] are (stored file, outgoing name); the receiver sees the names, numbered if equal. */
+    private fun shareUris(items: List<Pair<File, String>>, type: String) {
+        val uris = ShareUtils.namedUris(this, items)
         if (uris.isEmpty()) return fail(getString(R.string.tools_result_nothing))
         // fixshare: every Uri must be in ClipData too — the Android 10+ grant model follows it,
         // so a ClipData with only the first file shared one file from a batch.
@@ -900,32 +898,20 @@ class ToolResultActivity : BaseActivity() {
         if (doc != null) {
             val documents = docIds.mapNotNull { runCatching { repo.getDocument(it) }.getOrNull() }
             if (documents.size == 1) return documents.first().pdfFile
-            return zipOf(documents.map { it.pdfFile })
+            return zipOf(ShareUtils.documentItems(documents))
         }
         if (files.size == 1) return files.first()
-        return zipOf(files)
+        return zipOf(ShareUtils.fileItems(files))
     }
 
-    private fun zipOf(sources: List<File>): File? {
+    /** H2-1: entries carry the documents' own names (numbered when equal), not the stored scan.pdf. */
+    private fun zipOf(entries: List<Pair<File, String>>): File? {
+        if (entries.none { it.first.isFile }) return null
         val out = File(cacheDir, "documents/save/${System.currentTimeMillis()}.zip").apply {
             parentFile?.mkdirs()
         }
         return try {
-            val taken = mutableSetOf<String>()
-            ZipOutputStream(out.outputStream()).use { zip ->
-                for (source in sources) {
-                    if (!source.isFile) continue
-                    var name = source.name
-                    var n = 2
-                    while (!taken.add(name)) {
-                        name = "${source.name.substringBeforeLast('.')} ($n).${source.name.substringAfterLast('.')}"
-                        n++
-                    }
-                    zip.putNextEntry(ZipEntry(name))
-                    source.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
-                }
-            }
+            ZipExporter.exportFiles(entries, out)
             out.takeIf { it.length() > 0 }
         } catch (e: Exception) {
             out.delete()

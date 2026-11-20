@@ -13,16 +13,24 @@ object ZipExporter {
 
     fun export(docs: List<ScanDocument>, outFile: File) {
         require(docs.isNotEmpty()) { "No scans to export" }
+        exportFiles(ShareUtils.documentItems(docs).filter { it.first.length() > 0L }, outFile)
+    }
+
+    /**
+     * Writes [entries] (file to display name) into [outFile]. Every entry is stored under its
+     * sanitised display name; names that collide (ignoring case) are numbered before the
+     * extension. Missing files are skipped. H2-1: the library keeps every PDF as `scan.pdf`,
+     * so callers pass the document's own name, never the stored file's.
+     */
+    fun exportFiles(entries: List<Pair<File, String>>, outFile: File) {
         outFile.parentFile?.mkdirs()
-        val taken = mutableSetOf<String>()
+        val names = ExportNames.Allocator()
         ZipOutputStream(outFile.outputStream()).use { zip ->
-            for (doc in docs) {
-                if (!doc.pdfFile.exists() || doc.pdfFile.length() == 0L) continue
-                val base = ShareUtils.sanitizeName(doc.name).substringBeforeLast('.')
-                val name = DownloadSaver.uniqueName("$base.pdf") { it in taken }
-                taken.add(name)
+            for ((file, displayName) in entries) {
+                if (!file.isFile) continue
+                val name = names.file(ExportNames.sanitizeFileName(displayName))
                 zip.putNextEntry(ZipEntry(name))
-                doc.pdfFile.inputStream().use { it.copyTo(zip) }
+                file.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
         }

@@ -865,22 +865,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             ShareUtils.share(this, docs.single())
             return
         }
-        val uris = ArrayList<android.net.Uri>()
-        for (doc in docs) {
-            runCatching {
-                uris += androidx.core.content.FileProvider.getUriForFile(
-                    this, "$packageName.fileprovider", doc.pdfFile
-                )
-            }
-        }
-        if (uris.isEmpty()) {
-            Toast.makeText(this, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
-            return
-        }
-        // fixshare: no ClipData at all meant the Android 10+ grant followed nothing, so the
-        // receivers could not read the selected PDFs. The helper carries every Uri + read grant.
-        val intent = ShareUtils.multiShareIntent(this, uris, "application/pdf")
-        startActivity(Intent.createChooser(intent, getString(R.string.share_pdf)))
+        // H2-1: every PDF goes out under its document's own name (never the stored scan.pdf),
+        // copied into one fresh share folder. fixshare: the helper's intent carries every Uri in
+        // ClipData too, so the Android 10+ grant covers all of them.
+        ShareUtils.shareDocuments(this, docs)
     }
 
     private fun openDocument(id: String) {
