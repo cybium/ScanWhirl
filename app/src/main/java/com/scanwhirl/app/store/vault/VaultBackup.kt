@@ -81,8 +81,7 @@ object VaultBackup {
                     out.writeInt(files.size)
                     files.forEach { file ->
                         out.writeUTF(file.name)
-                        out.writeLong(file.length())
-                        FileInputStream(file).use { input -> copy(input, out, file.length()) }
+                        writeFilePayload(out, file)
                     }
                 }
 
@@ -90,8 +89,7 @@ object VaultBackup {
                 out.writeInt(extras.size)
                 extras.forEach { file ->
                     out.writeUTF(file.name)
-                    out.writeLong(file.length())
-                    FileInputStream(file).use { input -> copy(input, out, file.length()) }
+                    writeFilePayload(out, file)
                 }
                 out.flush()
                 Durable.syncStream(fos, part)
@@ -185,6 +183,24 @@ object VaultBackup {
             // Version 1 deliberately stops after the entries and has no extras to publish.
             if (version >= 2 && input.read() != -1) throw VaultAuthException("Damaged Vault backup")
             return Contents(recoveryBlob, ids, extras)
+        }
+    }
+
+    /**
+     * The declared byte count and emitted bytes must match. A Vault file can change after
+     * its length is read (for example, a password list being updated). Writing its second
+     * length into the stream silently corrupts all following entries, so sample it once,
+     * stream exactly that many bytes and refuse a trailing byte or early EOF.
+     * The caller discards the .part file on every failure, preserving an older backup.
+     */
+    private fun writeFilePayload(out: DataOutputStream, file: File) {
+        val declared = file.length()
+        out.writeLong(declared)
+        FileInputStream(file).use { input ->
+            copy(input, out, declared)
+            if (input.read() >= 0) {
+                throw IOException("A Vault file changed while the backup was being written")
+            }
         }
     }
 
