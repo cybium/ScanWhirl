@@ -31,10 +31,12 @@ class VaultLockedException : IllegalStateException("The Vault is locked")
 /**
  * AES-256-GCM file encryption for the Vault.
  *
- * Files are encrypted in independent 64 KiB chunks (The design's streaming rule), so
+ * Files are encrypted in bounded 64 KiB chunks (The design's streaming rule), so
  * opening a large scan never needs the whole file in memory. Each chunk has a fresh random
- * 96-bit IV and the 128-bit authenticated tag; a changed byte anywhere fails the tag and
- * no plaintext is published. The container header is deliberately not secret.
+ * 96-bit IV and 128-bit tag. New streams authenticate the header, stream identity, chunk
+ * order and final marker. File callers stage plaintext until the entire stream validates;
+ * stream callers MUST likewise stage output, which is provisional until successful return.
+ * Legacy v1 remains readable but is NOT order-authenticated.
  */
 object VaultCrypto {
 
@@ -58,7 +60,9 @@ object VaultCrypto {
     const val RECOVERY_LENGTH = 24
 
     private const val MAGIC = 0x53575643 // "SWVC"
-    private const val FORMAT_VERSION = 1
+    private const val LEGACY_VERSION = 1
+    private const val FORMAT_VERSION = 2
+    private const val STREAM_ID_BYTES = 16
 
     private val random = SecureRandom()
 
@@ -112,9 +116,27 @@ object VaultCrypto {
     }
 
     internal fun encryptedLength(plainLength: Long): Long {
-        val chunks = if (plainLength == 0L) 0 else (plainLength - 1) / CHUNK_BYTES + 1
-        return 17 + plainLength + chunks * (1 + IV_BYTES + 4 + TAG_BITS / 8)
+        val chunks = if (plainLength == 0L) 1 else (plainLength - 1) / CHUNK_BYTES + 1
+        return 33 + plainLength + chunks * (8 + 1 + 1 + IV_BYTES + 4 + TAG_BITS / 8)
     }
+
+    /** Size preflight only; the decryptor still validates the declared format and authentication. */
+    internal fun isEncryptedLength(actual: Long, plainLength: Long, version: Int): Boolean {
+        val legacyChunks = if (plainLength == 0L) 0 else (plainLength - 1) / CHUNK_BYTES + 1
+        val legacyLength = 17 + plainLength + legacyChunks * (1 + IV_BYTES + 4 + TAG_BITS / 8)
+        return when (version) {
+            LEGACY_VERSION -> actual == legacyLength
+            FORMAT_VERSION -> actual == encryptedLength(plainLength)
+            else -> false
+        }
+    }
+
+    internal fun isEncryptedFileLength(file: File, plainLength: Long): Boolean =
+        DataInputStream(FileInputStream(file)).use { input ->
+            try {
+                input.readInt() == MAGIC && isEncryptedLength(file.length(), plainLength, input.readUnsignedByte())
+            } catch (_: IOException) { false }
+        }
 
     /**
      * Streams [totalLength] bytes of [input] into [output] with the same chunked AES-256-GCM
@@ -124,7 +146,7 @@ object VaultCrypto {
     fun encryptStream(input: InputStream, totalLength: Long, output: OutputStream, key: ByteArray) =
         encrypt(input, totalLength, output, key)
 
-    /** Reads the container written by [encryptStream]; throws [VaultAuthException] on any change. */
+    /** Validates new streams through final+EOF; legacy v1 lacks order authentication. Stage output. */
     fun decryptStream(input: InputStream, output: OutputStream, key: ByteArray) =
         decrypt(input, output, key)
 
@@ -174,15 +196,16 @@ object VaultCrypto {
     // ------------------------------------------------------------------
 
     private fun encrypt(input: InputStream, totalLength: Long, output: OutputStream, key: ByteArray) {
+        require(totalLength >= 0)
         val out = DataOutputStream(output)
-        out.writeInt(MAGIC)
-        out.writeByte(FORMAT_VERSION)
-        out.writeInt(CHUNK_BYTES)
-        out.writeLong(totalLength)
+        val streamId = ByteArray(STREAM_ID_BYTES).also { random.nextBytes(it) }
+        val header = streamHeader(totalLength, streamId)
+        out.write(header)
 
         val buffer = ByteArray(CHUNK_BYTES)
         var remaining = totalLength
-        while (remaining > 0) {
+        var index = 0L
+        do {
             val wanted = minOf(remaining, CHUNK_BYTES.toLong()).toInt()
             var read = 0
             while (read < wanted) {
@@ -193,27 +216,55 @@ object VaultCrypto {
             val iv = ByteArray(IV_BYTES).also { random.nextBytes(it) }
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, iv))
+            val final = remaining == read.toLong()
+            cipher.updateAAD(chunkAad(header, index, final))
             val encrypted = cipher.doFinal(buffer, 0, read)
+            out.writeLong(index++)
+            out.writeByte(if (final) 1 else 0)
             out.writeByte(IV_BYTES)
             out.write(iv)
             out.writeInt(encrypted.size)
             out.write(encrypted)
             remaining -= read
-        }
+        } while (remaining > 0)
+        if (input.read() != -1) throw IOException("Source grew while encrypting")
         out.flush()
     }
+
+    private fun streamHeader(length: Long, streamId: ByteArray): ByteArray =
+        ByteArrayOutputStream().also { bytes ->
+            DataOutputStream(bytes).apply {
+                writeInt(MAGIC); writeByte(FORMAT_VERSION); writeInt(CHUNK_BYTES)
+                writeLong(length); write(streamId)
+            }
+        }.toByteArray()
+
+    private fun chunkAad(header: ByteArray, index: Long, final: Boolean): ByteArray =
+        ByteArrayOutputStream().also { bytes ->
+            DataOutputStream(bytes).apply {
+                write(header); writeLong(index); writeByte(if (final) 1 else 0)
+            }
+        }.toByteArray()
 
     private fun decrypt(input: InputStream, output: OutputStream, key: ByteArray, expectedLength: Long? = null) {
         val source = DataInputStream(input)
         try {
             if (source.readInt() != MAGIC) throw VaultAuthException("Not an encrypted Vault file")
-            if (source.readUnsignedByte() != FORMAT_VERSION) throw VaultAuthException("Unsupported Vault file")
+            val version = source.readUnsignedByte()
+            if (version != FORMAT_VERSION && version != LEGACY_VERSION) throw VaultAuthException("Unsupported Vault file")
             if (source.readInt() != CHUNK_BYTES) throw VaultAuthException("Unsupported Vault chunk size")
             var remaining = source.readLong()
             if (remaining < 0 || (expectedLength != null && remaining != expectedLength)) {
                 throw VaultAuthException("Damaged Vault file")
             }
+            if (version == FORMAT_VERSION) {
+                val streamId = ByteArray(STREAM_ID_BYTES).also { source.readFully(it) }
+                decryptOrdered(source, output, key, remaining, streamHeader(remaining, streamId))
+                return
+            }
 
+            // Compatibility only: original v1 chunks were independent, not order-authenticated.
+            // Preserve old behaviour for existing Vault files and outer-v2/legacy backups.
             while (remaining > 0) {
                 val ivLength = source.readUnsignedByte()
                 if (ivLength != IV_BYTES) throw VaultAuthException("Damaged Vault IV")
@@ -246,6 +297,38 @@ object VaultCrypto {
         } catch (e: IOException) {
             throw VaultAuthException("The Vault file is incomplete", e)
         }
+    }
+
+    private fun decryptOrdered(source: DataInputStream, output: OutputStream, key: ByteArray,
+                               totalLength: Long, header: ByteArray) {
+        var remaining = totalLength
+        var index = 0L
+        do {
+            if (source.readLong() != index) throw VaultAuthException("Damaged Vault chunk order")
+            val flag = source.readUnsignedByte()
+            if (flag !in 0..1) throw VaultAuthException("Damaged Vault final marker")
+            val final = flag == 1
+            val wanted = minOf(remaining, CHUNK_BYTES.toLong()).toInt()
+            if (final != (remaining <= CHUNK_BYTES)) throw VaultAuthException("Damaged Vault final marker")
+            if (source.readUnsignedByte() != IV_BYTES) throw VaultAuthException("Damaged Vault IV")
+            val iv = ByteArray(IV_BYTES).also { source.readFully(it) }
+            val size = source.readInt()
+            if (size != wanted + TAG_BITS / 8) throw VaultAuthException("Damaged Vault chunk")
+            val encrypted = ByteArray(size).also { source.readFully(it) }
+            val plain = try {
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, iv))
+                cipher.updateAAD(chunkAad(header, index, final))
+                cipher.doFinal(encrypted)
+            } catch (e: GeneralSecurityException) {
+                throw VaultAuthException("The Vault file was changed or the key is wrong", e)
+            }
+            remaining -= plain.size
+            if (final && source.read() != -1) throw VaultAuthException("Trailing Vault data")
+            output.write(plain)
+            index++
+        } while (remaining > 0)
+        output.flush()
     }
 }
 
@@ -287,12 +370,16 @@ object VaultKeyWrap {
             if (saltLength !in 8..64) throw VaultAuthException("Damaged Vault key file")
             // ByteArrayInputStream.available() is exact. A wrap always carries one 32-byte key.
             val expectedWrappedLength = VaultCrypto.encryptedLength(VaultCrypto.KEY_BYTES.toLong()).toInt()
-            if (data.available() != saltLength + Int.SIZE_BYTES + expectedWrappedLength) {
+            val legacyWrappedLength = 17 + VaultCrypto.KEY_BYTES + 1 + VaultCrypto.IV_BYTES + 4 + VaultCrypto.TAG_BITS / 8
+            val remaining = data.available()
+            if (remaining != saltLength + Int.SIZE_BYTES + expectedWrappedLength &&
+                remaining != saltLength + Int.SIZE_BYTES + legacyWrappedLength) {
                 throw VaultAuthException("Damaged Vault key file")
             }
             val salt = ByteArray(saltLength).also { data.readFully(it) }
             val wrappedLength = data.readInt()
-            if (wrappedLength != expectedWrappedLength) throw VaultAuthException("Damaged Vault key file")
+            if ((wrappedLength != expectedWrappedLength && wrappedLength != legacyWrappedLength) ||
+                data.available() != wrappedLength) throw VaultAuthException("Damaged Vault key file")
             val wrapped = ByteArray(wrappedLength).also { data.readFully(it) }
 
             val derived = VaultCrypto.deriveKey(secret, salt, iterations)

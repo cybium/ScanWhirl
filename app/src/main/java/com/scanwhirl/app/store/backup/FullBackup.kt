@@ -458,7 +458,10 @@ class FullBackup(
             var entries = 0
             while (true) {
                 when (val tag = input.readUnsignedByte()) {
-                    END -> return
+                    END -> {
+                        if (input.read() != -1) throw VaultAuthException("Trailing backup archive data")
+                        return
+                    }
                     ENTRY -> {
                         if (++entries > MAX_ENTRIES) throw VaultAuthException("The backup has too many files")
                         val path = input.readUTF()
