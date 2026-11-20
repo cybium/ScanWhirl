@@ -83,7 +83,8 @@ class ShellLookTest {
             layoutRoot(activity)
             val body = activity.findViewById<View>(R.id.swToolsBody)
             val rows = ToolsHubScreen.rows(body)
-            // B4-TOOLS: every shipping tool is a row once each job's door is open.
+            // T1 owner-approved 2026-11-20: no hidden tools, so every shipping tool is already
+            // a row on the first render.
             assertEquals(
                 com.scanwhirl.app.ui.kit.ToolRegistry.all
                     .count { it.status != com.scanwhirl.app.ui.kit.ToolStatus.SOON },

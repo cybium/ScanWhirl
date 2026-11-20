@@ -263,4 +263,36 @@ object Prefs {
         }.getOrDefault(false)
 
     fun resetQuickTools(c: Context) = sp(c).edit().remove(KEY_QUICK_TOOLS).apply()
+
+    // ---- Recent tools on the Tools tab (T1, owner 2026-11-20) ----------------
+    //
+    // The last few tools this person actually launched, most recent first, so the everyday
+    // work (Compress, OCR, Backup) is one tap from the top of the Tools tab. The list is a
+    // device habit, not a document and not a setting to carry: it is deliberately NOT in the
+    // Full Backup settings allowlist (FullBackup.portableSettingKeys), and an id this build no
+    // longer ships is dropped on read instead of rendering a dead row.
+
+    /** Public so the backup allowlist test can name the key without a private mirror. */
+    const val KEY_RECENT_TOOLS = "recent_tools"
+
+    const val MAX_RECENT_TOOLS = 6
+
+    /** Launched tools, most recent first; unknown or not-READY ids are ignored. */
+    fun recentTools(c: Context): List<String> {
+        val stored = sp(c).getString(KEY_RECENT_TOOLS, null) ?: return emptyList()
+        return stored.split(',').map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .filter { isReady(it) }
+            .distinct()
+            .take(MAX_RECENT_TOOLS)
+    }
+
+    /** Moves [id] to the front (an existing entry moves, it is never repeated). */
+    fun recordRecentTool(c: Context, id: String) {
+        if (!isReady(id)) return
+        val next = (listOf(id) + recentTools(c).filter { it != id }).take(MAX_RECENT_TOOLS)
+        sp(c).edit().putString(KEY_RECENT_TOOLS, next.joinToString(",")).apply()
+    }
+
+    fun clearRecentTools(c: Context) = sp(c).edit().remove(KEY_RECENT_TOOLS).apply()
 }

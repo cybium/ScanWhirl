@@ -79,29 +79,16 @@ abstract class ToolsJobsBase {
         }
     }
 
-    /** Opens the Tools tab, optionally expands every "All N tools" door, then lays out. */
-    private fun toolsTab(expandAll: Boolean = false, block: (ShellActivity, ViewGroup) -> Unit) {
+    /** Opens the Tools tab and lays out. T1: every job already lists every tool. */
+    private fun toolsTab(block: (ShellActivity, ViewGroup) -> Unit) {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 activity.findViewById<View>(R.id.swNavTools).performClick()
                 idle()
                 layoutRoot(activity)
-                if (expandAll) expandAllDoors(activity)
-                layoutRoot(activity)
                 block(activity, activity.findViewById(R.id.swToolsBody))
             }
-        }
-    }
-
-    private fun expandAllDoors(activity: ShellActivity) {
-        var guard = 0
-        while (guard++ < 20) {
-            val door = ToolsHubScreen.doors(activity.findViewById(R.id.swToolsBody)).firstOrNull()
-                ?: return
-            door.performClick()
-            idle()
-            layoutRoot(activity)
         }
     }
 
@@ -217,7 +204,7 @@ abstract class ToolsJobsBase {
     @Test
     fun `Compress is named inside the first job without scrolling`() {
         toolsTab { activity, body ->
-            val card = body.getChildAt(0) as ViewGroup
+            val card = ToolsHubScreen.cardTagged(body, ToolJob.SMALLER) as ViewGroup
             val header = (card.getChildAt(0) as ViewGroup).getChildAt(0) as TextView
             assertEquals(app.getString(R.string.tools_job_smaller), header.text.toString())
 
@@ -252,7 +239,7 @@ abstract class ToolsJobsBase {
 
     @Test
     fun `every Pro tool shows the gold Pro word`() {
-        toolsTab(expandAll = true) { _, body ->
+        toolsTab { _, body ->
             val rows = ToolsHubScreen.rows(body)
             for (tool in ToolRegistry.all.filter { it.pro && it.status != ToolStatus.SOON }) {
                 val row = rows.firstOrNull { it.tool?.id == tool.id }
@@ -281,33 +268,29 @@ abstract class ToolsJobsBase {
         }
     }
 
+    /**
+     * T1 owner-approved 2026-11-20: no hidden tools. Every job lists all of its tools on the
+     * first render — no "All N tools" door, no expansion state, nothing behind a tap.
+     */
     @Test
-    fun `the All tools door count comes from the catalogue`() {
-        toolsTab { activity, body ->
-            val organise = ToolRegistry.jobs().first { it.first == ToolJob.ORGANISE }
-            val door = ToolsHubScreen.doors(body).firstOrNull()
-            assertNotNull("a long job has an All N tools door", door)
-            assertEquals(
-                "the door wording is derived",
-                app.getString(R.string.tools_job_all, organise.second.size),
-                allText(door!!).first()
-            )
-            assertEquals(
-                "a long job shows only its first rows behind the door",
-                ToolsHubScreen.PREVIEW_ROWS,
-                ToolsHubScreen.rows(body).count { row ->
-                    row.tool?.let { ToolRegistry.jobOf(it) } == ToolJob.ORGANISE
+    fun `every job lists all of its tools with no extra tap`() {
+        toolsTab { _, body ->
+            val organises = ToolRegistry.jobs().first { it.first == ToolJob.ORGANISE }.second
+            assertTrue("Combine and organise stays a long job", organises.size > 3)
+            val ids = ToolsHubScreen.rows(body).mapNotNull { it.tool?.id }
+            for ((job, tools) in ToolRegistry.jobs()) {
+                for (tool in tools) {
+                    assertTrue("${tool.id} is not visible in job $job", tool.id in ids)
                 }
+            }
+            val texts = allText(body)
+            assertFalse(
+                "\"All N tools\" door wording survives in the hub",
+                texts.any { it == app.getString(R.string.tools_job_all, organises.size) }
             )
-            door.performClick()
-            idle()
-            layoutRoot(activity)
-            assertEquals(
-                "after the door every tool of the job is a row",
-                organise.second.size,
-                ToolsHubScreen.rows(body).count { row ->
-                    row.tool?.let { ToolRegistry.jobOf(it) } == ToolJob.ORGANISE
-                }
+            assertFalse(
+                "\"Show fewer\" door wording survives in the hub",
+                texts.any { it == app.getString(R.string.tools_job_fewer) }
             )
         }
     }
@@ -384,9 +367,10 @@ abstract class ToolsJobsBase {
                 ToolRegistry.jobs().map { app.getString(it.first.title) },
                 jobHeaders(body)
             )
+            // T1 owner-approved 2026-11-20: no hidden tools, so the whole catalogue returns.
             assertEquals(
-                "no search hit survives: only the first rows of each job show",
-                ToolRegistry.jobs().sumOf { minOf(it.second.size, ToolsHubScreen.PREVIEW_ROWS) },
+                "no search hit survives: every shipping tool of every job shows",
+                ToolRegistry.all.count { it.status != ToolStatus.SOON },
                 ToolsHubScreen.rows(body).size
             )
         }
@@ -454,7 +438,7 @@ abstract class ToolsJobsBase {
     @Test
     fun `200 percent uses list rows and the last job clears the dock`() {
         RuntimeEnvironment.setFontScale(2.0f)
-        toolsTab(expandAll = true) { activity, body ->
+        toolsTab { activity, body ->
             val rows = ToolsHubScreen.rows(body)
             assertEquals(
                 "at 200% every shipping tool keeps its own full-width row",
@@ -526,8 +510,13 @@ abstract class ToolsJobsBase {
 
     private fun jobHeaders(body: ViewGroup): List<String> = bodyHeaders(body).map { it.text.toString() }
 
+    /**
+     * The heading of each job card, in order. The optional "Recent tools" card is not a job, so
+     * it is skipped here (T1); its own heading is asserted by the recents tests.
+     */
     private fun bodyHeaders(body: ViewGroup): List<TextView> = (0 until body.childCount).mapNotNull { index ->
         val card = body.getChildAt(index) as? ViewGroup ?: return@mapNotNull null
+        if (card.tag == ToolsHubScreen.TAG_RECENT) return@mapNotNull null
         val head = card.getChildAt(0) as? ViewGroup ?: return@mapNotNull null
         head.getChildAt(0) as? TextView
     }

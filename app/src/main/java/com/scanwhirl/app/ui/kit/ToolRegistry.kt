@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.kit
 
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.tools.ToolLaunch
+import com.scanwhirl.app.util.Prefs
 import java.util.Locale
 
 /** v2 UI: 03_tools_hub — the seven catalogue groups, in mockup order. */
@@ -44,11 +45,17 @@ interface ToolHost {
 
 /**
  * The one place a tool tap is dispatched: Free + Pro tool goes to the Pro
- * screen, everything else runs its launch. Tools hub, Home quick row and the
- * Library create row all funnel here.
+ * screen, everything else runs its launch. Tools hub, its Recent row, Home
+ * quick row and the Library create row all funnel here.
+ *
+ * T1 (owner-approved 2026-11-20): a tool that really launches is recorded as
+ * recent here — the single choke point, so every door records the same way. A
+ * Pro tool a Free person was gated away from is not recorded (it never ran),
+ * and a Coming-soon entry has no row to tap.
  */
 fun ToolHost.launchTool(tool: SwTool) {
     if (tool.pro && proGate(tool)) return
+    (this as? android.content.Context)?.let { Prefs.recordRecentTool(it, tool.id) }
     tool.launch(this, tool)
 }
 

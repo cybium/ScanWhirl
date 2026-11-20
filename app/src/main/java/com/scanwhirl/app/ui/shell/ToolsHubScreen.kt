@@ -24,19 +24,25 @@ import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolRow
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.TrustPill
+import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 
 /**
  * UI_PLAN §0b / tools_v4 — the Tools tab answers "what do I want done?".
  *
- * The seven approved jobs come first (Make it smaller / Combine and organise / Sign and mark
- * up / Keep it private / Get the text / Change the format / Start something new), each one a
- * card of full-width [ToolRow]s. "Make it smaller" is first and names Compress, so making a
- * file smaller no longer means decoding "Optimize".
+ * T1 (owner-approved 2026-11-20): everyday tools come first. Under the search field sits
+ * "Recent tools" — the last up-to-six distinct tools this person launched, most recent first,
+ * each one tap on the same launch path as any other row (so Pro gating is unchanged). The row
+ * is absent for someone who has never launched a tool (no placeholder), and while searching.
  *
- * Membership and every number are derived from [ToolRegistry.jobs]; a job with more rows than
- * [PREVIEW_ROWS] offers one "All N tools" door that opens the rest in place (the same row
- * rendering as every other job, no third level). A Coming-soon tool is never rendered.
+ * Then the seven approved jobs come first in reading order (Make it smaller / Combine and
+ * organise / Sign and mark up / Keep it private / Get the text / Change the format / Start
+ * something new), each one a card of full-width [ToolRow]s. "Make it smaller" is first and
+ * names Compress, so making a file smaller no longer means decoding "Optimize".
+ *
+ * Every job lists every one of its shipping tools directly: there is no "All N tools" door,
+ * no expansion state and nothing hidden behind a tap. Membership is derived from
+ * [ToolRegistry.jobs]; a Coming-soon tool is never rendered.
  *
  * Search reuses the existing ranking and draws the same rows, so "Searchable PDF" reads in
  * full instead of the old five-column "…".
@@ -50,9 +56,6 @@ class ToolsHubScreen(
     private lateinit var clearButton: ImageButton
     private lateinit var searchBox: LinearLayout
     val body: LinearLayout
-
-    /** Jobs whose full list is shown after their "All N tools" door is tapped. */
-    private val expandedJobs = LinkedHashSet<ToolJob>()
 
     init {
         orientation = VERTICAL
@@ -204,6 +207,9 @@ class ToolsHubScreen(
                 )
                 return
             }
+            // T1: the everyday tools first, then every job with every tool open.
+            val recents = recentTools()
+            if (recents.isNotEmpty()) body.addView(recentCard(recents))
             for ((job, tools) in jobs) body.addView(jobCard(job, tools))
             return
         }
@@ -262,19 +268,36 @@ class ToolsHubScreen(
     private fun catalogue(): List<Pair<ToolJob, List<SwTool>>> =
         catalogueSource?.invoke() ?: ToolRegistry.jobs()
 
-    /** One job: its heading, its rows, and one "All N tools" door when the job is longer. */
+    /**
+     * T1: the tools this person launched last, most recent first. Read through [Prefs], which
+     * drops an id this build no longer ships (never a dead row) and keeps the list short.
+     */
+    private fun recentTools(): List<SwTool> = Prefs.recentTools(context)
+        .mapNotNull { ToolRegistry.byId(it) }
+        .filter { it.status == ToolStatus.READY }
+        .take(Prefs.MAX_RECENT_TOOLS)
+
+    /**
+     * "Recent tools": the same full-width rows as a job, under their own heading, each one
+     * tapping into the one launch path ([ToolHost.launchTool]) so Pro gating is unchanged.
+     */
+    private fun recentCard(tools: List<SwTool>): View {
+        val card = card()
+        card.tag = TAG_RECENT
+        card.addView(jobHeader(context.getString(R.string.tools_recent_title), false))
+        card.addView(headRule())
+        for (tool in tools) card.addView(row(tool))
+        return card
+    }
+
+    /** One job: its heading and every one of its shipping rows, with nothing hidden. */
     private fun jobCard(job: ToolJob, tools: List<SwTool>): View {
         val card = card()
-        // The card remembers its job, so the door can find its own group again after a rebuild.
+        // The card remembers its job, so a rebuild keeps its place and tests can find it.
         card.tag = job
         card.addView(jobHeader(context.getString(job.title), job.pro))
         card.addView(headRule())
-        val expanded = expandedJobs.contains(job)
-        val shown = if (expanded || tools.size <= PREVIEW_ROWS) tools else tools.take(PREVIEW_ROWS)
-        for (tool in shown) card.addView(row(tool))
-        if (tools.size > PREVIEW_ROWS) {
-            card.addView(door(job, tools.size, expanded))
-        }
+        for (tool in tools) card.addView(row(tool))
         return card
     }
 
@@ -427,94 +450,7 @@ class ToolsHubScreen(
         layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
     }
 
-    /**
-     * The one door to the rest of a long job. The count is the job's own derived size, never
-     * a typed number; the door opens in place so the tab stays two levels deep.
-     *
-     * W7: opening or closing rebuilds the card, so the tapped view is gone afterwards. Focus is
-     * put back inside the same group (the first newly shown row on open, the door again on
-     * close) and the card keeps its place on screen instead of jumping to the top.
-     */
-    private fun door(job: ToolJob, count: Int, expanded: Boolean): View {
-        val label = if (expanded) {
-            context.getString(R.string.tools_job_fewer)
-        } else {
-            context.getString(R.string.tools_job_all, count)
-        }
-        val door = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            // Only the door that opens the rest is discoverable as a door; "Show fewer" is a
-            // normal row, so an "open everything" walk always terminates.
-            tag = if (expanded) null else TAG_JOB_DOOR
-            isClickable = true
-            isFocusable = true
-            minimumHeight = SwStyle.dp(context, 48f)
-            val pad = SwStyle.dp(context, 8f)
-            setPadding(pad, pad, pad, pad)
-            background = SwStyle.rounded(context, android.graphics.Color.TRANSPARENT, radiusDp = 12f)
-            foreground = android.graphics.drawable.RippleDrawable(
-                ColorStateList.valueOf(SwStyle.color(context, R.color.sw_cyan_soft)),
-                null,
-                SwStyle.rounded(context, android.graphics.Color.WHITE, radiusDp = 12f)
-            )
-            contentDescription = label
-            setOnClickListener {
-                val scroll = ancestorScroll()
-                // W7: the card sits at the same content offset before and after a rebuild, so
-                // keeping the scroll offset keeps the expanded group where the person found it.
-                val keepScrollY = scroll?.scrollY
-                val expanding = expandedJobs.add(job)
-                if (!expanding) expandedJobs.remove(job)
-                render(searchInput.text?.toString().orEmpty())
-                if (scroll != null && keepScrollY != null) {
-                    scroll.post {
-                        if (scroll.scrollY != keepScrollY) scroll.scrollTo(0, keepScrollY)
-                    }
-                }
-                val target = if (expanding) {
-                    firstRevealedRow(job)
-                } else {
-                    cardFor(job)?.let { it.getChildAt(it.childCount - 1) }
-                }
-                target?.let { focusAndAnnounce(it) }
-            }
-        }
-        door.addView(
-            SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
-                typeface = SwType.semibold(context)
-                text = label
-            },
-            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-        )
-        door.addView(
-            ImageView(context).apply {
-                setImageResource(R.drawable.ic_sym_chevron_right)
-                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.text_hologram_mid))
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            },
-            LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f))
-        )
-        return door
-    }
-
-    /** The rebuilt card of [job], or null when that job no longer renders. */
-    private fun cardFor(job: ToolJob): ViewGroup? {
-        for (index in 0 until body.childCount) {
-            val child = body.getChildAt(index)
-            if (child is ViewGroup && child.tag == job) return child
-        }
-        return null
-    }
-
-    /** The first row a person could not see before the job was expanded. */
-    private fun firstRevealedRow(job: ToolJob): View? {
-        val card = cardFor(job) ?: return null
-        val rows = (0 until card.childCount).map { card.getChildAt(it) }.filterIsInstance<ToolRow>()
-        return rows.getOrNull(PREVIEW_ROWS) ?: rows.lastOrNull()
-    }
-
-    /** Keyboard and TalkBack focus in one stop: a list that expands must not drop either. */
+    /** Keyboard and TalkBack focus in one stop: a list that rebuilds must not drop either. */
     private fun focusAndAnnounce(view: View) {
         view.requestFocus()
         androidx.core.view.ViewCompat.performAccessibilityAction(
@@ -525,11 +461,8 @@ class ToolsHubScreen(
     }
 
     companion object {
-        /** Rows shown before a job offers its "All N tools" door. */
-        const val PREVIEW_ROWS = 3
-
-        /** Tag of the "All N tools" door, so tests can open it without a private id. */
-        const val TAG_JOB_DOOR = "swToolsJobDoor"
+        /** Tag of the "Recent tools" card, so tests can find it without a private id. */
+        const val TAG_RECENT = "swToolsRecent"
 
         /** Tag of the Clear search action inside the no-match state. */
         const val TAG_CLEAR_EMPTY = "swToolsClearEmpty"
@@ -557,15 +490,13 @@ class ToolsHubScreen(
             return found
         }
 
-        /** The "All N tools" doors currently rendered (tests open them). */
-        fun doors(root: View): List<View> {
-            val found = mutableListOf<View>()
-            fun walk(view: View) {
-                if (view.tag == TAG_JOB_DOOR) found += view
-                if (view is ViewGroup) for (i in 0 until view.childCount) walk(view.getChildAt(i))
+        /** The cards the hub renders, by tag (tests find the Recent card and a job card). */
+        fun cardTagged(root: View, tag: Any): View? {
+            if (root.tag == tag) return root
+            if (root is ViewGroup) {
+                for (i in 0 until root.childCount) cardTagged(root.getChildAt(i), tag)?.let { return it }
             }
-            walk(root)
-            return found
+            return null
         }
     }
 }
