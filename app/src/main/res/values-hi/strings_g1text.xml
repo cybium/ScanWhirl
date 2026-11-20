@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- F-02 / D9-1: the Text screen follows the store and says when retries are used up. -->
+<resources>
+    <!-- D9-1: a re-read finished while the Text screen was open. -->
+    <string name="ocr_g1text_new_text_title">नई लिखावट पढ़ी गई</string>
+    <string name="ocr_g1text_new_text_msg">इस फ़ोन ने लिखावट फिर से पढ़ी और पन्ना %1$s की सहेजी हुई लिखावट बदल गई। नई लिखावट रखें, या यहाँ लिखा अपना बदलाव रखें?</string>
+    <string name="ocr_g1text_use_new">नई लिखावट रखें</string>
+    <string name="ocr_g1text_keep_mine">मेरा बदलाव रखें</string>
+    <!-- F-02: automatic retries are used up, the pages stay unread. -->
+    <string name="ocr_g1text_retries_used">कुछ पन्नों की लिखावट कई कोशिशों के बाद भी नहीं पढ़ी जा सकी। आप लिखावट खुद लिख सकते हैं, या फिर से कोशिश करें दबाएँ।</string>
+</resources>

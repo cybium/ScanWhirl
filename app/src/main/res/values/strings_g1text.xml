@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- F-02 / D9-1: the Text screen follows the store and says when retries are used up. -->
+<resources>
+    <!-- D9-1: a re-read finished while the Text screen was open. -->
+    <string name="ocr_g1text_new_text_title">New text was read</string>
+    <string name="ocr_g1text_new_text_msg">This phone read the text again and the saved text changed on page %1$s. Use the new text, or keep what you wrote here?</string>
+    <string name="ocr_g1text_use_new">Use the new text</string>
+    <string name="ocr_g1text_keep_mine">Keep my edit</string>
+    <!-- F-02: automatic retries are used up, the pages stay unread. -->
+    <string name="ocr_g1text_retries_used">Some pages could not be read, even after several tries. You can type the text yourself, or tap Try again.</string>
+</resources>
