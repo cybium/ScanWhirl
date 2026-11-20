@@ -138,7 +138,7 @@ class OcrIndexerTest {
     }
 
     @Test
-    fun `recognizer failure leaves page absent, counts failure, clears marker`() = runBlocking {
+    fun `recognizer failure leaves page absent, counts failure, keeps a retry`() = runBlocking {
         val repo = ScanRepository(context)
         val id = saveDoc(repo, "3 pages", pageCount = 3)
 
@@ -154,7 +154,9 @@ class OcrIndexerTest {
         assertEquals("text of page_000.jpg", text["page_000.jpg"])
         assertNull(text["page_001.jpg"])
         assertEquals("text of page_002.jpg", text["page_002.jpg"])
-        assertFalse("ocr_pending should be cleared even with failures", OcrStore(docsDir).isPending(id))
+        // F-02: the failed page must be retried, so the document stays queued while it has
+        // automatic attempts left (it used to drop the marker and never try again).
+        assertTrue("ocr_pending stays for a retry", OcrStore(docsDir).isPending(id))
     }
 
     @Test

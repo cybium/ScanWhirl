@@ -29,21 +29,27 @@ class OcrReindex(private val repo: ScanRepository) {
     ): Int = repo.ocrStore.withRecognitionLock(docId) {
         withContext(Dispatchers.IO) {
             val doc = repo.getDocument(docId) ?: return@withContext -1
-            val keep = repo.ocrStore.clearForReread(docId, replaceCorrections)
-            var stored = 0
-            for (page in doc.pageFiles) {
-                if (page.name in keep) continue
-                val sourceHash = OcrStore.locked { Sha256.of(page) }
-                val result = OcrEngine.recognizeFile(page, language)
-                stored += repo.ocrStore.putRecognizedPages(
-                    docId, listOf(OcrStore.Recognized(page.name, sourceHash, result.text, result.page))
-                ).stored
+            try {
+                val keep = repo.ocrStore.clearForReread(docId, replaceCorrections)
+                var stored = 0
+                for (page in doc.pageFiles) {
+                    if (page.name in keep) continue
+                    val sourceHash = OcrStore.locked { Sha256.of(page) }
+                    val result = OcrEngine.recognizeFile(page, language)
+                    stored += repo.ocrStore.putRecognizedPages(
+                        docId, listOf(OcrStore.Recognized(page.name, sourceHash, result.text, result.page))
+                    ).stored
+                }
+                if (stored + doc.pageFiles.count { it.name in keep } == doc.pageFiles.size) {
+                    repo.ocrStore.clearPending(docId)
+                }
+                if (stored > 0) repo.refreshPdfAfterIndex(docId)
+                stored
+            } finally {
+                // D9-1: the stored text was cleared and rewritten; any open Text screen must
+                // reload it instead of keeping (and later saving) the old text.
+                OcrTextEvents.notifyChanged()
             }
-            if (stored + doc.pageFiles.count { it.name in keep } == doc.pageFiles.size) {
-                repo.ocrStore.clearPending(docId)
-            }
-            if (stored > 0) repo.refreshPdfAfterIndex(docId)
-            stored
         }
     }
 }
