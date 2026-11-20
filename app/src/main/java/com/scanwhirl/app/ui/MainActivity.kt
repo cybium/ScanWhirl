@@ -1784,47 +1784,34 @@ class MainActivity : BaseActivity(), HomeHost {
     }
 
     private fun promptUnlockBeforeOpen(doc: ScanDocument, onUnlocked: () -> Unit) {
-        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
-            .setTitle(R.string.unlock_pdf_title)
-            .setMessage(getString(R.string.unlock_pdf_msg, doc.name))
-            .setInput(
-                hint = getString(R.string.protect_hint),
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            )
-            .build()
-        sheet.setSecondary(R.string.unlock_pdf_remove) {
-                val pw = sheet.inputView?.text?.toString().orEmpty()
-                if (repo.verifyPdfPassword(doc.id, pw)) {
-                    lifecycleScope.launch {
-                        // PM-3.1b review C2: unlockPdf can still throw (for example locked_no_pages).
-                        try {
-                            withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, pw) } // pw verified above
-                            Toast.makeText(this@MainActivity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
-                            refreshList()
-                            onUnlocked()
-                        } catch (e: Exception) {
-                            Toast.makeText(
-                                this@MainActivity,
-                                getString(R.string.page_op_failed, e.message),
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
+        com.scanwhirl.app.ui.protect.UnlockSheet.showWithGrant(
+            activity = this,
+            documentName = doc.name,
+            verify = { repo.checkPdfPassword(doc.id, it) },
+            onUnlocked = { onUnlocked() },
+            onRemoveProtection = { grant ->
+                lifecycleScope.launch {
+                    val progress = showProgress(R.string.unlock_pdf_title)
+                    try {
+                        withContext(Dispatchers.IO) { repo.unlockPdf(doc.id, grant) }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.page_op_failed, e.message),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@launch
+                    } finally {
+                        progress.dismiss()
                     }
-                } else {
-                    Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, R.string.unlock_pdf_done, Toast.LENGTH_LONG).show()
+                    refreshList()
+                    onUnlocked()
                 }
             }
-        sheet.setPrimaryStayOpen(R.string.unlock_pdf_open) {
-            val pw = sheet.inputView?.text?.toString().orEmpty()
-            if (repo.verifyPdfPassword(doc.id, pw)) {
-                sheet.dismiss()
-                onUnlocked()
-            } else {
-                Toast.makeText(this, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
-            }
-        }
-        sheet.show()
+        )
     }
 
     /** Editing a locked scan asks for the password first (pages stay protected). */
