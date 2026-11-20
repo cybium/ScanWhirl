@@ -17,6 +17,7 @@ import com.scanwhirl.app.util.PdfA
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -114,10 +115,11 @@ object PdfAFlow {
      * Both cache folders are wiped by the cold-start privacy sweep.
      */
     private fun publishedCopy(context: Context, file: File): File {
-        val dir = File(context.cacheDir, "documents/pdfa").apply { mkdirs() }
-        val out = File(dir, file.name)
+        // X3: one folder per export so two documents with the same name (the PDF/A name is
+        // derived from the document name) never overwrite a copy the result screen is sharing.
+        val out = File(ShareUtils.newShareDirectory(context), file.name)
         if (file.renameTo(out)) return out
-        file.copyTo(out, overwrite = true)
+        file.copyTo(out, overwrite = false)
         file.delete()
         return out
     }
