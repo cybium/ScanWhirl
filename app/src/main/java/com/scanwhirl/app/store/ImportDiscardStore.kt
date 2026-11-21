@@ -20,9 +20,10 @@ import java.util.UUID
  *
  * The manifest carries BOTH a monotonic (elapsedRealtime) and a wall-clock window. Inside one
  * boot the monotonic deadline is authoritative, so a wall-clock adjustment cannot change a
- * promised Undo. Across a reboot elapsedRealtime restarts, so the persisted wall deadline is
- * authoritative: expired -> purge, unexpired -> keep the remaining wall time. A v1 manifest
- * has no wall window and is treated as unreadable: recovery restores it rather than guessing.
+ * promised Undo. Across a reboot elapsedRealtime restarts: the first recovery persists an anchor
+ * (wall time then + a conservatively bounded remaining window, plus the new boot's monotonic
+ * reading). Later waits use that monotonic anchor, so even a clock that keeps moving backwards
+ * cannot keep an expired escrow alive. v1/v2 manifests are read and upgraded on first recovery.
  */
 class ImportDiscardStore(
     context: Context,
@@ -40,7 +41,9 @@ class ImportDiscardStore(
     data class Token(val key: String, val id: String, val deadline: Long)
     private data class Record(
         val phase: String, val start: Long, val deadline: Long, val boot: Int,
-        val wallStart: Long, val wallDeadline: Long
+        val wallStart: Long, val wallDeadline: Long,
+        val anchorBoot: Int = -1, val anchorElapsed: Long = -1,
+        val anchorWall: Long = -1, val anchorWindow: Long = -1
     )
     enum class Stage {
         MANIFEST_WRITTEN, DOCUMENT_MOVED, DRAFT_MOVED, COMMITTED,
@@ -64,40 +67,102 @@ class ImportDiscardStore(
 
     private fun write(dir: File, record: Record) {
         Durable.atomicWriteText(File(dir, "manifest"),
-            "v2\n${record.phase}\n${idOf(dir)}\n${record.start}\n${record.deadline}\n" +
-                "${record.boot}\n${record.wallStart}\n${record.wallDeadline}\n")
+            "v3\n${record.phase}\n${idOf(dir)}\n${record.start}\n${record.deadline}\n" +
+                "${record.boot}\n${record.wallStart}\n${record.wallDeadline}\n" +
+                "${record.anchorBoot}\n${record.anchorElapsed}\n${record.anchorWall}\n" +
+                "${record.anchorWindow}\n")
         Durable.syncDir(dir)
     }
 
     private fun read(dir: File): Record? = runCatching {
         val lines = File(dir, "manifest").readLines()
-        require(lines.size == 8 && lines[0] == "v2" && lines[2] == idOf(dir))
+        require(lines.size >= 6 && lines[2] == idOf(dir))
         require(lines[1] in listOf("STAGING", "PENDING", "RESTORING", "PURGING"))
         val start = lines[3].toLong()
         val deadline = lines[4].toLong()
-        require(start >= 0 && deadline > start && deadline - start <= Int.MAX_VALUE)
-        val wallStart = lines[6].toLong()
-        val wallDeadline = lines[7].toLong()
-        require(wallStart >= 0 && wallDeadline > wallStart && wallDeadline - wallStart <= Int.MAX_VALUE)
-        Record(lines[1], start, deadline, lines[5].toInt(), wallStart, wallDeadline)
+        val window = deadline - start
+        require(start >= 0 && window > 0 && window <= Int.MAX_VALUE)
+        val bootNo = lines[5].toInt()
+        when (lines[0]) {
+            // A v1 escrow has no wall window: the manifest's own creation time is the only
+            // durable wall fact. If even that is missing, keep it restorable via the anchor.
+            "v1" -> {
+                require(lines.size == 6)
+                val created = File(dir, "manifest").lastModified()
+                val wallStart = if (created > 0) created else -1L
+                val wallDeadline = if (wallStart > 0) wallStart + window else -1L
+                Record(lines[1], start, deadline, bootNo, wallStart, wallDeadline)
+            }
+            "v2" -> {
+                require(lines.size == 8)
+                val wallStart = lines[6].toLong()
+                val wallDeadline = lines[7].toLong()
+                require(wallStart >= 0 && wallDeadline > wallStart && wallDeadline - wallStart <= Int.MAX_VALUE)
+                Record(lines[1], start, deadline, bootNo, wallStart, wallDeadline)
+            }
+            "v3" -> {
+                require(lines.size == 12)
+                val wallStart = lines[6].toLong()
+                val wallDeadline = lines[7].toLong()
+                require(wallStart >= 0 && wallDeadline > wallStart && wallDeadline - wallStart <= Int.MAX_VALUE)
+                val anchorBoot = lines[8].toInt()
+                val anchorElapsed = lines[9].toLong()
+                val anchorWall = lines[10].toLong()
+                val anchorWindow = lines[11].toLong()
+                require(anchorBoot == -1 || (anchorElapsed >= 0 && anchorWall >= 0 &&
+                    anchorWindow >= 0 && anchorWindow <= window))
+                Record(lines[1], start, deadline, bootNo, wallStart, wallDeadline,
+                    anchorBoot, anchorElapsed, anchorWall, anchorWindow)
+            }
+            else -> error("Unknown import escrow manifest")
+        }
     }.getOrNull()
 
-    /** The monotonic clock only counts while this boot lasts; after a reboot use wall time. */
+    /** The monotonic clock only counts while this boot lasts; after a reboot use the anchor. */
     private fun sameBoot(record: Record) = record.boot == boot() && elapsed() >= record.start
 
-    private fun remaining(record: Record): Long = if (sameBoot(record)) {
-        (record.deadline - elapsed()).coerceAtLeast(0)
-    } else {
-        // Capped at the original window so a backwards wall adjustment cannot buy more Undo
-        // than the window that was promised when the import was discarded.
-        ((record.wallDeadline - wall())
-            .coerceAtMost(record.wallDeadline - record.wallStart)).coerceAtLeast(0)
+    private fun anchoredHere(record: Record) = record.anchorBoot == boot() && record.anchorWindow >= 0
+
+    private fun window(record: Record) = record.deadline - record.start
+
+    /** min of the original wall deadline and the bounded deadline inherited from an anchor. */
+    private fun effectiveWallDeadline(record: Record): Long {
+        val creation = if (record.wallDeadline > 0) record.wallDeadline else Long.MAX_VALUE
+        val anchor = if (record.anchorWindow >= 0) record.anchorWall + record.anchorWindow
+                     else Long.MAX_VALUE
+        return minOf(creation, anchor)
     }
 
-    private fun expired(record: Record) = if (sameBoot(record)) {
-        elapsed() >= record.deadline
-    } else {
-        wall() >= record.wallDeadline
+    private fun remaining(record: Record): Long = when {
+        anchoredHere(record) ->
+            (record.anchorElapsed + record.anchorWindow - elapsed()).coerceAtLeast(0)
+        sameBoot(record) ->
+            (record.deadline - elapsed()).coerceAtLeast(0)
+        else ->
+            (effectiveWallDeadline(record) - wall())
+                .coerceAtMost(window(record)).coerceAtLeast(0)
+    }
+
+    private fun expired(record: Record) = remaining(record) <= 0
+
+    /** First recovery after a boot change: persist a bounded, monotonic deadline for this boot. */
+    private fun anchor(dir: File, record: Record): Record {
+        if (anchoredHere(record) || sameBoot(record)) return record
+        val now = wall()
+        val left = (effectiveWallDeadline(record) - now)
+            .coerceAtMost(window(record)).coerceAtLeast(0)
+        val updated = record.copy(
+            anchorBoot = boot(), anchorElapsed = elapsed(),
+            anchorWall = now, anchorWindow = left
+        )
+        write(dir, updated)
+        return updated
+    }
+
+    private fun deadlineOf(record: Record) = when {
+        anchoredHere(record) -> record.anchorElapsed + record.anchorWindow
+        sameBoot(record) -> record.deadline
+        else -> effectiveWallDeadline(record)
     }
 
     fun remainingMs(token: Token): Long = repo.withImportDiscardLock {
@@ -161,9 +226,12 @@ class ImportDiscardStore(
                 record == null || record.phase == "STAGING" || record.phase == "RESTORING" ->
                     restorePayload(dir)
                 record.phase == "PURGING" -> purge(dir)
-                expired(record) -> purge(dir)
-                else -> pending += Token(dir.name, idOf(dir),
-                    if (sameBoot(record)) record.deadline else record.wallDeadline)
+                else -> {
+                    val current = if (record.phase == "PENDING" &&
+                        !sameBoot(record) && !anchoredHere(record)) anchor(dir, record) else record
+                    if (expired(current)) purge(dir)
+                    else pending += Token(dir.name, idOf(dir), deadlineOf(current))
+                }
             }
         }
         pending

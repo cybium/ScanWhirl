@@ -23,7 +23,8 @@ class ImportDiscardStoreTest {
     private val repo get() = ScanRepository(app)
     private var now = 1_000L
     private var boot = 7
-    private fun store() = ImportDiscardStore(app, repo, { now }, { boot })
+    private var wall = 1_700_000_000_000L
+    private fun store() = ImportDiscardStore(app, repo, { now }, { boot }, { wall })
     private fun digest(id: String) = PdfInvariants.dirDigest(File(repo.docsDir, id))
 
     @After fun reset() {
@@ -102,9 +103,16 @@ class ImportDiscardStoreTest {
         val id = DocFixtures.saved(repo, app, pages = 2)
         val before = digest(id)
         // PENDING is already durable: a later fault is a success receipt, not a discard failure.
-        ImportDiscardStore.fault = { if (it == ImportDiscardStore.Stage.COMMITTED) throw SimulatedDeath() }
+        val faultFired = java.util.concurrent.atomic.AtomicBoolean(false)
+        ImportDiscardStore.fault = {
+            if (it == ImportDiscardStore.Stage.COMMITTED) {
+                faultFired.set(true)
+                throw SimulatedDeath()
+            }
+        }
         val token = store().discard(id, 8_000)
         ImportDiscardStore.fault = {}
+        assertTrue("the post-commit fault hook must still have fired", faultFired.get())
         now += 3_000
         assertEquals(listOf(token), store().recover())
         assertEquals(5_000L, store().remainingMs(token))
