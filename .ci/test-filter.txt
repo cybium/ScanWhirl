@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.shell.HomeLargeFontTest,com.scanwhirl.app.ui.shell.LibraryFirstScreen640Test,com.scanwhirl.app.ui.shell.LibraryFirstScreenTest,com.scanwhirl.app.ui.shell.Sh1ShellSettingsFixTest,com.scanwhirl.app.ui.shell.ShellQaFixesTest

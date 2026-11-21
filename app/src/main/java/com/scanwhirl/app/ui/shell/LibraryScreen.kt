@@ -2604,7 +2604,12 @@ class LibraryScreen(
      */
     private fun listBottomInset(): Int {
         val dock = (context as? ShellActivity)?.dockClearancePx() ?: 0
-        return maxOf(SwStyle.dp(context, 96f), dock)
+        val base = maxOf(SwStyle.dp(context, 96f), dock)
+        // G6: a wrapped dock can grow a few pixels after this pass; keep a small high-font
+        // margin so the reserved clearance still covers the measured dock on the next frame.
+        return if (resources.configuration.fontScale >= 1.6f) {
+            base + SwStyle.dp(context, 8f)
+        } else base
     }
 
     private fun metaFor(doc: ScanDocument): String {
