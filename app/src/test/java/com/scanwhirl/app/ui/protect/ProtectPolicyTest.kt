@@ -79,6 +79,19 @@ class ProtectPolicyTest {
     }
 
     @Test
+    fun `the tries line announces the real next pause, including after it doubles`() {
+        var now = 1_000L
+        val cooldown = TryCooldown(clock = { now })
+        assertEquals(30, cooldown.nextPauseSeconds())
+        repeat(5) { cooldown.registerFailure() }
+        assertEquals("the next cycle starts at a 60-second pause", 60, cooldown.nextPauseSeconds())
+        now += 60_000L
+        assertEquals(60, cooldown.nextPauseSeconds())
+        cooldown.reset()
+        assertEquals("a right password restores the 30-second pause", 30, cooldown.nextPauseSeconds())
+    }
+
+    @Test
     fun `the right password resets the tries and the pause`() {
         var now = 0L
         val cooldown = TryCooldown(clock = { now })

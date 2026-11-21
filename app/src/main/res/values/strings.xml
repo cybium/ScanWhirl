@@ -321,7 +321,7 @@
     <string name="locked_source_refused">Unlock “%1$s” first. Tools can’t use a password-protected document yet.</string>
     <string name="locked_no_pages">This document has no page images, so its password can’t be changed or removed.</string>
     <string name="unlock_current_pw_title">Current password</string>
-    <string name="password_charset">Use letters, numbers and common symbols. Emoji and non-Latin letters cannot be used.</string>
+    <string name="password_charset">Use at least 6 characters. Letters, numbers, symbols, Hindi and emoji all work. Only an incomplete character pair is not accepted.</string>
     <string name="protection_repair_title">Protection needs repair</string>
     <string name="protection_repair_msg">“%1$s” is marked as locked, but its PDF is not password-protected. Copies you already shared or saved are not changed by this. Enter your password to protect it again.</string>
     <string name="btn_protect_again">Protect again</string>

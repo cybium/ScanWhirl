@@ -1177,4 +1177,24 @@ class PdfDecryptorFailClosedTest {
         val message = assertRefused(built.bytes)
         assertTrue("expected the AES failure, got '$message'", message.contains("AES stream"))
     }
+
+    // ---- K1 defect 6: a broken file and an unknown password format are different failures ----
+
+    @Test
+    fun `a damaged structure is reported as Damaged, not as an unsupported password format`() {
+        val failure = assertThrows(PdfDecryptor.Unsupported::class.java) {
+            PdfDecryptor.decrypt("%PDF-1.7\nthis is not a PDF".toByteArray(Charsets.ISO_8859_1), "pw")
+        }
+        assertEquals("Damaged", failure.javaClass.simpleName)
+    }
+
+    @Test
+    fun `an unknown password format is reported as UnsupportedScheme`() {
+        // V6/R7 is a standard-security-handler version this offline decoder does not implement.
+        val built = build(Spec(version = 6, revision = 7, lengthBits = 256))
+        val failure = assertThrows(PdfDecryptor.Unsupported::class.java) {
+            PdfDecryptor.decrypt(built.bytes, "user-pass")
+        }
+        assertEquals("UnsupportedScheme", failure.javaClass.simpleName)
+    }
 }

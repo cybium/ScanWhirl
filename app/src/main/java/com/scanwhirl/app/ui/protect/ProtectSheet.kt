@@ -121,6 +121,21 @@ object ProtectSheet {
 
         val password = root.findViewById<EditText>(R.id.protectPassword)
         val confirm = root.findViewById<EditText>(R.id.protectConfirm)
+        // A password is a secret: Android's default view state would otherwise copy the text into
+        // the saved Bundle on rotation/process death, and autofill would offer to keep it. Both
+        // fields opt out at runtime as well as in the layout, and leaving the sheet clears them.
+        listOf(password, confirm).forEach { field ->
+            field.isSaveEnabled = false
+            field.freezesText = false
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                field.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+                field.setAutofillHints()
+            }
+        }
+        dialog.setOnDismissListener {
+            password.setText("")
+            confirm.setText("")
+        }
         val showButton = root.findViewById<ImageButton>(R.id.protectPasswordShow)
         val check = root.findViewById<ImageView>(R.id.protectConfirmCheck)
         val strength = root.findViewById<TextView>(R.id.protectStrength)

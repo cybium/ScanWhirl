@@ -181,6 +181,8 @@ object UnlockSheet {
                 if (!checking) {
                     open.isEnabled = true
                     remove.isEnabled = onRemoveProtection != null
+                    // The pause is over: every action returns, not just Open and Remove.
+                    vault.isEnabled = vaultAvailable && onUseVault != null
                 }
                 field.setBackgroundResource(fieldIdle)
                 error.visibility = View.GONE
@@ -188,6 +190,7 @@ object UnlockSheet {
             }
             open.isEnabled = false
             remove.isEnabled = false
+            vault.isEnabled = false
             val seconds = ceil(left / 1000.0).toInt()
             showError(activity.getString(R.string.unlock_wrong_paused, seconds))
             handler.postDelayed({ tickPause() }, 1000L)
@@ -241,7 +244,9 @@ object UnlockSheet {
                     tickPause()
                 } else {
                     showError(
-                        activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
+                        activity.getString(
+                            R.string.unlock_wrong_tries, cooldown.triesLeft, cooldown.nextPauseSeconds()
+                        )
                     )
                 }
             }

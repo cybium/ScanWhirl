@@ -18,12 +18,13 @@ import kotlin.math.ceil
  * [onSubmit] must call its callback on the main thread with [Result]:
  *  - [Result.OK] dismisses the sheet (the caller has created the document),
  *  - [Result.WRONG] counts a try and shows the tries-left / pause line,
- *  - [Result.UNSUPPORTED] explains a format this offline decoder cannot open,
+ *  - [Result.UNSUPPORTED] explains a password format this offline decoder cannot open,
+ *  - [Result.DAMAGED] explains a file whose structure is broken,
  *  - [Result.FAILED] shows the import failure.
  */
 internal object ImportUnlockSheet {
 
-    enum class Result { OK, WRONG, UNSUPPORTED, FAILED }
+    enum class Result { OK, WRONG, UNSUPPORTED, DAMAGED, FAILED }
 
     fun show(
         activity: AppCompatActivity,
@@ -119,12 +120,17 @@ internal object ImportUnlockSheet {
                             tickPause()
                         } else {
                             field.setError(
-                                activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
+                                activity.getString(
+                                R.string.unlock_wrong_tries, cooldown.triesLeft, cooldown.nextPauseSeconds()
+                            )
                             )
                         }
                     }
                     Result.UNSUPPORTED -> field.setError(
                         activity.getString(R.string.import_unlock_unsupported)
+                    )
+                    Result.DAMAGED -> field.setError(
+                        activity.getString(R.string.import_unlock_damaged)
                     )
                     Result.FAILED -> field.setError(
                         activity.getString(R.string.import_unlock_failed)

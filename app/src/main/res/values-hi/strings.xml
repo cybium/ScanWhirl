@@ -429,7 +429,7 @@
     <string name="locked_source_refused">पहले “%1$s” का ताला खोलें। काम अभी पासवर्ड वाले दस्तावेज़ का उपयोग नहीं कर सकते।</string>
     <string name="locked_no_pages">इस दस्तावेज़ में पन्नों की तस्वीरें नहीं हैं, इसलिए इसका पासवर्ड बदला या हटाया नहीं जा सकता।</string>
     <string name="unlock_current_pw_title">मौजूदा पासवर्ड</string>
-    <string name="password_charset">अंग्रेज़ी अक्षर, अंक और सामान्य चिह्न इस्तेमाल करें। PDF पासवर्ड में इमोजी और हिंदी अक्षर नहीं चलते।</string>
+    <string name="password_charset">कम से कम 6 अक्षर लें। अक्षर, अंक, चिह्न, हिंदी और इमोजी सब चलते हैं। सिर्फ़ अधूरा अक्षर-क्रम स्वीकार नहीं होता।</string>
     <string name="protection_repair_title">सुरक्षा ठीक करनी है</string>
     <string name="protection_repair_msg">“%1$s” पर ताला दिखता है, पर इसकी PDF पर पासवर्ड नहीं है। जो प्रतियाँ आप पहले भेज या सहेज चुके हैं, वे इससे नहीं बदलेंगी। इसे फिर से सुरक्षित करने के लिए अपना पासवर्ड डालें।</string>
     <string name="btn_protect_again">फिर से सुरक्षित करें</string>

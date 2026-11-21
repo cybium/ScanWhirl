@@ -81,6 +81,9 @@ class TryCooldown(
 
     fun remainingPauseMs(now: Long = clock()): Long = (pauseUntil - now).coerceAtLeast(0L)
 
+    /** The pause that starts when the current set of tries runs out, in whole seconds. */
+    fun nextPauseSeconds(): Int = (pauseMs / 1000).toInt()
+
     /**
      * Records one wrong password. Returns the pause that just started in milliseconds, or 0 when
      * the user may try again straight away.

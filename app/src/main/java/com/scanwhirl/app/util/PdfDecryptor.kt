@@ -46,7 +46,13 @@ object PdfDecryptor {
     class WrongPassword : IOException("Incorrect password")
 
     /** Not a PDF shape this offline decoder can rewrite faithfully (or too large to try). */
-    class Unsupported(message: String) : IOException(message)
+    open class Unsupported(message: String) : IOException(message)
+
+    /** The file's bytes or structure are broken: "damaged", not an unsupported password format. */
+    class Damaged(message: String) : Unsupported(message)
+
+    /** A well-formed encryption scheme this offline decoder does not implement. */
+    class UnsupportedScheme(message: String) : Unsupported(message)
 
     /**
      * Largest protected PDF this phone can decrypt in memory, in bytes.
@@ -79,13 +85,17 @@ object PdfDecryptor {
         decryptChecked(raw, password)
     } catch (e: WrongPassword) {
         throw e
-    } catch (e: Unsupported) {
+    } catch (e: UnsupportedScheme) {
         throw e
+    } catch (e: Unsupported) {
+        // Every remaining refusal is about the file's bytes or structure, not about a password
+        // format the decoder does not know. The UI can now tell those two cases apart.
+        throw Damaged(e.message ?: "This PDF looks damaged")
     } catch (e: IllegalArgumentException) {
-        throw Unsupported(e.message ?: "This PDF cannot be opened offline")
+        throw Damaged(e.message ?: "This PDF looks damaged")
     } catch (e: Exception) {
         // A malformed xref/dictionary must never surface as an IndexOutOfBounds to the UI.
-        throw Unsupported("This PDF's password protection could not be read")
+        throw Damaged("This PDF's password protection could not be read")
     }
 
     private fun decryptChecked(raw: ByteArray, password: String): ByteArray {
@@ -107,7 +117,7 @@ object PdfDecryptor {
         val objects = orderedObjects(raw, xref)
 
         val encryptionValue = trailerDict["Encrypt"]
-            ?: throw Unsupported("This PDF does not use the standard password format")
+            ?: throw UnsupportedScheme("This PDF does not use the standard password format")
         val encryptionDict: Pv
         val encryptObject: Int
         if (encryptionValue.dict != null) {
@@ -116,7 +126,7 @@ object PdfDecryptor {
         } else {
             val number = encryptionValue.refNumber
             val gen = encryptionValue.refGen
-            if (number < 0) throw Unsupported("This PDF does not use the standard password format")
+            if (number < 0) throw UnsupportedScheme("This PDF does not use the standard password format")
             val entry = objects.firstOrNull { it.number == number }
                 ?: throw Unsupported("The PDF /Encrypt reference points at a missing object")
             if (entry.gen != gen) {
@@ -668,12 +678,12 @@ object PdfDecryptor {
     private fun securityHandler(dict: Pv, trailer: Pv, password: String): Scheme {
         val map = dict.dict ?: throw Unsupported("The PDF /Encrypt value is not a dictionary")
         if (map["Filter"]?.name != "Standard") {
-            throw Unsupported("This PDF does not use the standard password format")
+            throw UnsupportedScheme("This PDF does not use the standard password format")
         }
         // /EFF names the filter for embedded-file streams. Even /Identity is refused: with the key
         // absent the streams inherit /StmF instead, so "no /EFF" is not "no encryption".
         if (map.containsKey("EFF")) {
-            throw Unsupported("This PDF names a separate embedded-file filter, which ScanWhirl cannot rewrite")
+            throw UnsupportedScheme("This PDF names a separate embedded-file filter, which ScanWhirl cannot rewrite")
         }
         val version = intValue(map["V"]) ?: 1
         val revision = intValue(map["R"])
@@ -686,7 +696,7 @@ object PdfDecryptor {
             else -> false
         }
         if (!compatible) {
-            throw Unsupported("This PDF uses a password format ScanWhirl cannot open")
+            throw UnsupportedScheme("This PDF uses a password format ScanWhirl cannot open")
         }
         val encryptMetadata = when (val flag = map["EncryptMetadata"]) {
             null -> true
@@ -731,7 +741,7 @@ object PdfDecryptor {
             return when (val cfm = entry["CFM"]?.name ?: "None") {
                 "None" -> IDENTITY
                 "V2" -> {
-                    if (version >= 5) throw Unsupported("The PDF mixes an AES-256 handler with RC4 filters")
+                    if (version >= 5) throw UnsupportedScheme("The PDF mixes an AES-256 handler with RC4 filters")
                     val declared = intValue(entry["Length"])
                     if (declared != null && declared != keyBytes * 8) {
                         throw Unsupported("The PDF crypt filter key length is inconsistent")
@@ -739,7 +749,7 @@ object PdfDecryptor {
                     Filter(CIPHER_RC4, keyBytes)
                 }
                 "AESV2" -> {
-                    if (version != 4) throw Unsupported("The PDF mixes crypt filters this decoder cannot recombine")
+                    if (version != 4) throw UnsupportedScheme("The PDF mixes crypt filters this decoder cannot recombine")
                     val declared = intValue(entry["Length"])
                     if (declared != null && declared != 16 && declared != 128) {
                         throw Unsupported("The PDF crypt filter key length is inconsistent")
@@ -750,14 +760,14 @@ object PdfDecryptor {
                     Filter(CIPHER_AES, 16)
                 }
                 "AESV3" -> {
-                    if (version != 5) throw Unsupported("The PDF mixes crypt filters this decoder cannot recombine")
+                    if (version != 5) throw UnsupportedScheme("The PDF mixes crypt filters this decoder cannot recombine")
                     val declared = intValue(entry["Length"])
                     if (declared != null && declared != 32 && declared != 256) {
                         throw Unsupported("The PDF crypt filter key length is inconsistent")
                     }
                     Filter(CIPHER_AES, 32)
                 }
-                else -> throw Unsupported("This PDF uses an unknown crypt filter ($cfm)")
+                else -> throw UnsupportedScheme("This PDF uses an unknown crypt filter ($cfm)")
             }
         }
 
