@@ -1266,8 +1266,13 @@ class ToolSetupActivity : BaseActivity() {
                         val (quality, maxDim) = compressLevel()
                         repo.compressScan(doc.id, quality, maxDim).id
                     }
-                    listOf(out)
-                }) { openDocs(it, targetBytes = targetBytes) }
+                    // L3-01: capture the source bytes now, before any later edit can
+                    // change them; the result only offers Replace with this proof.
+                    Pair(listOf(out), repo.toolSourceFingerprint(doc.id))
+                }) { (ids, fingerprint) ->
+                    openDocs(ids, targetBytes = targetBytes,
+                        sourceId = doc.id, sourceFingerprint = fingerprint)
+                }
             }
             "pdf_to_images" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1397,10 +1402,23 @@ class ToolSetupActivity : BaseActivity() {
      * Opens the result for new library documents. [targetBytes] is Compress's wanted size, so the
      * result can say honestly when that size was not reached (T05).
      */
-    private fun openDocs(ids: List<String>, targetBytes: Long? = null) {
+    private fun openDocs(
+        ids: List<String>,
+        targetBytes: Long? = null,
+        sourceId: String? = null,
+        sourceFingerprint: String? = null
+    ) {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
+        val outputId = ids.singleOrNull()
+        val proven = sourceId != null && sourceFingerprint != null && outputId != null
         startActivity(
-            ToolResultActivity.intent(this, tool.id, docIds = ids, targetBytes = targetBytes)
+            ToolResultActivity.intent(
+                this, tool.id, docIds = ids, targetBytes = targetBytes,
+                sourceId = sourceId, outputId = if (proven) outputId else null,
+                operationId = if (proven) "compress-$outputId" else null,
+                operation = if (proven) "compress" else null,
+                sourceFingerprint = sourceFingerprint
+            )
         )
     }
 

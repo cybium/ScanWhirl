@@ -19,4 +19,16 @@
     <string name="ux130_l3_failure_unreadable">Could not read this PDF. Choose another file.</string>
     <string name="ux130_l3_failure_no_space">Could not save the copy. Free some space and try again.</string>
     <string name="ux130_l3_failure_generic">Could not create the copy. Try again.</string>
+
+    <!-- L3-01: the durable Replace/Keep decision and its honest consequence. -->
+    <string name="ux130_l3_keep_original_title">Keep the original?</string>
+    <string name="ux130_l3_keep_both">Keep both</string>
+    <string name="ux130_l3_replace_original">Replace original</string>
+    <string name="ux130_l3_replace_consequence">Original moves to Trash. Restore it for 30 days.</string>
+    <string name="ux130_l3_restore_original">Restore original</string>
+    <string name="ux130_l3_replace_failed">Could not replace the original. Both files are kept.</string>
+    <string name="ux130_l3_restore_failed">Could not restore the original. It is still in Trash.</string>
+    <string name="ux130_l3_replace_done">Original moved to Trash. Restore it for 30 days.</string>
+    <string name="ux130_l3_restored_done">Original restored.</string>
+    <string name="ux130_l3_keep_both_done">Both files are kept.</string>
 </resources>

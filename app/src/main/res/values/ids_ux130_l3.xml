@@ -5,4 +5,9 @@
     <item name="ux130_l3_merge_move_earlier" type="id" />
     <item name="ux130_l3_merge_move_later" type="id" />
     <item name="ux130_l3_merge_position" type="id" />
+
+    <!-- L3-01: original-safety decision actions. -->
+    <item name="ux130_l3_keep_both" type="id" />
+    <item name="ux130_l3_replace_original" type="id" />
+    <item name="ux130_l3_restore_original" type="id" />
 </resources>

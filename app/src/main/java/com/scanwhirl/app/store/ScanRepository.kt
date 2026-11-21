@@ -4760,4 +4760,87 @@ class ScanRepository(private val context: Context) {
             }
         }
     }
+
+    // ------------------------------------------------------------------
+    // L3-01 — tool result original safety (UX-002).
+    //
+    // ADDITIVE ONLY. This section does not change recoverOperations, draft
+    // Replace, unlock, refilter, reservations or page ordering. It reuses the
+    // already-proven Trash primitives: a whole document directory is moved with
+    // one rename on the same filesystem, so a source restored from Trash is the
+    // exact same bytes, never a rewritten copy. The only new decisions are
+    // (a) eligibility and (b) a fingerprint gate before any move or restore.
+    // ------------------------------------------------------------------
+
+    /**
+     * SHA-256 over the name and full bytes of every file in a document directory.
+     * The Trash marker is excluded: it is added by the move and removed by the
+     * restore, so it must not count as document content.
+     */
+    private fun toolFingerprintOfDir(dir: File): String? {
+        if (!dir.isDirectory) return null
+        val files = dir.walkTopDown().filter { it.isFile && it.name != TRASH_MARKER }
+            .toList().sortedBy { it.relativeTo(dir).path }
+        if (files.isEmpty()) return null
+        val md = MessageDigest.getInstance("SHA-256")
+        for (file in files) {
+            md.update(file.relativeTo(dir).path.toByteArray(Charsets.UTF_8))
+            md.update(Sha256.of(file).toByteArray(Charsets.UTF_8))
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** Current fingerprint of a live library document, or null when it is gone. */
+    fun toolSourceFingerprint(id: String): String? = toolFingerprintOfDir(File(docsDir, id))
+
+    /**
+     * Replace is only preselected for a proven transform: exactly one live,
+     * unlocked, non-Vault library input, one live library output, an operation
+     * whose output bytes were measured, and two different ids. External files,
+     * multiple inputs or outputs, and every unsupported tool fall back to Keep both.
+     */
+    fun isToolReplaceEligible(sourceId: String, outputId: String, operation: String): Boolean {
+        // Only transforms whose one output is a measured library copy are proven here.
+        if (operation != "compress") return false
+        if (sourceId == outputId) return false
+        val source = getDocument(sourceId) ?: return false
+        val output = getDocument(outputId) ?: return false
+        if (source.isLocked || source.isVaulted || output.isLocked || output.isVaulted) return false
+        return toolSourceFingerprint(sourceId) != null && toolSourceFingerprint(outputId) != null
+    }
+
+    /**
+     * Moves the source whole into Trash, but only while its bytes still match the
+     * fingerprint captured when the result was produced. Returns the Trash key.
+     * A changed, missing or locked source is refused before anything is moved.
+     */
+    fun moveToolSourceToTrash(sourceId: String, expectedFingerprint: String): String {
+        val current = toolSourceFingerprint(sourceId)
+            ?: throw IOException("The source is no longer in the library")
+        if (current != expectedFingerprint) {
+            throw IOException("The source changed since the result was produced")
+        }
+        val doc = getDocument(sourceId) ?: throw IOException("The source is no longer in the library")
+        if (doc.isLocked || doc.isVaulted) throw IOException("A protected source cannot be replaced")
+        return moveToTrash(sourceId) ?: throw IOException("The source is no longer in the library")
+    }
+
+    /** Finds a Trash entry for this source whose bytes still match, whatever key it got. */
+    fun findTrashedToolSource(sourceId: String, expectedFingerprint: String): String? =
+        listTrash().firstOrNull { entry ->
+            entry.originalId == sourceId &&
+                toolFingerprintOfDir(File(trashDir, entry.key)) == expectedFingerprint
+        }?.key
+
+    /**
+     * Restores the original whole, refusing to overwrite anything if the Trash
+     * entry changed or no longer exists. An id collision is settled by the
+     * existing [restoreFromTrash] allocator, never by replacing a document.
+     */
+    fun restoreToolSource(trashKey: String, expectedFingerprint: String): ScanDocument {
+        if (toolFingerprintOfDir(File(trashDir, trashKey)) != expectedFingerprint) {
+            throw IOException("The trashed original changed and was not restored")
+        }
+        return restoreFromTrash(trashKey)
+    }
 }
