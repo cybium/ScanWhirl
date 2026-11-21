@@ -146,6 +146,18 @@ class OcrEditorActivity : BaseActivity() {
         // works against the true baseline and every page is present. On
         // recreation, the bundle's dirty pages and current page key go on top.
         if (docId != null) {
+            // C2 item 2: a direct launch with a locked or Vaulted document id must refuse
+            // before any page text or image is loaded. The viewer's own preview is not a
+            // reason to expose the stored OCR of a private document here.
+            val doc = runCatching { repo.getDocument(docId!!) }.getOrNull()
+            if (doc != null && (doc.isLocked || doc.isVaulted)) {
+                Toast.makeText(this, R.string.locked_edit_refused, Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+            // A missing/unloadable document keeps the old behaviour: loadDocOcr still shows
+            // whatever stored text exists (an OCR-only folder is a valid legacy case), and
+            // save reports the honest failure. There is no private page image or text to hide.
             loadDocOcr(docId!!)
         } else if (textPath != null) {
             loadTempOcr(textPath)

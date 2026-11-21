@@ -37,8 +37,8 @@ import java.io.File
 import java.util.Locale
 
 /**
- * P2pro RED tests: purchase-UI honesty and the tool-picker privacy leak.
- * Every assertion here compiles on base 5a1b82ff and fails on that base.
+ * P2pro regression tests: purchase-UI honesty and the tool-picker privacy leak.
+ * The base SHA these were written against belongs in the lane commit, not in source.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
