@@ -109,6 +109,8 @@ class PdfViewerActivity : BaseActivity() {
             override fun handleOnBackPressed() = handleBack()
         })
         binding.btnZoomClose.setOnClickListener { closeZoom() }
+        // UX-L4-03: the indicator is the entry to any page, not just the first 40.
+        binding.pdfPageIndicator.setOnClickListener { promptGoToPage() }
 
         binding.pdfPager.layoutManager = LinearLayoutManager(this)
         binding.pdfPager.adapter = pagerAdapter
@@ -655,10 +657,12 @@ class PdfViewerActivity : BaseActivity() {
     }
 
     private fun showReaderMore() {
+        // UX-L4-03: More now holds reader-specific actions. Find stays where it already
+        // is in the toolbar, so it is not duplicated here; Go to page replaces it.
         val builder = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(title)
             .setMessage(getString(R.string.reader_more_note, pageCount))
-            .setPrimary(R.string.reader_find) { find?.open(focus = true) }
+            .setPrimary(R.string.ux130_l4_go_to_page) { promptGoToPage() }
         if (vaultMode) {
             // The title is private and there is no Vault share path: secure the sheet's own
             // window (FLAG_SECURE on the activity does not cover a dialog's window) and drop
@@ -667,6 +671,49 @@ class PdfViewerActivity : BaseActivity() {
         } else {
             builder.setSecondary(R.string.share_pdf) { shareCurrent() }.build().show()
         }
+    }
+
+    /**
+     * UX-L4-03: any page, not only the first 40 strip thumbnails. The input is a
+     * plain integer in 1..pageCount with a localized validation message; an empty
+     * or out-of-range entry changes nothing.
+     */
+    private fun promptGoToPage() {
+        if (!checkVaultSession() || pageCount <= 0) return
+        val input = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            hint = getString(R.string.ux130_l4_go_to_page)
+            minHeight = (48 * resources.displayMetrics.density).toInt()
+            setSingleLine(true)
+        }
+        val frame = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, 0, pad, 0)
+            addView(input, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+        }
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.ux130_l4_go_to_page)
+            .setMessage(getString(R.string.reader_more_note, pageCount))
+            .setView(frame)
+            .setPositiveButton(R.string.ux130_l4_go_to_page, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val page = input.text?.toString()?.trim()?.toIntOrNull()
+                if (page == null || page < 1 || page > pageCount) {
+                    input.error = getString(R.string.ux130_l4_go_to_page_invalid, pageCount)
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                goToPage(page - 1)
+            }
+        }
+        dialog.show()
     }
 
     private fun toggleStrip() {
@@ -787,7 +834,39 @@ class PdfViewerActivity : BaseActivity() {
         fun bind(index: Int) {
             if (!checkVaultSession()) return
             binding.pageImage.tag = index
+            // UX-L4-03: the tappable preview is named and has a named zoom action.
+            binding.pageImage.contentDescription =
+                getString(R.string.ux130_l4_page_zoom, index + 1, pageCount)
             binding.pageImage.setOnClickListener { openZoom(index) }
+            androidx.core.view.ViewCompat.setAccessibilityDelegate(
+                binding.pageImage,
+                object : androidx.core.view.AccessibilityDelegateCompat() {
+                    override fun onInitializeAccessibilityNodeInfo(
+                        host: View,
+                        info: androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+                    ) {
+                        super.onInitializeAccessibilityNodeInfo(host, info)
+                        info.addAction(
+                            androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+                                .AccessibilityActionCompat(
+                                    R.id.ux130_l4_zoom_page,
+                                    getString(R.string.ux130_l4_zoom_page)
+                                )
+                        )
+                    }
+
+                    override fun performAccessibilityAction(
+                        host: View,
+                        action: Int,
+                        args: android.os.Bundle?
+                    ): Boolean = if (action == R.id.ux130_l4_zoom_page) {
+                        openZoom(index)
+                        true
+                    } else {
+                        super.performAccessibilityAction(host, action, args)
+                    }
+                }
+            )
             val cached = pageCache.get(index)
             if (cached != null) {
                 binding.pageImage.minimumHeight = 0

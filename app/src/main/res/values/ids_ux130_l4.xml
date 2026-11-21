@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX-L4 lane ids. Declared here so no other lane's ids file is edited. -->
+<resources>
+    <item name="ux130_l4_select_pages" type="id" />
+    <item name="ux130_l4_a11y_select_page" type="id" />
+    <item name="ux130_l4_all_pages" type="id" />
+    <item name="ux130_l4_zoom_page" type="id" />
+</resources>
