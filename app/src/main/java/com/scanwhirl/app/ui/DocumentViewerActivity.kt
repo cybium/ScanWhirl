@@ -293,6 +293,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         importKept = savedInstanceState?.getBoolean(KEY_IMPORT_KEPT) ?: false
         pendingDeletes.addAll(savedInstanceState?.getStringArrayList(KEY_PENDING_DELETES).orEmpty())
         pendingDeleteDeadline = savedInstanceState?.getLong(KEY_DELETE_DEADLINE) ?: 0L
+        // DV: ticked pages and the selection mode that owns them are screen state, not edits.
+        // A rotation must not silently untick the pages the person is working on.
+        savedInstanceState?.getStringArrayList(KEY_SELECTED_PAGES)?.let { selected.addAll(it) }
+        selectMode = selected.isNotEmpty()
         // A8: a viewer recreated while the corner crop screen was on top still knows where the
         // confirmed photos go when they come back. A batch whose position was never chosen dies
         // with the old screen (the question is gone), so its picked copies are not kept.
@@ -350,13 +354,16 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
                     // W1: the id decides, not the screen's transient handle; a draft asks first and
                     // "Use saved version" hands over the saved document's own bytes.
+                    val shareRun: (ScanDocument) -> Unit = { bound -> ShareUtils.share(this, bound) }
                     DocumentActionDispatcher.dispatch(
                         activity = this,
                         repo = repo,
                         docId = doc.id,
                         action = DocumentActionDispatcher.Action.SHARE,
-                        onUsed = { _ -> noteImportUsed() }
-                    ) { bound -> ShareUtils.share(this, bound) }
+                        onUsed = { _ -> noteImportUsed() },
+                        onFinishEditing = { finishEditingThen(shareRun) },
+                        run = shareRun
+                    )
                 }
             }
         }
@@ -382,7 +389,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 // W1: a sheet action the user started on a fresh import counts as acting on it,
                 // and "Finish editing first" must not stack a second document screen here.
                 onUsed = { noteImportUsed() },
-                onFinishEditing = {}
+                // The More sheet's output is chosen after this answer, so finishing here means
+                // offering the save choices; the chosen action can then be tapped again.
+                onFinishEditing = { finishEditingThen { _ -> Unit } }
             )
         }
         applyActionPanel()
@@ -409,8 +418,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.btnDraftSave.setOnClickListener { saveDraftFlow() }
         // Rename lives in the Actions sheet (the name row is a heading, not a button).
         // The toolbar carries no menu: Save PDF is the panel's labelled action, exactly once.
-        // Checkboxes stay hidden until Select pages is tapped (§4.5, D-D).
-        binding.pageList.checkboxesVisible = false
+        // Checkboxes stay hidden until Select pages is tapped (§4.5, D-D), unless a
+        // restored selection means the person was already selecting before rotation.
+        binding.pageList.checkboxesVisible = selectMode
 
         // First load (off the main thread). Opening a document writes no draft (G14).
         lifecycleScope.launch {
@@ -429,6 +439,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         outState.putBoolean(KEY_IMPORT_KEPT, importKept)
         outState.putStringArrayList(KEY_PENDING_DELETES, ArrayList(pendingDeletes))
         outState.putLong(KEY_DELETE_DEADLINE, pendingDeleteDeadline)
+        outState.putStringArrayList(KEY_SELECTED_PAGES, ArrayList(selected))
         pendingPhotoPosition?.let { outState.putInt(KEY_PHOTO_INSERT_AT, it) }
         pendingPhotoCount?.let { outState.putInt(KEY_PHOTO_COUNT, it) }
         // R1: only a batch the crop flow already owns is worth restoring; a copy in flight is
@@ -1007,7 +1018,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         sheet.show()
     }
 
-    private fun moveSelectedPage(to: Int) {
+    internal fun moveSelectedPage(to: Int) {
         val id = docId ?: return
         val path = selected.singleOrNull() ?: return
         lifecycleScope.launch {
@@ -1500,55 +1511,58 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         ProtectionDialogs.guardExport(this, repo, doc, onResolved = { lifecycleScope.launch { reloadDocument() } }) {
             // W1: with an unsaved draft the user chooses "Finish editing first" or "Use saved
             // version"; the copy written below is always the saved PDF's own bytes.
+            val savePdfRun: (ScanDocument) -> Unit = { bound ->
+                if (!bound.pdfFile.exists() || bound.pdfFile.length() == 0L) {
+                    Toast.makeText(this, R.string.pdf_missing, Toast.LENGTH_SHORT).show()
+                } else {
+                    withStoragePermission {
+                        lifecycleScope.launch {
+                            try {
+                                val saved = withContext(Dispatchers.IO) {
+                                    DownloadSaver.savePdfFile(
+                                        this@DocumentViewerActivity,
+                                        bound.pdfFile,
+                                        DownloadSaver.pdfNameFor(bound.name)
+                                    ).also {
+                                        // T4.8: remember the copy so delete can remove it. A failure to
+                                        // record it must not turn a finished export into a failed one.
+                                        try {
+                                            repo.addExport(bound.id, it)
+                                        } catch (_: Exception) {
+                                        }
+                                    }
+                                }
+                                // T44: a copy the user saved makes this import theirs; Back keeps it.
+                                noteImportUsed()
+                                SavedSnackbar.showExport(
+                                    this@DocumentViewerActivity,
+                                    binding.root,
+                                    saved,
+                                    R.string.pdf_saved_docs,
+                                    bound.id
+                                )
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    this@DocumentViewerActivity,
+                                    getString(R.string.pdf_save_failed, e.message),
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }
+                }
+            }
             DocumentActionDispatcher.dispatch(
                 activity = this,
                 repo = repo,
                 docId = doc.id,
                 action = DocumentActionDispatcher.Action.SAVE_PDF,
-                onUsed = { _ -> noteImportUsed() }
-            ) { bound ->
-                if (!bound.pdfFile.exists() || bound.pdfFile.length() == 0L) {
-                    Toast.makeText(this, R.string.pdf_missing, Toast.LENGTH_SHORT).show()
-                    return@dispatch
-                }
-                withStoragePermission {
-                    lifecycleScope.launch {
-                        try {
-                            val saved = withContext(Dispatchers.IO) {
-                                DownloadSaver.savePdfFile(
-                                    this@DocumentViewerActivity,
-                                    bound.pdfFile,
-                                    DownloadSaver.pdfNameFor(bound.name)
-                                ).also {
-                                    // T4.8: remember the copy so delete can remove it. A failure to
-                                    // record it must not turn a finished export into a failed one.
-                                    try {
-                                        repo.addExport(bound.id, it)
-                                    } catch (_: Exception) {
-                                    }
-                                }
-                            }
-                            // T44: a copy the user saved makes this import theirs; Back keeps it.
-                            noteImportUsed()
-                            SavedSnackbar.showExport(
-                                this@DocumentViewerActivity,
-                                binding.root,
-                                saved,
-                                R.string.pdf_saved_docs,
-                                bound.id
-                            )
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Toast.makeText(
-                                this@DocumentViewerActivity,
-                                getString(R.string.pdf_save_failed, e.message),
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    }
-                }
-            }
+                onUsed = { _ -> noteImportUsed() },
+                onFinishEditing = { finishEditingThen(savePdfRun) },
+                run = savePdfRun
+            )
         }
     }
 
@@ -1571,13 +1585,16 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         if (protectedReason(doc) != null) return
         traceAction("compress", doc)
         // W1: a draft asks first; the level sheet is estimated from the saved pages.
+        val compressRun: (ScanDocument) -> Unit = { bound -> compressFlow.startWith(bound) }
         DocumentActionDispatcher.dispatch(
             activity = this,
             repo = repo,
             docId = doc.id,
             action = DocumentActionDispatcher.Action.COMPRESS,
-            onUsed = { _ -> noteImportUsed() }
-        ) { bound -> compressFlow.startWith(bound) }
+            onUsed = { _ -> noteImportUsed() },
+            onFinishEditing = { finishEditingThen(compressRun) },
+            run = compressRun
+        )
     }
 
     /**
@@ -1589,19 +1606,22 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         if (protectedReason(doc) != null) return
         traceAction("sign", doc)
         // W1: a draft asks first; Sign then opens the editor for the saved version's pages.
-        DocumentActionDispatcher.dispatch(
-            activity = this,
-            repo = repo,
-            docId = doc.id,
-            action = DocumentActionDispatcher.Action.SIGN,
-            onUsed = { _ -> noteImportUsed() }
-        ) { bound ->
+        val signRun: (ScanDocument) -> Unit = { bound ->
             if (ProOffer.require(this)) {
                 startActivity(
                     StampEditorActivity.intent(this, bound.id, StampEditorActivity.TOOL_SIGN)
                 )
             }
         }
+        DocumentActionDispatcher.dispatch(
+            activity = this,
+            repo = repo,
+            docId = doc.id,
+            action = DocumentActionDispatcher.Action.SIGN,
+            onUsed = { _ -> noteImportUsed() },
+            onFinishEditing = { finishEditingThen(signRun) },
+            run = signRun
+        )
     }
 
     /**
@@ -1841,8 +1861,53 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         )
     }
 
-    /** Save as new copy: commit pending deletes, ask for a name (prefilled), publish. */
-    private fun saveDraftFlow() {
+    /**
+     * DV: the W1 answer "Finish editing first" used to be an empty lambda, so the answer was
+     * silently dropped. Offer the same save choices the draft bar offers. Once a save succeeds
+     * the original action runs on the saved document, so neither the edits nor the person's
+     * intent are lost. "Keep editing" is the explicit way to stop without saving.
+     */
+    private fun finishEditingThen(continueOn: (ScanDocument) -> Unit) {
+        if (document == null) return
+        SwSheet.builder(this)
+            .setTitle(R.string.draft_back_title)
+            .setMessage(R.string.dv_finish_editing_msg)
+            .setOptions(
+                listOf(
+                    getString(R.string.draft_save_new),
+                    getString(R.string.draft_replace),
+                    getString(R.string.draft_keep_editing)
+                )
+            ) { index, _ ->
+                when (index) {
+                    0 -> saveDraftFlow(onSaved = continueOn)
+                    1 -> replaceFlow(onSaved = continueOn)
+                    // 2 (Keep editing): close the sheet, change nothing.
+                }
+            }
+            .build()
+            .show()
+    }
+
+    /** A continued action still gets the dispatcher's "could not start" safety net. */
+    private fun continueAfterSave(continueOn: (ScanDocument) -> Unit, saved: ScanDocument) {
+        try {
+            continueOn(saved)
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                getString(R.string.page_op_failed, e.message ?: ""),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    /**
+     * Save as new copy: commit pending deletes, ask for a name (prefilled), publish.
+     * [onSaved] is set only by "Finish editing first": the caller continues its action on the
+     * new copy instead of closing this screen. The draft bar still just saves and finishes.
+     */
+    private fun saveDraftFlow(onSaved: ((ScanDocument) -> Unit)? = null) {
         val id = docId ?: return
         val doc = document ?: return
         lifecycleScope.launch {
@@ -1859,7 +1924,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                                 getString(R.string.draft_saved_new, copy.name),
                                 Toast.LENGTH_LONG
                             ).show()
-                            finish()
+                            if (onSaved == null) {
+                                finish()
+                            } else {
+                                reloadDocument()
+                                continueAfterSave(onSaved, copy)
+                            }
                         } catch (e: Exception) {
                             showDraftError(e)
                         }
@@ -1871,8 +1941,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
     }
 
-    /** Replace original: confirm, then the two-rename publish (previous version goes to Trash). */
-    private fun replaceFlow() {
+    /**
+     * Replace original: confirm, then the two-rename publish (previous version goes to Trash).
+     * [onSaved] continues the original output on the published document after the draft is gone.
+     */
+    private fun replaceFlow(onSaved: ((ScanDocument) -> Unit)? = null) {
         val id = docId ?: return
         val doc = document ?: return
         SwSheet.builder(this)
@@ -1881,9 +1954,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .setPrimary(R.string.draft_replace) {
                 lifecycleScope.launch {
                     try {
-                        withContext(Dispatchers.IO) {
+                        val published = withContext(Dispatchers.IO) {
                             commitPendingDeletesNow()
-                            repo.replaceWithDraft(id)
+                            repo.replaceWithDraft(id).document
                         }
                         Toast.makeText(
                             this@DocumentViewerActivity,
@@ -1891,6 +1964,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                             Toast.LENGTH_LONG
                         ).show()
                         reloadDocument()
+                        if (onSaved != null) continueAfterSave(onSaved, published)
                     } catch (e: Exception) {
                         showDraftError(e)
                     }
@@ -2034,6 +2108,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         private const val KEY_IMPORT_KEPT = "import_kept"
         private const val KEY_PENDING_DELETES = "pending_page_deletes"
         private const val KEY_DELETE_DEADLINE = "page_delete_deadline"
+        /** DV: ticked page paths and selection mode survive configuration changes. */
+        private const val KEY_SELECTED_PAGES = "selected_pages"
 
         fun intent(context: Context, docId: String): Intent =
             Intent(context, DocumentViewerActivity::class.java).putExtra(EXTRA_DOC_ID, docId)

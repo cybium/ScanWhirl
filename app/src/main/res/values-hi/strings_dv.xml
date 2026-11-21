@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DV: "Finish editing first" opens the draft's own save choices, then continues the action. -->
+    <string name="dv_finish_editing_msg">पहले इन पन्नों के बदलाव सहेजें। इसके बाद काम सहेजे गए दस्तावेज़ पर जारी रहेगा।</string>
+    <!-- DV: Sign says plainly that the signed copy never carries unsaved page edits. -->
+    <string name="w1_draft_sign_msg">हस्ताक्षर वाली प्रति %1$s का सहेजा हुआ संस्करण इस्तेमाल करेगी। आपके अभी सहेजे नहीं गए पन्नों के बदलाव इसमें शामिल नहीं होंगे।</string>
+</resources>
