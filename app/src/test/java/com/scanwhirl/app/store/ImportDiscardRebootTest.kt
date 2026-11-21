@@ -27,27 +27,12 @@ class ImportDiscardRebootTest {
     private var elapsed = 1_000L
     private var boot = 7
     private var wall = 1_700_000_000_000L
-    private var wallInjectable = true
     private fun digest(id: String) = PdfInvariants.dirDigest(File(repo.docsDir, id))
 
-    /**
-     * Reflection keeps the RED run compiling against the base four-argument constructor. On the
-     * fixed code the injected wall clock makes the reboot tests deterministic; on base the one
-     * expiry test falls back to a real 8-second wait so it still REDs on behaviour, not on a
-     * missing constructor.
-     */
-    private fun store(): ImportDiscardStore {
-        val injected = ImportDiscardStore::class.java.declaredConstructors
-            .firstOrNull { it.parameterCount == 5 }
-        return if (injected != null) {
-            injected.isAccessible = true
-            injected.newInstance(app.applicationContext, repo, { elapsed }, { boot }, { wall })
-                as ImportDiscardStore
-        } else {
-            wallInjectable = false
-            ImportDiscardStore(app, repo, { elapsed }, { boot })
-        }
-    }
+    /** Every clock is injected: no test in this class waits on real time. */
+    private fun store() = ImportDiscardStore(app, repo, { elapsed }, { boot }, { wall })
+
+    private fun escrowDir(key: String) = File(app.filesDir, "import_discard/$key")
 
     @After fun reset() {
         ImportDiscardStore.fault = {}
@@ -57,7 +42,7 @@ class ImportDiscardRebootTest {
     @Test fun `reboot after the wall deadline purges instead of resurrecting the import`() {
         val id = DocFixtures.saved(repo, app, pages = 2)
         val token = store().discard(id, 8_000)
-        if (wallInjectable) wall += 9_000 else Thread.sleep(8_100)
+        wall += 9_000
         boot++
         elapsed = 0L // a real reboot restarts the monotonic clock
         assertTrue("an expired escrow must never be restored by recovery", store().recover().isEmpty())
@@ -73,7 +58,7 @@ class ImportDiscardRebootTest {
         store().discard(id, 8_000)
         boot++
         elapsed = 0L
-        if (wallInjectable) wall += 3_000
+        wall += 3_000
         val pending = store().recover()
         val token: ImportDiscardStore.Token = pending.singleOrNull()
             ?: throw AssertionError("a live escrow must survive reboot as a pending Undo")
@@ -81,6 +66,74 @@ class ImportDiscardRebootTest {
             store().remainingMs(token))
         assertEquals(id, store().restore(token.key))
         assertEquals(before, digest(id))
+    }
+
+    @Test fun `a backwards wall clock after reboot is bounded by the recovery anchor`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        val token = store().discard(id, 8_000)
+        boot++
+        elapsed = 0L
+        wall -= 1_000_000L // clock jumped far backwards before the first recovery
+        val pending = store().recover()
+        val anchored = pending.singleOrNull()
+            ?: throw AssertionError("a live escrow must survive a backwards clock")
+        assertEquals("an anchor may never extend Undo past the original window", 8_000L,
+            store().remainingMs(anchored))
+        // The clock keeps going backwards; the persisted monotonic anchor must still expire.
+        elapsed += 8_001L
+        wall -= 1_000_000L
+        assertTrue("the anchored window must bound an expired escrow", store().recover().isEmpty())
+        assertFalse(escrowDir(token.key).exists())
+        assertNull("a backwards clock must not resurrect the import", repo.getDocument(id))
+        assertNull(store().restore(token.key))
+    }
+
+    @Test fun `an expired v1 manifest purges using its stored creation wall time`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        val token = store().discard(id, 8_000)
+        val manifest = File(escrowDir(token.key), "manifest")
+        manifest.writeText("v1\nPENDING\n$id\n1000\n9000\n$boot\n")
+        assertTrue(manifest.setLastModified(wall))
+        assertEquals("v1 fixture creation time", wall, manifest.lastModified())
+        wall += 9_001
+        boot++
+        elapsed = 0L
+        assertTrue("an expired v1 escrow must not be restored", store().recover().isEmpty())
+        assertFalse(escrowDir(token.key).exists())
+        assertNull(repo.getDocument(id))
+        assertTrue(repo.listTrash().isEmpty())
+    }
+
+    @Test fun `an unexpired v1 manifest stays restorable and gains a bounded anchor`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        val before = digest(id)
+        val token = store().discard(id, 8_000)
+        val manifest = File(escrowDir(token.key), "manifest")
+        manifest.writeText("v1\nPENDING\n$id\n1000\n9000\n$boot\n")
+        assertTrue(manifest.setLastModified(wall))
+        wall += 3_000
+        boot++
+        elapsed = 0L
+        val pending = store().recover()
+        val anchored = pending.singleOrNull()
+            ?: throw AssertionError("an unexpired v1 escrow must remain restorable")
+        assertEquals(5_000L, store().remainingMs(anchored))
+        assertEquals(id, store().restore(token.key))
+        assertEquals(before, digest(id))
+        assertTrue("recovery upgrades the legacy manifest", manifest.readText().startsWith("v3\n"))
+    }
+
+    @Test fun `restoring from Trash never reuses an id waiting in import escrow`() {
+        val escrowed = DocFixtures.saved(repo, app, pages = 1)
+        val token = store().discard(escrowed, 8_000)
+        val other = DocFixtures.saved(repo, app, pages = 1)
+        val key = requireNotNull(repo.moveToTrash(other))
+        // A Trash entry may legitimately remember its original id; here that id is in escrow.
+        File(repo.trashDir, "$key/trashed.txt").writeText("v1\n$escrowed\n1\n")
+        val restored = repo.restoreFromTrash(key)
+        assertNotEquals("a Trash restore must not collide with escrow", escrowed, restored.id)
+        assertNotNull("the restored Trash document is in the Library", repo.getDocument(restored.id))
+        assertEquals("Undo still works after the Trash restore", escrowed, store().restore(token.key))
     }
 
     @Test fun `same boot ignores wall clock jumps so Undo is neither cut short nor extended`() {

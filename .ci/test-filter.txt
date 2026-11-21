@@ -1,0 +1,1 @@
+com.scanwhirl.app.store.ImportDiscardRebootTest,com.scanwhirl.app.store.ImportDiscardStoreTest,com.scanwhirl.app.store.ImportDiscardSourceTest,com.scanwhirl.app.ui.ImportDiscardNoticeTest,com.scanwhirl.app.ui.ImportPdfFixFlowTest,com.scanwhirl.app.store.TrashTest
