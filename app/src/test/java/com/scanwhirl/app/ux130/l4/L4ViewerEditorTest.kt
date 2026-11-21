@@ -85,12 +85,10 @@ class L4ViewerEditorTest {
         val activity = text("src/main/java/com/scanwhirl/app/ui/OcrEditorActivity.kt")
         check(activity.contains("R.string.ux130_l4_finish_editing"),
             "the edit action still uses the forbidden 'Done' concept")
-        check(activity.contains("LegacyTokenText(decided") &&
-            activity.contains("override fun toString(): String = token"),
-            "the legacy 'Done' token must be a compatibility label, not the visible text")
-        check(activity.contains("R.string.ocr_w5_save_txt_and_close") ||
-            activity.contains("R.string.ux130_l4_save_as_txt"),
-            "unsaved exit has no explicit .txt save route")
+        check(activity.contains("val editLabel = if (edit) R.string.ux130_l4_finish_editing"),
+            "the edit label must be a plain decided string, no compatibility token")
+        check(activity.contains("R.string.ux130_l4_save_as_txt"),
+            "unsaved exit has no explicit 'Save as .txt' route")
         check(activity.contains("R.string.ux130_l4_discard_edits"),
             "unsaved exit has no separated 'Discard edits' route")
         check(activity.contains("R.string.ux130_l4_discard_edits_confirm"),

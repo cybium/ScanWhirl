@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.text.InputType
-import android.text.Spanned
 import android.text.method.TextKeyListener
 import android.view.Menu
 import android.view.MenuItem
@@ -908,20 +907,10 @@ class OcrEditorActivity : BaseActivity() {
         } else {
             field.clearFocus()
         }
-        if (edit) {
-            // UX-L4-02: "Finish editing" is what is drawn and what TalkBack reads.
-            // The legacy "Done" token is kept only as this label's toString() so the
-            // existing edit-mode regression contract stays literally green. Spanned
-            // keeps TextView from collapsing the label to that token.
-            val decided = getString(R.string.ux130_l4_finish_editing)
-            binding.btnEditText.setText(
-                LegacyTokenText(decided, getString(R.string.ocr_w5_done_editing))
-            )
-            binding.btnEditText.contentDescription = decided
-        } else {
-            binding.btnEditText.setText(R.string.ocr_w5_edit_text)
-            binding.btnEditText.contentDescription = getString(R.string.ocr_w5_edit_text)
-        }
+        // UX-L4-02: the decided wording, drawn and spoken, with no legacy token.
+        val editLabel = if (edit) R.string.ux130_l4_finish_editing else R.string.ocr_w5_edit_text
+        binding.btnEditText.setText(editLabel)
+        binding.btnEditText.contentDescription = getString(editLabel)
         binding.btnSaveEdits.isVisible = edit
         // UX-L4-02: an "all pages" copy has no meaning on a one-page document.
         binding.btnCopyAll.isVisible = !edit && pageTexts.size > 1
@@ -1697,15 +1686,14 @@ class OcrEditorActivity : BaseActivity() {
      */
     private fun showUnsavedConfirm() {
         // UX-L4-02: four distinct outcomes. "Save edits" (primary) keeps library
-        // text; the .txt row writes a file; "Keep editing" is the secondary; and
-        // the destructive "Discard edits" row is separate and confirmed. The .txt
-        // row keeps the existing judged wording (UX4-8: reuse existing strings).
+        // text; "Save as .txt" writes a file; "Keep editing" is the secondary; and
+        // the destructive "Discard edits" row is separate and confirmed.
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ocr_unsaved_title)
             .setMessage(R.string.ocr_w5_back_msg)
             .setOptions(
                 listOf(
-                    getString(R.string.ocr_w5_save_txt_and_close),
+                    getString(R.string.ux130_l4_save_as_txt),
                     getString(R.string.ux130_l4_discard_edits)
                 )
             ) { which, _ ->
@@ -1735,31 +1723,6 @@ class OcrEditorActivity : BaseActivity() {
             cacheFileToDelete?.let { it.delete() }
         }
         cacheFileToDelete = null
-    }
-
-    /**
-     * UX-L4-02 compatibility label: renders [shown] ("Finish editing") but reports
-     * [token] ("Done") from toString() so the pre-existing edit-mode regression
-     * contract stays literally green. Implementing [Spanned] stops TextView from
-     * flattening the CharSequence to its token. The accessible name is set
-     * separately to the decided wording.
-     */
-    private class LegacyTokenText(
-        private val shown: String,
-        private val token: String
-    ) : CharSequence, Spanned {
-        override val length: Int get() = shown.length
-        override fun get(index: Int): Char = shown[index]
-        override fun subSequence(startIndex: Int, endIndex: Int): CharSequence =
-            LegacyTokenText(shown.substring(startIndex, endIndex), token)
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : Any> getSpans(start: Int, end: Int, type: Class<T>): Array<T> =
-            emptyArray<Any>() as Array<T>
-        override fun getSpanStart(tag: Any?): Int = -1
-        override fun getSpanEnd(tag: Any?): Int = -1
-        override fun getSpanFlags(tag: Any?): Int = 0
-        override fun nextSpanTransition(start: Int, limit: Int, type: Class<*>?): Int = limit
-        override fun toString(): String = token
     }
 
     companion object {
