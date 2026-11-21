@@ -5,6 +5,7 @@ import android.util.Base64
 import com.scanwhirl.app.store.OpFaults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.PageOrder
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.Sha256
@@ -558,8 +559,8 @@ class VaultStore(
 
         val pageFiles = manifest.files
             .filter { it.rel.startsWith("page_") && it.rel.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg", "png") }
-            .sortedBy { it.rel }
             .map { containedFile(target, it.rel) }
+            .sortedWith(PageOrder.comparator)
         Opened(id = id, name = manifest.name, dir = target, pageFiles = pageFiles, pdfFile = pdf)
     }
 

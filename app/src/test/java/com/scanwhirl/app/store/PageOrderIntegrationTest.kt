@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
+import com.scanwhirl.app.store.vault.FakeVaultKeys
+import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.PdfGenerator
 import kotlinx.coroutines.runBlocking
@@ -117,6 +119,35 @@ class PageOrderIntegrationTest {
             assertTrue("every page marker must be exported: $xml", positions.all { it >= 0 })
             assertEquals("markers strictly follow the PDF page order", positions.sorted(), positions)
         } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `vault round trip keeps numeric page order across the 999 to 1000 seam`() = runBlocking {
+        val dir = File(repo.docsDir, "x1vault${System.nanoTime().toString().takeLast(8)}").apply { mkdirs() }
+        val vault = VaultStore(app, repo, keys = FakeVaultKeys(), iterations = 2_000)
+        try {
+            File(dir, "meta.txt").writeText("X1 vault seam\n${System.currentTimeMillis()}\nOther\n")
+            val indices = listOf(99, 100, 101, 999, 1000)
+            val ordered = indices.map { i ->
+                File(dir, pageName(i)).apply { writeBytes(ImportFixtures.image(width = 120, height = 80)) }
+            }
+            PdfGenerator.imagesToPdf(ordered, File(dir, "scan.pdf"))
+
+            val passcode = "104242" // fictional fixture passcode; never a device credential
+            vault.setup(passcode)
+            vault.markConfirmationPassed()
+            assertTrue("the fictional passcode opened the Vault", vault.unlockWithPasscode(passcode).ok)
+            val entry = vault.addDocument(dir.name)
+            val opened = vault.openDocument(entry.id)
+            assertEquals(
+                "Vault reopen uses the numeric page order, not lexicographic rel order",
+                indices.map(::pageName),
+                opened.pageFiles.map { it.name }
+            )
+        } finally {
+            vault.lock()
             dir.deleteRecursively()
         }
     }
