@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L1lib library fixes: honest write failures and the async Tags sheet. -->
+    <!-- #3: a disk-full / sync failure during a library folder or tag write. -->
+    <string name="l1lib_write_failed">Could not save the change. Some documents may not have changed. Check free storage and try again.</string>
+    <!-- %1$d = documents actually moved, %2$d = documents selected. -->
+    <string name="l1lib_move_partial">Could not move all documents. %1$d of %2$d moved.</string>
+    <!-- #2: visible while every meta.txt is read on the IO thread. -->
+    <string name="l1lib_tags_loading">Loading tags…</string>
+</resources>
