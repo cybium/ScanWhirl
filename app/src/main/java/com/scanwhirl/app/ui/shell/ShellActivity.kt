@@ -3,7 +3,9 @@ package com.scanwhirl.app.ui.shell
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.Gravity
@@ -82,6 +84,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     /** SH1 #3: the look this instance was built with. A change needs an immediate redraw. */
     private var appliedFont: String = ""
     private var appliedLanguage: String = ""
+
+    /** Fail-closed guard: one look change can trigger at most one recreate per instance. */
+    private var lookRecreateIssued = false
 
     private var proOpen = false
     private var proRequest = 0
@@ -200,21 +205,21 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            // SH1 #1: a wallpaper chosen in Settings must be drawn by the launcher too;
-            // saving the choice alone left the main screen unchanged. No photo -> shipped look.
-            background = com.scanwhirl.app.util.Wallpaper.drawable(this@ShellActivity)
-                ?: SwStyle.gradient(
-                    this@ShellActivity,
-                    0x1200F0FF,
-                    SwStyle.color(this@ShellActivity, R.color.rv_bg),
-                    radiusDp = 0f
-                )
+            // The shipped look is painted first and stays until an optional wallpaper has
+            // been decoded off the main thread (loadWallpaper below): no flash or jank.
+            background = SwStyle.gradient(
+                this@ShellActivity,
+                0x1200F0FF,
+                SwStyle.color(this@ShellActivity, R.color.rv_bg),
+                radiusDp = 0f
+            )
         }
         contentHost = FrameLayout(this).apply { id = R.id.swTabContent }
         root.addView(contentHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         navHost = buildNav()
         root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 100f)))
         setContentView(root)
+        loadWallpaper(root)
         // v2 UI: 01_home_A — with the keyboard up the nav bar and scan disc must not
         // float over the chips. One listener only: the shared helper already keeps the
         // base padding, the cutout/top inset and max(nav bar, IME) at the bottom, and
@@ -274,8 +279,34 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
         revealFromIntent(intent)
         lastProState = com.scanwhirl.app.util.ProGate.isPro(this)
-        if (intent?.getBooleanExtra(EXTRA_OPEN_PRO, false) == true) {
-            intent.removeExtra(EXTRA_OPEN_PRO)
+        openProFromIntent(intent)
+    }
+
+    /**
+     * SH1 review P1/P2: decode the chosen photo off the main thread, exactly like the
+     * legacy Home does, then apply it under a translucent ink scrim so the shell's text
+     * keeps its contrast. The gradient set in onCreate remains until the decode finishes,
+     * so a slow photo can never flash a wrong background or block the UI thread.
+     */
+    private fun loadWallpaper(root: LinearLayout) {
+        lifecycleScope.launch {
+            val photo = withContext(Dispatchers.IO) {
+                wallpaperProbe?.invoke()
+                com.scanwhirl.app.util.Wallpaper.drawable(this@ShellActivity)
+            }
+            if (isFinishing || isDestroyed || photo == null) return@launch
+            val ink = SwStyle.color(this@ShellActivity, R.color.rv_bg)
+            val scrim = ColorDrawable(
+                Color.argb(SCRIM_ALPHA, Color.red(ink), Color.green(ink), Color.blue(ink))
+            )
+            root.background = LayerDrawable(arrayOf(photo, scrim))
+        }
+    }
+
+    /** SH1 review P2: the Pro deep link can also arrive on a live shell. */
+    private fun openProFromIntent(source: Intent?) {
+        if (source?.getBooleanExtra(EXTRA_OPEN_PRO, false) == true) {
+            source.removeExtra(EXTRA_OPEN_PRO)
             showPro()
         }
     }
@@ -290,6 +321,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         super.onNewIntent(intent)
         setIntent(intent)
         revealFromIntent(intent)
+        openProFromIntent(intent)
     }
 
     /**
@@ -337,9 +369,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // SH1 #3: Settings changes the font and the app language on its own screen. The shell
         // underneath is stopped, not rebuilt, so it would keep the old look until a cold
         // start. recreate() carries the selected tab through onSaveInstanceState.
-        if (appliedFont != com.scanwhirl.app.util.Prefs.fontStyle(this) ||
-            appliedLanguage != com.scanwhirl.app.util.AppLanguage.currentTag(this)
+        if (!lookRecreateIssued &&
+            (appliedFont != com.scanwhirl.app.util.Prefs.fontStyle(this) ||
+                appliedLanguage != com.scanwhirl.app.util.AppLanguage.currentTag(this))
         ) {
+            lookRecreateIssued = true
             recreate()
             return
         }
@@ -1378,6 +1412,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         /** Opens the Pro screen on launch (Settings' Gold option for Free users). */
         const val EXTRA_OPEN_PRO = "open_pro"
+
+        /** SH1 review P1: test seam invoked on the IO thread just before a wallpaper decode. */
+        @JvmField internal var wallpaperProbe: (() -> Unit)? = null
+
+        /** SH1 review P2: ~65% ink over a photo keeps the shell's text readable. */
+        internal const val SCRIM_ALPHA = 166
 
         /** SH1 #2: saved selection of the bottom bar across recreation. */
         private const val KEY_TAB = "sh1_selected_tab"

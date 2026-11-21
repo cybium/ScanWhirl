@@ -73,7 +73,7 @@ class Sh1ShellSettingsFixTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `saved wallpaper is drawn by the shell instead of only being stored`() {
         assertTrue(
             "ShellActivity must apply Wallpaper.drawable() as its background; " +
@@ -82,7 +82,7 @@ class Sh1ShellSettingsFixTest {
         )
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the selected bottom tab survives recreation`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -102,7 +102,7 @@ class Sh1ShellSettingsFixTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a font or language change redraws the shell immediately`() {
         val resume = shellText.substringAfter("override fun onResume()")
             .substringBefore("override fun onStop()")
@@ -111,7 +111,7 @@ class Sh1ShellSettingsFixTest {
         assertTrue("the check must cover the app language", resume.contains("currentTag"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `visible dates use the app language locale not the device locale`() {
         val start = shellText.indexOf("private fun dayLabel")
         assertTrue("dayLabel exists", start >= 0)
@@ -128,7 +128,7 @@ class Sh1ShellSettingsFixTest {
         )
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `trash expiry is recomputed when Trash resumes`() {
         val resume = trashText.substringAfter("override fun onResume()")
             .substringBefore("override fun onCreateOptionsMenu")
@@ -139,7 +139,7 @@ class Sh1ShellSettingsFixTest {
         )
     }
 
-    @Test
+    @Test(timeout = 30_000)
     @Config(sdk = [35], qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `Hindi tab labels fit at 200 percent font and keep their content description`() {
         RuntimeEnvironment.setFontScale(2.0f)
@@ -168,7 +168,7 @@ class Sh1ShellSettingsFixTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `an external show-document extra is validated before it is acted on`() {
         val start = shellText.indexOf("private fun revealFromIntent")
         assertTrue("revealFromIntent exists", start >= 0)
@@ -182,7 +182,7 @@ class Sh1ShellSettingsFixTest {
         )
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the dead Orbital Dark summary is not a hardcoded string`() {
         assertFalse(
             "Settings keeps the theme row hidden; it must not carry a hardcoded English name",
