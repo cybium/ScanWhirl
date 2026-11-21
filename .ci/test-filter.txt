@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.stamp.C1SaveTimeoutTest,com.scanwhirl.app.ui.stamp.StampSavingBackTest,com.scanwhirl.app.ui.stamp.C1RedactionFindTest,com.scanwhirl.app.ui.ReaderDockTest
