@@ -15,6 +15,7 @@ import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.PdfA
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.ShareUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,16 +76,21 @@ object PdfAFlow {
     }
 
     private fun create(activity: AppCompatActivity, repo: ScanRepository, doc: ScanDocument) {
+        // L3-05: the existing progress UI opens before the work starts and closes
+        // on success, cancellation and every error. No silent multi-second wait.
+        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+            activity, activity.getString(R.string.progress_title)
+        )
         activity.lifecycleScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) { exportForResult(activity, repo, doc.id) }
                 activity.startActivity(resultIntent(activity, file))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Toast.makeText(
-                    activity,
-                    activity.getString(R.string.pdfa_failed, e.message.orEmpty()),
-                    Toast.LENGTH_LONG
-                ).show()
+                Toast.makeText(activity, L3FailureCopy.message(activity, e), Toast.LENGTH_LONG).show()
+            } finally {
+                progress.dismiss()
             }
         }
     }
@@ -173,5 +179,27 @@ class PdfAExport(private val context: Context, private val repo: ScanRepository)
         val cleaned = name.trim().map { if (it.isLetterOrDigit() || it == ' ' || it == '-' || it == '_') it else '_' }
             .joinToString("").trim().replace(Regex("\\s+"), " ").take(60)
         return cleaned.ifBlank { "Document" }.lowercase(Locale.ROOT).replace(' ', '-')
+    }
+}
+
+/**
+ * L3-05 — one localized cause/action mapping for the four tool sites that used
+ * to print a JVM message. Only the bucket matters in the UI; details stay out of
+ * the UI entirely (never logged here either, so no secret or document path can
+ * leak through a user-visible line).
+ */
+object L3FailureCopy {
+    fun message(context: Context, e: Throwable): String {
+        val raw = e.localizedMessage.orEmpty().lowercase(Locale.ROOT)
+        return when {
+            e is SecurityException || raw.contains("password") || raw.contains("encrypt") ||
+                raw.contains("denied") || raw.contains("permission") ||
+                raw.contains("corrupt") || raw.contains("malformed") ->
+                context.getString(R.string.ux130_l3_failure_unreadable)
+            e is OutOfMemoryError || raw.contains("space") || raw.contains("enospc") ||
+                raw.contains("quota") ->
+                context.getString(R.string.ux130_l3_failure_no_space)
+            else -> context.getString(R.string.ux130_l3_failure_generic)
+        }
     }
 }

@@ -14,4 +14,9 @@
     <string name="ux130_l3_merge_move_earlier">Move earlier</string>
     <string name="ux130_l3_merge_move_later">Move later</string>
     <string name="ux130_l3_merge_file_position">File %1$d of %2$d</string>
+
+    <!-- L3-05: localized causes; raw exception text is never shown. -->
+    <string name="ux130_l3_failure_unreadable">Could not read this PDF. Choose another file.</string>
+    <string name="ux130_l3_failure_no_space">Could not save the copy. Free some space and try again.</string>
+    <string name="ux130_l3_failure_generic">Could not create the copy. Try again.</string>
 </resources>

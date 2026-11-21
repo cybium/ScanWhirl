@@ -22,6 +22,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.L3FailureCopy
 import com.scanwhirl.app.databinding.ActivityMergePdfBinding
 import com.scanwhirl.app.databinding.ItemMergePdfBinding
 import kotlinx.coroutines.Dispatchers
@@ -205,7 +206,7 @@ class MergePdfActivity : BaseActivity() {
                 } else {
                     Toast.makeText(
                         this@MergePdfActivity,
-                        getString(R.string.merge_pdf_failed, e.message),
+                        L3FailureCopy.message(this@MergePdfActivity, e),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -213,7 +214,7 @@ class MergePdfActivity : BaseActivity() {
                 sheet?.dismiss()
                 Toast.makeText(
                     this@MergePdfActivity,
-                    getString(R.string.merge_pdf_failed, e.message),
+                    L3FailureCopy.message(this@MergePdfActivity, e),
                     Toast.LENGTH_LONG
                 ).show()
             }
