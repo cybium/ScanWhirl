@@ -1,0 +1,1 @@
+com.scanwhirl.app.form1.FormPresetsTest,com.scanwhirl.app.form1.ExactKbEncoderTest,com.scanwhirl.app.form1.SignatureCleanupTest,com.scanwhirl.app.form1.FormReadyStringsTest,com.scanwhirl.app.form1.FormReadyActivityTest

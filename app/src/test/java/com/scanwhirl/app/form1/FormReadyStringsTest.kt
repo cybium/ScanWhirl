@@ -1,4 +1,4 @@
-package com.scanwhirl.app.zzform1
+package com.scanwhirl.app.form1
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

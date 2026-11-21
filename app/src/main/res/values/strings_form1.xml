@@ -28,4 +28,8 @@
     <string name="form1_note_below_min">Below your minimum. %1$s</string>
     <string name="form1_note_above_max">Above your maximum. %1$s</string>
     <string name="form1_source_kept">Your original photo is untouched.</string>
+    <string name="form1_size_too_large">This size is too large for a form photo. Use up to 4000 px.</string>
+    <string name="form1_out_of_memory">This photo is too large for this phone. Try a smaller picture.</string>
+    <string name="form1_selected">Selected</string>
+    <string name="form1_not_selected">Not selected</string>
 </resources>

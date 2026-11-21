@@ -21,6 +21,9 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
@@ -185,6 +188,7 @@ class FormReadyActivity : BaseActivity() {
                 setOnClickListener { selectPreset(def.first) }
             }
             presetChips[def.first.id] = chip
+            chipA11y(chip)
             presetRow.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = SwStyle.dp(this@FormReadyActivity, 4f)
             })
@@ -230,6 +234,7 @@ class FormReadyActivity : BaseActivity() {
                 setOnClickListener { unit = u; refresh() }
             }
             unitChips[u] = chip
+            chipA11y(chip)
             units.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = SwStyle.dp(this@FormReadyActivity, 4f)
             })
@@ -266,6 +271,7 @@ class FormReadyActivity : BaseActivity() {
                 setOnClickListener { dpi = d; refresh() }
             }
             dpiChips[d] = chip
+            chipA11y(chip)
             dpiRow.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = SwStyle.dp(this@FormReadyActivity, 4f)
             })
@@ -363,6 +369,24 @@ class FormReadyActivity : BaseActivity() {
         })
     }
 
+    /**
+     * TalkBack announces which preset/unit/DPI chip is active. [refresh] writes the current state
+     * into the chip tag; the delegate reads it so it stays correct after every edit and rotation.
+     */
+    private fun chipA11y(chip: TextView) {
+        ViewCompat.setAccessibilityDelegate(chip, object : AccessibilityDelegateCompat() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                val on = host.tag as? Boolean == true
+                info.isCheckable = true
+                info.isChecked = on
+                info.stateDescription = host.context.getString(
+                    if (on) R.string.form1_selected else R.string.form1_not_selected
+                )
+            }
+        })
+    }
+
     private fun action(text: String, id: Int, primary: Boolean, onClick: () -> Unit): TextView =
         SwStyle.asButton(SwStyle.text(this, 15f, SwStyle.color(
             this, if (primary) R.color.sw_disc_ink else R.color.text_hologram_hi
@@ -416,25 +440,43 @@ class FormReadyActivity : BaseActivity() {
 
     private fun refresh() {
         val (w, h) = currentPixels()
+        val tooLarge = !FormPresets.fitsFormLimit(w, h)
         readout.text = getString(R.string.form1_readout, w, h)
         example.text = getString(R.string.form1_example, spec.widthPx, spec.heightPx, spec.minKb, spec.maxKb)
         photoCmNote.isVisible = spec.id == "photo"
+        // An impossible target is refused before any bitmap is allocated.
+        val sizeMessage = getString(R.string.form1_size_too_large)
+        if (tooLarge) {
+            errorView.text = sizeMessage
+            errorView.isVisible = true
+        } else if (errorView.text.toString() == sizeMessage) {
+            errorView.isVisible = false
+            errorView.text = ""
+        }
+        applyButton.isEnabled = hasImageForTest() && !tooLarge
+        applyButton.alpha = if (applyButton.isEnabled) 1f else 0.5f
         val hi = SwStyle.color(this, R.color.text_hologram_hi)
         val ink = SwStyle.color(this, R.color.sw_disc_ink)
         val cyan = SwStyle.color(this, R.color.cyan_primary)
         val surface = SwStyle.color(this, R.color.rv_surface_2)
         for ((id, chip) in presetChips) {
             val on = id == spec.id
+            chip.tag = on
+            chip.isSelected = on
             chip.setTextColor(if (on) ink else hi)
             chip.background = SwStyle.rounded(this, if (on) cyan else surface, 12f)
         }
         for ((d, chip) in dpiChips) {
             val on = d == dpi
+            chip.tag = on
+            chip.isSelected = on
             chip.setTextColor(if (on) ink else hi)
             chip.background = SwStyle.rounded(this, if (on) cyan else surface, 12f)
         }
         for ((u, chip) in unitChips) {
             val on = u == unit
+            chip.tag = on
+            chip.isSelected = on
             chip.setTextColor(if (on) ink else hi)
             chip.background = SwStyle.rounded(this, if (on) cyan else surface, 12f)
         }
@@ -490,8 +532,7 @@ class FormReadyActivity : BaseActivity() {
             bitmap = decoded
             cropView.setImage(decoded)
             if (rect != null && rect.size == 4) cropView.setCropRect(RectF(rect[0], rect[1], rect[2], rect[3]))
-            applyButton.isEnabled = true
-            applyButton.alpha = 1f
+            refresh()
             pickButton.isVisible = false
         }
     }
@@ -535,8 +576,7 @@ class FormReadyActivity : BaseActivity() {
             cropView.setImage(decoded)
             errorView.isVisible = false
             pickButton.isVisible = false
-            applyButton.isEnabled = true
-            applyButton.alpha = 1f
+            refresh() // re-checks the size cap before enabling Apply
         }
     }
 
@@ -565,6 +605,13 @@ class FormReadyActivity : BaseActivity() {
         val width = rect.width().toInt().coerceIn(1, source.width - left)
         val height = rect.height().toInt().coerceIn(1, source.height - top)
         val (targetW, targetH) = currentPixels()
+        if (!FormPresets.fitsFormLimit(targetW, targetH)) {
+            errorView.text = getString(R.string.form1_size_too_large)
+            errorView.isVisible = true
+            applyButton.isEnabled = false
+            applyButton.alpha = 0.5f
+            return
+        }
         val dpiNow = dpi
         val minBytes = minKb * SizeUnits.BYTES_PER_KB
         val maxBytes = maxKb * SizeUnits.BYTES_PER_KB
@@ -602,6 +649,17 @@ class FormReadyActivity : BaseActivity() {
                 finish()
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: OutOfMemoryError) {
+                // The phone cannot hold this rendition. Free the preview on every path and say
+                // so in the app's own words instead of letting the process die.
+                progress.isVisible = false
+                busy = false
+                cropView.clearImage()
+                bitmap?.takeIf { !it.isRecycled }?.recycle()
+                bitmap = null
+                errorView.text = getString(R.string.form1_out_of_memory)
+                errorView.isVisible = true
+                refresh()
             } catch (e: Exception) {
                 progress.isVisible = false
                 busy = false
@@ -655,6 +713,10 @@ class FormReadyActivity : BaseActivity() {
     internal fun currentDpiForTest(): Int = dpi
     internal fun currentCleanupForTest(): Boolean = cleanup
     internal fun lastOutputForTest(): File? = lastOutput
+
+    /** Test seams for the confirmed crop frame (the view keeps it in image pixels). */
+    internal fun setCropRectForTest(rect: RectF) = cropView.setCropRect(rect)
+    internal fun cropRectForTest(): RectF = cropView.getCropRect()
 
     /** Test seam for editable custom values, mirroring what the fields do. */
     internal fun setCustomValuesForTest(w: Float, h: Float, u: FormUnit, d: Int, min: Int, max: Int) {

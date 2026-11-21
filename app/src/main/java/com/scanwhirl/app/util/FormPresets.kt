@@ -23,6 +23,14 @@ object FormPresets {
     const val DPI_300 = 300
     val SUPPORTED_DPI = intArrayOf(DPI_100, DPI_200, DPI_300)
 
+    /**
+     * A form photo is small by definition. A 12000 x 12000 custom entry would allocate ~576 MB
+     * before encoding and can kill the process, so the screen refuses anything above this cap
+     * with an honest message instead of trying to rasterize it.
+     */
+    const val MAX_FORM_LONG_SIDE = 4000
+    const val MAX_FORM_PIXELS = 12_000_000L
+
     data class Spec(
         val id: String,
         val widthPx: Int,
@@ -71,8 +79,14 @@ object FormPresets {
         FormUnit.INCH -> px.toFloat() / dpi
     }
 
+    /** True when a target is small enough to be a real form photo and safe to rasterize. */
+    fun fitsFormLimit(width: Int, height: Int): Boolean =
+        width in 1..MAX_FORM_LONG_SIDE && height in 1..MAX_FORM_LONG_SIDE &&
+            maxOf(width, height) <= MAX_FORM_LONG_SIDE &&
+            width.toLong() * height.toLong() <= MAX_FORM_PIXELS
+
     fun isSane(spec: Spec): Boolean =
-        spec.widthPx in 1..12000 && spec.heightPx in 1..12000 &&
+        fitsFormLimit(spec.widthPx, spec.heightPx) &&
             spec.dpi in SUPPORTED_DPI && spec.minKb in 1..10_000 &&
             spec.maxKb >= spec.minKb && spec.maxKb <= 10_000
 }
