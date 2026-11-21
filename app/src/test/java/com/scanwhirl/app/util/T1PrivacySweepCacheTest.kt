@@ -41,15 +41,15 @@ class T1PrivacySweepCacheTest {
     }
 
     @Test
-    fun `the passport and business card cache dirs are swept at cold start`() {
+    fun `abandoned passport and business card cache files are swept at cold start`() {
+        val old = System.currentTimeMillis() - PrivacySweep.CAPTURE_CACHE_MAX_AGE_MS - 60_000L
         val passport = file("t1_passport/photo.jpg")
         val card = file("t1_business_card/card.jpg")
+        listOf(passport, card).forEach { it.setLastModified(old) }
 
         PrivacySweep.run(app)
 
-        assertFalse("the passport photo must not survive a cold start", passport.exists())
-        assertFalse("the business card must not survive a cold start", card.exists())
-        assertFalse("the whole dir is gone", File(cache, "t1_passport").exists())
-        assertFalse("the whole dir is gone", File(cache, "t1_business_card").exists())
+        assertFalse("an abandoned passport photo must not survive a cold start", passport.exists())
+        assertFalse("an abandoned business card must not survive a cold start", card.exists())
     }
 }
