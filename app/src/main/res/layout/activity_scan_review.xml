@@ -195,6 +195,8 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- L2-03: the unenforced "Order looks right" ritual is removed.
+                 The IDs stay hidden so older test sources still resolve them. -->
             <TextView
                 android:id="@+id/orderLink"
                 android:layout_width="match_parent"

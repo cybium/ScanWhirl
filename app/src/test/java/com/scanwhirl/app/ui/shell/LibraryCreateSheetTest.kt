@@ -178,7 +178,6 @@ class LibraryCreateSheetTest {
     fun `scan entry runs the existing camera launcher`() {
         launch { activity ->
             val dialog = openSheet(activity)
-            val toastBefore = ShadowToast.shownToastCount()
             dialog.findViewById<View>(R.id.swCreateScan).performClick()
             idle()
             assertFalse("the sheet closes on a choice", dialog.isShowing)
@@ -188,10 +187,24 @@ class LibraryCreateSheetTest {
             )
             // In Robolectric ML Kit is absent, so ScanLauncher.launchScanner() reports the same
             // scanner failure a phone without Play services shows: proof the existing launcher ran.
-            assertTrue(
-                "the existing scanner launcher ran",
-                ShadowToast.shownToastCount() > toastBefore ||
-                    !ShadowToast.getTextOfLatestToast().isNullOrBlank()
+            // L2-04: that failure is one truthful sheet, not a duplicate Toast.
+            var scannerSheet: Dialog? = null
+            for (i in 0 until 20) {
+                idle()
+                val candidate = ShadowDialog.getLatestDialog()
+                if (candidate?.isShowing == true &&
+                    candidate.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString() ==
+                    activity.getString(R.string.ux130_l2_scanner_unavailable_title)
+                ) {
+                    scannerSheet = candidate
+                    break
+                }
+            }
+            assertNotNull("the existing scanner launcher ran", scannerSheet)
+            assertEquals(
+                "the launcher offers the photo fallback",
+                activity.getString(R.string.ux130_l2_pick_photos),
+                scannerSheet!!.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
             )
         }
     }

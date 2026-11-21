@@ -17,7 +17,6 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
-import android.text.style.StyleSpan
 import android.view.ContextThemeWrapper
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
@@ -135,9 +134,6 @@ class ScanReviewActivity : BaseActivity() {
     internal var arrangeMode = false
         private set
 
-    /** The owner confirmed the page order ("Order looks right") in this session. */
-    private var orderChecked = false
-
     /** A filter was changed here (filters live in filters.txt, not in file mtimes). */
     private var filtersEdited = false
 
@@ -251,7 +247,6 @@ class ScanReviewActivity : BaseActivity() {
         savedInstanceState?.let {
             currentIndex = it.getInt(STATE_CURRENT, 0)
             arrangeMode = it.getBoolean(STATE_ARRANGE, false)
-            orderChecked = it.getBoolean(STATE_ORDER_OK, false)
             filtersEdited = it.getBoolean(STATE_FILTERS_EDITED, false)
             editedBeforeRecreate = it.getBoolean(STATE_EDITED, false)
         }
@@ -374,7 +369,6 @@ class ScanReviewActivity : BaseActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putInt(STATE_CURRENT, currentIndex)
         outState.putBoolean(STATE_ARRANGE, arrangeMode)
-        outState.putBoolean(STATE_ORDER_OK, orderChecked)
         outState.putBoolean(STATE_FILTERS_EDITED, filtersEdited)
         outState.putBoolean(STATE_EDITED, isEdited())
         if (reviewStateReady) {
@@ -782,20 +776,9 @@ class ScanReviewActivity : BaseActivity() {
         binding.btnToolDelete.setOnClickListener {
             pages.getOrNull(currentIndex)?.let { deletePage(it) }
         }
-        binding.orderLink.setOnClickListener { setMode(arrange = true) }
     }
 
     private fun setupArrange() {
-        binding.orderText.text = SpannableStringBuilder().apply {
-            append(getString(R.string.review_order_title), StyleSpan(Typeface.BOLD), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            append(' ')
-            append(getString(R.string.review_order_body))
-        }
-        binding.btnOrderOk.setOnClickListener {
-            orderChecked = true
-            haptic(confirmHaptic())
-            renderPages()
-        }
         binding.btnArrEarlier.setOnClickListener {
             reorderStaging(currentIndex, currentIndex - 1, announce = true)
         }
@@ -870,11 +853,8 @@ class ScanReviewActivity : BaseActivity() {
         filmAdapter.notifyDataSetChanged()
         binding.btnSavePdf.text =
             resources.getQuantityString(R.plurals.review_save_pages, pages.size, pages.size)
-        val needsOrderCheck = pages.size > 1 && !orderChecked
-        binding.orderLink.isVisible = needsOrderCheck
-        binding.orderCard.isVisible = needsOrderCheck
-        // The card already says what to do; one instruction at a time keeps the grid tall.
-        binding.arrangeHint.isVisible = !needsOrderCheck
+        // L2-03: no unenforced "Order looks right" ritual. One honest hint stays
+        // visible in Arrange; the accessible Earlier/Later/Move to actions remain.
         renderStatus()
         renderCurrent()
     }
@@ -1403,7 +1383,6 @@ class ScanReviewActivity : BaseActivity() {
         private const val REVIEW_STATE = "review_state"
         private const val STATE_CURRENT = "review_current_page"
         private const val STATE_ARRANGE = "review_arrange_mode"
-        private const val STATE_ORDER_OK = "review_order_checked"
         private const val STATE_FILTERS_EDITED = "review_filters_edited"
         private const val STATE_EDITED = "review_edited"
 
