@@ -90,6 +90,12 @@ class ScanWhirlApp : Application() {
         if (!storageRecoveryStarted.compareAndSet(false, true)) return
         appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
+                // Restore interrupted discard staging BEFORE ordinary orphan-draft cleanup.
+                runCatching {
+                    com.scanwhirl.app.store.ImportDiscardStore(this@ScanWhirlApp, repository).recover()
+                        .forEach { com.scanwhirl.app.ui.DiscardActions.scheduleExpiry(this@ScanWhirlApp, it) }
+                    repository.ocrStore.pendingQueue().forEach { indexer.enqueue(it) }
+                }
                 runCatching { repository.reapAbandonedSaves() }
                 runCatching { repository.recoverTrash() }
                 runCatching { repository.recoverImports() }
