@@ -585,6 +585,9 @@ class BatchActivity : BaseActivity() {
             .setMessage(R.string.tools_batch_password)
             .setSecondary(R.string.sheet_cancel)
             .build()
+            // A password is on screen: block screenshots, recents and casting like every
+            // other password sheet in the app (TYPE12 item 4).
+            .secure()
         val password = PasswordField(this).apply { id = R.id.batchPassword; showStrength = false }
         sheet.setContent(password)
         sheet.setPrimary(R.string.tools_batch_start)

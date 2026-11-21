@@ -52,10 +52,10 @@ class SwChip(context: Context) : LinearLayout(context) {
                 .apply { marginEnd = SwStyle.dp(context, 6f) }
         )
 
-        // L1-04 target is 12sp; 11.5f is retained because OcrLabelFitTest fails at 12sp
-        // ("Save .txt" breaks inside ".txt" at 320dp/2.0x in the shared OCR chip row).
+        // L1-04: 12sp is the readable floor. The OCR chip row now wraps whole chips so a
+        // label never has to split a word (OcrLabelFitTest, no mid-word break / no clipping).
         labelView = SwStyle.text(
-            context, 11.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
+            context, 12f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
         ).apply {
             id = R.id.swChipLabel
             maxLines = 1
