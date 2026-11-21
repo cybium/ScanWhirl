@@ -265,6 +265,22 @@ class StampEditorActivity : BaseActivity() {
             if (editor.removeSelected()) refresh()
         }
         binding.findRedactions.setOnClickListener { openFindSheet() }
+        // UXG G5: Find is toggled by arm() rather than styled by paint(), so it never received
+        // the Button role the other painted actions get. Give it the same focus/clickable/Button
+        // semantics so TalkBack announces "Find, button" and keyboard focus can reach it.
+        binding.findRedactions.apply {
+            isFocusable = true
+            isClickable = true
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(
+                    host: View,
+                    info: android.view.accessibility.AccessibilityNodeInfo
+                ) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = Button::class.java.name
+                }
+            }
+        }
         binding.undo.setOnClickListener {
             if (editor.undo()) refresh()
         }

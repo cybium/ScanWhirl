@@ -59,6 +59,12 @@ class BackupActivity : BaseActivity() {
         @androidx.annotation.VisibleForTesting
         var failWorkForTest: Throwable? = null
 
+        // UXG G2: the encrypted archive is expensive to rebuild. Saved across a configuration
+        // change so the Save/Share offer can be restored after recreation; the bytes stay in the
+        // private cache dir that PrivacySweep clears eventually.
+        private const val STATE_PENDING = "ux_uxg_backup_pending"
+        private const val STATE_PENDING_WARNINGS = "ux_uxg_backup_pending_warnings"
+
         fun intent(context: Context): Intent = Intent(context, BackupActivity::class.java)
     }
 
@@ -185,10 +191,42 @@ class BackupActivity : BaseActivity() {
         com.scanwhirl.app.util.SecureView.apply(window)
         setContentView(buildScreen())
         refresh()
+        // UXG G2: a configuration change destroyed the previous instance while the encrypted
+        // archive was still waiting for Save/Share. Recover the exact cached file and re-offer
+        // the same choices instead of forcing the person to rebuild an 18 MB backup.
+        val restored = savedInstanceState?.getString(STATE_PENDING)?.let { File(it) }
+        if (restored != null && restored.isFile) {
+            pending = restored
+            savedInstanceState.getStringArrayList(STATE_PENDING_WARNINGS)?.let {
+                pendingWarnings = it
+            }
+            offerSaving(restored)
+        }
+    }
+
+    /** UXG G2: keep the pending archive's path (and honesty warnings) across rotation. */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pending?.let { file ->
+            if (file.isFile) {
+                outState.putString(STATE_PENDING, file.absolutePath)
+                if (pendingWarnings.isNotEmpty()) {
+                    outState.putStringArrayList(STATE_PENDING_WARNINGS, ArrayList(pendingWarnings))
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
-        pending?.delete()
+        // UXG G2: rotation destroys and recreates this screen. Keep the encrypted archive across a
+        // configuration change; only a real finish (or another non-configuration teardown)
+        // releases the cached bytes. The file lives in the private cache dir, so a crash that
+        // skips this callback still leaves it to PrivacySweep rather than leaking it externally.
+        if (!isChangingConfigurations) {
+            pending?.delete()
+            pending = null
+            pendingWarnings = emptyList()
+        }
         restoreSource?.let { com.scanwhirl.app.util.BoundedCopy.release(it) }
         super.onDestroy()
     }
