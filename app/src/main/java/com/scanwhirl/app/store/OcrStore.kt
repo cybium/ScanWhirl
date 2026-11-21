@@ -73,10 +73,16 @@ class OcrStore(private val docsDir: File) {
                     total += count
                 }
             }
+            // useLines has the same readLine semantics as the old readLines():
+            // a trailing newline does not create an extra empty line. Plain
+            // String.lineSequence() does, which would mark every saved file as
+            // malformed on the trailing record.
             val lines = ArrayList<String>()
-            for (line in String(bytes.toByteArray(), Charsets.UTF_8).lineSequence()) {
-                if (lines.size >= MAX_LINES) throw IOException("Too many text lines")
-                lines += line
+            String(bytes.toByteArray(), Charsets.UTF_8).reader().buffered().useLines { sequence ->
+                for (line in sequence) {
+                    if (lines.size >= MAX_LINES) throw IOException("Too many text lines")
+                    lines += line
+                }
             }
             return lines
         }
