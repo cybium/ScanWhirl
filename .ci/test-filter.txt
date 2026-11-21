@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.R1ReviewFixTest,com.scanwhirl.app.util.PageStampSuggestTest,com.scanwhirl.app.util.SensitiveScanTest,com.scanwhirl.app.util.AadhaarMaskTest,com.scanwhirl.app.util.R1RedactDefectTest

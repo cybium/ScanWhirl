@@ -35,6 +35,7 @@ class PageStampSuggestTest {
         // The Find flow boxes only the characters it matched, not the whole OCR line.
         assertTrue("box starts on the number: ${s.box.left}", s.box.left > 0.1f)
         assertTrue("box stops before the trailing text: ${s.box.right}", s.box.right < 0.8f)
+        assertTrue("box covers the line height", s.box.top <= 0.1f && s.box.bottom >= 0.15f)
         assertTrue(s.box.left >= 0f && s.box.right <= 1f && s.box.top >= 0f && s.box.bottom <= 1f)
     }
 
