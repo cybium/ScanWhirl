@@ -1235,10 +1235,18 @@ class ScanRepository(private val context: Context) {
         return "$id$TRASH_KEY_SEP$n"
     }
 
-    private fun freeLibraryId(): String {
+    /**
+     * UX-007: an id waiting in the private import escrow is still reserved. Reusing it would make
+     * Undo throw "Cannot overwrite" on a brand-new import. The supplier is a test seam only.
+     */
+    private fun freeLibraryId(freshId: () -> String = { UUID.randomUUID().toString().take(8) }): String {
+        val escrowKey = Regex("^([A-Za-z0-9_-]{1,64})--[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+        val reserved = File(context.filesDir, "import_discard").listFiles()
+            ?.mapNotNull { escrowKey.matchEntire(it.name)?.groupValues?.get(1) }
+            ?.toSet().orEmpty()
         while (true) {
-            val id = UUID.randomUUID().toString().take(8)
-            if (!File(docsDir, id).exists() && !File(trashDir, id).exists()) return id
+            val id = freshId()
+            if (id !in reserved && !File(docsDir, id).exists() && !File(trashDir, id).exists()) return id
         }
     }
 

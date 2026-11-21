@@ -80,7 +80,10 @@ class DiscardActions(
             val app = ScanWhirlApp.from(context)
             app.appScope.launch(Dispatchers.IO) {
                 val store = ImportDiscardStore(app)
-                delay(store.remainingMs(token))
+                // remainingMs is wall-aware after a reboot: a zero window means finish now,
+                // not "wait forever". recover() purges expired escrows and keeps live ones.
+                val remaining = store.remainingMs(token)
+                if (remaining > 0) delay(remaining)
                 runCatching { store.recover() }
             }
         }

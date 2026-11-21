@@ -98,14 +98,15 @@ class ImportDiscardStoreTest {
         }
     }
 
-    @Test fun `death after commit retains the same durable token and remaining window`() {
+    @Test fun `a post commit fault cannot revoke the durable token or its remaining window`() {
         val id = DocFixtures.saved(repo, app, pages = 2)
         val before = digest(id)
+        // PENDING is already durable: a later fault is a success receipt, not a discard failure.
         ImportDiscardStore.fault = { if (it == ImportDiscardStore.Stage.COMMITTED) throw SimulatedDeath() }
-        try { store().discard(id, 8_000); fail("death not injected") } catch (_: SimulatedDeath) {}
+        val token = store().discard(id, 8_000)
         ImportDiscardStore.fault = {}
         now += 3_000
-        val token = store().recover().single()
+        assertEquals(listOf(token), store().recover())
         assertEquals(5_000L, store().remainingMs(token))
         assertEquals(id, store().restore(token.key))
         assertEquals(before, digest(id))
@@ -152,14 +153,24 @@ class ImportDiscardStoreTest {
         assertTrue(store().pending().isEmpty())
     }
 
-    @Test fun `corrupt manifest or changed boot restores rather than guessing an expiry`() {
-        for (corrupt in listOf(true, false)) {
+    @Test fun `a corrupt manifest restores while an unexpired reboot keeps the token`() {
+        run {
             val id = DocFixtures.saved(repo, app, pages = 2)
             val before = digest(id)
             val token = store().discard(id, 8_000)
-            if (corrupt) File(app.filesDir, "import_discard/${token.key}/manifest").writeText("../../outside")
-            else boot++
-            store().recover()
+            File(app.filesDir, "import_discard/${token.key}/manifest").writeText("../../outside")
+            assertTrue(store().recover().isEmpty())
+            assertEquals(before, digest(id))
+        }
+        run {
+            val id = DocFixtures.saved(repo, app, pages = 2)
+            val before = digest(id)
+            val token = store().discard(id, 8_000)
+            boot++
+            val rebooted: ImportDiscardStore.Token = store().recover().singleOrNull()
+                ?: throw AssertionError("an unexpired escrow must stay restorable across reboot")
+            assertEquals(token.key, rebooted.key)
+            assertEquals(id, store().restore(token.key))
             assertEquals(before, digest(id))
         }
     }
