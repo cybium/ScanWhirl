@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2R lane: honest receipts for interrupted backup/restore. EN is the decided wording. -->
+<resources>
+    <string name="v2r_backup_interrupted_title">Backup interrupted</string>
+    <string name="v2r_backup_interrupted_body">Nothing was saved. Your originals are unchanged. Try again.</string>
+    <string name="v2r_restore_interrupted_title">Restore interrupted</string>
+    <string name="v2r_restore_interrupted_body">Some documents may already have been restored. Check your Library before trying again.</string>
+    <string name="v2r_try_again">Try again</string>
+</resources>

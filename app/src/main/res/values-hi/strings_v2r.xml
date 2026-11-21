@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2R lane Hindi parity. Glossary: प्रति, वापस लाना, दस्तावेज़, प्रयास; no loanwords. -->
+<resources>
+    <string name="v2r_backup_interrupted_title">प्रति सहेजना रुक गई</string>
+    <string name="v2r_backup_interrupted_body">कुछ भी सहेजा नहीं गया। मूल फ़ाइलें नहीं बदलीं। फिर प्रयास करें।</string>
+    <string name="v2r_restore_interrupted_title">वापस लाना रुक गया</string>
+    <string name="v2r_restore_interrupted_body">कुछ दस्तावेज़ पहले ही वापस लाए गए हो सकते हैं। फिर प्रयास करने से पहले दस्तावेज़ देखें।</string>
+    <string name="v2r_try_again">फिर प्रयास करें</string>
+</resources>
