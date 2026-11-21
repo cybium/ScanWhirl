@@ -74,6 +74,10 @@ class VaultStore(
         @androidx.annotation.VisibleForTesting
         internal var keyWipeProbe: ((String) -> Unit)? = null
 
+        /** SEC2 LOW: test seam for the Vault-backup import key wipe. */
+        @androidx.annotation.VisibleForTesting
+        internal var importKeyWipeProbe: (() -> Unit)? = null
+
         private fun wipeKey(key: ByteArray, where: String) {
             key.fill(0)
             keyWipeProbe?.invoke(where)
@@ -685,9 +689,11 @@ class VaultStore(
 
         vaultDir.mkdirs()
         val staging = File(vaultDir, "$RESTORE_PREFIX${UUID.randomUUID().toString().take(8)}")
+        var importKey: ByteArray? = null
         try {
             val contents = VaultBackup.extract(src, staging)
             val key = VaultKeyWrap.open(contents.recoveryBlob, VaultCrypto.normalizeRecoveryCode(recoveryCode))
+            importKey = key
 
             val verified = contents.entryIds.map { id ->
                 val dir = containedFile(staging, id)
@@ -727,6 +733,10 @@ class VaultStore(
             VaultSession.open(key)
             listEntries()
         } finally {
+            // SEC2 LOW: the session copied this key; the caller's unwrapped
+            // array is done and must not linger after a failed import either.
+            importKey?.fill(0)
+            importKeyWipeProbe?.invoke()
             staging.deleteRecursively()
         }
     }
