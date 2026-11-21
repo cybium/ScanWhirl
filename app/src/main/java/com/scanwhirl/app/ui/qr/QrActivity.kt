@@ -31,6 +31,7 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.AppLocale
 import com.scanwhirl.app.util.ClipboardPrivacy
+import com.scanwhirl.app.util.SecureView
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -110,7 +111,10 @@ class QrActivity : BaseActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         current?.let { content ->
-            outState.putString(STATE_VALUE, content.raw)
+            // SECURITY_JUDGE 1.3.0: the Bundle is not a secret store. Wi-Fi codes
+            // are rebuilt from the same redactor as history, so a password can
+            // never survive recreation; the user re-shows or rescans it.
+            outState.putString(STATE_VALUE, QrContent.historyValue(content.raw, content.kind))
             outState.putString(STATE_KIND, content.kind.name)
         }
     }
@@ -212,6 +216,8 @@ class QrActivity : BaseActivity() {
                     return
                 }
                 history.add(QrContent.historyValue(content.raw, content.kind), content.kind)
+                // A new result replaces any previously revealed secret on this window.
+                SecureView.clear(window)
                 current = content
                 render()
             }
@@ -383,9 +389,11 @@ class QrActivity : BaseActivity() {
         )
         val valueView = SwStyle.text(this@QrActivity, 15f, SwStyle.color(this@QrActivity, R.color.text_hologram_hi)).apply {
             id = if (field.secret) R.id.qrSecretValue else R.id.qrFieldValue
-            // A password is hidden until the user deliberately reveals it; Copy still works.
+            // A password is hidden until the user deliberately reveals it. It is
+            // never selectable: a system selection menu would offer a plain Copy
+            // that skips ClipboardPrivacy's sensitive flag and timed clearing.
             text = if (field.secret) QrContent.MASK else field.value
-            setTextIsSelectable(true)
+            setTextIsSelectable(!field.secret)
             setLineSpacing(0f, 1.25f)
         }
         addView(
@@ -402,6 +410,9 @@ class QrActivity : BaseActivity() {
                     setOnClickListener {
                         val reveal = text == getString(R.string.qr_show)
                         valueView.text = if (reveal) field.value else QrContent.MASK
+                        // SECURITY_JUDGE 1.3.0: a revealed password is a secret on
+                        // screen; secure the window for exactly as long as it shows.
+                        if (reveal) SecureView.apply(window) else SecureView.clear(window)
                         text = getString(if (reveal) R.string.qr_hide else R.string.qr_show)
                     }
                 },
@@ -466,6 +477,7 @@ class QrActivity : BaseActivity() {
                 historyRow(item, stamp.format(Date(item.at))).apply {
                     id = R.id.qrHistoryRow
                     setOnClickListener {
+                        SecureView.clear(window)
                         current = QrContent.parse(
                             item.value, item.kind, getString(R.string.qr_contact_fallback)
                         )
