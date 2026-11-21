@@ -97,6 +97,85 @@ class Kt1KitFixesTest {
     }
 
     @Test
+    fun `a manual dismiss followed by finish runs onDismiss exactly once`() {
+        val controller = newController()
+        var dismissals = 0
+        val sheet = SwSheet.builder(controller.get()).setTitle("Manual")
+            .setPrimary("OK").build()
+        sheet.setOnDismissListener { dismissals++ }
+        sheet.show()
+        idle()
+        // Off-main dismissal is still pending when finish() lands: the shared boolean used to
+        // let the lifecycle dismissal suppress this manual one, losing its callbacks entirely.
+        val tap = Thread { sheet.dismiss() }
+        tap.start()
+        tap.join()
+        controller.pause().stop().destroy()
+        idle()
+        assertEquals("the manual dismissal's callbacks must run exactly once", 1, dismissals)
+    }
+
+    @Test
+    fun `a main-thread manual dismiss followed by finish still runs onDismiss once`() {
+        val controller = newController()
+        var dismissals = 0
+        val sheet = SwSheet.builder(controller.get()).setTitle("Manual")
+            .setPrimary("OK").build()
+        sheet.setOnDismissListener { dismissals++ }
+        sheet.show()
+        idle()
+        sheet.dismiss()
+        controller.pause().stop().destroy()
+        idle()
+        assertEquals("one manual dismissal, one callback", 1, dismissals)
+    }
+
+    @Test
+    fun `a credential field is wiped when the owner is destroyed without a dismiss callback`() {
+        val controller = newController()
+        val activity = controller.get()
+        val sheet = SwSheet.builder(activity).setTitle("Unlock").setPrimary("Go").build()
+        val field = android.widget.EditText(activity)
+        sheet.bindCredentialSubmit(
+            activity = activity,
+            field = field,
+            submitLabel = R.string.sheet_got_it,
+            read = { field.text.toString() },
+            work = { it },
+            onResult = {}
+        )
+        // Not shown: there is no onDismiss callback at all, so only the owner's ON_DESTROY
+        // observer can wipe the secret. That is the path the old code missed.
+        field.setText("secret123")
+        assertEquals("the secret is in the field before destruction", "secret123", field.text.toString())
+        controller.pause().stop().destroy()
+        idle()
+        assertEquals("the secret must not survive its owner", "", field.text.toString())
+    }
+
+    @Test
+    fun `a credential field is also wiped when a shown sheet is destroyed`() {
+        val controller = newController()
+        val activity = controller.get()
+        val sheet = SwSheet.builder(activity).setTitle("Unlock").setPrimary("Go").build()
+        val field = android.widget.EditText(activity)
+        sheet.bindCredentialSubmit(
+            activity = activity,
+            field = field,
+            submitLabel = R.string.sheet_got_it,
+            read = { field.text.toString() },
+            work = { it },
+            onResult = {}
+        )
+        sheet.show()
+        idle()
+        field.setText("secret123")
+        controller.pause().stop().destroy()
+        idle()
+        assertEquals("the secret must not survive its owner", "", field.text.toString())
+    }
+
+    @Test
     fun `SwProgress is dismissed when its owner activity is destroyed`() {
         val controller = newController()
         val progress = SwProgress.show(controller.get(), "Working")
