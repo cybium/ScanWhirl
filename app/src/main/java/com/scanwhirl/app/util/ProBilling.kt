@@ -1103,6 +1103,9 @@ internal class ConnectQueue {
     private val pending = mutableListOf<(Boolean) -> Unit>()
     private var connecting = false
 
+    /** Bumped each time a new connection attempt starts, so a late setup callback can be ignored. */
+    private var attempt = 0
+
     /** True only for the caller that must start the real connection. */
     fun add(onReady: (Boolean) -> Unit): Boolean = synchronized(this) {
         if (connecting) {
@@ -1110,19 +1113,32 @@ internal class ConnectQueue {
             false
         } else {
             connecting = true
+            attempt++
             pending.clear()
             pending += onReady
             true
         }
     }
 
-    /** Ends this attempt and returns every callback that was waiting on it. */
-    fun finish(): List<(Boolean) -> Unit> = synchronized(this) {
-        if (!connecting) return@synchronized emptyList()
+    /** Id of the current attempt; the caller that starts a connection captures it. */
+    fun currentAttempt(): Int = synchronized(this) { attempt }
+
+    /**
+     * Ends attempt [id] (the current one by default) and returns every callback waiting on it.
+     * A callback from an older attempt is a no-op: it must never settle a newer attempt's
+     * waiters. `close()` and a thrown `startConnection` use [settle] to deliver false.
+     */
+    fun finish(id: Int = attempt): List<(Boolean) -> Unit> = synchronized(this) {
+        if (!connecting || id != attempt) return@synchronized emptyList()
         connecting = false
         val ready = pending.toList()
         pending.clear()
         ready
+    }
+
+    /** Ends an attempt and delivers [ok] to everyone waiting on it. */
+    fun settle(ok: Boolean, id: Int = attempt) {
+        finish(id).forEach { runCatching { it(ok) } }
     }
 }
 
@@ -1274,16 +1290,25 @@ internal class PlayBilling(
         // One connection, one listener. Later callers wait in the queue instead of starting
         // another startConnection and overwriting the first caller's listener (p2pro #5).
         if (!connectQueue.add(onReady)) return
-        c.startConnection(object : BillingClientStateListener {
-            override fun onBillingSetupFinished(result: BillingResult) {
-                val ok = result.responseCode == BillingClient.BillingResponseCode.OK
-                lastError = if (ok) null else result.responseCode
-                connectQueue.finish().forEach { runCatching { it(ok) } }
-            }
+        // Capture this attempt's id: a setup callback from an older attempt must never settle
+        // a newer attempt's waiters (C2 item 6).
+        val attempt = connectQueue.currentAttempt()
+        try {
+            c.startConnection(object : BillingClientStateListener {
+                override fun onBillingSetupFinished(result: BillingResult) {
+                    val ok = result.responseCode == BillingClient.BillingResponseCode.OK
+                    lastError = if (ok) null else result.responseCode
+                    connectQueue.settle(ok, attempt)
+                }
 
-            // With automatic service reconnection the library retries on the next API call.
-            override fun onBillingServiceDisconnected() = Unit
-        })
+                // With automatic service reconnection the library retries on the next API call.
+                override fun onBillingServiceDisconnected() = Unit
+            })
+        } catch (t: Throwable) {
+            // A startConnection that throws cannot leave every queued caller hanging: fail
+            // this attempt with false so price/Buy/Restore/reconcile all see a clean failure.
+            connectQueue.settle(false, attempt)
+        }
     }
 
     override fun price(onPrice: (String?) -> Unit) {
@@ -1390,6 +1415,8 @@ internal class PlayBilling(
         runCatching { client?.endConnection() }
         client = null
         details = null
-        connectQueue.finish()
+        // C2 item 6: every caller still waiting on this connection must hear a failure,
+        // otherwise a price/Buy/Restore queued just before close() hangs forever.
+        connectQueue.settle(false)
     }
 }

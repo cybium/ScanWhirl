@@ -463,6 +463,13 @@ class PdfViewerActivity : BaseActivity() {
                 ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             }
             path != null -> {
+                // C2 item 1: EXTRA_PATH is caller-supplied. Only a file that canonically lives
+                // inside this app's own documents (filesDir) or cache (cacheDir) may be opened.
+                // Canonical containment rejects `../` and symlinks that escape; anything else
+                // gets the honest "could not open" message and the reader finishes.
+                if (!isPathInsideAppDirs(path, filesDir, cacheDir)) {
+                    throw NoPdfException(R.string.pdf_viewer_failed)
+                }
                 val file = File(path)
                 if (!file.exists() || file.length() == 0L) throw NoPdfException(R.string.pdf_missing)
                 title = title.ifBlank { file.nameWithoutExtension }
@@ -900,6 +907,21 @@ class PdfViewerActivity : BaseActivity() {
             }
             previewJobs[key] = job
             return job
+        }
+
+        /**
+         * C2 item 1: true only when [path] canonically resolves inside this app's own
+         * documents (filesDir) or cache (cacheDir). A `../` traversal or a symlink whose
+         * target is outside those roots resolves elsewhere and is refused. A path that
+         * cannot be resolved at all is refused too (fail closed).
+         */
+        @androidx.annotation.VisibleForTesting
+        internal fun isPathInsideAppDirs(path: String, filesDir: File, cacheDir: File): Boolean = try {
+            val file = File(path).canonicalFile
+            val roots = listOf(filesDir.canonicalFile, cacheDir.canonicalFile)
+            roots.any { root -> file.startsWith(root) }
+        } catch (_: Exception) {
+            false
         }
 
         fun intent(context: Context, docId: String, title: String): Intent =
