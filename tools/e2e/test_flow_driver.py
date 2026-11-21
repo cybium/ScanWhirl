@@ -19,6 +19,52 @@ class FlowSelectorsTest(unittest.TestCase):
     def test_description_and_hindi_match(self):
         self.assertTrue(f.match(self.node(**{"content-desc": "कागज़ात"}), desc="कागज़ात"))
 
+    def test_resource_id_matches_bare_and_qualified(self):
+        qualified = self.node(**{"resource-id": "com.scanwhirl.app.test:id/backupNow"})
+        self.assertTrue(f.match(qualified, rid="backupNow"))
+        self.assertTrue(f.match(self.node(**{"resource-id": "backupNow"}), rid="backupNow"))
+        self.assertFalse(f.match(qualified, rid="backupRestore"))
+
+    def test_find_within_parent_scopes_repeated_ids(self):
+        root = ET.Element("hierarchy")
+        card = self.node(clickable="true")
+        more = self.node(**{"resource-id": "com.scanwhirl.app.test:id/swDocMore"})
+        card.append(more)
+        root.append(card)
+        self.assertIs(f.find_within(card, rid="swDocMore"), more)
+        with self.assertRaises(AssertionError):
+            f.find_within(card, rid="qaDelete")
+
+    def test_clickable_ancestor_returns_none_without_clickable(self):
+        root = ET.Element("hierarchy")
+        label = self.node()
+        root.append(label)
+        self.assertIsNone(f.clickable_ancestor(root, label))
+
+    def test_swipe_reveal_below_uses_live_bounds(self):
+        node = self.node(bounds="[100,200][500,700]")
+        with patch.object(f, "adb") as adb, patch.object(f.time, "sleep"):
+            f.swipe_reveal_below(node)
+            # x centre 300; span 500 => start 700-62=638, end 200+62=262 (finger up).
+            adb.assert_called_once_with("shell", "input", "swipe", 300, 638, 300, 262, 800)
+
+    def test_long_press_node_holds_at_clickable_ancestor(self):
+        root = ET.Element("hierarchy")
+        parent = self.node(clickable="true", bounds="[100,200][500,400]")
+        label = self.node(text="e2e-three-pages")
+        root.append(parent)
+        parent.append(label)
+        with patch.object(f, "adb") as adb, patch.object(f.time, "sleep"):
+            f.long_press_node(root, label)
+            adb.assert_called_once_with("shell", "input", "swipe", 300, 300, 300, 300, 900)
+
+    def test_swipe_reveal_right_uses_live_bounds(self):
+        node = self.node(bounds="[100,200][500,400]")
+        with patch.object(f, "adb") as adb, patch.object(f.time, "sleep"):
+            f.swipe_reveal_right(node, y_fraction=0.75)
+            # span 400 => start 500-66=434, end 100+66=166; y=200+150=350.
+            adb.assert_called_once_with("shell", "input", "swipe", 434, 350, 166, 350, 600)
+
     def test_missing_and_zero_area_controls_fail_closed(self):
         root = ET.Element("hierarchy")
         root.append(self.node(text="Compress", bounds="[0,0][0,0]"))
