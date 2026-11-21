@@ -98,6 +98,9 @@ class OcrStore(private val docsDir: File) {
         internal fun writeCountForTests(): Int = writeCount.get()
         internal fun resetWriteCountForTests() { writeCount.set(0) }
 
+        /** SEC2 N2: called under the OCR lock after validation, before publishing. */
+        @Volatile internal var recognizedCommitProbe: (() -> Unit)? = null
+
         // Never acquire the repository PDF lock while holding this lock.
         internal fun <T> locked(action: () -> T): T = lock.withLock(action)
     }
@@ -416,7 +419,11 @@ class OcrStore(private val docsDir: File) {
         }
 
         if (stored > 0) {
-            dir.mkdirs()
+            recognizedCommitProbe?.invoke()
+            // SEC2 N2: a Vault move (or any delete) can remove this directory
+            // between validation and publish. Never mkdirs a removed document:
+            // that would leave plaintext OCR under a fresh ordinary library id.
+            if (!dir.isDirectory) return@withLock BatchResult(0, already, stale)
             writeGeometry(id, geo, before, previous)
             writeTexts(id, before)
         }

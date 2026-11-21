@@ -1437,16 +1437,24 @@ class ScanRepository(private val context: Context) {
      * private purge area, never into the ordinary (listable, restorable) Trash.
      * Returns true only when the whole folder moved out of the Library.
      */
-    fun moveOriginalToVaultPendingPurge(id: String): Boolean = synchronized(TRASH_LOCK) {
-        val src = File(docsDir, id)
-        if (!src.isDirectory) return@synchronized false
-        val dest = File(vaultPendingPurgeDir, id)
-        if (dest.exists()) return@synchronized false
-        if (!vaultPendingMove(src, dest)) return@synchronized false
-        Durable.syncDir(docsDir)
-        dest.parentFile?.let { Durable.syncDir(it) }
-        true
-    }
+    fun moveOriginalToVaultPendingPurge(id: String): Boolean =
+        // SEC2 N2: restore the established lock order used by moveToTrash.
+        // PDF_LOCK -> OcrStore.lock -> TRASH_LOCK excludes an OCR commit from
+        // validating a page and then writing plaintext into a moved directory.
+        synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                synchronized(TRASH_LOCK) {
+                    val src = File(docsDir, id)
+                    if (!src.isDirectory) return@synchronized false
+                    val dest = File(vaultPendingPurgeDir, id)
+                    if (dest.exists()) return@synchronized false
+                    if (!vaultPendingMove(src, dest)) return@synchronized false
+                    Durable.syncDir(docsDir)
+                    dest.parentFile?.let { Durable.syncDir(it) }
+                    true
+                }
+            }
+        }
 
     /** True while a plaintext original is still waiting to be purged for [id]. */
     fun vaultPendingPurgeExists(id: String): Boolean = File(vaultPendingPurgeDir, id).exists()
