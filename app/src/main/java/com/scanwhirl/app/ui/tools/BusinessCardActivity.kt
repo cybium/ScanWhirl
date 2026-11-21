@@ -53,7 +53,9 @@ import java.io.File
  * it with the app's existing on-device OCR, parse it with the pure [ContactParser], then show an
  * editable kit form. Actions: Save to contacts (`ACTION_INSERT`, no permission), Share as vCard
  * (a `.vcf` through FileProvider) and Save card image (a normal document through the publish
- * path). Nothing is written until one of those actions is used; leaving creates nothing.
+ * path). A short-lived cache copy keeps the card and the edited fields through rotation and is
+ * deleted when the screen really closes; no document is written until one of those actions is
+ * used, and leaving without an action creates nothing in the library.
  */
 class BusinessCardActivity : BaseActivity() {
 
@@ -128,7 +130,7 @@ class BusinessCardActivity : BaseActivity() {
         progress.isVisible = true
         lifecycleScope.launch {
             val bytes = withContext(Dispatchers.IO) {
-                runCatching { File(path).takeIf { it.isFile }?.readBytes() }.getOrNull()
+                runCatching { File(path).takeIf { it.isFile && it.length() > 0L }?.readBytes() }.getOrNull()
             }
             progress.isVisible = false
             if (bytes == null) {
@@ -150,7 +152,15 @@ class BusinessCardActivity : BaseActivity() {
 
     private fun writeImageCache(bytes: ByteArray): String? = runCatching {
         val dir = File(cacheDir, "t1_business_card").apply { mkdirs() }
-        File(dir, "card.jpg").apply { writeBytes(bytes) }.absolutePath
+        val final = File(dir, "card.jpg")
+        val tmp = File(dir, "card.jpg.tmp")
+        tmp.writeBytes(bytes)
+        if (final.exists()) final.delete()
+        if (!tmp.renameTo(final)) {
+            tmp.delete()
+            return@runCatching null
+        }
+        final.absolutePath
     }.getOrNull()
 
     // ---- screen -----------------------------------------------------------
@@ -340,8 +350,12 @@ class BusinessCardActivity : BaseActivity() {
             try {
                 val text = withContext(Dispatchers.IO) {
                     // T1: cache the captured card off the main thread so rotation can restore it
-                    // without asking the person to capture (and re-read) it again.
-                    imagePath = writeImageCache(bytes)
+                    // without asking the person to capture (and re-read) it again. The path is
+                    // published inside IO, immediately after the complete tmp+rename write.
+                    writeImageCache(bytes)?.let { path ->
+                        imagePath = path
+                        cacheWriteGate?.invoke()
+                    }
                     recognizeForTest?.invoke(bytes) ?: OcrEngine.recognizeBytes(bytes)
                 }
                 progress.isVisible = false
@@ -563,9 +577,21 @@ class BusinessCardActivity : BaseActivity() {
         errorView.isVisible = true
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // T1: rotation keeps the cache copy; a real exit removes the plaintext card photo.
+        if (isFinishing && !isChangingConfigurations) {
+            runCatching { File(cacheDir, "t1_business_card").deleteRecursively() }
+        }
+    }
+
     companion object {
         /** Test seam: replaces the on-device OCR with a fixed text in UI tests. */
         internal var recognizeForTest: ((ByteArray) -> String)? = null
+
+        /** Tests: held inside IO right after the cache path is published. */
+        @Volatile
+        internal var cacheWriteGate: (() -> Unit)? = null
 
         private const val KEY_IMAGE_PATH = "t1_bc_image_path"
         private const val KEY_HAS_FORM = "t1_bc_has_form"

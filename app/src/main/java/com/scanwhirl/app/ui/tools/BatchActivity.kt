@@ -101,6 +101,9 @@ class BatchActivity : BaseActivity() {
         if (savedInstanceState != null) {
             savedInstanceState.getStringArrayList(KEY_SELECTED)?.let { selected.addAll(it) }
             query = savedInstanceState.getString(KEY_QUERY).orEmpty()
+            // T1: without the requested set a run resumed after process death reports zero
+            // "not processed" documents in its cancellation summary.
+            savedInstanceState.getStringArrayList(KEY_REQUESTED)?.let { requestedIds = it }
         }
         // Batch tools is a Pro tool. The registry and the launcher gate the normal path; a direct
         // internal intent must land on the same shell offer (with real billing), never a local Pro
@@ -135,6 +138,7 @@ class BatchActivity : BaseActivity() {
         super.onSaveInstanceState(outState)
         outState.putStringArrayList(KEY_SELECTED, ArrayList(selected))
         outState.putString(KEY_QUERY, query)
+        outState.putStringArrayList(KEY_REQUESTED, ArrayList(requestedIds))
     }
 
     // ---- chooser ----------------------------------------------------------
@@ -779,6 +783,7 @@ class BatchActivity : BaseActivity() {
         const val EXTRA_DOC_IDS = "doc_ids"
         private const val KEY_SELECTED = "t1_batch_selected"
         private const val KEY_QUERY = "t1_batch_query"
+        private const val KEY_REQUESTED = "t1_batch_requested"
 
         /** Requested ids that produced no result (the run was cancelled before reaching them). */
         internal fun notProcessedCount(

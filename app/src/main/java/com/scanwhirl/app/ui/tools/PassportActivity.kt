@@ -195,11 +195,18 @@ class PassportActivity : BaseActivity() {
                 val upright = raw?.let { bytes ->
                     runCatching { ImageTools.normalizeGalleryPhoto(bytes) }.getOrDefault(bytes)
                 }
-                val path = upright?.let { writeImageCache(it) }
+                upright?.let { bytes ->
+                    // T1: publish the path from inside IO, right after the complete tmp+rename
+                    // write. A rotation between the write and the main continuation must not lose it.
+                    writeImageCache(bytes)?.let { path ->
+                        imagePath = path
+                        cacheWriteGate?.invoke()
+                    }
+                }
                 val decoded = upright?.let { bytes ->
                     runCatching { ImageTools.decodeSampled(bytes, 2400) }.getOrNull()
                 }
-                Triple(decoded, path, upright == null)
+                decoded to (upright == null)
             }
             progress.isVisible = false
             val decoded = loaded.first
@@ -209,7 +216,6 @@ class PassportActivity : BaseActivity() {
                 showPickPrompt()
                 return@launch
             }
-            imagePath = loaded.second
             bitmap?.takeIf { !it.isRecycled }?.recycle()
             bitmap = decoded
             cropView.setImage(decoded)
@@ -231,7 +237,8 @@ class PassportActivity : BaseActivity() {
         progress.isVisible = true
         lifecycleScope.launch {
             val decoded = withContext(Dispatchers.IO) {
-                runCatching { File(path).takeIf { it.isFile }?.readBytes() }
+                // A partial .tmp can never sit at the final path; only a complete rename can.
+                runCatching { File(path).takeIf { it.isFile && it.length() > 0L }?.readBytes() }
                     .getOrNull()
                     ?.let { runCatching { ImageTools.decodeSampled(it, 2400) }.getOrNull() }
             }
@@ -259,7 +266,15 @@ class PassportActivity : BaseActivity() {
 
     private fun writeImageCache(bytes: ByteArray): String? = runCatching {
         val dir = File(cacheDir, "t1_passport").apply { mkdirs() }
-        File(dir, "photo.jpg").apply { writeBytes(bytes) }.absolutePath
+        val final = File(dir, "photo.jpg")
+        val tmp = File(dir, "photo.jpg.tmp")
+        tmp.writeBytes(bytes)
+        if (final.exists()) final.delete()
+        if (!tmp.renameTo(final)) {
+            tmp.delete()
+            return@runCatching null
+        }
+        final.absolutePath
     }.getOrNull()
 
     private fun apply() {
@@ -305,9 +320,18 @@ class PassportActivity : BaseActivity() {
         cropView.clearImage()
         bitmap?.takeIf { !it.isRecycled }?.recycle()
         bitmap = null
+        // T1: the plaintext cache is only for rotation. A real exit removes it; a configuration
+        // change keeps it so the recreated screen can still restore the photo.
+        if (isFinishing && !isChangingConfigurations) {
+            runCatching { File(cacheDir, "t1_passport").deleteRecursively() }
+        }
     }
 
     companion object {
+        /** Tests: held inside IO right after the cache path is published. */
+        @Volatile
+        internal var cacheWriteGate: (() -> Unit)? = null
+
         private const val KEY_IMAGE_PATH = "t1_passport_image_path"
         private const val KEY_CROP_RECT = "t1_passport_crop_rect"
 

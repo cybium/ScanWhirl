@@ -38,7 +38,9 @@ import com.scanwhirl.app.util.PhotoAutoCrop
 import com.scanwhirl.app.util.Prefs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -74,6 +76,20 @@ class IdCardActivity : BaseActivity() {
     private var back: ByteArray? = null
     private var pendingSide = Side.FRONT
     private var creating = false
+
+    /**
+     * T1: the cache copies are written once at capture time on IO. Saved state only carries these
+     * path strings, so onSaveInstanceState never pushes JPEG bytes through the Bundle or writes
+     * them on the main thread. Each path is published only after a complete tmp+rename write.
+     */
+    @Volatile
+    private var frontPath: String? = null
+    @Volatile
+    private var backPath: String? = null
+    @Volatile
+    private var cropPath: String? = null
+    private var frontWrite: Job? = null
+    private var backWrite: Job? = null
 
     /**
      * True while our own code moves the flow on to the next step (a sheet button, "Front only").
@@ -220,40 +236,39 @@ class IdCardActivity : BaseActivity() {
      * JPEG through the saved-state Bundle (X2, D5).
      */
     private fun keepCapturedState(outState: Bundle) {
-        runCatching {
-            val dir = capturedStateDir().apply { mkdirs() }
-            front?.let { File(dir, FRONT_FILE).writeBytes(it) }
-                ?: File(dir, FRONT_FILE).delete()
-            back?.let { File(dir, BACK_FILE).writeBytes(it) }
-                ?: File(dir, BACK_FILE).delete()
-            val pending = cropBytes
-            if (pending != null) {
-                File(dir, CROP_FILE).writeBytes(pending)
-                outState.putBoolean(KEY_CROP_PENDING, true)
-                outState.putInt(KEY_CROP_SIDE, cropSide.ordinal)
-                outState.putBoolean(KEY_CROP_DETECTED, cropDetected)
-                // D5(a): the person's adjusted frame, normalised so any preview size restores it.
-                // R2-1: during the async reopen there is no live CropView/bitmap yet, so keep the
-                // rectangle that was restored from the previous state instead of saving nothing.
-                val rect = cropView?.getCropRect()
-                val shown = cropBitmap
-                val savedRect = if (rect != null && shown != null && shown.width > 0 && shown.height > 0) {
-                    floatArrayOf(
-                        rect.left / shown.width, rect.top / shown.height,
-                        rect.right / shown.width, rect.bottom / shown.height
-                    )
-                } else {
-                    cropSavedRect
-                }
-                if (savedRect != null) outState.putFloatArray(KEY_CROP_RECT, savedRect)
+        // The writes already ran on IO at capture time. Join them here only as a safety barrier so
+        // a rotation in that tiny gap still finds a complete file; nothing is written on main.
+        runBlocking {
+            frontWrite?.join()
+            backWrite?.join()
+        }
+        if (front != null && frontPath != null) outState.putString(KEY_FRONT_PATH, frontPath)
+        if (back != null && backPath != null) outState.putString(KEY_BACK_PATH, backPath)
+        if (cropBytes != null) {
+            outState.putBoolean(KEY_CROP_PENDING, true)
+            cropPath?.let { outState.putString(KEY_CROP_PATH, it) }
+            outState.putInt(KEY_CROP_SIDE, cropSide.ordinal)
+            outState.putBoolean(KEY_CROP_DETECTED, cropDetected)
+            // D5(a): the person's adjusted frame, normalised so any preview size restores it.
+            // R2-1: during the async reopen there is no live CropView/bitmap yet, so keep the
+            // rectangle that was restored from the previous state instead of saving nothing.
+            val rect = cropView?.getCropRect()
+            val shown = cropBitmap
+            val savedRect = if (rect != null && shown != null && shown.width > 0 && shown.height > 0) {
+                floatArrayOf(
+                    rect.left / shown.width, rect.top / shown.height,
+                    rect.right / shown.width, rect.bottom / shown.height
+                )
             } else {
-                File(dir, CROP_FILE).delete()
-                // D5(b): preparation is still running, so keep the pick itself, not its result.
-                val uri = cropSourceUri
-                if (cropPreparing && uri != null) {
-                    outState.putString(KEY_CROP_SOURCE_URI, uri.toString())
-                    outState.putInt(KEY_CROP_SIDE, cropSide.ordinal)
-                }
+                cropSavedRect
+            }
+            if (savedRect != null) outState.putFloatArray(KEY_CROP_RECT, savedRect)
+        } else {
+            // D5(b): preparation is still running, so keep the pick itself, not its result.
+            val uri = cropSourceUri
+            if (cropPreparing && uri != null) {
+                outState.putString(KEY_CROP_SOURCE_URI, uri.toString())
+                outState.putInt(KEY_CROP_SIDE, cropSide.ordinal)
             }
         }
     }
@@ -263,10 +278,22 @@ class IdCardActivity : BaseActivity() {
         pendingSide = if (state.getInt(KEY_PENDING_SIDE, 0) == Side.BACK.ordinal) Side.BACK else Side.FRONT
         runCatching {
             val dir = capturedStateDir()
-            front = File(dir, FRONT_FILE).takeIf { it.isFile }?.readBytes()
-            back = File(dir, BACK_FILE).takeIf { it.isFile }?.readBytes()
+            fun pathFor(key: String, fallback: String): String? =
+                state.getString(key) ?: File(dir, fallback).takeIf { it.isFile }?.absolutePath
+            fun bytesAt(path: String?): ByteArray? = path?.let {
+                File(it).takeIf { f -> f.isFile && f.length() > 0L }?.readBytes()
+            }
+
+            val fp = pathFor(KEY_FRONT_PATH, FRONT_FILE)
+            front = bytesAt(fp)
+            frontPath = fp
+            val bp = pathFor(KEY_BACK_PATH, BACK_FILE)
+            back = bytesAt(bp)
+            backPath = bp
             if (state.getBoolean(KEY_CROP_PENDING, false)) {
-                cropBytes = File(dir, CROP_FILE).takeIf { it.isFile }?.readBytes()
+                val cp = pathFor(KEY_CROP_PATH, CROP_FILE)
+                cropBytes = bytesAt(cp)
+                cropPath = cp
                 if (cropBytes != null) {
                     cropSide = if (state.getInt(KEY_CROP_SIDE, 0) == Side.BACK.ordinal) Side.BACK else Side.FRONT
                     cropDetected = state.getBoolean(KEY_CROP_DETECTED, true)
@@ -285,9 +312,26 @@ class IdCardActivity : BaseActivity() {
 
     private fun clearCapturedState() {
         runCatching { capturedStateDir().deleteRecursively() }
+        frontPath = null
+        backPath = null
+        cropPath = null
     }
 
     private fun capturedStateDir(): File = File(cacheDir, STATE_DIR)
+
+    /** T1: capture-time write on IO; tmp+rename so a half-written JPEG is never restored. */
+    private fun writeCache(bytes: ByteArray, fileName: String): String? = runCatching {
+        val dir = capturedStateDir().apply { mkdirs() }
+        val final = File(dir, fileName)
+        val tmp = File(dir, "$fileName.tmp")
+        tmp.writeBytes(bytes)
+        if (final.exists()) final.delete()
+        if (!tmp.renameTo(final)) {
+            tmp.delete()
+            return@runCatching null
+        }
+        final.absolutePath
+    }.getOrNull()
 
     // ---- screen -----------------------------------------------------------
 
@@ -530,8 +574,11 @@ class IdCardActivity : BaseActivity() {
             val prepared = withContext(Dispatchers.IO) {
                 cropPrepareGate?.invoke(side)
                 val oriented = runCatching { ImageTools.normalizeGalleryPhoto(bytes) }.getOrDefault(bytes)
-                runCatching { PhotoAutoCrop.crop(oriented) }
+                val result = runCatching { PhotoAutoCrop.crop(oriented) }
                     .getOrDefault(PhotoAutoCrop.Result(oriented, false))
+                // T1: the pending crop photo is cached here on IO, not later on main in state save.
+                cropPath = writeCache(result.bytes, CROP_FILE)
+                result
             }
             if (generation != cropGeneration) return@launch
             val bitmap = withContext(Dispatchers.IO) {
@@ -842,6 +889,7 @@ class IdCardActivity : BaseActivity() {
     /** The prepared photo only lives for the crop screen; the cache copy goes with it. */
     private fun clearCropState() {
         runCatching { File(capturedStateDir(), CROP_FILE).delete() }
+        cropPath = null
     }
 
     private fun showCaptureSheet(side: Side, message: Int? = null) {
@@ -859,11 +907,19 @@ class IdCardActivity : BaseActivity() {
         when (side) {
             Side.FRONT -> {
                 front = bytes
+                // T1: the cache copy is written once, here, on IO; onSaveInstanceState only
+                // stores the resulting path string.
+                frontWrite = lifecycleScope.launch(Dispatchers.IO) {
+                    frontPath = writeCache(bytes, FRONT_FILE)
+                }
                 render()
                 showBackSheet()
             }
             Side.BACK -> {
                 back = bytes
+                backWrite = lifecycleScope.launch(Dispatchers.IO) {
+                    backPath = writeCache(bytes, BACK_FILE)
+                }
                 render()
                 showLayoutSheet()
             }
@@ -1123,6 +1179,10 @@ class IdCardActivity : BaseActivity() {
         private const val KEY_CROP_DETECTED = "id_card_crop_detected"
         private const val KEY_CROP_RECT = "id_card_crop_rect"
         private const val KEY_CROP_SOURCE_URI = "id_card_crop_source_uri"
+        // T1: paths only. The JPEG bytes themselves are written at capture time on IO.
+        private const val KEY_FRONT_PATH = "t1_id_front_path"
+        private const val KEY_BACK_PATH = "t1_id_back_path"
+        private const val KEY_CROP_PATH = "t1_id_crop_path"
 
         /** The crop screen never needs more than a phone-width copy of the card. */
         private const val CROP_PREVIEW_DIM = 2400
