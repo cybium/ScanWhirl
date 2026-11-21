@@ -43,6 +43,9 @@ class LockToolsActivity : BaseActivity(), HomeHost {
     }
     private var mode = MODE_PROTECT
 
+    /** KT1: true while the chooser is the current step, so recreation can bring it back. */
+    private var awaitingPick = true
+
     private val pickPdf = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri ?: return@registerForActivityResult
         flow.unlockDevicePdfFile(uri) { finish() }
@@ -51,8 +54,16 @@ class LockToolsActivity : BaseActivity(), HomeHost {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_PROTECT
+        awaitingPick = savedInstanceState?.getBoolean(KEY_AWAITING_PICK, true) ?: true
         setContentView(buildRoot())
-        if (savedInstanceState == null) showChooser()
+        // The chooser is a dialog, so Android does not restore it. Re-show it after a rotation
+        // only when the user has not moved on to a document / another route yet.
+        if (awaitingPick) showChooser()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_AWAITING_PICK, awaitingPick)
     }
 
     private fun buildRoot(): LinearLayout = LinearLayout(this).apply {
@@ -94,6 +105,7 @@ class LockToolsActivity : BaseActivity(), HomeHost {
     }
 
     private fun showChooser() {
+        awaitingPick = true
         val all = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
         if (mode == MODE_PROTECT) {
             val protectable = all.filter { !it.isLocked && !it.isVaulted }
@@ -104,8 +116,8 @@ class LockToolsActivity : BaseActivity(), HomeHost {
                 title = getString(R.string.lock_choose_document),
                 docs = protectable,
                 noEligibleTitle = R.string.r3fit_no_protectable.takeIf { all.isNotEmpty() && protectable.isEmpty() },
-                onEmptyScan = { FlowUtil.openHome(this) },
-                onPick = { doc -> flow.protectDocument(doc) },
+                onEmptyScan = { moveOn { FlowUtil.openHome(this) } },
+                onPick = { doc -> moveOn { flow.protectDocument(doc) } },
                 onDismiss = { finish() }
             )
         } else {
@@ -117,18 +129,24 @@ class LockToolsActivity : BaseActivity(), HomeHost {
                 noEligibleTitle = R.string.r3fit_no_locked.takeIf { all.isNotEmpty() && locked.isEmpty() },
                 extraAction = if (all.isEmpty()) null else {
                     DocumentPicker.ExtraAction(getString(R.string.lock_from_pdf)) {
-                        pickPdf.launch("application/pdf")
+                        moveOn { pickPdf.launch("application/pdf") }
                     }
                 },
-                onEmptyScan = { FlowUtil.openHome(this) },
-                onEmptyImport = { pickPdf.launch("application/pdf") },
-                onPick = { doc -> flow.unlockDocument(doc) },
+                onEmptyScan = { moveOn { FlowUtil.openHome(this) } },
+                onEmptyImport = { moveOn { pickPdf.launch("application/pdf") } },
+                onPick = { doc -> moveOn { flow.unlockDocument(doc) } },
                 onDismiss = { finish() }
             )
         }
     }
 
     private fun dp(value: Int): Int = SwStyle.dp(this, value.toFloat())
+
+    /** The chooser is done: a recreation must resume the next step, not re-open it. */
+    private fun moveOn(action: () -> Unit) {
+        awaitingPick = false
+        action()
+    }
 
     // ---- HomeHost ---------------------------------------------------------
 
@@ -145,6 +163,7 @@ class LockToolsActivity : BaseActivity(), HomeHost {
     }
 
     companion object {
+        private const val KEY_AWAITING_PICK = "kt1_awaiting_pick"
         const val EXTRA_MODE = "lock_mode"
         const val MODE_PROTECT = "protect"
         const val MODE_UNLOCK = "unlock"

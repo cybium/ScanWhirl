@@ -60,10 +60,14 @@ class R3PickerEmptyTest(private val language: String) {
                 else "None of your documents are password-protected",
                 title(dialog)
             )
-            assertFalse(visible(dialog, R.id.docPickerEmptyScan))
-            assertFalse(visible(dialog, R.id.docPickerEmptyImport))
+            // KT1: a non-empty library with no eligible documents is no longer a dead end - the
+            // caller's real Scan/Import routes stay available, with an honest explanation.
+            assertTrue(visible(dialog, R.id.docPickerEmptyScan))
+            assertTrue(visible(dialog, R.id.docPickerEmptyImport))
             assertTrue(visible(dialog, R.id.docPickerExtra))
             assertFalse(visible(dialog, R.id.docPickerClear))
+            assertTrue("the no-eligible state explains itself",
+                dialog.findViewById<TextView>(R.id.docPickerEmptyBody)?.text.toString().isNotBlank())
         }
     }
 
@@ -76,8 +80,11 @@ class R3PickerEmptyTest(private val language: String) {
                 else "All your documents are already password-protected",
                 title(dialog)
             )
-            assertFalse(visible(dialog, R.id.docPickerEmptyScan))
+            // KT1: the honest route forward stays available when nothing is eligible.
+            assertTrue(visible(dialog, R.id.docPickerEmptyScan))
             assertFalse(visible(dialog, R.id.docPickerClear))
+            assertTrue("the no-eligible state explains itself",
+                dialog.findViewById<TextView>(R.id.docPickerEmptyBody)?.text.toString().isNotBlank())
         }
     }
 
@@ -119,7 +126,8 @@ class R3PickerEmptyTest(private val language: String) {
                 HindiTextLauncher.open(activity, repo)
                 withLatestPicker { dialog ->
                     assertEquals(activity.getString(R.string.r3fit_no_hindi_text_source), title(dialog))
-                    assertFalse(visible(dialog, R.id.docPickerEmptyScan))
+                    // KT1: FlowUtil's real Scan route remains available when nothing is eligible.
+                    assertTrue(visible(dialog, R.id.docPickerEmptyScan))
                 }
             }
         }
@@ -136,7 +144,8 @@ class R3PickerEmptyTest(private val language: String) {
                 options.getChildAt(2).performClick()
                 withLatestPicker { dialog ->
                     assertEquals(activity.getString(R.string.r3fit_no_insert_source), title(dialog))
-                    assertFalse(visible(dialog, R.id.docPickerEmptyScan))
+                    // KT1: FlowUtil's real Scan route remains available when nothing is eligible.
+                    assertTrue(visible(dialog, R.id.docPickerEmptyScan))
                 }
             }
         }

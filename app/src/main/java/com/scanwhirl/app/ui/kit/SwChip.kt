@@ -11,7 +11,7 @@ import android.widget.TextView
 import com.scanwhirl.app.R
 
 /**
- * v2 UI: 08_text_ocr — the kit chip: 38dp tall, 12dp radius, glass fill with a
+ * v2 UI: 08_text_ocr — the kit chip: a 48dp touch target painted 38dp tall, 12dp radius, glass fill with a
  * cyan hairline, an 18dp cyan glyph and a 13sp bold label. An optional
  * trailing view (the PRO pill) rides on the right.
  */
@@ -26,15 +26,19 @@ class SwChip(context: Context) : LinearLayout(context) {
         gravity = Gravity.CENTER_VERTICAL
         isClickable = true
         isFocusable = true
-        background = SwStyle.rounded(
+        val face = SwStyle.rounded(
             context,
             SwStyle.color(context, R.color.glass_surface_raised),
             radiusDp = 12f,
             stroke = SwStyle.color(context, R.color.sw_cyan_hair)
         )
+        // KT1: the touch target is 48dp, but the painted face keeps its 38dp look. The inset
+        // draws the same glass pill 5dp short of each edge; existing fixChip callers stay correct.
+        val inset = (SwStyle.dp(context, 48f) - SwStyle.dp(context, 38f)) / 2
+        background = android.graphics.drawable.InsetDrawable(face, 0, inset, 0, inset)
         val padH = SwStyle.dp(context, 10f)
         setPadding(padH, 0, padH, 0)
-        minimumHeight = SwStyle.dp(context, 38f)
+        minimumHeight = SwStyle.dp(context, 48f)
         SwMotion.press(this)
 
         iconView = ImageView(context).apply {

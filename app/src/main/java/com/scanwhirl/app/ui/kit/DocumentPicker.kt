@@ -60,12 +60,14 @@ class DocumentPicker private constructor(
     val searchView: EditText
 
     private val list: LinearLayout
+    private val body: FrameLayout
     private val emptyHost: LinearLayout
     private val emptyTitle: TextView
     private val emptyBody: TextView
     private val emptyScan: TextView
     private val emptyImport: TextView
     private val clearSearch: TextView
+    private val dismissActions = DismissActions(dialog)
 
     /** The document id chosen last; null until a row is tapped and after a cancel. */
     var selectedDocumentId: String? = null
@@ -165,7 +167,7 @@ class DocumentPicker private constructor(
 
         // A short, fixed window keeps the sheet on screen at 200% and lets a long library scroll.
         val bodyH = (context.resources.displayMetrics.heightPixels * 0.55f).toInt()
-        val body = FrameLayout(context)
+        body = FrameLayout(context)
         root.addView(
             body,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, bodyH)
@@ -252,9 +254,8 @@ class DocumentPicker private constructor(
             dialog.behavior.skipCollapsed = true
             dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
-        dialog.setOnDismissListener {
-            if (!picked) onDismiss?.invoke()
-        }
+        dismissActions.add { if (!picked) onDismiss?.invoke() }
+        context.attachDialogLifecycle(dialog, dismissActions)
         render()
     }
 
@@ -292,6 +293,7 @@ class DocumentPicker private constructor(
 
         val noMatch = docs.isNotEmpty() && filtered.isEmpty()
         val showEmpty = filtered.isEmpty()
+        val noEligible = docs.isEmpty() && noEligibleTitle != null
         val emptyLibrary = docs.isEmpty() && noEligibleTitle == null
         (view.findViewById<View>(R.id.docPickerScroll))?.isVisible = !showEmpty
         emptyHost.isVisible = showEmpty
@@ -305,15 +307,17 @@ class DocumentPicker private constructor(
             )
             emptyBody.text = when {
                 noMatch -> view.context.getString(R.string.w6_picker_no_match_body)
+                noEligible -> view.context.getString(R.string.kt1_no_eligible_body)
                 emptyLibrary -> view.context.getString(R.string.w6_picker_empty_body)
                 else -> null
             }
-            emptyBody.isVisible = noMatch || emptyLibrary
-            // A search with no match offers only Clear; a truly empty library offers the
-            // host's real Scan/Import routes (never a fake one).
+            emptyBody.isVisible = noMatch || noEligible || emptyLibrary
+            // A search with no match offers only Clear. An empty library AND a non-empty library
+            // with no eligible documents both offer the host's real Scan/Import routes: the
+            // latter was a dead end (an honest title with no way forward).
             clearSearch.isVisible = noMatch
-            emptyScan.isVisible = emptyLibrary && hasScanAction
-            emptyImport.isVisible = emptyLibrary && hasImportAction
+            emptyScan.isVisible = (emptyLibrary || noEligible) && hasScanAction
+            emptyImport.isVisible = (emptyLibrary || noEligible) && hasImportAction
         }
     }
 
@@ -344,9 +348,10 @@ class DocumentPicker private constructor(
                 SwStyle.card(context, 16f)
             }
             setOnClickListener {
+                if (picked) return@setOnClickListener
+                picked = true
                 selectedDocumentId = doc.id
                 paintSelection()
-                picked = true
                 dialog.dismiss()
                 onPick(doc)
             }
@@ -543,11 +548,13 @@ class DocumentPicker private constructor(
             picker.emptyScan.isVisible = onEmptyScan != null
             picker.emptyImport.isVisible = onEmptyImport != null
             picker.emptyScan.setOnClickListener {
+                if (picker.picked) return@setOnClickListener
                 picker.picked = true
                 dialog.dismiss()
                 onEmptyScan?.invoke()
             }
             picker.emptyImport.setOnClickListener {
+                if (picker.picked) return@setOnClickListener
                 picker.picked = true
                 dialog.dismiss()
                 onEmptyImport?.invoke()
@@ -558,14 +565,27 @@ class DocumentPicker private constructor(
                     text = extraAction.label
                     gravity = Gravity.CENTER
                     setOnClickListener {
+                        if (picker.picked) return@setOnClickListener
                         picker.picked = true
                         dialog.dismiss()
                         extraAction.onClick()
                     }
                 }
-                (picker.view as LinearLayout).addView(extra, LinearLayout.LayoutParams(
+                val root = picker.view as LinearLayout
+                root.addView(extra, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { topMargin = SwStyle.dp(activity, 8f) })
+                // KT1: pin the extra action. Only the document body shrinks/scrolls, so at 200%
+                // font (or with a long title) "From a PDF file" can never be pushed off-screen.
+                // Keep the dialog's own LayoutParams type (CoordinatorLayout) and change only
+                // the height: replacing it with a LinearLayout param crashes the dialog parent.
+                root.layoutParams?.let { lp ->
+                    lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                    root.layoutParams = lp
+                }
+                picker.body.layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+                ).apply { topMargin = SwStyle.dp(activity, 10f) }
             }
             picker.render()
             androidx.core.view.ViewCompat.setAccessibilityPaneTitle(
