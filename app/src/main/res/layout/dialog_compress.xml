@@ -2,8 +2,8 @@
 <!--
   UI-B3 (#7) + W2: the Compress setup sheet. Two explicit aims ("Choose quality" / "Aim for a
   file size"), the existing quality estimates, and the exact-size field with a hint that stays
-  put and an inline error. The whole content scrolls so the field and the Compress button stay
-  reachable at 200% type with the keyboard open.
+  put and an inline error. Title and options scroll above SwSheet's pinned, wrapping
+  Compress/Cancel footer, including at 200% type with the keyboard open.
 
   W2 (lane 2): the sheet opens instantly and names the job before any estimate runs — the exact
   source name, its page count and size, and its real first page only for an ordinary document

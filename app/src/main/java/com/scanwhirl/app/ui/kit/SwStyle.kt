@@ -98,15 +98,17 @@ object SwStyle {
     fun tracking(context: Context, em: Float): Float =
         if (em == 0f || AppLanguage.showingHindi(context)) 0f else em
 
-    /** 40dp round icon tap target with a 24dp tinted glyph. */
+    /** 48dp round icon tap target with the same 24dp tinted glyph. */
     fun iconButton(context: Context, iconRes: Int, tint: Int): android.widget.ImageButton =
         android.widget.ImageButton(context).apply {
             setImageResource(iconRes)
             imageTintList = android.content.res.ColorStateList.valueOf(tint)
             background = rounded(context, Color.TRANSPARENT, 999f)
-            val size = dp(context, 40f)
+            val size = dp(context, 48f)
             layoutParams = LinearLayout.LayoutParams(size, size)
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+            // CENTER_INSIDE never upscales the intrinsic 24dp vector. Retain 8dp padding:
+            // callers with an explicit smaller box (e.g. VaultCard) keep their old glyph size.
             setPadding(dp(context, 8f), dp(context, 8f), dp(context, 8f), dp(context, 8f))
         }
 
