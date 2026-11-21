@@ -216,7 +216,9 @@ class FormReadyActivityTest {
         controller.recreate()
         idle()
         val restored = controller.get()
-        assertTrue("photo must come back after recreation", waitUntil { restored.hasImageForTest() })
+        // Wait on the crop view's own published state, not just the activity's bitmap field:
+        // setImage() and setCropRect() run together on the main thread after the decode.
+        assertTrue("crop view must be ready after recreation", waitUntil { restored.cropReadyForTest() })
         assertEquals("2.5 cm at 300 DPI", 295, restored.currentWidthPxForTest())
         assertEquals("1.2 cm at 300 DPI", 142, restored.currentHeightPxForTest())
         assertEquals(12, restored.currentMinKbForTest())
@@ -225,6 +227,8 @@ class FormReadyActivityTest {
         assertEquals("2.50", textOf(restored, R.id.formReadyWidth))
         assertEquals("1.20", textOf(restored, R.id.formReadyHeight))
         assertEquals(rect, restored.cropRectForTest())
+        idle()
+        assertEquals("the crop must not be re-fitted after it is shown", rect, restored.cropRectForTest())
         assertTrue(textOf(restored, R.id.formReadyReadout).contains("295"))
         controller.pause().stop().destroy()
     }
