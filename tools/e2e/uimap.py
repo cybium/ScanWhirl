@@ -52,8 +52,9 @@ DEVICE_MODEL = "Pixel 6"
 def adb(*args, binary=False, timeout=90, check=True):
     p = subprocess.run(["adb", *map(str, args)], capture_output=True, timeout=timeout)
     if check and p.returncode != 0:
-        raise RuntimeError("adb %s failed: %s" % (" ".join(map(str, args)),
-                                                  p.stderr.decode("utf-8", "replace").strip()[:300]))
+        detail = (p.stderr.decode("utf-8", "replace") + "\n" +
+                  p.stdout.decode("utf-8", "replace")).strip()
+        raise RuntimeError("adb %s failed: %s" % (" ".join(map(str, args)), detail[:300]))
     return p.stdout if binary else p.stdout.decode("utf-8", "replace").strip()
 
 
@@ -288,6 +289,18 @@ def record_visit(node, screen_id, result_title, screenshot_path, status, reason=
 
 
 # ---------------------------------------------------------------------- device cfg
+def install_apk():
+    """The workflow downloads (not installs) the demo APK; install it here."""
+    apk = os.environ.get("APK", "")
+    if not apk or not Path(apk).is_file():
+        GRAPH["meta"]["install"] = "APK env missing; using whatever is already on the emulator"
+        return
+    out = adb("install", "-r", apk, check=False)
+    GRAPH["meta"]["install"] = out.strip()[-500:]
+    if "Failure" in out or "failed" in out.lower():
+        raise RuntimeError("APK install failed: " + out.strip()[-300:])
+
+
 def configure_device():
     adb("shell", "settings", "put", "global", "window_animation_scale", "0")
     adb("shell", "settings", "put", "global", "transition_animation_scale", "0")
@@ -340,9 +353,15 @@ def make_and_push_fixtures():
     for f in files:
         name = Path(f).name
         remote = "/sdcard/Download/" + name
-        adb("push", f, remote, check=False)
-        verify = adb("shell", "test", "-s", remote, "&&", "echo", "ok", check=False)
-        if "ok" in verify or adb("shell", "ls", remote, check=False).strip():
+        ok = False
+        for attempt in range(3):
+            adb("push", f, remote, check=False)
+            listing = adb("shell", "ls", "-l", remote, check=False)
+            if name in listing:
+                ok = True
+                break
+            time.sleep(1.5)  # a freshly booted adb can drop the first commands
+        if ok:
             pushed.append(name)
             FIXTURE_NAMES.append(Path(f).stem)
         else:
@@ -1349,6 +1368,7 @@ def main():
     GRAPH["meta"]["device"] = {"model": DEVICE_MODEL, "sdk": adb("shell", "getprop", "ro.build.version.sdk")}
 
     try:
+        install_apk()
         make_and_push_fixtures()
         seed_library()
 
