@@ -1248,11 +1248,12 @@ class UiSmokeTest {
     @Test
     fun `size parsing handles kb mb bare and invalid input`() {
         val parse = com.scanwhirl.app.util.ImageTools::parseSizeInput
-        assertEquals(1024L, parse("1 KB"))
-        assertEquals(1_048_576L, parse("1 MB"))
-        assertEquals(1_572_864L, parse("1.5mb"))
-        assertEquals(512_000L, parse("500"))  // bare number = 500 KB
-        assertEquals(2048L, parse("2k"))
+        // CP1: decimal sizes; the hint says a bare number means KB.
+        assertEquals(1_000L, parse("1 KB"))
+        assertEquals(1_000_000L, parse("1 MB"))
+        assertEquals(1_500_000L, parse("1.5mb"))
+        assertEquals(500_000L, parse("500"))  // bare number = 500 KB
+        assertEquals(2_000L, parse("2k"))
         assertNull(parse("nonsense"))
         assertNull(parse(""))
         assertNull(parse(null))

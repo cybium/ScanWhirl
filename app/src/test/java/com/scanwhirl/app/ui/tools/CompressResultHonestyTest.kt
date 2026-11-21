@@ -176,7 +176,7 @@ abstract class CompressResultHonestyBase {
     @Test
     fun `a rounded size never contradicts the above-limit verdict`() {
         val id = doc("Boundary")
-        val target = 100L * 1024L
+        val target = 100_000L // 100 KB in decimal bytes: 100 KB + 1 byte renders as "100 KB"
         val measured = target + 1
         val pdf = requireNotNull(repo.getDocument(id)).pdfFile
         pdf.writeBytes(ByteArray(measured.toInt()))
@@ -205,7 +205,7 @@ abstract class CompressResultHonestyBase {
     @Test
     fun `a rounded size never contradicts the under-limit verdict`() {
         val id = doc("Boundary low")
-        val target = 100L * 1024L
+        val target = 100_000L // 100 KB in decimal bytes
         val measured = target - 1
         val pdf = requireNotNull(repo.getDocument(id)).pdfFile
         pdf.writeBytes(ByteArray(measured.toInt()))

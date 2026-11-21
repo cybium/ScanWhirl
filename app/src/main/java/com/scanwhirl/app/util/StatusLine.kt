@@ -42,12 +42,12 @@ object StatusLine {
         return "$period · $docs · ${formatBytes(totalBytes)}".uppercase(Locale.ROOT)
     }
 
-    fun formatBytes(bytes: Long): String = when {
-        bytes <= 0 -> "0 B"
-        bytes >= 1_048_576 -> String.format(Locale.ROOT, "%.1f MB", bytes / 1_048_576.0)
-        bytes >= 1024 -> String.format(Locale.ROOT, "%.0f KB", bytes / 1024.0)
-        else -> "$bytes B"
-    }
+    /**
+     * CP1: decimal sizes. KB = 1000 bytes and MB = 1,000,000, matching the unit the Compress
+     * target field accepts. A file described as "under 500 KB" is therefore <= 500,000 bytes and
+     * also fits a portal that counts a KB as 1024 bytes. The UI label stays "KB".
+     */
+    fun formatBytes(bytes: Long): String = SizeUnits.format(bytes)
 
     /**
      * test26 T3.2 — the same readout as [format] but as a `SpannableString`:

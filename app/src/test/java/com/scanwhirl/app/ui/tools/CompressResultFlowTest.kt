@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Intent
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
@@ -185,9 +186,13 @@ class CompressResultFlowTest {
             started.component?.className
         )
         assertEquals(
-            "the size the person typed reaches the result",
-            1024L,
+            "the size the person typed reaches the result (1 KB = 1000 bytes)",
+            1_000L,
             started.getLongExtra(EXTRA_TARGET, 0L)
+        )
+        assertTrue(
+            "CP1: the real flow marks a target miss so the header cannot say Compressed",
+            started.getBooleanExtra("compress_missed", false)
         )
         val ids = started.getStringArrayListExtra(EXTRA_DOC_IDS).orEmpty()
         assertEquals("still only the new document", listOf(ids.single()), ids)
@@ -213,6 +218,21 @@ class CompressResultFlowTest {
                     activity.findViewById<View>(R.id.toolResultAlsoSave)
                 )
                 assertNotNull("and Undo", activity.findViewById<View>(R.id.toolResultUndo))
+                val texts = mutableListOf<String>()
+                fun walk(v: View) {
+                    if (v.visibility != View.VISIBLE) return
+                    if (v is TextView && !v.text.isNullOrBlank()) texts += v.text.toString()
+                    if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+                }
+                walk(activity.window!!.decorView)
+                assertTrue(
+                    "CP1: the header of a real target miss says the size was not reached: $texts",
+                    texts.contains(app.getString(R.string.cp1_compress_header_missed))
+                )
+                assertTrue(
+                    "CP1: and the smallest readable copy is named: '$summary'",
+                    summary.contains(app.getString(R.string.cp1_compress_floor_miss, "1 KB", StatusLine.formatBytes(bytes)))
+                )
             }
         }
         assertNotNull("the source survives a target compress too", repo.getDocument(source.id))

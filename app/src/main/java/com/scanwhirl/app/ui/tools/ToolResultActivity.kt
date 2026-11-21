@@ -239,8 +239,18 @@ class ToolResultActivity : BaseActivity() {
         bar.addView(
             SwStyle.text(this, 22f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
                 // B3: a compressed result opens with what happened, not with "Done".
+                // CP1: a target miss or a copy that grew must not be titled "Compressed".
                 text = getString(
-                    if (isCompressResult) R.string.compress_result_header else R.string.tools_result_done
+                    when {
+                        isCompressResult &&
+                            intent.getBooleanExtra(EXTRA_COMPRESS_MISSED, false) ->
+                            R.string.cp1_compress_header_missed
+                        isCompressResult &&
+                            intent.getBooleanExtra(EXTRA_COMPRESS_GREW, false) ->
+                            R.string.cp1_compress_header_grew
+                        isCompressResult -> R.string.compress_result_header
+                        else -> R.string.tools_result_done
+                    }
                 )
             },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -1265,6 +1275,10 @@ class ToolResultActivity : BaseActivity() {
         /** UI-B3 (#9): the compressed source is a library document and was left in place. */
         private const val EXTRA_SOURCE_KEPT = "source_kept"
 
+        /** CP1: the result did not reach the typed size, or the copy grew. The header says so. */
+        private const val EXTRA_COMPRESS_MISSED = "compress_missed"
+        private const val EXTRA_COMPRESS_GREW = "compress_grew"
+
         /** W3: recreation-safe receipt/undo state (never a storage policy, only this run's own copy). */
         private const val KEY_UNDONE = "w3_undone"
         private const val KEY_COPY_URI = "w3_copy_uri"
@@ -1295,7 +1309,11 @@ class ToolResultActivity : BaseActivity() {
             /** B2-M2: the size before Compress ran, for the "Before … → After …" line. */
             beforeBytes: Long? = null,
             /** UI-B3: the source was a library document and stays there untouched. */
-            sourceKept: Boolean = false
+            sourceKept: Boolean = false,
+            /** CP1: the typed target was missed, so the header must not claim "Compressed". */
+            compressTargetMissed: Boolean = false,
+            /** CP1: after > before, so the result must admit the copy is larger. */
+            compressGrew: Boolean = false
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
@@ -1306,6 +1324,8 @@ class ToolResultActivity : BaseActivity() {
                 if (targetBytes != null && targetBytes > 0L) putExtra(EXTRA_TARGET, targetBytes)
                 if (beforeBytes != null && beforeBytes > 0L) putExtra(EXTRA_BEFORE, beforeBytes)
                 if (sourceKept) putExtra(EXTRA_SOURCE_KEPT, true)
+                if (compressTargetMissed) putExtra(EXTRA_COMPRESS_MISSED, true)
+                if (compressGrew) putExtra(EXTRA_COMPRESS_GREW, true)
             }
     }
 }

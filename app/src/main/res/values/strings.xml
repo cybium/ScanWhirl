@@ -141,7 +141,7 @@
     <string name="result_saved_downloads">Saved to Downloads/ScanWhirl: %1$s</string>
     <string name="result_saved_documents">Saved to Documents/ScanWhirl: %1$s</string>
     <string name="result_save_failed">Could not save: %1$s</string>
-    <string name="compress_grew_warning">This PDF is text/vector, so the result is larger than the original.</string>
+    <string name="compress_grew_warning">The new copy is larger than the original. Keep the original.</string>
     <string name="compress_target_missed">Couldn\'t reach %1$s. This is the smallest honest result.</string>
 
     <string name="pdf_rasterize_note">Pages become images, so text is no longer selectable. Editing works the same.</string>
@@ -389,7 +389,7 @@
     <string name="resize_keep_ratio">Keep proportions</string>
     <string name="resize_keep_original">Reset all</string>
     <string name="resize_target_label">Limit file size (up to)</string>
-    <string name="resize_target_hint">Up to 500 KB, 3 MB</string>
+    <string name="resize_target_hint">Up to 500 KB, 3 MB. Numbers alone mean KB</string>
     <string name="resize_advanced">Advanced (pixels &amp; DPI)</string>
     <string name="size_50">50 KB</string>
     <string name="size_100">100 KB</string>
@@ -412,7 +412,7 @@
     <string name="compress_level_medium">Balanced</string>
     <string name="compress_level_high">Smaller</string>
     <string name="compress_level_ultra">Smallest</string>
-    <string name="compress_est_item">%1$s · estimated %2$s</string>
+    <string name="compress_est_item">%1$s · about %2$s</string>
     <string name="compress_estimating">Estimating sizes…</string>
     <string name="compress_pick_scan">Choose a scan to compress</string>
     <string name="compress_done">Compressed: %1$s → %2$s</string>
@@ -421,7 +421,7 @@
     <!-- UI-B3 (#7, #8, #9-now): two explicit aims, then a measured result. -->
     <string name="compress_mode_quality">Choose quality</string>
     <string name="compress_mode_target">Aim for a file size</string>
-    <string name="compress_target_help">Type KB or MB, like 500 KB or 3 MB</string>
+    <string name="compress_target_help">Type KB or MB, like 500 KB or 3 MB. Numbers alone mean KB</string>
     <string name="compress_target_required">Type the size you need, like 500 KB or 3 MB</string>
     <string name="compress_action">Compress</string>
     <string name="compress_result_header">Compressed</string>

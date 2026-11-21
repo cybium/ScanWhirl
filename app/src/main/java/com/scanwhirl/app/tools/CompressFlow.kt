@@ -24,6 +24,7 @@ import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.StatusLine
+import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -63,7 +64,9 @@ class CompressFlow(
     )
 
     private val levels = listOf(
-        Level(R.string.compress_level_low, 80, null, 200f),
+        // CP1: the best-quality tier also caps at 3000 px, the ceiling import uses. Earlier it
+        // rendered at 4096, which could OOM a budget phone while the rest of the app stayed at 3000.
+        Level(R.string.compress_level_low, 80, 3000, 200f),
         Level(R.string.compress_level_medium, 65, 2000, 150f),
         Level(R.string.compress_level_high, 50, 1600, 130f),
         Level(R.string.compress_level_ultra, 38, 1200, 110f)
@@ -71,6 +74,9 @@ class CompressFlow(
 
     /** The pages chosen in the device-PDF gate (null until a device PDF is picked). */
     private var devicePages: List<Int>? = null
+
+    /** Total pages in the picked device PDF, for the honest "N pages of M" before line (CP1). */
+    private var devicePageCount: Int = 0
 
     /** The estimate job of this flow's sheet; cancelled the moment that sheet closes. */
     private var estimateJob: Job? = null
@@ -367,7 +373,11 @@ class CompressFlow(
                             ImageTools.recompressJpeg(it, level.quality, level.maxDim)
                                 .size.toLong()
                         }.average()
-                        val bytes = (average * doc.pageCount * 1.02 + 1024).toLong()
+                        // CP1: the shared measured-overhead model, the same one the hub uses.
+                        // The sheet says "about"; the real size follows the run.
+                        val bytes = SizeUnits.estimateJpegPages(
+                            average, doc.pageCount, doc.pageFiles.size
+                        )
                         withContext(Dispatchers.Main) { onLevel(index, bytes) }
                     }
                 }
@@ -400,11 +410,11 @@ class CompressFlow(
                             val rendered = runCatching {
                                 PdfPageRenderer.renderPageJpeg(
                                     fd, pageIndex, level.dpi,
-                                    level.maxDim ?: 4096, level.quality
+                                    level.maxDim ?: 3000, level.quality
                                 )
                             }.getOrNull()
                             val bytes = rendered?.let {
-                                (it.size.toDouble() * pages * 1.02 + 1024).toLong()
+                                SizeUnits.estimateJpegPages(it.size.toDouble(), pages)
                             }
                             withContext(Dispatchers.Main) { onLevel(index, bytes) }
                             if (bytes == null) {
@@ -434,10 +444,12 @@ class CompressFlow(
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
                 showCompressResult(out, before, after, sourceKept = true)
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // CP1: an OutOfMemoryError is an Error. It still needs a localized message and a
+                // dismissed progress sheet, never a crash with "Compression failed:" in English.
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
@@ -447,32 +459,37 @@ class CompressFlow(
         }
     }
 
-    /** Compresses a saved scan so the finished PDF fits the exact target size. */
+    /**
+     * Compresses a saved scan to an exact target with a determinate "page k of N" sheet and Cancel.
+     * The repository writes each page into private staging and only publishes after every page
+     * succeeds, so Cancel (or an OOM) leaves no partial document and never touches the source.
+     */
     private fun runCompressScanToTarget(doc: ScanDocument, target: Long) {
-        val progress = host.showProgress()
-        activity.lifecycleScope.launch {
+        var job: Job? = null
+        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+            activity, activity.getString(R.string.progress_title), total = doc.pageCount
+        ) { job?.cancel() }
+        job = activity.lifecycleScope.launch {
             try {
-                val before = if (doc.pdfFile.exists() && doc.pdfFile.length() > 0) {
-                    doc.pdfFile.length()
-                } else {
-                    doc.pageFiles.sumOf { it.length() }
-                }
-                // F11 (H3-2): the repository's streaming path, one page at a time. The old sheet
-                // code built a List<ByteArray> for the whole document here and could OOM on a
-                // long scan. F11 (H3-5): this path also carries the recognised text, and the
-                // repository names the copy through the shared output rule (H3-6).
-                val out = repo.compressScanToTarget(doc.id, target)
+                val before = CompressIdentity.sizeOf(doc)
+                // F11: streaming, one page at a time. F11 (H3-5): recognised text is carried over.
+                val out = repo.compressScanToTarget(doc.id, target, onPage = { done, total ->
+                    activity.runOnUiThread { progress.setProgress(done, total) }
+                })
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // H5-3: cancellation (screen closed or recreated) is not a failure.
-                throw e
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                activity.runOnUiThread {
+                    Toast.makeText(
+                        activity, activity.getString(R.string.cp1_compress_cancelled), Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Throwable) {
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             } finally {
-                progress.dismiss()
+                activity.runOnUiThread { progress.dismiss() }
             }
         }
     }
@@ -493,15 +510,28 @@ class CompressFlow(
         before: Long,
         after: Long,
         target: Long? = null,
-        sourceKept: Boolean = false
+        sourceKept: Boolean = false,
+        /** Honest "Before: N pages of M (X MB)" for a picked PDF's selected pages. */
+        beforeLine: String? = null
     ) {
         val missed = target != null && after > target
-        val note = when {
-            // The result's own target line says this, so it is not repeated as a note.
-            missed -> null
-            before > 0 && after > before -> activity.getString(R.string.compress_grew_warning)
-            else -> null
+        val grew = before > 0L && after > before
+        val notes = buildList<String> {
+            beforeLine?.let { add(it) }
+            if (target != null && after > target) {
+                // CP1: the readable floor means we stop instead of shredding the text. Say the miss
+                // and the smallest readable size; never present an unreadable page as success.
+                add(
+                    activity.getString(
+                        R.string.cp1_compress_floor_miss,
+                        StatusLine.formatBytes(target),
+                        StatusLine.formatBytes(after)
+                    )
+                )
+            }
+            if (grew) add(activity.getString(R.string.compress_grew_warning))
         }
+        val note = notes.joinToString("\n").takeIf { it.isNotBlank() }
         activity.startActivity(
             ToolResultActivity.intent(
                 activity,
@@ -509,8 +539,11 @@ class CompressFlow(
                 docIds = listOf(out.id), // the new copy only: Undo never touches the source
                 targetBytes = target,
                 note = note,
-                beforeBytes = before,
-                sourceKept = sourceKept
+                // A subset line replaces the misleading whole-file "Before: X MB".
+                beforeBytes = if (beforeLine == null) before else null,
+                sourceKept = sourceKept,
+                compressTargetMissed = missed,
+                compressGrew = grew
             )
         )
     }
@@ -521,6 +554,7 @@ class CompressFlow(
                 val plan = withContext(Dispatchers.IO) { repo.inspectDevicePdf(uri, 2048) }
                 val decision = com.scanwhirl.app.ui.tools.DevicePdfGate.decide(activity, plan)
                 if (decision == ScanRepository.ImportDecision.Cancel) return@launch
+                devicePageCount = plan.pageCount
                 devicePages = when (decision) {
                     ScanRepository.ImportDecision.All -> (0 until plan.pageCount).toList()
                     is ScanRepository.ImportDecision.Pages -> decision.indices
@@ -545,17 +579,30 @@ class CompressFlow(
                         )
                     }
                 )
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // CP1: inspecting a device PDF can OOM too; report it with a localized reason.
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
                 ).show()
             }
         }
+    }
+
+    /**
+     * CP1 (defect 6): a picked PDF's whole-file size is not the "before" for a page subset. The
+     * result states how many of the PDF's pages were actually compressed and the whole file's size
+     * as context, so a 2-of-20 selection can never look like it shrank a 20-page file.
+     */
+    private fun deviceBeforeLine(wholeBytes: Long): String? {
+        val selected = devicePages?.size ?: return null
+        val total = devicePageCount.takeIf { it > 0 } ?: return null
+        return activity.getString(
+            R.string.cp1_compress_before_subset,
+            selected, total, StatusLine.formatBytes(wholeBytes)
+        )
     }
 
     private fun runCompressFile(uri: Uri, level: Level) {
@@ -574,7 +621,7 @@ class CompressFlow(
                 }
                 val indices = devicePages.orEmpty()
                 val out = repo.importPdfAsScanSelected(
-                    uri, name, level.dpi, level.maxDim ?: 4096, level.quality,
+                    uri, name, level.dpi, level.maxDim ?: 3000, level.quality,
                     indices = indices,
                     onPage = { done, total ->
                         activity.runOnUiThread {
@@ -588,11 +635,15 @@ class CompressFlow(
                 sheet?.dismiss()
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
-                showCompressResult(out, before, after)
-            } catch (e: kotlinx.coroutines.CancellationException) {
+                showCompressResult(out, before, after, beforeLine = deviceBeforeLine(before))
+            } catch (e: CancellationException) {
                 sheet?.dismiss()
-                throw e
-            } catch (e: Exception) {
+                activity.runOnUiThread {
+                    Toast.makeText(
+                        activity, activity.getString(R.string.cp1_compress_cancelled), Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Throwable) {
                 sheet?.dismiss()
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
@@ -632,11 +683,18 @@ class CompressFlow(
                 ) ?: return@launch
                 sheet?.dismiss()
                 host.refreshList()
-                showCompressResult(out, before, out.pdfFile.length(), target)
-            } catch (e: kotlinx.coroutines.CancellationException) {
+                showCompressResult(
+                    out, before, out.pdfFile.length(), target,
+                    beforeLine = deviceBeforeLine(before)
+                )
+            } catch (e: CancellationException) {
                 sheet?.dismiss()
-                throw e
-            } catch (e: Exception) {
+                activity.runOnUiThread {
+                    Toast.makeText(
+                        activity, activity.getString(R.string.cp1_compress_cancelled), Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Throwable) {
                 sheet?.dismiss()
                 Toast.makeText(
                     activity, activity.getString(R.string.compress_failed, failureReason(e)), Toast.LENGTH_LONG
@@ -717,7 +775,7 @@ internal data class CompressIdentity(
 internal object CompressTarget {
 
     /** Above 2 GB a "compress to this size" is a mistake, not a target worth chasing. */
-    const val MAX_BYTES = 2L * 1024L * 1024L * 1024L
+    const val MAX_BYTES = SizeUnits.MAX_BYTES
 
     sealed class Result {
         object Blank : Result()
@@ -735,11 +793,14 @@ internal object CompressTarget {
         val match = SIZE.matchEntire(cleaned) ?: return Result.Invalid
         val number = match.groupValues[1].toDoubleOrNull() ?: return Result.Invalid
         if (!number.isFinite()) return Result.TooLarge
+        // CP1: decimal units. "500" and "500 KB" both mean 500,000 bytes, so a result that fits
+        // this target also fits a portal counting a KB as 1024 bytes. MAX_BYTES deliberately stays
+        // the shared 2 GiB ceiling used by ImageTools.parseSizeInput (the hub's parser).
         val bytes = when (match.groupValues[2]) {
-            "mb", "m" -> number * 1024.0 * 1024.0
-            "kb", "k" -> number * 1024.0
+            "mb", "m" -> number * SizeUnits.BYTES_PER_MB
+            "kb", "k" -> number * SizeUnits.BYTES_PER_KB
             "b" -> number
-            else -> number * 1024.0 // bare number = KB
+            else -> number * SizeUnits.BYTES_PER_KB // bare number = KB (the hint says so)
         }
         if (!bytes.isFinite() || bytes > MAX_BYTES.toDouble()) return Result.TooLarge
         val whole = bytes.toLong()
@@ -777,15 +838,27 @@ object SizeFit {
         }
     }
 
-    fun fitToShare(orig: ByteArray, share: Long): ByteArray {
+    fun fitToShare(
+        orig: ByteArray,
+        share: Long,
+        isCancelled: () -> Boolean = { false }
+    ): ByteArray {
         if (orig.size.toLong() <= share) return orig
         val bmp = try {
+            // CP1: the same 3000 px decode ceiling as import; never feed a huge page to the encoder.
             ImageTools.decodeSampled(orig, 3000)
         } catch (e: Exception) {
             null
         } ?: throw IllegalStateException("A page could not be decoded")
-        val fitted = ImageTools.compressToFit(bmp, share).bytes
-        bmp.recycle()
+        val fitted = try {
+            ImageTools.compressToFit(
+                bmp, share,
+                minLongSide = ImageTools.MIN_READABLE_LONG_SIDE,
+                isCancelled = isCancelled
+            ).bytes
+        } finally {
+            bmp.recycle()
+        }
         return if (fitted.size >= orig.size) orig else fitted
     }
 }

@@ -44,6 +44,7 @@ import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.ScanFilter
+import com.scanwhirl.app.util.SizeUnits
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.CancellationException
@@ -841,7 +842,8 @@ class ToolSetupActivity : BaseActivity() {
                         val average = samples.map {
                             ImageTools.recompressJpeg(it, quality, maxDim).size.toLong()
                         }.average()
-                        (average * doc.pageCount * 1.02 + 1024).toLong()
+                        // CP1: the same "about" estimate and measured PDF overhead as CompressFlow.
+                        SizeUnits.estimateJpegPages(average, doc.pageCount, doc.pageFiles.size)
                     }
                 }.getOrNull()
             }
@@ -856,7 +858,9 @@ class ToolSetupActivity : BaseActivity() {
     private fun updateEstimateLines() {
         val estimates = compressEstimates
         levelSizes.forEachIndexed { index, view ->
-            view.text = estimates?.getOrNull(index)?.let { StatusLine.formatBytes(it) }.orEmpty()
+            view.text = estimates?.getOrNull(index)?.let {
+                getString(R.string.cp1_est_only, SizeUnits.format(it))
+            }.orEmpty()
         }
     }
 

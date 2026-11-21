@@ -9,10 +9,12 @@ import android.graphics.Matrix
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.exifinterface.media.ExifInterface
+import kotlinx.coroutines.CancellationException
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.util.zip.CRC32
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -453,22 +455,9 @@ object ImageTools {
      * H3-7: the result used to go through `Double.roundToInt()`, which saturates at
      * `Int.MAX_VALUE` — "5000 MB" silently became 2 GiB. Long arithmetic keeps the value honest
      * and a size over the 2 GB ceiling is refused (the Compress sheet names the same limit).
+     * CP1: the units are decimal and live in [SizeUnits], the helper every screen now shares.
      */
-    fun parseSizeInput(text: String?): Long? {
-        val cleaned = text?.trim()?.lowercase()?.replace(" ", "") ?: return null
-        if (cleaned.isEmpty()) return null
-        val match = Regex("(\\d+(?:\\.\\d+)?)(kb|mb|k|m|b)?").matchEntire(cleaned) ?: return null
-        val value = match.groupValues[1].toDoubleOrNull() ?: return null
-        if (!value.isFinite()) return null
-        val bytes = when (match.groupValues[2]) {
-            "mb", "m" -> value * 1_048_576.0
-            "kb", "k" -> value * 1024.0
-            "b" -> value
-            else -> value * 1024.0 // bare number = KB
-        }
-        if (!bytes.isFinite() || bytes > MAX_SIZE_BYTES) return null
-        return bytes.toLong().coerceAtLeast(1L)
-    }
+    fun parseSizeInput(text: String?): Long? = SizeUnits.parse(text, MAX_SIZE_BYTES)
 
     /** Resolves output size from the options and encodes (JPEG/PNG, optional size cap + DPI tag). */
     fun resize(src: ByteArray, opts: ResizeOptions): ResizeResult {
@@ -524,64 +513,113 @@ object ImageTools {
     }
 
     /**
-     * Re-encode at [quality]; optionally downscale so the longest side is at most [maxDim].
-     * [maxDim] null keeps original dimensions.
+     * CP1: a page smaller than this loses the strokes of ordinary 9-10 pt text. The old fitter
+     * shrank to 64 px, which produced ~1 KB pages that looked like noise. 1000 px on the long side
+     * is the lane's readable floor for an A4-like page (about 85 dpi, legible when zoomed); the
+     * Compress path never goes below it and reports an honest target miss instead.
      */
-    fun recompressJpeg(src: ByteArray, quality: Int, maxDim: Int?): ByteArray {
+    const val MIN_READABLE_LONG_SIDE = 1000
+
+    /** Cooperative cancellation shared by the two compress encoders; no thread hopping here. */
+    private fun checkCancelled(isCancelled: () -> Boolean) {
+        if (isCancelled()) throw CancellationException("Compress cancelled")
+    }
+
+    /**
+     * Re-encode at [quality]; optionally downscale so the longest side is at most [maxDim].
+     * [maxDim] null keeps original dimensions. [isCancelled] is checked between the decode and
+     * the encode so a Cancel cannot leave a half-finished page behind.
+     */
+    fun recompressJpeg(
+        src: ByteArray,
+        quality: Int,
+        maxDim: Int?,
+        isCancelled: () -> Boolean = { false }
+    ): ByteArray {
+        checkCancelled(isCancelled)
         val bitmap = decodeSampled(src, maxDim ?: WORK_DIM)
-
-        val target = if (maxDim != null &&
-            (bitmap.width > maxDim || bitmap.height > maxDim)
-        ) {
-            val scale = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
-            val w = (bitmap.width * scale).toInt().coerceAtLeast(1)
-            val h = (bitmap.height * scale).toInt().coerceAtLeast(1)
-            Bitmap.createScaledBitmap(bitmap, w, h, true)
-        } else {
-            bitmap
+        var target: Bitmap? = null
+        try {
+            target = if (maxDim != null &&
+                (bitmap.width > maxDim || bitmap.height > maxDim)
+            ) {
+                val scale = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
+                val w = (bitmap.width * scale).toInt().coerceAtLeast(1)
+                val h = (bitmap.height * scale).toInt().coerceAtLeast(1)
+                Bitmap.createScaledBitmap(bitmap, w, h, true)
+            } else {
+                bitmap
+            }
+            checkCancelled(isCancelled)
+            return encodeJpeg(target, quality)
+        } finally {
+            if (target !== null && target !== bitmap) target.recycle()
+            bitmap.recycle()
         }
-
-        if (target !== bitmap) bitmap.recycle()
-        val result = encodeJpeg(target, quality)
-        target.recycle()
-        return result
     }
 
     /**
      * Encodes as JPEG, lowering quality (then shrinking the image further when needed)
-     * until the output fits within [maxBytes]. Best effort: if even the smallest
-     * rendition is too big, the smallest produced file is returned.
+     * until the output fits within [maxBytes]. Best effort: if even the smallest readable rendition
+     * is too big, the smallest produced file is returned. A target miss is reported by the result
+     * screen from the measured bytes, so no second "floor hit" flag is needed here.
+     *
+     * [minLongSide] applies the readable floor: 0 keeps the historical resize behaviour, while the
+     * Compress path passes [MIN_READABLE_LONG_SIDE]. The shrink rounds UP and clamps the long side
+     * to the floor, so a 0.7 step can never land just below it. [isCancelled] is checked on every
+     * encode pass, so a long target fit yields promptly to Cancel.
      */
-    fun compressToFit(bitmap: Bitmap, maxBytes: Long, asPng: Boolean = false, dpi: Int = 0): FitResult {
+    fun compressToFit(
+        bitmap: Bitmap,
+        maxBytes: Long,
+        asPng: Boolean = false,
+        dpi: Int = 0,
+        minLongSide: Int = 0,
+        isCancelled: () -> Boolean = { false }
+    ): FitResult {
         require(maxBytes > 0) { "Target size must be positive" }
+        // The floor never enlarges a page that is already smaller.
+        val floor = if (minLongSide > 0) minOf(minLongSide, maxOf(bitmap.width, bitmap.height)) else 0
         var current = flatten(bitmap)
-        var best: ByteArray? = null
-
-        while (true) {
-            var quality = 90
-            while (quality >= 12) {
-                val out = if (asPng) encodePng(current) else encodeJpeg(current, quality)
-                if (best == null || out.size < best.size) best = out
-                if (out.size <= maxBytes) {
-                    val dims = current.width to current.height
-                    if (current !== bitmap) current.recycle()
-                    val patched = if (!asPng && dpi > 0) patchJpegDpi(out, dpi) else out
-                    return FitResult(patched, dims.first, dims.second)
+        try {
+            var best: ByteArray? = null
+            while (true) {
+                var quality = 90
+                while (quality >= 12) {
+                    checkCancelled(isCancelled)
+                    val out = if (asPng) encodePng(current) else encodeJpeg(current, quality)
+                    if (best == null || out.size < best.size) best = out
+                    if (out.size <= maxBytes) {
+                        val dims = current.width to current.height
+                        val patched = if (!asPng && dpi > 0) patchJpegDpi(out, dpi) else out
+                        return FitResult(patched, dims.first, dims.second)
+                    }
+                    quality -= 8
                 }
-                quality -= 8
-            }
-            // Quality floor reached without fitting — shrink the image and retry.
-            val nw = (current.width * 0.7).toInt().coerceAtLeast(64)
-            val nh = (current.height * 0.7).toInt().coerceAtLeast(64)
-            if (nw >= current.width || nh >= current.height) {
-                val dims = current.width to current.height
-                val smallest = best ?: encodeJpeg(current, 12)
+                // Quality floor reached without fitting. Shrink, but stop at the readable floor.
+                val currentLong = maxOf(current.width, current.height)
+                if (floor > 0 && currentLong <= floor) break
+                val scale = if (floor > 0) max(0.7f, floor.toFloat() / currentLong) else 0.7f
+                // Re-review P2: coerceAtLeast(1) on BOTH branches. A 1 px side times 0.7 is 0,
+                // which used to make createScaledBitmap throw on a narrow page with a tiny target.
+                var nw = (if (floor > 0) ceil(current.width * scale).toInt()
+                    else (current.width * scale).toInt()).coerceAtLeast(1)
+                var nh = (if (floor > 0) ceil(current.height * scale).toInt()
+                    else (current.height * scale).toInt()).coerceAtLeast(1)
+                if (floor > 0) {
+                    // Round up then clamp: never 1001 -> 999 or 1400 -> 980.
+                    if (nw >= nh) nw = maxOf(nw, floor) else nh = maxOf(nh, floor)
+                }
+                if (nw >= current.width && nh >= current.height) break
+                val scaled = Bitmap.createScaledBitmap(current, nw, nh, true)
                 if (current !== bitmap) current.recycle()
-                return FitResult(smallest, dims.first, dims.second)
+                current = scaled
             }
-            val scaled = Bitmap.createScaledBitmap(current, nw, nh, true)
+            val dims = current.width to current.height
+            val smallest = best ?: encodeJpeg(current, 12)
+            return FitResult(smallest, dims.first, dims.second)
+        } finally {
             if (current !== bitmap) current.recycle()
-            current = scaled
         }
     }
 

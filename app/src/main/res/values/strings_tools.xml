@@ -109,7 +109,7 @@
     <string name="tools_import_progress_msg">Page %1$d of %2$d</string>
     <string name="tools_import_starting">Preparing the PDF…</string>
     <string name="tools_import_cancel_note">Cancel stops the import. Nothing is added.</string>
-    <string name="tools_import_no_space">This PDF needs %1$d MB and would leave %2$d MB free. Free space first.</string>
+    <string name="tools_import_no_space">This PDF needs %1$s and would leave %2$s free. Free space first.</string>
     <string name="tools_import_low_space_title">Not enough free space</string>
     <string name="tools_setup_no_text">Pages without text are read first, on this phone. This can take a moment.</string>
     <string name="tools_setup_metadata_note">A clean copy without EXIF or thumbnails. The original is kept.</string>

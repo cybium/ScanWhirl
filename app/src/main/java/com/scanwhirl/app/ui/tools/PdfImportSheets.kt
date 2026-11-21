@@ -13,7 +13,7 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.PdfImportBudget
-import java.util.Locale
+import com.scanwhirl.app.util.SizeUnits
 
 /**
  * v2 UI: 03_tools_hub — the swsheets around a big PDF import: the pre-check decision, the page
@@ -21,11 +21,8 @@ import java.util.Locale
  */
 object PdfImportSheets {
 
-    fun formatSize(bytes: Long): String = when {
-        bytes >= 1024L * 1024 * 1024 ->
-            String.format(Locale.ROOT, "%.1f GB", bytes / (1024.0 * 1024 * 1024))
-        else -> String.format(Locale.ROOT, "%.0f MB", bytes / (1024.0 * 1024))
-    }
+    /** CP1: the shared decimal formatter; the old local one counted 1024-byte MB. */
+    fun formatSize(bytes: Long): String = SizeUnits.format(bytes)
 
     /** "This PDF has N pages": Import all / Choose pages / Cancel. */
     fun ask(
@@ -172,8 +169,8 @@ object PdfImportSheets {
             .setMessage(
                 activity.getString(
                     R.string.tools_import_no_space,
-                    plan.estimateBytes / (1024 * 1024),
-                    plan.freeBytes / (1024 * 1024)
+                    SizeUnits.format(plan.estimateBytes),
+                    SizeUnits.format(plan.freeBytes)
                 )
             )
             .setPrimary(R.string.sheet_got_it)

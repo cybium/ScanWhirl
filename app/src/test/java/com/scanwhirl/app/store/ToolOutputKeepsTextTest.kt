@@ -173,11 +173,14 @@ class ToolOutputKeepsTextTest {
     }
 
     @Test
-    fun `a downscaled compress keeps the words but never the stale line boxes`() {
+    fun `a downscaled compress keeps the words and rescales the line boxes`() {
+        // CP1 (lead decision 4): the old rule dropped geometry whenever pixels changed, so a
+        // compressed copy silently lost its invisible text layer. The boxes are now scaled to the
+        // new page size and the searchable flag survives. This is a deliberate expectation change.
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Downscale text")
         withRecognisedText(id)
 
-        // maxDim 100 halves the 200..220 px pages: the words stay, the coordinates cannot.
+        // maxDim 100 halves the 200..220 px pages: the words and their boxes are both carried.
         val copy = runBlocking { repo.compressScan(id, quality = 60, maxDim = 100) }
 
         assertEquals(
@@ -188,13 +191,19 @@ class ToolOutputKeepsTextTest {
             ),
             repo.ocrDoc(copy.id)
         )
+        val geo = repo.ocrGeometry(copy.id)
+        assertEquals("every page keeps proportional geometry", 2, geo.size)
+        copy.pageFiles.forEach { page ->
+            val info = requireNotNull(
+                runCatching { com.scanwhirl.app.util.PdfGenerator.readJpegInfo(page.readBytes()) }.getOrNull()
+            )
+            val layer = requireNotNull(geo[page.name]) { "geometry for ${page.name}" }
+            assertEquals("geometry width follows the new pixels", info.width, layer.width)
+            assertEquals("geometry height follows the new pixels", info.height, layer.height)
+        }
         assertTrue(
-            "boxes measured on the old pixels must not be carried",
-            repo.ocrGeometry(copy.id).isEmpty()
-        )
-        assertFalse(
-            "no text layer may be claimed for the resized pages",
-            File(File(repo.docsDir, copy.id), "text_layer.flag").exists()
+            "the resized copy still declares its text layer",
+            File(File(repo.docsDir, copy.id), "text_layer.flag").isFile
         )
         assertFalse(
             "the text is already known, so no re-read is queued",

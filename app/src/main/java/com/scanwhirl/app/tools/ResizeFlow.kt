@@ -16,7 +16,7 @@ import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.BoundedCopy
 import com.scanwhirl.app.util.ImageTools
-import com.scanwhirl.app.util.StatusLine
+import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,7 +81,7 @@ class ResizeFlow(
     private fun showResizeDialog(bytes: ByteArray, origW: Int, origH: Int, name: String) {
         val dialogBinding = DialogResizeBinding.inflate(activity.layoutInflater)
         dialogBinding.fileInfo.text = activity.getString(
-            R.string.resize_file_info, name, StatusLine.formatBytes(bytes.size.toLong()), origW, origH
+            R.string.resize_file_info, name, SizeUnits.format(bytes.size.toLong()), origW, origH
         )
 
         val presetValues = mapOf(
@@ -159,7 +159,7 @@ class ResizeFlow(
                 val eh = dialogBinding.editHeight.text.toString().toIntOrNull()
                 val targetText = dialogBinding.editMaxSize.text?.toString()
 
-                val target = if (targetText.isNullOrBlank()) null else ImageTools.parseSizeInput(targetText)
+                val target = if (targetText.isNullOrBlank()) null else SizeUnits.parse(targetText)
                 if (!targetText.isNullOrBlank() && target == null) {
                     Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
                     return@setPrimaryStayOpen

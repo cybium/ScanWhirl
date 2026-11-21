@@ -124,7 +124,7 @@ object PdfImport {
     ): T {
         val declared = declaredSize(context, uri)
         if (declared != null && declared > maxBytes) {
-            throw ImportException(Reason.TOO_LARGE, "PDF is larger than ${maxBytes / (1024 * 1024)} MB")
+            throw ImportException(Reason.TOO_LARGE, "PDF is larger than ${SizeUnits.format(maxBytes)}")
         }
         val dir = File(context.cacheDir, "pdf_fd").apply { mkdirs() }
         if (declared != null && cacheSpace(dir) < declared + SPACE_MARGIN) {
@@ -167,7 +167,7 @@ object PdfImport {
                             }
                             total += n
                             if (total > maxBytes) {
-                                throw ImportException(Reason.TOO_LARGE, "PDF is larger than ${maxBytes / (1024 * 1024)} MB")
+                                throw ImportException(Reason.TOO_LARGE, "PDF is larger than ${SizeUnits.format(maxBytes)}")
                             }
                             out.write(buf, 0, n)
                         }

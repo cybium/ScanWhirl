@@ -39,7 +39,7 @@ class StatusLineTest {
     fun `format builds the HUD readout`() {
         assertEquals(
             "GOOD AFTERNOON · 2 DOCS · 14.0 MB",
-            StatusLine.format(context, 14, 2, 14L * 1_048_576)
+            StatusLine.format(context, 14, 2, 14_000_000L)
         )
         assertEquals(
             "GOOD MORNING · 1 DOC · 0 B",
@@ -47,7 +47,7 @@ class StatusLineTest {
         )
         assertEquals(
             "GOOD NIGHT · 0 DOCS · 512 KB",
-            StatusLine.format(context, 23, 0, 512L * 1024)
+            StatusLine.format(context, 23, 0, 512_000L)
         )
     }
 
