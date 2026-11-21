@@ -45,7 +45,7 @@ class VaultStore(
     private val context: Context,
     private val repo: ScanRepository,
     private val keys: VaultKeys = AndroidVaultKeys(),
-    private val gate: VaultPasscodeGate = VaultPasscodeGate(),
+    private val gate: VaultPasscodeGate = VaultPasscodeGate.shared(context),
     private val iterations: Int = VaultCrypto.PBKDF2_ITERATIONS
 ) {
 
