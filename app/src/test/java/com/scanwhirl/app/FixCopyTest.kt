@@ -384,7 +384,9 @@ class FixCopyTest {
         assertEquals(listOf("low", "medium", "high", "ultra"), levels.map { it[1] })
         val quality = levels.map { it[2].toInt() }
         assertTrue("quality drops as the file gets smaller: $quality", quality.zipWithNext().all { it.first > it.second })
-        assertEquals("Best quality keeps the full image size", "null", levels[0][3])
+        // CP1: Best quality is capped at 3000 px, the same ceiling import uses, so a device PDF
+        // cannot OOM the phone while the other levels stay smaller.
+        assertEquals("Best quality is capped at 3000 px", "3000", levels[0][3])
 
         val en = englishStrings()
         assertEquals("Best quality", en["compress_level_low"])

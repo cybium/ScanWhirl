@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CP1: ईमानदार नतीजे। हर पंक्ति का अंग्रेज़ी और हिंदी जोड़ा है। -->
+    <!-- review --> <string name="cp1_compress_header_missed">आपका आकार नहीं मिला</string>
+    <!-- review --> <string name="cp1_compress_header_grew">मूल से बड़ी प्रति</string>
+    <!-- review --> <string name="cp1_compress_floor_miss">अक्षरों को अपठनीय किए बिना %1$s तक नहीं पहुँच सके। सबसे छोटी पढ़ने योग्य प्रति: %2$s।</string>
+    <!-- review --> <string name="cp1_compress_before_subset">पहले: %2$d में से %1$d पृष्ठ (%3$s)</string>
+    <!-- review --> <string name="cp1_compress_cancelled">छोटा करना रोक दिया गया। मूल कागज़ात वैसा ही है।</string>
+</resources>

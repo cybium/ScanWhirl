@@ -246,8 +246,8 @@ abstract class CompressSetSheetBase {
                     val started = pollStartedResult(activity)
                     assertNotNull("the target compress starts with no estimate at all", started)
                     assertEquals(
-                        "the typed size is the one that runs",
-                        200L * 1024L,
+                        "the typed size is the one that runs (200 KB = 200,000 bytes)",
+                        200_000L,
                         started!!.getLongExtra("target_bytes", 0L)
                     )
                 }

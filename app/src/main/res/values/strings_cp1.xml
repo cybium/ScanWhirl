@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CP1: honest compress outcomes. Every line has an English + Hindi pair. -->
+    <string name="cp1_compress_header_missed">Could not reach your size</string>
+    <string name="cp1_compress_header_grew">Larger than the original</string>
+    <string name="cp1_compress_floor_miss">Could not reach %1$s without making text unreadable. Smallest readable copy: %2$s.</string>
+    <string name="cp1_compress_before_subset">Before: %1$d pages of %2$d (%3$s)</string>
+    <string name="cp1_compress_cancelled">Compression cancelled. The original is untouched.</string>
+</resources>

@@ -45,9 +45,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -1772,8 +1774,11 @@ class ScanRepository(private val context: Context) {
         } catch (e: PublishPending) {
             // Recovery must find the sealed staging folder: do not release it.
             throw e
-        } catch (e: Exception) {
-            OpStaging.release(staging)
+        } catch (e: Throwable) {
+            // CP1: an OutOfMemoryError is an Error, not an Exception, so the old Exception-only
+            // catch leaked its staging folder. Release on OOM too, but leave other Errors (a real
+            // or simulated process death) sealed for startup recovery exactly as before.
+            if (e is Exception || e is OutOfMemoryError) OpStaging.release(staging)
             throw e
         }
         Durable.syncDir(docsDir)
@@ -1823,7 +1828,9 @@ class ScanRepository(private val context: Context) {
         sourceId: String,
         staging: File,
         pageMap: Map<String, String>,
-        keepGeometry: Set<String>
+        keepGeometry: Set<String>,
+        /** CP1: geometry already rescaled to the compressed page's pixel size, when available. */
+        scaledGeo: Map<String, OcrPage> = emptyMap()
     ) {
         val texts = ocrStore.readText(sourceId)
         if (texts.isEmpty()) return
@@ -1833,7 +1840,11 @@ class ScanRepository(private val context: Context) {
         for ((dst, src) in pageMap) {
             val text = texts[src] ?: continue
             outTexts[dst] = text
-            if (dst in keepGeometry) geo[src]?.let { outGeo[dst] = it }
+            if (dst in keepGeometry) {
+                val scaled = scaledGeo[dst]
+                if (scaled != null) outGeo[dst] = scaled
+                else geo[src]?.let { outGeo[dst] = it }
+            }
         }
         if (outTexts.isNotEmpty()) {
             OcrStore(OpStaging.root(context.filesDir)).putAll(staging.name, outTexts, outGeo)
@@ -1843,19 +1854,24 @@ class ScanRepository(private val context: Context) {
     /**
      * F11 (H3-2): writes one compressed page per source page into [staging] — one page's bytes
      * alive at a time, never a `List<ByteArray>` of the whole document — and carries the source's
-     * recognised text across (H3-5).
+     * recognised text across (H3-5). CP1 also rescales the line boxes when the pixels changed, so
+     * the copy keeps a real invisible text layer (and its `text_layer.flag`) instead of losing it.
      */
     private suspend fun stageCompressedPages(
         id: String,
         doc: ScanDocument,
         staging: File,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> },
         compress: (index: Int, page: File) -> ByteArray
     ) {
+        val ctx = currentCoroutineContext()
         val geo = ocrStore.readGeo(id)
         val pageMap = LinkedHashMap<String, String>()
         val keepGeometry = LinkedHashSet<String>()
+        val scaledGeo = LinkedHashMap<String, OcrPage>()
+        val total = doc.pageFiles.size
         doc.pageFiles.forEachIndexed { i, file ->
-            currentCoroutineContext().ensureActive()
+            ctx.ensureActive()
             onLivePageBytes?.invoke(1)
             val bytes = compress(i, file)
             val out = stagePageBytes(bytes, staging, i)
@@ -1864,12 +1880,32 @@ class ScanRepository(private val context: Context) {
             val layer = geo[file.name]
             if (layer != null) {
                 val info = runCatching { PdfGenerator.readJpegInfo(bytes) }.getOrNull()
-                if (info != null && info.width == layer.width && info.height == layer.height) {
-                    keepGeometry += out.name
+                if (info != null) {
+                    if (info.width == layer.width && info.height == layer.height) {
+                        keepGeometry += out.name
+                    } else if (layer.width > 0 && layer.height > 0) {
+                        val sx = info.width.toFloat() / layer.width
+                        val sy = info.height.toFloat() / layer.height
+                        scaledGeo[out.name] = layer.copy(
+                            width = info.width,
+                            height = info.height,
+                            lines = layer.lines.map { line ->
+                                OcrLine(
+                                    text = line.text,
+                                    left = (line.left * sx).roundToInt().coerceIn(0, info.width),
+                                    top = (line.top * sy).roundToInt().coerceIn(0, info.height),
+                                    right = (line.right * sx).roundToInt().coerceIn(0, info.width),
+                                    bottom = (line.bottom * sy).roundToInt().coerceIn(0, info.height)
+                                )
+                            }
+                        )
+                        keepGeometry += out.name
+                    }
                 }
             }
+            onPage(i + 1, total)
         }
-        carryOcr(id, staging, pageMap, keepGeometry)
+        carryOcr(id, staging, pageMap, keepGeometry, scaledGeo)
     }
 
     /**
@@ -1877,21 +1913,28 @@ class ScanRepository(private val context: Context) {
      * [target]. Each page is read, fitted and written back on its own; the whole document is
      * never in memory (the old `SizeFit.compressBytes` held every page and a second copy).
      * Internal so a test can drive it with a staging folder and count live page bytes.
+     * CP1: reports per-page progress and passes a cancel predicate into the encode loop.
      */
-    internal suspend fun fitStagedPagesToTarget(staging: File, target: Long) {
+    internal suspend fun fitStagedPagesToTarget(
+        staging: File,
+        target: Long,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ) {
+        val ctx = currentCoroutineContext()
         val pages = pageFilesIn(staging)
         if (pages.isEmpty()) throw IOException("No pages to compress")
         val sizes = pages.map { it.length().coerceAtLeast(1L) }
         val sum = sizes.sum().coerceAtLeast(1L)
         val budget = (target - (pages.size * 600L + 1000L)).coerceAtLeast(2048L)
         pages.forEachIndexed { i, file ->
-            currentCoroutineContext().ensureActive()
+            ctx.ensureActive()
             onLivePageBytes?.invoke(1)
             val bytes = file.readBytes()
             val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
-            val fitted = SizeFit.fitToShare(bytes, share)
+            val fitted = SizeFit.fitToShare(bytes, share, isCancelled = { !ctx.isActive })
             if (fitted !== bytes) Durable.writeFile(file, fitted)
             onLivePageBytes?.invoke(0)
+            onPage(i + 1, pages.size)
         }
     }
 
@@ -1934,11 +1977,14 @@ class ScanRepository(private val context: Context) {
     ): ScanDocument = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
+        val ctx = currentCoroutineContext()
         buildAndPublish(outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }) { staging ->
-            // H3-5: the words survive compression; text (and geometry where the pixels kept their
-            // size) is carried to the copy so it is searchable right away.
+            // H3-5: the words survive compression; text and rescaled geometry are carried to the
+            // copy so it is searchable right away (CP1).
             stageCompressedPages(id, doc, staging) { _, file ->
-                ImageTools.recompressJpeg(file.readBytes(), quality, maxDim)
+                ImageTools.recompressJpeg(
+                    file.readBytes(), quality, maxDim, isCancelled = { !ctx.isActive }
+                )
             }
         }
     }
@@ -1949,20 +1995,24 @@ class ScanRepository(private val context: Context) {
      * Here only the current page's bytes and bitmap are alive, and the recognised text is carried
      * to the copy (H3-5).
      */
-    suspend fun compressScanToTarget(id: String, targetBytes: Long): ScanDocument =
-        withContext(Dispatchers.IO) {
+    suspend fun compressScanToTarget(
+        id: String,
+        targetBytes: Long,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): ScanDocument = withContext(Dispatchers.IO) {
             require(targetBytes > 0) { "Target size must be positive" }
             val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
             refuseLockedSources(listOf(doc))
+            val ctx = currentCoroutineContext()
             val sizes = doc.pageFiles.map { it.length().coerceAtLeast(1L) }
             val sum = sizes.sum().coerceAtLeast(1L)
             val budget = (targetBytes - (doc.pageFiles.size * 600L + 1000L)).coerceAtLeast(2048L)
             buildAndPublish(
                 outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }
             ) { staging ->
-                stageCompressedPages(id, doc, staging) { i, file ->
+                stageCompressedPages(id, doc, staging, onPage = onPage) { i, file ->
                     val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
-                    SizeFit.fitToShare(file.readBytes(), share)
+                    SizeFit.fitToShare(file.readBytes(), share, isCancelled = { !ctx.isActive })
                 }
             }
         }
@@ -2341,7 +2391,8 @@ class ScanRepository(private val context: Context) {
                     done += pdf.indices.size
                 }
                 if (done == 0) throw IllegalStateException("No pages to compress")
-                fitStagedPagesToTarget(staging, targetBytes)
+                // CP1: the re-fit pass gets the same determinate progress as the render pass.
+                fitStagedPagesToTarget(staging, targetBytes, onPage = onPage)
             }
         }
     }

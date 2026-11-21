@@ -181,10 +181,10 @@
     <string name="cat_label_study">पढ़ाई</string>
     <string name="clear_selection">चयन हटाएँ</string>
     <string name="compress_done">छोटा किया गया: %1$s → %2$s</string>
-    <string name="compress_est_item">%1$s · अनुमानित %2$s</string>
+    <!-- review --> <string name="compress_est_item">%1$s · लगभग %2$s</string>
     <string name="compress_estimating">आकार का अनुमान लगाया जा रहा है…</string>
     <string name="compress_failed">फ़ाइल छोटी नहीं की जा सकी: %1$s</string>
-    <string name="compress_grew_warning">यह PDF लिखे हुए और लकीरों से बनी है, इसलिए नतीजा मूल से बड़ा हो गया।</string>
+    <!-- review --> <string name="compress_grew_warning">नई प्रति मूल से बड़ी है। मूल को रखें।</string>
     <string name="compress_level_high">छोटा</string>
     <string name="compress_level_low">सबसे साफ़</string>
     <string name="compress_level_medium">बीच का</string>
@@ -200,7 +200,7 @@
     <!-- UI-B3 (#7, #8, #9-now): दो साफ़ तरीके, फिर मापा हुआ नतीजा। -->
     <string name="compress_mode_quality">गुणवत्ता चुनें</string>
     <string name="compress_mode_target">फ़ाइल का आकार तय करें</string>
-    <string name="compress_target_help">KB या MB में लिखें, जैसे 500 KB या 3 MB</string>
+    <!-- review --> <string name="compress_target_help">KB या MB में लिखें, जैसे 500 KB या 3 MB। अकेले अंकों का मतलब KB होता है।</string>
     <string name="compress_target_required">ज़रूरी आकार लिखें, जैसे 500 KB या 3 MB</string>
     <string name="compress_action">छोटा करें</string>
     <string name="compress_result_header">छोटा किया गया</string>
@@ -341,7 +341,7 @@
     <string name="resize_keep_ratio">अनुपात वही रखें</string>
     <string name="resize_px">px</string>
     <string name="resize_share">बदली हुई तस्वीर भेजें</string>
-    <string name="resize_target_hint">500 KB या 3 MB से ज़्यादा न हो</string>
+    <!-- review --> <string name="resize_target_hint">500 KB या 3 MB से ज़्यादा न हो। अकेले अंकों का मतलब KB होता है।</string>
     <string name="resize_target_label">फ़ाइल का आकार इससे ज़्यादा न हो</string>
     <string name="resize_times">×</string>
     <string name="resize_title">तस्वीर का आकार बदलें</string>

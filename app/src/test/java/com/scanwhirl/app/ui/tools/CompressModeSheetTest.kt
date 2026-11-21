@@ -355,8 +355,8 @@ abstract class CompressModeSheetBase {
             val started = pollStartedResult(activity)
             assertNotNull("size mode starts the compress", started)
             assertEquals(
-                "the typed limit is the one that runs",
-                7L * 1024L,
+                "the typed limit is the one that runs (7 KB = 7000 bytes)",
+                7_000L,
                 started!!.getLongExtra("target_bytes", 0L)
             )
         }
@@ -393,7 +393,7 @@ abstract class CompressModeSheetBase {
 
             val started = pollStartedResult(activity)
             assertNotNull("Done starts the compress", started)
-            assertEquals("with the typed limit", 7L * 1024L, started!!.getLongExtra("target_bytes", 0L))
+            assertEquals("with the typed limit (7 KB = 7000 bytes)", 7_000L, started!!.getLongExtra("target_bytes", 0L))
             // Consume the first result the run legitimately started.
             shadowOf(activity).getNextStartedActivity()
             idle()

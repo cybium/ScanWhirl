@@ -52,17 +52,19 @@ class CompressTargetParseTest {
     }
 
     @Test
-    fun `a real size is the exact number of bytes`() {
-        assertEquals(CompressTarget.Result.Bytes(7L * 1024L), CompressTarget.parse("7 KB"))
-        assertEquals(CompressTarget.Result.Bytes(700L * 1024L), CompressTarget.parse("700 KB"))
-        assertEquals(CompressTarget.Result.Bytes(700L * 1024L), CompressTarget.parse(" 700kb "))
-        assertEquals(CompressTarget.Result.Bytes(3L * 1024L * 1024L), CompressTarget.parse("3 MB"))
-        assertEquals("a bare number means KB, as the hint says", CompressTarget.Result.Bytes(512_000L), CompressTarget.parse("500"))
-        assertEquals(CompressTarget.Result.Bytes(1536L), CompressTarget.parse("1.5"))
+    fun `a real size is the exact number of bytes (decimal KB and MB)`() {
+        // CP1: KB = 1000 bytes and MB = 1,000,000. "Under 500 KB" is <= 500,000 bytes,
+        // so it also passes a portal that counts KB as 1024. The label stays "KB".
+        assertEquals(CompressTarget.Result.Bytes(7_000L), CompressTarget.parse("7 KB"))
+        assertEquals(CompressTarget.Result.Bytes(700_000L), CompressTarget.parse("700 KB"))
+        assertEquals(CompressTarget.Result.Bytes(700_000L), CompressTarget.parse(" 700kb "))
+        assertEquals(CompressTarget.Result.Bytes(3_000_000L), CompressTarget.parse("3 MB"))
+        assertEquals("a bare number means KB, as the hint says", CompressTarget.Result.Bytes(500_000L), CompressTarget.parse("500"))
+        assertEquals(CompressTarget.Result.Bytes(1_500L), CompressTarget.parse("1.5"))
         assertEquals(CompressTarget.Result.Bytes(2L), CompressTarget.parse("2 b"))
         assertEquals(
-            "exactly at the ceiling is still a size",
-            CompressTarget.Result.Bytes(CompressTarget.MAX_BYTES),
+            "2048 MB is a size below the shared 2 GiB ceiling",
+            CompressTarget.Result.Bytes(2_048_000_000L),
             CompressTarget.parse("2048 MB")
         )
         val parsed = CompressTarget.parse("7 KB") as CompressTarget.Result.Bytes
