@@ -406,10 +406,19 @@ class PdfViewerActivity : BaseActivity() {
     }
 
     private fun deleteVaultCopy() {
-        intent.getStringExtra(EXTRA_PATH)?.let { path ->
-            val file = File(path)
+        val path = intent.getStringExtra(EXTRA_PATH) ?: return
+        try {
+            val root = File(cacheDir, "vault_open").canonicalFile
+            val file = File(path).canonicalFile
             // Never delete an arbitrary caller-supplied original.
-            if (isVaultOpenCopy(file)) file.delete()
+            if (!file.startsWith(root)) return
+            // openDocument decrypts the PDF *and* the page images into one per-document folder.
+            // Deleting only the PDF leaves those pages in plaintext until lock or cold start.
+            val dir = file.parentFile?.canonicalFile ?: return
+            // Never wipe the shared root (or, via a symlink, anything outside vault_open).
+            if (dir == root || !dir.startsWith(root)) return
+            dir.deleteRecursively()
+        } catch (_: Exception) {
         }
     }
 
@@ -556,7 +565,18 @@ class PdfViewerActivity : BaseActivity() {
 
         // The dock lives in layout/view_reader_dock.xml (an <include>), so it has
         // no ViewBinding fields: find it by id, which is also how tests reach it.
-        findViewById<View>(R.id.readerDockShare).setOnClickListener { shareCurrent() }
+        val share = findViewById<View>(R.id.readerDockShare)
+        if (vaultMode) {
+            // A Vault document has no share/export path: its PDF is a decrypted cache copy and
+            // FileProvider does not expose vault_open. Hiding and disabling Share is the only
+            // way to keep a Vault share from crashing or leaking plaintext.
+            share.visibility = View.GONE
+            share.isEnabled = false
+            share.isClickable = false
+            share.setOnClickListener(null)
+        } else {
+            share.setOnClickListener { shareCurrent() }
+        }
         findViewById<View>(R.id.readerDockPages).setOnClickListener { toggleStrip() }
         findViewById<View>(R.id.readerDockText).setOnClickListener { openTextScreen() }
         findViewById<View>(R.id.readerDockSign).setOnClickListener {
@@ -586,15 +606,26 @@ class PdfViewerActivity : BaseActivity() {
 
     private fun shareCurrent() {
         if (!checkVaultSession()) return
-        val doc = dockDoc
-        if (doc != null) {
-            ShareUtils.share(this, doc)
+        if (vaultMode) {
+            // Defensive: a stale listener or a test seam must never offer a vault_open URI.
+            Toast.makeText(this, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
             return
         }
-        val file = dockFile
-        if (file != null && file.exists()) {
-            ShareUtils.shareFile(this, file, "application/pdf")
-        } else {
+        try {
+            val doc = dockDoc
+            if (doc != null) {
+                ShareUtils.share(this, doc)
+                return
+            }
+            val file = dockFile
+            if (file != null && file.exists()) {
+                ShareUtils.shareFile(this, file, "application/pdf")
+            } else {
+                Toast.makeText(this, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: IllegalArgumentException) {
+            // FileProvider rejects paths it does not expose. An unshareable file is an honest
+            // "nothing to share", never a crashed reader.
             Toast.makeText(this, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
         }
     }
@@ -617,13 +648,18 @@ class PdfViewerActivity : BaseActivity() {
     }
 
     private fun showReaderMore() {
-        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+        val builder = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(title)
             .setMessage(getString(R.string.reader_more_note, pageCount))
             .setPrimary(R.string.reader_find) { find?.open(focus = true) }
-            .setSecondary(R.string.share_pdf) { shareCurrent() }
-            .build()
-            .show()
+        if (vaultMode) {
+            // The title is private and there is no Vault share path: secure the sheet's own
+            // window (FLAG_SECURE on the activity does not cover a dialog's window) and drop
+            // the Share action.
+            builder.build().secure().show()
+        } else {
+            builder.setSecondary(R.string.share_pdf) { shareCurrent() }.build().show()
+        }
     }
 
     private fun toggleStrip() {

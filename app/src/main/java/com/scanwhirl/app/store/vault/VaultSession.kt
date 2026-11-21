@@ -22,6 +22,17 @@ object VaultSession {
     @Volatile
     private var backgroundAt: Long = 0L
 
+    /**
+     * V2: the Vault store registers a wipe of its `cacheDir/vault_open` copies here. Dropping
+     * the key on expiry must also drop the plaintext pages, not just stop future decryption.
+     */
+    @Volatile
+    internal var openCopyWipe: (() -> Unit)? = null
+
+    internal fun registerOpenCopyWipe(wipe: () -> Unit) {
+        openCopyWipe = wipe
+    }
+
     /** True while unlocked and inside the background grace period. Expires lazily. */
     fun isUnlocked(now: Long = clock()): Boolean = keyOrNull(now) != null
 
@@ -41,13 +52,24 @@ object VaultSession {
     /** Remembers a freshly unwrapped vault key (setup or unlock). */
     internal fun open(vaultKey: ByteArray) {
         require(vaultKey.size == VaultCrypto.KEY_BYTES) { "A Vault key is 256 bits" }
-        close()
+        // A new key replaces the old one in memory. It must not wipe copies a caller has just
+        // decrypted under this key: only close()/expiry ends the lifetime of plaintext copies.
+        dropKey()
         key = vaultKey.copyOf()
         backgroundAt = 0L
     }
 
     /** Drops the key and forgets the background timestamp. */
     fun close() {
+        dropKey()
+        // The key is already gone, so a failure to delete files cannot leave a usable Vault.
+        try {
+            openCopyWipe?.invoke()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun dropKey() {
         key?.fill(0)
         key = null
         backgroundAt = 0L
