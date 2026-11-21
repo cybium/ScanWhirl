@@ -136,7 +136,7 @@ class SwProgress private constructor(
 
     fun dismiss() {
         SwMotion.stop(whirl)
-        if (dialog.isShowing) dialog.dismiss()
+        if (dialog.isShowing) dismissActions.dismiss()
     }
 
     val isShowing: Boolean get() = dialog.isShowing

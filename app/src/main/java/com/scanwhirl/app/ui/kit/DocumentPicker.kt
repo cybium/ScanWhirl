@@ -125,7 +125,7 @@ class DocumentPicker private constructor(
                 contentDescription = context.getString(R.string.sheet_close)
                 layoutParams = LinearLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt())
                 setPadding((12 * density).toInt(), (12 * density).toInt(), (12 * density).toInt(), (12 * density).toInt())
-                setOnClickListener { dialog.dismiss() }
+                setOnClickListener { dismissActions.dismiss() }
             }
         )
         root.addView(header)
@@ -352,7 +352,7 @@ class DocumentPicker private constructor(
                 picked = true
                 selectedDocumentId = doc.id
                 paintSelection()
-                dialog.dismiss()
+                dismissActions.dismiss()
                 onPick(doc)
             }
             SwMotion.press(this)
@@ -550,13 +550,13 @@ class DocumentPicker private constructor(
             picker.emptyScan.setOnClickListener {
                 if (picker.picked) return@setOnClickListener
                 picker.picked = true
-                dialog.dismiss()
+                picker.dismissActions.dismiss()
                 onEmptyScan?.invoke()
             }
             picker.emptyImport.setOnClickListener {
                 if (picker.picked) return@setOnClickListener
                 picker.picked = true
-                dialog.dismiss()
+                picker.dismissActions.dismiss()
                 onEmptyImport?.invoke()
             }
             if (extraAction != null) {
@@ -567,7 +567,7 @@ class DocumentPicker private constructor(
                     setOnClickListener {
                         if (picker.picked) return@setOnClickListener
                         picker.picked = true
-                        dialog.dismiss()
+                        picker.dismissActions.dismiss()
                         extraAction.onClick()
                     }
                 }

@@ -105,7 +105,7 @@ class SwSheet private constructor(
             contentDescription = context.getString(R.string.sheet_close)
             layoutParams = LinearLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt())
             setPadding((12 * density).toInt(), (12 * density).toInt(), (12 * density).toInt(), (12 * density).toInt())
-            setOnClickListener { dialog.dismiss() }
+            setOnClickListener { dismissActions.dismiss() }
         }
         header.addView(closeButton)
         bodyColumn.addView(header)
@@ -354,7 +354,7 @@ class SwSheet private constructor(
                         if (optionPicked) return@setOnClickListener
                         optionPicked = true
                         onPick(index, true)
-                        dialog.dismiss()
+                        dismissActions.dismiss()
                     }
                 }
                 SwMotion.press(row)
@@ -381,7 +381,7 @@ class SwSheet private constructor(
             if (primaryFired) return@setOnClickListener
             primaryFired = true
             onClick?.invoke()
-            dialog.dismiss()
+            dismissActions.dismiss()
         }
     }
 
@@ -403,7 +403,7 @@ class SwSheet private constructor(
             if (secondaryFired) return@setOnClickListener
             secondaryFired = true
             onClick?.invoke()
-            dialog.dismiss()
+            dismissActions.dismiss()
         }
     }
 
@@ -497,7 +497,7 @@ class SwSheet private constructor(
         view.findViewById<View>(R.id.swSheetGrab)?.isVisible = false
     }
 
-    fun dismiss() = dialog.dismiss()
+    fun dismiss() = dismissActions.dismiss()
 
     /** Secret fields: hide this window from screenshots, recents and casting. */
     fun secure(): SwSheet = apply { SecureView.apply(dialog.window) }
@@ -594,8 +594,9 @@ class SwSheet private constructor(
  */
 internal class DismissActions(private val dialog: Dialog) {
     private val actions = mutableListOf<Pair<() -> Unit, Boolean>>()
+    /** One token per dismissal, in initiation order: true = lifecycle (silent) dismissal. */
+    private val dismissals = ArrayDeque<Boolean>()
     private var installed = false
-    private var suppressed = false
 
     fun add(action: () -> Unit) = add(action, internal = false)
 
@@ -610,19 +611,25 @@ internal class DismissActions(private val dialog: Dialog) {
         }
     }
 
+    /** A user/flow dismissal: its callbacks must run, even if the owner finishes in the same frame. */
+    fun dismiss() {
+        dismissals.addLast(false)
+        dialog.dismiss()
+    }
+
     /**
-     * The owner is being destroyed: close the window, but a callback from a dead screen must not
-     * run the caller's dismiss logic. Android posts the OnDismissListener, so the flag lives until
-     * that callback arrives. Apps that restore their sheet on rotation rely on this silence.
+     * The owner is being destroyed: close the window silently. The suppression token belongs to
+     * THIS dismissal only; a manual dismissal already queued keeps its own (non-silent) token, so
+     * a poster/callback from that earlier dismissal still runs the caller's logic exactly once.
      */
     fun closeFromLifecycle() {
-        suppressed = true
-        if (dialog.isShowing) dialog.dismiss() else suppressed = false
+        if (!dialog.isShowing) return
+        dismissals.addLast(true)
+        dialog.dismiss()
     }
 
     private fun fire() {
-        val skipCallerActions = suppressed
-        suppressed = false
+        val skipCallerActions = dismissals.removeFirstOrNull() ?: false
         actions.toList().forEach { (action, internal) ->
             if (!skipCallerActions || internal) action()
         }

@@ -62,6 +62,9 @@ internal fun <T : Any> SwSheet.bindCredentialSubmit(
         override fun onDestroy(owner: LifecycleOwner) {
             attempt?.cancel()
             dismiss()
+            // KT1 P2: a lifecycle dismissal runs internal cleanup only, so the onDismiss
+            // below may be skipped. The secret must never outlive its owner either way.
+            field.text?.clear()
         }
     }
     activity.lifecycle.addObserver(observer)
