@@ -61,6 +61,18 @@ class CompressReadabilityTest {
         page.recycle()
     }
 
+    @Test
+    fun `a one-pixel-wide page still shrinks without a zero dimension`() {
+        // CP1 re-review P2: the floor=0 (Resize) branch lost coerceAtLeast(1); 1*0.7 -> 0 made
+        // createScaledBitmap(0, ...) throw on a 1x400 image with a tiny target.
+        val page = solidPage(1, 400)
+        val fit = ImageTools.compressToFit(page, maxBytes = 1L)
+        assertTrue("width stays at least one pixel", fit.width >= 1)
+        assertTrue("height stays at least one pixel", fit.height >= 1)
+        assertTrue("a real rendition is returned", fit.bytes.isNotEmpty())
+        page.recycle()
+    }
+
     @Test(expected = CancellationException::class)
     fun `cancel is observed inside the encode loop`() {
         val page = solidPage(800, 1200)

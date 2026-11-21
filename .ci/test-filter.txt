@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.DecimalSizeSweepTest,com.scanwhirl.app.util.CompressReadabilityTest
