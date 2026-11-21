@@ -144,14 +144,20 @@ def tap(**want):
     tap_node(node)
 
 
-def tap_text_any(*texts):
-    root = hierarchy()
-    for t in texts:
-        n = find(root, text=t)
-        if n:
-            tap_node(n)
-            return t
-    raise AssertionError("none of the texts on screen: %s" % (texts,))
+def tap_text_any(*texts, timeout=20):
+    """Wait for one of the labels to actually render before tapping it."""
+    deadline = time.monotonic() + timeout
+    while True:
+        root = try_hierarchy()
+        if root is not None:
+            for t in texts:
+                n = find(root, text=t)
+                if n:
+                    tap_node(n)
+                    return t
+        if time.monotonic() >= deadline:
+            raise AssertionError("none of the texts on screen: %s" % (texts,))
+        time.sleep(0.5)
 
 
 def back():
@@ -172,7 +178,7 @@ def scroll(up=False):
 
 
 def seek(**want):
-    for _ in range(14):
+    for _ in range(30):
         root = try_hierarchy()
         if root is not None:
             n = find(root, **want)
@@ -335,7 +341,7 @@ def launch():
         if tick % 8 == 0:
             dismiss_dialogs()
         root = try_hierarchy()
-        if root is not None and (find(root, id="swHomeSearch") or find(root, id="swNavLibrary")):
+        if root is not None and find(root, id="swHomeSearch") and find(root, id="swNavScan"):
             return
         if tick == 45:  # a cold start can lose the first task to the launcher
             adb("shell", "am", "start", "-W", "-n", ACT, check=False)
@@ -395,8 +401,15 @@ def make_and_push_fixtures():
 
 def open_create_sheet():
     for attempt in range(2):
-        root = hierarchy()
-        n = find(root, id="swNavScan")
+        deadline = time.monotonic() + 20
+        n = None
+        while time.monotonic() < deadline:
+            root = try_hierarchy()
+            if root is not None:
+                n = find(root, id="swNavScan")
+                if n:
+                    break
+            time.sleep(0.5)
         if not n:
             raise AssertionError("create disc (swNavScan) missing")
         tap_node(n)
@@ -461,20 +474,30 @@ def seed_library():
             try:
                 launch()
                 open_create_sheet()
-                tap(text="Import PDF")
+                tap_text_any("Import PDF")
                 saf_pick(name + ".pdf")
                 wait_any_viewer()
-                root = hierarchy()
-                if find(root, text="Keep"):
+                # The first Back can ask whether to keep the fresh import.
+                for _ in range(3):
+                    root = try_hierarchy()
+                    if root is None or find(root, text="Keep") is None:
+                        break
                     tap(text="Keep")
+                    time.sleep(0.5)
                 back()
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    root = try_hierarchy()
+                    if root is not None and find(root, id="swHomeSearch"):
+                        break
+                    time.sleep(0.5)
                 root = hierarchy()
-                if not find(root, text=name):
-                    # import retention sheet may still be up
-                    if find(root, text="Keep"):
-                        tap(text="Keep")
-                seeded.append(name)
-                break
+                found = any(name in (n.get("text") or "") or name in (n.get("content-desc") or "")
+                            for n in root.iter("node"))
+                if found:
+                    seeded.append(name)
+                    break
+                raise AssertionError("imported document not visible in Library")
             except Exception as exc:
                 GRAPH["errors"].append({"where": "seed/" + name,
                                         "error": str(exc), "attempt": attempt + 1})
@@ -572,10 +595,16 @@ def nav_tab(view_id, ready):
     return wait_ready(ready, 25)
 
 
-def nav_pro():
+def go_me():
     launch()
     tap(id="swNavMe")
-    tap_text_any("ScanWhirl Pro", "Pro")
+    if not wait_ready(ready_me, 25):
+        raise AssertionError("Me tab did not render")
+
+
+def nav_pro():
+    go_me()
+    tap_text_any("ScanWhirl Pro is active", "ScanWhirl Pro", "Pro")
     return wait_ready(lambda r: ready_any(r, ("swProBuy", "swProClose", "swProPrice")), 20)
 
 
@@ -608,22 +637,19 @@ def nav_page():
 
 
 def nav_settings():
-    launch()
-    tap(id="swNavMe")
+    go_me()
     tap_text_any("Settings")
     return wait_ready(ready_settings, 20)
 
 
 def nav_trash():
-    launch()
-    tap(id="swNavMe")
+    go_me()
     tap_text_any("Trash")
     return wait_ready(ready_trash, 20)
 
 
 def nav_backup():
-    launch()
-    tap(id="swNavMe")
+    go_me()
     tap_text_any("Backup & restore")
     return wait_ready(ready_backup, 20)
 
@@ -667,13 +693,13 @@ def nav_passport():
 def nav_tool_setup(tool="Compress"):
     launch()
     tap(id="swNavTools")
-    wait_ready(ready_tools, 25)
+    if not wait_ready(ready_tools, 25):
+        raise AssertionError("Tools tab did not render")
     try:
         tap(desc=tool)
     except AssertionError:
-        seek(desc=tool)
-        root = hierarchy()
-        tap_node(find(root, desc=tool))
+        node = seek(desc=tool)
+        tap_node(node)
     return wait_ready(ready_setup, 20)
 
 
@@ -699,11 +725,28 @@ def _nav_lock_direct():
 def nav_ocr():
     launch()
     tap(id="swNavTools")
-    wait_ready(ready_tools, 20)
-    tap_text_any("Read text", "To text")
+    if not wait_ready(ready_tools, 20):
+        raise AssertionError("Tools tab did not render")
+    node = None
+    for label in ("Read text", "To text"):
+        try:
+            node = seek(text=label)
+            break
+        except AssertionError:
+            continue
+    if node is None:
+        raise AssertionError("Read text / To text tile not found")
+    tap_node(node)
     # a DocumentPicker opens; pick a doc
-    root = hierarchy()
-    row = find(root, id="docPickerRow")
+    deadline = time.monotonic() + 20
+    row = None
+    while time.monotonic() < deadline:
+        root = try_hierarchy()
+        if root is not None:
+            row = find(root, id="docPickerRow")
+            if row:
+                break
+        time.sleep(0.5)
     if row:
         tap_node(row)
     return wait_ready(ready_ocr, 30)
@@ -955,7 +998,7 @@ def pull_outputs(tag, also_save=True):
 
 def finish_tool(tool, tag):
     """Wait for a result screen, capture it, pull output, record."""
-    deadline = time.monotonic() + 130
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         root = try_hierarchy()
         if root is not None and (find(root, id="toolResultOpen") or find(root, id="toolResultKeep")
