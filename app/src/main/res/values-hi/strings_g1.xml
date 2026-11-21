@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- G1: honest, localized failure when a page cannot be re-filtered on this phone. -->
+<resources>
+    <string name="refilter_out_of_memory">यह पन्ना इस फ़ोन पर रंग-रूप बदलने के लिए बहुत बड़ा है। मूल पन्ना नहीं बदला गया।</string>
+    <string name="unlock_lock_not_removed">PDF खुल गया, पर ताला हटाने का निशान नहीं हटा। ऐप दोबारा खोलने पर ScanWhirl इसे पूरा करेगा।</string>
+</resources>

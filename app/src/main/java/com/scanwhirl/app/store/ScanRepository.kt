@@ -45,6 +45,7 @@ import com.scanwhirl.app.util.TableDetect
 import com.scanwhirl.app.util.XlsxWriter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
@@ -61,6 +62,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.max
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
@@ -129,6 +131,62 @@ class ScanRepository(private val context: Context) {
         @Volatile internal var decryptPdf: (ByteArray, String) -> ByteArray = PdfDecryptor::decrypt
 
         /**
+         * G1: bounded decode of a kept page before re-filtering. The old full-resolution
+         * `BitmapFactory.decodeFile` could exhaust the heap on a large imported page; [decodeBoundedForRefilter]
+         * caps the long side at the capture limit. Replaceable in tests to force OutOfMemoryError.
+         */
+        @Volatile internal var refilterDecode: (File) -> Bitmap = { decodeBoundedForRefilter(it) }
+
+        /** Long-side cap for the refilter decode (the same ceiling a captured page can have). */
+        internal const val REFILTER_MAX_LONG_SIDE = 4000
+
+        private fun decodeBoundedForRefilter(file: File): Bitmap {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.path, bounds)
+            require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Not a decodable image" }
+            var sample = 1
+            // Ceiling, like ImageTools.pageSampleSize: floor division leaves an 8001 px source at
+            // 4001 px after inSampleSize=2, one pixel over the cap.
+            fun side(size: Int) = (size.toLong() + sample - 1) / sample
+            while (side(bounds.outWidth) > REFILTER_MAX_LONG_SIDE || side(bounds.outHeight) > REFILTER_MAX_LONG_SIDE) {
+                sample *= 2
+            }
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            return BitmapFactory.decodeFile(file.path, opts)
+                ?: throw IllegalStateException("This page's kept original can't be read, so nothing was changed.")
+        }
+
+        /** G1 review P1: called under SAVE_LOCK after snapshotting an orphan, before the locked re-check. */
+        @Volatile internal var orphanCleanupProbe: (() -> Unit)? = null
+
+        /** G1 review P2: lock-record removal; false simulates a failed delete so the marker must survive. */
+        @Volatile internal var removeLockFile: (File) -> Boolean = { it.delete() }
+
+        /** G1 review: true when a startup recovery step failed; startup must not declare full success. */
+        @Volatile internal var recoveryIncomplete: Boolean = false
+
+        /** Lead decision: recursive removal of plaintext scratch; false simulates a failed delete. */
+        @Volatile internal var recoveryFileDelete: (File) -> Boolean = { it.deleteRecursively() }
+
+        /** Lead decision: fault seam at the start of each startup recovery step; may throw. */
+        @Volatile internal var recoveryStepFault: ((String) -> Unit)? = null
+
+        /** Sol re-review: page/PDF hashing during recovery; a throw means UNKNOWN, never mismatch. */
+        @Volatile internal var recoveryHash: (File) -> String = { Sha256.of(it) }
+
+        /**
+         * Sol final re-review: [recoveryIncomplete] is a PASS-WIDE accumulated flag. Reset it once,
+         * at the start of the startup pass, never inside a later step: a step that failed earlier
+         * (e.g. import staging) must stay visible after recoverOperations runs cleanly.
+         */
+        fun beginStartupRecoveryPass() {
+            recoveryIncomplete = false
+        }
+
+        /**
          * Test seam (task S4B): called on the thread that runs the PDF-lock PBKDF2, so a test can
          * prove the 1 300 000-iteration derivation never happens on the main thread.
          */
@@ -139,6 +197,13 @@ class ScanRepository(private val context: Context) {
             trashFault = {}
             importFault = {}
             decryptPdf = PdfDecryptor::decrypt
+            refilterDecode = { decodeBoundedForRefilter(it) }
+            orphanCleanupProbe = null
+            removeLockFile = { it.delete() }
+            recoveryIncomplete = false
+            recoveryFileDelete = { it.deleteRecursively() }
+            recoveryStepFault = null
+            recoveryHash = { Sha256.of(it) }
             lockDerivationProbe = null
         }
 
@@ -1713,6 +1778,29 @@ class ScanRepository(private val context: Context) {
         File(page.parentFile, page.nameWithoutExtension + ".orig")
 
     /**
+     * The one re-filter path for both saved pages and draft pages. Decode is bounded to the
+     * capture cap and OutOfMemoryError (an `Error`, invisible to `catch (Exception)`) is turned
+     * into an honest localized IOException. Nothing is staged or committed on failure, so the
+     * original page stays byte-identical.
+     */
+    private fun applyRefilter(source: File, out: File, filter: ScanFilter) {
+        var bmp: Bitmap? = null
+        try {
+            bmp = refilterDecode(source)
+            val filtered = filter.applyTo(bmp)
+            try {
+                PageReplace.commit(PageReplace.stageJpeg(out, filtered, 92))
+            } finally {
+                if (filtered !== bmp) filtered.recycle()
+            }
+        } catch (e: OutOfMemoryError) {
+            throw IOException(context.getString(R.string.refilter_out_of_memory))
+        } finally {
+            bmp?.recycle()
+        }
+    }
+
+    /**
      * Applies [filter] to one saved page of a document — always re-processing
      * from the kept original so filters never stack, and so "Original"
      * restores the untouched scan. Creates the `.orig` sibling on first use.
@@ -1735,15 +1823,7 @@ class ScanRepository(private val context: Context) {
                 }
             } else {
                 if (!orig.exists()) PageReplace.commit(PageReplace.stageCopy(orig, file))
-                val src = BitmapFactory.decodeFile(orig.path)
-                    ?: throw IllegalStateException("This page's kept original can't be read, so nothing was changed.")
-                val out = filter.applyTo(src)
-                try {
-                    PageReplace.commit(PageReplace.stageJpeg(file, out, 92))
-                } finally {
-                    if (out !== src) out.recycle()
-                    src.recycle()
-                }
+                applyRefilter(orig, file, filter)
             }
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after filter")
@@ -2694,20 +2774,45 @@ class ScanRepository(private val context: Context) {
         synchronized(PDF_LOCK) {
             if (grant != null) requireLockRecord(dir, grant)
             val work = OpStaging.create(context.filesDir)
+            // Past the PDF rename the marker is the only way back to a consistent state, so it is
+            // kept for the next start on any failure; before it, cleanup is a clean rollback.
+            var swapped = false
             try {
+                val pdf = File(dir, PdfProtection.PDF_FILE)
+                val lock = File(dir, LOCK_FILE)
+                val oldRecord = readPdfLock(lock)
+                    ?: throw IllegalStateException("The lock record can't be read, so nothing was changed.")
+                val oldPdf = Sha256.of(pdf)
                 val plain = File(work, "plain.pdf")
                 val layered = writePdf(dir, plain)
+                Durable.syncFile(plain)
+                val newPdf = Sha256.of(plain)
+                Durable.atomicWriteText(
+                    File(work, Unlock.MARKER),
+                    Unlock.write(dir.name, oldRecord, oldPdf, newPdf)
+                )
+                Durable.syncDir(work)
                 OpFaults.at("unlock:built")
-                if (!plain.renameTo(File(dir, PdfProtection.PDF_FILE))) {
-                    throw IOException("Could not unlock the PDF")
-                }
+                if (!plain.renameTo(pdf)) throw IOException("Could not unlock the PDF")
+                swapped = true
                 OpFaults.at("unlock:swapped")
-                File(dir, LOCK_FILE).delete()
+                // The unlocked copy is durable before the lock label goes away. A failed delete
+                // must never be treated as success: keep the marker (swapped=true skips cleanup)
+                // and report honestly, so startup can retry instead of leaving a plain PDF
+                // silently carrying a lock label.
+                Durable.syncDir(dir)
+                if (!removeLockFile(lock)) {
+                    throw IOException(context.getString(R.string.unlock_lock_not_removed))
+                }
                 updateTextLayerFlag(dir, layered)
                 Durable.syncDir(dir)
+                File(work, Unlock.MARKER).delete()
+                Durable.syncDir(work)
                 OpStaging.release(work)
             } catch (e: Exception) {
-                OpStaging.release(work)
+                // A real kill skips this too. After the swap the marker stays so recoverOperations
+                // can finish the unlock; deleting it would leave a plain PDF with a stale label.
+                if (!swapped) OpStaging.release(work)
                 throw e
             }
         }
@@ -2823,6 +2928,34 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
+     * Sol re-review: "could not hash" is NOT proof of a mismatch. A failure (including an
+     * OutOfMemoryError) means UNKNOWN: the marker is the only record of the new verifier, so it
+     * must be kept and retried, never deleted as if the operation had been rolled back.
+     */
+    private enum class DigestState { VERIFIED_MATCH, VERIFIED_MISMATCH, UNKNOWN }
+
+    private class DigestResult(val state: DigestState, val matchedNew: Boolean = false) {
+        companion object {
+            val MATCH_OLD = DigestResult(DigestState.VERIFIED_MATCH, false)
+            val MATCH_NEW = DigestResult(DigestState.VERIFIED_MATCH, true)
+            val MISMATCH = DigestResult(DigestState.VERIFIED_MISMATCH)
+            val UNKNOWN = DigestResult(DigestState.UNKNOWN)
+        }
+    }
+
+    private fun checkPdfDigest(pdf: File, oldHex: String, newHex: String): DigestResult = try {
+        when (val digest = recoveryHash(pdf)) {
+            newHex -> DigestResult.MATCH_NEW
+            oldHex -> DigestResult.MATCH_OLD
+            else -> DigestResult.MISMATCH
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (t: Throwable) {
+        DigestResult.UNKNOWN
+    }
+
+    /**
      * Finishes a password change that died after the PDF swap (see [swapPasswordVerified]).
      * Only the destructive step needs repair: once `scan.pdf` is the new file, the marker alone
      * names the verifier that must replace the old one. A death before the swap changed nothing
@@ -2831,18 +2964,88 @@ class ScanRepository(private val context: Context) {
     private fun recoverPasswordSwap(work: File) {
         val swap = PasswordSwap.read(work) ?: return
         val dir = File(docsDir, swap.id)
-        if (!dir.isDirectory) return
+        if (!dir.isDirectory) { // the document is truly gone: stale, nothing to repair
+            File(work, PasswordSwap.MARKER).delete()
+            return
+        }
         val pdf = File(dir, PdfProtection.PDF_FILE)
         val lock = File(dir, LOCK_FILE)
         synchronized(PDF_LOCK) {
-            val digest = runCatching { Sha256.of(pdf) }.getOrNull()
-            if (digest == swap.newPdfSha256) {
-                if (readPdfLock(lock) != swap.newRecord) {
-                    Durable.atomicWriteText(lock, swap.newRecord)
-                    Durable.syncDir(dir)
+            when (val check = checkPdfDigest(pdf, swap.previousPdfSha256, swap.newPdfSha256)) {
+                DigestResult.UNKNOWN -> {
+                    // Never lose the only copy of the new verifier because a hash could not be read.
+                    recoveryIncomplete = true
+                    android.util.Log.w("ScanWhirl", "startup password-swap: PDF digest unknown")
+                    return@synchronized
                 }
-                recordLockIndex(pdf, swap.id)
+                DigestResult.MATCH_NEW -> {
+                    if (readPdfLock(lock) != swap.newRecord) {
+                        try {
+                            Durable.atomicWriteText(lock, swap.newRecord)
+                            Durable.syncDir(dir)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (t: Throwable) {
+                            recoveryIncomplete = true
+                            android.util.Log.w("ScanWhirl",
+                                "startup password-swap: verifier write failed (${t.javaClass.simpleName})")
+                            return@synchronized // keep the marker, retry next start
+                        }
+                    }
+                    recordLockIndex(pdf, swap.id)
+                }
+                // MATCH_OLD or a verified MISMATCH: nothing was swapped in, resolution is complete.
             }
+            File(work, PasswordSwap.MARKER).delete()
+        }
+    }
+
+    /**
+     * G1: finishes an unlock that died after the plain PDF was swapped in (the one destructive
+     * step). Before the swap nothing changed and the marker is simply swept. After it the plain
+     * copy is already durable, so the marker alone says which stale lock record must go; the
+     * encrypted PDF (still named by the marker) is kept if the swap never happened.
+     */
+    private fun recoverUnlock(work: File) {
+        val pending = Unlock.read(work) ?: return
+        val dir = File(docsDir, pending.id)
+        if (!dir.isDirectory) {
+            File(work, Unlock.MARKER).delete()
+            return
+        }
+        val pdf = File(dir, PdfProtection.PDF_FILE)
+        val lock = File(dir, LOCK_FILE)
+        synchronized(PDF_LOCK) {
+            when (checkPdfDigest(pdf, pending.oldPdfSha256, pending.newPdfSha256)) {
+                DigestResult.UNKNOWN -> {
+                    recoveryIncomplete = true
+                    android.util.Log.w("ScanWhirl", "startup unlock recovery: PDF digest unknown")
+                    return@synchronized // keep the marker and its metadata for a later start
+                }
+                DigestResult.MATCH_NEW -> {
+                    // Rolled forward: never leave a plain PDF labelled locked. If the label cannot
+                    // be removed, KEEP the marker and let the sweep skip this folder for a retry.
+                    if (lock.exists() && !removeLockFile(lock)) {
+                        // Keep the marker and the label for a later start. No new UI: the unlock
+                        // screen already reported the honest failure; startup only logs a
+                        // non-sensitive marker and exposes [recoveryIncomplete] via the launcher.
+                        recoveryIncomplete = true
+                        android.util.Log.w("ScanWhirl", "startup unlock recovery: lock label removal failed")
+                        return@synchronized
+                    }
+                    if (lock.exists()) Durable.syncDir(dir)
+                    pruneLockIndex()
+                }
+                DigestResult.MATCH_OLD -> {
+                    // Rolled back: the encrypted PDF is still in place, so its label must stay.
+                    if (!lock.exists()) {
+                        Durable.atomicWriteText(lock, pending.oldRecord)
+                        Durable.syncDir(dir)
+                    }
+                }
+                // A verified MISMATCH is a stale marker: resolved by ignoring it.
+            }
+            File(work, Unlock.MARKER).delete()
         }
     }
 
@@ -2907,85 +3110,225 @@ class ScanRepository(private val context: Context) {
         }
 
     /**
-     * PM-2.2b startup recovery, in order:
+     * G1: reclaims the two data-free leftovers a new-scan save can leave in documents/ when the
+     * process dies before publication:
+     *  - a bare reserved id directory (crash between the exclusive `mkdir` and the marker write).
+     *    The ordinary reaper cannot see it because it has no owner marker, so it stayed forever;
+     *  - a directory holding only our `.incomplete` / `.incomplete.tmp` marker.
+     *
+     * A directory with ANY other entry (pages, PDF, `txn.txt` or `meta.txt`) is never touched:
+     * that is journal-linked replay material or a published document and may be the owner's only
+     * copy. A marker must be provably ours; a bare empty directory carries no data at all.
+     */
+    private fun isDataFreeReservation(dir: File): Boolean {
+        if (!dir.isDirectory) return false
+        val names = dir.list()?.toSet() ?: return false
+        val marker = SaveFormat.MARKER
+        val markerTmp = SaveFormat.MARKER_TMP
+        if (names.any { it != marker && it != markerTmp }) return false
+        // A bare empty directory is a crash between mkdir and the marker write and has no
+        // owner marker; any marker must nevertheless be provably ours.
+        return names.isEmpty() || SaveFormat.ownerOf(dir) != null
+    }
+
+    /** Runs only while SAVE_LOCK is held: saves cannot reserve, write or publish concurrently. */
+    private fun removeOrphanReservationsLocked(): Int {
+        var removed = 0
+        for (dir in docsDir.listFiles { it -> it.isDirectory }.orEmpty()) {
+            if (!isDataFreeReservation(dir)) continue
+            // Re-check immediately before the delete, under the same lock: an out-of-band write
+            // between the snapshot and here must never turn into deleted user data.
+            orphanCleanupProbe?.invoke()
+            if (!isDataFreeReservation(dir)) continue
+            if (dir.deleteRecursively()) removed++
+        }
+        return removed
+    }
+
+    /**
+     * Sol re-review: a recovery marker carries everything needed to finish (old/new verifiers and
+     * both PDF digests), and the actual replacement PDF is already inside the document folder.
+     * Therefore an unresolved folder must keep ONLY its marker, never plaintext scratch. A marker
+     * naming a missing document or an unrelated PDF is stale and its whole folder is deleted.
+     */
+    private enum class MarkerState { NONE, KEEP, STALE, UNKNOWN }
+
+    private fun recoveryMarkerState(work: File): MarkerState {
+        val (id, oldPdf, newPdf) = PasswordSwap.read(work)?.let {
+            Triple(it.id, it.previousPdfSha256, it.newPdfSha256)
+        } ?: Unlock.read(work)?.let {
+            Triple(it.id, it.oldPdfSha256, it.newPdfSha256)
+        } ?: return MarkerState.NONE
+        val dir = File(docsDir, id)
+        if (!dir.isDirectory) return MarkerState.STALE // truly missing document
+        return when (checkPdfDigest(File(dir, PdfProtection.PDF_FILE), oldPdf, newPdf)) {
+            DigestResult.MATCH_OLD, DigestResult.MATCH_NEW -> MarkerState.KEEP
+            DigestResult.MISMATCH -> MarkerState.STALE // both digests computed, neither matches
+            else -> MarkerState.UNKNOWN // keep marker + metadata, retry next start
+        }
+    }
+
+    private fun pruneRecoveryStaging(work: File) {
+        val markerName = when {
+            PasswordSwap.read(work) != null -> PasswordSwap.MARKER
+            Unlock.read(work) != null -> Unlock.MARKER
+            else -> return
+        }
+        when (recoveryMarkerState(work)) {
+            MarkerState.STALE -> {
+                work.deleteRecursively()
+                return
+            }
+            MarkerState.UNKNOWN -> {
+                // Recovery needs ONLY the marker (and the document's own PDF, which is not here).
+                // Scratch is still removed with the same checked recursive cleanup as KEEP, so a
+                // permanently unreadable document cannot keep plaintext around forever.
+                recoveryIncomplete = true
+            }
+            else -> Unit
+        }
+        work.listFiles()?.forEach { file ->
+            if (file.name != markerName && !recoveryFileDelete(file)) {
+                recoveryIncomplete = true
+            }
+        }
+        // Verify under the same pass: anything left (including a nested dir) is kept for retry.
+        if (work.listFiles()?.any { it.name != markerName } == true) {
+            recoveryIncomplete = true
+            android.util.Log.w("ScanWhirl", "startup recovery: staging scratch could not be removed")
+        }
+    }
+
+    /**
+     * One isolated recovery step. A failing step (e.g. a disk-full folders.txt write) must never
+     * abort the document and security steps or leave startup claiming a fully successful pass.
+     * Cancellation is not a failure to be swallowed: it is rethrown so startup can abort cleanly.
+     * Only the exception class is logged; no user data or message is written to the log.
+     */
+    private suspend fun recoveryStep(name: String, block: suspend () -> Unit) {
+        try {
+            recoveryStepFault?.invoke(name)
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            // Lead decision: no Error escapes startup recovery. Every other step still runs.
+            recoveryIncomplete = true
+            android.util.Log.w("ScanWhirl", "startup recovery step $name failed (${t.javaClass.simpleName})")
+        }
+    }
+
+    /**
+     * PM-2.2b startup recovery. CORE document/security steps run FIRST and each is isolated; folder
+     * repair runs LAST, also isolated, so a disk-full folders.txt write cannot abort a Replace
+     * roll-forward or the staging sweep. A failed folder delete keeps its tombstone for the next
+     * start. [recoveryIncomplete] is exposed so startup does not declare a failed pass complete.
+     *
      *  1. roll forward a sealed Replace whose base is absent and whose Trash entry carries
      *     `previous=<token>` (and whose pages/PDF still match the seal);
-     *  2. finish every published `.publish`: discard its draft (only the matching creation) and
+     *  2. finish password changes and unlocks that died after their PDF swap;
+     *  3. finish every published `.publish`: discard its draft (only the matching creation) and
      *     delete the seal;
-     *  3. drop interrupted discards and drafts whose base is gone from BOTH documents and Trash;
-     *  4. sweep every staging folder that is not live in this process.
+     *  4. reclaim data-free orphan save reservations (under SAVE_LOCK);
+     *  5. drop interrupted discards and drafts whose base is gone from BOTH documents and Trash;
+     *  6. sweep every staging folder that is not live and has no unresolved recovery marker;
+     *  7. finish interrupted folder deletes, then reconcile folder names from documents.
      * Returns how many Replace operations were rolled forward.
      */
-    fun recoverOperations(): Int {
+    fun recoverOperations(): Int = runBlocking { recoverOperationsSuspend() }
+
+    /**
+     * Blocking wrapper retained for tests and legacy callers only. It must NOT be called from a
+     * coroutine or on the main thread: the orphan-reservation step suspends on [SAVE_LOCK], which
+     * a save may hold. Production startup and legacy Home call [recoverOperationsSuspend] directly
+     * from their IO coroutines, so no blocking bridge is involved there (non-reentrancy precondition).
+     */
+    suspend fun recoverOperationsSuspend(): Int {
         val filesDir = context.filesDir
         var rolledForward = 0
+        var swept = 0
+        // Do NOT reset recoveryIncomplete here: it accumulates across the whole startup pass.
 
-        // L1lib3 P1: finish an interrupted folder delete BEFORE reconciliation, so a
-        // name the user deleted is not re-added from documents that still carry it.
-        finishPendingDelete()
-        // L1lib2 P1: startup reconciliation. A process death between the two rename
-        // writes can leave a document folder name absent from folders.txt; add it back
-        // before any UI reads the folder list. Startup runs off the main thread.
-        reconcileFolders()
-
-        // 1. Roll forward.
         val stagingRoot = OpStaging.root(filesDir)
-        // L1lib #7: listTrash() reads every Trash entry's meta.txt. Hoist it out of the
-        // staging loop: with S staging folders and T trash entries the old code did S×T
-        // loads. Trash is not changed by a roll-forward, so one snapshot is enough.
-        val trashSnapshot = listTrash()
-        for (dir in stagingRoot.listFiles { f -> f.isDirectory }.orEmpty()) {
-            val seal = OpStaging.readSeal(dir) ?: continue
-            val replaces = seal.replaces ?: continue
-            val base = File(docsDir, replaces)
-            if (base.exists()) continue
-            val trash = trashSnapshot.firstOrNull {
-                it.originalId == replaces && it.previousToken == seal.token
-            } ?: continue
-            val pages = pageFilesIn(dir)
-            if (pages.map { it.name } != seal.pages) continue
-            if (SaveFormat.pagesDigest(pages) != seal.pagesSha256) continue
-            if (Sha256.of(File(dir, "scan.pdf")) != seal.pdfSha256) continue
-            synchronized(TRASH_LOCK) {
-                if (dir.renameTo(base)) {
-                    OpStaging.forget(dir)
-                    rolledForward++
+        val stagingDirs = { stagingRoot.listFiles { f -> f.isDirectory }.orEmpty() }
+        // Pruning uses exactly the same live-operation exclusion as OpStaging.sweep: a marker
+        // created by a running unlock/password change must never have its scratch removed. Repair
+        // steps still visit every folder: a crashed Replace stays live in this process until rollback.
+        val deadStagingDirs = { stagingDirs().filterNot { OpStaging.isLive(it) } }
+
+        // 1. Roll forward. listTrash() reads every Trash entry's meta.txt; hoist it out of the
+        // staging loop (S staging folders × T trash entries becomes one snapshot).
+        recoveryStep("replace") {
+            val trashSnapshot = listTrash()
+            for (dir in stagingDirs()) {
+                val seal = OpStaging.readSeal(dir) ?: continue
+                val replaces = seal.replaces ?: continue
+                val base = File(docsDir, replaces)
+                if (base.exists()) continue
+                val trash = trashSnapshot.firstOrNull {
+                    it.originalId == replaces && it.previousToken == seal.token
+                } ?: continue
+                val pages = pageFilesIn(dir)
+                if (pages.map { it.name } != seal.pages) continue
+                if (SaveFormat.pagesDigest(pages) != seal.pagesSha256) continue
+                if (Sha256.of(File(dir, "scan.pdf")) != seal.pdfSha256) continue
+                synchronized(TRASH_LOCK) {
+                    if (dir.renameTo(base)) {
+                        OpStaging.forget(dir)
+                        rolledForward++
+                    }
                 }
             }
         }
 
-        // 1b. Finish a password change that died between its PDF swap and its verifier write: the
-        // marker names the new verifier, so no second KDF run and no plaintext is needed.
-        for (dir in stagingRoot.listFiles { f -> f.isDirectory }.orEmpty()) {
-            recoverPasswordSwap(dir)
+        // 2. Core security recovery: the markers name everything needed to finish without a KDF.
+        recoveryStep("password-swap") { stagingDirs().forEach { recoverPasswordSwap(it) } }
+        recoveryStep("unlock") { stagingDirs().forEach { recoverUnlock(it) } }
+
+        // 3. Finish published draft seals (create-only Save as new, or a completed Replace).
+        recoveryStep("published-seals") {
+            docsDir.listFiles { f -> f.isDirectory }.orEmpty().forEach { dir ->
+                val seal = OpStaging.readSeal(dir) ?: return@forEach
+                synchronized(DRAFT_LOCK) {
+                    runCatching { drafts.load(seal.draft) }.getOrNull()?.let { draft ->
+                        if (draft.created == seal.draftCreated) drafts.discard(seal.draft)
+                    }
+                }
+                File(dir, OpStaging.SEAL).delete()
+            }
         }
 
-        // 2. Finish published draft seals (create-only Save as new, or a completed Replace).
-        docsDir.listFiles { f -> f.isDirectory }.orEmpty().forEach { dir ->
-            val seal = OpStaging.readSeal(dir) ?: return@forEach
+        // 4. G1: reclaim data-free orphan save reservations under SAVE_LOCK (suspend caller).
+        recoveryStep("orphan-reservations") { SAVE_LOCK.withLock { removeOrphanReservationsLocked() } }
+
+        // 5. Drafts: interrupted discards, and drafts whose base is gone from library and Trash.
+        recoveryStep("drafts") {
             synchronized(DRAFT_LOCK) {
-                runCatching { drafts.load(seal.draft) }.getOrNull()?.let { draft ->
-                    if (draft.created == seal.draftCreated) drafts.discard(seal.draft)
-                }
-            }
-            File(dir, OpStaging.SEAL).delete()
-        }
-
-        // 3. Drafts: interrupted discards, and drafts whose base is gone from library and Trash.
-        // Only a manifest we can read is judged: an unknown/damaged folder is never deleted here.
-        synchronized(DRAFT_LOCK) {
-            drafts.removeDiscardLeftovers()
-            val trashIds = listTrash().map { it.originalId }.toSet()
-            drafts.ids().forEach { id ->
-                val draft = runCatching { drafts.load(id) }.getOrNull() ?: return@forEach
-                if (!File(docsDir, draft.baseId).exists() && draft.baseId !in trashIds) {
-                    drafts.discard(id)
+                drafts.removeDiscardLeftovers()
+                val trashIds = listTrash().map { it.originalId }.toSet()
+                drafts.ids().forEach { id ->
+                    val draft = runCatching { drafts.load(id) }.getOrNull() ?: return@forEach
+                    if (!File(docsDir, draft.baseId).exists() && draft.baseId !in trashIds) {
+                        drafts.discard(id)
+                    }
                 }
             }
         }
 
-        // 4. Everything else not live in this process (including a seal that failed a check).
-        val swept = OpStaging.sweep(filesDir)
+        // 6. Keep only metadata an unresolved marker truly needs, then sweep everything else.
+        // Stale markers (missing document / unrelated digest) delete their whole folder here.
+        recoveryStep("prune-recovery-staging") { deadStagingDirs().forEach { pruneRecoveryStaging(it) } }
+        recoveryStep("staging-sweep") {
+            swept = OpStaging.sweep(filesDir) { dir ->
+                val state = recoveryMarkerState(dir)
+                state == MarkerState.KEEP || state == MarkerState.UNKNOWN
+            }
+        }
+
+        // 7. Folder repair LAST. A failure here leaves the tombstone/folder work for the next start.
+        recoveryStep("finish-folder-delete") { finishPendingDelete() }
+        recoveryStep("reconcile-folders") { reconcileFolders() }
+
         return rolledForward + swept
     }
 
@@ -3143,6 +3486,54 @@ class ScanRepository(private val context: Context) {
             val previous = values["pdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
             val next = values["newPdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
             return Swap(id, oldRecord, newRecord, previous, next)
+        }
+    }
+
+    /**
+     * G1: the recovery marker of an interrupted unlock, kept in private [OpStaging] (never beside
+     * a document). It records the locked and plain PDF digests and the old lock record. Written and
+     * fsynced BEFORE the destructive rename, so a process death can finish the unlock (drop the
+     * stale label) or roll back (the encrypted PDF is still there) without the password and without
+     * touching the page sources.
+     */
+    private object Unlock {
+        const val MARKER = ".unlock"
+        private const val HEADER = "scanwhirl-unlock-v1"
+        private val idPattern = Regex("[A-Za-z0-9_-]{1,64}")
+        private val sha256Pattern = Regex("[0-9a-f]{64}")
+
+        class Pending(
+            val id: String,
+            val oldRecord: String,
+            val oldPdfSha256: String,
+            val newPdfSha256: String
+        )
+
+        fun write(id: String, oldRecord: String, oldPdf: String, newPdf: String): String = buildString {
+            append(HEADER).append('\n')
+            append("id=").append(id).append('\n')
+            append("old=").append(oldRecord).append('\n')
+            append("pdf=").append(oldPdf).append('\n')
+            append("newPdf=").append(newPdf).append('\n')
+        }
+
+        /** Any missing, torn or unexpected field returns null: an unreadable marker never guesses. */
+        fun read(work: File): Pending? {
+            val file = File(work, MARKER)
+            if (file.length() !in 1L..2048L) return null
+            val lines = runCatching { file.readLines() }.getOrNull() ?: return null
+            if (lines.firstOrNull() != HEADER) return null
+            val values = HashMap<String, String>()
+            for (line in lines.drop(1)) {
+                val eq = line.indexOf('=')
+                if (eq <= 0) return null
+                values[line.substring(0, eq)] = line.substring(eq + 1)
+            }
+            val id = values["id"]?.takeIf { idPattern.matches(it) } ?: return null
+            val old = values["old"]?.takeIf { it.length in 1..256 } ?: return null
+            val oldPdf = values["pdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
+            val newPdf = values["newPdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
+            return Pending(id, old, oldPdf, newPdf)
         }
     }
 
@@ -4339,17 +4730,7 @@ class ScanRepository(private val context: Context) {
                     Durable.copyFile(source, outOrig)
                     "r_$n.orig"
                 }
-                val bmp = BitmapFactory.decodeFile(source.path)
-                    ?: throw IllegalStateException(
-                        "This page's kept original can't be read, so nothing was changed."
-                    )
-                val out = filter.applyTo(bmp)
-                try {
-                    PageReplace.commit(PageReplace.stageJpeg(File(dir, "r_$n.jpg"), out, 92))
-                } finally {
-                    if (out !== bmp) out.recycle()
-                    bmp.recycle()
-                }
+                applyRefilter(source, File(dir, "r_$n.jpg"), filter)
                 OpFaults.at("draft:replacement_written")
                 storeDraft(
                     draft.copy(

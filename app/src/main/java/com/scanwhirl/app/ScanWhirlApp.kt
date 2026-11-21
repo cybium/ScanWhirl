@@ -79,6 +79,29 @@ class ScanWhirlApp : Application() {
      */
     val storageRecovered = kotlinx.coroutines.flow.MutableStateFlow(false)
 
+    /** G1 review: the pass finished (safe to load the Library), even if some folder step failed. */
+    val storageRecoveryFinished = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** G1 review: true when a core recovery step failed; startup must not claim a clean pass. */
+    val storageRecoveryIncomplete = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /**
+     * Sol re-review: startup isolates ordinary IO failures but never swallows cancellation or an
+     * Error. Only the exception class is logged; no user data or message reaches the log.
+     */
+    private suspend inline fun startupStep(name: String, block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            // Lead decision: an Error must not kill startup or stop the remaining steps. Sol
+            // re-review: an outer startup failure is just as incomplete as an inner one.
+            com.scanwhirl.app.store.ScanRepository.recoveryIncomplete = true
+            android.util.Log.w("ScanWhirl", "storage recovery step $name failed (${t.javaClass.simpleName})")
+        }
+    }
+
     /**
      * F1 (hunt H1-1): the storage recovery the legacy Home ran on every start (reclaim abandoned
      * saves, finish interrupted permanent deletes and expire Trash, drop dead import staging,
@@ -88,10 +111,19 @@ class ScanWhirlApp : Application() {
      */
     internal fun startStorageRecovery() {
         if (!storageRecoveryStarted.compareAndSet(false, true)) return
-        appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        // One reset for the whole pass: every step ORs its failures into this shared flag.
+        com.scanwhirl.app.store.ScanRepository.beginStartupRecoveryPass()
+        appScope.launch(kotlinx.coroutines.Dispatchers.IO +
+            kotlinx.coroutines.CoroutineExceptionHandler { _, t ->
+                // Backstop only: every step isolates its own failures. Class only, no user data.
+                android.util.Log.w("ScanWhirl", "storage recovery backstop (${t.javaClass.simpleName})")
+                com.scanwhirl.app.store.ScanRepository.recoveryIncomplete = true
+                storageRecoveryIncomplete.value = true
+                storageRecoveryFinished.value = true
+            }) {
             try {
                 // Restore interrupted discard staging BEFORE ordinary orphan-draft cleanup.
-                runCatching {
+                startupStep("discard") {
                     com.scanwhirl.app.store.ImportDiscardStore(this@ScanWhirlApp, repository).recover()
                         .forEach { com.scanwhirl.app.ui.DiscardActions.scheduleExpiry(this@ScanWhirlApp, it) }
                     // Do NOT re-enqueue pending OCR here: enqueue() rewrites each ocr_pending
@@ -99,12 +131,17 @@ class ScanWhirlApp : Application() {
                     // indexing is already owned by startLibraryIndexBackfill(); an Undo requeues
                     // its own restored id via DiscardActions -> TrashActions.queueIndexing.
                 }
-                runCatching { repository.reapAbandonedSaves() }
-                runCatching { repository.recoverTrash() }
-                runCatching { repository.recoverImports() }
-                runCatching { repository.recoverOperations() }
+                startupStep("abandoned-saves") { repository.reapAbandonedSaves() }
+                startupStep("trash") { repository.recoverTrash() }
+                startupStep("imports") { repository.recoverImports() }
+                startupStep("operations") { repository.recoverOperationsSuspend() }
             } finally {
-                storageRecovered.value = true
+                val incomplete = com.scanwhirl.app.store.ScanRepository.recoveryIncomplete
+                storageRecoveryIncomplete.value = incomplete
+                // Never claim a fully successful pass when a core step failed, but always release
+                // the launcher's wait: folder work that failed is kept on disk for the next start.
+                storageRecovered.value = !incomplete
+                storageRecoveryFinished.value = true
             }
         }
     }

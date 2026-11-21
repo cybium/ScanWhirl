@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Matrix
+import androidx.exifinterface.media.ExifInterface
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -27,8 +28,9 @@ import kotlin.math.roundToInt
  *  3. **Cut** only in the middle 30% of the width: a dark narrow valley / brightness dip between
  *     two text blocks. No confident valley → the exact middle and "Check the line."
  *
- * Decoding is sampled to [MAX_LONG_SIDE]; the rotated full-resolution copy exists only inside
- * [splitToJpeg] and is recycled with the crops.
+ * Decoding is sampled to [MAX_LONG_SIDE] and applies the photo's EXIF orientation (same helper as
+ * import), so a sideways phone photo is split upright. The rotated full-resolution copy exists
+ * only inside [splitToJpeg] and is recycled with the crops.
  */
 object BookSplit {
 
@@ -84,6 +86,12 @@ object BookSplit {
         val pages: List<Bitmap> get() = listOf(left, right)
     }
 
+    /**
+     * Bounded decode that honours the photo's EXIF orientation, using the same tag and the same
+     * transform as import ([ImageTools.orientationMatrix]). BitmapFactory does not apply EXIF
+     * itself, so without this a sideways phone photo was split along the wrong axis. The preview
+     * and the create path both go through here, so they always agree on which way is up.
+     */
     fun decode(bytes: ByteArray, maxLongSide: Int = MAX_LONG_SIDE): Bitmap {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
@@ -94,8 +102,25 @@ object BookSplit {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
             ?: throw IllegalStateException("Could not decode image")
+        val orientation = try {
+            bytes.inputStream().use {
+                ExifInterface(it).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+                )
+            }
+        } catch (e: Exception) {
+            // A missing/unreadable tag is not a damaged image: decoders treat it as identity.
+            ExifInterface.ORIENTATION_NORMAL
+        }
+        if (orientation !in 2..8) return bitmap
+        val turned = Bitmap.createBitmap(
+            bitmap, 0, 0, bitmap.width, bitmap.height,
+            ImageTools.orientationMatrix(orientation), true
+        )
+        if (turned !== bitmap) bitmap.recycle()
+        return turned
     }
 
     fun rotate(source: Bitmap, degrees: Int): Bitmap {
