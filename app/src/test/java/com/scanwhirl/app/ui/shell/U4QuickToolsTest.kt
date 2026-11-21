@@ -24,7 +24,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -39,6 +41,7 @@ import org.robolectric.shadows.ShadowDialog
  * (including the Pro gate) as the Tools tab. Checked in English and Hindi, 100 % and 200 %.
  */
 abstract class U4QuickToolsBase {
+
     protected lateinit var app: Application
     protected val hi: Boolean get() = app.resources.configuration.locales[0].language == "hi"
 
@@ -89,7 +92,7 @@ abstract class U4QuickToolsBase {
         assertNotNull("the pencil opens the editor sheet", ShadowDialog.getLatestDialog())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `defaults visible with title all tools link and pencil`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -119,7 +122,7 @@ abstract class U4QuickToolsBase {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a quick tile launches exactly like the Tools tab`() {
         fun quickLaunch(): String? {
             var name: String? = null
@@ -154,7 +157,7 @@ abstract class U4QuickToolsBase {
         assertEquals("the Home tile runs the same launch as the Tools tab", fromHub, fromHome)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a Pro quick tile is gated for a free person`() {
         Prefs.setQuickTools(app, listOf("to_word"))
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
@@ -178,7 +181,7 @@ abstract class U4QuickToolsBase {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `editor adds removes reorders and resets with persist and cancel`() {
         val added = ToolRegistry.all.first {
             it.status == ToolStatus.READY && it.id !in Prefs.DEFAULT_QUICK_TOOLS
@@ -262,7 +265,7 @@ abstract class U4QuickToolsBase {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `editor tiles speak add or remove and the twelve limit is focusable`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -307,7 +310,7 @@ abstract class U4QuickToolsBase {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pro is not spoken for a pro tool when the person has pro`() {
         val proId = ToolRegistry.all.first { it.pro && it.status == ToolStatus.READY }.id
         Prefs.setQuickTools(app, listOf(proId))
@@ -346,7 +349,7 @@ abstract class U4QuickToolsBase {
         return requireNotNull(id)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `editor and tiles reflow at 200 percent without clipping`() {
         RuntimeEnvironment.setFontScale(2.0f)
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->

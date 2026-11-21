@@ -117,17 +117,21 @@ class ImportLifecycleTest {
         val page = ImportFixtures.image(width = 160, height = 220)
         val uri = Uri.parse("content://scanwhirl-import/late.pdf")
         register(uri)
-        var began = false
-        var release = false
+        val began = java.util.concurrent.atomic.AtomicBoolean(false)
+        val releaseTimedOut = java.util.concurrent.atomic.AtomicBoolean(false)
+        val release = java.util.concurrent.CountDownLatch(1)
         val activity = host()
         val before = repo.listDocuments().map { it.id }.toSet()
 
         LockFlow(
             activity, repo, activity, { emptyList() }, { _ -> },
             importProtected = { _, name, _ ->
-                began = true
-                // Hold the decrypt until the host has been asked to finish.
-                while (!release) Thread.sleep(10)
+                began.set(true)
+                // Hold the decrypt until the host has been asked to finish, but never forever:
+                // a missed signal now fails this test instead of hanging the whole CI JVM.
+                if (!release.await(8, java.util.concurrent.TimeUnit.SECONDS)) {
+                    releaseTimedOut.set(true)
+                }
                 repo.createDocument(name ?: "Late", listOf(page))
             }
         ).importProtectedPdf(uri, "Late import")
@@ -135,13 +139,14 @@ class ImportLifecycleTest {
         assertTrue("the Unlock sheet opens", pollUntil { sheet() != null })
         val dialog = sheet()!!
         submit(dialog, "1234")
-        assertTrue("the import started", pollUntil { began })
+        assertTrue("the import started", pollUntil { began.get() })
 
         // finish() (without destroy) is the rotation path: the old host is no longer usable, but
         // its coroutine scope is still alive, so the base code would start a viewer from it.
         activity.finish()
         assertTrue("the host is finishing", activity.isFinishing)
-        release = true
+        release.countDown()
+        assertFalse("the import seam waited too long to be released after finish()", releaseTimedOut.get())
 
         assertTrue(
             "the document is still created",

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Intent
@@ -44,6 +46,7 @@ import kotlin.math.abs
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class IdCardFixFlowTest {
+
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -135,7 +138,7 @@ class IdCardFixFlowTest {
 
     // ---- W6: only layouts that make sense ---------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `front only never offers both sides on one page`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -161,7 +164,7 @@ class IdCardFixFlowTest {
 
     // ---- W7: one Back from a step before the result leaves to Home --------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `back at the layout step leaves the flow and saves nothing`() {
         var finishing = false
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
@@ -184,7 +187,7 @@ class IdCardFixFlowTest {
 
     // ---- X1: a cancelled capture returns to the previous step -------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a cancelled camera returns to the card screen instead of re-opening the sheet`() {
         var finishing = false
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
@@ -219,7 +222,7 @@ class IdCardFixFlowTest {
 
     // ---- W4: the Android photo picker, not Google's scanner ---------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pick from gallery opens the photo picker directly`() {
         var scannerCrop = false
         com.scanwhirl.app.tools.GalleryCrop.startOverride = { scannerCrop = true; true }
@@ -252,7 +255,7 @@ class IdCardFixFlowTest {
 
     // ---- X2: the captured sides survive recreation ------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the captured front survives recreation and is used for the card`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -280,7 +283,7 @@ class IdCardFixFlowTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the captured back survives recreation and both sides reach the page`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -317,17 +320,22 @@ class IdCardFixFlowTest {
             }
             assertTrue("the card document is created", waitUntil { repo.listDocuments().isNotEmpty() })
             scenario.onActivity { activity ->
-                val started = shadowOf(activity).peekNextStartedActivity()
+                // The document is published before the result-screen intent is recorded; wait
+                // for the launch instead of sampling the intent immediately (a load-time race).
+                assertTrue("the result screen is launched", waitUntil {
+                    shadowOf(activity).peekNextStartedActivity()?.component?.className ==
+                        ToolResultActivity::class.java.name
+                })
                 assertEquals(
                     ToolResultActivity::class.java.name,
-                    started?.component?.className
+                    shadowOf(activity).peekNextStartedActivity()?.component?.className
                 )
             }
         }
         return repo.listDocuments().single().id
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the result screen offers Keep and Discard and no Save or Undo`() {
         val id = runToResult()
         ActivityScenario.launch<ToolResultActivity>(
@@ -360,7 +368,7 @@ class IdCardFixFlowTest {
         assertNotNull("Keep keeps the card", repo.getDocument(id))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Discard deletes exactly that card and nothing else`() {
         val id = runToResult()
         val staging = File(app.cacheDir, "fx_other").apply { mkdirs() }
@@ -385,7 +393,7 @@ class IdCardFixFlowTest {
         assertEquals(1, repo.listDocuments().size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Back on the result screen asks before discarding`() {
         val id = runToResult()
         ActivityScenario.launch<ToolResultActivity>(

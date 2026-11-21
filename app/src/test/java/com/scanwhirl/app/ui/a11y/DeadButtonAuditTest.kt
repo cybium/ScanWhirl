@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.a11y
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -64,6 +66,7 @@ import java.util.UUID
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class DeadButtonAuditTest {
 
+
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private val problems = mutableListOf<String>()
@@ -110,7 +113,7 @@ class DeadButtonAuditTest {
 
     // ------------------------------------------------------------------ tests
 
-    @Test
+    @Test(timeout = 60_000)
     fun `shell screens have no dead buttons`() {
         auditBothProStates(
             Screen("Library") { shellHost() },
@@ -124,7 +127,7 @@ class DeadButtonAuditTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document and editor screens have no dead buttons`() {
         val pages = DocFixtures.saved(repo, app, pages = 2, name = "Dead audit pages")
         val stamp = DocFixtures.saved(repo, app, pages = 1, name = "Dead audit stamp")
@@ -138,7 +141,7 @@ class DeadButtonAuditTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tool, settings and vault screens have no dead buttons`() {
         val result = DocFixtures.saved(repo, app, pages = 1, name = "Dead audit result")
         auditBothProStates(
@@ -158,7 +161,7 @@ class DeadButtonAuditTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review and sheet screens have no dead buttons`() {
         val review = DocFixtures.saved(repo, app, pages = 2, name = "Dead audit review")
         val sheets = DocFixtures.saved(repo, app, pages = 2, name = "Dead audit sheets")

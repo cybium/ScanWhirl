@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.a11y
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -58,6 +60,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class SweepFixScreensTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -227,7 +230,7 @@ class SweepFixScreensTest {
         pollUntil { activity.findViewById<View>(R.id.swProScreen) != null }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pro free price and unlock are fully above the dock at 360dp font 1`() {
         RuntimeEnvironment.setFontScale(1.0f)
         ActivityScenario.launch(ShellActivity::class.java).use { s ->
@@ -298,7 +301,7 @@ class SweepFixScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pro free unlock is still reachable at font 2`() {
         RuntimeEnvironment.setFontScale(2.0f)
         ActivityScenario.launch(ShellActivity::class.java).use { s ->
@@ -325,7 +328,7 @@ class SweepFixScreensTest {
 
     // ------------------------------------------------------------------ M7 + M3 Settings
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings rows carry their own name and a 48dp target`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             s.onActivity { a ->
@@ -337,7 +340,7 @@ class SweepFixScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the unnamed strip at the top of scrolled settings is the text language row and is named`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             s.onActivity { a ->
@@ -370,7 +373,7 @@ class SweepFixScreensTest {
 
     // ------------------------------------------------------------------ M7 Me
 
-    @Test
+    @Test(timeout = 60_000)
     fun `me rows carry their own name and a 48dp target`() {
         ActivityScenario.launch(ShellActivity::class.java).use { s ->
             s.onActivity { a ->
@@ -386,7 +389,7 @@ class SweepFixScreensTest {
 
     // ------------------------------------------------------------------ M4 + M7 Trash
 
-    @Test
+    @Test(timeout = 60_000)
     fun `trash actions carry their own name and a 48dp target`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Sweep trash")
         runBlocking { repo.moveToTrash(id) }
@@ -410,7 +413,7 @@ class SweepFixScreensTest {
 
     // ------------------------------------------------------------------ M7 the document More sheet
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document more sheet rows carry their own name and a 48dp target`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Sweep sheet")
         ActivityScenario.launch<DocumentViewerActivity>(
@@ -437,7 +440,7 @@ class SweepFixScreensTest {
 
     // ------------------------------------------------------------------ M6 PDF/A result
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a pdf result shows a typed file card instead of a blank white preview`() {
         val pdf = File(app.cacheDir, "documents/result/id-card-pdfa.pdf").apply {
             parentFile?.mkdirs()
@@ -474,7 +477,7 @@ class SweepFixScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the pdf type badge exists in both languages`() {
         val en = resDir("values")
         val hi = resDir("values-hi")

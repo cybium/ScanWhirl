@@ -5,6 +5,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.ImportFixtures
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -47,10 +48,11 @@ class F4SmallFixesTest {
             idle()
             // A rotation / dark-mode / font change recreates the screen inside the Undo window.
             scenario.recreate()
-            idle()
-            Thread.sleep(200)
-            idle()
+            // Advance Robolectric's virtual clock instead of sleeping on the host: the restore
+            // and the snackbar teardown are main-looper work, so a controlled idle drains them.
+            shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(250))
             assertTrue("a configuration change must not make the pending delete permanent", first.isFile)
+            assertFalse("the hidden .del marker must be renamed back", File(first.path + ".del").exists())
         }
     }
 

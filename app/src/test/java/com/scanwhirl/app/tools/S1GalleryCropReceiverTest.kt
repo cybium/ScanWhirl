@@ -1,4 +1,6 @@
 package com.scanwhirl.app.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.net.Uri
 import android.os.Bundle
@@ -40,6 +42,7 @@ class S1CropReceiverActivity : BaseActivity() {
 @Config(sdk = [35])
 class S1GalleryCropReceiverTest {
 
+
     @Before
     fun setUp() {
         GalleryCrop.startOverride = { true }
@@ -57,7 +60,7 @@ class S1GalleryCropReceiverTest {
         ApplicationProvider.getApplicationContext<android.app.Application>().mainLooper
     ).idle()
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the recreated activity handles the crop result and the destroyed one is never touched`() {
         val controller = Robolectric.buildActivity(S1CropReceiverActivity::class.java).setup()
         val first = controller.get()
@@ -78,7 +81,7 @@ class S1GalleryCropReceiverTest {
         assertEquals(1, second.receivedUris!!.size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the picker fallback after rotation is not delivered to the destroyed activity`() {
         GalleryCrop.startOverride = { false }
         val controller = Robolectric.buildActivity(S1CropReceiverActivity::class.java).setup()
@@ -101,7 +104,7 @@ class S1GalleryCropReceiverTest {
         assertNotNull("the recreated activity gets the fallback", second.receivedUris)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `no pending request keeps a strong reference to a destroyed activity`() {
         val controller = Robolectric.buildActivity(S1CropReceiverActivity::class.java).setup()
         val first = controller.get()
