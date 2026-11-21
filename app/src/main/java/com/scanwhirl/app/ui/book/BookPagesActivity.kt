@@ -130,10 +130,15 @@ class BookPagesActivity : BaseActivity() {
                 // L1's opt-in gallery import runs the scanner (perspective crop) on a picked
                 // photo; its manual fallback hands the raw URIs to the page-region guard.
                 com.scanwhirl.app.tools.launchGalleryCrop(
-                    this,
+                    activity = this,
                     maxPages = 30,
-                    onResult = { uris -> if (uris.isNotEmpty()) loadImages(uris) },
-                    onFallback = { uris -> if (uris.isNotEmpty()) loadImages(uris) }
+                    // S1 review P0: dispatch to the live activity, never a captured old screen.
+                    onResult = { host, _, uris ->
+                        if (host is BookPagesActivity && uris.isNotEmpty()) host.loadImages(uris)
+                    },
+                    onFallback = { host, _, uris ->
+                        if (host is BookPagesActivity && uris.isNotEmpty()) host.loadImages(uris)
+                    }
                 )
             }
             .build()
