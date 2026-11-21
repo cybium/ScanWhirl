@@ -43,7 +43,7 @@
     <string name="qr_field_address">पता</string>
     <string name="qr_field_message">संदेश</string>
     <string name="qr_field_website">वेबसाइट</string>
-    <string name="qr_field_check_link">इस पते को ध्यान से देखें</string>
+    <string name="qr_field_check_link">इस लिंक को ध्यान से जाँचें</string>
     <string name="qr_contact_fallback">संपर्क</string>
     <string name="qr_show">दिखाएँ</string>
     <string name="qr_hide">छिपाएँ</string>
