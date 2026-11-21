@@ -1274,7 +1274,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
             PdfImport.Reason.EMPTY -> getString(R.string.import_failed_empty)
             PdfImport.Reason.TOO_LARGE ->
-                getString(R.string.import_failed_too_large, (PdfImport.MAX_BYTES / (1024 * 1024)).toInt())
+                getString(
+                    R.string.ux130_l1_import_too_large,
+                    com.scanwhirl.app.util.SizeUnits.format(PdfImport.MAX_BYTES)
+                )
             PdfImport.Reason.LOW_MEMORY -> getString(R.string.import_failed_low_memory)
             PdfImport.Reason.TOO_MANY_PAGES ->
                 getString(R.string.import_failed_too_many, failure.pages, PdfImport.MAX_PAGES)
@@ -1449,12 +1452,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         val bytes = runCatching {
             if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
         }.getOrDefault(0L)
-        return when {
-            bytes >= 1024 * 1024 -> String.format(java.util.Locale.getDefault(), "%.1f MB", bytes / 1048576f)
-            bytes >= 1024 -> "${bytes / 1024} KB"
-            bytes > 0 -> "$bytes B"
-            else -> "0 B"
-        }
+        // L1: the shell used binary KB/MB here while every other readout uses the shared
+        // decimal formatter. One helper, so a size cannot disagree between two screens.
+        return com.scanwhirl.app.util.SizeUnits.format(bytes)
     }
 
     /** SH1 #4: visible dates follow the app's language, not the device locale. */
