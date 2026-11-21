@@ -57,11 +57,11 @@ class SettingsActivity : BaseActivity() {
         binding.switchSearchablePdf.minimumHeight = com.scanwhirl.app.ui.kit.SwStyle.dp(this, 48f)
 
         // test25 Phase 5A / D1: Orbital-only dark theme — the row stays in the
-        // XML (locked ID) but is hidden, and the summary is pinned to the one
-        // theme we ship. The row lives inside the grouped Appearance card, so
-        // hiding it leaves no empty card behind.
+        // XML (locked ID) but is hidden. Its pinned summary is a resource, not a
+        // hardcoded literal in this screen. The row lives inside the grouped Appearance
+        // card, so hiding it leaves no empty card behind.
         binding.rowTheme.visibility = android.view.View.GONE
-        binding.subTheme.text = "Orbital Dark"
+        binding.subTheme.text = getString(R.string.sh1_theme_summary)
 
         binding.rowTheme.setOnClickListener { chooseTheme() }
         binding.rowFont.setOnClickListener { chooseFont() }
@@ -444,7 +444,6 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun updateSummaries() {
-        // subTheme is not updated here: D1 pins it to "Orbital Dark" in onCreate.
         binding.subFont.setText(
             when (Prefs.fontStyle(this)) {
                 Prefs.FONT_SERIF -> R.string.font_serif

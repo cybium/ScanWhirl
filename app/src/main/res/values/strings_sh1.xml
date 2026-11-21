@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SH1 #8: the pinned summary of the hidden theme row. Previously a hardcoded literal
+         inside SettingsActivity; kept as a resource so no UI sentence lives in Kotlin. -->
+    <string name="sh1_theme_summary">Orbital Dark</string>
+</resources>

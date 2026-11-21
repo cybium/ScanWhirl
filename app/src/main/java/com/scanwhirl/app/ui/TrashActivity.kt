@@ -66,7 +66,13 @@ class TrashActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        reload()
+        // SH1 #5: expiry is not only a cold-start job. A screen left open past the 30-day
+        // window must drop expired entries and redraw the rest when it comes back. Expiry
+        // stays in the repository; this screen only asks it to run before it reloads.
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { runCatching { repo.recoverTrash() } }
+            reload()
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

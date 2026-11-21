@@ -5,6 +5,7 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -77,6 +78,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private lateinit var navItems: Map<Tab, LinearLayout>
 
     private var tab = Tab.LIBRARY
+
+    /** SH1 #3: the look this instance was built with. A change needs an immediate redraw. */
+    private var appliedFont: String = ""
+    private var appliedLanguage: String = ""
+
     private var proOpen = false
     private var proRequest = 0
     private var buying = false
@@ -189,15 +195,20 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
+        appliedFont = com.scanwhirl.app.util.Prefs.fontStyle(this)
+        appliedLanguage = com.scanwhirl.app.util.AppLanguage.currentTag(this)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = SwStyle.gradient(
-                this@ShellActivity,
-                0x1200F0FF,
-                SwStyle.color(this@ShellActivity, R.color.rv_bg),
-                radiusDp = 0f
-            )
+            // SH1 #1: a wallpaper chosen in Settings must be drawn by the launcher too;
+            // saving the choice alone left the main screen unchanged. No photo -> shipped look.
+            background = com.scanwhirl.app.util.Wallpaper.drawable(this@ShellActivity)
+                ?: SwStyle.gradient(
+                    this@ShellActivity,
+                    0x1200F0FF,
+                    SwStyle.color(this@ShellActivity, R.color.rv_bg),
+                    radiusDp = 0f
+                )
         }
         contentHost = FrameLayout(this).apply { id = R.id.swTabContent }
         root.addView(contentHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -240,7 +251,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
         })
 
-        showTab(Tab.LIBRARY)
+        // SH1 #2: the selected tab is part of the screen's state, not a fresh-start choice.
+        val startTab = savedInstanceState?.getString(KEY_TAB)
+            ?.let { runCatching { Tab.valueOf(it) }.getOrNull() }
+            ?: Tab.LIBRARY
+        showTab(startTab)
         // F1 (hunt H1-1): storage recovery once per process, off the main thread; the Library
         // reloads when it finishes so a document an interrupted Replace took away is back.
         val app = ScanWhirlApp.from(this)
@@ -265,6 +280,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
     }
 
+    /** SH1 #2: keep the tab through rotation and through the Settings-driven recreate. */
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(KEY_TAB, tab.name)
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -278,8 +299,13 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private fun revealFromIntent(source: Intent?) {
         val docId = source?.getStringExtra(EXTRA_SHOW_DOC_ID) ?: return
         source.removeExtra(EXTRA_SHOW_DOC_ID)
+        // SH1 #7: the extra may come from another app or a stale back stack. Only a real,
+        // readable, unprotected document may be revealed; unknown values are ignored.
+        if (docId.isBlank()) return
+        val doc = runCatching { repo.getDocument(docId) }.getOrNull() ?: return
+        if (doc.isLocked || doc.isVaulted) return
         showTab(Tab.LIBRARY)
-        library.revealDocument(docId)
+        library.revealDocument(doc.id)
     }
 
     private var billingUnsub: (() -> Unit)? = null
@@ -308,6 +334,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     override fun onResume() {
         super.onResume()
+        // SH1 #3: Settings changes the font and the app language on its own screen. The shell
+        // underneath is stopped, not rebuilt, so it would keep the old look until a cold
+        // start. recreate() carries the selected tab through onSaveInstanceState.
+        if (appliedFont != com.scanwhirl.app.util.Prefs.fontStyle(this) ||
+            appliedLanguage != com.scanwhirl.app.util.AppLanguage.currentTag(this)
+        ) {
+            recreate()
+            return
+        }
         syncProState()
         // Cheap once-per-process ownership check: a purchase on another phone / after a reinstall
         // unlocks, and a refund locks Pro again (release builds only).
@@ -380,6 +415,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     gravity = Gravity.CENTER
                     tag = "label"
                     maxLines = 1
+                    // SH1 #6: a long Hindi tab name (कागज़ात) must end in "…" instead of
+                    // running over the neighbouring cell at 200 % font. The cell keeps its
+                    // own contentDescription, so TalkBack still says the whole name.
+                    ellipsize = TextUtils.TruncateAt.END
                     // The cell is a quarter of the bar minus the scan-disc gap;
                     // cap the label so a long tab name never clips at 2.0x.
                     val density = resources.displayMetrics.density
@@ -390,7 +429,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     )
                 },
                 LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply { topMargin = SwStyle.dp(this@ShellActivity, 3f) }
             )
             items[tab] = cell
@@ -1306,9 +1345,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
     }
 
+    /** SH1 #4: visible dates follow the app's language, not the device locale. */
+    internal fun appLocale(): java.util.Locale {
+        val tag = com.scanwhirl.app.util.AppLanguage.currentTag(this)
+        return if (tag.isEmpty()) java.util.Locale.getDefault()
+        else java.util.Locale.forLanguageTag(tag)
+    }
+
     private fun dayLabel(doc: ScanDocument): String =
-        java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault())
-            .format(java.util.Date(doc.createdAt))
+        java.text.SimpleDateFormat("d MMM", appLocale()).format(java.util.Date(doc.createdAt))
 
     // ---- HomeHost ---------------------------------------------------------
 
@@ -1333,6 +1378,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         /** Opens the Pro screen on launch (Settings' Gold option for Free users). */
         const val EXTRA_OPEN_PRO = "open_pro"
+
+        /** SH1 #2: saved selection of the bottom bar across recreation. */
+        private const val KEY_TAB = "sh1_selected_tab"
 
         /** Tag of the non-interactive fade painted just above the dock. */
         const val DOCK_FADE = "swDockFade"
