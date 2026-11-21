@@ -359,6 +359,7 @@ class ProScreen(
                 text = context.getString(R.string.ux130_l5_pro_continue_free)
                 contentDescription = text
                 gravity = Gravity.CENTER
+                maxLines = 2
                 setOnClickListener { callbacks.onClose() }
             }
             restoreRow = SwStyle.quietAction(
@@ -369,14 +370,23 @@ class ProScreen(
                 text = context.getString(R.string.ux130_l5_pro_restore)
                 contentDescription = text
                 gravity = Gravity.CENTER
+                maxLines = 2
                 setOnClickListener { onRestorePurchase() }
             }
-            val actions = LinearLayout(context).apply { orientation = HORIZONTAL }
+            // minHeight 48dp is set by SwStyle.quietAction; the height wraps so a two-line label
+            // at 200% or in Hindi can grow. ActionStack stacks them when they cannot fit side by side.
+            val actions = ActionStack(context)
             actions.addView(
                 continueFree,
-                LayoutParams(0, SwStyle.dp(context, 48f), 1f).apply { marginEnd = SwStyle.dp(context, 8f) }
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
             )
-            actions.addView(restoreRow, LayoutParams(0, SwStyle.dp(context, 48f), 1f))
+            actions.addView(
+                restoreRow,
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = SwStyle.dp(context, 8f)
+                    topMargin = SwStyle.dp(context, 8f)
+                }
+            )
             content.addView(
                 actions, 6,
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -658,5 +668,46 @@ class ProScreen(
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
         return cell
+    }
+}
+
+/**
+ * The free exit and Restore sit side by side only when both labels actually fit. A 200% or
+ * Hindi "Restore purchase" needs two lines, so the row switches to a vertical stack before the
+ * text can clip. The decision is measured, not guessed from locale or font scale.
+ */
+private class ActionStack(context: Context) : LinearLayout(context) {
+
+    init {
+        orientation = HORIZONTAL
+    }
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        if (childCount == 2 && View.MeasureSpec.getMode(widthSpec) != View.MeasureSpec.UNSPECIFIED) {
+            val available = View.MeasureSpec.getSize(widthSpec)
+            val needed = naturalWidth(0, available) + naturalWidth(1, available) +
+                SwStyle.dp(context, 8f)
+            val wanted = if (needed > available) VERTICAL else HORIZONTAL
+            if (orientation != wanted) orientation = wanted
+        }
+        super.onMeasure(widthSpec, heightSpec)
+    }
+
+    /** Probes a child unwrapped, then restores its real layout params for the parent's pass. */
+    private fun naturalWidth(index: Int, available: Int): Int {
+        val child = getChildAt(index)
+        val params = child.layoutParams as LayoutParams
+        val width = params.width
+        val weight = params.weight
+        params.width = LayoutParams.WRAP_CONTENT
+        params.weight = 0f
+        child.measure(
+            View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val result = child.measuredWidth
+        params.width = width
+        params.weight = weight
+        return result
     }
 }

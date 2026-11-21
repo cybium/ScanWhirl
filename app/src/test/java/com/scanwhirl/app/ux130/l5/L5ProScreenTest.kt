@@ -3,6 +3,7 @@ package com.scanwhirl.app.ux130.l5
 import android.app.Activity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.scanwhirl.app.R
@@ -164,6 +165,50 @@ class L5ProScreenTest {
             assertTrue("$name has a real target", view!!.height >= SwStyle.dp(activity, 48f))
         }
     }
+
+    private fun assertActionsFitAtTwoTimes(lang: String) {
+        val (activity, pro) = screen(lang = lang, scale = 2f)
+        measure(activity, pro, 360, 800)
+        val free = byId(activity, pro, "swProContinueFree") as TextView
+        val restore = byId(activity, pro, "swProRestoreAction") as TextView
+        for (view in listOf(free, restore)) {
+            assertEquals(
+                "$lang ${view.text}: height wraps instead of a fixed 48dp",
+                ViewGroup.LayoutParams.WRAP_CONTENT, view.layoutParams.height
+            )
+            assertEquals("$lang ${view.text}: two lines allowed", 2, view.maxLines)
+            assertTrue(
+                "$lang ${view.text}: at least 48dp, got ${view.height}px",
+                view.height >= SwStyle.dp(activity, 48f)
+            )
+            val text = view.text
+            val layout = view.layout
+            assertNotNull("$lang ${view.text} was laid out", layout)
+            for (line in 0 until layout!!.lineCount) {
+                assertEquals("$lang ${view.text} line $line is ellipsized", 0, layout.getEllipsisCount(line))
+                assertTrue(
+                    "$lang ${view.text} line $line overflows its padding box",
+                    layout.getLineWidth(line) <= view.width - view.totalPaddingLeft - view.totalPaddingRight + 0.5f
+                )
+            }
+            assertEquals("$lang ${view.text} loses its ending", text.length, layout.getLineEnd(layout.lineCount - 1))
+            assertTrue(
+                "$lang ${view.text} needs ${layout.height + view.totalPaddingTop + view.totalPaddingBottom}px but is ${view.height}px",
+                layout.height + view.totalPaddingTop + view.totalPaddingBottom <= view.height + 0.5f
+            )
+        }
+        val stack = free.parent as LinearLayout
+        assertEquals(
+            "$lang: the two actions stack when they do not fit side by side",
+            LinearLayout.VERTICAL, stack.orientation
+        )
+    }
+
+    @Test
+    fun `English paywall actions fit fully at 200 percent`() = assertActionsFitAtTwoTimes("en")
+
+    @Test
+    fun `Hindi paywall actions fit fully at 200 percent`() = assertActionsFitAtTwoTimes("hi")
 
     @Test
     fun `Hindi paywall copy is present`() {

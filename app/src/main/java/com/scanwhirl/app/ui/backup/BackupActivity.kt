@@ -51,6 +51,14 @@ class BackupActivity : BaseActivity() {
         @androidx.annotation.VisibleForTesting
         var vaultOverride: VaultStore? = null
 
+        /**
+         * Test seam: thrown at the start of the create coroutine to prove the explicit finally
+         * clears progress on an exception or a cancellation. Always null in the app.
+         */
+        @JvmField
+        @androidx.annotation.VisibleForTesting
+        var failWorkForTest: Throwable? = null
+
         fun intent(context: Context): Intent = Intent(context, BackupActivity::class.java)
     }
 
@@ -452,22 +460,27 @@ class BackupActivity : BaseActivity() {
         val file = backup.newArchiveFile()
         startWork(getString(R.string.ux130_l5_backup_creating))
         lifecycleScope.launch {
-            // Keep the whole report: it says when part of the phone is not in the archive
-            // (a Vault whose setup is unfinished), and the person must hear that here.
-            val report = withContext(Dispatchers.IO) {
-                runCatching { backup.write(file, secret, wrap) }
-            }
-            val written = report.getOrNull()
-            if (written == null) {
+            try {
+                failWorkForTest?.let { throw it }
+                // Keep the whole report: it says when part of the phone is not in the archive
+                // (a Vault whose setup is unfinished), and the person must hear that here.
+                val report = withContext(Dispatchers.IO) {
+                    runCatching { backup.write(file, secret, wrap) }
+                }
+                val written = report.getOrNull()
+                if (written == null) {
+                    file.delete()
+                    toast(R.string.backup_failed)
+                    return@launch
+                }
+                pending = file
+                pendingWarnings = written.warnings
+                offerSaving(file)
+            } finally {
+                // Covers every terminal path, including an exception or cancellation that
+                // bypasses runCatching. Progress must never be left on screen after the work ends.
                 finishWork()
-                file.delete()
-                toast(R.string.backup_failed)
-                return@launch
             }
-            pending = file
-            pendingWarnings = written.warnings
-            finishWork()
-            offerSaving(file)
         }
     }
 
