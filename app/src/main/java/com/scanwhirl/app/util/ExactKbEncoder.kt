@@ -54,6 +54,13 @@ object ExactKbEncoder {
     private const val MAX_SCALE_STEPS = 12
     private const val MIN_DIM = 8
 
+    /**
+     * Test seam: lets a test inject an OutOfMemoryError and prove the screen reports it instead
+     * of crashing. Null in production.
+     */
+    @Volatile
+    internal var beforeEncode: (() -> Unit)? = null
+
     fun encode(
         source: Bitmap,
         width: Int,
@@ -63,10 +70,13 @@ object ExactKbEncoder {
         maxBytes: Long,
         isCancelled: () -> Boolean = { false }
     ): Result {
-        require(width in 1..12000 && height in 1..12000) { "Invalid target size" }
+        require(
+            FormPresets.fitsFormLimit(width, height)
+        ) { "This size is too large for a form photo. Use up to ${FormPresets.MAX_FORM_LONG_SIDE} px." }
         require(dpi in 1..65535) { "Invalid DPI" }
         require(minBytes > 0 && maxBytes >= minBytes) { "Invalid KB band" }
         checkCancelled(isCancelled)
+        beforeEncode?.invoke()
 
         var w = width
         var h = height

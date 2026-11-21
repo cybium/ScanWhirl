@@ -1,4 +1,4 @@
-package com.scanwhirl.app.zzform1
+package com.scanwhirl.app.form1
 
 import android.graphics.Bitmap
 import com.scanwhirl.app.util.ExactKbEncoder
@@ -149,6 +149,35 @@ class ExactKbEncoderTest {
             val b = ExactKbEncoder.encode(src, 200, 230, 200, 20_000L, 50_000L)
             assertTrue(a.bytes.contentEquals(b.bytes))
             assertEquals(a, b)
+        }
+    }
+
+    @Test
+    fun `targets beyond the form cap are refused before allocating`() {
+        withSource(300, 200, Kind.NOISE) { src ->
+            try {
+                ExactKbEncoder.encode(src, 12000, 12000, 200, 20_000L, 50_000L)
+                fail("a poster sized target must be refused")
+            } catch (e: IllegalArgumentException) {
+                assertTrue(e.message.orEmpty().contains("4000"))
+            }
+        }
+    }
+
+    @Test
+    fun `an injected OutOfMemoryError reaches the caller`() {
+        ExactKbEncoder.beforeEncode = { throw OutOfMemoryError("injected test OOM") }
+        try {
+            withSource(300, 200, Kind.NOISE) { src ->
+                try {
+                    ExactKbEncoder.encode(src, 200, 230, 200, 20_000L, 50_000L)
+                    fail("an OOM must not be swallowed")
+                } catch (e: OutOfMemoryError) {
+                    assertEquals("injected test OOM", e.message)
+                }
+            }
+        } finally {
+            ExactKbEncoder.beforeEncode = null
         }
     }
 

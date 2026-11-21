@@ -28,4 +28,8 @@
     <string name="form1_note_below_min">आपकी न्यूनतम सीमा से कम। %1$s</string>
     <string name="form1_note_above_max">आपकी अधिकतम सीमा से ऊपर। %1$s</string>
     <string name="form1_source_kept">आपकी मूल फ़ोटो नहीं बदली गई।</string>
+    <string name="form1_size_too_large">यह आकार फ़ोटो के लिए बहुत बड़ा है। 4000 px तक लें।</string>
+    <string name="form1_out_of_memory">यह फ़ोटो इस फ़ोन के लिए बहुत बड़ी है। छोटी तस्वीर आज़माएँ।</string>
+    <string name="form1_selected">चुना गया</string>
+    <string name="form1_not_selected">नहीं चुना गया</string>
 </resources>
