@@ -1,0 +1,1 @@
+com.scanwhirl.app.store.DocumentNamesRepositoryTest,com.scanwhirl.app.store.PageSelectTest,com.scanwhirl.app.store.DraftEngineTest,com.scanwhirl.app.ui.shell.SearchSnippetTest,com.scanwhirl.app.ui.tools.PdfAPickerPilotTest,com.scanwhirl.app.ui.protect.W6PickerPilotTest

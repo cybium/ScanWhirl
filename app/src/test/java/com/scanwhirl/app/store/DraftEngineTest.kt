@@ -153,7 +153,21 @@ class DraftEngineTest {
         val previous = repo.listTrash().filter { it.previousToken != null && it.originalId == id }
         assertEquals("exactly one previous version in Trash", 1, previous.size)
         val restored = repo.restoreFromTrash(result.trashKey)
-        assertEquals("the previous version restores byte-identically", before, digest(restored.id))
+        assertEquals("the live replacement keeps its title", "Doc", repo.getDocument(id)!!.name)
+        assertEquals(
+            "a restored previous version must not duplicate the live title",
+            "Doc (2)", restored.name
+        )
+        // Only the deduplicated title may differ. Put the old title back in this test copy and
+        // require every other byte (pages, PDF, OCR, category, timestamps) to match exactly.
+        val restoredMeta = File(docDir(restored.id), "meta.txt")
+        val restoredLines = restoredMeta.readLines().toMutableList()
+        restoredLines[0] = "Doc"
+        restoredMeta.writeText(restoredLines.joinToString("\n") + "\n")
+        assertEquals(
+            "the previous version restores byte-identically apart from the title",
+            before, digest(restored.id)
+        )
         assertFalse("the draft must be gone after Replace", draftDir(id).exists())
         assertFalse(
             "no seal may stay in a published document",

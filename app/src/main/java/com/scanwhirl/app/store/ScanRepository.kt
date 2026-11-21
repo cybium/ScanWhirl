@@ -278,6 +278,25 @@ class ScanRepository(private val context: Context) {
         true
     }
 
+    /**
+     * Call only under TRASH_LOCK, held through the publish rename/marker unlink or rename edit.
+     * That existing process-wide lock serialises names across scans, imports, tools and restores.
+     * Legacy Vault items in documents/ reserve names (as outputName already does), so returning
+     * an item cannot collide. The separate encrypted Vault is not read or unlocked for naming.
+     * Trash and incomplete saves do not reserve names; they resolve afresh before publication.
+     */
+    private fun uniqueDocumentName(dir: File, proposed: String): String =
+        DocumentNames.unique(proposed, docsDir.listFiles { f -> f.isDirectory }.orEmpty()
+            .filter { it.absoluteFile != dir.absoluteFile }
+            .mapNotNull { loadDocument(it)?.name })
+
+    /** Preserve timestamps, category, exports and unknown metadata while resolving just the title. */
+    private fun resolveNameBeforePublish(dir: File) {
+        updateMeta(dir) { lines ->
+            if (lines.isNotEmpty()) lines[0] = uniqueDocumentName(dir, lines[0])
+        }
+    }
+
     private fun padMeta(lines: MutableList<String>) {
         while (lines.size < 3) lines.add(if (lines.size == 1) "" else CategoryRules.OTHER)
     }
@@ -773,14 +792,18 @@ class ScanRepository(private val context: Context) {
      * exactly as it is, so a later replay can publish it instead of rebuilding it.
      */
     private fun publishPrepared(dir: File): ScanDocument {
-        if (!File(dir, SaveFormat.MARKER).delete()) {
-            throw IOException("Could not publish the new document. Try saving again.")
+        val doc = synchronized(TRASH_LOCK) {
+            resolveNameBeforePublish(dir)
+            if (!File(dir, SaveFormat.MARKER).delete()) {
+                throw IOException("Could not publish the new document. Try saving again.")
+            }
+            Durable.syncDir(dir)
+            Durable.syncDir(docsDir) // best effort; durability of the entry itself is not guaranteed
+            loadDocument(dir) ?: throw IllegalStateException("Saved document could not be reopened")
         }
-        Durable.syncDir(dir)
-        Durable.syncDir(docsDir) // best effort; durability of the entry itself is not guaranteed
         SaveFaults.at("after_publish")
 
-        val doc = loadDocument(dir) ?: throw IllegalStateException("Saved document could not be reopened")
+        // Do not take the OCR lock while holding TRASH_LOCK (the global order is OCR -> Trash).
         markPendingAfterPublish(doc)
         return doc
     }
@@ -1141,6 +1164,7 @@ class ScanRepository(private val context: Context) {
             if (!isSafeId(id) || File(docsDir, id).exists()) id = freeLibraryId()
             trashFault(TrashStage.BEFORE_RESTORE)
             val dest = File(docsDir, id)
+            resolveNameBeforePublish(src)
             if (!src.renameTo(dest)) throw IOException("Could not restore \"${trashed.document.name}\"")
             trashFault(TrashStage.RESTORED)
             File(dest, TRASH_MARKER).delete()
@@ -1255,9 +1279,13 @@ class ScanRepository(private val context: Context) {
     }
 
     fun renameDocument(id: String, newName: String) {
-        updateMeta(File(docsDir, id)) { lines ->
-            while (lines.size < 2) lines.add("")
-            lines[0] = newName.trim().replace('\n', ' ').ifBlank { lines[0] }
+        synchronized(TRASH_LOCK) {
+            val dir = File(docsDir, id)
+            updateMeta(dir) { lines ->
+                while (lines.size < 2) lines.add("")
+                val proposed = newName.trim().replace('\n', ' ').ifBlank { lines[0] }
+                lines[0] = uniqueDocumentName(dir, proposed)
+            }
         }
     }
 
@@ -1319,7 +1347,13 @@ class ScanRepository(private val context: Context) {
 
             val first = indices.first() + 1
             val last = indices.last() + 1
-            val label = if (first == last) "Page $first" else "Pages $first-$last"
+            // A gap means "Pages 1-10" would claim pages that were never picked. Name the actual
+            // selection instead; a contiguous run keeps the familiar range label.
+            val label = when {
+                indices.size == 1 -> "Page $first"
+                last - first == indices.size - 1 -> "Pages $first-$last"
+                else -> "Pages " + indices.joinToString(", ") { it + 1 }
+            }
             val name = OutputNames.forTool(doc.name, label, existingDocumentNames())
             val chosen = indices.map { doc.pageFiles[it] }
             buildAndPublish(name, doc.category, chosen.sumOf { it.length() }) { staging ->
@@ -1706,6 +1740,7 @@ class ScanRepository(private val context: Context) {
                 id = synchronized(TRASH_LOCK) {
                     val newId = freeLibraryId()
                     OpFaults.at("op:before_rename")
+                    resolveNameBeforePublish(staging)
                     if (!staging.renameTo(File(docsDir, newId))) {
                         throw IOException(context.getString(R.string.op_publish_failed))
                     }
@@ -2084,6 +2119,7 @@ class ScanRepository(private val context: Context) {
             currentCoroutineContext().ensureActive()
             val id = synchronized(TRASH_LOCK) {
                 val id = freeLibraryId()
+                resolveNameBeforePublish(staging)
                 if (!staging.renameTo(File(docsDir, id))) {
                     throw PdfImport.ImportException(PdfImport.Reason.SAVE_FAILED, "Could not add the document")
                 }

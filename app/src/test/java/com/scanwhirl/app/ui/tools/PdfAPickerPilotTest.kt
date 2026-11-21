@@ -62,7 +62,9 @@ class PdfAPickerPilotTest {
     @Test
     fun `PDF-A uses the shared picker and reviews the exact chosen file`() {
         val threePages = DocFixtures.saved(repo, app, pages = 3, name = "SW_TEST_3pages")
-        val onePage = DocFixtures.saved(repo, app, pages = 1, name = "SW_TEST_3pages")
+        // Legacy duplicate: both sources keep the same visible title, so the sheet must rely on
+        // the chosen document's id (and page count), not on a unique name.
+        val onePage = DocFixtures.savedLegacyDuplicate(repo, app, pages = 1, name = "SW_TEST_3pages")
 
         ActivityScenario.launch<ShellActivity>(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->

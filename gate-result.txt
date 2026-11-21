@@ -1,0 +1,6 @@
+FAIL SearchSnippetTest > near identical names differ by pages size and date in full :: java.lang.AssertionError: both same-name rows appear
+FAIL PdfAPickerPilotTest > PDF-A uses the shared picker and reviews the exact chosen file :: org.junit.ComparisonFailure: the row shows the document name expected:<SW_TEST_3pages[]> but was:<SW_TEST_3pages[ (2)]>
+FAIL DraftEngineTest > replace moves the base to Trash as previous version and publishes the draft under the same id :: org.junit.ComparisonFailure: the previous version restores byte-identically expected:<[6fff6c6915f28f8a00d39472214ab4fb9da8be4c023c223f3aa835944303d131]> but was:<[438c6d8f8f07ff94e54ad4c596e1f23e168aa73a161a5a6a02268bf1
+FAIL W6PickerPilotTest > two identical names still select the exact file by id :: java.lang.AssertionError: both rows show the same name expected:<[SW_TEST_3pages, SW_TEST_3pages]> but was:<[SW_TEST_3pages (2), SW_TEST_3pages]>
+REASON test step outcome=failure (Gradle exit status was not success)
+GATE FAIL tests=2804 failures=4 skipped=0 lint=[0 errors, 592 warnings]
