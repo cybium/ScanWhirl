@@ -174,11 +174,13 @@ class ScanRepository(private val context: Context) {
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
         readProbe?.invoke(Thread.currentThread().name)
-        return docsDir.listFiles { f -> f.isDirectory }
+        val loaded = docsDir.listFiles { f -> f.isDirectory }
             ?.sortedByDescending { it.lastModified() }
             ?.mapNotNull { dir -> loadDocument(dir) }
-            ?.filter { includeVaulted || !it.isVaulted }
             ?: emptyList()
+        // L1lib2 P1: next-load reconciliation reuses the metas we just read; no extra scan.
+        reconcileFrom(loaded.mapNotNull { it.folder })
+        return if (includeVaulted) loaded else loaded.filterNot { it.isVaulted }
     }
 
     /** Documents hidden inside the 4-digit PIN Pro Vault. */
@@ -506,12 +508,17 @@ class ScanRepository(private val context: Context) {
     /**
      * Renames a folder and every document in it. Documents are never lost.
      *
-     * L1lib #6 (crash-safe order): rewrite the DOCUMENTS first and only then the folder
-     * list. The old order wrote the list first, so a disk-full failure midway left
-     * `folders.txt` naming the new folder while half the documents still carried the old
-     * name. If a document write throws, every document already changed is best-effort
-     * rolled back and the exception is rethrown; `folders.txt` keeps the old name, so the
-     * list and the documents always agree.
+     * L1lib #6 / L1lib2 P1: folders.txt is written TWICE so it is consistent at every step:
+     *  1. write the list with BOTH old and new names. From this point on a document that
+     *     carries either name still resolves to a real folder, even if the process dies.
+     *  2. rewrite every document from [oldName] to [newName].
+     *  3. write the final list with the old name removed.
+     *
+     * A failure in step 1 changes nothing. A failure in steps 2 or 3 rolls the documents
+     * back and restores the original list. An `Error` (simulated process death) is NOT
+     * caught: the step-1 list keeps both names, so no document is orphaned. Any leftover
+     * folder name found only in documents is re-added by [reconcileFolders] on startup or
+     * the next library load.
      */
     fun renameFolder(oldName: String, newName: String): Boolean {
         val clean = LibraryMeta.normalizeFolder(newName) ?: return false
@@ -521,8 +528,13 @@ class ScanRepository(private val context: Context) {
             if (at < 0) return false
             if (all.any { it.equals(clean, true) && !it.equals(oldName, true) }) return false
 
+            val finalList = all.toMutableList().also { it[at] = clean }
+            // Step 1: both names exist before any document points at the new one.
+            writeFolders((all + clean).distinctBy { it.lowercase(Locale.getDefault()) })
+
             val changed = mutableListOf<File>()
             try {
+                // Step 2: rewrite the documents.
                 forEachDocumentDir { dir ->
                     val lines = metaLines(dir) ?: return@forEachDocumentDir
                     val meta = LibraryMeta.read(lines)
@@ -536,9 +548,11 @@ class ScanRepository(private val context: Context) {
                         changed += dir
                     }
                 }
-            } catch (t: Throwable) {
-                // Best effort: undo the documents that were already rewritten so no document
-                // points at a folder name that never made it into folders.txt.
+                // Step 3: drop the old name only after every document was rewritten.
+                writeFolders(finalList)
+            } catch (t: Exception) {
+                // Best effort: undo documents and restore the original folder list so the
+                // two stores agree again. An Error (process death) skips this on purpose.
                 for (dir in changed) {
                     runCatching {
                         updateMeta(dir) { current ->
@@ -549,11 +563,37 @@ class ScanRepository(private val context: Context) {
                         }
                     }
                 }
+                runCatching { writeFolders(all) }
                 throw t
             }
-            // The list changes only after every document is consistent with the new name.
-            writeFolders(all.toMutableList().also { it[at] = clean })
             return true
+        }
+    }
+
+    /**
+     * L1lib2 P1: re-add any folder name that is still used by a document but missing from
+     * folders.txt (e.g. after a process death between the two rename writes). Documents
+     * are never silently moved into "All only".
+     */
+    fun reconcileFolders() {
+        synchronized(META_LOCK) {
+            val used = mutableSetOf<String>()
+            forEachDocumentDir { dir ->
+                metaLines(dir)?.let { lines ->
+                    LibraryMeta.read(lines).folder?.let { used += it }
+                }
+            }
+            reconcileFrom(used)
+        }
+    }
+
+    /** Adds [folders] missing from folders.txt; callers hold no lock beyond this method. */
+    private fun reconcileFrom(folders: Collection<String>) {
+        if (folders.isEmpty()) return
+        synchronized(META_LOCK) {
+            val known = listFolders()
+            val missing = folders.filter { name -> known.none { it.equals(name, true) } }
+            if (missing.isNotEmpty()) writeFolders(known + missing)
         }
     }
 
@@ -2767,6 +2807,11 @@ class ScanRepository(private val context: Context) {
     fun recoverOperations(): Int {
         val filesDir = context.filesDir
         var rolledForward = 0
+
+        // L1lib2 P1: startup reconciliation first. A process death between the two
+        // rename writes can leave a document folder name absent from folders.txt; add
+        // it back before any UI reads the folder list.
+        reconcileFolders()
 
         // 1. Roll forward.
         val stagingRoot = OpStaging.root(filesDir)

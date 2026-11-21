@@ -20,6 +20,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -140,6 +141,53 @@ class LibraryL1LibTest {
         }
     }
 
+    /** Lay the shell out as a phone so the scroll view has real content height. */
+    private fun layoutRoot(activity: ShellActivity): View {
+        val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)
+        val dm = activity.resources.displayMetrics
+        val w = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+        val h = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+        repeat(3) {
+            root.measure(w, h)
+            root.layout(0, 0, dm.widthPixels, dm.heightPixels)
+        }
+        return root
+    }
+
+    // ---- L1lib2 P2: the real scroll listener appends more cards -----------
+
+    @Test
+    fun `scrolling the viewport appends cards without rebinding earlier ones`() {
+        repeat(150) { index ->
+            val dir = File(repo.docsDir, "scroll%03d".format(index)).apply { mkdirs() }
+            File(dir, "meta.txt").writeText("Scroll file $index\n${1_700_000_000_000L + index}\nother\n")
+            File(dir, "page_000.jpg").writeBytes(ByteArray(8) { (it + 1).toByte() })
+        }
+
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                waitFor("the first page renders") { cards(activity).size == 60 }
+                layoutRoot(activity)
+                val scroll = activity.findViewById<ViewGroup>(R.id.swTabContent).getChildAt(0) as ScrollView
+                val content = scroll.getChildAt(0)
+                assertTrue("the list is taller than the viewport", content.height > scroll.height)
+
+                val before = cards(activity)
+                scroll.scrollTo(0, content.height)
+                idle()
+
+                val after = cards(activity)
+                assertTrue("scrolling appended cards, got ${after.size}", after.size > before.size)
+                for (i in before.indices) {
+                    assertSame("card $i was already inflated and must not be recreated", before[i], after[i])
+                }
+                assertTrue("new cards were inflated", after.size > before.size)
+                val count = activity.findViewById<TextView>(R.id.swDocCount)
+                assertTrue("count still names all 150 documents: ${count.text}", count.text.contains("150"))
+            }
+        }
+    }
+
     // ---- #3: a failed write never crashes ---------------------------------
 
     @Test
@@ -212,6 +260,35 @@ class LibraryL1LibTest {
                     cards(activity).any { it.doc?.id == cafe }
                 }
                 assertEquals("only the cafe document matches", cafe, cards(activity).single().doc?.id)
+            }
+        }
+    }
+
+    // ---- L1lib2 P2: Devanagari names and OCR with matras stay searchable --
+
+    @Test
+    fun `Hindi names and OCR text with matras are found by word search`() {
+        Prefs.setLocaleTag(app, "hi")
+        val rent = DocFixtures.saved(repo, app, pages = 1, name = "किराया पर्ची")
+        val power = DocFixtures.saved(repo, app, pages = 1, name = "बिजली बिल")
+        repo.ocrStore.putTexts(rent, mapOf("page_000.jpg" to "किराया पर्ची अक्टूबर"))
+        repo.ocrStore.putTexts(power, mapOf("page_000.jpg" to "बिजली बिल समय पर"))
+
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                waitFor("the Hindi cards render") { cards(activity).size == 2 }
+
+                search(activity, "किराया")
+                waitFor("the Devanagari name hit appears") {
+                    cards(activity).singleOrNull()?.doc?.id == rent
+                }
+                assertEquals("matra-bearing Hindi name matches", rent, cards(activity).single().doc?.id)
+
+                search(activity, "बिजली")
+                waitFor("the Devanagari OCR hit appears") {
+                    cards(activity).singleOrNull()?.doc?.id == power
+                }
+                assertEquals("matra-bearing Hindi OCR text matches", power, cards(activity).single().doc?.id)
             }
         }
     }

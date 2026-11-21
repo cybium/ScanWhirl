@@ -28,6 +28,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import com.scanwhirl.app.R
@@ -488,18 +489,16 @@ class LibraryScreen(
      */
     private fun <T> ioWrite(
         block: () -> T,
-        onError: (() -> Unit)? = null,
+        onError: (suspend () -> Unit)? = null,
         after: (T) -> Unit = {}
     ) {
-        val fail = {
-            if (onError != null) onError() else writeFailed()
-        }
+        val fail: suspend () -> Unit = { if (onError != null) onError() else writeFailed() }
         val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
         if (owner == null) {
             val result = try {
                 block()
             } catch (t: Exception) {
-                fail()
+                runBlocking { fail() }
                 return
             }
             after(result)
@@ -1099,9 +1098,12 @@ class LibraryScreen(
                         reload()
                     },
                     onError = {
-                        // L1lib #3: say how many actually moved, then re-sync with disk.
-                        val moved = ids.count { id ->
-                            repo.getDocument(id)?.folder.equals(target, true)
+                        // L1lib2 P2: counting moved documents reads every meta.txt, so do
+                        // it on IO (withContext returns here on Main for the Toast).
+                        val moved = withContext(ioDispatcher) {
+                            ids.count { id ->
+                                repo.getDocument(id)?.folder.equals(target, true)
+                            }
                         }
                         Toast.makeText(
                             context,
@@ -2220,8 +2222,25 @@ class LibraryScreen(
      */
     internal fun loadMoreCards(): Boolean {
         if (cardsShown >= allVisibleDocs.size) return false
-        cardsShown = minOf(cardsShown + CARD_PAGE, allVisibleDocs.size)
-        renderCards()
+        val target = minOf(cardsShown + CARD_PAGE, allVisibleDocs.size)
+        val generation = renderGeneration
+        var from = cardsShown
+        // Commit the whole range up front so two scroll events cannot schedule the same
+        // cards. The views arrive in ~20-card frames, each guarded against a stale render.
+        cardsShown = target
+        while (from < target) {
+            val to = minOf(from + APPEND_CHUNK, target)
+            val start = from
+            post {
+                if (generation == renderGeneration && start == renderedDocs.size) {
+                    val bound = minOf(to, allVisibleDocs.size)
+                    for (i in start until bound) addCard(allVisibleDocs[i])
+                    renderedDocs = allVisibleDocs.take(bound)
+                    renderedSignatures = renderedDocs.map { signature(it) }
+                }
+            }
+            from = to
+        }
         return true
     }
 
@@ -2366,6 +2385,8 @@ class LibraryScreen(
         /** First page of document cards; more are appended as the reader scrolls. */
         const val INITIAL_CARDS = 60
         const val CARD_PAGE = 60
+        /** Append a page across a few frames instead of inflating 60 views in one frame. */
+        const val APPEND_CHUNK = 20
 
         private val isRobolectric =
             android.os.Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
