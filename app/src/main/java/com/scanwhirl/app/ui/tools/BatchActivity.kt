@@ -548,10 +548,10 @@ class BatchActivity : BaseActivity() {
             paintFormat()
         }
         val formatRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        formatRow.addView(jpg, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 48f), 1f).apply {
+        formatRow.addView(jpg, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginEnd = SwStyle.dp(this@BatchActivity, 8f)
         })
-        formatRow.addView(png, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 48f), 1f))
+        formatRow.addView(png, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(formatRow)
         paintFormat()
 
@@ -564,10 +564,10 @@ class BatchActivity : BaseActivity() {
         perDoc.setOnClickListener { oneZip = false; paintZip() }
         all.setOnClickListener { oneZip = true; paintZip() }
         val zipRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        zipRow.addView(perDoc, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 48f), 1f).apply {
+        zipRow.addView(perDoc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginEnd = SwStyle.dp(this@BatchActivity, 8f)
         })
-        zipRow.addView(all, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 48f), 1f))
+        zipRow.addView(all, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(zipRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@BatchActivity, 10f) })

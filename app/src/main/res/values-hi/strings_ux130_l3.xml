@@ -4,6 +4,7 @@
     <!-- L3-02: परिणाम पदानुक्रम. -->
     <string name="ux130_l3_result_remove_copy">यह नई प्रति हटाएँ</string>
     <string name="ux130_l3_result_remove_copy_consequence">इससे यह नई प्रति और इसी कार्रवाई के दौरान Documents/ScanWhirl में सहेजी गई प्रति हट जाती है। आपकी मूल फ़ाइल वैसी ही रहती है।</string>
+    <string name="ux130_l3_copy_changed">यह प्रति पहले ही बदली या हटा दी गई।</string>
 
     <!-- L3-03: compress setup labels. -->
     <string name="ux130_l3_compress_aim_size">आकार तय करें</string>
@@ -18,16 +19,4 @@
     <string name="ux130_l3_failure_unreadable">यह PDF पढ़ी नहीं जा सकी। दूसरी फ़ाइल चुनें।</string>
     <string name="ux130_l3_failure_no_space">प्रति सहेजी नहीं गई। कुछ जगह खाली करें और फिर प्रयास करें।</string>
     <string name="ux130_l3_failure_generic">प्रति नहीं बनाई गई। फिर प्रयास करें।</string>
-
-    <!-- L3-01: मूल फ़ाइल रखने या बदलने का स्थायी निर्णय. -->
-    <string name="ux130_l3_keep_original_title">मूल फ़ाइल रखें?</string>
-    <string name="ux130_l3_keep_both">दोनों रखें</string>
-    <string name="ux130_l3_replace_original">मूल को बदलें</string>
-    <string name="ux130_l3_replace_consequence">मूल फ़ाइल हटाई गई फ़ाइलों में जाएगी। 30 दिनों तक इसे वापस लाया जा सकता है।</string>
-    <string name="ux130_l3_restore_original">मूल फ़ाइल वापस लाएँ</string>
-    <string name="ux130_l3_replace_failed">मूल को बदला नहीं जा सका। दोनों फ़ाइलें रखी गईं।</string>
-    <string name="ux130_l3_restore_failed">मूल फ़ाइल वापस नहीं लाई जा सकी। वह अभी भी हटाई गई फ़ाइलों में है।</string>
-    <string name="ux130_l3_replace_done">मूल फ़ाइल हटाई गई फ़ाइलों में है। 30 दिनों तक इसे वापस लाया जा सकता है।</string>
-    <string name="ux130_l3_restored_done">मूल फ़ाइल वापस लाई गई।</string>
-    <string name="ux130_l3_keep_both_done">दोनों फ़ाइलें रखी गईं।</string>
 </resources>

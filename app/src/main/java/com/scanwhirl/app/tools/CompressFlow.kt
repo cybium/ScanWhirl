@@ -448,10 +448,9 @@ class CompressFlow(
                 val before = if (doc.pdfFile.exists()) doc.pdfFile.length() else 0L
                 val out = repo.compressScan(doc.id, level.quality, level.maxDim)
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
-                val fingerprint = repo.toolSourceFingerprint(doc.id)
                 host.refreshList()
                 showCompressResult(out, before, after, sourceKept = true,
-                    provenSourceId = doc.id, provenFingerprint = fingerprint)
+                    receiptSourceId = doc.id)
             } catch (e: CancellationException) {
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
@@ -484,10 +483,9 @@ class CompressFlow(
                 val out = repo.compressScanToTarget(doc.id, target, onPage = { done, total ->
                     activity.runOnUiThread { progress.setProgress(done, total) }
                 })
-                val fingerprint = repo.toolSourceFingerprint(doc.id)
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true,
-                    provenSourceId = doc.id, provenFingerprint = fingerprint)
+                    receiptSourceId = doc.id)
             } catch (e: CancellationException) {
                 activity.runOnUiThread {
                     Toast.makeText(
@@ -523,9 +521,8 @@ class CompressFlow(
         sourceKept: Boolean = false,
         /** Honest "Before: N pages of M (X MB)" for a picked PDF's selected pages. */
         beforeLine: String? = null,
-        /** L3-01: proven library source only; external sources pass null. */
-        provenSourceId: String? = null,
-        provenFingerprint: String? = null
+        /** L3-02 P2: library source used only to derive the "original kept" receipt from state. */
+        receiptSourceId: String? = null
     ) {
         val missed = target != null && after > target
         val grew = before > 0L && after > before
@@ -557,13 +554,7 @@ class CompressFlow(
                 sourceKept = sourceKept,
                 compressTargetMissed = missed,
                 compressGrew = grew,
-                // L3-01: the source id, output id, operation identity and source
-                // bytes travel together. Without them the result is Keep both only.
-                sourceId = provenSourceId,
-                outputId = if (provenSourceId != null) out.id else null,
-                operationId = if (provenSourceId != null) "compress-${out.id}" else null,
-                operation = if (provenSourceId != null) "compress" else null,
-                sourceFingerprint = provenFingerprint
+                receiptSourceId = receiptSourceId
             )
         )
     }

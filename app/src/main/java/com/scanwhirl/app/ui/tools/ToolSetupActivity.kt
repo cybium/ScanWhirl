@@ -759,9 +759,20 @@ class ToolSetupActivity : BaseActivity() {
                 marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
                 if (stackEstimate) bottomMargin = SwStyle.dp(this@ToolSetupActivity, 4f)
             })
-            row.addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
-            })
+            // L3-03 P1: in a vertical row, width 0 + weight 1 measures to zero
+            // and the label disappears. A stacked label must fill the row.
+            row.addView(
+                label,
+                if (stackEstimate) {
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                } else {
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
+                    }
+                }
+            )
             row.addView(size, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { if (stackEstimate) topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
@@ -1266,12 +1277,9 @@ class ToolSetupActivity : BaseActivity() {
                         val (quality, maxDim) = compressLevel()
                         repo.compressScan(doc.id, quality, maxDim).id
                     }
-                    // L3-01: capture the source bytes now, before any later edit can
-                    // change them; the result only offers Replace with this proof.
-                    Pair(listOf(out), repo.toolSourceFingerprint(doc.id))
-                }) { (ids, fingerprint) ->
-                    openDocs(ids, targetBytes = targetBytes,
-                        sourceId = doc.id, sourceFingerprint = fingerprint)
+                    listOf(out)
+                }) { ids ->
+                    openDocs(ids, targetBytes = targetBytes, receiptSourceId = doc.id)
                 }
             }
             "pdf_to_images" -> {
@@ -1405,19 +1413,13 @@ class ToolSetupActivity : BaseActivity() {
     private fun openDocs(
         ids: List<String>,
         targetBytes: Long? = null,
-        sourceId: String? = null,
-        sourceFingerprint: String? = null
+        receiptSourceId: String? = null
     ) {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        val outputId = ids.singleOrNull()
-        val proven = sourceId != null && sourceFingerprint != null && outputId != null
         startActivity(
             ToolResultActivity.intent(
                 this, tool.id, docIds = ids, targetBytes = targetBytes,
-                sourceId = sourceId, outputId = if (proven) outputId else null,
-                operationId = if (proven) "compress-$outputId" else null,
-                operation = if (proven) "compress" else null,
-                sourceFingerprint = sourceFingerprint
+                receiptSourceId = receiptSourceId
             )
         )
     }

@@ -26,7 +26,7 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.store.ToolResultChoiceStore
+import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -108,22 +108,11 @@ class ToolResultActivity : BaseActivity() {
     private var beforeBytes: Long? = null
 
     /**
-     * L3-01 / UX-002: provenance for the one proven transform. Only a result that
-     * carries ALL of these gets a Replace decision; every other result stays
-     * "Keep both" with no extra choice. The fingerprint is captured by the
-     * producing flow, before anything can touch the source.
+     * L3-02 P1: identity of the output, captured by [intent] at creation time.
+     * Undo only removes a document that still has these exact bytes, so a stale
+     * id that was later reused by another document is never deleted.
      */
-    private var sourceId: String? = null
-    private var outputId: String? = null
-    private var operationId: String? = null
-    private var operation: String? = null
-    private var sourceFingerprint: String? = null
-    private lateinit var choiceStore: ToolResultChoiceStore
-    private var choice: ToolResultChoiceStore.Entry? = null
-    private var replaceEligible = false
-    private var keepBothButton: TextView? = null
-    private var replaceButton: TextView? = null
-    private var restoreButton: View? = null
+    private var outputIdentity: String? = null
 
     /** F1: the ID card flow's own result actions (Keep / Discard). */
     private val idCardFlow: Boolean get() = toolId == "id_card"
@@ -146,9 +135,12 @@ class ToolResultActivity : BaseActivity() {
     private var documentsExistingName: String? = null
 
     /**
-     * UI-B3 (#9-now): the compressed source was a library document and was left in place, so the
-     * result can say where the original is. Export-only results never show this line.
+     * L3-02 P2: the "original kept" receipt is derived from the library's ACTUAL
+     * state at render time (is the source document still there?), not from a
+     * producer's boolean. [sourceKept] is the derived value; the legacy boolean
+     * extra is only a fallback for callers that supply no source id.
      */
+    private var receiptSourceId: String? = null
     private var sourceKept = false
 
     /**
@@ -169,43 +161,13 @@ class ToolResultActivity : BaseActivity() {
         note = intent.getStringExtra(EXTRA_NOTE)
         targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0 }
-        sourceKept = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
-        // L3-01: read the producer's provenance. Without all four values there is
-        // no proof, so the Replace card is not shown and Keep both is the only path.
-        sourceId = intent.getStringExtra(EXTRA_SOURCE_ID)
-        outputId = intent.getStringExtra(EXTRA_OUTPUT_ID)
-        operationId = intent.getStringExtra(EXTRA_OPERATION_ID)
-        operation = intent.getStringExtra(EXTRA_OPERATION)
-        sourceFingerprint = intent.getStringExtra(EXTRA_SOURCE_FINGERPRINT)
-        val sid = sourceId
-        val oid = outputId
-        val opId = operationId
-        val op = operation
-        val fp = sourceFingerprint
-        val hasProvenance = !idCardFlow && sid != null && oid != null && opId != null &&
-            op != null && fp != null && docIds.singleOrNull() == oid && files.isEmpty()
-        if (hasProvenance) {
-            choiceStore = ToolResultChoiceStore(this)
-            // An existing decision is honoured even while the original is in Trash:
-            // otherwise leaving and reopening would hide the Restore route exactly
-            // when it is needed. Eligibility only gates NEW decisions.
-            val existing = choiceStore.load(opId!!)
-            if (existing != null || repo.isToolReplaceEligible(sid!!, oid!!, op!!)) {
-                replaceEligible = true
-                choice = choiceStore.reconcile(repo, opId!!)
-            }
-            if (replaceEligible && choice == null) {
-                // Preselected, but NOT applied: a "pending" journal is never a
-                // storage instruction, so an abandoned result cannot replace.
-                val initial = ToolResultChoiceStore.Entry(
-                    operationId = opId, sourceId = sid, outputId = oid, operation = op,
-                    sourceFingerprint = fp, decision = "pending", preferred = "replace",
-                    trashKey = null, updatedAt = System.currentTimeMillis()
-                )
-                choiceStore.save(initial)
-                choice = initial
-            }
-        }
+        // L3-02 P1: the identity was captured when this intent was built, before
+        // any later owner of the id could replace the output.
+        outputIdentity = intent.getStringExtra(EXTRA_OUTPUT_IDENTITY)
+        // L3-02 P2: derive the original-kept receipt from the library right now.
+        receiptSourceId = intent.getStringExtra(EXTRA_RECEIPT_SOURCE_ID)
+        val legacyClaim = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
+        sourceKept = receiptSourceId?.let { repo.getDocument(it) != null } ?: legacyClaim
         // W3: a rotation must not lose what this run already learned. The saved Documents copy
         // stays undoable (it is still the same copy, still verified by its fingerprint), and an
         // already-undone result never offers the actions again as if nothing happened.
@@ -397,9 +359,6 @@ class ToolResultActivity : BaseActivity() {
         column.addView(errorView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
-
-        // L3-01: the original-safety decision only appears for proven results.
-        if (replaceEligible) addDecisionCard(column)
 
         if (idCardFlow) {
             // F1/W3: the card is already saved, so there is nothing to Save and nothing to Undo.
@@ -604,119 +563,6 @@ class ToolResultActivity : BaseActivity() {
             }
             setOnClickListener { onClick() }
         }
-
-    // ---- L3-01: original safety ------------------------------------------
-
-    /** "Keep the original?" card: Keep both / Replace original, with the exact consequence. */
-    private fun addDecisionCard(column: LinearLayout) {
-        column.addView(
-            SwStyle.text(this, 16f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
-                text = getString(R.string.ux130_l3_keep_original_title)
-                maxLines = Int.MAX_VALUE
-            },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) }
-        )
-        column.addView(
-            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
-                text = getString(R.string.ux130_l3_replace_consequence)
-                setLineSpacing(0f, 1.2f)
-                maxLines = Int.MAX_VALUE
-            },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 4f) }
-        )
-        keepBothButton = button(getString(R.string.ux130_l3_keep_both),
-            id = R.id.ux130_l3_keep_both) { applyDecision("keep_both") }
-        replaceButton = button(getString(R.string.ux130_l3_replace_original),
-            id = R.id.ux130_l3_replace_original) { applyDecision("replace") }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(keepBothButton, LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
-        ).apply { marginEnd = SwStyle.dp(this@ToolResultActivity, 8f) })
-        row.addView(replaceButton, LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
-        ))
-        column.addView(row, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
-        // A Trashed original keeps a named route back, however often the screen is
-        // reopened: the journal, not a transient field, decides if it is shown.
-        restoreButton = button(getString(R.string.ux130_l3_restore_original),
-            id = R.id.ux130_l3_restore_original) { applyDecision("keep_both") }
-        column.addView(restoreButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
-        renderDecisionState()
-    }
-
-    private fun renderDecisionState() {
-        val current = choice
-        val trashed = current?.trashKey != null
-        restoreButton?.visibility = if (trashed) View.VISIBLE else View.GONE
-        val replaced = current?.decision == "replace"
-        // The preselection is visible (filled), but it never moves a file by itself.
-        paintDecision(keepBothButton, !replaced)
-        paintDecision(replaceButton, replaced)
-    }
-
-    private fun paintDecision(view: TextView?, primary: Boolean) {
-        val v = view ?: return
-        v.setTextColor(SwStyle.color(this, if (primary) R.color.sw_disc_ink else R.color.text_hologram_hi))
-        v.background = if (primary) {
-            SwStyle.rounded(this, SwStyle.color(this, R.color.cyan_primary), radiusDp = 16f)
-        } else {
-            SwStyle.rounded(
-                this, SwStyle.color(this, R.color.glass_surface), radiusDp = 16f,
-                stroke = SwStyle.color(this, R.color.sw_cyan_hair)
-            )
-        }
-    }
-
-    /**
-     * Explicit decisions only. A failure never changes the journal, so the UI
-     * never claims a replace or restore that did not actually happen. The output
-     * copy is untouched here: removing it is the separate Undo action.
-     */
-    private fun applyDecision(decision: String) {
-        val current = choice ?: return
-        val fp = current.sourceFingerprint
-        try {
-            val next: ToolResultChoiceStore.Entry
-            val message: Int
-            if (decision == "replace") {
-                if (current.decision == "replace" && current.trashKey != null &&
-                    repo.findTrashedToolSource(current.sourceId, fp) == current.trashKey
-                ) {
-                    message = R.string.ux130_l3_replace_done // repeated tap: already true
-                    next = current
-                } else {
-                    val key = repo.moveToolSourceToTrash(current.sourceId, fp)
-                    next = current.copy(decision = "replace", trashKey = key, preferred = "replace",
-                        updatedAt = System.currentTimeMillis())
-                    message = R.string.ux130_l3_replace_done
-                }
-            } else {
-                val key = current.trashKey ?: repo.findTrashedToolSource(current.sourceId, fp)
-                if (key != null) repo.restoreToolSource(key, fp)
-                next = current.copy(decision = "keep_both", trashKey = null, preferred = "keep_both",
-                    updatedAt = System.currentTimeMillis())
-                message = if (key != null) R.string.ux130_l3_restored_done else R.string.ux130_l3_keep_both_done
-            }
-            if (next !== current) choiceStore.save(next)
-            choice = next
-            clearFail()
-            Toast.makeText(this, getString(message), Toast.LENGTH_SHORT).show()
-            renderDecisionState()
-        } catch (_: Exception) {
-            fail(getString(
-                if (decision == "replace") R.string.ux130_l3_replace_failed
-                else R.string.ux130_l3_restore_failed
-            ))
-        }
-    }
 
     // ---- content ----------------------------------------------------------
 
@@ -1324,6 +1170,15 @@ class ToolResultActivity : BaseActivity() {
 
     private fun undo() {
         if (undone) return
+        // L3-02 P1: a stale id must never authorize deletion. The identity was
+        // captured when this result was created; if the document currently at
+        // that id has different bytes it is somebody else's file.
+        if ((docIds.isNotEmpty() || files.isNotEmpty()) &&
+            (outputIdentity == null || captureOutputIdentity(this, docIds, files) != outputIdentity)
+        ) {
+            fail(getString(R.string.ux130_l3_copy_changed))
+            return
+        }
         undone = true
         val outs = files.toList()
         // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
@@ -1488,12 +1343,11 @@ class ToolResultActivity : BaseActivity() {
         private const val EXTRA_COMPRESS_MISSED = "compress_missed"
         private const val EXTRA_COMPRESS_GREW = "compress_grew"
 
-        /** L3-01: validated provenance, all four required before a Replace card appears. */
-        private const val EXTRA_SOURCE_ID = "l3_source_id"
-        private const val EXTRA_OUTPUT_ID = "l3_output_id"
-        private const val EXTRA_OPERATION_ID = "l3_operation_id"
-        private const val EXTRA_OPERATION = "l3_operation"
-        private const val EXTRA_SOURCE_FINGERPRINT = "l3_source_fingerprint"
+        /** L3-02 P1: output identity captured at result creation, checked before removal. */
+        private const val EXTRA_OUTPUT_IDENTITY = "l3_output_identity"
+
+        /** L3-02 P2: the library source used to derive the "original kept" receipt. */
+        private const val EXTRA_RECEIPT_SOURCE_ID = "l3_receipt_source_id"
 
         /** W3: recreation-safe receipt/undo state (never a storage policy, only this run's own copy). */
         private const val KEY_UNDONE = "w3_undone"
@@ -1530,12 +1384,8 @@ class ToolResultActivity : BaseActivity() {
             compressTargetMissed: Boolean = false,
             /** CP1: after > before, so the result must admit the copy is larger. */
             compressGrew: Boolean = false,
-            /** L3-01: one proven library source, one library output. */
-            sourceId: String? = null,
-            outputId: String? = null,
-            operationId: String? = null,
-            operation: String? = null,
-            sourceFingerprint: String? = null
+            /** L3-02 P2: library source, used only to derive the receipt from actual state. */
+            receiptSourceId: String? = null
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
@@ -1548,15 +1398,53 @@ class ToolResultActivity : BaseActivity() {
                 if (sourceKept) putExtra(EXTRA_SOURCE_KEPT, true)
                 if (compressTargetMissed) putExtra(EXTRA_COMPRESS_MISSED, true)
                 if (compressGrew) putExtra(EXTRA_COMPRESS_GREW, true)
-                if (sourceId != null && outputId != null && operationId != null &&
-                    operation != null && sourceFingerprint != null
-                ) {
-                    putExtra(EXTRA_SOURCE_ID, sourceId)
-                    putExtra(EXTRA_OUTPUT_ID, outputId)
-                    putExtra(EXTRA_OPERATION_ID, operationId)
-                    putExtra(EXTRA_OPERATION, operation)
-                    putExtra(EXTRA_SOURCE_FINGERPRINT, sourceFingerprint)
+                if (receiptSourceId != null) putExtra(EXTRA_RECEIPT_SOURCE_ID, receiptSourceId)
+                captureOutputIdentity(context, docIds, files)?.let {
+                    putExtra(EXTRA_OUTPUT_IDENTITY, it)
                 }
             }
+
+        /**
+         * L3-02 P1: hash the exact outputs while this intent is being built. A
+         * later document that merely reuses an id has different bytes and can
+         * never satisfy the same identity, so Undo cannot delete it.
+         */
+        private fun captureOutputIdentity(
+            context: Context,
+            docIds: List<String>,
+            files: List<File>
+        ): String? {
+            return try {
+                if (files.isNotEmpty()) {
+                    val parts = mutableListOf<String>()
+                    for (file in files.sortedBy { it.path }) {
+                        if (!file.exists()) return null
+                        // A result may name a directory (a failed export folder);
+                        // keep those removable so the honest "not every copy was
+                        // removed" path still works on base behavior.
+                        parts += if (file.isFile) {
+                            "${file.path}|${file.length()}|${Sha256.of(file)}"
+                        } else {
+                            "${file.path}|dir|${file.lastModified()}"
+                        }
+                    }
+                    "F:" + parts.joinToString(";")
+                } else if (docIds.isNotEmpty()) {
+                    val repo = ScanWhirlApp.from(context).repository
+                    val parts = mutableListOf<String>()
+                    for (id in docIds.sorted()) {
+                        val doc = repo.getDocument(id) ?: return null
+                        val pdf = doc.pdfFile
+                        if (!pdf.isFile) return null
+                        parts += "$id|${doc.createdAt}|${pdf.length()}|${Sha256.of(pdf)}"
+                    }
+                    "D:" + parts.joinToString(";")
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 }
