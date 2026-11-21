@@ -18,6 +18,7 @@ import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.ui.backup.BackupActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -164,4 +165,58 @@ class L5BackupStatusTest {
             ShadowDialog.getShownDialogs().lastOrNull { it.findViewById<View>(progressId) != null }
         )
     }
+
+    /**
+     * Drives the real create path with a fictional failure injected at the start of its coroutine.
+     * The seam is read reflectively so this file still compiles on the pre-fix SHA, where it is
+     * absent (that is the RED state).
+     */
+    private fun assertFailureDismissesProgress(error: Throwable) {
+        val seam = try {
+            BackupActivity::class.java.getField("failWorkForTest")
+        } catch (missing: NoSuchFieldException) {
+            throw AssertionError("a failure seam is needed to prove the explicit finally", missing)
+        }
+        @Suppress("UNCHECKED_CAST")
+        val previous = seam.get(null) as? Throwable
+        seam.set(null, error)
+        try {
+            val activity = launch()
+            activity.findViewById<View>(R.id.backupNow).performClick()
+            idle()
+            sheet(app.getString(R.string.backup_choose))
+                .findViewById<TextView>(R.id.swSheetSecondary).performClick()
+            idle()
+            val passwordSheet = sheet(app.getString(R.string.backup_password_title))
+            passwordSheet.findViewById<EditText>(R.id.backupPassword).setText(password)
+            passwordSheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
+            idle()
+            // Let the launched coroutine start, hit the injected throw and run its cleanup.
+            val deadline = System.currentTimeMillis() + 5_000
+            val busyMethod = BackupActivity::class.java.getMethod("workInFlightForTest")
+            while (System.currentTimeMillis() < deadline && busyMethod.invoke(activity) as Boolean) {
+                idle()
+                Thread.sleep(10)
+            }
+            assertFalse("the busy flag is cleared on failure", busyMethod.invoke(activity) as Boolean)
+            val progressId = app.resources.getIdentifier("swProgressRoot", "id", app.packageName)
+            assertTrue("the progress id exists", progressId != 0)
+            assertFalse(
+                "the progress sheet is dismissed on failure, not left on screen",
+                ShadowDialog.getShownDialogs().any {
+                    it.isShowing && it.findViewById<View>(progressId) != null
+                }
+            )
+        } finally {
+            seam.set(null, previous)
+        }
+    }
+
+    @Test
+    fun `an exception during backup creation dismisses progress`() =
+        assertFailureDismissesProgress(IllegalStateException("fictional backup failure"))
+
+    @Test
+    fun `cancellation during backup creation dismisses progress`() =
+        assertFailureDismissesProgress(java.util.concurrent.CancellationException("fictional cancellation"))
 }
