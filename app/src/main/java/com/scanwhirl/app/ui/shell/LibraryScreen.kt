@@ -278,13 +278,14 @@ class LibraryScreen(
                 SwStyle.dp(context, 18f), SwStyle.dp(context, 10f)
             )
             isVisible = false
+            background = readableBand()
         }
         addView(noMatchView)
         folderScroll = folderSection()
         addView(folderScroll)
         // UX-008: between the folders and the document list, never above them. Two row shells
         // (twelve tools at six columns) stay addressable for tests and drag targets.
-        quickHeader = quickToolsHeader()
+        quickHeader = quickToolsHeader().apply { background = readableBand() }
         addView(quickHeader)
         // UX-008: ONE horizontally scrolling row on Home. The editor still holds up to 12,
         // but the document list must own the first screen (proved at 360x640dp).
@@ -302,7 +303,7 @@ class LibraryScreen(
         addView(quickRow)
         recentHeader = sectionHeader(context.getString(R.string.home_recent), context.getString(R.string.home_newest)) {
             showSortSheet()
-        }
+        }.apply { background = readableBand() }
         addView(recentHeader)
         // The category chips scroll like the folder chips: five or more chips are wider than a
         // 320-360dp phone, and a plain LinearLayout squeezed the trailing ones to zero width.
@@ -339,6 +340,7 @@ class LibraryScreen(
             gravity = Gravity.CENTER_VERTICAL
             val pad = SwStyle.dp(context, 18f)
             setPadding(pad, SwStyle.dp(context, 2f), pad, SwStyle.dp(context, 2f))
+            background = readableBand()
         }
         countLabel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true)
         countLabel.id = R.id.swDocCount
@@ -636,6 +638,16 @@ class LibraryScreen(
 
     // ---- folders ----------------------------------------------------------
 
+    /**
+     * G3: text over a bright wallpaper photo needs a real surface under it. The shell's
+     * readable wallpaper scrim deliberately stays at its tested strength, so the library
+     * puts its exposed text rows on the same near-opaque glass surface its cards and
+     * search field already use. This is a visual surface only - it changes no geometry.
+     */
+    private fun readableBand(): android.graphics.drawable.Drawable = SwStyle.rounded(
+        context, SwStyle.color(context, R.color.glass_surface), radiusDp = 12f
+    )
+
     private fun folderSection(): View {
         // Compact folder chips: one scrolling row under the search field. The A/अ language
         // chip moved up into the header (v4 header: mark, A/अ, search).
@@ -684,8 +696,9 @@ class LibraryScreen(
             //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
             val pad = SwStyle.dp(context, 2f)
-            setPadding(0, pad, 0, pad)
+            setPadding(pad, pad, pad, pad)
             isVisible = false
+            background = readableBand()
         }
         section.addView(activeFilter, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         return section
