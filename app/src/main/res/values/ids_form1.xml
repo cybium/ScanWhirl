@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FORM1: views are built in code (like PassportActivity), so their ids live here. -->
+    <item name="formReadyPresetPhoto" type="id" />
+    <item name="formReadyPresetSignature" type="id" />
+    <item name="formReadyPresetThumb" type="id" />
+    <item name="formReadyPresetDeclaration" type="id" />
+    <item name="formReadyPresetCustom" type="id" />
+    <item name="formReadyWidth" type="id" />
+    <item name="formReadyHeight" type="id" />
+    <item name="formReadyMinKb" type="id" />
+    <item name="formReadyMaxKb" type="id" />
+    <item name="formReadyCleanup" type="id" />
+    <item name="formReadyReadout" type="id" />
+    <item name="formReadyExample" type="id" />
+    <item name="formReadyPhotoCmNote" type="id" />
+    <item name="formReadyPick" type="id" />
+    <item name="formReadyCrop" type="id" />
+    <item name="formReadyApply" type="id" />
+    <item name="formReadyError" type="id" />
+    <item name="formReadyProgress" type="id" />
+</resources>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FORM1: हिंदी जोड़ी। शब्दावली JUDGE_HINDI / HINDI_REVIEW_1.3.0 के अनुसार है। -->
+    <string name="form1_title">आवेदन पत्र के लिए फ़ोटो और हस्ताक्षर</string>
+    <string name="form1_check_rules">अपने आवेदन पत्र के ठीक नियम देखें</string>
+    <string name="form1_notice">ये उदाहरण मात्र हैं। सही px, KB और DPI के लिए मौजूदा सूचना देखें। कुछ पोर्टल लाइव फ़ोटो का चरण भी माँगते हैं, जो बिना इंटरनेट के संभव नहीं है।</string>
+    <string name="form1_preset_photo">फ़ोटो</string>
+    <string name="form1_preset_signature">हस्ताक्षर</string>
+    <string name="form1_preset_thumb">अंगूठे का निशान</string>
+    <string name="form1_preset_declaration">घोषणा</string>
+    <string name="form1_preset_custom">मर्ज़ी</string>
+    <string name="form1_example">उदाहरण: %1$d × %2$d px, %3$d से %4$d KB तक, JPG</string>
+    <string name="form1_photo_cm_note">कुछ आवेदन पत्र इसके बजाय लगभग 3.5 × 4.5 cm माँगते हैं।</string>
+    <string name="form1_width_hint">चौड़ाई</string>
+    <string name="form1_height_hint">ऊँचाई</string>
+    <string name="form1_min_hint">न्यूनतम KB</string>
+    <string name="form1_max_hint">अधिकतम KB</string>
+    <string name="form1_readout">फ़ाइल बनेगी: %1$d × %2$d px</string>
+    <string name="form1_cleanup">हस्ताक्षर साफ़ करें (सफ़ेद कागज़, गहरा लेख)</string>
+    <string name="form1_pick">फ़ोटो चुनें</string>
+    <string name="form1_apply">फ़ाइल बनाएँ</string>
+    <string name="form1_min_miss">तस्वीर बदले बिना न्यूनतम आकार नहीं मिला। सबसे बड़ी सही फ़ाइल रखी गई: %1$s।</string>
+    <string name="form1_max_miss">सबसे छोटी सही फ़ाइल भी आपकी अधिकतम सीमा से ऊपर है। सीमाएँ देखें।</string>
+    <string name="form1_pick_failed">वह फ़ोटो नहीं पढ़ी जा सकी। JPG या PNG तस्वीर चुनें।</string>
+    <string name="form1_encode_failed">फ़ाइल नहीं बन सकी। दूसरी फ़ोटो या दूसरी सीमाएँ आज़माएँ।</string>
+    <string name="form1_note_measured">माप: %1$s (%2$d बाइट) · %3$d × %4$d px · %5$d DPI</string>
+    <string name="form1_note_in_band">आपकी %1$s से %2$s सीमा के भीतर।</string>
+    <string name="form1_note_below_min">आपकी न्यूनतम सीमा से कम। %1$s</string>
+    <string name="form1_note_above_max">आपकी अधिकतम सीमा से ऊपर। %1$s</string>
+    <string name="form1_source_kept">आपकी मूल फ़ोटो नहीं बदली गई।</string>
+</resources>
