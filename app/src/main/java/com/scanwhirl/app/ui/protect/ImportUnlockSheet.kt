@@ -19,12 +19,13 @@ import kotlin.math.ceil
  *  - [Result.OK] dismisses the sheet (the caller has created the document),
  *  - [Result.WRONG] counts a try and shows the tries-left / pause line,
  *  - [Result.UNSUPPORTED] explains a password format this offline decoder cannot open,
+ *  - [Result.CANNOT_REWRITE] explains a valid PDF shape this offline rewriter deliberately refuses,
  *  - [Result.DAMAGED] explains a file whose structure is broken,
  *  - [Result.FAILED] shows the import failure.
  */
 internal object ImportUnlockSheet {
 
-    enum class Result { OK, WRONG, UNSUPPORTED, DAMAGED, FAILED }
+    enum class Result { OK, WRONG, UNSUPPORTED, CANNOT_REWRITE, DAMAGED, FAILED }
 
     fun show(
         activity: AppCompatActivity,
@@ -128,6 +129,9 @@ internal object ImportUnlockSheet {
                     }
                     Result.UNSUPPORTED -> field.setError(
                         activity.getString(R.string.import_unlock_unsupported)
+                    )
+                    Result.CANNOT_REWRITE -> field.setError(
+                        activity.getString(R.string.import_unlock_cannot_rewrite)
                     )
                     Result.DAMAGED -> field.setError(
                         activity.getString(R.string.import_unlock_damaged)
