@@ -63,6 +63,7 @@ class QrActivity : BaseActivity() {
     private var scanning = false
     private var scanToken = 0
     private var scanAwaitingResume = false
+    private var pausedDuringScan = false
     private val scanTimeout = Handler(Looper.getMainLooper())
     private var lastCopiedSecret: String? = null
 
@@ -168,22 +169,31 @@ class QrActivity : BaseActivity() {
         }
         scanTimeout.postDelayed(timeout, SCAN_TIMEOUT_MS)
         QrScanners.get(this).scan(this) { outcome ->
+            // A stale callback must touch NOTHING: an older scan's late answer may arrive while
+            // a newer scan is already waiting for its own resume. Checking the token only after
+            // clearing the flag used to leave the newer scan permanently disabled.
+            if (isFinishing || isDestroyed || token != scanToken) return@scan
             scanTimeout.removeCallbacks(timeout)
             scanAwaitingResume = false
-            // A rotation can deliver the old scanner's callback to a finished activity; the
-            // recreated one keeps its own state and is free to scan again.
-            if (isFinishing || isDestroyed || token != scanToken) return@scan
             scanning = false
             onScanOutcome(outcome)
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // A Play-services scanner is a separate activity: leaving for it while a scan is in
+        // flight means this screen will be resumed when that UI is gone.
+        if (scanning) pausedDuringScan = true
+    }
+
     override fun onResume() {
         super.onResume()
-        // The scanner is a separate activity: returning here means it is no longer in front,
-        // so a scan that timed out without a callback can finally release the Scan button.
-        if (scanAwaitingResume) {
+        // Safety release: whenever no scanner UI is in front any more, Scan must work again,
+        // even if a late callback from an older scan failed to arrive or was ignored.
+        if (scanAwaitingResume || pausedDuringScan) {
             scanAwaitingResume = false
+            pausedDuringScan = false
             scanning = false
         }
     }
