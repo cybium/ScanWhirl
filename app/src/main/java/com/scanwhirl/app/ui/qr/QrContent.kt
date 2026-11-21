@@ -43,44 +43,22 @@ data class QrContent(
 
         /**
          * Redaction applied before a scanned value is written to the reversible (Base64) history.
-         * A Wi-Fi code keeps its network and security but drops the password; every other kind is
-         * stored unchanged. Also used when reading old entries so legacy passwords are not shown.
+         * A Wi-Fi code is rebuilt from the very same tokenizer [parseWifi] uses, with every field
+         * that tokenizer reads as a password left out. That covers escaped (`\P:`), lower-case
+         * and duplicate password fields, not just a literal `P:` prefix. Also applied on read so
+         * entries saved by older versions never surface a password.
          */
         fun historyValue(raw: String, kind: QrKind): String {
             if (kind != QrKind.WIFI) return raw
             val prefixLength = if (raw.length >= 5 && raw.regionMatches(0, "WIFI:", 0, 5, true)) 5 else 0
-            return raw.take(prefixLength) + redactWifiPassword(raw.substring(prefixLength))
-        }
-
-        /** Blanks the value of every `P:` field, preserving escapes and all other fields. */
-        private fun redactWifiPassword(body: String): String {
-            val out = StringBuilder()
-            val field = StringBuilder()
-            var i = 0
-            while (i < body.length) {
-                val c = body[i]
-                when {
-                    c == '\\' && i + 1 < body.length -> {
-                        field.append(c).append(body[i + 1])
-                        i += 2
-                    }
-                    c == ';' -> {
-                        out.append(redactField(field.toString())).append(';')
-                        field.setLength(0)
-                        i++
-                    }
-                    else -> {
-                        field.append(c)
-                        i++
-                    }
+            val kept = parseWifiFields(raw.substring(prefixLength)).filterNot { (key, _) -> key == 'P' }
+            return raw.take(prefixLength) + buildString {
+                kept.forEach { (key, value) ->
+                    append(key).append(':').append(escapeWifiValue(value)).append(';')
                 }
+                append(';')
             }
-            if (field.isNotEmpty()) out.append(redactField(field.toString()))
-            return out.toString()
         }
-
-        private fun redactField(field: String): String =
-            if (field.startsWith("P:", ignoreCase = true)) "P:" else field
 
         private const val WIFI_PREFIX = "WIFI:"
         private const val VCARD_PREFIX = "BEGIN:VCARD"
@@ -149,7 +127,7 @@ data class QrContent(
                 kind = QrKind.URL,
                 title = clip(normalized),
                 // The real host only: never the user@host part a deceptive link can hide behind.
-                fields = listOfNotNull(displayHost(normalized)?.let { QrField(R.string.qr_field_website, it) }),
+                fields = listOf(websiteField(value, normalized)),
                 actions = listOf(QrAction.OPEN_LINK, QrAction.COPY, QrAction.SHARE),
                 raw = value,
                 copyText = normalized,
@@ -157,18 +135,31 @@ data class QrContent(
             )
         }
 
+        /** A link always gets a row: either the real host, or the exact text for inspection. */
+        private fun websiteField(scanned: String, normalized: String): QrField {
+            val host = displayHost(normalized)
+            return if (host != null) {
+                QrField(R.string.qr_field_website, host)
+            } else {
+                // java.net.URI rejects backslashes, spaces and other illegal characters. Rather
+                // than guess a host from such text, show verbatim what was on the code.
+                QrField(R.string.qr_field_check_link, clip(scanned))
+            }
+        }
+
         /**
-         * The host a link really goes to, decoded from punycode for reading. If the punycode
-         * differs, both forms are shown so a look-alike domain is visible. Userinfo is never
-         * included: `https://trusted@evil/` must show "evil", not "trusted".
+         * The host a link really goes to, decoded from punycode for reading. Both the Unicode
+         * and ASCII forms are shown when they differ, so a mixed-script look-alike is visible.
+         * Userinfo is never included: `https://trusted@evil/` shows "evil", not "trusted".
          */
         private fun displayHost(normalized: String): String? {
             val uri = runCatching { URI(normalized) }.getOrNull() ?: return null
             val host = uri.host?.takeIf { it.isNotBlank() }
                 ?: uri.authority?.substringAfterLast('@')?.takeIf { it.isNotBlank() }
                 ?: return null
-            val decoded = runCatching { IDN.toUnicode(host) }.getOrDefault(host)
-            return if (decoded == host) decoded else "$decoded ($host)"
+            val unicode = runCatching { IDN.toUnicode(host) }.getOrDefault(host)
+            val ascii = runCatching { IDN.toASCII(unicode) }.getOrDefault(host)
+            return if (ascii.equals(unicode, ignoreCase = true)) unicode else "$unicode ($ascii)"
         }
 
         private fun wifi(value: String): QrContent {
@@ -321,6 +312,16 @@ data class QrContent(
         /** `WIFI:T:WPA;S:name;P:pass;H:true;;` with `\;`, `\,`, `\:` and `\\` escapes. */
         private fun parseWifi(body: String): Map<Char, String> {
             val map = LinkedHashMap<Char, String>()
+            parseWifiFields(body).forEach { (key, value) -> map[key] = value }
+            return map
+        }
+
+        /**
+         * The single tokenizer behind both parsing and history redaction. It unescapes values
+         * before reading a one-character key, so `\P:` and `p:` are passwords just like `P:`.
+         */
+        private fun parseWifiFields(body: String): List<Pair<Char, String>> {
+            val fields = ArrayList<Pair<Char, String>>()
             val text = StringBuilder()
             var key: Char? = null
             var i = 0
@@ -332,7 +333,7 @@ data class QrContent(
                         i++
                     }
                     c == ';' -> {
-                        key?.let { map[it] = text.toString() }
+                        key?.let { fields += it to text.toString() }
                         key = null
                         text.setLength(0)
                     }
@@ -344,8 +345,16 @@ data class QrContent(
                 }
                 i++
             }
-            key?.let { map[it] = text.toString() }
-            return map
+            key?.let { fields += it to text.toString() }
+            return fields
+        }
+
+        /** Re-escapes a parsed value when a Wi-Fi code is rebuilt for storage. */
+        private fun escapeWifiValue(value: String): String = buildString {
+            value.forEach { c ->
+                if (c == '\\' || c == ';' || c == ',' || c == ':') append('\\')
+                append(c)
+            }
         }
 
         /** Splits on [separator] while honouring backslash escapes. */

@@ -43,6 +43,7 @@
     <string name="qr_field_address">पता</string>
     <string name="qr_field_message">संदेश</string>
     <string name="qr_field_website">वेबसाइट</string>
+    <string name="qr_field_check_link">इस पते को ध्यान से देखें</string>
     <string name="qr_contact_fallback">संपर्क</string>
     <string name="qr_show">दिखाएँ</string>
     <string name="qr_hide">छिपाएँ</string>
@@ -52,5 +53,4 @@
     <string name="qr_cleared">पुराने स्कैन साफ़ हो गए</string>
     <string name="qr_history_meta">%1$s, %2$s</string>
 
-    <string name="qr_pro_message">QR कोड पढ़ना Pro का हिस्सा है, बाकी Pro कामों की तरह।</string>
 </resources>

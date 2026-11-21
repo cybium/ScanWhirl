@@ -62,6 +62,7 @@ class QrActivity : BaseActivity() {
     private var current: QrContent? = null
     private var scanning = false
     private var scanToken = 0
+    private var scanAwaitingResume = false
     private val scanTimeout = Handler(Looper.getMainLooper())
     private var lastCopiedSecret: String? = null
 
@@ -159,18 +160,31 @@ class QrActivity : BaseActivity() {
         if (scanning) return
         scanning = true
         val token = ++scanToken
-        // A scanner UI that never reports back must not leave Scan as a dead tap.
+        // A scanner that never reports back must not leave Scan as a dead tap. But its Play-
+        // services sheet may still be on screen, so keep Scan blocked until onResume proves
+        // that UI has gone; otherwise a second tap opens two concurrent scanner sheets.
         val timeout = Runnable {
-            if (scanning && token == scanToken) scanning = false
+            if (scanning && token == scanToken) scanAwaitingResume = true
         }
         scanTimeout.postDelayed(timeout, SCAN_TIMEOUT_MS)
         QrScanners.get(this).scan(this) { outcome ->
             scanTimeout.removeCallbacks(timeout)
+            scanAwaitingResume = false
             // A rotation can deliver the old scanner's callback to a finished activity; the
             // recreated one keeps its own state and is free to scan again.
             if (isFinishing || isDestroyed || token != scanToken) return@scan
             scanning = false
             onScanOutcome(outcome)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The scanner is a separate activity: returning here means it is no longer in front,
+        // so a scan that timed out without a callback can finally release the Scan button.
+        if (scanAwaitingResume) {
+            scanAwaitingResume = false
+            scanning = false
         }
     }
 

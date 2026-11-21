@@ -313,7 +313,7 @@ class QrActivityTest {
     }
 
     @Test
-    fun `a scanner that never calls back leaves Scan tappable`() {
+    fun `a timed-out scanner keeps Scan blocked until the screen resumes`() {
         val scanner = HoldingScanner()
         QrScanners.override = scanner
         controller = Robolectric.buildActivity(QrActivity::class.java).setup()
@@ -321,7 +321,12 @@ class QrActivityTest {
         val activity = controller!!.get()
 
         activity.need<View>(R.id.qrScan).performClick()
-        assertEquals("the second tap reaches the scanner", 2, scanner.calls)
+        assertEquals("the first scanner may still be showing: no second sheet", 1, scanner.calls)
+
+        // Coming back means the Play-services scanner UI is no longer in front.
+        controller!!.pause().resume()
+        activity.need<View>(R.id.qrScan).performClick()
+        assertEquals("Scan is live again after a resume", 2, scanner.calls)
     }
 
     @Test
