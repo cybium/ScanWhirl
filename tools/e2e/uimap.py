@@ -333,7 +333,15 @@ def launch():
         if root is not None and find(root, id="swHomeSearch"):
             return
         time.sleep(0.7)
-    raise RuntimeError("Library (swHomeSearch) did not appear after launch")
+    # Leave concrete evidence of what WAS on screen instead of a bare timeout.
+    root = try_hierarchy()
+    png, xml = screenshot("launch_failed")
+    GRAPH["meta"]["launch_failure"] = {
+        "activity": current_activity(), "screenshot": png, "dump": xml,
+        "texts": [n.get("text") for n in root.iter("node") if n.get("text")][:40] if root is not None else [],
+        "ids": [rid(n) for n in root.iter("node") if rid(n)][:40] if root is not None else [],
+    }
+    raise RuntimeError("Library (swHomeSearch) did not appear after launch; see launch_failed.*")
 
 
 def set_locale(lang="en", scale="1.0"):
