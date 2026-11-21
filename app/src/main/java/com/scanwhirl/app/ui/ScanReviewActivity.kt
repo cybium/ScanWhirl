@@ -298,7 +298,7 @@ class ScanReviewActivity : BaseActivity() {
                     true
                 }
                 R.id.action_add_gallery -> {
-                    galleryPagesLauncher.launch("image/*")
+                    showGalleryAddSheet()
                     true
                 }
                 else -> false
@@ -860,6 +860,7 @@ class ScanReviewActivity : BaseActivity() {
         binding.pageGrid.refresh()
         haptic(HapticFeedbackConstants.CLOCK_TICK)
         renderCurrent()
+        renderStatus()
     }
 
     /** Everything that depends on the page list (after any reload). */
@@ -881,7 +882,8 @@ class ScanReviewActivity : BaseActivity() {
     private fun renderCurrent() {
         val n = pages.size
         val i = currentIndex
-        binding.pageStatus.text = getString(R.string.review_page_of, i + 1, n)
+        // L2-03: the page position now lives in the single reviewStatus line.
+        // pageStatus is an empty, hidden legacy node; no duplicate status is shown.
         binding.btnPrevPage.isVisible = n > 1
         binding.btnNextPage.isVisible = n > 1
         binding.btnPrevPage.isEnabled = i > 0
@@ -897,10 +899,14 @@ class ScanReviewActivity : BaseActivity() {
         pages.getOrNull(i)?.let { loadFocusImage(it) }
     }
 
-    /** "5 pages · Forms · Not saved yet" — the status always names the unsaved state. */
+    /**
+     * L2-03: one status line — "Page %1$d of %2$d · <category> · Not saved yet".
+     * The separate page counter stays as a hidden compatibility node; the owner
+     * sees only this line, and it always names the unsaved state honestly.
+     */
     private fun renderStatus() {
         val text = SpannableStringBuilder()
-        text.append(resources.getQuantityString(R.plurals.review_page_count, pages.size, pages.size))
+        text.append(getString(R.string.ux130_l2_review_status, currentIndex + 1, pages.size))
         if (chosenCategory != CategoryRules.UNSORTED) {
             text.append(" · ").append(CategoryLabels.display(this, chosenCategory))
         }
@@ -991,13 +997,23 @@ class ScanReviewActivity : BaseActivity() {
                 all.indexOf(filters[file.path] ?: ScanFilter.ORIGINAL)
             ) { which, _ ->
                 val chosen = all[which]
-                if (chosen == (filters[file.path] ?: ScanFilter.ORIGINAL) || !file.exists()) return@setOptions
+                val previous = filters[file.path] ?: ScanFilter.ORIGINAL
+                val wasEdited = filtersEdited
+                if (chosen == previous || !file.exists()) return@setOptions
                 filters[file.path] = chosen
                 filtersEdited = true
                 writeFilters()
                 binding.pageGrid.refresh()
                 renderPages()
-                snack(getString(R.string.review_filter_set, index + 1, getString(chosen.labelRes)), null)
+                // L2-03: a filter is reversible. Undo restores the prior choice and
+                // writes filters.txt, so the restored value survives recreation.
+                snack(getString(R.string.review_filter_set, index + 1, getString(chosen.labelRes))) {
+                    filters[file.path] = previous
+                    filtersEdited = wasEdited
+                    writeFilters()
+                    binding.pageGrid.refresh()
+                    renderPages()
+                }
             }
             .setSecondary(android.R.string.cancel)
             .build()
@@ -1023,11 +1039,32 @@ class ScanReviewActivity : BaseActivity() {
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     R.id.action_add_pages -> launchAddPages()
-                    R.id.action_add_gallery -> galleryPagesLauncher.launch("image/*")
+                    R.id.action_add_gallery -> showGalleryAddSheet()
                 }
                 true
             }
         }.show()
+    }
+
+    /**
+     * L2-02: gallery additions get an explicit corner-adjust step. The primary
+     * action runs the existing gallery-crop pipeline and only appends the
+     * corrected URIs; the secondary keeps the old straight-photo import as an
+     * opt out. Cancel and any failure leave the current page list untouched.
+     */
+    internal fun showGalleryAddSheet() {
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.ux130_l2_add_gallery_title)
+            .setMessage(R.string.ux130_l2_add_gallery_msg)
+            .setPrimary(R.string.ux130_l2_add_gallery_adjust) {
+                com.scanwhirl.app.tools.launchGalleryCropForReview(this)
+            }
+            .setSecondary(R.string.ux130_l2_add_gallery_plain) {
+                galleryPagesLauncher.launch("image/*")
+            }
+            .build()
+        sheet.setOnDismissListener { /* an undecided import never changes staging */ }
+        sheet.show()
     }
 
     /** Move to…: an explicit numbered position, the accessible alternative to dragging. */

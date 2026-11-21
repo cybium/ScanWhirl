@@ -155,7 +155,9 @@
         </com.google.android.material.button.MaterialButtonToggleGroup>
     </LinearLayout>
 
-    <!-- Page N of M on its own row: at font scale 2.0 the toggle leaves it too narrow. -->
+    <!-- L2-03: one visible status line (reviewStatus) now carries the page
+         position and the unsaved state. This legacy node is hidden and empty;
+         it is kept only so older test sources still resolve the ID. -->
     <TextView
         android:id="@+id/pageStatus"
         android:layout_width="match_parent"
@@ -166,6 +168,7 @@
         android:paddingBottom="2dp"
         android:textColor="@color/rv_ink_2"
         android:textSize="14sp"
+        android:visibility="gone"
         tools:text="Page 4 of 5" />
 
     <FrameLayout
@@ -386,7 +389,7 @@
                 android:layout_height="wrap_content"
                 android:paddingHorizontal="16dp"
                 android:paddingTop="2dp"
-                android:text="@string/review_arrange_hint"
+                android:text="@string/ux130_l2_arrange_hint"
                 android:textColor="@color/rv_ink_3"
                 android:textSize="12sp" />
 

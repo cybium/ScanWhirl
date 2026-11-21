@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L2: Hindi copy following HINDI_REVIEW_1.3.0.md consistency
+     glossary (पन्ना/पन्ने, तस्वीर, no rejected loanwords). -->
+<resources>
+    <!-- L2-01: accessible crop handles. -->
+    <string name="ux130_l2_crop_frame">पन्ने का ढाँचा। कोना या किनारा चुनकर उसे हिलाएँ।</string>
+    <string name="ux130_l2_crop_corner_tl">ऊपर-बाएँ कोना</string>
+    <string name="ux130_l2_crop_corner_tr">ऊपर-दाएँ कोना</string>
+    <string name="ux130_l2_crop_corner_br">नीचे-दाएँ कोना</string>
+    <string name="ux130_l2_crop_corner_bl">नीचे-बाएँ कोना</string>
+    <string name="ux130_l2_crop_edge_top">ऊपर वाला किनारा</string>
+    <string name="ux130_l2_crop_edge_right">दायाँ किनारा</string>
+    <string name="ux130_l2_crop_edge_bottom">नीचे वाला किनारा</string>
+    <string name="ux130_l2_crop_edge_left">बायाँ किनारा</string>
+    <string name="ux130_l2_crop_move_left">बाएँ ले जाएँ</string>
+    <string name="ux130_l2_crop_move_right">दाएँ ले जाएँ</string>
+    <string name="ux130_l2_crop_move_up">ऊपर ले जाएँ</string>
+    <string name="ux130_l2_crop_move_down">नीचे ले जाएँ</string>
+    <string name="ux130_l2_crop_moved">%1$s हिलाया गया</string>
+    <string name="ux130_l2_crop_select_handle">कोना या किनारा चुनें</string>
+
+    <!-- L2-02: gallery additions get an explicit crop step. -->
+    <string name="ux130_l2_add_gallery_title">पन्नों के कोने सही करें?</string>
+    <string name="ux130_l2_add_gallery_msg">इस स्कैन में जोड़ने से पहले पन्नों को सीधा करें।</string>
+    <string name="ux130_l2_add_gallery_adjust">कोने सही करें</string>
+    <string name="ux130_l2_add_gallery_plain">पन्ने जोड़ें</string>
+    <string name="ux130_l2_add_gallery_cancel">रद्द करें</string>
+
+    <!-- L2-03: review status, hint, preview and zoom. -->
+    <string name="ux130_l2_review_status">पन्ना %1$d / %2$d</string>
+    <string name="ux130_l2_arrange_hint">कई पन्ने चुनने के लिए बक्सों पर टिक लगाएँ। क्रम बदलने के लिए पकड़ खींचें।</string>
+    <string name="ux130_l2_preview_page">पन्ना %1$d / %2$d</string>
+    <string name="ux130_l2_preview_page_default">पन्ने का पूर्वावलोकन</string>
+    <string name="ux130_l2_zoom_page">पन्ना बड़ा करें</string>
+    <string name="ux130_l2_close_zoom">बड़ा करना बंद करें</string>
+
+    <!-- L2-04: resume and scanner fallback. -->
+    <string name="ux130_l2_scanner_unavailable_title">स्कैन उपलब्ध नहीं है</string>
+    <string name="ux130_l2_pick_photos">तस्वीर चुनें</string>
+    <string name="ux130_l2_cancel">रद्द करें</string>
+    <string name="ux130_l2_empty_scan_title">कोई पन्ना स्कैन नहीं हुआ</string>
+    <string name="ux130_l2_empty_scan_msg">स्कैन में कोई पन्ना नहीं मिला। आप इसके बदले तस्वीर चुन सकते हैं।</string>
+    <string name="ux130_l2_resume_scan">स्कैन फिर शुरू करें</string>
+    <string name="ux130_l2_discard_scan">स्कैन हटाएँ</string>
+</resources>

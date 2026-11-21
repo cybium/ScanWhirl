@@ -4,10 +4,18 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
+import android.os.Bundle
 import android.util.AttributeSet
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.core.view.accessibility.AccessibilityNodeProviderCompat
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import kotlin.math.hypot
@@ -83,6 +91,116 @@ class CropView @JvmOverloads constructor(
         strokeWidth = 5f * density
         strokeCap = Paint.Cap.ROUND
     }
+    private val focusRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = cyan
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * density
+    }
+
+    /** The handle currently focused by TalkBack/switch access or keyboard. */
+    private var selectedHandle = -1
+
+    /** Last change announcement; kept so a test can assert a real announcement happened. */
+    internal var lastAnnouncement: String = ""
+        private set
+
+    /**
+     * Eight virtual children (four corners, four edges) let a screen reader move a
+     * handle by name without ever dragging a pixel. Positions, aspect ratio and
+     * clamping are the exact same code the touch path uses.
+     */
+    private val cropNodeProvider = object : AccessibilityNodeProviderCompat() {
+        override fun createAccessibilityNodeInfo(virtualViewId: Int): AccessibilityNodeInfoCompat? {
+            if (virtualViewId != AccessibilityNodeProviderCompat.HOST_VIEW_ID && image == null) return null
+            val screen = IntArray(2).also { getLocationOnScreen(it) }
+            if (virtualViewId == AccessibilityNodeProviderCompat.HOST_VIEW_ID) {
+                val info = AccessibilityNodeInfoCompat.wrap(AccessibilityNodeInfo.obtain(this@CropView))
+                info.setClassName(CropView::class.java.name)
+                info.isFocusable = true
+                info.isEnabled = true
+                info.contentDescription = context.getString(R.string.ux130_l2_crop_frame)
+                info.setBoundsInScreen(
+                    Rect(screen[0], screen[1], screen[0] + width, screen[1] + height)
+                )
+                if (image != null) {
+                    for (handle in 0 until 8) info.addChild(this@CropView, HANDLE_BASE + handle)
+                }
+                return info
+            }
+            val handle = virtualViewId - HANDLE_BASE
+            if (handle !in 0..7) return null
+            val info = AccessibilityNodeInfoCompat.obtain(this@CropView, virtualViewId)
+            info.setClassName(CropView::class.java.name)
+            info.isFocusable = true
+            info.isAccessibilityFocused = selectedHandle == handle
+            info.text = handleLabel(handle)
+            info.contentDescription = handleLabel(handle)
+            val points = handlePoints()
+            val x = points[handle * 2]
+            val y = points[handle * 2 + 1]
+            // touchRadius is a 24dp radius, i.e. a 48dp effective target, not a 24dp dot.
+            val r = touchRadius
+            info.setBoundsInParent(Rect((x - r).toInt(), (y - r).toInt(), (x + r).toInt(), (y + r).toInt()))
+            info.setBoundsInScreen(
+                Rect(
+                    (screen[0] + x - r).toInt(), (screen[1] + y - r).toInt(),
+                    (screen[0] + x + r).toInt(), (screen[1] + y + r).toInt()
+                )
+            )
+            for ((action, label) in moveActionsFor(handle)) {
+                info.addAction(
+                    AccessibilityNodeInfoCompat.AccessibilityActionCompat(action, context.getString(label))
+                )
+            }
+            return info
+        }
+
+        override fun performAction(virtualViewId: Int, action: Int, arguments: Bundle?): Boolean {
+            if (virtualViewId == AccessibilityNodeProviderCompat.HOST_VIEW_ID) {
+                return super.performAction(virtualViewId, action, arguments)
+            }
+            val handle = virtualViewId - HANDLE_BASE
+            if (handle !in 0..7) return false
+            // Only advertise (and accept) moves that make sense for this handle.
+            if (action in ACTION_MOVE_LEFT..ACTION_MOVE_DOWN &&
+                action !in moveActionsFor(handle).map { it.first }
+            ) {
+                return false
+            }
+            return when (action) {
+                AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS -> {
+                    selectHandle(handle)
+                    true
+                }
+                AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS -> {
+                    if (selectedHandle == handle) {
+                        selectedHandle = -1
+                        invalidate()
+                    }
+                    true
+                }
+                ACTION_MOVE_LEFT -> moveHandle(handle, -1f, 0f)
+                ACTION_MOVE_RIGHT -> moveHandle(handle, 1f, 0f)
+                ACTION_MOVE_UP -> moveHandle(handle, 0f, -1f)
+                ACTION_MOVE_DOWN -> moveHandle(handle, 0f, 1f)
+                else -> super.performAction(virtualViewId, action, arguments)
+            }
+        }
+    }
+
+    init {
+        // L2-01: the canvas surface is a real accessibility target, not just drawn pixels.
+        isFocusable = true
+        isFocusableInTouchMode = true
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
+            override fun getAccessibilityNodeProvider(host: View): AccessibilityNodeProviderCompat? =
+                cropNodeProvider
+        })
+    }
+
+    /** Test seam: the same provider ViewCompat exposes to TalkBack. */
+    internal fun nodeProviderForTest(): AccessibilityNodeProviderCompat = cropNodeProvider
 
     /** Hands the page bitmap to the view (a display-size copy, never full-res). */
     fun setImage(bitmap: Bitmap) {
@@ -167,6 +285,15 @@ class CropView @JvmOverloads constructor(
         drawEdgeBar(canvas, c.right, c.centerY(), horizontal = false)
         drawEdgeBar(canvas, c.centerX(), c.bottom, horizontal = true)
         drawEdgeBar(canvas, c.left, c.centerY(), horizontal = false)
+
+        // Focus indication: the keyboard/screen-reader handle gets a visible ring.
+        if (selectedHandle in 0..7) {
+            val point = handlePoints()
+            canvas.drawCircle(
+                point[selectedHandle * 2], point[selectedHandle * 2 + 1],
+                handleRadius + 5f * density, focusRingPaint
+            )
+        }
     }
 
     private fun drawEdgeBar(canvas: Canvas, x: Float, y: Float, horizontal: Boolean) {
@@ -207,6 +334,115 @@ class CropView @JvmOverloads constructor(
             c.left, c.top, c.right, c.top, c.right, c.bottom, c.left, c.bottom,
             c.centerX(), c.top, c.right, c.centerY(), c.centerX(), c.bottom, c.left, c.centerY()
         )
+    }
+
+    private fun handleLabel(handle: Int): String = context.getString(
+        when (handle) {
+            0 -> R.string.ux130_l2_crop_corner_tl
+            1 -> R.string.ux130_l2_crop_corner_tr
+            2 -> R.string.ux130_l2_crop_corner_br
+            3 -> R.string.ux130_l2_crop_corner_bl
+            4 -> R.string.ux130_l2_crop_edge_top
+            5 -> R.string.ux130_l2_crop_edge_right
+            6 -> R.string.ux130_l2_crop_edge_bottom
+            else -> R.string.ux130_l2_crop_edge_left
+        }
+    )
+
+    /** Corners can move on both axes; an edge only moves perpendicular to itself. */
+    private fun moveActionsFor(handle: Int): List<Pair<Int, Int>> = when (handle) {
+        in 0..3 -> listOf(
+            ACTION_MOVE_LEFT to R.string.ux130_l2_crop_move_left,
+            ACTION_MOVE_RIGHT to R.string.ux130_l2_crop_move_right,
+            ACTION_MOVE_UP to R.string.ux130_l2_crop_move_up,
+            ACTION_MOVE_DOWN to R.string.ux130_l2_crop_move_down
+        )
+        4, 6 -> listOf(
+            ACTION_MOVE_UP to R.string.ux130_l2_crop_move_up,
+            ACTION_MOVE_DOWN to R.string.ux130_l2_crop_move_down
+        )
+        else -> listOf(
+            ACTION_MOVE_LEFT to R.string.ux130_l2_crop_move_left,
+            ACTION_MOVE_RIGHT to R.string.ux130_l2_crop_move_right
+        )
+    }
+
+    private fun selectHandle(handle: Int) {
+        selectedHandle = handle
+        setTag(R.id.ux130_l2_crop_handle, handle)
+        invalidate()
+    }
+
+    private fun cornerImagePoint(handle: Int): Pair<Float, Float> = when (handle) {
+        0 -> crop.left to crop.top
+        1 -> crop.right to crop.top
+        2 -> crop.right to crop.bottom
+        else -> crop.left to crop.bottom
+    }
+
+    private fun edgeImagePoint(edge: Int): Pair<Float, Float> = when (edge) {
+        0 -> crop.centerX() to crop.top
+        1 -> crop.right to crop.centerY()
+        2 -> crop.centerX() to crop.bottom
+        else -> crop.left to crop.centerY()
+    }
+
+    /**
+     * Moves one handle by a fixed view-dp step on either axis and routes through
+     * the very same drag/aspect/clamp code a finger uses. Returns true only when
+     * the rectangle actually changed, so a boundary no-op is not announced.
+     */
+    private fun moveHandle(handle: Int, directionX: Float, directionY: Float): Boolean {
+        val bmp = image ?: return false
+        if (imageRect.width() <= 0f || imageRect.height() <= 0f) return false
+        val step = 24f * density
+        val dx = directionX * step * bmp.width / imageRect.width()
+        val dy = directionY * step * bmp.height / imageRect.height()
+        val before = RectF(crop)
+        if (handle < 4) {
+            activeCorner = handle
+            val (x, y) = cornerImagePoint(handle)
+            dragCornerTo(bmp, x + dx, y + dy)
+            activeCorner = -1
+        } else {
+            activeEdge = handle - 4
+            val (x, y) = edgeImagePoint(handle - 4)
+            dragEdgeTo(bmp, x + dx, y + dy)
+            activeEdge = -1
+        }
+        clampToImage(bmp)
+        selectHandle(handle)
+        if (crop == before) return false
+        invalidate()
+        val announcement = context.getString(R.string.ux130_l2_crop_moved, handleLabel(handle))
+        lastAnnouncement = announcement
+        try {
+            announceForAccessibility(announcement)
+        } catch (_: Throwable) {
+            // A test host may not have an AccessibilityManager; the written state still holds.
+        }
+        return true
+    }
+
+    /** D-pad moves the focused (or first) handle; Tab cycles through the eight. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (image != null) {
+            val direction = when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> -1f to 0f
+                KeyEvent.KEYCODE_DPAD_RIGHT -> 1f to 0f
+                KeyEvent.KEYCODE_DPAD_UP -> 0f to -1f
+                KeyEvent.KEYCODE_DPAD_DOWN -> 0f to 1f
+                else -> null
+            }
+            if (direction != null) {
+                val handle = if (selectedHandle in 0..7) selectedHandle else 0
+                if (moveHandle(handle, direction.first, direction.second)) return true
+            } else if (keyCode == KeyEvent.KEYCODE_TAB) {
+                selectHandle(if (selectedHandle in 0..6) selectedHandle + 1 else 0)
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -406,5 +642,16 @@ class CropView @JvmOverloads constructor(
         val top = (cy - height / 2f).coerceIn(0f, bmp.height - height)
         crop.set(left, top, left + width, top + height)
         invalidate()
+    }
+
+    private companion object {
+        /** Virtual child ids are HOST_VIEW_ID + 1 .. + 8 (corners then edges). */
+        const val HANDLE_BASE = 1
+
+        /** Custom actions live well above the framework's standard action range. */
+        const val ACTION_MOVE_LEFT = 0x01000001
+        const val ACTION_MOVE_RIGHT = 0x01000002
+        const val ACTION_MOVE_UP = 0x01000003
+        const val ACTION_MOVE_DOWN = 0x01000004
     }
 }
