@@ -81,23 +81,52 @@ class L3_02_OutputIdentityGuardTest {
     }
 
     @Test
-    fun `an unchanged output is still removed by one tap`() {
+    fun `a cheap identity that still matches allows one tap removal`() {
+        // OLD: no identity was recorded when no producer supplied one, so Undo
+        // adopted the current identity and deleted. NEW: intent() records a
+        // stat-only identity at build time; an unchanged output still matches.
         val output = DocFixtures.saved(repo, app, pages = 1, name = "fresh output")
-        ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "compress", docIds = listOf(output))
-        ).use { scenario ->
+        val intent = ToolResultActivity.intent(app, "compress", docIds = listOf(output))
+        ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
             val deadline = System.currentTimeMillis() + 5000L
-            val diag = StringBuilder()
             while (repo.getDocument(output) != null && System.currentTimeMillis() < deadline) {
                 shadowOf(Looper.getMainLooper()).idle()
-                scenario.onActivity { activity ->
-                    val err = activity.findViewById<TextView>(R.id.toolResultError)
-                    diag.append("error='${err.text}' ")
-                }
                 Thread.sleep(20L)
             }
-            assertEquals("guard diagnostic: $diag", null, repo.getDocument(output))
+            assertEquals(null, repo.getDocument(output))
         }
+    }
+
+    @Test
+    fun `a cheap identity that no longer matches refuses instead of adopting at Undo`() {
+        // OLD: Undo adopted the current identity and deleted whatever had the id.
+        // NEW: the cheap identity was captured before the reuse and still differs,
+        // so Undo refuses and the new owner survives.
+        val output = DocFixtures.saved(repo, app, pages = 1, name = "cheap original")
+        val intent = ToolResultActivity.intent(app, "compress", docIds = listOf(output))
+        val other = DocFixtures.saved(repo, app, pages = 1, name = "cheap new owner")
+        File(repo.docsDir, output).deleteRecursively()
+        File(repo.docsDir, other).copyRecursively(File(repo.docsDir, output))
+
+        ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            val deadline = System.currentTimeMillis() + 5000L
+            var shown = false
+            while (!shown && System.currentTimeMillis() < deadline) {
+                scenario.onActivity { activity ->
+                    val error = activity.findViewById<TextView>(R.id.toolResultError)
+                    shown = error.isVisible &&
+                        error.text.toString() == app.getString(R.string.ux130_l3_copy_changed)
+                }
+                if (!shown) {
+                    shadowOf(Looper.getMainLooper()).idle()
+                    Thread.sleep(20L)
+                }
+            }
+            assertTrue("the honest refusal is visible", shown)
+        }
+        assertEquals("cheap new owner", repo.getDocument(output)?.name)
+        assertNotNull("the new owner survives", repo.getDocument(output))
     }
 }

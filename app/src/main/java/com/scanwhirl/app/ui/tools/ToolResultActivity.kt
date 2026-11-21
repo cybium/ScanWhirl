@@ -1177,20 +1177,23 @@ class ToolResultActivity : BaseActivity() {
         lifecycleScope.launch {
             // L3-02 P1: the re-check hashes on IO, never on Main, while the
             // button is disabled so a second tap cannot race the first.
-            val allowed = withContext(Dispatchers.IO) {
-                val current = captureOutputIdentityBlocking(this@ToolResultActivity, docIds, files)
-                val expected = outputIdentity
-                if (expected == null) {
-                    // Direct callers with no producer identity, or outputs with no
-                    // single PDF to hash, keep base behavior (still computed off main).
-                    outputIdentity = current
-                    true
-                } else {
-                    current == expected
+            val allowed = try {
+                withContext(Dispatchers.IO) {
+                    val expected = outputIdentity
+                    when {
+                        expected == null -> docIds.isEmpty() && files.isEmpty()
+                        expected.startsWith(CHEAP_IDENTITY_PREFIX) ->
+                            cheapIdentity(this@ToolResultActivity, docIds, files) == expected
+                        else -> captureOutputIdentityBlocking(
+                            this@ToolResultActivity, docIds, files
+                        ) == expected
+                    }
                 }
+            } finally {
+                // P2: a cancelled re-check must never leave Undo disabled.
+                undoChecking = false
+                undoButton?.isEnabled = true
             }
-            undoChecking = false
-            undoButton?.isEnabled = true
             if (!allowed) {
                 fail(getString(R.string.ux130_l3_copy_changed))
                 return@launch
@@ -1360,6 +1363,7 @@ class ToolResultActivity : BaseActivity() {
 
         /** L3-02 P1: output identity captured at result creation, checked before removal. */
         private const val EXTRA_OUTPUT_IDENTITY = "l3_output_identity"
+        private const val CHEAP_IDENTITY_PREFIX = "C:"
 
         /** L3-02 P2: the library source used to derive the "original kept" receipt. */
         private const val EXTRA_RECEIPT_SOURCE_ID = "l3_receipt_source_id"
@@ -1417,9 +1421,41 @@ class ToolResultActivity : BaseActivity() {
                 if (compressGrew) putExtra(EXTRA_COMPRESS_GREW, true)
                 if (receiptSourceId != null) putExtra(EXTRA_RECEIPT_SOURCE_ID, receiptSourceId)
                 // No hashing here: intent() runs on Main. Producers capture the
-                // identity in their own IO work and pass it in.
-                if (outputIdentity != null) putExtra(EXTRA_OUTPUT_IDENTITY, outputIdentity)
+                // full identity in their own IO work; any caller that did not gets
+                // a cheap stat-only identity (id + createdAt + size + mtime), so
+                // the identity is always recorded BEFORE the user can reach Undo.
+                val identity = outputIdentity ?: cheapIdentity(context, docIds, files)
+                if (identity != null) putExtra(EXTRA_OUTPUT_IDENTITY, identity)
             }
+
+        /**
+         * Cheap identity: ordinary file stats only, no content hashing. Safe to
+         * call on Main. Used for callers that did not supply a producer identity.
+         */
+        fun cheapIdentity(context: Context, docIds: List<String>, files: List<File>): String? {
+            return try {
+                if (files.isNotEmpty()) {
+                    val parts = files.sortedBy { it.path }.map { f ->
+                        "${f.path}|${f.length()}|${f.lastModified()}"
+                    }
+                    "C:F:" + parts.joinToString(";")
+                } else if (docIds.isNotEmpty()) {
+                    val repo = ScanWhirlApp.from(context).repository
+                    val parts = docIds.sorted().map { id ->
+                        val doc = repo.getDocument(id) ?: return null
+                        val pdf = doc.pdfFile
+                        val size = if (pdf.isFile) pdf.length() else -1L
+                        val modified = if (pdf.isFile) pdf.lastModified() else -1L
+                        "$id|${doc.createdAt}|$size|$modified"
+                    }
+                    "C:D:" + parts.joinToString(";")
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
 
         /** Test seam: observes the thread that performs identity hashing. */
         @Volatile
