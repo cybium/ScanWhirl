@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SECURITY_JUDGE 1.3.0 finding 2: honest outcome when the plaintext original
+         could not be fully purged. The retry keeps working from the durable marker. -->
+    <string name="vault_added_purge_pending">Added to the Vault. The original could not be fully removed yet; it will be removed next start.</string>
+</resources>

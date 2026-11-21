@@ -171,6 +171,15 @@ class ScanRepository(private val context: Context) {
         /** Lead decision: recursive removal of plaintext scratch; false simulates a failed delete. */
         @Volatile internal var recoveryFileDelete: (File) -> Boolean = { it.deleteRecursively() }
 
+        /** SEC1 1.3.0: rename of a Vault original into the private purge area; false simulates failure. */
+        @Volatile internal var vaultPendingMove: (File, File) -> Boolean = { from, to -> from.renameTo(to) }
+
+        /** SEC1 1.3.0: recursive purge of a private Vault original; false simulates a partial delete. */
+        @Volatile internal var vaultPendingDelete: (File) -> Boolean = { it.deleteRecursively() }
+
+        /** SEC1 1.3.0: recursive delete in [deleteFromTrash]; false simulates a partial delete. */
+        @Volatile internal var trashPurgeDelete: (File) -> Boolean = { it.deleteRecursively() }
+
         /** Lead decision: fault seam at the start of each startup recovery step; may throw. */
         @Volatile internal var recoveryStepFault: ((String) -> Unit)? = null
 
@@ -202,6 +211,9 @@ class ScanRepository(private val context: Context) {
             removeLockFile = { it.delete() }
             recoveryIncomplete = false
             recoveryFileDelete = { it.deleteRecursively() }
+            vaultPendingMove = { from, to -> from.renameTo(to) }
+            vaultPendingDelete = { it.deleteRecursively() }
+            trashPurgeDelete = { it.deleteRecursively() }
             recoveryStepFault = null
             recoveryHash = { Sha256.of(it) }
             lockDerivationProbe = null
@@ -224,6 +236,13 @@ class ScanRepository(private val context: Context) {
 
         /** Hidden entries being permanently deleted; finished by [recoverTrash]. */
         internal const val PURGE_PREFIX = ".purge-"
+
+        /**
+         * SECURITY_JUDGE 1.3.0 finding 2: plaintext originals of documents moving
+         * into the Vault live here until purged. This folder is neither [docsDir]
+         * nor [trashDir], so no Trash screen or restore path can list them.
+         */
+        private const val VAULT_PENDING_PURGE_DIR = ".vault_pending_purge"
 
         /** Separates an id from its counter when two Trash entries share an id. */
         private const val TRASH_KEY_SEP = "~"
@@ -1401,9 +1420,50 @@ class ScanRepository(private val context: Context) {
             val hidden = File(trashDir, "$PURGE_PREFIX$key-${UUID.randomUUID().toString().take(8)}")
             if (!src.renameTo(hidden)) throw IOException("Could not delete this item")
             trashFault(TrashStage.PURGE_HIDDEN)
-            hidden.deleteRecursively()
+            // SEC1 1.3.0: a partial recursive delete is NOT a completed deletion.
+            // The hidden entry stays for recoverTrash; report failure instead of
+            // claiming success while plaintext bytes are still on disk.
+            if (!trashPurgeDelete(hidden)) throw IOException("Could not delete this item")
             originalId?.let { dropDerivedCaches(it) }
         }
+    }
+
+    /** SEC1 1.3.0: private, non-Trash home for plaintext originals awaiting Vault purge. */
+    internal val vaultPendingPurgeDir: File
+        get() = File(context.filesDir, VAULT_PENDING_PURGE_DIR).apply { mkdirs() }
+
+    /**
+     * SECURITY_JUDGE 1.3.0 finding 2: moves a library original straight into a
+     * private purge area, never into the ordinary (listable, restorable) Trash.
+     * Returns true only when the whole folder moved out of the Library.
+     */
+    fun moveOriginalToVaultPendingPurge(id: String): Boolean = synchronized(TRASH_LOCK) {
+        val src = File(docsDir, id)
+        if (!src.isDirectory) return@synchronized false
+        val dest = File(vaultPendingPurgeDir, id)
+        if (dest.exists()) return@synchronized false
+        if (!vaultPendingMove(src, dest)) return@synchronized false
+        Durable.syncDir(docsDir)
+        dest.parentFile?.let { Durable.syncDir(it) }
+        true
+    }
+
+    /** True while a plaintext original is still waiting to be purged for [id]. */
+    fun vaultPendingPurgeExists(id: String): Boolean = File(vaultPendingPurgeDir, id).exists()
+
+    /**
+     * Purges a private Vault original. Returns true only when every file is gone;
+     * a partial delete leaves the folder in place for the durable-marker retry.
+     */
+    fun purgeVaultPendingOriginal(id: String): Boolean = synchronized(TRASH_LOCK) {
+        val dir = File(vaultPendingPurgeDir, id)
+        if (!dir.exists()) return@synchronized true
+        val removed = vaultPendingDelete(dir)
+        if (removed) {
+            Durable.syncDir(vaultPendingPurgeDir)
+            dropDerivedCaches(id)
+        }
+        removed
     }
 
     /** Proven exported copies of a trashed document (see [provenExportsOf]). */

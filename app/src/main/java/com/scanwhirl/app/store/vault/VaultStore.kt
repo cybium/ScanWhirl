@@ -428,10 +428,22 @@ class VaultStore(
     fun hasEntry(id: String): Boolean = File(vaultDir, id).let { it.isDirectory && File(it, MANIFEST_FILE).isFile }
 
     /**
-     * Encrypts every file of the library document [docId], verifies the encrypted copy,
-     * publishes it, then moves the plain original to Trash and purges it.
+     * SECURITY_JUDGE 1.3.0 finding 2: the encrypted entry is published, but the
+     * plaintext original may still be waiting in the private purge area.
+     * [purgeComplete] is false in that case; the durable marker is kept so the
+     * next Vault open retries. The UI must report this honestly.
      */
-    fun addDocument(docId: String): Entry = synchronized(LOCK) {
+    data class AddResult(val entry: Entry, val purgeComplete: Boolean)
+
+    /** Entry-only convenience for callers that do not show an outcome message. */
+    fun addDocument(docId: String): Entry = addDocumentWithResult(docId).entry
+
+    /**
+     * Encrypts every file of the library document [docId], verifies the encrypted copy,
+     * publishes it, then moves the plain original to a PRIVATE purge area (never the
+     * ordinary Trash) and purges it with a checked result.
+     */
+    fun addDocumentWithResult(docId: String): AddResult = synchronized(LOCK) {
         val key = requireKey()
         requireCompleted()
         val doc = repo.getDocument(docId) ?: throw IOException("This document no longer exists")
@@ -444,7 +456,6 @@ class VaultStore(
         val staging = File(vaultDir, "$STAGING_PREFIX$docId-${UUID.randomUUID().toString().take(8)}")
         if (!staging.mkdirs()) throw IOException("Could not open the Vault folder")
         var published = false
-        var trashed = false
 
         try {
             OpFaults.at("vault:add:start")
@@ -498,29 +509,27 @@ class VaultStore(
             Durable.syncDir(vaultDir)
             OpFaults.at("vault:published")
 
-            val trashKey = repo.moveToTrash(docId)
-            trashed = true
-            OpFaults.at("vault:trashed")
-
-            // The encrypted entry is verified, so the plaintext Trash copy can go now.
-            if (trashKey != null) {
-                try {
-                    repo.deleteFromTrash(trashKey)
-                } catch (_: Exception) {
-                }
+            // SEC1 1.3.0: the plaintext original goes straight to a private area,
+            // never into the ordinary (listable, restorable) Trash. If the move
+            // fails the original stays in the Library, the durable marker is kept
+            // for recover(), and the honest result says cleanup is not finished.
+            if (!repo.moveOriginalToVaultPendingPurge(docId)) {
+                return@synchronized AddResult(manifest.toEntry(), false)
             }
-            clearCompletedAdd(docId)
-            manifest.toEntry()
+            // Fault name kept so existing process-death recovery tests still
+            // exercise the window between the move and the purge.
+            OpFaults.at("vault:trashed")
+            val purgeComplete = repo.purgeVaultPendingOriginal(docId)
+            if (purgeComplete) clearCompletedAdd(docId)
+            AddResult(manifest.toEntry(), purgeComplete)
         } catch (e: Exception) {
             if (!published) {
                 staging.deleteRecursively()
-            } else if (!trashed) {
-                // The original is still in the library; drop the half-finished entry.
-                target.deleteRecursively()
+                File(vaultDir, "$ADDING_PREFIX$docId").delete()
             }
-            if (!target.exists()) File(vaultDir, "$ADDING_PREFIX$docId").delete()
-            // When the move to Trash already happened, the complete entry is kept and
-            // recover() finishes the purge.
+            // Published: keep the verified entry and the durable marker. recover()
+            // finishes moving/purging the plaintext original; never drop the only
+            // authority to clean it up.
             throw e
         }
     }
@@ -720,14 +729,17 @@ class VaultStore(
                 return@forEach
             }
             try {
-                if (File(repo.docsDir, id).exists()) {
-                    val key = repo.moveToTrash(id)
-                    if (key != null) repo.deleteFromTrash(key)
-                }
+                // SEC1 1.3.0: an original still in the Library goes straight to the
+                // private purge area, never into the ordinary Trash.
+                if (File(repo.docsDir, id).exists()) repo.moveOriginalToVaultPendingPurge(id)
+                // Legacy copies that an older build left in ordinary Trash must not
+                // stay restorable; deleting one with a checked result is safe here.
                 repo.listTrash().filter { it.originalId == id }.forEach { item ->
                     repo.deleteFromTrash(item.key)
                 }
-                clearCompletedAdd(id)
+                // Only a completed purge clears the durable marker; a partial delete
+                // leaves it for the next open to retry.
+                if (repo.purgeVaultPendingOriginal(id)) clearCompletedAdd(id)
             } catch (_: Exception) {
                 // Keep the local marker so an interrupted purge can be retried.
             }

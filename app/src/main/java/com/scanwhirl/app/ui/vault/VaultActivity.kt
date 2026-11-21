@@ -1654,9 +1654,13 @@ class VaultActivity : BaseActivity() {
     private fun addToVault(doc: ScanDocument) {
         lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) { store.addDocument(doc.id) }
+                val added = withContext(Dispatchers.IO) { store.addDocumentWithResult(doc.id) }
                 render()
-                Toast.makeText(this@VaultActivity, R.string.vault_added, Toast.LENGTH_SHORT).show()
+                // SECURITY_JUDGE 1.3.0: never say "added" alone when the plaintext
+                // original is still awaiting a checked purge; promise only the retry.
+                val message = if (added.purgeComplete) R.string.vault_added
+                else R.string.vault_added_purge_pending
+                Toast.makeText(this@VaultActivity, message, Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 showError(getString(R.string.vault_add_failed, e.message ?: ""))
             }
