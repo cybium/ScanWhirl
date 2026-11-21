@@ -114,8 +114,10 @@ class FormReadyActivity : BaseActivity() {
         if (savedInstanceState == null) {
             selectPreset(FormPresets.PHOTO)
         } else {
+            // restoreState applies the aspect BEFORE the async image load. Setting it afterwards
+            // races the decode: when the image arrived first, CropView's aspect setter re-fitted
+            // the restored rectangle and silently moved the user's crop after a rotation.
             restoreState(savedInstanceState)
-            cropView.aspectRatio = currentPixels().let { it.first.toFloat() / it.second }
         }
     }
 
@@ -510,6 +512,9 @@ class FormReadyActivity : BaseActivity() {
         cleanup = state.getBoolean(KEY_CLEANUP, spec.signatureCleanup)
         writeFields()
         refresh()
+        // Apply the aspect while the crop view has no image: the setter cannot re-fit anything
+        // yet. setImage() then fits the frame once, and setCropRect() restores the exact frame.
+        cropView.aspectRatio = currentPixels().let { (w, h) -> w.toFloat() / h }
         val path = state.getString(KEY_IMAGE)
         val rect = state.getFloatArray(KEY_RECT)
         if (path == null) {
@@ -717,6 +722,9 @@ class FormReadyActivity : BaseActivity() {
     /** Test seams for the confirmed crop frame (the view keeps it in image pixels). */
     internal fun setCropRectForTest(rect: RectF) = cropView.setCropRect(rect)
     internal fun cropRectForTest(): RectF = cropView.getCropRect()
+
+    /** Real signal that the crop view has published its image and rect, not just our own field. */
+    internal fun cropReadyForTest(): Boolean = !cropView.getCropRect().isEmpty
 
     /** Test seam for editable custom values, mirroring what the fields do. */
     internal fun setCustomValuesForTest(w: Float, h: Float, u: FormUnit, d: Int, min: Int, max: Int) {
