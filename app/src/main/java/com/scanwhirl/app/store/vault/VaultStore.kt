@@ -598,12 +598,20 @@ class VaultStore(
         Opened(id = id, name = manifest.name, dir = target, pageFiles = pageFiles, pdfFile = pdf)
     }
 
-    /** Removes the encrypted entry. The plaintext was already purged when it was added. */
+    /**
+     * Removes the encrypted entry. SEC2 N1: the plaintext original may still be
+     * in the private purge area when an earlier purge failed. Finish that cleanup
+     * here; if it fails too, the folder itself is the durable authority and the
+     * independent startup sweep retries it. Never drop the marker before both
+     * copies are gone.
+     */
     fun removeFromVault(id: String) = synchronized(LOCK) {
         requireKey()
         requireCompleted()
         entryDir(id).deleteRecursively()
         File(openDir, id).deleteRecursively()
+        val purged = repo.purgeVaultPendingOriginal(id)
+        if (purged) File(vaultDir, "$ADDING_PREFIX$id").delete()
     }
 
     // ------------------------------------------------------------------
@@ -767,6 +775,19 @@ class VaultStore(
                 if (repo.purgeVaultPendingOriginal(id)) clearCompletedAdd(id)
             } catch (_: Exception) {
                 // Keep the local marker so an interrupted purge can be retried.
+            }
+        }
+
+        // SEC2 N1: independent, locally owned sweep. A pending-purge folder is
+        // authority in its own right: removing the encrypted entry, or losing the
+        // .adding marker, must never strand plaintext. A still-live add owns its
+        // folder and is handled above; a checked failure leaves it for next start.
+        repo.vaultPendingPurgeIds().forEach { id ->
+            if (File(vaultDir, "$ADDING_PREFIX$id").exists()) return@forEach
+            try {
+                repo.purgeVaultPendingOriginal(id)
+            } catch (_: Exception) {
+                // Keep the plaintext for a checked retry; never claim success.
             }
         }
     }

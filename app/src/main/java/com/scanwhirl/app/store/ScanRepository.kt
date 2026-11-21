@@ -1452,6 +1452,14 @@ class ScanRepository(private val context: Context) {
     fun vaultPendingPurgeExists(id: String): Boolean = File(vaultPendingPurgeDir, id).exists()
 
     /**
+     * SEC2 N1: every locally owned pending-purge entry, independent of any
+     * Vault marker or encrypted entry. The folder's own existence is deletion
+     * authority; a stale marker must never strand its plaintext.
+     */
+    internal fun vaultPendingPurgeIds(): List<String> =
+        vaultPendingPurgeDir.listFiles { f -> f.isDirectory }?.map { it.name }.orEmpty()
+
+    /**
      * Purges a private Vault original. Returns true only when every file is gone;
      * a partial delete leaves the folder in place for the durable-marker retry.
      */
