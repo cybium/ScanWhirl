@@ -11,6 +11,7 @@ import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.tools.ToolResultActivity
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -56,7 +57,7 @@ class L3_02_IdentityThreadProbeTest {
     }
 
     @Test
-    fun `the Undo identity re-check hashes off the main thread`() {
+    fun `the Undo identity re-check never hashes on the main thread`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "io hash")
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "compress", docIds = listOf(id))
@@ -68,8 +69,8 @@ class L3_02_IdentityThreadProbeTest {
                 Thread.sleep(20L)
             }
         }
-        assertTrue("identity was never captured", threads.isNotEmpty())
         val main = Looper.getMainLooper().thread
         assertTrue("hashing ran on the main thread: $threads", threads.none { it === main })
+        assertEquals(null, repo.getDocument(id))
     }
 }

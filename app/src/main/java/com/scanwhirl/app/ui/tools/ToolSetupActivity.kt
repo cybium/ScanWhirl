@@ -1230,7 +1230,10 @@ class ToolSetupActivity : BaseActivity() {
                         else getString(R.string.tools_setup_bad_ranges)
                     )
                 }
-                execute({ repo.splitByRange(doc.id, spans).map { it.id } }) { openDocs(it) }
+                execute({
+                    val ids = repo.splitByRange(doc.id, spans).map { it.id }
+                    ids to captureDocs(ids)
+                }) { (ids, identity) -> openDocs(ids, outputIdentity = identity) }
             }
             "extract" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1245,17 +1248,26 @@ class ToolSetupActivity : BaseActivity() {
                     )
                 }
                 val indices = spans.flatMap { it.indices().toList() }.distinct().sorted()
-                execute({ listOf(repo.extractPages(doc.id, indices).id) }) { openDocs(it) }
+                execute({
+                    val ids = listOf(repo.extractPages(doc.id, indices).id)
+                    ids to captureDocs(ids)
+                }) { (ids, identity) -> openDocs(ids, outputIdentity = identity) }
             }
             "duplicate" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
-                execute({ listOf(repo.duplicateDocument(doc.id, nameText.ifBlank { null }).id) }) { openDocs(it) }
+                execute({
+                    val ids = listOf(repo.duplicateDocument(doc.id, nameText.ifBlank { null }).id)
+                    ids to captureDocs(ids)
+                }) { (ids, identity) -> openDocs(ids, outputIdentity = identity) }
             }
             "merge" -> {
                 val ids = selected.toList()
                 if (ids.size < 2) return fail(getString(R.string.tools_setup_need_two))
-                execute({ listOf(repo.mergeDocuments(ids, nameText.ifBlank { null }).id) }) { openDocs(it) }
+                execute({
+                    val out = listOf(repo.mergeDocuments(ids, nameText.ifBlank { null }).id)
+                    out to captureDocs(out)
+                }) { (out, identity) -> openDocs(out, outputIdentity = identity) }
             }
             "compress" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1299,16 +1311,18 @@ class ToolSetupActivity : BaseActivity() {
                     val name = "${baseName(doc)}.$extension" + if (!single) ".zip" else ""
                     val out = File(dir, name)
                     repo.pdfToImages(doc.id, format, zip = !single, outFile = out, quality = quality)
-                    ResultFiles(listOf(out), mimeFor(out))
-                }) { openFiles(it.files, it.mime) }
+                    val result = ResultFiles(listOf(out), mimeFor(out))
+                    result to captureFiles(result.files)
+                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
             }
             "long_image" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
                 execute({
                     val files = repo.exportLongImage(doc.id, outputDir(), doc.name)
-                    ResultFiles(files, "image/jpeg")
-                }) { openFiles(it.files, it.mime) }
+                    val result = ResultFiles(files, "image/jpeg")
+                    result to captureFiles(result.files)
+                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
             }
             "to_word" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1319,14 +1333,15 @@ class ToolSetupActivity : BaseActivity() {
                     val file = repo.exportWord(doc.id, out, includePictures = wordPictures) {
                         unreadPages = it
                     }
-                    ResultFiles(listOf(file), DOCX_MIME)
-                }) { result ->
+                    val result = ResultFiles(listOf(file), DOCX_MIME)
+                    result to captureFiles(result.files)
+                }) { (result, identity) ->
                     // O1-1: an export with unread pages is never reported as complete.
                     val unread = unreadPages.size
                     val note = if (unread > 0) {
                         resources.getQuantityString(R.plurals.tools_unread_pages, unread, unread)
                     } else null
-                    openFiles(result.files, result.mime, note = note)
+                    openFiles(result.files, result.mime, note = note, outputIdentity = identity)
                 }
             }
             "to_powerpoint" -> {
@@ -1335,8 +1350,9 @@ class ToolSetupActivity : BaseActivity() {
                 execute({
                     val out = File(outputDir(), "${baseName(doc)}.pptx")
                     repo.exportPowerPoint(doc.id, out)
-                    ResultFiles(listOf(out), PPTX_MIME)
-                }) { openFiles(it.files, it.mime) }
+                    val result = ResultFiles(listOf(out), PPTX_MIME)
+                    result to captureFiles(result.files)
+                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
             }
             "to_excel" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1348,8 +1364,9 @@ class ToolSetupActivity : BaseActivity() {
                         tablesOnly = excelTablesOnly,
                         noTableNote = getString(R.string.tools_excel_no_table)
                     )
-                    ExcelRun(report, doc)
-                }) { run ->
+                    val run = ExcelRun(report, doc)
+                    run to captureFiles(listOfNotNull(report.file))
+                }) { (run, identity) ->
                     val file = run.report.file
                     if (file == null) {
                         showNoTables(run.doc, run.report.unreadPages.size, run.report.totalPages)
@@ -1368,7 +1385,8 @@ class ToolSetupActivity : BaseActivity() {
                         }
                         openFiles(
                             listOf(file), XLSX_MIME,
-                            note = notes.joinToString("\n").takeIf { it.isNotBlank() }
+                            note = notes.joinToString("\n").takeIf { it.isNotBlank() },
+                            outputIdentity = identity
                         )
                     }
                 }
@@ -1380,13 +1398,17 @@ class ToolSetupActivity : BaseActivity() {
                     val chosen = ids.mapNotNull { id -> docs.firstOrNull { it.id == id } }
                     val out = File(outputDir(), "${getString(R.string.tools_setup_zip_name)}.zip")
                     ZipExporter.export(chosen, out)
-                    ResultFiles(listOf(out), "application/zip")
-                }) { openFiles(it.files, it.mime) }
+                    val result = ResultFiles(listOf(out), "application/zip")
+                    result to captureFiles(result.files)
+                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
             }
             "remove_metadata" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
-                execute({ listOf(repo.removeMetadata(doc.id).id) }) { openDocs(it) }
+                execute({
+                    val out = listOf(repo.removeMetadata(doc.id).id)
+                    out to captureDocs(out)
+                }) { (out, identity) -> openDocs(out, outputIdentity = identity) }
             }
             else -> fail(getString(R.string.tools_setup_nothing))
         }
@@ -1432,10 +1454,23 @@ class ToolSetupActivity : BaseActivity() {
         )
     }
 
-    private fun openFiles(files: List<File>, mime: String, note: String? = null) {
+    private fun openFiles(
+        files: List<File>,
+        mime: String,
+        note: String? = null,
+        outputIdentity: String? = null
+    ) {
         if (files.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        startActivity(ToolResultActivity.intent(this, tool.id, files = files, mime = mime, note = note))
+        startActivity(ToolResultActivity.intent(this, tool.id, files = files,
+            mime = mime, note = note, outputIdentity = outputIdentity))
     }
+
+    /** Blocking helpers: called only inside execute()'s Dispatchers.IO block. */
+    private fun captureDocs(ids: List<String>): String? =
+        ToolResultActivity.captureOutputIdentityBlocking(this, ids, emptyList())
+
+    private fun captureFiles(files: List<File>): String? =
+        ToolResultActivity.captureOutputIdentityBlocking(this, emptyList(), files)
 
     /**
      * To Excel, Tables only: nothing was written. O1-4: when pages were unreadable, say how many
@@ -1475,8 +1510,9 @@ class ToolSetupActivity : BaseActivity() {
                 tablesOnly = false,
                 noTableNote = getString(R.string.tools_excel_no_table)
             )
-            out
-        }) { file -> openFiles(listOf(file), XLSX_MIME) }
+            val files = listOf(out)
+            files to captureFiles(files)
+        }) { (files, identity) -> openFiles(files, XLSX_MIME, outputIdentity = identity) }
     }
 
     private fun fail(message: String) {
