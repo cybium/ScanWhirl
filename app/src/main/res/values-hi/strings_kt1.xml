@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane kt1kit strings (Hindi). -->
+<resources>
+    <string name="kt1_no_eligible_body">इस औज़ार के लिए अभी कुछ नहीं है। पहले दस्तावेज़ स्कैन करें या PDF आयात करें, फिर दोबारा कोशिश करें।</string>
+</resources>

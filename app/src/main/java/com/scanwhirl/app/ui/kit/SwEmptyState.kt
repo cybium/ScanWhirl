@@ -86,9 +86,15 @@ class SwEmptyState(context: Context) : LinearLayout(context) {
                         .apply { topMargin = SwStyle.dp(context, 18f) }
                 )
             }
+            actionView.isVisible = true
             actionView.text = action
             SwMotion.press(actionView)
             actionView.setOnClickListener { onAction?.invoke() }
+        } else {
+            // KT1: rebinding with no action must not leave the previous row's action live.
+            actionView.setOnClickListener(null)
+            actionView.text = null
+            actionView.isVisible = false
         }
     }
 

@@ -75,6 +75,10 @@ class DocCard(context: Context) : LinearLayout(context) {
     private val metaLine: MetaLine
     private val actions: LinearLayout
 
+    /** KT1: selection mode is announced as a real checkable control, not colour alone. */
+    private var selectionMode = false
+    private var checkedState = false
+
     /**
      * UI-W4: at a compact width (or 200 % font) a row keeps one named overflow. The
      * direct Share moves into the same Actions sheet as More, so the name, page line
@@ -97,6 +101,22 @@ class DocCard(context: Context) : LinearLayout(context) {
         isClickable = true
         isFocusable = true
         SwMotion.press(this)
+        androidx.core.view.ViewCompat.setAccessibilityDelegate(
+            this,
+            object : androidx.core.view.AccessibilityDelegateCompat() {
+                override fun onInitializeAccessibilityNodeInfo(
+                    host: View,
+                    info: androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+                ) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    if (selectionMode) {
+                        info.className = android.widget.CheckBox::class.java.name
+                        info.isCheckable = true
+                        info.isChecked = checkedState
+                    }
+                }
+            }
+        )
 
         thumbFrame = FrameLayout(context).apply {
             background = SwStyle.rounded(context, SwStyle.color(context, R.color.sw_paper_thumb), radiusDp = 8f)
@@ -384,16 +404,9 @@ class DocCard(context: Context) : LinearLayout(context) {
         if (hit == null) {
             searchPage.text = null
             searchSnippet.text = null
-            contentDescription = null
         } else {
             searchPage.text = context.getString(R.string.search_hit_page, hit.pageIndex + 1)
             searchSnippet.text = PageHitViews.styled(context, hit.excerpt)
-            contentDescription = context.getString(
-                R.string.search_hit_row_desc,
-                document.name,
-                hit.pageIndex + 1,
-                hit.excerpt.text
-            )
         }
 
         // The row names the folder the document lives in (sentence case, as the person
@@ -410,6 +423,9 @@ class DocCard(context: Context) : LinearLayout(context) {
             else CategoryStyle.color(document.category),
             radiusDp = 3f
         )
+        // KT1: a search hit used to replace the whole description, so TalkBack lost the name,
+        // meta, folder and protected badge. Speak the whole row, then add the match.
+        contentDescription = spokenDescription(hit)
         shareButton.setOnClickListener { onShare() }
         moreButton.setOnClickListener { onMore() }
         // UI-W4: one named overflow at compact width / large font, as the judged
@@ -451,6 +467,20 @@ class DocCard(context: Context) : LinearLayout(context) {
         }
     }
 
+    /** One spoken sentence for the whole row: identity and metadata first, the match last. */
+    private fun spokenDescription(hit: DocSearchHit?): String {
+        val parts = mutableListOf<String>()
+        parts += nameView.text.toString()
+        if (lockBadge.isVisible) parts += lockBadge.text.toString()
+        if (metaView.text.isNotBlank()) parts += metaView.text.toString()
+        if (categoryView.text.isNotBlank()) parts += categoryView.text.toString()
+        if (hit != null) {
+            parts += searchPage.text.toString()
+            parts += hit.excerpt.text
+        }
+        return parts.filter { it.isNotBlank() }.joinToString(", ")
+    }
+
     /**
      * Shows the letter + page-glyph placeholder for [document] (null hides it, a real
      * page is on the tile). The letter is the first character of the name, upper-cased
@@ -490,6 +520,8 @@ class DocCard(context: Context) : LinearLayout(context) {
      * library is selecting, and the per-card Share/⋯ give way to the action bar.
      */
     fun setSelection(active: Boolean, checked: Boolean) {
+        selectionMode = active
+        checkedState = checked
         selectionBadge.isVisible = active && checked
         shareButton.isVisible = !active && !compactRow
         moreButton.isVisible = !active

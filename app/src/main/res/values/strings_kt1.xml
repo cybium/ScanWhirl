@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane kt1kit strings. English first; Hindi parity in values-hi/strings_kt1.xml. -->
+<resources>
+    <!-- Honest route out of a non-empty library with nothing eligible for this tool. -->
+    <string name="kt1_no_eligible_body">Nothing here for this tool yet. Scan a document or import a PDF, then try again.</string>
+</resources>

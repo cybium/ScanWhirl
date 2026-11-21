@@ -8,6 +8,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -81,7 +82,10 @@ class PasswordField(context: Context) : LinearLayout(context) {
             setHintTextColor(SwStyle.color(context, R.color.text_hologram_dim))
             setTextColor(SwStyle.color(context, R.color.text_hologram_hi))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or
+                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            // KT1: a password must not be remembered by the keyboard or offered as a suggestion.
+            imeOptions = imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
             transformationMethod = PasswordTransformationMethod.getInstance()
             background = null
             isSingleLine = true
@@ -185,11 +189,14 @@ class PasswordField(context: Context) : LinearLayout(context) {
         revealed = reveal
         editText.transformationMethod =
             if (reveal) null else PasswordTransformationMethod.getInstance()
-        editText.inputType = if (reveal) {
-            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        val variation = if (reveal) {
+            InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
         } else {
-            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
+        editText.inputType = InputType.TYPE_CLASS_TEXT or variation or
+            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        editText.imeOptions = editText.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
         editText.setSelection(editText.text.length)
         toggleButton.setImageResource(
             if (reveal) R.drawable.ic_sym_visibility_off else R.drawable.ic_sym_visibility

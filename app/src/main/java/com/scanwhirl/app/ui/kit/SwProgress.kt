@@ -30,6 +30,7 @@ class SwProgress private constructor(
     private val bar: ProgressBar
     private val label: TextView
     private val whirl: ImageView
+    private lateinit var dismissActions: DismissActions
 
     init {
         val d = context.resources.displayMetrics.density
@@ -53,7 +54,9 @@ class SwProgress private constructor(
         // Endless whirl, attach-scoped: started only while the sheet is attached
         // and cancelled with it, so a dismissed sheet never leaks the activity.
         SwMotion.spin(whirl)
-        dialog.setOnDismissListener { SwMotion.stop(whirl) }
+        dismissActions = DismissActions(dialog)
+        dismissActions.add { SwMotion.stop(whirl) }
+        context.attachDialogLifecycle(dialog, dismissActions)
 
         label = SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.swProgressLabel

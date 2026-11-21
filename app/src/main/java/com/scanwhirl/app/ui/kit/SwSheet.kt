@@ -1,5 +1,6 @@
 package com.scanwhirl.app.ui.kit
 
+import android.app.Dialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
@@ -10,6 +11,8 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.isVisible
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.SecureView
@@ -37,6 +40,9 @@ class SwSheet private constructor(
     val secondaryButton: TextView
     private val bodyColumn: LinearLayout
     private var bodyScroll: androidx.core.widget.NestedScrollView
+    private val dismissActions = DismissActions(dialog)
+    private var primaryFired = false
+    private var secondaryFired = false
 
     init {
         val density = context.resources.displayMetrics.density
@@ -170,6 +176,8 @@ class SwSheet private constructor(
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         dialog.window?.setDimAmount(0.66f)
         dialog.behavior.peekHeight = (context.resources.displayMetrics.heightPixels * 0.45f).toInt()
+        // KT1: a sheet must not outlive its Activity (WindowLeaked + a callback into a dead screen).
+        context.attachDialogLifecycle(dialog, dismissActions)
     }
 
     /** The sheet's text field, created by [setInput]; tests find it as swSheetInput. */
@@ -271,6 +279,9 @@ class SwSheet private constructor(
         val ripple = android.util.TypedValue().also {
             context.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
         }
+        // A single choice closes the sheet: a double tap must not reach the caller twice.
+        // Multi-choice rows keep toggling (that is their purpose) and are not one-shot.
+        var optionPicked = false
         val list = LinearLayout(context).apply {
             id = R.id.swSheetItems
             orientation = LinearLayout.VERTICAL
@@ -340,6 +351,8 @@ class SwSheet private constructor(
                         render()
                         onPick(index, selected[index])
                     } else {
+                        if (optionPicked) return@setOnClickListener
+                        optionPicked = true
                         onPick(index, true)
                         dialog.dismiss()
                     }
@@ -360,10 +373,13 @@ class SwSheet private constructor(
         setPrimary(text, null, onClick)
 
     fun setPrimary(text: CharSequence, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet = apply {
+        primaryFired = false
         primaryButton.text = text
         setActionIcon(primaryButton, iconRes)
         primaryButton.isVisible = true
         primaryButton.setOnClickListener {
+            if (primaryFired) return@setOnClickListener
+            primaryFired = true
             onClick?.invoke()
             dialog.dismiss()
         }
@@ -379,10 +395,13 @@ class SwSheet private constructor(
         setSecondary(text, null, onClick)
 
     fun setSecondary(text: CharSequence, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet = apply {
+        secondaryFired = false
         secondaryButton.text = text
         setActionIcon(secondaryButton, iconRes)
         secondaryButton.isVisible = true
         secondaryButton.setOnClickListener {
+            if (secondaryFired) return@setOnClickListener
+            secondaryFired = true
             onClick?.invoke()
             dialog.dismiss()
         }
@@ -425,7 +444,7 @@ class SwSheet private constructor(
 
     /** Runs when the sheet closes for any reason (button, close icon, back, outside tap). */
     fun setOnDismissListener(action: () -> Unit) = apply {
-        dialog.setOnDismissListener { action() }
+        dismissActions.add(action)
     }
 
     /**
@@ -566,4 +585,65 @@ class SwSheet private constructor(
                 .setPrimary(R.string.sheet_got_it)
                 .build()
     }
+}
+
+/**
+ * A Dialog has exactly one platform OnDismissListener, but the kit and its callers each need one.
+ * Keep them here and install the real listener once, so adding a callback never silently removes
+ * another (the lifecycle observer removal, the whirl stop or the caller's onDismiss).
+ */
+internal class DismissActions(private val dialog: Dialog) {
+    private val actions = mutableListOf<Pair<() -> Unit, Boolean>>()
+    private var installed = false
+    private var suppressed = false
+
+    fun add(action: () -> Unit) = add(action, internal = false)
+
+    /** Internal cleanup (observer removal) still runs when caller callbacks are suppressed. */
+    fun addInternal(action: () -> Unit) = add(action, internal = true)
+
+    private fun add(action: () -> Unit, internal: Boolean) {
+        actions += action to internal
+        if (!installed) {
+            installed = true
+            dialog.setOnDismissListener { fire() }
+        }
+    }
+
+    /**
+     * The owner is being destroyed: close the window, but a callback from a dead screen must not
+     * run the caller's dismiss logic. Android posts the OnDismissListener, so the flag lives until
+     * that callback arrives. Apps that restore their sheet on rotation rely on this silence.
+     */
+    fun closeFromLifecycle() {
+        suppressed = true
+        if (dialog.isShowing) dialog.dismiss() else suppressed = false
+    }
+
+    private fun fire() {
+        val skipCallerActions = suppressed
+        suppressed = false
+        actions.toList().forEach { (action, internal) ->
+            if (!skipCallerActions || internal) action()
+        }
+    }
+}
+
+/**
+ * KT1: when the owner is a ComponentActivity, follow its lifecycle. ON_DESTROY closes the window
+ * (no WindowLeaked) without running caller callbacks from a finished screen; apps that restore
+ * their own sheet after a rotation rely on that silence. A normal dismissal removes the observer
+ * so a long-lived activity does not accumulate one per sheet. A plain Application context is not
+ * a LifecycleOwner and is left alone.
+ */
+internal fun Context.attachDialogLifecycle(dialog: Dialog, actions: DismissActions) {
+    val owner = this as? LifecycleOwner ?: return
+    val observer = object : DefaultLifecycleObserver {
+        override fun onDestroy(owner: LifecycleOwner) {
+            // The posted dismiss callback runs the internal removal action below.
+            actions.closeFromLifecycle()
+        }
+    }
+    owner.lifecycle.addObserver(observer)
+    actions.addInternal { owner.lifecycle.removeObserver(observer) }
 }
