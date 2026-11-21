@@ -313,6 +313,15 @@ class PageGridView @JvmOverloads constructor(
                 override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
                     super.onInitializeAccessibilityNodeInfo(host, info)
                     val pos = bindingAdapterPosition
+                    // UX-L4-01: selection has a TalkBack route, not just a long-press.
+                    if (pos != NO_POSITION) {
+                        info.addAction(
+                            AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                                R.id.ux130_l4_a11y_select_page,
+                                context.getString(R.string.ux130_l4_select_page)
+                            )
+                        )
+                    }
                     if (dragEnabled && pos != NO_POSITION) {
                         if (pos > 0) {
                             info.addAction(
@@ -335,6 +344,11 @@ class PageGridView @JvmOverloads constructor(
                     val pos = bindingAdapterPosition
                     if (pos != NO_POSITION) {
                         when (action) {
+                            R.id.ux130_l4_a11y_select_page -> {
+                                // Enter selection on the first actuation; toggle afterwards.
+                                if (!checkboxesVisible) onLongPress?.invoke(pos) else onCheckToggle?.invoke(pos)
+                                return true
+                            }
                             R.id.a11y_move_up -> if (pos > 0) {
                                 moveBy(pos, pos - 1)
                                 return true

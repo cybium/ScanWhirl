@@ -15,6 +15,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.widget.Button
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -1176,6 +1177,19 @@ class StampEditorActivity : BaseActivity() {
             view.setTextColor(ink)
             view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
             view.gravity = Gravity.CENTER
+            // UX-L4-04: these painted TextViews are actions. TalkBack must hear a
+            // Button with its enabled state, and keyboard focus must reach them.
+            view.isFocusable = true
+            view.isClickable = true
+            view.accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(
+                    host: View,
+                    info: android.view.accessibility.AccessibilityNodeInfo
+                ) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = Button::class.java.name
+                }
+            }
         }
 
         paint(

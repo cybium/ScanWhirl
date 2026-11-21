@@ -332,6 +332,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
         binding.pageList.onCheckToggle = { index -> toggleSelected(index) }
         binding.pageList.onLongPress = { index -> enterSelection(index) }
+        // UX-L4-01: a visible, TalkBack-reachable entry into the same selection mode.
+        // The long-press shortcut stays; this control is the discoverable alternative.
+        findViewById<View>(R.id.ux130_l4_select_pages).setOnClickListener { enterSelectionMode() }
         binding.pageList.checkedAt = { i ->
             selected.contains(visiblePages.getOrNull(i)?.path)
         }
@@ -792,7 +795,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     private fun updateSelectionUi() {
         val count = selected.size
-        if (selectMode && count == 0) selectMode = false
+        // UX-L4-01: clicking "Select pages" enters selection with nothing ticked yet,
+        // so the bars must stay up. Only a genuinely empty document leaves the mode.
+        if (selectMode && count == 0 && visiblePages.isEmpty()) selectMode = false
         supportActionBar?.subtitle = null
         binding.selectionTopBar.isVisible = selectMode
         binding.selectionActionBar.isVisible = selectMode
@@ -801,6 +806,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.selCount.text = resources.getQuantityString(R.plurals.selected_count, count, count)
         binding.btnSelAll.isEnabled = count < visiblePages.size
         binding.pageList.checkboxesVisible = selectMode
+        // The entry control is redundant (and costs height) once selection is open.
+        findViewById<View>(R.id.ux130_l4_select_pages).isVisible = !selectMode
     }
 
     /** Kit paint for the selection bars (icons already come from the layout). */
@@ -829,6 +836,15 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** True while pages are selected: round checks + top bar + action bar. */
     private var selectMode = false
+
+    /** UX-L4-01: enter selection mode from the visible control (no page ticked yet). */
+    private fun enterSelectionMode() {
+        if (selectMode) return
+        selectMode = true
+        binding.pageList.checkboxesVisible = true
+        binding.pageList.refresh()
+        updateSelectionUi()
+    }
 
     /** Long-press: enter selection mode with this page selected (idempotent). */
     private fun enterSelection(index: Int) {
@@ -1772,6 +1788,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 importQuestionSheet = null
                 sheet.dismiss()
                 discardImportedCopy(id)
+            } else {
+                // UX-L4-01 / UX-007: never silently ignore the tap. Keep stays reachable;
+                // we only explain that this layout cannot place Discard safely.
+                Snackbar.make(binding.root, R.string.ux130_l4_discard_unavailable, Snackbar.LENGTH_LONG).show()
             }
         }
         keep.setOnClickListener {
@@ -1841,7 +1861,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             view.setTextColor(ink)
             view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
             view.gravity = Gravity.CENTER
-            view.minHeight = dp(44f)
+            // UX-L4-01: the layout declares 48dp; the runtime paint must not shrink it.
+            view.minHeight = dp(48f)
+            view.minimumWidth = dp(48f)
             view.setPadding(dp(10f), 0, dp(10f), 0)
         }
         paint(

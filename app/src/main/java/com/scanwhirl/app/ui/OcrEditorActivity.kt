@@ -127,6 +127,8 @@ class OcrEditorActivity : BaseActivity() {
         // Edge-to-edge: let the system insets (nav bar, IME) be applied to the
         // root view so content never lands under the gesture bar or keyboard.
         binding.root.applySystemBarsPadding()
+        // UX-L4-02: one short footer line at 100 %, real reflow when text grows.
+        binding.ocrFootNote.maxLines = if (resources.configuration.fontScale > 1.05f) 3 else 1
         // N1: opening the text screen is reading, not typing: no keyboard, top of the page.
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN)
 
@@ -253,6 +255,8 @@ class OcrEditorActivity : BaseActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_ocr_editor, menu)
+        // UX-L4-02: one all-pages scope, and only where there is more than one page.
+        menu.findItem(R.id.ux130_l4_all_pages)?.isVisible = pageTexts.size > 1
         A11yTargets.widenOverflow(binding.toolbar)
         return true
     }
@@ -904,11 +908,13 @@ class OcrEditorActivity : BaseActivity() {
         } else {
             field.clearFocus()
         }
-        binding.btnEditText.setText(
-            if (edit) R.string.ocr_w5_done_editing else R.string.ocr_w5_edit_text
-        )
+        // UX-L4-02: the decided wording, drawn and spoken, with no legacy token.
+        val editLabel = if (edit) R.string.ux130_l4_finish_editing else R.string.ocr_w5_edit_text
+        binding.btnEditText.setText(editLabel)
+        binding.btnEditText.contentDescription = getString(editLabel)
         binding.btnSaveEdits.isVisible = edit
-        binding.btnCopyAll.isVisible = !edit
+        // UX-L4-02: an "all pages" copy has no meaning on a one-page document.
+        binding.btnCopyAll.isVisible = !edit && pageTexts.size > 1
         // Read-first keeps one 48dp action line: the edit bar (Undo/Redo/word count)
         // replaces the read line only while the person is editing.
         binding.ocrEditBar.isVisible = edit
@@ -1680,20 +1686,31 @@ class OcrEditorActivity : BaseActivity() {
      * primary keeps the corrections in the document; the close icon keeps editing.
      */
     private fun showUnsavedConfirm() {
+        // UX-L4-02: four distinct outcomes. "Save edits" (primary) keeps library
+        // text; "Save as .txt" writes a file; "Keep editing" is the secondary; and
+        // the destructive "Discard edits" row is separate and confirmed.
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ocr_unsaved_title)
             .setMessage(R.string.ocr_w5_back_msg)
             .setOptions(
                 listOf(
-                    getString(R.string.ocr_w5_save_txt_and_close),
-                    getString(R.string.ocr_discard_btn)
+                    getString(R.string.ux130_l4_save_as_txt),
+                    getString(R.string.ux130_l4_discard_edits)
                 )
             ) { which, _ ->
-                if (which == 0) saveCurrent(finishAfterSave = true) else finish()
+                if (which == 0) {
+                    saveCurrent(finishAfterSave = true)
+                } else {
+                    com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+                        .setTitle(R.string.ux130_l4_discard_edits_confirm)
+                        .setMessage(R.string.ocr_w5_back_msg)
+                        .setPrimary(R.string.ux130_l4_discard_edits) { finish() }
+                        .setSecondary(R.string.ocr_w5_keep_editing) { }
+                        .build()
+                        .show()
+                }
             }
-            .setPrimary(R.string.ocr_w5_save_edits) {
-                saveEdits(finishAfter = true)
-            }
+            .setPrimary(R.string.ocr_w5_save_edits) { saveEdits(finishAfter = true) }
             .setSecondary(R.string.ocr_w5_keep_editing) { }
             .build()
             .show()

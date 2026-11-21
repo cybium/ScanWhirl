@@ -167,7 +167,7 @@ class OcrTextFileSaveFixTextTest {
                 // "Save .txt and close" row writes the file. This test covers the file.
                 val rows = sheet.findViewById<android.view.ViewGroup>(R.id.swSheetItems)
                 assertEquals(
-                    activity.getString(R.string.ocr_w5_save_txt_and_close),
+                    activity.getString(R.string.ux130_l4_save_as_txt),
                     (rows.getChildAt(0) as ViewGroup).contentDescription?.toString()
                 )
                 rows.getChildAt(0).performClick()

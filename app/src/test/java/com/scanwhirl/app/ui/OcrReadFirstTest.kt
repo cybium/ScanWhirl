@@ -156,7 +156,7 @@ class OcrReadFirstTest {
             assertFalse("selection-only mode is off while editing", edit.isTextSelectable)
             assertTrue(saveEdits.isVisible)
             assertFalse("Copy all pages is a read-mode action", activity.findViewById<View>(R.id.btnCopyAll).isVisible)
-            assertEquals(activity.getString(R.string.ocr_w5_done_editing), toggle.text.toString())
+            assertEquals(activity.getString(R.string.ux130_l4_finish_editing), toggle.text.toString())
 
             toggle.performClick()
             shadowOf(Looper.getMainLooper()).idle()
