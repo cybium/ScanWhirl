@@ -94,8 +94,9 @@ class ScanWhirlApp : Application() {
             block()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
-        } catch (e: Exception) {
-            android.util.Log.w("ScanWhirl", "storage recovery step $name failed (${e.javaClass.simpleName})")
+        } catch (t: Throwable) {
+            // Lead decision: an Error must not kill startup or stop the remaining steps.
+            android.util.Log.w("ScanWhirl", "storage recovery step $name failed (${t.javaClass.simpleName})")
         }
     }
 
@@ -108,7 +109,13 @@ class ScanWhirlApp : Application() {
      */
     internal fun startStorageRecovery() {
         if (!storageRecoveryStarted.compareAndSet(false, true)) return
-        appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        appScope.launch(kotlinx.coroutines.Dispatchers.IO +
+            kotlinx.coroutines.CoroutineExceptionHandler { _, t ->
+                // Backstop only: every step isolates its own failures. Class only, no user data.
+                android.util.Log.w("ScanWhirl", "storage recovery backstop (${t.javaClass.simpleName})")
+                storageRecoveryIncomplete.value = true
+                storageRecoveryFinished.value = true
+            }) {
             try {
                 // Restore interrupted discard staging BEFORE ordinary orphan-draft cleanup.
                 startupStep("discard") {

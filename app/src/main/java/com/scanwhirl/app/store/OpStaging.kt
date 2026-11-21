@@ -69,6 +69,9 @@ internal object OpStaging {
         root(filesDir).listFiles().orEmpty()
             .filter { it.name !in live && !keep(it) && it.deleteRecursively() }.size
 
+    /** The same live-operation exclusion [sweep] uses; pruning must not touch a running op. */
+    fun isLive(dir: File): Boolean = dir.name in live
+
     /** PM-2.2b: writes the seal atomically (after every file is fsynced, before the rename). */
     fun writeSeal(dir: File, seal: Seal) {
         val text = buildString {
@@ -85,12 +88,15 @@ internal object OpStaging {
     }
 
     /**
-     * PM-2.2b: parses a seal; any missing or invalid field returns null (a broken seal is treated
-     * as "no seal", so recovery falls through to the ordinary sweep).
+     * PM-2.2b: parses a seal; any missing or invalid field returns null (a broken or oversized seal
+     * is treated as "no seal" — STALE, never KEEP — so recovery falls through to the sweep). Reads
+     * are bounded to [MAX_SEAL_BYTES] so a corrupt marker cannot exhaust the heap at startup.
      */
+    const val MAX_SEAL_BYTES = 64 * 1024
+
     fun readSeal(dir: File): Seal? {
         val file = File(dir, SEAL)
-        if (!file.isFile) return null
+        if (!file.isFile || file.length() > MAX_SEAL_BYTES) return null
         val lines = try {
             file.readLines()
         } catch (_: Exception) {

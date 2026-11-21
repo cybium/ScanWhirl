@@ -164,6 +164,12 @@ class ScanRepository(private val context: Context) {
         /** G1 review: true when a startup recovery step failed; startup must not declare full success. */
         @Volatile internal var recoveryIncomplete: Boolean = false
 
+        /** Lead decision: recursive removal of plaintext scratch; false simulates a failed delete. */
+        @Volatile internal var recoveryFileDelete: (File) -> Boolean = { it.deleteRecursively() }
+
+        /** Lead decision: fault seam at the start of each startup recovery step; may throw. */
+        @Volatile internal var recoveryStepFault: ((String) -> Unit)? = null
+
         /**
          * Test seam (task S4B): called on the thread that runs the PDF-lock PBKDF2, so a test can
          * prove the 1 300 000-iteration derivation never happens on the main thread.
@@ -179,6 +185,8 @@ class ScanRepository(private val context: Context) {
             orphanCleanupProbe = null
             removeLockFile = { it.delete() }
             recoveryIncomplete = false
+            recoveryFileDelete = { it.deleteRecursively() }
+            recoveryStepFault = null
             lockDerivationProbe = null
         }
 
@@ -3062,7 +3070,14 @@ class ScanRepository(private val context: Context) {
             return
         }
         work.listFiles()?.forEach { file ->
-            if (file.name != markerName) file.delete()
+            if (file.name != markerName && !recoveryFileDelete(file)) {
+                recoveryIncomplete = true
+            }
+        }
+        // Verify under the same pass: anything left (including a nested dir) is kept for retry.
+        if (work.listFiles()?.any { it.name != markerName } == true) {
+            recoveryIncomplete = true
+            android.util.Log.w("ScanWhirl", "startup recovery: staging scratch could not be removed")
         }
     }
 
@@ -3074,12 +3089,14 @@ class ScanRepository(private val context: Context) {
      */
     private suspend fun recoveryStep(name: String, block: suspend () -> Unit) {
         try {
+            recoveryStepFault?.invoke(name)
             block()
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (t: Throwable) {
+            // Lead decision: no Error escapes startup recovery. Every other step still runs.
             recoveryIncomplete = true
-            android.util.Log.w("ScanWhirl", "startup recovery step $name failed (${e.javaClass.simpleName})")
+            android.util.Log.w("ScanWhirl", "startup recovery step $name failed (${t.javaClass.simpleName})")
         }
     }
 
@@ -3116,6 +3133,10 @@ class ScanRepository(private val context: Context) {
 
         val stagingRoot = OpStaging.root(filesDir)
         val stagingDirs = { stagingRoot.listFiles { f -> f.isDirectory }.orEmpty() }
+        // Pruning uses exactly the same live-operation exclusion as OpStaging.sweep: a marker
+        // created by a running unlock/password change must never have its scratch removed. Repair
+        // steps still visit every folder: a crashed Replace stays live in this process until rollback.
+        val deadStagingDirs = { stagingDirs().filterNot { OpStaging.isLive(it) } }
 
         // 1. Roll forward. listTrash() reads every Trash entry's meta.txt; hoist it out of the
         // staging loop (S staging folders × T trash entries becomes one snapshot).
@@ -3178,7 +3199,7 @@ class ScanRepository(private val context: Context) {
 
         // 6. Keep only metadata an unresolved marker truly needs, then sweep everything else.
         // Stale markers (missing document / unrelated digest) delete their whole folder here.
-        recoveryStep("prune-recovery-staging") { stagingDirs().forEach { pruneRecoveryStaging(it) } }
+        recoveryStep("prune-recovery-staging") { deadStagingDirs().forEach { pruneRecoveryStaging(it) } }
         recoveryStep("staging-sweep") {
             swept = OpStaging.sweep(filesDir) { dir -> recoveryMarkerState(dir) == MarkerState.KEEP }
         }
