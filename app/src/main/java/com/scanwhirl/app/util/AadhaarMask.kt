@@ -29,8 +29,12 @@ object AadhaarMask {
     /** A number found in one line, with the box covering its first 8 digits. */
     data class Hit(val digits: Int, val box: PageStamp.Box)
 
-    /** One token of digits, possibly grouped by single spaces/tabs. */
-    private val TOKEN = Regex("\\d(?:[ \\t]?\\d)*")
+    /**
+     * One token of digits, grouped by spaces, dots or hyphens. OCR may put two spaces between
+     * groups ("1234  5678  9012") or use dots ("1234.5678.9012") / hyphens. A comma is not a
+     * separator, so a price like "1,234.56" never becomes one 12-digit token.
+     */
+    private val TOKEN = Regex("\\d(?:[ .\\t-]*\\d)*")
 
     /** OCR confusion characters that are digits in context. */
     fun normalize(text: String): String = buildString(text.length) {

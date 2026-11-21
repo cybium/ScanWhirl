@@ -44,7 +44,9 @@ object SensitiveScan {
         val end: Int,
         val maskEnd: Int,
         val text: String,
-        val digits: Int = 0
+        val digits: Int = 0,
+        /** Lower wins an overlap; bank-specific detections outrank a plain phone/account. */
+        val priority: Int = PRIORITY[kind] ?: 99
     )
 
     private val PRIORITY = mapOf(
@@ -52,8 +54,11 @@ object SensitiveScan {
         Kind.CARD to 7, Kind.AADHAAR to 8, Kind.VID to 9, Kind.ACCOUNT to 10
     )
 
-    private val DIGIT_RUN = Regex("(?<!\\d)\\d(?:[ \\t-]?\\d){8,18}(?!\\d)")
-    private val INDIAN_PHONE = Regex("(?<!\\d)(?:\\+?91[ \\t-]?)?[6-9]\\d{4}[ \\t-]?\\d{5}(?!\\d)")
+    // OCR groups numbers with a single space, a double space, a dot or a hyphen; allow any run
+    // of those separators, but never a comma (so prices like 1,234.56 stay split).
+    private val DIGIT_RUN = Regex("(?<!\\d)\\d(?:[ .\\t-]*\\d){8,18}(?!\\d)")
+    // +91 (98765) 43210, 091 98765 43210, +91-98765-43210 and the plain 98765 43210.
+    private val INDIAN_PHONE = Regex("(?<!\\d)(?:\\+?0?91)?[ \\t()-]*[6-9]\\d{4}[ \\t()-]*\\d{5}(?!\\d)")
     private val INTL_PHONE = Regex("(?<!\\d)\\+\\d{1,3}(?:[ \\t.-]?\\(?\\d{1,4}\\)?){2,4}(?!\\d)")
     private val LOCAL_PHONE = Regex("(?<!\\d)\\(?\\d{3}\\)?[ \\t.-]\\d{3}[ \\t.-]\\d{4}(?!\\d)")
     private val EMAIL = Regex("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}")
@@ -64,6 +69,14 @@ object SensitiveScan {
         Regex("(?<![A-Z0-9])[A-Z]{2}[- ]?\\d{2}[- ]?\\d{4}[- ]?\\d{7}(?![A-Z0-9])")
     private val PASSPORT = Regex("(?<![A-Z0-9])[A-Z]\\d{7}(?![A-Z0-9])")
     private val IBAN = Regex("(?<![A-Z0-9])[A-Z]{2}\\d{2}[A-Z0-9 ]{10,30}(?![A-Z0-9])")
+    // IFSC: four letters, a literal zero, six alphanumerics (SBIN0001234). Matched on the
+    // upper-cased original text: normalize() would turn the letter I into a 1.
+    private val IFSC = Regex("(?<![A-Z0-9])[A-Z]{4}0[A-Z0-9]{6}(?![A-Z0-9])")
+    // UPI VPA: handle@psp with no TLD dot (ravi@oksbi, name.surname@ybl, 9876543210@paytm).
+    // The lookaheads keep a.b@example.com with its .com TLD as an ordinary EMAIL.
+    private val UPI = Regex(
+        "(?<![A-Za-z0-9._%+\\-])[A-Za-z0-9._%+\\-]+@[A-Za-z][A-Za-z0-9]*(?![A-Za-z0-9\\-])(?!\\.[A-Za-z]{2,})"
+    )
 
     // ------------------------------------------------------------------ public API
 
@@ -142,11 +155,11 @@ object SensitiveScan {
         val upper = text.uppercase()
         val candidates = ArrayList<Candidate>()
 
-        fun add(kind: Kind, start: Int, endExclusive: Int, maskEnd: Int) {
+        fun add(kind: Kind, start: Int, endExclusive: Int, maskEnd: Int, priority: Int = PRIORITY[kind] ?: 99) {
             if (start < 0 || endExclusive <= start || start >= text.length) return
             val end = min(endExclusive, text.length)
             val masked = min(maskEnd, end)
-            candidates += Candidate(kind, start, end, masked, text.substring(start, end).trim())
+            candidates += Candidate(kind, start, end, masked, text.substring(start, end).trim(), priority = priority)
         }
 
         // Phone formats first: they must win over "long account number".
@@ -161,6 +174,16 @@ object SensitiveScan {
             if (m.value.count { it.isDigit() } == 10) {
                 add(Kind.PHONE, m.range.first, m.range.last + 1, m.range.last + 1)
             }
+        }
+
+        // Bank identifiers: IFSC and UPI VPAs belong to the existing "Card & bank numbers"
+        // category (Kind.ACCOUNT), so the Find sheet picks them up without a new choice.
+        // A dedicated priority keeps a numeric VPA from being mistaken for a plain phone.
+        for (m in IFSC.findAll(upper)) {
+            add(Kind.ACCOUNT, m.range.first, m.range.last + 1, m.range.last + 1, priority = 5)
+        }
+        for (m in UPI.findAll(text)) {
+            add(Kind.ACCOUNT, m.range.first, m.range.last + 1, m.range.last + 1, priority = 5)
         }
 
         // Emails, PAN, IBAN and SSN need the original letters, not the digit-normalised copy.
@@ -224,7 +247,7 @@ object SensitiveScan {
         // Specific detectors win an overlap (a card is not also an account; SSN is not an account).
         val chosen = ArrayList<Candidate>()
         candidates.sortedWith(
-            compareBy({ PRIORITY[it.kind] ?: 99 }, { it.start })
+            compareBy({ it.priority }, { it.start })
         ).forEach { candidate ->
             if (chosen.none { it.start < candidate.end && candidate.start < it.end }) {
                 chosen += candidate

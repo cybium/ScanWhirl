@@ -70,7 +70,7 @@
     <string name="stamp_hint_redact">Drag a box over what must be hidden</string>
     <string name="stamp_hint_select">Tap a mark to move it; drag a corner to resize</string>
     <string name="stamp_no_ocr">No recognised text on this page yet.</string>
-    <string name="stamp_no_suggestions">No private numbers found.</string>
+    <string name="stamp_no_suggestions">Nothing found automatically. Check the page yourself before sharing.</string>
     <string name="stamp_locked">This document is protected. Unlock it first.</string>
     <string name="stamp_missing">This document could not be opened.</string>
     <string name="stamp_no_selection">Tap a mark to edit it</string>
@@ -110,5 +110,5 @@
     <item quantity="other">Hid %1$d items. Check the boxes, then save.</item>
 </plurals>
 <string name="private_info_label">Private info hidden</string>
-<string name="private_info_saved">Saved a copy with private info hidden: %1$s</string>
+<string name="private_info_saved">Saved a copy with private info hidden: %1$s. The original document stays unchanged in your library.</string>
 </resources>
