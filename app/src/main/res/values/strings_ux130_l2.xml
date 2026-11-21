@@ -25,6 +25,7 @@
     <string name="ux130_l2_add_gallery_adjust">Adjust corners</string>
     <string name="ux130_l2_add_gallery_plain">Add pages</string>
     <string name="ux130_l2_add_gallery_cancel">Cancel</string>
+    <string name="ux130_l2_gallery_partial_failure">Some pages could not be added. Choose a readable image and try again. The pages that were added are still in this scan.</string>
 
     <!-- L2-03: one review status, honest hint, preview and zoom actions. -->
     <string name="ux130_l2_review_status">Page %1$d of %2$d</string>
