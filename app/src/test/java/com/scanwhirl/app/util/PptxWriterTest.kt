@@ -199,7 +199,10 @@ class PptxWriterTest {
         assertTrue("notes master is required for notes", parts.containsKey("ppt/notesMasters/notesMaster1.xml"))
         assertTrue(parts.containsKey("ppt/notesMasters/_rels/notesMaster1.xml.rels"))
         assertTrue(parts.containsKey("ppt/notesSlides/notesSlide1.xml"))
-        assertTrue(parts.containsKey("ppt/notesSlides/notesSlide2.xml"))
+        assertFalse(
+            "a page with no note text must not get an empty notes slide",
+            parts.containsKey("ppt/notesSlides/notesSlide2.xml")
+        )
         assertEquals(2, slideCount(parts))
         assertPackageValid(parts)
         assertTrue(
@@ -211,6 +214,10 @@ class PptxWriterTest {
         assertTrue(
             "slide 1 must link its notes",
             text(parts, "ppt/slides/_rels/slide1.xml.rels").contains("notesSlides/notesSlide1.xml")
+        )
+        assertFalse(
+            "slide 2 has no note, so no notes relationship",
+            text(parts, "ppt/slides/_rels/slide2.xml.rels").contains("notesSlide")
         )
     }
 

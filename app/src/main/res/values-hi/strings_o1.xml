@@ -11,6 +11,7 @@
     <!-- केवल तालिकाएँ, सभी पन्ने नहीं पढ़े गए। -->
     <string name="tools_excel_unread_all_title">पन्ने नहीं पढ़े जा सके</string>
     <string name="tools_excel_unread_all_msg">%2$d में से %1$d पन्ने नहीं पढ़े जा सके। कोई तालिका जाँची नहीं जा सकी।</string>
+    <string name="tools_excel_no_tables_unread_msg">पढ़े गए पन्नों में कोई तालिका नहीं मिली। %2$d में से %1$d पन्ने नहीं पढ़े जा सके।</string>
 
     <!-- जिस स्लाइड शो में कुछ नहीं पढ़ा गया, उसमें टिप्पणियाँ नहीं होतीं। -->
     <string name="tools_result_pptx_no_text_note">स्लाइड पर पन्ने की तस्वीर है। कोई लिखा हुआ नहीं पढ़ा गया, इसलिए टिप्पणियाँ नहीं हैं।</string>

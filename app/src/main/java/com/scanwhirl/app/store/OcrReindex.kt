@@ -97,7 +97,13 @@ class OcrReindex(private val repo: ScanRepository) {
                 // of keeping (and later saving) the old text.
                 OcrTextEvents.notifyChanged()
             }
-            if (stored == 0 && unavailable != null) throw unavailable!!
+            // P1: rebuild the searchable PDF here. clearPending() dequeues the document, so the
+            // indexer's afterIndexed refresh can never fire for a re-read; without this the PDF
+            // would keep the old text layer even though the stored text changed.
+            if (stored > 0) repo.refreshPdfAfterIndex(docId)
+            // P2: a missing text model is a device reason, not a page failure. Surface it even
+            // when some pages were read, so the Text screen says "unavailable", not "failed".
+            if (unavailable != null) throw unavailable!!
             stored
         }
     }

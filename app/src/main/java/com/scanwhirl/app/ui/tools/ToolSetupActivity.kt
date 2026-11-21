@@ -1382,17 +1382,29 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     /**
-     * To Excel, Tables only: nothing was written. O1-4: when every page was unreadable, say that
+     * To Excel, Tables only: nothing was written. O1-4: when pages were unreadable, say how many
      * instead of claiming no page has a table; we never looked at their content.
      */
     private fun showNoTables(doc: ScanDocument, unread: Int, total: Int) {
-        val allUnread = unread > 0 && unread == total
+        val title: Int
+        val message: String
+        when {
+            unread > 0 && unread == total -> {
+                title = R.string.tools_excel_unread_all_title
+                message = getString(R.string.tools_excel_unread_all_msg, unread, total)
+            }
+            unread > 0 -> {
+                title = R.string.tools_excel_no_tables_title
+                message = getString(R.string.tools_excel_no_tables_unread_msg, unread, total)
+            }
+            else -> {
+                title = R.string.tools_excel_no_tables_title
+                message = getString(R.string.tools_excel_no_tables_msg)
+            }
+        }
         SwSheet.builder(this)
-            .setTitle(if (allUnread) R.string.tools_excel_unread_all_title else R.string.tools_excel_no_tables_title)
-            .setMessage(
-                if (allUnread) getString(R.string.tools_excel_unread_all_msg, unread, total)
-                else getString(R.string.tools_excel_no_tables_msg)
-            )
+            .setTitle(title)
+            .setMessage(message)
             .setPrimary(R.string.tools_excel_export_all) { exportAllText(doc) }
             .setSecondary(R.string.sheet_cancel)
             .build()
