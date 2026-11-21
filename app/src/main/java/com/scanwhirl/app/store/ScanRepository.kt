@@ -39,6 +39,7 @@ import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ReadingOrder
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
+import com.scanwhirl.app.util.SizeUnits
 import com.scanwhirl.app.util.TableDetect
 import com.scanwhirl.app.util.XlsxWriter
 import kotlinx.coroutines.CancellationException
@@ -2268,8 +2269,8 @@ class ScanRepository(private val context: Context) {
                     PdfImport.Reason.NO_SPACE,
                     context.getString(
                         R.string.tools_import_no_space,
-                        plan.estimateBytes / (1024 * 1024),
-                        plan.freeBytes / (1024 * 1024)
+                        SizeUnits.format(plan.estimateBytes),
+                        SizeUnits.format(plan.freeBytes)
                     ),
                     pages = totalPages
                 )

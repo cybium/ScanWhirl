@@ -600,10 +600,12 @@ object ImageTools {
                 val currentLong = maxOf(current.width, current.height)
                 if (floor > 0 && currentLong <= floor) break
                 val scale = if (floor > 0) max(0.7f, floor.toFloat() / currentLong) else 0.7f
-                var nw = if (floor > 0) ceil(current.width * scale).toInt()
-                    else (current.width * scale).toInt()
-                var nh = if (floor > 0) ceil(current.height * scale).toInt()
-                    else (current.height * scale).toInt()
+                // Re-review P2: coerceAtLeast(1) on BOTH branches. A 1 px side times 0.7 is 0,
+                // which used to make createScaledBitmap throw on a narrow page with a tiny target.
+                var nw = (if (floor > 0) ceil(current.width * scale).toInt()
+                    else (current.width * scale).toInt()).coerceAtLeast(1)
+                var nh = (if (floor > 0) ceil(current.height * scale).toInt()
+                    else (current.height * scale).toInt()).coerceAtLeast(1)
                 if (floor > 0) {
                     // Round up then clamp: never 1001 -> 999 or 1400 -> 980.
                     if (nw >= nh) nw = maxOf(nw, floor) else nh = maxOf(nh, floor)
