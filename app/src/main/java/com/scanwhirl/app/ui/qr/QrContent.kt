@@ -1,6 +1,8 @@
 package com.scanwhirl.app.ui.qr
 
 import com.scanwhirl.app.R
+import java.net.IDN
+import java.net.URI
 
 /** What kind of value a scanned code holds (design §3: QR code reader). */
 enum class QrKind { URL, WIFI, CONTACT, PHONE, EMAIL, SMS, GEO, TEXT }
@@ -36,6 +38,28 @@ data class QrContent(
         /** Nothing longer than this is displayed or stored in the history. */
         const val MAX_VALUE = 4096
 
+        /** Shown in place of a secret until the user chooses to reveal it. */
+        const val MASK = "••••••••"
+
+        /**
+         * Redaction applied before a scanned value is written to the reversible (Base64) history.
+         * A Wi-Fi code is rebuilt from the very same tokenizer [parseWifi] uses, with every field
+         * that tokenizer reads as a password left out. That covers escaped (`\P:`), lower-case
+         * and duplicate password fields, not just a literal `P:` prefix. Also applied on read so
+         * entries saved by older versions never surface a password.
+         */
+        fun historyValue(raw: String, kind: QrKind): String {
+            if (kind != QrKind.WIFI) return raw
+            val prefixLength = if (raw.length >= 5 && raw.regionMatches(0, "WIFI:", 0, 5, true)) 5 else 0
+            val kept = parseWifiFields(raw.substring(prefixLength)).filterNot { (key, _) -> key == 'P' }
+            return raw.take(prefixLength) + buildString {
+                kept.forEach { (key, value) ->
+                    append(key).append(':').append(escapeWifiValue(value)).append(';')
+                }
+                append(';')
+            }
+        }
+
         private const val WIFI_PREFIX = "WIFI:"
         private const val VCARD_PREFIX = "BEGIN:VCARD"
         private const val MECARD_PREFIX = "MECARD:"
@@ -45,28 +69,37 @@ data class QrContent(
          * the scanner's value type (used when the text alone is ambiguous); TEXT is the
          * honest fallback for anything unrecognised.
          */
-        fun parse(rawValue: String, reported: QrKind = QrKind.TEXT): QrContent {
+        /** [contactFallback] is the localised "Contact" title used when a card has no name. */
+        fun parse(
+            rawValue: String,
+            reported: QrKind = QrKind.TEXT,
+            contactFallback: String = "Contact"
+        ): QrContent {
             val value = rawValue.take(MAX_VALUE).trim()
             val upper = value.uppercase()
             return when {
                 upper.startsWith("HTTP://") || upper.startsWith("HTTPS://") -> url(value)
                 upper.startsWith("WWW.") -> url(value)
                 upper.startsWith("WIFI:") -> wifi(value)
-                upper.startsWith(VCARD_PREFIX) -> vcard(value)
-                upper.startsWith(MECARD_PREFIX) -> mecard(value)
+                upper.startsWith(VCARD_PREFIX) -> vcard(value, contactFallback)
+                upper.startsWith(MECARD_PREFIX) -> mecard(value, contactFallback)
                 upper.startsWith("TEL:") -> phone(value.substring(4))
                 upper.startsWith("MAILTO:") -> email(value.substring(7).substringBefore('?'))
                 upper.startsWith("SMSTO:") || upper.startsWith("SMS:") -> sms(value)
                 upper.startsWith("GEO:") -> geo(value.substring(4))
-                reported != QrKind.TEXT -> byReported(reported, value)
+                reported != QrKind.TEXT -> byReported(reported, value, contactFallback)
                 else -> text(value)
             }
         }
 
-        private fun byReported(reported: QrKind, value: String): QrContent = when (reported) {
+        private fun byReported(reported: QrKind, value: String, contactFallback: String): QrContent = when (reported) {
             QrKind.URL -> url(value)
             QrKind.WIFI -> wifi(value)
-            QrKind.CONTACT -> if (value.uppercase().startsWith(MECARD_PREFIX)) mecard(value) else vcard(value)
+            QrKind.CONTACT -> if (value.uppercase().startsWith(MECARD_PREFIX)) {
+                mecard(value, contactFallback)
+            } else {
+                vcard(value, contactFallback)
+            }
             QrKind.PHONE -> phone(value)
             QrKind.EMAIL -> email(value.substringAfter("mailto:", value))
             QrKind.SMS -> sms(value)
@@ -93,12 +126,40 @@ data class QrContent(
             return QrContent(
                 kind = QrKind.URL,
                 title = clip(normalized),
-                fields = emptyList(),
+                // The real host only: never the user@host part a deceptive link can hide behind.
+                fields = listOf(websiteField(value, normalized)),
                 actions = listOf(QrAction.OPEN_LINK, QrAction.COPY, QrAction.SHARE),
                 raw = value,
                 copyText = normalized,
                 actionUri = normalized
             )
+        }
+
+        /** A link always gets a row: either the real host, or the exact text for inspection. */
+        private fun websiteField(scanned: String, normalized: String): QrField {
+            val host = displayHost(normalized)
+            return if (host != null) {
+                QrField(R.string.qr_field_website, host)
+            } else {
+                // java.net.URI rejects backslashes, spaces and other illegal characters. Rather
+                // than guess a host from such text, show verbatim what was on the code.
+                QrField(R.string.qr_field_check_link, clip(scanned))
+            }
+        }
+
+        /**
+         * The host a link really goes to, decoded from punycode for reading. Both the Unicode
+         * and ASCII forms are shown when they differ, so a mixed-script look-alike is visible.
+         * Userinfo is never included: `https://trusted@evil/` shows "evil", not "trusted".
+         */
+        private fun displayHost(normalized: String): String? {
+            val uri = runCatching { URI(normalized) }.getOrNull() ?: return null
+            val host = uri.host?.takeIf { it.isNotBlank() }
+                ?: uri.authority?.substringAfterLast('@')?.takeIf { it.isNotBlank() }
+                ?: return null
+            val unicode = runCatching { IDN.toUnicode(host) }.getOrDefault(host)
+            val ascii = runCatching { IDN.toASCII(unicode) }.getOrDefault(host)
+            return if (ascii.equals(unicode, ignoreCase = true)) unicode else "$unicode ($ascii)"
         }
 
         private fun wifi(value: String): QrContent {
@@ -124,7 +185,7 @@ data class QrContent(
             )
         }
 
-        private fun vcard(value: String): QrContent {
+        private fun vcard(value: String, contactFallback: String): QrContent {
             val lines = value
                 .replace("\r\n", "\n")
                 .replace("\r", "\n")
@@ -140,9 +201,6 @@ data class QrContent(
                     names.getOrPut(key) { ArrayList() }.add(text)
                 }
             }
-            val displayName = names["FN"]?.firstOrNull()
-                ?: names["N"]?.firstOrNull()?.let { formatVcardName(it) }
-                ?: value.lineSequence().firstOrNull().orEmpty()
             val rows = buildList {
                 names["FN"]?.firstOrNull()?.let { add(QrField(R.string.qr_field_name, it)) }
                 addAll(names["N"].orEmpty().map { QrField(R.string.qr_field_name, formatVcardName(it)) })
@@ -152,6 +210,11 @@ data class QrContent(
                 names["TITLE"]?.firstOrNull()?.let { add(QrField(R.string.qr_field_role, it)) }
                 names["ADR"]?.firstOrNull()?.let { add(QrField(R.string.qr_field_address, it.replace(';', ' ').trim())) }
             }.distinct()
+            // BEGIN:VCARD is an envelope line, never a name. Use a real field, then "Contact".
+            val displayName = names["FN"]?.firstOrNull()
+                ?: names["N"]?.firstOrNull()?.let { formatVcardName(it) }
+                ?: rows.firstOrNull()?.value
+                ?: contactFallback
             return QrContent(
                 kind = QrKind.CONTACT,
                 title = clip(displayName),
@@ -163,7 +226,7 @@ data class QrContent(
             )
         }
 
-        private fun mecard(value: String): QrContent {
+        private fun mecard(value: String, contactFallback: String): QrContent {
             val pairs = splitEscaped(value.removePrefixPrefix(MECARD_PREFIX), ';')
             val map = LinkedHashMap<String, String>()
             pairs.forEach { pair ->
@@ -183,7 +246,7 @@ data class QrContent(
             }
             return QrContent(
                 kind = QrKind.CONTACT,
-                title = clip(name.ifEmpty { value }),
+                title = clip(name.ifEmpty { rows.firstOrNull()?.value ?: contactFallback }),
                 fields = rows,
                 actions = listOf(QrAction.ADD_CONTACT, QrAction.COPY),
                 raw = value,
@@ -249,6 +312,16 @@ data class QrContent(
         /** `WIFI:T:WPA;S:name;P:pass;H:true;;` with `\;`, `\,`, `\:` and `\\` escapes. */
         private fun parseWifi(body: String): Map<Char, String> {
             val map = LinkedHashMap<Char, String>()
+            parseWifiFields(body).forEach { (key, value) -> map[key] = value }
+            return map
+        }
+
+        /**
+         * The single tokenizer behind both parsing and history redaction. It unescapes values
+         * before reading a one-character key, so `\P:` and `p:` are passwords just like `P:`.
+         */
+        private fun parseWifiFields(body: String): List<Pair<Char, String>> {
+            val fields = ArrayList<Pair<Char, String>>()
             val text = StringBuilder()
             var key: Char? = null
             var i = 0
@@ -260,7 +333,7 @@ data class QrContent(
                         i++
                     }
                     c == ';' -> {
-                        key?.let { map[it] = text.toString() }
+                        key?.let { fields += it to text.toString() }
                         key = null
                         text.setLength(0)
                     }
@@ -272,8 +345,16 @@ data class QrContent(
                 }
                 i++
             }
-            key?.let { map[it] = text.toString() }
-            return map
+            key?.let { fields += it to text.toString() }
+            return fields
+        }
+
+        /** Re-escapes a parsed value when a Wi-Fi code is rebuilt for storage. */
+        private fun escapeWifiValue(value: String): String = buildString {
+            value.forEach { c ->
+                if (c == '\\' || c == ';' || c == ',' || c == ':') append('\\')
+                append(c)
+            }
         }
 
         /** Splits on [separator] while honouring backslash escapes. */

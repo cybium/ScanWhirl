@@ -19,6 +19,7 @@
     <string name="qr_copy">Copy</string>
     <string name="qr_share">Share</string>
     <string name="qr_copied">Copied</string>
+    <string name="qr_copied_sensitive">Copied. Cleared from the clipboard in 1 minute.</string>
     <string name="qr_no_app">No app on this phone can open that.</string>
     <string name="qr_no_contacts">No contacts app. The code was copied instead.</string>
 
@@ -41,11 +42,15 @@
     <string name="qr_field_role">Role</string>
     <string name="qr_field_address">Address</string>
     <string name="qr_field_message">Message</string>
+    <string name="qr_field_website">Website</string>
+    <string name="qr_field_check_link">Check this link carefully</string>
+    <string name="qr_contact_fallback">Contact</string>
+    <string name="qr_show">Show</string>
+    <string name="qr_hide">Hide</string>
 
     <string name="qr_recent">Recent scans</string>
     <string name="qr_clear">Clear</string>
     <string name="qr_cleared">History cleared</string>
     <string name="qr_history_meta">%1$s, %2$s</string>
 
-    <string name="qr_pro_message">The QR code reader is part of Pro, together with the other Pro tools.</string>
 </resources>

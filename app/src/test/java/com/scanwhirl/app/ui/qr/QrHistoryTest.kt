@@ -1,6 +1,7 @@
 package com.scanwhirl.app.ui.qr
 
 import android.app.Application
+import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -103,5 +104,16 @@ class QrHistoryTest {
         assertTrue(history.list().isEmpty())
         history.add("", QrKind.TEXT, at = 1)
         assertEquals(listOf(""), history.list().map { it.value })
+    }
+
+    @Test
+    fun `an old wifi entry with a password is redacted when the history is read`() {
+        val old = "WIFI:T:WPA;S:Home;P:s3cret;;"
+        val encoded = Base64.encodeToString(old.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        file.writeText("WIFI\t1\t$encoded\n")
+
+        val item = QrHistory(app).list().single()
+        assertFalse("the old on-disk password is not shown", item.value.contains("s3cret"))
+        assertTrue("the network survives", item.value.contains("Home"))
     }
 }

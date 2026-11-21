@@ -13,8 +13,9 @@ import android.os.Looper
  *
  * - On Android 13+ the clip is marked `EXTRA_IS_SENSITIVE`, so the system does not show its
  *   content in the clipboard preview.
- * - The clip is cleared automatically after [CLEAR_AFTER_MS], but only when it still holds the
- *   same text (the user may have copied something else in the meantime).
+ * - A sensitive clip is cleared automatically after [CLEAR_AFTER_MS], but only when it still
+ *   holds the same text (the user may have copied something else in the meantime). Ordinary
+ *   copies (links, text, names) are never scheduled for clearing: they are not secrets.
  * - Nothing is ever logged.
  */
 object ClipboardPrivacy {
@@ -30,7 +31,7 @@ object ClipboardPrivacy {
             }
         }
         clipboard.setPrimaryClip(clip)
-        scheduleClear(context.applicationContext, text)
+        if (sensitive) scheduleClear(context.applicationContext, text)
     }
 
     /** Clears the clipboard if [expected] is still what is on it. */

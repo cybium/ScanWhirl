@@ -69,7 +69,8 @@ class QrHistory(
         val value = runCatching {
             String(Base64.decode(parts[2], Base64.NO_WRAP), Charsets.UTF_8)
         }.getOrNull() ?: return null
-        return Item(value, kind, at)
+        // Old entries were saved before Wi-Fi redaction; never surface a stored password.
+        return Item(QrContent.historyValue(value, kind), kind, at)
     }
 
     private fun write(items: List<Item>) {

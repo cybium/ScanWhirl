@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.qr
 
 import com.scanwhirl.app.R
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -154,5 +155,101 @@ class QrContentTest {
         val kinds = QrKind.entries.map { kind -> QrContent.parse("x", kind).kind }
         assertEquals(QrKind.entries.toSet(), kinds.toSet())
         assertEquals(QrAction.entries.size, QrAction.entries.toSet().size)
+    }
+
+    @Test
+    fun `a wifi value kept for history drops the password but keeps network and security`() {
+        val raw = "WIFI:T:WPA;S:Home 5G;P:s3cr\\;et;;"
+        val safe = QrContent.historyValue(raw, QrKind.WIFI)
+        assertFalse("the password is not in the reversible Base64 history", safe.contains("s3cr"))
+        assertTrue("the network stays", safe.contains("Home 5G"))
+        assertTrue("the security stays", safe.contains("WPA"))
+        assertEquals("a non-wifi code is stored unchanged", raw, QrContent.historyValue(raw, QrKind.TEXT))
+    }
+
+    @Test
+    fun `a link shows the real host decoded from punycode without changing the link`() {
+        val raw = "https://xn--bcher-kva.example/offer"
+        val content = QrContent.parse(raw)
+        assertEquals(
+            QrField(R.string.qr_field_website, "bücher.example (xn--bcher-kva.example)"),
+            content.fields.first()
+        )
+        assertEquals("what is opened is untouched", raw, content.actionUri)
+    }
+
+    @Test
+    fun `a link with userinfo shows only the real host`() {
+        val raw = "https://trusted.example@evil.example/path"
+        val content = QrContent.parse(raw)
+        assertEquals(QrField(R.string.qr_field_website, "evil.example"), content.fields.first())
+        assertEquals("what is opened is untouched", raw, content.actionUri)
+    }
+
+    @Test
+    fun `a vcard without a name uses a real field or a contact fallback`() {
+        val withPhone = QrContent.parse("BEGIN:VCARD\nVERSION:3.0\nTEL:98765\nEND:VCARD")
+        assertEquals("98765", withPhone.title)
+        val empty = QrContent.parse("BEGIN:VCARD\nVERSION:3.0\nEND:VCARD")
+        assertEquals("Contact", empty.title)
+        assertEquals(
+            "the fallback is localisable",
+            "संपर्क",
+            QrContent.parse("BEGIN:VCARD\nEND:VCARD", QrKind.CONTACT, "संपर्क").title
+        )
+    }
+
+    @Test
+    fun `an escaped password key is redacted with the same tokenizer that parses it`() {
+        listOf("\\P:s3cr\\;et\\\\x,y", "\\p:s3cr\\;et\\\\x,y").forEach { field ->
+            val raw = "WIFI:T:WPA;S:Home;$field;;"
+            val parsed = QrContent.parse(raw, QrKind.WIFI)
+            assertEquals("the scanner does treat this as a password", "s3cr;et\\x,y", parsed.copyText)
+            val safe = QrContent.historyValue(raw, QrKind.WIFI)
+            assertFalse("the escaped-key password must not be stored: $safe", safe.contains("s3cr"))
+            assertTrue("the network stays", safe.contains("Home"))
+            assertTrue("the security stays", safe.contains("WPA"))
+        }
+    }
+
+    @Test
+    fun `a lower-case password key is redacted`() {
+        val raw = "WIFI:T:WPA;S:Home;p:s3cret;;"
+        val safe = QrContent.historyValue(raw, QrKind.WIFI)
+        assertFalse(safe.contains("s3cret"))
+        assertTrue(safe.contains("Home"))
+    }
+
+    @Test
+    fun `duplicate password fields are all removed and an escaped SSID survives`() {
+        val raw = "WIFI:T:WPA;S:Home\\;5G;P:first;P:second;;"
+        val safe = QrContent.historyValue(raw, QrKind.WIFI)
+        assertFalse("first password", safe.contains("first"))
+        assertFalse("second password", safe.contains("second"))
+        assertEquals("Home;5G", QrContent.parse(safe, QrKind.WIFI).title)
+    }
+
+    @Test
+    fun `a unicode host also shows its ASCII punycode form`() {
+        val raw = "https://bücher.example/x"
+        val content = QrContent.parse(raw)
+        assertEquals(
+            QrField(R.string.qr_field_website, "bücher.example (xn--bcher-kva.example)"),
+            content.fields.first()
+        )
+        assertEquals("what is opened is untouched", raw, content.actionUri)
+    }
+
+    @Test
+    fun `a link the URI parser rejects shows the scanned text for inspection`() {
+        listOf("https://example.com\\bad path", "https://exa mple.com/x").forEach { raw ->
+            val content = QrContent.parse(raw)
+            assertEquals(
+                "the exact scanned text is shown, not a guessed host",
+                QrField(R.string.qr_field_check_link, raw),
+                content.fields.first()
+            )
+            assertEquals("what is opened is untouched", raw, content.actionUri)
+        }
     }
 }
