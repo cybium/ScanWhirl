@@ -3151,8 +3151,13 @@ class ScanRepository(private val context: Context) {
     fun makeSearchable(id: String): Boolean {
         val dir = File(docsDir, id)
         if (!dir.isDirectory || File(dir, LOCK_FILE).exists()) return false
-        if (pageFilesIn(dir).isEmpty()) return false
-        if (ocrStore.readGeo(id).isEmpty()) return false
+        val pages = pageFilesIn(dir)
+        if (pages.isEmpty()) return false
+        val geo = ocrStore.readGeo(id)
+        if (geo.isEmpty()) return false
+        // O1-8: never replace scan.pdf with a partial layer and then report "unavailable".
+        // Only rewrite when every page has a stored layer; otherwise leave the PDF untouched.
+        if (pages.any { !geo.containsKey(it.name) }) return false
         regeneratePdf(dir, forceLayers = true)
         return File(dir, "text_layer.flag").exists()
     }
@@ -3429,11 +3434,14 @@ class ScanRepository(private val context: Context) {
      * Writes a `.docx` from the document's recognised text (one paragraph per OCR line, page
      * break between pages). With [includePictures] each page starts with its own page image
      * (fitted to the text width) followed by that page's text. Never rewrites the document.
+     * A page the recogniser could not read gets a visible, localised line in the file and is
+     * passed to [onUnreadPages]; the export is never reported as complete in that case.
      */
     suspend fun exportWord(
         id: String,
         outFile: File,
-        includePictures: Boolean = false
+        includePictures: Boolean = false,
+        onUnreadPages: (List<Int>) -> Unit = {}
     ): File = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
@@ -3443,6 +3451,7 @@ class ScanRepository(private val context: Context) {
         // too and the next export of any kind needs no second pass.
         val text = ocrStore.readText(id).toMutableMap()
         val unread = doc.pageFiles.filter { it.name !in text }
+        val unreadPages = mutableListOf<Int>()
         if (unread.isNotEmpty()) {
             val language = com.scanwhirl.app.util.OcrLanguageSettings.get(appContext())
             for (page in unread) {
@@ -3452,10 +3461,10 @@ class ScanRepository(private val context: Context) {
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    // Unreadable page: it stays "not read" and exports as an empty page, exactly
-                    // like a page the recognizer found no text on.
+                    unreadPages += doc.pageFiles.indexOf(page)
                     continue
                 } catch (_: OutOfMemoryError) {
+                    unreadPages += doc.pageFiles.indexOf(page)
                     continue
                 }
                 ocrStore.putPage(id, page.name, result.text, result.page)
@@ -3463,12 +3472,18 @@ class ScanRepository(private val context: Context) {
             }
         }
         val geo = ocrStore.readGeo(id)
-        val pages = doc.pageFiles.map { page ->
-            wordPageLines(text[page.name] ?: "", geo[page.name])
+        val pages = doc.pageFiles.mapIndexed { index, page ->
+            if (index in unreadPages) {
+                // O1-1: an unreadable page is named in the file instead of silently exported blank.
+                listOf(context.getString(R.string.tools_word_page_unread, index + 1))
+            } else {
+                wordPageLines(text[page.name] ?: "", geo[page.name])
+            }
         }
-        if (pages.none { lines -> lines.any { it.isNotBlank() } }) {
+        if (text.values.none { it.isNotBlank() }) {
             // T37: "Read the text first" left a Hindi user with nowhere to go. Name the setting
-            // that actually decides whether the page can be read.
+            // that actually decides whether the page can be read. All pages unreadable still
+            // reaches this honest dead end; a partial export reports its unread pages instead.
             throw NoTextForExportException(context.getString(R.string.tools_word_no_text))
         }
         if (includePictures) {
@@ -3485,6 +3500,7 @@ class ScanRepository(private val context: Context) {
         } else {
             DocxWriter.write(outFile, pages)
         }
+        onUnreadPages(unreadPages)
         outFile
     }
 
@@ -3628,7 +3644,7 @@ class ScanRepository(private val context: Context) {
         id: String,
         outFile: File,
         tablesOnly: Boolean = false,
-        noTableNote: String = "No table found on this page.",
+        noTableNote: String? = null,
         unreadNote: String? = null
     ): ExcelExport = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
@@ -3637,8 +3653,9 @@ class ScanRepository(private val context: Context) {
         val storedText = ocrStore.readText(id)
         val storedGeo = ocrStore.readGeo(id)
         // H4-5: a page the recogniser never read has no table claim to make, so it says so instead
-        // of "no table found on this page".
+        // of "no table found on this page". O1-7: the defaults are resources, never hard-coded English.
         val unreadNoteText = unreadNote ?: context.getString(R.string.tools_excel_unread_page)
+        val noTableNoteText = noTableNote ?: context.getString(R.string.tools_excel_no_table)
         val unreadPages = mutableListOf<Int>()
         val pages = ArrayList<OcrPage>(doc.pageFiles.size)
         for ((index, page) in doc.pageFiles.withIndex()) {
@@ -3690,7 +3707,7 @@ class ScanRepository(private val context: Context) {
                 else -> XlsxWriter.Sheet(
                     "Page ${index + 1}",
                     ocr.lines.filter { it.text.isNotBlank() }.map { listOf(it.text) }
-                        .ifEmpty { listOf(listOf(noTableNote)) }
+                        .ifEmpty { listOf(listOf(noTableNoteText)) }
                 )
             }
         }

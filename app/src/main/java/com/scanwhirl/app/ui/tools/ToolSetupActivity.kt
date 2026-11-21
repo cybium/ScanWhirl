@@ -1265,11 +1265,21 @@ class ToolSetupActivity : BaseActivity() {
             "to_word" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
+                var unreadPages: List<Int> = emptyList()
                 execute({
                     val out = File(outputDir(), "${baseName(doc)}.docx")
-                    repo.exportWord(doc.id, out, includePictures = wordPictures)
-                    ResultFiles(listOf(out), DOCX_MIME)
-                }) { openFiles(it.files, it.mime) }
+                    val file = repo.exportWord(doc.id, out, includePictures = wordPictures) {
+                        unreadPages = it
+                    }
+                    ResultFiles(listOf(file), DOCX_MIME)
+                }) { result ->
+                    // O1-1: an export with unread pages is never reported as complete.
+                    val unread = unreadPages.size
+                    val note = if (unread > 0) {
+                        resources.getQuantityString(R.plurals.tools_unread_pages, unread, unread)
+                    } else null
+                    openFiles(result.files, result.mime, note = note)
+                }
             }
             "to_powerpoint" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1294,16 +1304,23 @@ class ToolSetupActivity : BaseActivity() {
                 }) { run ->
                     val file = run.report.file
                     if (file == null) {
-                        showNoTables(run.doc)
+                        showNoTables(run.doc, run.report.unreadPages.size, run.report.totalPages)
                     } else {
+                        // O1-6: show the unread count as well as the table count; neither is hidden.
+                        val notes = mutableListOf<String>()
+                        if (excelTablesOnly) {
+                            notes += getString(
+                                R.string.tools_excel_tables_note,
+                                run.report.tablePages, run.report.totalPages
+                            )
+                        }
+                        val unread = run.report.unreadPages.size
+                        if (unread > 0) {
+                            notes += resources.getQuantityString(R.plurals.tools_unread_pages, unread, unread)
+                        }
                         openFiles(
                             listOf(file), XLSX_MIME,
-                            note = if (excelTablesOnly) {
-                                getString(
-                                    R.string.tools_excel_tables_note,
-                                    run.report.tablePages, run.report.totalPages
-                                )
-                            } else null
+                            note = notes.joinToString("\n").takeIf { it.isNotBlank() }
                         )
                     }
                 }
@@ -1364,11 +1381,18 @@ class ToolSetupActivity : BaseActivity() {
         startActivity(ToolResultActivity.intent(this, tool.id, files = files, mime = mime, note = note))
     }
 
-    /** To Excel, Tables only: no page had a table, so nothing was written. Offer all text. */
-    private fun showNoTables(doc: ScanDocument) {
+    /**
+     * To Excel, Tables only: nothing was written. O1-4: when every page was unreadable, say that
+     * instead of claiming no page has a table; we never looked at their content.
+     */
+    private fun showNoTables(doc: ScanDocument, unread: Int, total: Int) {
+        val allUnread = unread > 0 && unread == total
         SwSheet.builder(this)
-            .setTitle(R.string.tools_excel_no_tables_title)
-            .setMessage(R.string.tools_excel_no_tables_msg)
+            .setTitle(if (allUnread) R.string.tools_excel_unread_all_title else R.string.tools_excel_no_tables_title)
+            .setMessage(
+                if (allUnread) getString(R.string.tools_excel_unread_all_msg, unread, total)
+                else getString(R.string.tools_excel_no_tables_msg)
+            )
             .setPrimary(R.string.tools_excel_export_all) { exportAllText(doc) }
             .setSecondary(R.string.sheet_cancel)
             .build()

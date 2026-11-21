@@ -196,15 +196,25 @@ object XlsxWriter {
     )
 
     /**
+     * A date is text, never a number to split: "12.05.2025" must not become "12.05" + ".2025"
+     * and shift every following column. All three common separators are covered, with a two- or
+     * four-digit year.
+     */
+    private val dateToken = Regex("\\b\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4}\\b")
+
+    /**
      * Splits one OCR cell into text/value cells without losing a character. Only a token that
      * [parseNumeric] accepts and that carries a currency sign, percent sign, grouping comma or
      * decimal point is split, so ordinary words ("A4", "Page 1", "2026") stay whole. A value
-     * that already fills the cell is returned unchanged.
+     * that already fills the cell is returned unchanged. A recognised date is left whole.
      */
     internal fun splitCell(raw: String): List<String> {
         val text = raw.trim()
         if (text.isEmpty() || parseNumeric(text) != null) return listOf(raw)
+        val dates = dateToken.findAll(text).map { it.range }.toList()
         for (match in valueToken.findAll(text)) {
+            // A value token inside a date ("12.05" of "12.05.2025") is not a value to extract.
+            if (dates.any { match.range.first <= it.last && it.first <= match.range.last }) continue
             val raw = match.value
             val token = raw.trim()
             if (token.isEmpty()) continue

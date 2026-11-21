@@ -7,6 +7,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import java.util.zip.ZipFile
 import kotlin.math.min
 import kotlin.math.roundToLong
 
@@ -28,6 +29,17 @@ object PptxWriter {
     /** A4 portrait slide, in English Metric Units (21.0 × 29.7 cm). */
     const val A4_WIDTH_EMU = 7_560_000L
     const val A4_HEIGHT_EMU = 10_692_000L
+
+    /**
+     * True when a written deck actually carries speaker notes. The result screen uses this to
+     * avoid claiming notes exist for a deck that only holds page pictures. Never throws: an
+     * unreadable or incomplete file simply has no notes to describe.
+     */
+    fun hasNotes(file: File): Boolean = try {
+        ZipFile(file).use { it.getEntry("ppt/notesSlides/notesSlide1.xml") != null }
+    } catch (_: Exception) {
+        false
+    }
 
     /** Slides a talk app can show: 4:3 notes area, the PowerPoint default. */
     private const val NOTES_WIDTH_EMU = 6_858_000L

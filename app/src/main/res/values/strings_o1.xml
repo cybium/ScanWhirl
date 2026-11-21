@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- O1 office export honesty. Plain words, no long dash, one concept per line. -->
+<resources>
+    <!-- A page the recogniser could not read, written into the Word file and shown on the result. -->
+    <string name="tools_word_page_unread">Page %1$d could not be read.</string>
+    <plurals name="tools_unread_pages">
+        <item quantity="one">Could not read %1$d page.</item>
+        <item quantity="other">Could not read %1$d pages.</item>
+    </plurals>
+
+    <!-- Tables only, every page unread: say that, not "no table". -->
+    <string name="tools_excel_unread_all_title">Pages could not be read</string>
+    <string name="tools_excel_unread_all_msg">Could not read %1$d of %2$d pages. No table could be checked.</string>
+
+    <!-- A slide deck with no recognised text has no speaker notes. -->
+    <string name="tools_result_pptx_no_text_note">Slides are page pictures. No text was read, so there are no speaker notes.</string>
+</resources>
