@@ -1,10 +1,15 @@
 package com.scanwhirl.app.ui.kit
 
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.ui.tools.ToolLaunch
+import com.scanwhirl.app.ui.tools.form.FormReadyActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.robolectric.Shadows.shadowOf
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -46,11 +51,12 @@ class ToolRegistryTest {
     }
 
     // fixui: tiles removed (owner F6/F7/F20) - Book pages, Photos to PDF, Business card,
-    // Duplicate, Enhance and B&W left the catalogue: 43 - 6 = 37 tiles (35 READY, 2 Coming soon).
+    // Duplicate, Enhance and B&W left the catalogue: 43 - 6 = 37; FORM1 adds form_ready = 38
+    // tiles (36 READY, 2 Coming soon).
     @Test
-    fun `catalogue holds all 37 tools, each id once`() {
-        assertEquals(37, ToolRegistry.all.size)
-        assertEquals(35, ToolRegistry.all.count { it.status == ToolStatus.READY })
+    fun `catalogue holds all 38 tools, each id once`() {
+        assertEquals(38, ToolRegistry.all.size)
+        assertEquals(36, ToolRegistry.all.count { it.status == ToolStatus.READY })
         assertEquals(2, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         assertEquals(
             "duplicate tool ids",
@@ -160,6 +166,29 @@ class ToolRegistryTest {
         assertEquals("a PDF title starts-with wins", "pdf_to_images", ids("pdf").first())
         assertEquals("keyword 'smaller' finds Compress", "compress", ids("small").first())
         assertTrue("a keyword substring still matches", ids("scan").contains("scan"))
+    }
+
+    @Test
+    fun `form ready is a free Size-it tool reachable from search and Quick tools`() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val tool = requireNotNull(ToolRegistry.byId("form_ready"))
+        assertEquals(ToolStatus.READY, tool.status)
+        assertEquals("PRO_PLAN.md has no form entry: Free is the documented default", false, tool.pro)
+        assertEquals(ToolGroup.OPTIMIZE, tool.group)
+        assertEquals(ToolJob.SMALLER, ToolRegistry.jobOf(tool))
+        assertTrue("Tools search finds it", ToolRegistry.search(app, "form").any { it.id == "form_ready" })
+        assertTrue(
+            "Hindi Tools search finds it",
+            ToolRegistry.search(app, "हस्ताक्षर").any { it.id == "form_ready" }
+        )
+        assertTrue(
+            "a READY tool is eligible for Quick tools",
+            ToolRegistry.all.any { it.status == ToolStatus.READY && it.id == "form_ready" }
+        )
+
+        ToolLaunch.start(app, "form_ready")
+        val started = requireNotNull(shadowOf(app).nextStartedActivity) { "the tile launched nothing" }
+        assertEquals(FormReadyActivity::class.java.name, started.component?.className)
     }
 
     private class RecordingHost : ToolHost {

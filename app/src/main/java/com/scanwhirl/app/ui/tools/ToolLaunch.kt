@@ -31,6 +31,7 @@ object ToolLaunch {
             "id_card" -> IdCardActivity.intent(context)
             "business_card" -> BusinessCardActivity.intent(context)
             "batch_tools" -> BatchActivity.intent(context, emptyList())
+            "form_ready" -> com.scanwhirl.app.ui.tools.form.FormReadyActivity.intent(context)
             else -> ToolSetupActivity.intent(context, toolId)
         }
         if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -32,4 +32,6 @@
     <string name="form1_out_of_memory">यह फ़ोटो इस फ़ोन के लिए बहुत बड़ी है। छोटी तस्वीर आज़माएँ।</string>
     <string name="form1_selected">चुना गया</string>
     <string name="form1_not_selected">नहीं चुना गया</string>
+    <!-- Tools टाइल (मुफ़्त): आवेदन पत्र के लिए फ़ोटो या हस्ताक्षर तैयार करें। -->
+    <string name="tool_form_ready">फ़ॉर्म के लिए फ़ोटो और हस्ताक्षर</string>
 </resources>

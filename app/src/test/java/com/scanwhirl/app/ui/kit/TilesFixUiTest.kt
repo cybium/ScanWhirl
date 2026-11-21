@@ -52,14 +52,14 @@ class TilesFixUiTest {
         }
         assertTrue(ToolRegistry.byGroup(ToolGroup.CREATE).size >= 5)
         assertTrue(ToolRegistry.byGroup(ToolGroup.ORGANIZE).size >= 8)
-        assertEquals(2, ToolRegistry.byGroup(ToolGroup.OPTIMIZE).size)
+        assertEquals(3, ToolRegistry.byGroup(ToolGroup.OPTIMIZE).size)
     }
 
     @Test
     fun `the derived counts match the shipped catalogue`() {
-        // Owner F6/F7/F20 removed six tiles from the 43-tool catalogue.
-        assertEquals(37, ToolRegistry.all.size)
-        assertEquals(35, ToolRegistry.all.count { it.status == ToolStatus.READY })
+        // Owner F6/F7/F20 removed six tiles from the 43-tool catalogue; FORM1 adds form_ready.
+        assertEquals(38, ToolRegistry.all.size)
+        assertEquals(36, ToolRegistry.all.count { it.status == ToolStatus.READY })
         assertEquals("two tiles are still Coming soon", 2, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         // PRO_PLAN line 10-11 (accepted): folder creation and move-to-folder are FREE;
         // only tags and the other Pro tools stay on sale.

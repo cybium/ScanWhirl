@@ -419,7 +419,7 @@
                 android:gravity="center"
                 android:text="@string/action_rotate"
                 android:textColor="@color/text_hologram_hi"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/btnSelDelete"
@@ -434,7 +434,7 @@
                 android:gravity="center"
                 android:text="@string/delete"
                 android:textColor="@color/text_hologram_hi"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/btnSelExtract"
@@ -449,7 +449,7 @@
                 android:gravity="center"
                 android:text="@string/extract"
                 android:textColor="@color/text_hologram_hi"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/btnSelShare"
@@ -464,7 +464,7 @@
                 android:gravity="center"
                 android:text="@string/share_pdf"
                 android:textColor="@color/text_hologram_hi"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/btnSelMore"
@@ -479,7 +479,7 @@
                 android:gravity="center"
                 android:text="@string/more"
                 android:textColor="@color/text_hologram_hi"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- The document workspace panel: seven NAMED actions, each its own 48 dp+ target with

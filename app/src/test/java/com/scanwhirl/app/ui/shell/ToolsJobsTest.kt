@@ -128,8 +128,8 @@ abstract class ToolsJobsBase {
         }
         assertEquals("Make it smaller is first", ToolJob.SMALLER, jobs.first().first)
         assertEquals(
-            "Make it smaller names Compress and Resize",
-            listOf("compress", "resize"),
+            "Make it smaller names Compress, Resize and the form photo tool",
+            listOf("compress", "resize", "form_ready"),
             jobs.first().second.map { it.id }
         )
         assertTrue("Sign and mark up is the Pro job", jobs.first { it.first == ToolJob.MARKUP }.first.pro)

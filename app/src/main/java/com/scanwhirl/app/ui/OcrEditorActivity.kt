@@ -14,6 +14,7 @@ import android.text.method.TextKeyListener
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
@@ -790,9 +791,11 @@ class OcrEditorActivity : BaseActivity() {
     }
 
     /**
-     * W5 large type: five chips on two weighted rows leave ~90dp each, so a word
-     * like "Share" or ".txt" is split inside the word. Two columns keep every word
-     * whole and wrap only between words.
+     * W5 large type: five chips squeezed into weighted columns leave ~90dp each, so a
+     * word like "Share" or ".txt" is split INSIDE the word. A wrapping flow gives every
+     * chip its natural width and moves a whole chip to the next line when it no longer
+     * fits. The label keeps its two-line whole-word policy, so nothing breaks mid-word
+     * and nothing is clipped (OcrLabelFitTest's intent, unchanged).
      */
     private fun reflowActionsForLargeText() {
         if (resources.configuration.fontScale <= 1.5f) return
@@ -801,28 +804,20 @@ class OcrEditorActivity : BaseActivity() {
             R.id.btnTidyText, R.id.btnCopy, R.id.btnShare, R.id.btnSave, R.id.btnToWord
         )
         val chips = ids.mapNotNull { findViewById<View>(it) }
+        if (chips.isEmpty()) return
         for (chip in chips) (chip.parent as? android.view.ViewGroup)?.removeView(chip)
         container.removeAllViews()
-        val gap = (8 * resources.displayMetrics.density).toInt()
-        val rowGap = (8 * resources.displayMetrics.density).toInt()
-        val rows = listOf(chips.subList(0, 2), chips.subList(2, 4), chips.subList(4, 5))
-        rows.forEachIndexed { index, group ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            group.forEachIndexed { i, chip ->
-                row.addView(
-                    chip,
-                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                        .apply { marginEnd = if (i < group.lastIndex) gap else 0 }
-                )
-            }
-            container.addView(
-                row,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { if (index > 0) topMargin = rowGap }
+        val flow = com.scanwhirl.app.ui.kit.SwFlowLayout(
+            this, horizontalGapDp = 8f, verticalGapDp = 8f
+        )
+        chips.forEach { flow.addView(it) }
+        container.addView(
+            flow,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
-        }
+        )
     }
 
     /**
