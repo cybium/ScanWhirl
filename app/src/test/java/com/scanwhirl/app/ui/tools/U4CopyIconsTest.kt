@@ -31,7 +31,7 @@ abstract class U4CopyIconsBase {
     }
 
     @Test fun settingsNoteDescribesFutureReadingOnly() {
-        assertEquals(if (hi) "अगली बार लिखावट पढ़ते समय इस्तेमाल होगी।" else "Used the next time text is read.",
+        assertEquals(if (hi) "अगली बार पढ़ने पर यह भाषा इस्तेमाल होगी।" else "Used the next time text is read.",
             string("u4_ocr_language_note"))
         assertTrue(source("SettingsActivity.kt").contains(".setMessage(R.string.u4_ocr_language_note)"))
         assertTrue("document re-read warning stays", source("OcrEditorActivity.kt").contains("R.string.ocr_lang_note"))

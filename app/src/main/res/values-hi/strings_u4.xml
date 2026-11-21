@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="u4_ocr_language_note">अगली बार लिखावट पढ़ते समय इस्तेमाल होगी।</string>
+    <string name="u4_ocr_language_note">अगली बार पढ़ने पर यह भाषा इस्तेमाल होगी।</string>
     <string name="u4_backup_restore_password_note">इस प्रति के लिए इस्तेमाल किया गया पासवर्ड डालें।</string>
     <string name="u4_backup_restore_code_note">इस प्रति के लिए इस्तेमाल किया गया तिजोरी वापस खोलने का कोड डालें।</string>
     <string name="u4_library_documents">दस्तावेज़</string>

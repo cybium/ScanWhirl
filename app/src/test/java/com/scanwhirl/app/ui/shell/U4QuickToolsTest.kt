@@ -61,11 +61,10 @@ abstract class U4QuickToolsBase {
 
     protected fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
-    private fun quickTiles(activity: ShellActivity): List<ToolTile> =
-        listOf(R.id.swQuickRow, R.id.swQuickRow2).flatMap { id ->
-            val row = activity.findViewById<ViewGroup>(id) ?: return@flatMap emptyList()
-            (0 until row.childCount).mapNotNull { row.getChildAt(it) as? ToolTile }
-        }
+    private fun quickTiles(activity: ShellActivity): List<ToolTile> {
+        val row = activity.findViewById<View>(R.id.swQuickRow) ?: return emptyList()
+        return allTiles(row)
+    }
 
     private fun sheetTiles(): List<ToolTile> {
         val dialog = ShadowDialog.getLatestDialog() ?: return emptyList()
@@ -263,13 +262,85 @@ abstract class U4QuickToolsBase {
         )
     }
 
+    @Test
+    fun `editor tiles speak add or remove and the twelve limit is focusable`() {
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                openEditor(activity)
+                val removeTile = sheetTiles().first { it.tool?.id == "merge" }
+                assertEquals(
+                    "a selected tile speaks its remove action",
+                    activity.getString(R.string.quick_remove, activity.getString(R.string.tool_merge)),
+                    removeTile.contentDescription.toString()
+                )
+                val addTile = sheetTiles().first { !Prefs.quickTools(activity).contains(it.tool!!.id) }
+                assertEquals(
+                    "an available tile speaks its add action",
+                    activity.getString(R.string.quick_add, activity.getString(addTile.tool!!.title)),
+                    addTile.contentDescription.toString()
+                )
+            }
+        }
+        val twelve = ToolRegistry.all.filter { it.status == ToolStatus.READY }
+            .map { it.id }.distinct().take(12)
+        assertEquals("the catalogue can fill twelve", 12, twelve.size)
+        Prefs.setQuickTools(app, twelve)
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                openEditor(activity)
+                val dialog = ShadowDialog.getLatestDialog()!!
+                val limit = activity.getString(R.string.quick_max_reached)
+                val focusableHint = allChildren(dialog.findViewById(R.id.swSheetContent)!!)
+                    .filter { it.isFocusable && it.contentDescription?.toString() == limit }
+                    .toList()
+                assertTrue("the max-12 hint is on a focusable view", focusableHint.isNotEmpty())
+                val blocked = sheetTiles().filter { !twelve.contains(it.tool?.id) }
+                if (blocked.isNotEmpty()) {
+                    assertTrue(
+                        "a blocked add tile still speaks the limit",
+                        blocked.all { it.contentDescription?.toString() == limit && it.isFocusable }
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `pro is not spoken for a pro tool when the person has pro`() {
+        val proId = ToolRegistry.all.first { it.pro && it.status == ToolStatus.READY }.id
+        Prefs.setQuickTools(app, listOf(proId))
+        ProGate.setTestOverride(app, true)
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val tile = quickTiles(activity).first { it.tool?.id == proId }
+                assertFalse(
+                    "a Pro build never speaks PRO",
+                    tile.contentDescription.toString().contains(activity.getString(R.string.badge_pro))
+                )
+            }
+        }
+        ProGate.setTestOverride(app, false)
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val tile = quickTiles(activity).first { it.tool?.id == proId }
+                assertTrue(
+                    "Free still hears PRO on a gated tile",
+                    tile.contentDescription.toString().contains(activity.getString(R.string.badge_pro))
+                )
+            }
+        }
+    }
+
     private fun quickFirstId(): String {
         var id: String? = null
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                id = (activity.findViewById<View>(R.id.swQuickRow) as? ViewGroup)
-                    ?.let { (it.getChildAt(0) as? ToolTile)?.tool?.id }
+                id = quickTiles(activity).firstOrNull()?.tool?.id
             }
         }
         return requireNotNull(id)
@@ -282,15 +353,13 @@ abstract class U4QuickToolsBase {
             scenario.onActivity { activity ->
                 idle()
                 val density = activity.resources.displayMetrics.density
-                val row = activity.findViewById<ViewGroup>(R.id.swQuickRow)!!
-                val label = (0 until row.childCount)
-                    .mapNotNull { row.getChildAt(it) as? ToolTile }
-                    .first().labelView
+                val row = activity.findViewById<View>(R.id.swQuickRow)!!
+                val label = allTiles(row).first().labelView
                 val layout = label.layout
                 assertNotNull("the quick label is laid out", layout)
                 assertFalse("no ellipsis at 200 %", (0 until layout!!.lineCount).any { layout.getEllipsisCount(it) > 0 })
                 assertTrue("text fits its box", layout.height <= label.height + 1)
-                assertTrue("a tile is at least 48dp", row.getChildAt(0).height >= 48 * density)
+                assertTrue("a tile is at least 48dp", allTiles(row).first().height >= 48 * density)
 
                 openEditor(activity)
                 val dialog = ShadowDialog.getLatestDialog()!!

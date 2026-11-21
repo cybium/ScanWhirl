@@ -130,13 +130,15 @@ abstract class HomeLargeFontBase {
                     "the Home creation row is gone",
                     activity.findViewById<View>(R.id.swCreateRow)
                 )
-                val quickRow = activity.findViewById<ViewGroup>(R.id.swQuickRow)
+                val quickRow = activity.findViewById<View>(R.id.swQuickRow)
                 assertNotNull("UX-008: the quick tools row is on Home", quickRow)
-                for (i in 0 until quickRow!!.childCount) {
-                    val label = quickRow.getChildAt(i).findViewById<TextView>(R.id.swToolLabel)
-                        ?: continue
-                    problems += labelProblems(label, "quick \"${label.text}\"")
+                fun walk(v: View) {
+                    if (v is TextView && v.id == R.id.swToolLabel) {
+                        problems += labelProblems(v, "quick \"${v.text}\"")
+                    }
+                    if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
                 }
+                walk(quickRow!!)
                 val list = activity.findViewById<ViewGroup>(R.id.swDocList)
                 assertTrue("the seeded documents are listed", list.childCount > 0)
 
