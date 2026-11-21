@@ -56,6 +56,7 @@ import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.PageOrder
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ScanFilter
@@ -483,7 +484,7 @@ class ScanReviewActivity : BaseActivity() {
 
     private fun listStaged(): List<File> =
         stagingDir.listFiles { f -> f.extension.equals("jpg", true) }
-            ?.sortedBy { it.nameWithoutExtension }
+            ?.sortedWith(PageOrder.comparator)
             ?: emptyList()
 
     private fun snapshot(): Map<String, Long> =
