@@ -75,9 +75,14 @@ class SearchSnippetTest {
         name: String,
         pages: Int = 3,
         ocr: Map<Int, String> = emptyMap(),
-        vaulted: Boolean = false
+        vaulted: Boolean = false,
+        legacyDuplicate: Boolean = false
     ): String {
-        val id = DocFixtures.saved(repo, app, pages = pages, name = name)
+        val id = if (legacyDuplicate) {
+            DocFixtures.savedLegacyDuplicate(repo, app, pages = pages, name = name)
+        } else {
+            DocFixtures.saved(repo, app, pages = pages, name = name)
+        }
         if (ocr.isNotEmpty()) {
             repo.ocrStore.putTexts(id, ocr.mapKeys { "page_%03d.jpg".format(it.key) })
         }
@@ -380,7 +385,8 @@ class SearchSnippetTest {
     @Test
     fun `near identical names differ by pages size and date in full`() {
         fixture("Bill", pages = 1, ocr = filler(1))
-        fixture("Bill", pages = 3, ocr = filler(3))
+        // Same visible title on both rows: a legacy duplicate is never retroactively renamed.
+        fixture("Bill", pages = 3, ocr = filler(3), legacyDuplicate = true)
         launch { activity ->
             search(activity, "bill")
             waitFor("both same-name rows appear") {
