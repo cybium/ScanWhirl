@@ -128,8 +128,11 @@ class IdCardActivity : BaseActivity() {
     /** The person's adjusted frame (normalised 0..1), restored once the crop screen is shown. */
     private var cropSavedRect: FloatArray? = null
 
-    /** Invalidates an older preparation/reopen when a newer state starts (or Cancel wins). */
-    private var cropGeneration = 0
+    /**
+     * Invalidates an older preparation/reopen when a newer state starts (or Cancel wins).
+     * T2: this must be process-wide, not per-instance: after a rotation the old activity's
+     * coroutine still holds the old instance, so a new instance's counter cannot cancel it.
+     */
 
     private val cropBack = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = cancelCrop()
@@ -563,29 +566,41 @@ class IdCardActivity : BaseActivity() {
      * recreation during this work re-reads it ([resumeCropPreparation]) instead of losing it.
      */
     private fun beginCrop(side: Side, bytes: ByteArray) {
-        val generation = ++cropGeneration
+        val generation = nextCropGeneration()
         cropPreparing = true
         cropSide = side
         // N1: Back while the photo is being prepared returns to the side sheet (and cleans up),
         // instead of finishing silently in the middle of the work.
         cropBack.isEnabled = true
         progress.isVisible = true
+        // T2: the cache write now happens on IO, so a recreation can supersede this generation
+        // while it runs. Remember exactly which file THIS attempt wrote, so a stale attempt can
+        // remove only its own copy and never a newer one.
+        var writtenCropPath: String? = null
         lifecycleScope.launch {
             val prepared = withContext(Dispatchers.IO) {
                 cropPrepareGate?.invoke(side)
                 val oriented = runCatching { ImageTools.normalizeGalleryPhoto(bytes) }.getOrDefault(bytes)
                 val result = runCatching { PhotoAutoCrop.crop(oriented) }
                     .getOrDefault(PhotoAutoCrop.Result(oriented, false))
-                // T1: the pending crop photo is cached here on IO, not later on main in state save.
-                cropPath = writeCache(result.bytes, CROP_FILE)
+                if (generation == cropGenerationSeq.get()) {
+                    // T1: cached here on IO, not later on main in state save. The path is
+                    // published inside IO so a state save in this window can still see it.
+                    writtenCropPath = writeCache(result.bytes, CROP_FILE)
+                    if (writtenCropPath != null) cropPath = writtenCropPath
+                }
                 result
             }
-            if (generation != cropGeneration) return@launch
+            if (generation != cropGenerationSeq.get()) {
+                discardCropPath(writtenCropPath)
+                return@launch
+            }
             val bitmap = withContext(Dispatchers.IO) {
                 runCatching { ImageTools.decodeSampled(prepared.bytes, CROP_PREVIEW_DIM) }.getOrNull()
             }
-            if (generation != cropGeneration) {
+            if (generation != cropGenerationSeq.get()) {
                 bitmap?.recycle()
+                discardCropPath(writtenCropPath)
                 return@launch
             }
             progress.isVisible = false
@@ -615,7 +630,7 @@ class IdCardActivity : BaseActivity() {
      * The Uri was saved with the side, so the same photo is read and prepared again here.
      */
     private fun resumeCropPreparation(uri: Uri, side: Side) {
-        val generation = ++cropGeneration
+        val generation = nextCropGeneration()
         cropPreparing = true
         cropSide = side
         cropBack.isEnabled = true
@@ -626,7 +641,7 @@ class IdCardActivity : BaseActivity() {
                     contentResolver.openInputStream(uri)?.use { ImageTools.readPageBytes(it) }
                 }.getOrNull()
             }
-            if (generation != cropGeneration) return@launch
+            if (generation != cropGenerationSeq.get()) return@launch
             progress.isVisible = false
             if (isFinishing || isDestroyed) return@launch
             if (bytes == null) {
@@ -636,6 +651,8 @@ class IdCardActivity : BaseActivity() {
                 cropPreparing = false
                 cropSourceUri = null
                 cropBack.isEnabled = false
+                // T2: no side is pending any more, so no stale crop copy may remain.
+                clearCropState()
                 render()
                 showCaptureSheet(side, R.string.fixidcrop_id_photo_gone)
                 return@launch
@@ -653,7 +670,7 @@ class IdCardActivity : BaseActivity() {
         val bytes = cropBytes ?: return
         val side = cropSide
         val detected = cropDetected
-        val generation = ++cropGeneration
+        val generation = nextCropGeneration()
         // N1: Back during this async reopen must clean up and return to the side sheet.
         cropBack.isEnabled = true
         progress.isVisible = true
@@ -662,7 +679,7 @@ class IdCardActivity : BaseActivity() {
                 cropReopenGate?.invoke()
                 runCatching { ImageTools.decodeSampled(bytes, CROP_PREVIEW_DIM) }.getOrNull()
             }
-            if (generation != cropGeneration) {
+            if (generation != cropGenerationSeq.get()) {
                 bitmap?.recycle()
                 return@launch
             }
@@ -859,7 +876,7 @@ class IdCardActivity : BaseActivity() {
     internal fun cancelCrop() {
         if (cropOverlay == null && cropBytes == null && !cropPreparing) return
         val side = cropSide
-        cropGeneration++
+        nextCropGeneration()
         cropPreparing = false
         cropSourceUri = null
         cropSavedRect = null
@@ -890,6 +907,14 @@ class IdCardActivity : BaseActivity() {
     private fun clearCropState() {
         runCatching { File(capturedStateDir(), CROP_FILE).delete() }
         cropPath = null
+    }
+
+    /** T2: a superseded attempt removes only the copy it wrote, never a newer generation's file. */
+    private fun discardCropPath(path: String?) {
+        if (path != null && path == cropPath) {
+            runCatching { File(path).delete() }
+            cropPath = null
+        }
     }
 
     private fun showCaptureSheet(side: Side, message: Int? = null) {
@@ -1164,6 +1189,15 @@ class IdCardActivity : BaseActivity() {
     }
 
     companion object {
+        /**
+         * T2: one generation counter for the whole process. A coroutine started by an activity
+         * that was destroyed by a rotation must be invalidated by the new activity's counter,
+         * not by a fresh instance field on the old activity it still holds.
+         */
+        private val cropGenerationSeq = java.util.concurrent.atomic.AtomicInteger(0)
+
+        private fun nextCropGeneration(): Int = cropGenerationSeq.incrementAndGet()
+
         /** Tests: hold the reopened crop decode so Back or a second recreation happens first. */
         @Volatile
         internal var cropReopenGate: (() -> Unit)? = null

@@ -366,7 +366,7 @@ class InsertPhotosCropFixInsertCropTest {
                 assertTrue("Back closes the flow", waitUntil { activity.isFinishing })
             }
         }
-        assertTrue("the batch folder is cleaned up", insertDirs().isEmpty())
+        assertTrue("the batch folder is cleaned up", waitUntil { insertDirs().isEmpty() })
     }
 
     @Test
@@ -413,7 +413,7 @@ class InsertPhotosCropFixInsertCropTest {
         } finally {
             page.recycle()
         }
-        assertTrue("the picked copies are gone after the insert", insertDirs().isEmpty())
+        assertTrue("the picked copies are gone after the insert", waitUntil { insertDirs().isEmpty() })
     }
 
     @Test
@@ -446,7 +446,7 @@ class InsertPhotosCropFixInsertCropTest {
             )
             assertNull("no draft was created", runBlocking { repo.draftOf(target) })
         }
-        assertTrue("Back keeps no picked copy", insertDirs().isEmpty())
+        assertTrue("Back keeps no picked copy", waitUntil { insertDirs().isEmpty() })
     }
 
     @Test
@@ -502,7 +502,7 @@ class InsertPhotosCropFixInsertCropTest {
                 bitmap.recycle()
             }
         }
-        assertTrue("the picked copies are gone after the insert", insertDirs().isEmpty())
+        assertTrue("the picked copies are gone after the insert", waitUntil { insertDirs().isEmpty() })
     }
 
     @Test
@@ -527,7 +527,7 @@ class InsertPhotosCropFixInsertCropTest {
             idle()
 
             assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
-            assertTrue("the picked copies go with the cancelled sheet", insertDirs().isEmpty())
+            assertTrue("the picked copies go with the cancelled sheet", waitUntil { insertDirs().isEmpty() })
         }
     }
 
@@ -551,7 +551,7 @@ class InsertPhotosCropFixInsertCropTest {
             idle()
 
             assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
-            assertTrue("the question is gone with the old screen, so are its copies", insertDirs().isEmpty())
+            assertTrue("the question is gone with the old screen, so are its copies", waitUntil { insertDirs().isEmpty() })
         }
     }
 
@@ -614,7 +614,7 @@ class InsertPhotosCropFixInsertCropTest {
                 assertTrue("Back finishes the flow", waitUntil { current.isFinishing })
             }
         }
-        assertTrue("a cancelled rotation test keeps no picked copy", insertDirs().isEmpty())
+        assertTrue("a cancelled rotation test keeps no picked copy", waitUntil { insertDirs().isEmpty() })
     }
 
     // ---- rework after critic: D1 (tap during the next load), D2 (frame during that load) ----
@@ -680,7 +680,7 @@ class InsertPhotosCropFixInsertCropTest {
             "photo 2 is the second page: ${two.toList()}",
             two[1] > two[0] + 20
         )
-        assertTrue("the picked copies are gone", insertDirs().isEmpty())
+        assertTrue("the picked copies are gone", waitUntil { insertDirs().isEmpty() })
     }
 
     @Test
@@ -737,7 +737,7 @@ class InsertPhotosCropFixInsertCropTest {
                 assertTrue("Back finishes the flow", waitUntil { current.isFinishing })
             }
         }
-        assertTrue("a cancelled batch keeps no picked copy", insertDirs().isEmpty())
+        assertTrue("a cancelled batch keeps no picked copy", waitUntil { insertDirs().isEmpty() })
     }
 
     @Test
@@ -830,7 +830,7 @@ class InsertPhotosCropFixInsertCropTest {
                 base[1] <= base[0] + 20
             )
         }
-        assertTrue("the picked copies are gone", insertDirs().isEmpty())
+        assertTrue("the picked copies are gone", waitUntil { insertDirs().isEmpty() })
     }
 
     // ---- rework 2 after judge: R1 (copy ownership), R2 (write isolation), R3 (recovery) ----
@@ -1025,7 +1025,7 @@ class InsertPhotosCropFixInsertCropTest {
                 Activity.RESULT_CANCELED,
                 shadowOf(activity).resultCode
             )
-            assertTrue("the batch folder is gone", insertDirs().isEmpty())
+            assertTrue("the batch folder is gone", waitUntil { insertDirs().isEmpty() })
         }
         assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
     }
