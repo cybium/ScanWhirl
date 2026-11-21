@@ -23,6 +23,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -217,13 +218,32 @@ class L4ViewerEditorTest {
             }
             discard.layout(0, smallHeight - 10, discard.width.coerceAtLeast(200), smallHeight)
             discard.performClick()
-            assertTrue(
-                "a failed Discard placement reports why instead of ignoring the tap",
-                pollUntil {
-                    activity.findViewById<TextView>(com.google.android.material.R.id.snackbar_text)
-                        ?.text?.toString()
-                        ?.contains(activity.getString(R.string.ux130_l4_discard_unavailable)) == true
-                }
+            idle()
+            val status = requireNotNull(sheet.findViewById<TextView>(R.id.ux_uxg_discard_status)) {
+                "the Keep/Discard sheet has an inline status line"
+            }
+            assertEquals(View.VISIBLE, status.visibility)
+            assertEquals(
+                activity.getString(R.string.ux130_l4_discard_unavailable),
+                status.text.toString()
+            )
+            assertEquals(
+                "the reason is announced to accessibility",
+                View.IMPORTANT_FOR_ACCESSIBILITY_YES,
+                status.importantForAccessibility
+            )
+            assertEquals(
+                ViewCompat.ACCESSIBILITY_LIVE_REGION_POLITE,
+                ViewCompat.getAccessibilityLiveRegion(status)
+            )
+            val keep = requireNotNull(sheet.findViewById<View>(R.id.swSheetPrimary)) {
+                "Keep stays in the sheet"
+            }
+            assertTrue("Keep remains reachable", keep.isShown && keep.isEnabled)
+            assertTrue("the sheet stays open for the safe choice", sheet.isShowing)
+            assertNull(
+                "the reason must be inside the sheet, not a Snackbar painted behind it",
+                activity.findViewById<View>(com.google.android.material.R.id.snackbar_text)
             )
         }
     }
@@ -324,8 +344,27 @@ class L4ViewerEditorTest {
                 confirm.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
             )
             assertEquals(
+                activity.getString(R.string.ux_uxg_ocr_discard_warning),
+                confirm.findViewById<TextView>(R.id.swSheetMessage)?.text?.toString()
+            )
+            val keepEditing = requireNotNull(confirm.findViewById<TextView>(R.id.swSheetPrimary)) {
+                "Keep editing is the safe primary"
+            }
+            assertEquals(
+                activity.getString(R.string.ocr_w5_keep_editing),
+                keepEditing.text.toString()
+            )
+            val discardEdits = requireNotNull(confirm.findViewById<TextView>(R.id.swSheetSecondary)) {
+                "Discard edits is the separated secondary"
+            }
+            assertEquals(
                 activity.getString(R.string.ux130_l4_discard_edits),
-                confirm.findViewById<TextView>(R.id.swSheetPrimary)?.text?.toString()
+                discardEdits.text.toString()
+            )
+            assertEquals(
+                "Discard edits must be danger-styled, not the ordinary safe cyan",
+                androidx.core.content.ContextCompat.getColor(activity, R.color.laser_danger),
+                discardEdits.currentTextColor
             )
         }
     }
