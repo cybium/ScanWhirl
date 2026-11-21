@@ -33,7 +33,8 @@ import kotlinx.coroutines.withContext
 /**
  * M07 P1: Trash. Every document moved here is complete (pages, originals, PDF,
  * metadata, corrected OCR text and geometry) and can be restored whole, or deleted
- * permanently by the person. Nothing is purged automatically.
+ * permanently by the person. Entries older than the 30-day restore window are expired by
+ * the repository at startup and whenever this screen resumes; nothing is purged sooner.
  *
  * Exports already saved to Documents/ScanWhirl are outside Trash: a move never
  * touches them, and permanent deletion only offers to remove copies the document
