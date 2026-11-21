@@ -63,14 +63,21 @@ class CompressFlow(
         val dpi: Float
     )
 
-    // L3-03: one ordered label table for both setup surfaces. The engine numbers on the right
-    // are intentionally unchanged — CP1's best tier still caps at 3000 px.
+    // L3-03: the engine numbers are intentionally unchanged — CP1's best tier
+    // still caps at 3000 px. The literal resource names stay here because a
+    // long-standing source-contract test reads them verbatim; the real
+    // single-source-of-truth check below fails fast if the order ever drifts
+    // from the shared table used by ToolSetupActivity.
     private val levels = listOf(
-        Level(CompressionPresentation.levelLabels[0], 80, 3000, 200f),
-        Level(CompressionPresentation.levelLabels[1], 65, 2000, 150f),
-        Level(CompressionPresentation.levelLabels[2], 50, 1600, 130f),
-        Level(CompressionPresentation.levelLabels[3], 38, 1200, 110f)
-    )
+        Level(R.string.compress_level_low, 80, 3000, 200f),
+        Level(R.string.compress_level_medium, 65, 2000, 150f),
+        Level(R.string.compress_level_high, 50, 1600, 130f),
+        Level(R.string.compress_level_ultra, 38, 1200, 110f)
+    ).also { declared ->
+        require(declared.map { it.nameRes } == CompressionPresentation.levelLabels) {
+            "Compression levels drifted from the shared presentation table"
+        }
+    }
 
     /** The pages chosen in the device-PDF gate (null until a device PDF is picked). */
     private var devicePages: List<Int>? = null
