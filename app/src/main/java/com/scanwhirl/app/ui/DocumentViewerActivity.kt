@@ -414,6 +414,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.btnSelMore.setOnClickListener { showSelectionMore() }
         binding.btnEmptyAddPages.setOnClickListener { startInsertPages() }
         styleSelectionBars()
+        reflowSelectionBarForLargeText()
         // PM-2.2c: the draft bar appears after the first edit; every action is explicit.
         styleDraftBar()
         binding.btnDraftDiscard.setOnClickListener { discardFlow() }
@@ -808,6 +809,42 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.pageList.checkboxesVisible = selectMode
         // The entry control is redundant (and costs height) once selection is open.
         findViewById<View>(R.id.ux130_l4_select_pages).isVisible = !selectMode
+    }
+
+    /**
+     * TYPE12 item 3: at 200 % five fixed columns squeeze a 12sp label until Android breaks
+     * inside the word ("Rotat/e"). A wrapping flow gives each action its natural width and
+     * moves a whole action to the next line instead of splitting it.
+     */
+    private fun reflowSelectionBarForLargeText() {
+        if (resources.configuration.fontScale <= 1.5f) return
+        val bar = binding.selectionActionBar
+        val ids = listOf(
+            R.id.btnSelRotate, R.id.btnSelDelete, R.id.btnSelExtract,
+            R.id.btnSelShare, R.id.btnSelMore
+        )
+        val actions = ids.mapNotNull { findViewById<View>(it) }
+        if (actions.isEmpty()) return
+        for (action in actions) (action.parent as? ViewGroup)?.removeView(action)
+        bar.orientation = LinearLayout.VERTICAL
+        bar.removeAllViews()
+        val flow = com.scanwhirl.app.ui.kit.SwFlowLayout(
+            this, horizontalGapDp = 4f, verticalGapDp = 4f
+        )
+        for (action in actions) {
+            action.layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            flow.addView(action)
+        }
+        bar.addView(
+            flow,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
     }
 
     /** Kit paint for the selection bars (icons already come from the layout). */

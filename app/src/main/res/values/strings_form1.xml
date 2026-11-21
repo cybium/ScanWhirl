@@ -32,4 +32,6 @@
     <string name="form1_out_of_memory">This photo is too large for this phone. Try a smaller picture.</string>
     <string name="form1_selected">Selected</string>
     <string name="form1_not_selected">Not selected</string>
+    <!-- Tools tile (Free): prepare a photo or signature for a form. -->
+    <string name="tool_form_ready">Form photo &amp; signature</string>
 </resources>

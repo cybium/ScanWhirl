@@ -96,7 +96,9 @@ class DocCard(context: Context) : LinearLayout(context) {
         gravity = Gravity.CENTER_VERTICAL
         val d = resources.displayMetrics.density
         background = SwStyle.card(context, 18f)
-        setPadding((12 * d).toInt(), (12 * d).toInt(), (6 * d).toInt(), (12 * d).toInt())
+        // L1-04: the 14sp Hindi folder label adds a line's worth of height. 10dp vertical
+        // padding (was 12) keeps the first card above the dock at 360x640dp in EN and HI.
+        setPadding((12 * d).toInt(), (10 * d).toInt(), (6 * d).toInt(), (10 * d).toInt())
         minimumHeight = SwStyle.dp(context, 88f)
         isClickable = true
         isFocusable = true
@@ -287,9 +289,13 @@ class DocCard(context: Context) : LinearLayout(context) {
             categoryDot,
             LayoutParams((8 * d).toInt(), (8 * d).toInt()).apply { marginEnd = (5 * d).toInt() }
         )
-        // Kept at 11f: raising this at 200 % Hindi makes the 88dp card two pixels taller and
-        // breaks the 360x640dp first-card clearance (LibraryFirstScreen640HiTest).
-        categoryView = SwStyle.text(context, 11f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
+        // L1-04 metadata token: 12sp Latin / 14sp Devanagari. The shared metadata floor keeps
+        // the folder label readable without shrinking it; the band redesign freed the 640dp
+        // clearance this used to break (LibraryFirstScreen640HiTest guards it).
+        categoryView = SwStyle.text(
+            context, 12f, SwStyle.color(context, R.color.text_hologram_mid),
+            bold = true, metadata = true
+        ).apply {
             id = R.id.swDocFolder
             minimumHeight = (14 * d).toInt()
             gravity = Gravity.CENTER_VERTICAL

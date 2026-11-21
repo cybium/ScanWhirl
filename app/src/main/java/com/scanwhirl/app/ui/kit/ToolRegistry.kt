@@ -154,9 +154,12 @@ object ToolRegistry {
         ),
         ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sym_view_module, "batch many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
-        // Optimize (2)
+        // Optimize (3) — FORM1 is Free (PRO_PLAN.md does not list it, so it never moves behind Pro).
         ready("compress", ToolGroup.OPTIMIZE, R.string.tool_compress, R.drawable.ic_sym_compress, "compress smaller size reduce mb छोटा", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("resize", ToolGroup.OPTIMIZE, R.string.tool_resize, R.drawable.ic_sym_aspect_ratio, "resize dimensions pixels"),
+        ready("form_ready", ToolGroup.OPTIMIZE, R.string.tool_form_ready, R.drawable.ic_sym_photo_library,
+            "form form-ready photo signature thumb declaration exam government फ़ॉर्म हस्ताक्षर",
+            launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Convert (8)
         ready("pdf_to_images", ToolGroup.CONVERT, R.string.tool_pdf_to_images, R.drawable.ic_sym_image, "pdf to jpg png images zip", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
@@ -290,9 +293,11 @@ object ToolRegistry {
      * added later still gets a job from [groupJob], so the hub can never silently drop it.
      */
     private val jobAssignments: List<Pair<String, ToolJob>> = listOf(
-        // Make it smaller
+        // Make it smaller — "Form photo & signature" lives here because its job is sizing
+        // a photo/signature to an exact form spec (the Size-it job), same as Compress/Resize.
         "compress" to ToolJob.SMALLER,
         "resize" to ToolJob.SMALLER,
+        "form_ready" to ToolJob.SMALLER,
         // Combine and organise
         "merge" to ToolJob.ORGANISE,
         "split" to ToolJob.ORGANISE,
