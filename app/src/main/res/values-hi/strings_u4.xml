@@ -5,4 +5,6 @@
     <string name="u4_backup_restore_code_note">इस प्रति के लिए इस्तेमाल किया गया तिजोरी वापस खोलने का कोड डालें।</string>
     <string name="u4_library_documents">दस्तावेज़</string>
     <string name="u4_where_library">दस्तावेज़ों में सहेजा गया</string>
+    <string name="u4_quick_editor_hint">हटाने के लिए − दबाएँ, क्रम बदलने के लिए खींचें।</string>
+    <string name="u4_quick_reset">पहले जैसा करें</string>
 </resources>

@@ -35,14 +35,16 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 
 /**
- * UI-B1-LIBRARY-CREATE (UI_CRITIQUE_GPT_2026-11-19 #1): the populated Library must start with
- * the person's documents. The old Home spent its first screen on three creation tiles and six
- * quick tools, so a library of sixteen documents showed none of them above the floating dock.
+ * UI-B1-LIBRARY-CREATE (UI_CRITIQUE_GPT_2026-11-19 #1) + owner decision UX-008: the populated
+ * Library must start with the person's documents. The old Home spent its first screen on three
+ * creation tiles and a TALL quick-tools wall; the creation tiles moved into the Create sheet and
+ * UX-008 brought back only a compact two-row Quick tools strip beneath the folders.
  *
- * Contract checked here, at 360dp, English and Hindi, 100 % and 200 % font:
- *  - the first document row is fully above the dock;
- *  - Home no longer renders the creation tiles or the quick tools (the Create sheet and the
- *    Tools tab replace them), and the six tools are still reachable on the Tools tab;
+ * Contract checked here at 360x800dp, English and Hindi:
+ *  - at 100 % the first document row is fully above the dock; at 200 % the document list header
+ *    is (unclipped text beats density, UI_PLAN §0.8);
+ *  - Home no longer renders the creation tiles, but the compact Quick tools row with its pencil
+ *    is present (UX-008), and the six tools are still reachable on the Tools tab;
  *  - an empty library keeps a visible import shortcut plus the trust line;
  *  - About carries the same trust line.
  */
@@ -110,6 +112,21 @@ abstract class LibraryFirstScreenBase {
         val root = layoutRoot(activity)
         val list = activity.findViewById<ViewGroup>(R.id.swDocList)
         assertTrue("the seeded library renders rows", list.childCount > 0)
+        if (scale >= 2f) {
+            // UI_PLAN §0.8: at 200 % unclipped text beats density. UX-008's compact row plus
+            // three-line labels legitimately fills the first screen; the document LIST (its
+            // count header) must still be on it, never a tool-only screen.
+            val count = activity.findViewById<View>(R.id.swDocCount)
+            assertNotNull("the document count is on the 200 % first screen", count)
+            assertTrue(
+                "the document list header is above the dock at 200 %",
+                topIn(count!!, root) + count.height <= minOf(
+                    topIn(activity.findViewById<View>(R.id.swNavScan), root),
+                    topIn(activity.findViewById<View>(R.id.swShellNav), root)
+                )
+            )
+            return
+        }
         val card = list.getChildAt(0)
         assertTrue("the first row is a document card", card is DocCard)
         assertTrue("the first row has height", card.height > 0)
@@ -140,18 +157,30 @@ abstract class LibraryFirstScreenBase {
     }
 
     @Test
-    fun `home no longer renders creation tiles or quick tools`() {
+    fun `home drops creation tiles but keeps the compact quick tools row`() {
         launch { activity ->
             assertNull(
                 "the Home creation row is replaced by the Create sheet",
                 activity.findViewById<View>(R.id.swCreateRow)
             )
-            assertNull(
-                "the Home quick tools are replaced by the Tools tab",
+            // UX-008: the owner restored a compact Quick tools row. It must never become the
+            // old wall again: two rows at most, with the pencil and the All tools door.
+            assertNotNull(
+                "UX-008: the Home quick tools are back",
                 activity.findViewById<View>(R.id.swQuickRow)
             )
-            assertNull(activity.findViewById<View>(R.id.swQuickRow2))
-            assertNull(activity.findViewById<View>(R.id.swQuickRow3))
+            assertNotNull(
+                "UX-008: the pencil opens the editor",
+                activity.findViewById<View>(R.id.swQuickEdit)
+            )
+            assertNotNull(
+                "UX-008: the All tools link is in the header",
+                activity.findViewById<View>(R.id.swQuickAll)
+            )
+            assertTrue(
+                "UX-008: at most two quick-tool rows",
+                activity.findViewById<View>(R.id.swQuickRow3) == null
+            )
         }
     }
 
@@ -225,11 +254,11 @@ abstract class LibraryFirstScreenBase {
 /** The phone the owner checks: 360dp, English. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
+@Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class LibraryFirstScreenEnTest : LibraryFirstScreenBase()
 
 /** The same phone in Hindi, where the old header also clipped at 200 %. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "hi-w360dp-h640dp-xhdpi")
+@Config(sdk = [35], qualifiers = "hi-w360dp-h800dp-xhdpi")
 class LibraryFirstScreenHiTest : LibraryFirstScreenBase()

@@ -124,15 +124,19 @@ abstract class HomeLargeFontBase {
                 val problems = mutableListOf<String>()
                 val density = activity.resources.displayMetrics.density
 
-                // UI-B1 (#1): a populated Home starts with documents, not creation chrome.
+                // UI-B1 (#1): the creation tiles are gone; UX-008 keeps a compact Quick tools
+                // row that must wrap its labels at 200 % without clipping or shrinking them.
                 assertNull(
                     "the Home creation row is gone",
                     activity.findViewById<View>(R.id.swCreateRow)
                 )
-                assertNull(
-                    "the Home quick tools are gone",
-                    activity.findViewById<View>(R.id.swQuickRow)
-                )
+                val quickRow = activity.findViewById<ViewGroup>(R.id.swQuickRow)
+                assertNotNull("UX-008: the quick tools row is on Home", quickRow)
+                for (i in 0 until quickRow!!.childCount) {
+                    val label = quickRow.getChildAt(i).findViewById<TextView>(R.id.swToolLabel)
+                        ?: continue
+                    problems += labelProblems(label, "quick \"${label.text}\"")
+                }
                 val list = activity.findViewById<ViewGroup>(R.id.swDocList)
                 assertTrue("the seeded documents are listed", list.childCount > 0)
 

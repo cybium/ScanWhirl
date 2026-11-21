@@ -66,10 +66,13 @@ class ShellScreenTest {
     @Test
     fun `library shows the header, folder chips and document rows`() {
         scrollActivity { activity ->
-            // UI-B1 (#1): the populated Home no longer spends its first screen on creation
-            // tiles and quick tools; those live in the Create sheet and the Tools tab.
+            // UI-B1 (#1): the creation tiles live in the Create sheet. UX-008 restores only a
+            // compact two-row Quick tools strip, so the row is present again on Home.
             assertNull(activity.findViewById<View>(R.id.swCreateRow))
-            assertNull(activity.findViewById<View>(R.id.swQuickRow))
+            assertNotNull(
+                "UX-008: quick tools are back on Home",
+                activity.findViewById<View>(R.id.swQuickRow)
+            )
 
             assertNotNull("the brand mark is in the header", activity.findViewById<View>(R.id.swBrandMark))
             assertEquals("A/अ", activity.findViewById<TextView>(R.id.swLanguageChip).text.toString())
