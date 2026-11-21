@@ -160,6 +160,33 @@ def seek(**want):
     raise AssertionError(f"Not found after bounded scroll: {want}")
 
 
+def swipe_reveal_below(node, duration=800):
+    """Scroll a specific capped/scrolling container, derived from its live bounds.
+
+    Unlike scroll() (which picks the largest scrollable node), this targets the
+    sheet's own content so a full-screen Library list behind a dialog cannot steal
+    the gesture. No fixed coordinates: every point comes from the current dump.
+    """
+    x1, y1, x2, y2 = bounds(node)
+    x = (x1 + x2) // 2
+    span = y2 - y1
+    start = y2 - max(24, span // 8)
+    end = y1 + max(24, span // 8)
+    adb("shell", "input", "swipe", x, start, x, end, duration)
+    time.sleep(0.6)
+
+
+def seek_in(container_rid, **want):
+    """Find a control inside a capped content view, scrolling only that view."""
+    for _ in range(8):
+        root = hierarchy()
+        try:
+            return root, find(root, **want)
+        except AssertionError:
+            swipe_reveal_below(find(root, rid=container_rid))
+    raise AssertionError(f"Not found after bounded scroll of {container_rid}: {want}")
+
+
 def capture(tag):
     # Only synthetic app/system picker screens on a fresh disposable emulator.
     data = dump_xml()
@@ -460,19 +487,22 @@ def f8():
 
 def f9():
     locale()
-    # UX-L1 moved the single-document Trash action into the per-card quick-actions
-    # sheet (the card's swDocMore overflow -> qaDelete), not the viewer's scrolling
-    # Actions sheet. Target stable resource-ids: no English copy, no bounded scroll.
+    # The named card's overflow (swDocMore) opens the per-document Actions sheet.
+    # Its Trash row (rowMoreDelete) sits below the CappedScrollView's 62% viewport,
+    # so scroll THAT container only - the full-screen Library list behind the
+    # dialog is larger and would steal a generic scroll() gesture.
     root = hierarchy()
     label = find(root, text=NAME)
     card = clickable_ancestor(root, label)
     assert card is not None, "Named document card has no clickable ancestor"
     tap_node(root, find_within(card, rid="swDocMore"))
-    wait(rid="qaDelete")
-    capture("F9_quick_actions")
-    # qaDelete -> confirmDelete(): the document moves to Trash immediately and an
-    # Undo snackbar is shown. There is no second confirmation sheet to tap.
-    tap(rid="qaDelete")
+    wait(rid="swSheetContent")
+    root, trash = seek_in("swSheetContent", rid="rowMoreDelete")
+    capture("F9_actions_trash_row")
+    tap_node(root, trash)
+    # confirmTrash asks once more; its primary is "Move to Trash" (swSheetPrimary).
+    wait(rid="swSheetPrimary")
+    tap(rid="swSheetPrimary")
     time.sleep(1)
     launch()
     tap(desc="Me")
@@ -483,7 +513,7 @@ def f9():
     wait(desc="Library")
     wait(text=strings("en")["home_search_hint"])
     capture("F9_cold_library")
-    return "Named imported item moved to Trash via per-card quick actions; verified in Trash; force-stop/cold start opens Library"
+    return "Named imported item moved to Trash via Actions sheet; verified in Trash; force-stop/cold start opens Library"
 
 
 def main():

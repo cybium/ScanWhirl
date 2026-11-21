@@ -41,6 +41,13 @@ class FlowSelectorsTest(unittest.TestCase):
         root.append(label)
         self.assertIsNone(f.clickable_ancestor(root, label))
 
+    def test_swipe_reveal_below_uses_live_bounds(self):
+        node = self.node(bounds="[100,200][500,700]")
+        with patch.object(f, "adb") as adb, patch.object(f.time, "sleep"):
+            f.swipe_reveal_below(node)
+            # x centre 300; span 500 => start 700-62=638, end 200+62=262 (finger up).
+            adb.assert_called_once_with("shell", "input", "swipe", 300, 638, 300, 262, 800)
+
     def test_missing_and_zero_area_controls_fail_closed(self):
         root = ET.Element("hierarchy")
         root.append(self.node(text="Compress", bounds="[0,0][0,0]"))
