@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane P1: Hindi wording follows the judged glossary; no transliterated loanwords. -->
+<resources>
+    <string name="p1_share_failed">यह फ़ाइल साझा नहीं हो सकी। पहले इसे सहेजें।</string>
+
+    <string name="p1_page_range_no_pages">इस दस्तावेज़ में कोई पन्ना नहीं है।</string>
+    <string name="p1_page_range_empty">पन्ने ऐसे लिखें: 1-3, 5, 8-</string>
+    <string name="p1_page_range_cannot_read">"%1$s" पढ़ा नहीं जा सका। ऐसे लिखें: 1-3, 5, 8-.</string>
+    <string name="p1_page_range_outside">पन्ना %1$d इस दस्तावेज़ में नहीं है (1-%2$d).</string>
+    <string name="p1_page_range_backwards">"%1$s" में पन्ने उल्टे क्रम में हैं।</string>
+
+    <string name="p1_setup_failed_no_pages">दस्तावेज़ में कोई पन्ना नहीं है</string>
+    <string name="p1_setup_failed_no_space">इस फ़ोन में जगह नहीं है</string>
+    <string name="p1_setup_failed_too_large">फ़ाइल इस फ़ोन के लिए बहुत बड़ी है</string>
+    <string name="p1_setup_failed_invalid_input">दर्ज किए गए मानों में से एक सही नहीं है</string>
+    <string name="p1_setup_failed_unavailable">दस्तावेज़ तैयार नहीं है। फिर प्रयास करें।</string>
+    <string name="p1_setup_failed_generic">अपना चयन जाँचें और फिर प्रयास करें</string>
+</resources>

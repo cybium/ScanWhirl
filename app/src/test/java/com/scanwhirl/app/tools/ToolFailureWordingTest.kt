@@ -48,6 +48,21 @@ class ToolFailureWordingTest {
         override fun toast(message: CharSequence, duration: Int) = Unit
     }
 
+    /**
+     * P1: the picked image is copied off the main thread, so the failure toast is
+     * posted after the IO task resumes. Wait for it instead of asserting on the
+     * very next main-looper pass; the wording assertions below are unchanged.
+     */
+    private fun awaitToast(): String? {
+        val deadline = System.currentTimeMillis() + 5000L
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            ShadowToast.getTextOfLatestToast()?.let { return it }
+            Thread.sleep(20L)
+        }
+        return ShadowToast.getTextOfLatestToast()
+    }
+
     @Test
     fun `resize names an unreadable file in the person's language`() {
         val uri = Uri.parse("content://tool_wording/unreadable_${System.nanoTime()}.jpg")
@@ -58,16 +73,15 @@ class ToolFailureWordingTest {
             scenario.onActivity { activity ->
                 ShadowToast.reset()
                 ResizeFlow(activity, ScanRepository(activity), NoHost).start(uri)
-                shadowOf(Looper.getMainLooper()).idle()
-                val shown = ShadowToast.getTextOfLatestToast()
+                val shown = awaitToast()
                 assertEquals(
                     activity.getString(
                         R.string.resize_failed, activity.getString(R.string.f8_reason_unreadable)
                     ),
                     shown
                 )
-                assertFalse("no raw system text", shown.contains("/secret"))
-                assertFalse("no raw system text", shown.contains("FileNotFound"))
+                assertFalse("no raw system text", shown.orEmpty().contains("/secret"))
+                assertFalse("no raw system text", shown.orEmpty().contains("FileNotFound"))
             }
         }
     }
@@ -82,12 +96,11 @@ class ToolFailureWordingTest {
             scenario.onActivity { activity ->
                 ShadowToast.reset()
                 ResizeFlow(activity, ScanRepository(activity), NoHost).start(uri)
-                shadowOf(Looper.getMainLooper()).idle()
                 assertEquals(
                     activity.getString(
                         R.string.resize_failed, activity.getString(R.string.f8_reason_not_image)
                     ),
-                    ShadowToast.getTextOfLatestToast()
+                    awaitToast()
                 )
             }
         }
