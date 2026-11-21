@@ -98,7 +98,9 @@
 
     <!-- App Button System -->
     <style name="Widget.ScanWhirl.Button.Primary" parent="Widget.Material3.Button">
-        <item name="backgroundTint">@color/cyan_primary</item>
+        <!-- UX L5-04: the working accent is the calm sw_scan. The neon #00F0FF stays
+             a small capture-disc detail only; SW buttons no longer carry it. -->
+        <item name="backgroundTint">@color/sw_scan</item>
         <item name="android:textColor">@color/void_abyss</item>
         <item name="iconTint">@color/void_abyss</item>
         <item name="android:textStyle">bold</item>
@@ -109,7 +111,8 @@
     </style>
 
     <style name="Widget.ScanWhirl.Button.Secondary" parent="Widget.Material3.Button.OutlinedButton">
-        <item name="strokeColor">@color/cyan_border_idle</item>
+        <!-- UX L5-04: a functional outline clears 3:1 against the adjacent ink. -->
+        <item name="strokeColor">@color/sw_boundary_functional</item>
         <item name="strokeWidth">1dp</item>
         <item name="android:textColor">@color/text_hologram_hi</item>
         <item name="iconTint">@color/cyan_primary</item>
@@ -144,8 +147,9 @@
 
     <style name="Widget.ScanWhirl.Button.Dock" parent="Widget.Material3.Button.TextButton">
         <item name="android:textColor">@color/text_hologram_hi</item>
-        <item name="iconTint">@color/cyan_primary</item>
-        <item name="android:textSize">11sp</item>
+        <item name="iconTint">@color/sw_scan</item>
+        <!-- UX L5-04: dock metadata has a 12sp floor and wraps instead of shrinking. -->
+        <item name="android:textSize">12sp</item>
         <item name="android:letterSpacing">0.04</item>
         <item name="iconGravity">top</item>
         <item name="android:minHeight">48dp</item>

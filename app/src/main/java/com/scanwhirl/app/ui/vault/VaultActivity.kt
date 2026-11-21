@@ -1051,21 +1051,33 @@ class VaultActivity : BaseActivity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(this@VaultActivity, 8f) }
         )
-        val save = SwStyle.text(this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+        val save = SwStyle.text(this, 14f, SwStyle.color(this, R.color.rv_accent), bold = true).apply {
             // The old "Copy code" control lived here; the id is reused so the screen keeps one
             // obvious save action (audit S1). 48 dp + focusable like optionRow() (critic D8).
             id = R.id.vaultRecoveryCopy
             text = getString(R.string.vault_recovery_save_file)
+            contentDescription = text
             gravity = Gravity.CENTER
             isClickable = true
-            isFocusable = true
             minimumHeight = SwStyle.dp(this@VaultActivity, 48f)
+            SwStyle.asButton(this)
             setOnClickListener { startSaveRecoveryCode(code) }
         }
         content.addView(save)
         content.addView(
-            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), metadata = true).apply {
                 text = getString(R.string.vault_recovery_once)
+                setLineSpacing(0f, 1.3f)
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(this@VaultActivity, 10f) }
+        )
+        // UX5-7: consequence -> code -> Save as file -> proof step. Every credential, recovery
+        // and backup-sharing warning above stays before the "I saved it" consent.
+        content.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), metadata = true).apply {
+                id = R.id.uxL5VaultRecoveryProof
+                text = getString(R.string.ux130_l5_vault_recovery_proof)
                 setLineSpacing(0f, 1.3f)
             },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -1074,7 +1086,7 @@ class VaultActivity : BaseActivity() {
 
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.vault_recovery_sheet_title)
-            .setMessage(R.string.vault_recovery_note)
+            .setMessage(R.string.ux130_l5_vault_recovery_summary)
             .setContent(content)
             .build()
         // The recovery code sits in this dialog's own window: it needs FLAG_SECURE too, the
@@ -1239,12 +1251,17 @@ class VaultActivity : BaseActivity() {
         pass.errorView.id = R.id.vaultUnlockError
         pass.editText.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
         content.addView(pass)
-        val recoveryLink = SwStyle.text(this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+        val recoveryLink = SwStyle.text(
+            this, 14f, SwStyle.color(this, R.color.rv_accent), bold = true, metadata = true
+        ).apply {
             id = R.id.vaultUseRecovery
-            text = getString(R.string.vault_use_recovery)
+            text = getString(R.string.ux130_l5_vault_use_recovery)
+            contentDescription = text
             gravity = Gravity.CENTER
             isClickable = true
-            minimumHeight = SwStyle.dp(this@VaultActivity, 44f)
+            // UX5-4: the only way back from a forgotten passcode is a real 48dp Button.
+            minimumHeight = SwStyle.dp(this@VaultActivity, 48f)
+            SwStyle.asButton(this)
         }
         content.addView(recoveryLink)
 
