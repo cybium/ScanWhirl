@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.OcrEngineRecognizerReuseTest,com.scanwhirl.app.util.PdfPageRendererReuseTest
