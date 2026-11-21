@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX lane UXG Hindi: Devanagari metadata floor (L5 token equivalent). -->
+<resources>
+    <dimen name="ux_uxg_viewer_meta">14sp</dimen>
+</resources>

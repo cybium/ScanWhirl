@@ -40,7 +40,7 @@
 
         <!-- UX-L4-03: the page indicator is a named 48dp control that opens
              "Go to page", so any page is reachable, not just the first 40 thumbs. -->
-        <TextView
+        <com.scanwhirl.app.ui.kit.UxgActionTextView
             android:id="@+id/pdfPageIndicator"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
