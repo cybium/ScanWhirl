@@ -86,6 +86,20 @@ class ScanWhirlApp : Application() {
     val storageRecoveryIncomplete = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     /**
+     * Sol re-review: startup isolates ordinary IO failures but never swallows cancellation or an
+     * Error. Only the exception class is logged; no user data or message reaches the log.
+     */
+    private suspend inline fun startupStep(name: String, block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("ScanWhirl", "storage recovery step $name failed (${e.javaClass.simpleName})")
+        }
+    }
+
+    /**
      * F1 (hunt H1-1): the storage recovery the legacy Home ran on every start (reclaim abandoned
      * saves, finish interrupted permanent deletes and expire Trash, drop dead import staging,
      * roll an interrupted Replace forward) never ran from the shipped launcher. It runs once per
@@ -97,7 +111,7 @@ class ScanWhirlApp : Application() {
         appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 // Restore interrupted discard staging BEFORE ordinary orphan-draft cleanup.
-                runCatching {
+                startupStep("discard") {
                     com.scanwhirl.app.store.ImportDiscardStore(this@ScanWhirlApp, repository).recover()
                         .forEach { com.scanwhirl.app.ui.DiscardActions.scheduleExpiry(this@ScanWhirlApp, it) }
                     // Do NOT re-enqueue pending OCR here: enqueue() rewrites each ocr_pending
@@ -105,10 +119,10 @@ class ScanWhirlApp : Application() {
                     // indexing is already owned by startLibraryIndexBackfill(); an Undo requeues
                     // its own restored id via DiscardActions -> TrashActions.queueIndexing.
                 }
-                runCatching { repository.reapAbandonedSaves() }
-                runCatching { repository.recoverTrash() }
-                runCatching { repository.recoverImports() }
-                runCatching { repository.recoverOperations() }
+                startupStep("abandoned-saves") { repository.reapAbandonedSaves() }
+                startupStep("trash") { repository.recoverTrash() }
+                startupStep("imports") { repository.recoverImports() }
+                startupStep("operations") { repository.recoverOperationsSuspend() }
             } finally {
                 val incomplete = com.scanwhirl.app.store.ScanRepository.recoveryIncomplete
                 storageRecoveryIncomplete.value = incomplete

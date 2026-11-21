@@ -412,7 +412,13 @@ class MainActivity : BaseActivity(), HomeHost {
             runCatching { repo.recoverImports() }
             // PM-2.2b: finish a Replace that died between its two renames, finish draft cleanup,
             // then sweep dead working folders. A rolled-forward document must show up at once.
-            val rolled = runCatching { repo.recoverOperations() }.getOrDefault(0)
+            val rolled = try {
+                repo.recoverOperationsSuspend()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                0 // legacy Home: a failed recovery step is already exposed by startup
+            }
             if (rolled > 0) withContext(Dispatchers.Main) { refreshList() }
         }
 

@@ -2910,7 +2910,14 @@ class ScanRepository(private val context: Context) {
                 pending.newPdfSha256 -> {
                     // Rolled forward: never leave a plain PDF labelled locked. If the label cannot
                     // be removed, KEEP the marker and let the sweep skip this folder for a retry.
-                    if (lock.exists() && !removeLockFile(lock)) return@synchronized
+                    if (lock.exists() && !removeLockFile(lock)) {
+                        // Keep the marker and the label for a later start. No new UI: the unlock
+                        // screen already reported the honest failure; startup only logs a
+                        // non-sensitive marker and exposes [recoveryIncomplete] via the launcher.
+                        recoveryIncomplete = true
+                        android.util.Log.w("ScanWhirl", "startup unlock recovery: lock label removal failed")
+                        return@synchronized
+                    }
                     if (lock.exists()) Durable.syncDir(dir)
                     pruneLockIndex()
                 }
@@ -3023,18 +3030,53 @@ class ScanRepository(private val context: Context) {
         return removed
     }
 
-    private fun removeOrphanReservations(): Int = runBlocking {
-        SAVE_LOCK.withLock { removeOrphanReservationsLocked() }
+    /**
+     * Sol re-review: a recovery marker carries everything needed to finish (old/new verifiers and
+     * both PDF digests), and the actual replacement PDF is already inside the document folder.
+     * Therefore an unresolved folder must keep ONLY its marker, never plaintext scratch. A marker
+     * naming a missing document or an unrelated PDF is stale and its whole folder is deleted.
+     */
+    private enum class MarkerState { NONE, KEEP, STALE }
+
+    private fun recoveryMarkerState(work: File): MarkerState {
+        val (id, oldPdf, newPdf) = PasswordSwap.read(work)?.let {
+            Triple(it.id, it.previousPdfSha256, it.newPdfSha256)
+        } ?: Unlock.read(work)?.let {
+            Triple(it.id, it.oldPdfSha256, it.newPdfSha256)
+        } ?: return MarkerState.NONE
+        val dir = File(docsDir, id)
+        if (!dir.isDirectory) return MarkerState.STALE
+        val digest = runCatching { Sha256.of(File(dir, PdfProtection.PDF_FILE)) }.getOrNull()
+            ?: return MarkerState.STALE
+        return if (digest == oldPdf || digest == newPdf) MarkerState.KEEP else MarkerState.STALE
+    }
+
+    private fun pruneRecoveryStaging(work: File) {
+        val markerName = when {
+            PasswordSwap.read(work) != null -> PasswordSwap.MARKER
+            Unlock.read(work) != null -> Unlock.MARKER
+            else -> return
+        }
+        if (recoveryMarkerState(work) == MarkerState.STALE) {
+            work.deleteRecursively()
+            return
+        }
+        work.listFiles()?.forEach { file ->
+            if (file.name != markerName) file.delete()
+        }
     }
 
     /**
      * One isolated recovery step. A failing step (e.g. a disk-full folders.txt write) must never
      * abort the document and security steps or leave startup claiming a fully successful pass.
+     * Cancellation is not a failure to be swallowed: it is rethrown so startup can abort cleanly.
      * Only the exception class is logged; no user data or message is written to the log.
      */
-    private fun recoveryStep(name: String, block: () -> Unit) {
+    private suspend fun recoveryStep(name: String, block: suspend () -> Unit) {
         try {
             block()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             recoveryIncomplete = true
             android.util.Log.w("ScanWhirl", "startup recovery step $name failed (${e.javaClass.simpleName})")
@@ -3058,7 +3100,15 @@ class ScanRepository(private val context: Context) {
      *  7. finish interrupted folder deletes, then reconcile folder names from documents.
      * Returns how many Replace operations were rolled forward.
      */
-    fun recoverOperations(): Int {
+    fun recoverOperations(): Int = runBlocking { recoverOperationsSuspend() }
+
+    /**
+     * Blocking wrapper retained for tests and legacy callers only. It must NOT be called from a
+     * coroutine or on the main thread: the orphan-reservation step suspends on [SAVE_LOCK], which
+     * a save may hold. Production startup and legacy Home call [recoverOperationsSuspend] directly
+     * from their IO coroutines, so no blocking bridge is involved there (non-reentrancy precondition).
+     */
+    suspend fun recoverOperationsSuspend(): Int {
         val filesDir = context.filesDir
         var rolledForward = 0
         var swept = 0
@@ -3109,8 +3159,8 @@ class ScanRepository(private val context: Context) {
             }
         }
 
-        // 4. G1: reclaim data-free orphan save reservations under SAVE_LOCK.
-        recoveryStep("orphan-reservations") { removeOrphanReservations() }
+        // 4. G1: reclaim data-free orphan save reservations under SAVE_LOCK (suspend caller).
+        recoveryStep("orphan-reservations") { SAVE_LOCK.withLock { removeOrphanReservationsLocked() } }
 
         // 5. Drafts: interrupted discards, and drafts whose base is gone from library and Trash.
         recoveryStep("drafts") {
@@ -3126,11 +3176,11 @@ class ScanRepository(private val context: Context) {
             }
         }
 
-        // 6. Everything else not live, except folders holding an UNRESOLVED recovery marker.
+        // 6. Keep only metadata an unresolved marker truly needs, then sweep everything else.
+        // Stale markers (missing document / unrelated digest) delete their whole folder here.
+        recoveryStep("prune-recovery-staging") { stagingDirs().forEach { pruneRecoveryStaging(it) } }
         recoveryStep("staging-sweep") {
-            swept = OpStaging.sweep(filesDir) { dir ->
-                PasswordSwap.read(dir) != null || Unlock.read(dir) != null
-            }
+            swept = OpStaging.sweep(filesDir) { dir -> recoveryMarkerState(dir) == MarkerState.KEEP }
         }
 
         // 7. Folder repair LAST. A failure here leaves the tombstone/folder work for the next start.
