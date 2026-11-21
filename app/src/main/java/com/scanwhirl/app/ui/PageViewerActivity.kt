@@ -20,6 +20,7 @@ import com.scanwhirl.app.databinding.ActivityPageViewerBinding
 import com.scanwhirl.app.databinding.ItemPagerPageBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.PageOrder
 import com.scanwhirl.app.util.ScanFilter
 import androidx.core.view.isVisible
 import android.view.View
@@ -273,7 +274,7 @@ class PageViewerActivity : BaseActivity() {
         // window, so put every orphan back (except a page still pending in THIS screen).
         restoreOrphanedStagingDeletes(dir)
         pages = dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
-            ?.sortedBy { it.nameWithoutExtension }
+            ?.sortedWith(PageOrder.comparator)
             .orEmpty()
         if (pages.isEmpty()) {
             Toast.makeText(this, R.string.doc_not_found, Toast.LENGTH_SHORT).show()

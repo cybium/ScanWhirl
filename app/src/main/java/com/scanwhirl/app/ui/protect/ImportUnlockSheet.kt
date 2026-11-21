@@ -4,6 +4,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.inputmethod.EditorInfo
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
@@ -68,8 +70,21 @@ internal object ImportUnlockSheet {
         val handler = Handler(Looper.getMainLooper())
         var busy = false
 
+        // X1 P2: the kit suppresses caller onDismiss when the owner is destroyed, so a rotation
+        // leaves the password in the field the app-scoped import callback still holds. Wipe it on
+        // ON_DESTROY too, exactly as kit/CredentialSubmit.kt does for its secret fields.
+        val destroyObserver = object : DefaultLifecycleObserver {
+            override fun onDestroy(owner: LifecycleOwner) {
+                field.editText.setText("")
+            }
+        }
+        activity.lifecycle.addObserver(destroyObserver)
+
         // Closed for any reason (Open, back, outside tap): the typed password leaves the view.
-        sheet.setOnDismissListener { field.editText.setText("") }
+        sheet.setOnDismissListener {
+            field.editText.setText("")
+            activity.lifecycle.removeObserver(destroyObserver)
+        }
 
         fun tickPause() {
             if (!sheet.isShowing) return
@@ -101,7 +116,10 @@ internal object ImportUnlockSheet {
             field.setError(null)
             onSubmit(text) { result ->
                 if (!sheet.isShowing) {
+                    // The sheet is gone (e.g. rotated away), but the app-scoped callback still
+                    // owns this field: never let a late result leave the secret behind.
                     busy = false
+                    field.editText.setText("")
                     return@onSubmit
                 }
                 busy = false

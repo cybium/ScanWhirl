@@ -3,6 +3,7 @@ package com.scanwhirl.app.store
 import android.content.Context
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.PageOrder
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.Sha256
 import java.io.File
@@ -146,7 +147,7 @@ internal object PendingScans {
 
     /** Staged pages in review order (the order the review screen shows and saves). */
     fun pages(dir: File): List<File> =
-        dir.listFiles { f -> f.extension.equals("jpg", true) }?.sortedBy { it.nameWithoutExtension } ?: emptyList()
+        dir.listFiles { f -> f.extension.equals("jpg", true) }?.sortedWith(PageOrder.comparator) ?: emptyList()
 
     /**
      * The review identity of a staging folder exactly as the review screen would hand it to

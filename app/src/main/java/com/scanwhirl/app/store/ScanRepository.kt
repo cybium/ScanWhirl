@@ -23,6 +23,7 @@ import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrBox
 import com.scanwhirl.app.util.OutputNames
+import com.scanwhirl.app.util.PageOrder
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PageStamp
@@ -216,7 +217,7 @@ class ScanRepository(private val context: Context) {
         var totalSize = 0L
         val pages = dir.listFiles { f -> f.extension.equals("jpg", true) || f.extension.equals("jpeg", true) }
             ?.mapNotNull { f -> f.length().takeIf { it > 0 }?.let { f to it } }
-            ?.sortedBy { it.first.nameWithoutExtension }
+            ?.sortedWith { a, b -> PageOrder.comparator.compare(a.first, b.first) }
             ?.onEach { totalSize += it.second }
             ?.map { it.first }
             ?: emptyList()
@@ -1704,25 +1705,8 @@ class ScanRepository(private val context: Context) {
 
     internal fun pageFilesIn(dir: File): List<File> =
         dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
-            ?.sortedWith { a, b ->
-                val na = pageNumber(a.nameWithoutExtension)
-                val nb = pageNumber(b.nameWithoutExtension)
-                when {
-                    na != null && nb != null -> na.compareTo(nb)          // page_1000 follows page_999
-                    na == null && nb == null -> a.nameWithoutExtension.compareTo(b.nameWithoutExtension)
-                    na != null -> -1                                     // page_* first
-                    else -> 1
-                }
-            }
+            ?.sortedWith(PageOrder.comparator)
             ?: emptyList()
-
-    /** Numeric part of `page_001`; other names fall back to the old lexicographic order. */
-    private fun pageNumber(name: String): Long? {
-        val dash = name.lastIndexOf('_')
-        if (dash < 0 || dash == name.length - 1) return null
-        for (i in dash + 1 until name.length) if (name[i] !in '0'..'9') return null
-        return name.substring(dash + 1).toLongOrNull()
-    }
 
     /** Kept original of a filtered page: `page_001.jpg` -> `page_001.orig` (not a .jpg, never listed). */
     private fun origOf(page: File): File =
