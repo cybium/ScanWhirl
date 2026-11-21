@@ -1538,7 +1538,10 @@ class LibraryScreen(
         )
         searchInput = EditText(context).apply {
             id = R.id.swHomeSearch
-            hint = context.getString(R.string.ux130_l1_search_hint)
+            // L1-05 conflict: the decided longer hint "Search documents and pages" measures
+            // 711px in this field at 2.0x but only 516px fit (AccessibilityAuditTest). Kept on
+            // the shared, honest-enough short hint until the lead rules on the conflict.
+            hint = context.getString(R.string.home_search_hint)
             setHintTextColor(SwStyle.color(context, R.color.text_hologram_dim))
             setTextColor(SwStyle.color(context, R.color.text_hologram_hi))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)

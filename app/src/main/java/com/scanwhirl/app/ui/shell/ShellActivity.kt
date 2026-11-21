@@ -1439,7 +1439,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         if (docs.size > 8) {
             val search = android.widget.EditText(this).apply {
                 id = R.id.swDocPickerSearch
-                hint = getString(R.string.ux130_l1_search_hint)
+                hint = getString(R.string.home_search_hint)
                 setHintTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_dim))
                 setTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_hi))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)

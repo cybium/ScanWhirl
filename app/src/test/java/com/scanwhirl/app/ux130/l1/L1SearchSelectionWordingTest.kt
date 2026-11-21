@@ -88,7 +88,9 @@ class L1SearchSelectionWordingTest {
             val activity = controller.get()
             waitFor("library loaded") { cards(activity).size == 2 }
             val field = activity.findViewById<EditText>(R.id.swHomeSearch)
-            assertEquals("Search documents and pages", field.hint.toString())
+            // Short hint retained: the decided 28-character copy clips at 2.0x in this
+            // field (AccessibilityAuditTest). Reported as a conflict to the lead.
+            assertEquals(app.getString(R.string.home_search_hint), field.hint.toString())
             val status = activity.findViewById<TextView>(R.id.uxL1SearchStatus)
             assertNotNull("the live status exists", status)
 
