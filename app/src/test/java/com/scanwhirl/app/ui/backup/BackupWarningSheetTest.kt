@@ -239,7 +239,10 @@ class BackupWarningSheetTest {
         secretSheet.findViewById<EditText>(R.id.backupPassword).setText(password)
         secretSheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
 
-        val restored = awaitSheet(app.getString(R.string.backup_restored))
+        // B1 expectation change: this restore really leaves the Vault part waiting (a warning),
+        // so the honest title is "Restore finished with warnings", not "Backup restored". The
+        // old title would claim a complete restore; the assertion below still checks the warning.
+        val restored = awaitSheet(app.getString(R.string.b1_restore_warning_title))
         val message = sheetText(restored)
         val deferred = app.getString(R.string.vault_pending_restore_deferred)
         assertTrue(
