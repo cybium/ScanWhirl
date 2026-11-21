@@ -491,7 +491,7 @@ class BackupActivity : BaseActivity() {
         if (header.wrap == FullBackup.Wrap.RECOVERY_CODE) {
             val sheet = SwSheet.builder(this)
                 .setTitle(R.string.backup_restore)
-                .setMessage(R.string.backup_code_note)
+                .setMessage(R.string.u4_backup_restore_code_note)
                 .setInput(hint = getString(R.string.backup_code_hint))
                 .build()
             sheet.setPrimary(R.string.backup_restore_go) {
@@ -512,7 +512,7 @@ class BackupActivity : BaseActivity() {
             }
             val sheet = SwSheet.builder(this)
                 .setTitle(R.string.backup_restore)
-                .setMessage(getString(R.string.backup_password_note, FullBackup.MIN_PASSWORD))
+                .setMessage(R.string.u4_backup_restore_password_note)
                 .setContent(field)
                 .build()
             sheet.setPrimary(R.string.backup_restore_go) {

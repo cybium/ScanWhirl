@@ -129,7 +129,6 @@ object DocumentActionsSheet {
             setPadding(0, 0, 0, SwStyle.dp(activity, 12f))
         }
         rows.addView(header(activity, doc))
-        rows.addView(groupHeader(activity, R.string.doc_actions_header, null, "work", after = false))
 
         var sheet: SwSheet? = null
         fun dismissThen(action: Action, run: () -> Unit) {

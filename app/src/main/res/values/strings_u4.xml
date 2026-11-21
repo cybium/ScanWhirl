@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="u4_ocr_language_note">Used the next time text is read.</string>
+    <string name="u4_backup_restore_password_note">Enter the password used for this backup.</string>
+    <string name="u4_backup_restore_code_note">Enter the Vault recovery code used for this backup.</string>
+    <string name="u4_library_documents">Documents</string>
+    <string name="u4_where_library">Saved in Library</string>
+    <string name="u4_quick_editor_hint">Tap − to remove, drag to reorder.</string>
+    <string name="u4_quick_reset">Reset to defaults</string>
+</resources>

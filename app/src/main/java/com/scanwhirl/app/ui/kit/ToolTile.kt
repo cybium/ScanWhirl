@@ -246,7 +246,10 @@ class ToolTile(context: Context) : FrameLayout(context) {
         labelView.text = text
         contentDescription = buildString {
             append(text)
-            if (tool?.pro == true) append(", ").append(context.getString(R.string.badge_pro))
+            // Same rule as bind(): a Pro build owns every tool, so no PRO is spoken or drawn.
+            if (tool?.pro == true && !com.scanwhirl.app.util.ProGate.isPro(context)) {
+                append(", ").append(context.getString(R.string.badge_pro))
+            }
         }
     }
 

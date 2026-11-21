@@ -43,8 +43,9 @@ class ResultNameTest {
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary)
                 assertTrue("name line: ${name.text}", name.text.toString() == "isz14 - Merged")
                 assertTrue("page count: ${summary.text}", summary.text.toString().contains("2 pages"))
-                assertFalse("no size line outside Compress/Resize: ${summary.text}",
-                    summary.text.toString().contains("KB") || summary.text.toString().contains("MB"))
+                assertTrue("every result leads with its measured output size: ${summary.text}",
+                    summary.text.toString().startsWith(activity.getString(R.string.compress_result_size,
+                        com.scanwhirl.app.util.StatusLine.formatBytes(requireNotNull(repo.getDocument(id)).pdfFile.length()))))
             }
         }
     }

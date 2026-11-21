@@ -304,7 +304,7 @@ class ToolResultActivity : BaseActivity() {
 
         nameView = SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.toolResultName
-            maxLines = 1
+            maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
 
@@ -313,29 +313,16 @@ class ToolResultActivity : BaseActivity() {
             setLineSpacing(0f, 1.25f)
         }
 
-        // B3: a compressed result reads outcome, before size, then a smaller preview; every other
-        // result keeps the preview first.
-        if (isCompressResult) {
-            column.addView(nameView, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
-            column.addView(summary, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
-            column.addView(previewHost, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, 140f)
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
-        } else {
-            column.addView(previewHost, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, 200f)
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
-            column.addView(nameView, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) })
-            column.addView(summary, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
-        }
+        // Outcome first. The receipt remains readable body text below the measured headline.
+        column.addView(summary, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
+        column.addView(nameView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
+        column.addView(previewHost, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, if (isCompressResult) 140f else 200f)
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
 
         errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
             id = R.id.toolResultError
@@ -364,7 +351,7 @@ class ToolResultActivity : BaseActivity() {
         }
 
         column.addView(
-            button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true) { open() },
+            button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true, icon = R.drawable.ic_sym_folder_open) { open() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
@@ -374,13 +361,13 @@ class ToolResultActivity : BaseActivity() {
         // T05-RESULT-SLICE: one tap keeps a copy in Documents for the person's own files app and
         // USB, for a document result and for an exported file alike.
         column.addView(
-            button(getString(R.string.tools_result_share), R.id.toolResultShare) { share() },
+            button(getString(R.string.tools_result_share), R.id.toolResultShare, icon = R.drawable.ic_sym_share) { share() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
         )
         column.addView(
-            button(getString(R.string.tools_result_also_save), R.id.toolResultAlsoSave) { alsoSave() },
+            button(getString(R.string.tools_result_also_save), R.id.toolResultAlsoSave, icon = R.drawable.ic_sym_download) { alsoSave() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
@@ -440,7 +427,7 @@ class ToolResultActivity : BaseActivity() {
             if (isCompressResult) R.string.compress_undo else R.string.tools_result_undo
         )
         column.addView(
-            button(undoLabel, R.id.toolResultUndo) { undo() },
+            button(undoLabel, R.id.toolResultUndo, icon = R.drawable.ic_sym_undo) { undo() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
@@ -466,6 +453,7 @@ class ToolResultActivity : BaseActivity() {
         id: Int = View.NO_ID,
         tag: String? = null,
         primary: Boolean = false,
+        icon: Int? = null,
         onClick: () -> Unit
     ): TextView =
         SwStyle.text(this, 15f, SwStyle.color(
@@ -476,7 +464,18 @@ class ToolResultActivity : BaseActivity() {
             this.text = text
             gravity = Gravity.CENTER
             // At 200% type a long action ("Also save in Documents") needs more than two lines.
-            maxLines = 3
+            maxLines = Int.MAX_VALUE
+            val horizontal = SwStyle.dp(this@ToolResultActivity, 16f)
+            val vertical = SwStyle.dp(this@ToolResultActivity, 12f)
+            setPadding(horizontal, vertical, horizontal, vertical)
+            icon?.let {
+                val glyph = requireNotNull(androidx.appcompat.content.res.AppCompatResources.getDrawable(context, it)).mutate()
+                val size = SwStyle.dp(this@ToolResultActivity, 24f)
+                glyph.setBounds(0, 0, size, size)
+                glyph.setTint(currentTextColor)
+                setCompoundDrawablesRelative(glyph, null, null, null)
+                compoundDrawablePadding = SwStyle.dp(this@ToolResultActivity, 12f)
+            }
             minimumHeight = SwStyle.dp(this@ToolResultActivity, 50f)
             background = if (primary) {
                 SwStyle.rounded(this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.cyan_primary), radiusDp = 16f)
@@ -490,13 +489,18 @@ class ToolResultActivity : BaseActivity() {
             }
             isClickable = true
             isFocusable = true
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = android.widget.Button::class.java.name
+                }
+            }
             setOnClickListener { onClick() }
         }
 
     // ---- content ----------------------------------------------------------
 
     private fun render() {
-        val showSizes = toolId == "compress" || toolId == "resize"
         val docs = docIds.mapNotNull { runCatching { repo.getDocument(it) }.getOrNull() }
         if (docs.isNotEmpty()) {
             val pages = docs.sumOf { it.pageCount }
@@ -512,9 +516,7 @@ class ToolResultActivity : BaseActivity() {
                     R.plurals.tools_result_documents, docs.size, docs.size
                 )
             }
-            if (showSizes) {
-                line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
-            }
+            line = getString(R.string.compress_result_size, StatusLine.formatBytes(bytes)) + "\n" + line
             if (isCompressResult) {
                 applyCompressSummary(bytes)
             } else {
@@ -529,12 +531,12 @@ class ToolResultActivity : BaseActivity() {
                 getString(R.string.tools_result_name_more, files.first().name, files.size - 1)
             }
             var line = resources.getQuantityString(R.plurals.tools_result_files_count, files.size, files.size)
-            if (showSizes) {
-                line = getString(R.string.tools_result_with_size, line, StatusLine.formatBytes(bytes))
-            }
+            line = getString(R.string.compress_result_size, StatusLine.formatBytes(bytes)) + "\n" + line
             applySummary(line)
             val first = files.first()
             if (isTypedFile(first)) {
+                // The type card already names this artifact; do not repeat that name outside it.
+                nameView.isVisible = files.size > 1
                 showFileCard(first)
             } else {
                 preview.isVisible = true
@@ -551,7 +553,7 @@ class ToolResultActivity : BaseActivity() {
 
     private fun applySummary(line: String) {
         summaryBaseLine = if (note.isNullOrBlank()) line else "$line\n$note"
-        summary.text = composeSummary()
+        renderSummary()
     }
 
     private fun composeSummary(): String = buildString {
@@ -561,6 +563,15 @@ class ToolResultActivity : BaseActivity() {
         )
         for (line in locationLines) {
             if (line.isNotBlank()) append("\n").append(line)
+        }
+    }
+
+    private fun renderSummary() {
+        val text = composeSummary()
+        val end = text.indexOf('\n').let { if (it < 0) text.length else it }
+        summary.text = android.text.SpannableString(text).apply {
+            setSpan(android.text.style.RelativeSizeSpan(24f / 14f), 0, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
     }
 
@@ -574,12 +585,7 @@ class ToolResultActivity : BaseActivity() {
         if (docIds.isNotEmpty()) {
             val docs = docIds.mapNotNull { runCatching { repo.getDocument(it) }.getOrNull() }
             if (docs.isNotEmpty()) {
-                val name = if (docs.size == 1) {
-                    docs.first().name
-                } else {
-                    getString(R.string.tools_result_name_more, docs.first().name, docs.size - 1)
-                }
-                next += getString(R.string.w3_where_library, name)
+                next += getString(R.string.u4_where_library)
             }
         } else if (files.isNotEmpty()) {
             next += getString(R.string.w3_where_app_output)
@@ -592,7 +598,7 @@ class ToolResultActivity : BaseActivity() {
         if (next != locationLines) {
             locationLines.clear()
             locationLines.addAll(next)
-            summary.text = composeSummary()
+            renderSummary()
         }
     }
 
@@ -611,7 +617,7 @@ class ToolResultActivity : BaseActivity() {
     private fun applyCompressSummary(measuredBytes: Long?) {
         measuredSummaryBytes = measuredBytes
         summaryBaseLine = null
-        summary.text = composeSummary()
+        renderSummary()
     }
 
     private fun compressSummaryText(): String = buildString {
@@ -720,6 +726,7 @@ class ToolResultActivity : BaseActivity() {
         card.addView(SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.toolResultFileName
             text = file.name
+            isVisible = files.size == 1
             gravity = Gravity.CENTER
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE

@@ -758,10 +758,9 @@ class AccessibilityAuditTest {
     private fun dp(px: Int, density: Float): Int = Math.round(px / density)
 
     private fun assertNoProblems() {
-        val message = buildString {
-            appendLine("${problems.size} accessibility problem(s); $allowedHits allow-listed:")
-            problems.forEach { appendLine(" - $it") }
-        }
+        // One line keeps the full detail in the CI summary (multi-line messages get truncated).
+        val message = "${problems.size} accessibility problem(s); $allowedHits allow-listed: " +
+            problems.joinToString(" ;; ")
         assertTrue(message, problems.isEmpty())
     }
 }

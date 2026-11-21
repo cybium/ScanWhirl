@@ -39,8 +39,12 @@ import com.scanwhirl.app.ui.kit.DocSearchHit
 import com.scanwhirl.app.ui.kit.SwChip
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.ToolHost
+import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolStatus
+import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.util.AppLanguage
 import com.scanwhirl.app.util.BatchRename
 import com.scanwhirl.app.util.CategoryLabels
@@ -54,12 +58,15 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * UI-B1 (v4 Home, UI_PLAN §0b): the Library is documents first. Header (mark, A/अ), search,
- * compact folder chips, the Recent sort row, category chips and the real document rows.
+ * UI-B1 (v4 Home, UI_PLAN §0b) + owner decision UX-008: the Library is documents first. Header
+ * (mark, A/अ), search, compact folder chips, a compact customisable Quick tools row, the Recent
+ * sort row, category chips and the real document rows.
  *
- * The old creation tiles and six quick tools are gone from this screen: the centre Scan action
- * opens [CreateSheet] and the Tools tab owns every tool. The trust line moved to About and is
- * still shown on the empty library, which also offers both starting routes.
+ * The old creation tiles are gone from this screen: the centre Scan action opens [CreateSheet].
+ * Quick tools came back on the owner's 2026-11-21 decision (UX-008): ONE compact horizontally
+ * scrolling row of icon tiles, a pencil that opens one editor sheet (add/remove/reorder/reset,
+ * up to 12), and the same Pro gate as the Tools tab. The trust line moved to About and is still
+ * shown on the empty library. The first document card still clears the dock at 360x640dp.
  */
 class LibraryScreen(
     private val context: Context,
@@ -92,6 +99,26 @@ class LibraryScreen(
 
     lateinit var searchInput: EditText
     lateinit var docList: LinearLayout
+
+    // UX-008: the Home Quick tools row. The saved ids come from Prefs (which the backup
+    // allowlist keeps); the sheet edits a draft so closing it without Done changes nothing.
+    private var quickIds: MutableList<String> =
+        com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
+    private var quickDraft: MutableList<String>? = null
+    private var quickSheet: SwSheet? = null
+    private lateinit var quickHeader: View
+    private lateinit var quickRow: HorizontalScrollView
+    private lateinit var quickStrip: LinearLayout
+    private lateinit var quickEdit: ImageButton
+    private lateinit var quickAll: TextView
+    private val quickLabels = mapOf(
+        "merge" to R.string.quick_merge,
+        "compress" to R.string.quick_compress,
+        "sign" to R.string.quick_sign,
+        "protect" to R.string.quick_protect,
+        "to_word" to R.string.quick_to_word,
+        "read_text" to R.string.quick_read_text
+    )
 
     private val chipRow: LinearLayout
     private var chipScroll: View? = null
@@ -178,6 +205,24 @@ class LibraryScreen(
         addView(noMatchView)
         folderScroll = folderSection()
         addView(folderScroll)
+        // UX-008: between the folders and the document list, never above them. Two row shells
+        // (twelve tools at six columns) stay addressable for tests and drag targets.
+        quickHeader = quickToolsHeader()
+        addView(quickHeader)
+        // UX-008: ONE horizontally scrolling row on Home. The editor still holds up to 12,
+        // but the document list must own the first screen (proved at 360x640dp).
+        quickStrip = LinearLayout(context).apply { orientation = HORIZONTAL }
+        quickRow = HorizontalScrollView(context).apply {
+            id = R.id.swQuickRow
+            isHorizontalScrollBarEnabled = false
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(SwStyle.dp(context, 18f))
+            addView(quickStrip, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ))
+        }
+        addView(quickRow)
         recentHeader = sectionHeader(context.getString(R.string.home_recent), context.getString(R.string.home_newest)) {
             showSortSheet()
         }
@@ -208,7 +253,7 @@ class LibraryScreen(
             )
         }
         addView(chipScroll)
-        addView(SwStyle.spacer(context, if (resources.configuration.fontScale >= 1.6f) 2f else 6f))
+        addView(SwStyle.spacer(context, 2f))
 
         val selectBar = selectionBar()
 
@@ -216,9 +261,7 @@ class LibraryScreen(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val pad = SwStyle.dp(context, 18f)
-            val top = if (resources.configuration.fontScale >= 1.6f) 2f else 4f
-            val bottom = if (resources.configuration.fontScale >= 1.6f) 2f else 6f
-            setPadding(pad, SwStyle.dp(context, top), pad, SwStyle.dp(context, bottom))
+            setPadding(pad, SwStyle.dp(context, 2f), pad, SwStyle.dp(context, 2f))
         }
         countLabel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true)
         countLabel.id = R.id.swDocCount
@@ -345,6 +388,8 @@ class LibraryScreen(
             listHost,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         )
+        // Only now: buildQuickRows() calls updateChrome(), which needs the list views above.
+        buildQuickRows()
     }
 
     // ---- pinned library chrome -------------------------------------------
@@ -489,8 +534,7 @@ class LibraryScreen(
             orientation = VERTICAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 val m = SwStyle.dp(context, 18f)
-                val top = if (resources.configuration.fontScale >= 1.6f) 0f else 4f
-                setMargins(m, SwStyle.dp(context, top), m, 0)
+                setMargins(m, 0, m, 0)
             }
         }
         val scroll = HorizontalScrollView(context).apply {
@@ -1203,9 +1247,9 @@ class LibraryScreen(
             // document row still clears the dock on the first screen.
             setPadding(
                 padH,
-                SwStyle.dp(context, if (large) 6f else 8f),
+                SwStyle.dp(context, if (large) 6f else 4f),
                 padH,
-                SwStyle.dp(context, if (large) 2f else 4f)
+                SwStyle.dp(context, if (large) 2f else 2f)
             )
         }
         if (resources.configuration.fontScale >= 1.6f) {
@@ -1364,10 +1408,302 @@ class LibraryScreen(
         return box.apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)).apply {
                 val m = SwStyle.dp(context, 18f)
-                val top = if (resources.configuration.fontScale >= 1.6f) 4f else 8f
+                val top = if (resources.configuration.fontScale >= 1.6f) 4f else 6f
                 setMargins(m, SwStyle.dp(context, top), m, 0)
             }
         }
+    }
+
+    // ---- Home quick tools (owner decision UX-008) ------------------------
+
+    /** "Quick tools", the "All tools" door and the pencil that opens the one editor sheet. */
+    private fun quickToolsHeader(): View {
+        val row = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val pad = SwStyle.dp(context, 18f)
+            // UX-008: no vertical padding at normal size; the 48dp pencil sets the row height.
+            val top = if (resources.configuration.fontScale >= 1.6f) SwStyle.dp(context, 4f) else 0
+            setPadding(pad, top, pad, 0)
+        }
+        row.addView(
+            SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+                // Never cap at one line: at 200 % the wrapped title must grow the header rather
+                // than clip (AccessibilityAuditTest caught this on the 2.0x Library).
+                text = context.getString(R.string.home_quick_tools)
+            },
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        )
+        quickAll = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+            id = R.id.swQuickAll
+            text = context.getString(R.string.home_all_tools)
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 48f)
+            minimumWidth = SwStyle.dp(context, 48f)
+            isClickable = true
+            isFocusable = true
+            setPadding(SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f), 0)
+            setOnClickListener { callbacks.onAllTools() }
+        }
+        row.addView(quickAll)
+        quickEdit = SwStyle.iconButton(
+            context, R.drawable.ic_sym_edit, SwStyle.color(context, R.color.text_hologram_mid)
+        ).apply {
+            id = R.id.swQuickEdit
+            contentDescription = context.getString(R.string.quick_edit)
+            val size = SwStyle.dp(context, 48f)
+            layoutParams = LayoutParams(size, size)
+            setPadding(
+                SwStyle.dp(context, 14f), SwStyle.dp(context, 14f),
+                SwStyle.dp(context, 14f), SwStyle.dp(context, 14f)
+            )
+            setOnClickListener { showQuickEditor() }
+        }
+        row.addView(quickEdit)
+        return row
+    }
+
+    /** Editor grid columns (Home itself is one horizontal strip, never a second row). */
+    private fun quickColumns(): Int = when {
+        resources.configuration.fontScale >= 1.6f -> 3
+        resources.configuration.fontScale >= 1.25f -> 5
+        else -> 6
+    }
+
+    /** Wide tiles let every EN/HI label fit one line at 100 %, so the strip stays short. */
+    private fun quickTileWidth(): Int = SwStyle.dp(
+        context, if (resources.configuration.fontScale >= 1.6f) 144f else 88f
+    )
+
+    /** One tool tile. The Home strip leaves [ToolTile.bind]'s launch click intact (Pro gate included). */
+    private fun quickTile(
+        tool: SwTool,
+        onClick: (() -> Unit)? = null,
+        badgeRes: Int? = null,
+        spoken: String? = null,
+        atLimit: Boolean = false
+    ): ToolTile {
+        val tile = ToolTile(context)
+        tile.host = host
+        tile.asQuick()
+        tile.bind(tool)
+        quickLabels[tool.id]?.let { tile.setLabel(context.getString(it)) }
+        // A quick label wraps and grows the tile; it is never shrunk or ellipsized (UI_PLAN 0.8).
+        tile.labelView.maxLines = if (resources.configuration.fontScale >= 1.6f) 4 else 2
+        if (spoken != null) tile.contentDescription = spoken
+        if (onClick != null) tile.setOnClickListener { onClick() }
+        if (atLimit) {
+            // A disabled tile is not focusable; keep it focusable so TalkBack can hear why.
+            tile.alpha = 0.38f
+            tile.isFocusable = true
+        }
+        if (badgeRes != null) {
+            val badge = ImageView(context).apply {
+                setImageResource(badgeRes)
+                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.sw_on_gold))
+                background = SwStyle.rounded(
+                    context, SwStyle.color(context, R.color.gold_pro_primary), radiusDp = 999f
+                )
+                // The tile speaks "Add/Remove <tool>"; the glyph is decorative to TalkBack.
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                setPadding(
+                    SwStyle.dp(context, 3f), SwStyle.dp(context, 3f),
+                    SwStyle.dp(context, 3f), SwStyle.dp(context, 3f)
+                )
+            }
+            tile.addView(
+                badge,
+                FrameLayout.LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f)).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    topMargin = SwStyle.dp(context, 2f)
+                    marginStart = SwStyle.dp(context, 2f)
+                }
+            )
+        }
+        return tile
+    }
+
+    /** One horizontal strip of all saved tools; the editor still holds up to twelve. */
+    internal fun buildQuickRows() {
+        quickStrip.removeAllViews()
+        val tools = quickIds.mapNotNull { ToolRegistry.byId(it) }
+            .take(com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS)
+        val width = quickTileWidth()
+        for (tool in tools) {
+            quickStrip.addView(
+                quickTile(tool),
+                LayoutParams(width, LayoutParams.WRAP_CONTENT)
+            )
+        }
+        quickRow.isVisible = tools.isNotEmpty()
+        updateChrome()
+    }
+
+    /** Reorder by long-press drag; works on the Home rows and inside the editor sheet. */
+    internal fun moveQuickTool(id: String, toIndex: Int) {
+        val list = quickDraft ?: quickIds
+        val from = list.indexOf(id)
+        if (from < 0) return
+        list.removeAt(from)
+        list.add(toIndex.coerceIn(0, list.size), id)
+        if (quickDraft != null) rebuildQuickEditor?.invoke() else buildQuickRows()
+    }
+
+    private var rebuildQuickEditor: (() -> Unit)? = null
+
+    /**
+     * UX-008: the pencil opens ONE sheet for add, remove, reorder and reset. The Home rows are
+     * untouched until Done; the X, Cancel and Back all discard the draft.
+     */
+    private fun showQuickEditor() {
+        val draft = quickIds.toMutableList()
+        quickDraft = draft
+        val content = LinearLayout(context).apply { orientation = VERTICAL }
+        val scroll = ScrollView(context).apply {
+            layoutParams = LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                (context.resources.displayMetrics.heightPixels * 0.5f).toInt()
+            )
+            addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        }
+        val heading: (String) -> TextView = { text ->
+            SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true)
+                .apply { this.text = text }
+        }
+        fun addRow(tools: List<SwTool>, remove: Boolean) {
+            val columns = quickColumns()
+            val atLimit = !remove && draft.size >= com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS
+            if (atLimit) {
+                // The limit is a real, focusable statement, not a silent dead tile.
+                content.addView(
+                    SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
+                        text = context.getString(R.string.quick_max_reached)
+                        contentDescription = text
+                        minimumHeight = SwStyle.dp(context, 48f)
+                        gravity = Gravity.CENTER_VERTICAL
+                        isFocusable = true
+                        isClickable = true
+                    },
+                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                        .apply { topMargin = SwStyle.dp(context, 4f) }
+                )
+            }
+            for (chunk in tools.chunked(columns)) {
+                val row = LinearLayout(context).apply {
+                    orientation = HORIZONTAL
+                    gravity = Gravity.TOP
+                }
+                for (tool in chunk) {
+                    val action = context.getString(
+                        if (remove) R.string.quick_remove else R.string.quick_add,
+                        context.getString(tool.title)
+                    )
+                    val tile = quickTile(
+                        tool,
+                        onClick = {
+                            if (remove) draft.remove(tool.id)
+                            else if (!atLimit && draft.size < com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS) {
+                                draft.add(tool.id)
+                            }
+                            rebuildQuickEditor?.invoke()
+                        },
+                        badgeRes = if (remove) R.drawable.ic_sym_close else R.drawable.ic_sym_add,
+                        spoken = if (atLimit) context.getString(R.string.quick_max_reached) else action,
+                        atLimit = atLimit
+                    )
+                    if (remove) {
+                        tile.setOnLongClickListener { view ->
+                            view.startDragAndDrop(
+                                android.content.ClipData.newPlainText("tool", tool.id),
+                                View.DragShadowBuilder(view), null, 0
+                            )
+                            true
+                        }
+                        tile.setOnDragListener { _, event ->
+                            if (event.action == android.view.DragEvent.ACTION_DROP) {
+                                val dragged = event.clipData?.getItemAt(0)?.text?.toString()
+                                if (dragged != null && dragged != tool.id) {
+                                    moveQuickTool(dragged, draft.indexOf(tool.id))
+                                }
+                            }
+                            true
+                        }
+                    }
+                    row.addView(tile, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+                }
+                repeat(columns - chunk.size) {
+                    row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+                }
+                content.addView(
+                    row,
+                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                        .apply { topMargin = SwStyle.dp(context, 4f) }
+                )
+            }
+        }
+        fun rebuildEditor() {
+            content.removeAllViews()
+            content.addView(
+                SwStyle.text(context, 12f, SwStyle.color(context, R.color.cyan_dim)).apply {
+                    text = context.getString(R.string.u4_quick_editor_hint)
+                    setLineSpacing(0f, 1.25f)
+                },
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            )
+            content.addView(
+                heading(context.getString(R.string.home_quick_tools)),
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = SwStyle.dp(context, 12f) }
+            )
+            addRow(draft.mapNotNull { ToolRegistry.byId(it) }, remove = true)
+            content.addView(
+                heading(context.getString(R.string.quick_add_tools)),
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = SwStyle.dp(context, 16f) }
+            )
+            addRow(
+                ToolRegistry.all.filter { it.status == ToolStatus.READY && it.id !in draft },
+                remove = false
+            )
+            content.addView(
+                SwStyle.text(context, 14f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+                    text = context.getString(R.string.u4_quick_reset)
+                    minimumHeight = SwStyle.dp(context, 48f)
+                    gravity = Gravity.CENTER_VERTICAL
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        draft.clear()
+                        draft.addAll(com.scanwhirl.app.util.Prefs.DEFAULT_QUICK_TOOLS)
+                        rebuildQuickEditor?.invoke()
+                    }
+                },
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = SwStyle.dp(context, 12f) }
+            )
+        }
+        rebuildQuickEditor = { rebuildEditor() }
+        rebuildEditor()
+        var saved = false
+        val sheet = SwSheet.builder(context)
+            .setTitle(R.string.quick_edit)
+            .setContent(scroll)
+            .setPrimary(R.string.sel_done) {
+                com.scanwhirl.app.util.Prefs.setQuickTools(context, draft)
+                quickIds = com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
+                saved = true
+                buildQuickRows()
+            }
+            .setSecondary(R.string.sheet_cancel) { /* discard */ }
+            .build()
+        sheet.setOnDismissListener {
+            rebuildQuickEditor = null
+            quickDraft = null
+            quickSheet = null
+            if (!saved) buildQuickRows()
+        }
+        quickSheet = sheet
+        sheet.show()
     }
 
     private fun sectionHeader(title: String, action: String?, onAction: (() -> Unit)? = null): View {
@@ -1375,13 +1711,9 @@ class LibraryScreen(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val pad = SwStyle.dp(context, 18f)
-            val large = resources.configuration.fontScale >= 1.6f
-            setPadding(
-                pad,
-                SwStyle.dp(context, if (large) 8f else 20f),
-                pad,
-                SwStyle.dp(context, if (large) 4f else 10f)
-            )
+            // UX-008: the compact Quick tools strip must not push documents off a 640dp
+            // first screen; the 48dp sort control still sets the row's touch-target height.
+            setPadding(pad, SwStyle.dp(context, 4f), pad, SwStyle.dp(context, 2f))
         }
         row.addView(
             SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
@@ -1414,6 +1746,14 @@ class LibraryScreen(
     }
 
     private fun renderSortLabel() {
+        ((sortAction?.parent as? ViewGroup)?.getChildAt(0) as? TextView)?.text = context.getString(
+            when (sort) {
+                com.scanwhirl.app.util.Prefs.LIB_NAME_ASC,
+                com.scanwhirl.app.util.Prefs.LIB_NAME_DESC,
+                com.scanwhirl.app.util.Prefs.LIB_SIZE -> R.string.u4_library_documents
+                else -> R.string.home_recent
+            }
+        )
         sortAction?.text = context.getString(sortLabelRes()) + " ▾"
     }
 
@@ -1827,6 +2167,8 @@ class LibraryScreen(
             (::searchInput.isInitialized && searchInput.hasFocus())
         val firstRun = docs.isEmpty() && !searching && folder == null && category == null
         folderScroll?.isVisible = !searching
+        quickHeader.isVisible = !searching && !firstRun
+        quickRow.isVisible = !searching && !firstRun && quickStrip.childCount > 0
         recentHeader?.isVisible = !searching && !firstRun
         chipScroll?.isVisible = !searching && !firstRun && docs.isNotEmpty()
         listHeader.isVisible = !searching && !firstRun
