@@ -4,7 +4,7 @@
     <!-- Engine -->
     <string name="draft_open_refused">पहले बिना सहेजे पन्नों के बदलाव सहेजें या हटाएँ।</string>
     <string name="draft_stale">ये बदलाव शुरू होने के बाद दस्तावेज़ बदल गया। इन्हें सिर्फ़ हटाया जा सकता है।</string>
-    <string name="draft_damaged">ये बिना सहेजे बदलाव खराब हो गए हैं और सिर्फ़ हटाए जा सकते हैं।</string>
+    <string name="draft_damaged">ये बिना सहेजे बदलाव ख़राब हो गए हैं और सिर्फ़ हटाए जा सकते हैं।</string>
     <string name="draft_edited_name">%1$s (बदला गया)</string>
 
     <!-- Organize screen -->

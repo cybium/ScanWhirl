@@ -2,9 +2,9 @@
 <resources>
     <!-- L1lib library fixes: honest write failures and the async Tags sheet (Hindi). -->
     <!-- #3: a disk-full / sync failure during a library folder or tag write. -->
-    <string name="l1lib_write_failed">बदलाव सहेजे नहीं जा सके। कुछ दस्तावेज़ नहीं बदले होंगे। खाली जगह देखकर फिर कोशिश करें।</string>
+    <string name="l1lib_write_failed">बदलाव सहेजे नहीं जा सके। कुछ दस्तावेज़ शायद न बदले हों। खाली जगह देखकर फिर कोशिश करें।</string>
     <!-- %1$d = documents actually moved, %2$d = documents selected. -->
-    <string name="l1lib_move_partial">सभी दस्तावेज़ नहीं ले जाए जा सके। कुल %2$d में से %1$d ले गए।</string>
+    <string name="l1lib_move_partial">कुछ दस्तावेज़ नहीं ले जाए जा सके। %2$d में से %1$d ले जाए गए।</string>
     <!-- #2: visible while every meta.txt is read on the IO thread. -->
     <string name="l1lib_tags_loading">टैग लाए जा रहे हैं…</string>
 </resources>

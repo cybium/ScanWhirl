@@ -341,7 +341,7 @@
     <string name="resize_keep_ratio">अनुपात वही रखें</string>
     <string name="resize_px">px</string>
     <string name="resize_share">बदली हुई तस्वीर भेजें</string>
-    <!-- review --> <string name="resize_target_hint">500 KB या 3 MB से ज़्यादा न हो। अकेले अंकों का मतलब KB होता है।</string>
+    <!-- review --> <string name="resize_target_hint">500 KB या 3 MB तक। अकेले अंकों का मतलब KB है।</string>
     <string name="resize_target_label">फ़ाइल का आकार इससे ज़्यादा न हो</string>
     <string name="resize_times">×</string>
     <string name="resize_title">तस्वीर का आकार बदलें</string>
@@ -429,7 +429,7 @@
     <string name="locked_source_refused">पहले “%1$s” का ताला खोलें। काम अभी पासवर्ड वाले दस्तावेज़ का उपयोग नहीं कर सकते।</string>
     <string name="locked_no_pages">इस दस्तावेज़ में पन्नों की तस्वीरें नहीं हैं, इसलिए इसका पासवर्ड बदला या हटाया नहीं जा सकता।</string>
     <string name="unlock_current_pw_title">मौजूदा पासवर्ड</string>
-    <string name="password_charset">कम से कम 6 अक्षर लें। अक्षर, अंक, चिह्न, हिंदी और इमोजी सब चलते हैं। सिर्फ़ अधूरा अक्षर-क्रम स्वीकार नहीं होता।</string>
+    <string name="password_charset">कम से कम 6 अक्षर रखें। अक्षर, अंक, चिह्न, हिंदी और इमोजी सब चलते हैं। केवल अधूरा इमोजी या अक्षर-जोड़ा स्वीकार नहीं होता।</string>
     <string name="protection_repair_title">सुरक्षा ठीक करनी है</string>
     <string name="protection_repair_msg">“%1$s” पर ताला दिखता है, पर इसकी PDF पर पासवर्ड नहीं है। जो प्रतियाँ आप पहले भेज या सहेज चुके हैं, वे इससे नहीं बदलेंगी। इसे फिर से सुरक्षित करने के लिए अपना पासवर्ड डालें।</string>
     <string name="btn_protect_again">फिर से सुरक्षित करें</string>
@@ -658,8 +658,8 @@
     <string name="import_pdf_cancelled">लाना रद्द किया गया। कुछ भी नहीं जोड़ा गया।</string>
     <string name="import_failed_title">यह PDF फ़ोन में नहीं लाई जा सकी</string>
     <string name="import_failed_password">यह PDF पासवर्ड से सुरक्षित है। ScanWhirl सुरक्षित PDF नहीं खोल सकता, इसलिए कुछ भी नहीं लाया गया। जिस ऐप ने इसे बनाया उसमें पासवर्ड हटाएँ या बिना पासवर्ड की प्रति सहेजें, फिर उसे फ़ोन में लाएँ।</string>
-    <string name="import_failed_damaged">यह फ़ाइल खराब है या PDF नहीं है, इसलिए कुछ भी नहीं लाया गया।</string>
-    <string name="import_failed_page">%2$d में से पन्ना %1$d पढ़ा नहीं जा सका, इसलिए कुछ भी नहीं लाया गया। PDF शायद खराब है।</string>
+    <string name="import_failed_damaged">यह फ़ाइल ख़राब है या PDF नहीं है, इसलिए कुछ भी नहीं लाया गया।</string>
+    <string name="import_failed_page">%2$d में से पन्ना %1$d पढ़ा नहीं जा सका, इसलिए कुछ भी नहीं लाया गया। PDF शायद ख़राब है।</string>
     <string name="import_failed_empty">इस PDF में कोई पन्ना नहीं है, इसलिए कुछ भी नहीं लाया गया।</string>
     <string name="import_failed_too_large">यह PDF %1$d MB से बड़ी है। इसे छोटी PDF में बाँटकर फ़ोन में लाएँ।</string>
     <string name="import_failed_too_many">इस PDF में %1$d पन्ने हैं। ScanWhirl एक बार में %2$d पन्ने तक लाता है, इसलिए पहले इसे छोटी PDF में बाँटें।</string>
