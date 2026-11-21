@@ -13,7 +13,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.store.ScanRepository.Companion.TrashStage
+import com.scanwhirl.app.store.ImportDiscardStore
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.FakeMediaStore
 import org.junit.After
@@ -38,7 +38,7 @@ import java.io.IOException
 
 /**
  * Owner bugs F5/W2: an imported PDF opens in the viewer as before, but the first Back from that
- * first look asks "Keep imported document?" and offers a reversible move to Trash.
+ * first look asks "Keep imported document?" and offers a finite, reversible Discard (UX-007).
  * Every other viewer entry keeps its plain Back.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -54,6 +54,7 @@ class ImportPdfFixFlowTest {
     @Before
     fun setUp() {
         Faults.resetAll()
+        ImportDiscardStore.fault = {}
         TrashActions.takePending()
         // T44: the viewer's save-to-Documents goes through MediaStore, exactly like the phone.
         media = FakeMediaStore().also { provider ->
@@ -70,11 +71,18 @@ class ImportPdfFixFlowTest {
     @After
     fun tearDown() {
         Faults.resetAll()
+        ImportDiscardStore.fault = {}
         TrashActions.takePending()
         media.close()
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    private fun clickDiscard(dialog: android.app.Dialog) {
+        val metrics = app.resources.displayMetrics
+        layoutWindow(requireNotNull(dialog.window).decorView, metrics.widthPixels, metrics.heightPixels)
+        dialog.findViewById<View>(R.id.swSheetSecondary).performClick()
+    }
 
     private fun waitUntil(timeoutMs: Long = 8_000, condition: () -> Boolean): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
@@ -100,7 +108,7 @@ class ImportPdfFixFlowTest {
     }
 
     @Test
-    fun `the first Back after an import can move only that import to Trash and restore it`() {
+    fun `the first Back after an import discards only that copy and restores it`() {
         val imported = DocFixtures.saved(repo, app, pages = 2, name = "Imported PDF")
         val other = DocFixtures.saved(repo, app, pages = 1, name = "Other doc")
         val originalPdf = requireNotNull(repo.getDocument(imported)).pdfFile.readBytes()
@@ -122,7 +130,7 @@ class ImportPdfFixFlowTest {
                     app.getString(R.string.fixflow_keep),
                     dialog.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
                 )
-                dialog.findViewById<View>(R.id.swSheetSecondary).performClick()
+                clickDiscard(dialog)
             }
             assertTrue("the import action closes the viewer", waitUntil {
                 var finishing = false
@@ -134,13 +142,15 @@ class ImportPdfFixFlowTest {
         assertNull("the import is no longer in the library", repo.getDocument(imported))
         assertNotNull("every other document is untouched", repo.getDocument(other))
         assertEquals(1, repo.listDocuments().size)
-        assertEquals("the import must be present in Trash, not permanently deleted",
-            listOf(imported), repo.listTrash().map { it.originalId })
-        val entry = repo.listTrash().single()
-        assertEquals(TrashActions.Moved(listOf(entry.key), listOf("Imported PDF"), 0),
-            TrashActions.takePending())
+        assertTrue("UX-007 Discard escrow is not Library Trash", repo.listTrash().isEmpty())
+        val store = ImportDiscardStore(app)
+        val entry = store.pending().single()
+        assertEquals(imported, entry.id)
+        assertTrue("escrow has a finite Undo deadline", store.remainingMs(entry) in 1..8_000)
+        assertNull("Discard must not post a Library Trash notice", TrashActions.takePending())
         assertTrue("the derived preview is invalidated: $caches", caches.none { it.exists() })
-        val restored = repo.restoreFromTrash(entry.key)
+        assertEquals(imported, store.restore(entry.key))
+        val restored = requireNotNull(repo.getDocument(imported))
         assertEquals(imported, restored.id)
         assertEquals(2, restored.pageCount)
         assertArrayEquals(originalPdf, restored.pdfFile.readBytes())
@@ -148,19 +158,18 @@ class ImportPdfFixFlowTest {
     }
 
     @Test
-    fun `a failed Trash move never falls back to permanent deletion`() {
+    fun `a failed discard stage never falls back to permanent deletion`() {
         val imported = DocFixtures.saved(repo, app, pages = 1, name = "Fresh import")
         val originalPdf = requireNotNull(repo.getDocument(imported)).pdfFile.readBytes()
-        ScanRepository.trashFault = { stage ->
-            if (stage == TrashStage.BEFORE_MOVE) throw IOException("Fictional move failure")
+        ImportDiscardStore.fault = { stage ->
+            if (stage == ImportDiscardStore.Stage.DOCUMENT_MOVED) throw IOException("Fictional stage failure")
         }
         ActivityScenario.launch<DocumentViewerActivity>(
             DocumentViewerActivity.intent(app, imported, freshImport = true)
         ).use { scenario ->
             scenario.onActivity { activity ->
                 activity.onBackPressedDispatcher.onBackPressed()
-                requireNotNull(ShadowDialog.getLatestDialog())
-                    .findViewById<View>(R.id.swSheetSecondary).performClick()
+                clickDiscard(requireNotNull(ShadowDialog.getLatestDialog()))
             }
             assertTrue("the failed move displays the existing failure receipt, not a success", waitUntil {
                 var failedHonestly = false
@@ -169,7 +178,7 @@ class ImportPdfFixFlowTest {
                         com.google.android.material.R.id.snackbar_text
                     )
                     failedHonestly = !activity.isFinishing &&
-                        snackbar?.text?.toString() == activity.getString(R.string.trash_move_failed)
+                        snackbar?.text?.toString() == activity.getString(R.string.u1_import_discard_failed)
                 }
                 failedHonestly
             })
@@ -180,7 +189,7 @@ class ImportPdfFixFlowTest {
     }
 
     @Test
-    fun `the import Trash action stays above the Create FAB area in English and Hindi`() {
+    fun `the import Discard action stays above the Create FAB area in English and Hindi`() {
         val imported = DocFixtures.saved(repo, app, pages = 1, name = "Fresh import")
         val problems = mutableListOf<String>()
         try {
@@ -213,8 +222,11 @@ class ImportPdfFixFlowTest {
                                 val action = dialog.findViewById<TextView>(R.id.swSheetSecondary)
                                 val bounds = screenBounds(action)
                                 val minimum = (48 * density).toInt()
-                                if (bounds.bottom > fab.top) {
-                                    problems += "$case: Trash must end above Create: action=$bounds FAB=$fab"
+                                val exclusion = Rect(fab).apply {
+                                    inset(-(24 * density).toInt(), -(24 * density).toInt())
+                                }
+                                if (Rect.intersects(bounds, exclusion)) {
+                                    problems += "$case: Discard must clear Create by 24dp: action=$bounds FAB=$fab"
                                 }
                                 if (bounds.top < 0 || bounds.left < 0 || bounds.right > w ||
                                     bounds.width() < minimum || bounds.height() < minimum ||
@@ -222,8 +234,17 @@ class ImportPdfFixFlowTest {
                                 ) {
                                     problems += "$case: Trash target is not visible at 48dp: $bounds"
                                 }
-                                val expected = if (language == "en") "Move to Trash" else
-                                    "हटाई गई फ़ाइलों में भेजें"
+                                val expected = if (language == "en") "Discard" else "छोड़ें"
+                                if (action.compoundDrawablesRelative[0] == null) {
+                                    problems += "$case: Discard needs its visible bin glyph"
+                                }
+                                val keep = dialog.findViewById<TextView>(R.id.swSheetPrimary)
+                                val keepNode = keep.createAccessibilityNodeInfo()
+                                if (keep.compoundDrawablesRelative[0] == null ||
+                                    keepNode.className != Button::class.java.name || !keepNode.isClickable ||
+                                    keep.height < minimum || keep.width < minimum) {
+                                    problems += "$case: Keep needs check glyph, Button role and 48dp target"
+                                }
                                 val node = action.createAccessibilityNodeInfo()
                                 if (node.text?.toString() != expected || !node.isClickable ||
                                     node.className != Button::class.java.name
@@ -231,10 +252,10 @@ class ImportPdfFixFlowTest {
                                     problems += "$case: expected accessible action '$expected', got '${node.text}'"
                                 }
                                 val message = dialog.findViewById<TextView>(R.id.swSheetMessage).text.toString()
-                                val recovery = if (language == "en") "restore this copy from Trash for 30 days" else
-                                    "30 दिन तक हटाई गई फ़ाइलों से वापस"
-                                if (!message.contains(recovery)) {
-                                    problems += "$case: the message doesn't explain recovery from Trash: '$message'"
+                                val assurance = if (language == "en") "Your original PDF stays unchanged." else
+                                    "मूल PDF नहीं बदलेगी।"
+                                if (message != assurance) {
+                                    problems += "$case: the message must briefly reassure about the source: '$message'"
                                 }
                                 for (id in listOf(R.id.swSheetTitle, R.id.swSheetMessage,
                                     R.id.swSheetSecondary, R.id.swSheetPrimary)) {
@@ -274,6 +295,86 @@ class ImportPdfFixFlowTest {
         val origin = IntArray(2)
         view.getLocationOnScreen(origin)
         return Rect(origin[0], origin[1], origin[0] + view.width, origin[1] + view.height)
+    }
+
+    @Test
+    fun `short landscape and keyboard viewports scroll Discard above the protected Scan zone`() {
+        val imported = DocFixtures.saved(repo, app, pages = 2, name = "Fictional short viewport")
+        try {
+            for (language in listOf("en", "hi")) for (width in listOf(320, 411)) {
+                for (height in listOf(320, 420)) for (font in listOf(1f, 2f)) {
+                    RuntimeEnvironment.setQualifiers("$language-w${width}dp-h${height}dp-xhdpi")
+                    RuntimeEnvironment.setFontScale(font)
+                    val density = app.resources.displayMetrics.density
+                    val w = (width * density).toInt()
+                    val h = (height * density).toInt()
+                    ActivityScenario.launch<DocumentViewerActivity>(
+                        DocumentViewerActivity.intent(app, imported, freshImport = true)
+                    ).use { scenario ->
+                        scenario.onActivity { viewer ->
+                            viewer.onBackPressedDispatcher.onBackPressed()
+                            val dialog = requireNotNull(ShadowDialog.getLatestDialog())
+                            val decor = requireNotNull(dialog.window).decorView
+                            layoutWindow(decor, w, h)
+                            val scroll = requireNotNull(findScroll(decor))
+                            scroll.scrollTo(0, scroll.getChildAt(0).height)
+                            layoutWindow(decor, w, h)
+                            val action = dialog.findViewById<TextView>(R.id.swSheetSecondary)
+                            val case = "$language $width/$height ${font}x"
+                            assertTrue("$case Discard is reachable above Scan: ${screenBounds(action)}",
+                                action.isEnabled && action.alpha == 1f &&
+                                    screenBounds(action).bottom <= h - (148 * density).toInt())
+                            assertTrue("$case at least 48dp", action.height >= (48 * density).toInt())
+                            val text = requireNotNull(action.layout)
+                            assertTrue("$case full label", text.height <=
+                                action.height - action.compoundPaddingTop - action.compoundPaddingBottom)
+                            // A repeated tap at the old Scan centre can only Keep or do nothing.
+                            val x = w / 2f
+                            val y = h - 61 * density
+                            decor.dispatchTouchEvent(android.view.MotionEvent.obtain(0, 0,
+                                android.view.MotionEvent.ACTION_DOWN, x, y, 0))
+                            decor.dispatchTouchEvent(android.view.MotionEvent.obtain(0, 1,
+                                android.view.MotionEvent.ACTION_UP, x, y, 0))
+                            idle()
+                            assertNotNull("$case Scan-coordinate tap must not discard", repo.getDocument(imported))
+                            assertTrue(ImportDiscardStore(app).pending().isEmpty())
+                        }
+                    }
+                }
+            }
+        } finally {
+            RuntimeEnvironment.setFontScale(1f)
+            RuntimeEnvironment.setQualifiers("")
+        }
+    }
+
+    private fun findScroll(view: View): androidx.core.widget.NestedScrollView? {
+        if (view is androidx.core.widget.NestedScrollView) return view
+        if (view is android.view.ViewGroup) for (i in 0 until view.childCount) {
+            findScroll(view.getChildAt(i))?.let { return it }
+        }
+        return null
+    }
+
+    @Test
+    fun `closing or rotating the import question never discards the copy`() {
+        val imported = DocFixtures.saved(repo, app, pages = 2)
+        val before = requireNotNull(repo.getDocument(imported)).pdfFile.readBytes()
+        ActivityScenario.launch<DocumentViewerActivity>(
+            DocumentViewerActivity.intent(app, imported, freshImport = true)
+        ).use { scenario ->
+            scenario.onActivity { viewer ->
+                viewer.onBackPressedDispatcher.onBackPressed()
+                requireNotNull(ShadowDialog.getLatestDialog()).cancel()
+                viewer.onBackPressedDispatcher.onBackPressed()
+                assertTrue(requireNotNull(ShadowDialog.getLatestDialog()).isShowing)
+            }
+            scenario.recreate()
+            assertNotNull(repo.getDocument(imported))
+        }
+        assertArrayEquals(before, requireNotNull(repo.getDocument(imported)).pdfFile.readBytes())
+        assertTrue(ImportDiscardStore(app).pending().isEmpty())
+        assertTrue(repo.listTrash().isEmpty())
     }
 
     @Test
@@ -376,7 +477,7 @@ class ImportPdfFixFlowTest {
      * T44: the untouched-import question must name what the action does, not imply discarding edits.
      */
     @Test
-    fun `the untouched import question names Trash, not a generic discard`() {
+    fun `the untouched import question names Discard with a bin glyph`() {
         val imported = DocFixtures.saved(repo, app, pages = 1, name = "Fresh import")
         ActivityScenario.launch<DocumentViewerActivity>(
             DocumentViewerActivity.intent(app, imported, freshImport = true)
@@ -390,15 +491,12 @@ class ImportPdfFixFlowTest {
                     dialog.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
                 )
                 assertEquals(
-                    "the answer explicitly says it moves the import to Trash",
-                    app.getString(R.string.trash_move),
+                    "UX-007 abandons this import, not a 30-day Trash item",
+                    "Discard",
                     dialog.findViewById<TextView>(R.id.swSheetSecondary)?.text?.toString()
                 )
-                assertEquals(
-                    "and it never uses the generic Discard wording",
-                    false,
-                    app.getString(R.string.trash_move) == app.getString(R.string.discard)
-                )
+                assertNotNull("Discard has a visible bin glyph",
+                    dialog.findViewById<TextView>(R.id.swSheetSecondary).compoundDrawablesRelative[0])
             }
         }
     }
