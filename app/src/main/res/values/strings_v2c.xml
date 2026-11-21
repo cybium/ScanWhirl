@@ -25,6 +25,7 @@
 
     <!-- C2: localized failure mapping; no raw exception text reaches the UI. -->
     <string name="v2c_error_unreadable">This image could not be read. Choose another image.</string>
+    <string name="v2c_error_page_unreadable">Page %1$d could not be read. Choose another image.</string>
     <string name="v2c_error_too_large">This image is too large. Try a smaller image.</string>
     <string name="v2c_error_no_space">There is not enough free space. Free some space and try again.</string>
     <string name="v2c_error_scanner">The scanner is not available. Choose photos instead.</string>

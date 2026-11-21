@@ -25,6 +25,7 @@
 
     <!-- C2: स्थानीय कारण, बिना कच्चे त्रुटि पाठ के। -->
     <string name="v2c_error_unreadable">यह तस्वीर पढ़ी नहीं जा सकी। दूसरी तस्वीर चुनें।</string>
+    <string name="v2c_error_page_unreadable">पन्ना %1$d पढ़ा नहीं जा सका। दूसरी तस्वीर चुनें।</string>
     <string name="v2c_error_too_large">यह तस्वीर बहुत बड़ी है। छोटी तस्वीर आज़माएँ।</string>
     <string name="v2c_error_no_space">पर्याप्त खाली जगह नहीं है। जगह खाली करके फिर कोशिश करें।</string>
     <string name="v2c_error_scanner">स्कैन उपलब्ध नहीं है। तस्वीरें चुनें।</string>

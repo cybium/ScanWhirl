@@ -1339,7 +1339,9 @@ class ScanReviewActivity : BaseActivity() {
                 else GmsDocumentScannerOptions.SCANNER_MODE_BASE
             )
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
-            .setPageLimit(1)
+            // No per-entry page cap: the shared camera session options govern every
+            // capture. Exactly one returned page is accepted by retakeLauncher; a
+            // different count is reported honestly and leaves this page untouched.
             .build()
         retakeTargetIndex = index
         try {
@@ -1509,7 +1511,12 @@ class ScanReviewActivity : BaseActivity() {
                 } catch (e: Exception) {
                     saving = false
                     progress.dismiss()
-                    val reason = V2cFailureMap.message(this@ScanReviewActivity, e)
+                    val page = V2cFailureMap.pageNumberOf(e)
+                    val reason = if (page != null) {
+                        getString(R.string.v2c_error_page_unreadable, page)
+                    } else {
+                        V2cFailureMap.message(this@ScanReviewActivity, e)
+                    }
                     recordReceipt(getString(R.string.v2c_receipt_save_failed), reason)
                     Toast.makeText(this@ScanReviewActivity, reason, Toast.LENGTH_LONG).show()
                 }

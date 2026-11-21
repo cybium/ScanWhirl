@@ -32,6 +32,17 @@ object V2cFailureMap {
         return context.getString(R.string.v2c_error_generic)
     }
 
+    /**
+     * Extracts only the page NUMBER for a localized "Page N ..." message.
+     * The exception's own wording is never displayed or stored.
+     */
+    fun pageNumberOf(failure: Throwable?): Int? {
+        val match = causeChain(failure ?: return null)
+            .firstNotNullOfOrNull { Regex("Page\\s+(\\d+)", RegexOption.IGNORE_CASE).find(it) }
+            ?: return null
+        return match.groupValues[1].toIntOrNull()
+    }
+
     private fun causeChain(failure: Throwable): List<String> {
         val out = mutableListOf<String>()
         var current: Throwable? = failure
