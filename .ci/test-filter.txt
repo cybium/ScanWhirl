@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.tools.IdCard*,com.scanwhirl.app.ui.tools.T1*,com.scanwhirl.app.util.T1*,com.scanwhirl.app.ui.tools.T2*,com.scanwhirl.app.ui.InsertPhotosCropFixInsertCropTest
