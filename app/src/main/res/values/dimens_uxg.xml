@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX lane UXG: viewer metadata type floor. Mirrors the L5 metadata token
+     (12sp; 14sp where Devanagari matras need their padding back). Added, never
+     substituted into capture surfaces or existing shared tokens. -->
+<resources>
+    <dimen name="ux_uxg_viewer_meta">12sp</dimen>
+</resources>

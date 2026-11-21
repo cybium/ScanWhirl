@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX lane UXG: lane-prefixed strings, English decided copy. No shared string
+     is edited; callers reference these keys directly. -->
+<resources>
+    <!-- G4: consequence shown on the separated Discard-edits confirmation. -->
+    <string name="ux_uxg_ocr_discard_warning">Unsaved edits will be lost. This cannot be undone.</string>
+</resources>

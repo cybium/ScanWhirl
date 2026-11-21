@@ -1701,13 +1701,26 @@ class OcrEditorActivity : BaseActivity() {
                 if (which == 0) {
                     saveCurrent(finishAfterSave = true)
                 } else {
-                    com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+                    val confirm = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
                         .setTitle(R.string.ux130_l4_discard_edits_confirm)
-                        .setMessage(R.string.ocr_w5_back_msg)
+                        .setMessage(R.string.ux_uxg_ocr_discard_warning)
                         .setPrimary(R.string.ux130_l4_discard_edits) { finish() }
                         .setSecondary(R.string.ocr_w5_keep_editing) { }
                         .build()
-                        .show()
+                    // UXG G4: the destructive action is visibly fenced off in danger tokens,
+                    // never the ordinary cyan used by safe saves. Keep editing stays the quiet,
+                    // safe default (the sheet's secondary), so a mis-tap does not lose text.
+                    confirm.primaryButton.apply {
+                        background = com.scanwhirl.app.ui.kit.SwStyle.rounded(
+                            context,
+                            com.scanwhirl.app.ui.kit.SwStyle.color(context, R.color.laser_danger_surface),
+                            radiusDp = 16f,
+                            stroke = com.scanwhirl.app.ui.kit.SwStyle.color(context, R.color.laser_danger_border),
+                            strokeDp = 2f
+                        )
+                        setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(context, R.color.laser_danger))
+                    }
+                    confirm.show()
                 }
             }
             .setPrimary(R.string.ocr_w5_save_edits) { saveEdits(finishAfter = true) }

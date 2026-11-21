@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX lane UXG Hindi: glossary — बिना सहेजे (unsaved), संपादन (edits),
+     "वापस नहीं ला सकते" matches the app's existing "cannot be undone" wording. -->
+<resources>
+    <string name="ux_uxg_ocr_discard_warning">बिना सहेजे गए संपादन हट जाएँगे। इन्हें वापस नहीं ला सकते।</string>
+</resources>
