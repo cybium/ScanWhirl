@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L1: new view ids only; existing shared ids are untouched. -->
+<resources>
+    <!-- L1-03 centre Scan caption lives inside the disc's single focus stop. -->
+    <item name="uxL1ScanCaption" type="id" />
+
+    <!-- L1-05 live search status and scoped count. -->
+    <item name="uxL1SearchStatus" type="id" />
+    <item name="uxL1SearchScope" type="id" />
+
+    <!-- L1-04 accessible quick-tool reorder actions and fast-scroll actions. -->
+    <item name="uxL1MoveEarlier" type="id" />
+    <item name="uxL1MoveLater" type="id" />
+    <item name="uxL1ScrollForward" type="id" />
+    <item name="uxL1ScrollBackward" type="id" />
+</resources>

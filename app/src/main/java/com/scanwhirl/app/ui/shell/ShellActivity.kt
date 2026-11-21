@@ -261,6 +261,22 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             ?.let { runCatching { Tab.valueOf(it) }.getOrNull() }
             ?: Tab.LIBRARY
         showTab(startTab)
+        // L1-02: the rest of the library's place is restored only after the async data load
+        // in showTab() has produced a real document list (LibraryScreen.applyPendingRestore).
+        if (savedInstanceState != null && startTab == Tab.LIBRARY) {
+            library.restoreLibraryState(
+                com.scanwhirl.app.ui.shell.LibraryUiState(
+                    query = savedInstanceState.getString(KEY_QUERY).orEmpty(),
+                    folder = savedInstanceState.getString(KEY_FOLDER),
+                    category = savedInstanceState.getString(KEY_CATEGORY),
+                    sort = savedInstanceState.getString(KEY_SORT)
+                        ?: com.scanwhirl.app.util.Prefs.LIB_NEWEST,
+                    selection = savedInstanceState.getStringArray(KEY_SELECTION)?.toList().orEmpty(),
+                    selectionMode = savedInstanceState.getBoolean(KEY_SELECTION_MODE, false),
+                    scrollY = savedInstanceState.getInt(KEY_SCROLL, 0)
+                )
+            )
+        }
         // F1 (hunt H1-1): storage recovery once per process, off the main thread; the Library
         // reloads when it finishes so a document an interrupted Replace took away is back.
         val app = ScanWhirlApp.from(this)
@@ -313,10 +329,31 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
     }
 
-    /** SH1 #2: keep the tab through rotation and through the Settings-driven recreate. */
+    /** SH1 #2 + L1-02: keep the tab and the library's place through rotation/recreate. */
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(KEY_TAB, tab.name)
+        if (::library.isInitialized) {
+            val state = library.captureLibraryState()
+            outState.putString(KEY_QUERY, state.query)
+            outState.putString(KEY_FOLDER, state.folder)
+            outState.putString(KEY_CATEGORY, state.category)
+            outState.putString(KEY_SORT, state.sort)
+            outState.putStringArray(KEY_SELECTION, state.selection.toTypedArray())
+            outState.putBoolean(KEY_SELECTION_MODE, state.selectionMode)
+            outState.putInt(KEY_SCROLL, state.scrollY)
+        }
         super.onSaveInstanceState(outState)
+    }
+
+    /** L1-02: the library's pinned scroll anchor, read from the shell's own ScrollView. */
+    internal fun libraryScrollY(): Int =
+        if (::library.isInitialized) scrolls[library]?.scrollY ?: 0 else 0
+
+    /** L1-02: restore the anchor after the recreated list has been laid out. */
+    internal fun restoreLibraryScrollY(y: Int) {
+        if (!::library.isInitialized) return
+        val scroller = scroll(library)
+        scroller.post { scroller.scrollTo(0, y) }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -1328,7 +1365,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         if (docs.size > 8) {
             val search = android.widget.EditText(this).apply {
                 id = R.id.swDocPickerSearch
-                hint = getString(R.string.home_search_hint)
+                hint = getString(R.string.ux130_l1_search_hint)
                 setHintTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_dim))
                 setTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_hi))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -1423,6 +1460,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         /** SH1 #2: saved selection of the bottom bar across recreation. */
         private const val KEY_TAB = "sh1_selected_tab"
+
+        /** L1-02: the rest of the library's place across recreation. */
+        private const val KEY_QUERY = "uxl1_library_query"
+        private const val KEY_FOLDER = "uxl1_library_folder"
+        private const val KEY_CATEGORY = "uxl1_library_category"
+        private const val KEY_SORT = "uxl1_library_sort"
+        private const val KEY_SELECTION = "uxl1_library_selection"
+        private const val KEY_SELECTION_MODE = "uxl1_library_selection_mode"
+        private const val KEY_SCROLL = "uxl1_library_scroll"
 
         /** Tag of the non-interactive fade painted just above the dock. */
         const val DOCK_FADE = "swDockFade"

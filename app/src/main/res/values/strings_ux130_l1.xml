@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L1: shell, library and discovery copy. EN is the decided wording. -->
+<resources>
+    <!-- L1-02 state restore (no visible copy) has no strings. -->
+
+    <!-- L1-03 centre Scan caption. The nav words stay the judged shared strings. -->
+    <string name="ux130_l1_scan_caption">Scan</string>
+
+    <!-- L1-05 honest search and selection language -->
+    <string name="ux130_l1_search_hint">Search documents and pages</string>
+    <string name="ux130_l1_search_scope">Searching in %1$s</string>
+    <string name="ux130_l1_scope_all">All documents</string>
+    <string name="ux130_l1_move_to_trash">Move to Trash</string>
+    <string name="ux130_l1_finish_selection">Finish selection</string>
+    <plurals name="ux130_l1_result_count">
+        <item quantity="one">%d result</item>
+        <item quantity="other">%d results</item>
+    </plurals>
+
+    <!-- L1-06 searchable PDF outcome and purchase retry -->
+    <string name="ux130_l1_adding_text_layer">Adding text layer…</string>
+    <string name="ux130_l1_text_layer_added">Text layer added to %1$s.</string>
+    <string name="ux130_l1_text_layer_already">This PDF already has a text layer.</string>
+    <string name="ux130_l1_text_layer_failed">Text layer could not be added. Your document is unchanged.</string>
+    <string name="ux130_l1_purchase_failed">Couldn\'t complete purchase</string>
+    <string name="ux130_l1_purchase_retry">Try again</string>
+    <string name="ux130_l1_purchase_restore">Restore purchase</string>
+    <string name="ux130_l1_purchase_close">Close</string>
+
+    <!-- L1-04 accessible quick tools editing and legible badges -->
+    <string name="ux130_l1_move_earlier">Move earlier</string>
+    <string name="ux130_l1_move_later">Move later</string>
+    <string name="ux130_l1_reset_quick">Reset quick tools?</string>
+    <string name="ux130_l1_scroll_forward">Scroll forward</string>
+    <string name="ux130_l1_scroll_backward">Scroll backward</string>
+
+    <!-- ShellActivity binary size labels moved onto the shared decimal formatter -->
+    <string name="ux130_l1_import_too_large">This PDF is larger than %1$s. Split it into smaller PDFs and import those.</string>
+</resources>

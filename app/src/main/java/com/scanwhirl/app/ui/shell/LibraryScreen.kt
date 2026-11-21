@@ -63,6 +63,22 @@ import java.util.Date
 import java.util.Locale
 
 /**
+ * L1-02: the user's place in the library is part of the shell's saved state. Kept as a
+ * plain snapshot so [ShellActivity] can put it in the instance bundle without reaching
+ * into this screen's private fields. Selection ids are filtered against loaded documents
+ * on restore, so an anchor that was removed meanwhile falls back safely.
+ */
+data class LibraryUiState(
+    val query: String,
+    val folder: String?,
+    val category: String?,
+    val sort: String,
+    val selection: List<String>,
+    val selectionMode: Boolean,
+    val scrollY: Int
+)
+
+/**
  * UI-B1 (v4 Home, UI_PLAN §0b) + owner decision UX-008: the Library is documents first. Header
  * (mark, A/अ), search, compact folder chips, a compact customisable Quick tools row, the Recent
  * sort row, category chips and the real document rows.
@@ -152,6 +168,8 @@ class LibraryScreen(
     private lateinit var activeFilter: TextView
     private lateinit var noMatchView: TextView
     private lateinit var homeClear: ImageButton
+    /** L1-05: live result count + the folder/category scope it applies to. */
+    private lateinit var searchStatus: TextView
 
     private var docs: List<ScanDocument> = emptyList()
     private var query = ""
@@ -182,6 +200,54 @@ class LibraryScreen(
     /** Tests wait on this after [reload] when they force a threaded IO dispatcher. */
     internal var loaded = false
         private set
+
+    /**
+     * L1-02: one restore pass per instance. A snapshot queued before the async load finishes
+     * is applied exactly once, after [docs] is current, so no duplicate render job is started.
+     */
+    private var pendingRestore: LibraryUiState? = null
+    internal var restoreAppliedCount: Int = 0
+        private set
+
+    internal fun captureLibraryState(): LibraryUiState = LibraryUiState(
+        query = query,
+        folder = folder,
+        category = category,
+        sort = sort,
+        selection = selected.toList(),
+        selectionMode = selectionMode,
+        scrollY = (context as? ShellActivity)?.libraryScrollY() ?: 0
+    )
+
+    /** Queue a snapshot; if the data is already loaded it is applied at once. */
+    internal fun restoreLibraryState(state: LibraryUiState) {
+        if (pendingRestore != null || restoreAppliedCount > 0) return
+        pendingRestore = state
+        if (loaded) applyPendingRestore()
+    }
+
+    private fun applyPendingRestore() {
+        val s = pendingRestore ?: return
+        pendingRestore = null
+        restoreAppliedCount++
+        query = s.query
+        if (::searchInput.isInitialized) searchInput.setText(s.query)
+        folder = s.folder
+        category = s.category
+        sort = s.sort
+        com.scanwhirl.app.util.Prefs.setLibrarySort(context, sort)
+        renderSortLabel()
+        selectionMode = s.selectionMode
+        selected.clear()
+        val known = docs.map { it.id }.toSet()
+        selected.addAll(s.selection.filter { it in known })
+        renderFolders()
+        renderChips()
+        renderDocs()
+        if (s.scrollY > 0) {
+            post { (context as? ShellActivity)?.restoreLibraryScrollY(s.scrollY) }
+        }
+    }
 
     /**
      * L1lib #1: no hard cap. [allVisibleDocs] is the full filtered/sorted result;
@@ -459,9 +525,12 @@ class LibraryScreen(
             // No lifecycle (unit-only host): keep the old synchronous behaviour.
             docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
             loaded = true
-            renderFolders()
-            renderChips()
-            renderDocs()
+            if (pendingRestore != null) applyPendingRestore()
+            else {
+                renderFolders()
+                renderChips()
+                renderDocs()
+            }
             return
         }
         loadJob?.cancel()
@@ -474,9 +543,13 @@ class LibraryScreen(
             if (!isActive) return@launch
             docs = fresh
             loaded = true
-            renderFolders()
-            renderChips()
-            renderDocs()
+            // L1-02: apply the queued snapshot now that the document list is current.
+            if (pendingRestore != null) applyPendingRestore()
+            else {
+                renderFolders()
+                renderChips()
+                renderDocs()
+            }
         }
     }
 
@@ -904,7 +977,7 @@ class LibraryScreen(
         top.addView(selectionCount, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         val done = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             id = R.id.swSelDone
-            text = context.getString(R.string.sel_done)
+            text = context.getString(R.string.ux130_l1_finish_selection)
             setPadding(SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 10f), 0)
             minimumHeight = SwStyle.dp(context, 48f)
             gravity = Gravity.CENTER
@@ -952,7 +1025,7 @@ class LibraryScreen(
             if (selected.size >= 2) requirePro { showBatchRename() }
             else Toast.makeText(context, context.getString(R.string.batch_select_hint), Toast.LENGTH_SHORT).show()
         }
-        action(R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.sel_delete) { confirmDeleteSelection() }
+        action(R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.ux130_l1_move_to_trash) { confirmDeleteSelection() }
         scroll.addView(actions)
         bar.addView(
             scroll,
@@ -1452,7 +1525,7 @@ class LibraryScreen(
         )
         searchInput = EditText(context).apply {
             id = R.id.swHomeSearch
-            hint = context.getString(R.string.home_search_hint)
+            hint = context.getString(R.string.ux130_l1_search_hint)
             setHintTextColor(SwStyle.color(context, R.color.text_hologram_dim))
             setTextColor(SwStyle.color(context, R.color.text_hologram_hi))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -1493,8 +1566,30 @@ class LibraryScreen(
             }
         }
         box.addView(homeClear)
-        return box.apply {
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)).apply {
+
+        // L1-05: the live count and its scope live directly under the field, so a filtered
+        // search never reads as a global result. One accessible status stop, not a second rail.
+        searchStatus = SwStyle.text(
+            context,
+            if (AppLanguage.showingHindi(context)) 14f else 12.5f,
+            SwStyle.color(context, R.color.text_hologram_hi)
+        ).apply {
+            id = R.id.uxL1SearchStatus
+            isVisible = false
+            maxLines = 3
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            setPadding(0, SwStyle.dp(context, 6f), 0, 0)
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            isFocusable = true
+        }
+        val wrap = LinearLayout(context).apply { orientation = VERTICAL }
+        wrap.addView(box, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)))
+        wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        return wrap.apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 val m = SwStyle.dp(context, 18f)
                 val top = if (resources.configuration.fontScale >= 1.6f) 4f else 6f
                 setMargins(m, SwStyle.dp(context, top), m, 0)
@@ -2266,6 +2361,21 @@ class LibraryScreen(
         countLabel.text = resources.getQuantityString(
             com.scanwhirl.app.R.plurals.list_count, shown.size, shown.size
         )
+        // L1-05: a live count that always names its scope, so a folder/category filter
+        // is never presented as a global result.
+        if (query.isNotBlank() || folder != null || category != null) {
+            val scope = folder
+                ?: category?.let { CategoryLabels.display(context, it) }
+                ?: context.getString(R.string.ux130_l1_scope_all)
+            val status = resources.getQuantityString(
+                R.plurals.ux130_l1_result_count, shown.size, shown.size
+            ) + " · " + context.getString(R.string.ux130_l1_search_scope, scope)
+            searchStatus.text = status
+            searchStatus.contentDescription = status
+        } else {
+            searchStatus.text = null
+            searchStatus.contentDescription = null
+        }
         // uihome: the pinned chrome only adds the fast-scroll bar (the count stays as
         // plain text in the list header - nothing is drawn over the rows).
         chrome?.setDocumentCount(shown.size)
@@ -2328,6 +2438,7 @@ class LibraryScreen(
         recentHeader?.isVisible = !searching && !firstRun
         chipScroll?.isVisible = !searching && !firstRun && docs.isNotEmpty()
         listHeader.isVisible = !searching && !firstRun
+        searchStatus.isVisible = query.isNotBlank() || folder != null || category != null
         // M5: keep the list's bottom inset at or above the dock's real height (it grows when
         // the scan disc rises over the page); never a smaller magic number.
         val inset = listBottomInset()
