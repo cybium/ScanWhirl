@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX lane UXG: ids introduced by this lane, kept out of shared id files. -->
+<resources>
+    <!-- G7: inline, announced status inside the import Keep/Discard sheet. -->
+    <item name="ux_uxg_discard_status" type="id"/>
+</resources>

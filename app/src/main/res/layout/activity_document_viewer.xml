@@ -166,7 +166,7 @@
                     android:paddingVertical="3dp"
                     android:text="@string/badge_vault"
                     android:textColor="@color/pro_gold"
-                    android:textSize="11sp"
+                    android:textSize="@dimen/ux_uxg_viewer_meta"
                     android:textStyle="bold"
                     android:visibility="gone" />
 
@@ -183,14 +183,14 @@
                     android:paddingVertical="3dp"
                     android:text="@string/badge_locked"
                     android:textColor="@color/pro_gold"
-                    android:textSize="11sp"
+                    android:textSize="@dimen/ux_uxg_viewer_meta"
                     android:textStyle="bold"
                     android:visibility="gone" />
             </LinearLayout>
 
             <!-- UX-L4-01: selection is discoverable, not a hidden long-press. A named
                  48dp control enters the same selection mode the long-press/drag uses. -->
-            <TextView
+            <com.scanwhirl.app.ui.kit.UxgActionTextView
                 android:id="@id/ux130_l4_select_pages"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -620,7 +620,7 @@
                 android:layout_marginTop="6dp"
                 android:text="@string/doc_action_save_hint"
                 android:textColor="@color/text_hologram_mid"
-                android:textSize="11sp" />
+                android:textSize="@dimen/ux_uxg_viewer_meta" />
         </LinearLayout>
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

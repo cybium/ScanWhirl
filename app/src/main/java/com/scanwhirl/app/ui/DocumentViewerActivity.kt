@@ -1721,6 +1721,21 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
         freshImportAsked = true
         val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        // UXG G7: a failed tap inside this modal must be reported INSIDE it. A Snackbar attached
+        // to the activity root is painted behind the sheet, so the person never sees the reason.
+        val discardStatus = SwStyle.text(this, 13f,
+            SwStyle.color(this, R.color.laser_danger), bold = true, metadata = true).apply {
+            setId(R.id.ux_uxg_discard_status)
+            text = getString(R.string.ux130_l4_discard_unavailable)
+            visibility = View.GONE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            androidx.core.view.ViewCompat.setAccessibilityLiveRegion(
+                this, androidx.core.view.ViewCompat.ACCESSIBILITY_LIVE_REGION_POLITE
+            )
+        }
+        choices.addView(discardStatus, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@DocumentViewerActivity, 8f) })
         fun choice(label: Int, icon: Int, safe: Boolean): TextView =
             SwStyle.text(this, 16f, SwStyle.color(this,
                 if (safe) R.color.sw_disc_ink else R.color.text_hologram_mid), bold = true).apply {
@@ -1790,8 +1805,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 discardImportedCopy(id)
             } else {
                 // UX-L4-01 / UX-007: never silently ignore the tap. Keep stays reachable;
-                // we only explain that this layout cannot place Discard safely.
-                Snackbar.make(binding.root, R.string.ux130_l4_discard_unavailable, Snackbar.LENGTH_LONG).show()
+                // the reason appears inline in this sheet and is announced, not behind it.
+                discardStatus.visibility = View.VISIBLE
+                discardStatus.announceForAccessibility(
+                    getString(R.string.ux130_l4_discard_unavailable)
+                )
             }
         }
         keep.setOnClickListener {
