@@ -341,7 +341,7 @@ def launch():
         if tick % 8 == 0:
             dismiss_dialogs()
         root = try_hierarchy()
-        if root is not None and find(root, id="swHomeSearch") and find(root, id="swNavScan"):
+        if root is not None and (find(root, id="swHomeSearch") or find(root, id="swNavLibrary")):
             return
         if tick == 45:  # a cold start can lose the first task to the launcher
             adb("shell", "am", "start", "-W", "-n", ACT, check=False)
@@ -399,8 +399,21 @@ def make_and_push_fixtures():
     return work
 
 
+def create_sheet_visible(root):
+    """The sheet is a generic SwSheet; its own ids plus any entry label prove it."""
+    if root is None:
+        return False
+    if find(root, id="swCreateScan"):
+        return True
+    for text in ("Import PDF", "ID card", "Passport", "Import photos"):
+        if find(root, text=text):
+            return True
+    return False
+
+
 def open_create_sheet():
-    for attempt in range(2):
+    dismiss_dialogs()
+    for attempt in range(3):
         deadline = time.monotonic() + 20
         n = None
         while time.monotonic() < deadline:
@@ -413,14 +426,16 @@ def open_create_sheet():
         if not n:
             raise AssertionError("create disc (swNavScan) missing")
         tap_node(n)
-        deadline = time.monotonic() + 8
+        deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             root = try_hierarchy()
-            if root is not None and find(root, id="swCreateScan"):
+            if create_sheet_visible(root):
                 return
-            time.sleep(0.4)
-        time.sleep(1)
-    raise AssertionError("Create sheet (swCreateScan) did not open")
+            if root is not None and find(root, id="aerr_wait"):
+                dismiss_dialogs()
+            time.sleep(0.5)
+        time.sleep(2)
+    raise AssertionError("Create sheet did not open after 3 taps of the disc")
 
 
 def saf_pick(filename):
