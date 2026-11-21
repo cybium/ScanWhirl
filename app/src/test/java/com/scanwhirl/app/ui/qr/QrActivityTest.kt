@@ -74,6 +74,18 @@ class QrActivityTest {
         }
     }
 
+    /** Keeps every callback so a late one from an old scan can be replayed. */
+    private class CallbackScanner : QrScanner {
+        val callbacks = ArrayList<(QrScanOutcome) -> Unit>()
+        var calls = 0
+            private set
+
+        override fun scan(activity: Activity, callback: (QrScanOutcome) -> Unit) {
+            calls++
+            callbacks += callback
+        }
+    }
+
     @Before
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
@@ -327,6 +339,29 @@ class QrActivityTest {
         controller!!.pause().resume()
         activity.need<View>(R.id.qrScan).performClick()
         assertEquals("Scan is live again after a resume", 2, scanner.calls)
+    }
+
+    @Test
+    fun `a late callback from an old scan cannot block a timed-out newer scan`() {
+        val scanner = CallbackScanner()
+        QrScanners.override = scanner
+        controller = Robolectric.buildActivity(QrActivity::class.java).setup()
+        val activity = controller!!.get()
+
+        // Scan #1 times out, its UI goes away, and a fresh scan #2 starts.
+        shadowOf(Looper.getMainLooper()).idleFor(61_000L, TimeUnit.MILLISECONDS)
+        controller!!.pause().resume()
+        activity.need<View>(R.id.qrScan).performClick()
+        assertEquals(2, scanner.calls)
+
+        // Scan #2 times out too; a late callback from #1 must not touch #2's state.
+        shadowOf(Looper.getMainLooper()).idleFor(61_000L, TimeUnit.MILLISECONDS)
+        scanner.callbacks[0].invoke(found("old result"))
+        controller!!.pause().resume()
+
+        activity.need<View>(R.id.qrScan).performClick()
+        assertEquals("a stale callback must not permanently disable Scan", 3, scanner.calls)
+        assertTrue("the stale result is not saved", saved().isEmpty())
     }
 
     @Test
