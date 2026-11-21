@@ -25,6 +25,7 @@
     <string name="ux130_l2_add_gallery_adjust">कोने सही करें</string>
     <string name="ux130_l2_add_gallery_plain">पन्ने जोड़ें</string>
     <string name="ux130_l2_add_gallery_cancel">रद्द करें</string>
+    <string name="ux130_l2_gallery_partial_failure">कुछ पन्ने जोड़े नहीं जा सके। पढ़ी जा सकने वाली तस्वीर चुनकर फिर कोशिश करें। जो पन्ने जोड़े गए हैं वे इसी स्कैन में हैं।</string>
 
     <!-- L2-03: review status, hint, preview and zoom. -->
     <string name="ux130_l2_review_status">पन्ना %1$d / %2$d</string>

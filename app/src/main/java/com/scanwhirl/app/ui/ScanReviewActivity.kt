@@ -1184,8 +1184,20 @@ class ScanReviewActivity : BaseActivity() {
         }
     }
 
+    /** Which normalizer the latest append used (test seam for the gallery fallback). */
+    internal var lastAppendUsedHeicAwareForTest: Boolean = false
+        private set
+
+    /**
+     * L2-02/L2-04: raw photos handed over by the scanner-module fallback can be
+     * HEIC/HEIF, so normalizeGalleryPhoto (not the JPEG-only page path) is used.
+     */
+    internal fun appendGalleryFallbackPages(uris: List<Uri>) =
+        appendStagedPages(uris, galleryPhotos = true)
+
     /** Copies [uris] into the staging folder with continuing page numbers. */
-    internal fun appendStagedPages(uris: List<Uri>) {
+    internal fun appendStagedPages(uris: List<Uri>, galleryPhotos: Boolean = false) {
+        lastAppendUsedHeicAwareForTest = galleryPhotos
         lifecycleScope.launch {
             var appended = false
             try {
@@ -1198,16 +1210,22 @@ class ScanReviewActivity : BaseActivity() {
                         next += 1
                         File(stagingDir, String.format(Locale.ROOT, "page_%03d.jpg", next))
                             // Real JPEG, white alpha and EXIF orientation; no perspective crop.
-                            .writeBytes(ImageTools.normalizePage(bytes))
+                            // The gallery fallback also re-encodes HEIC/HEIF containers.
+                            .writeBytes(
+                                if (galleryPhotos) ImageTools.normalizeGalleryPhoto(bytes)
+                                else ImageTools.normalizePage(bytes)
+                            )
                         appended = true
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(
-                    this@ScanReviewActivity,
-                    getString(R.string.stage_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
+                // A later bad page must not claim the earlier pages were untouched.
+                val message = if (appended) {
+                    getString(R.string.ux130_l2_gallery_partial_failure)
+                } else {
+                    getString(R.string.stage_failed, getString(R.string.f8_reason_unreadable))
+                }
+                Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
             } finally {
                 // Even when a later input is invalid, earlier added pages invalidate
                 // the scanner PDF and must remain visible/recoverable in review.
