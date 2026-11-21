@@ -19,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.L3FailureCopy
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.CropView
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -309,7 +310,7 @@ class PassportActivity : BaseActivity() {
             } catch (e: Exception) {
                 progress.isVisible = false
                 busy = false
-                errorView.text = getString(R.string.tools_passport_failed_with, e.message ?: "")
+                errorView.text = L3FailureCopy.message(this@PassportActivity, e)
                 errorView.isVisible = true
             }
         }

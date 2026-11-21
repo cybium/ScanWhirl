@@ -13,4 +13,9 @@
     <string name="ux130_l3_merge_move_earlier">पहले ले जाएँ</string>
     <string name="ux130_l3_merge_move_later">बाद में ले जाएँ</string>
     <string name="ux130_l3_merge_file_position">फ़ाइल %1$d / %2$d</string>
+
+    <!-- L3-05: कारण और अगला कदम, कच्चा त्रुटि संदेश कभी नहीं. -->
+    <string name="ux130_l3_failure_unreadable">यह पीडीएफ़ पढ़ी नहीं जा सकी। दूसरी फ़ाइल चुनें।</string>
+    <string name="ux130_l3_failure_no_space">प्रति सहेजी नहीं गई। कुछ जगह खाली करें और फिर प्रयास करें।</string>
+    <string name="ux130_l3_failure_generic">प्रति नहीं बनाई गई। फिर प्रयास करें।</string>
 </resources>

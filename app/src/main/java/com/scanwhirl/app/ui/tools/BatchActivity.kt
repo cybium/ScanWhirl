@@ -28,6 +28,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.L3FailureCopy
 import com.scanwhirl.app.tools.CompressTarget
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -651,7 +652,7 @@ class BatchActivity : BaseActivity() {
             } catch (e: Exception) {
                 progressSheet?.dismiss()
                 progressSheet = null
-                errorView.text = getString(R.string.tools_batch_failed, e.message ?: "")
+                errorView.text = L3FailureCopy.message(this@BatchActivity, e)
                 errorView.isVisible = true
             }
         }
