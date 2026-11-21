@@ -1,6 +1,5 @@
 package com.scanwhirl.app.ux130.l4
 
-import android.app.AlertDialog
 import android.app.Application
 import android.content.Intent
 import android.os.Looper
@@ -17,9 +16,11 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.ui.FlowRowLayout
 import com.scanwhirl.app.ui.PdfViewerActivity
 import com.scanwhirl.app.ui.stamp.StampEditorActivity
+import com.scanwhirl.app.util.SecureView
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,6 +72,7 @@ class L4PdfStampTest {
     fun tearDown() {
         PdfViewerActivity.pagesFactory = defaultFactory
         PdfViewerActivity.previewBuilder = defaultPreview
+        VaultSession.close()
         ShadowDialog.reset()
     }
 
@@ -111,16 +113,6 @@ class L4PdfStampTest {
         }
     }
 
-    private fun findEditText(root: View): EditText? {
-        if (root is EditText) return root
-        if (root is ViewGroup) {
-            for (i in 0 until root.childCount) {
-                findEditText(root.getChildAt(i))?.let { return it }
-            }
-        }
-        return null
-    }
-
     private fun dp48(activity: android.app.Activity): Int =
         (48f * activity.resources.displayMetrics.density).toInt()
 
@@ -147,34 +139,60 @@ class L4PdfStampTest {
 
             indicator.performClick()
             idle()
-            val dialog = ShadowDialog.getLatestDialog() as? AlertDialog
+            val sheet = ShadowDialog.getLatestDialog()
                 ?: throw AssertionError("tapping the indicator opens Go to page")
-            val input = requireNotNull(findEditText(dialog.window!!.decorView)) {
-                "the Go to page dialog has a page-number input"
+            assertTrue(
+                "Go to page is the lifecycle-managed kit SwSheet, not a raw AlertDialog",
+                sheet.findViewById<View>(R.id.swSheetRoot) != null
+            )
+            assertTrue("the Go to page sheet is showing", sheet.isShowing)
+            val input = requireNotNull(sheet.findViewById<EditText>(R.id.swSheetInput)) {
+                "the Go to page sheet has a page-number input"
             }
             assertEquals(activity.getString(R.string.ux130_l4_go_to_page), input.hint?.toString())
+            val primary = requireNotNull(sheet.findViewById<TextView>(R.id.swSheetPrimary)) {
+                "the Go to page sheet has a Go to page action"
+            }
+            assertEquals(activity.getString(R.string.ux130_l4_go_to_page), primary.text.toString())
 
-            // Out of range is rejected with a localized message and changes nothing.
+            // Out of range is rejected with a localized message; the stay-open primary keeps the
+            // sheet in place and nothing changes.
             input.setText("99")
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            primary.performClick()
             idle()
             assertEquals(
                 activity.getString(R.string.ux130_l4_go_to_page_invalid, 3),
                 input.error?.toString()
             )
-            assertTrue("the dialog stays open on invalid input", dialog.isShowing)
+            assertTrue("the sheet stays open on invalid input", sheet.isShowing)
 
-            // A valid page moves the reader there and closes the dialog.
+            // A valid page moves the reader there and closes the sheet.
             input.setText("2")
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            primary.performClick()
             idle()
-            assertFalse("the dialog closes on a valid page", dialog.isShowing)
+            assertFalse("the sheet closes on a valid page", sheet.isShowing)
             assertTrue(
                 "the reader shows the requested page",
                 pollUntil {
                     activity.findViewById<TextView>(R.id.pdfPageIndicator)?.text?.toString()
                         ?.contains("2") == true
                 }
+            )
+
+            // Vault mode keeps the private page number off screenshots: the same sheet is
+            // FLAG_SECURE while the reader is in Vault mode.
+            PdfViewerActivity::class.java.getDeclaredField("vaultMode")
+                .apply { isAccessible = true }.set(activity, true)
+            VaultSession.open(ByteArray(32) { 1 })
+            ShadowDialog.reset()
+            indicator.performClick()
+            idle()
+            val secureSheet = requireNotNull(ShadowDialog.getLatestDialog()) {
+                "the Go to page sheet opens in Vault mode"
+            }
+            assertTrue(
+                "the Go to page sheet must be FLAG_SECURE over a private document",
+                SecureView.isSecure(secureSheet.window)
             )
         }
     }
