@@ -111,6 +111,8 @@ class ScanWhirlApp : Application() {
      */
     internal fun startStorageRecovery() {
         if (!storageRecoveryStarted.compareAndSet(false, true)) return
+        // One reset for the whole pass: every step ORs its failures into this shared flag.
+        com.scanwhirl.app.store.ScanRepository.beginStartupRecoveryPass()
         appScope.launch(kotlinx.coroutines.Dispatchers.IO +
             kotlinx.coroutines.CoroutineExceptionHandler { _, t ->
                 // Backstop only: every step isolates its own failures. Class only, no user data.
