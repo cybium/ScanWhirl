@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- E1: shown when Back / Up is pressed while the stamped copy is still being written. -->
+    <string name="stamp_saving_wait">Please wait. The copy is still being saved.</string>
+</resources>

@@ -213,6 +213,15 @@ class StampEditorActivity : BaseActivity() {
                 if (editor.rotateBy(index, degrees)) refresh()
             }
 
+            override fun onGestureStart() {
+                editor.beginGesture()
+            }
+
+            override fun onGestureEnd() {
+                editor.endGesture()
+                refresh()
+            }
+
             override fun onFreehand(strokes: List<PageStamp.Stroke>) {
                 addMark(PageStamp.Mark.Freehand(strokes))
             }
@@ -931,7 +940,14 @@ class StampEditorActivity : BaseActivity() {
         // A leftover IME would consume the first Back; drop it before asking.
         (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
             ?.hideSoftInputFromWindow(binding.root.windowToken, 0)
-        if (editor.isEmpty() || saving) {
+        // E1: leaving mid-save used to create the copy with no receipt (the result went to a
+        // dead screen) and invite a duplicate Save on reopen. Keep the screen until the write
+        // reports back; a real close with marks still asks to discard as before.
+        if (saving) {
+            note(getString(R.string.stamp_saving_wait))
+            return
+        }
+        if (editor.isEmpty()) {
             finish()
             return
         }
