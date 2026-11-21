@@ -1,5 +1,6 @@
 package com.scanwhirl.app.util
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.Context
@@ -7,8 +8,15 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
@@ -31,8 +39,7 @@ object ShareUtils {
     fun share(context: Context, doc: ScanDocument) {
         when {
             doc.pdfFile.exists() -> {
-                val named = namedCopy(context, doc.pdfFile, documentFileName(doc))
-                shareSingle(context, named, "application/pdf")
+                shareCopy(context, doc.pdfFile, "application/pdf", documentFileName(doc))
             }
             doc.pageFiles.isNotEmpty() -> sharePages(context, doc)
             else -> Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
@@ -87,7 +94,62 @@ object ShareUtils {
 
     /** Shares any file with an explicit MIME type (ZIP, PDF, image, …). */
     fun shareFile(context: Context, file: File, mime: String) {
-        shareSingle(context, file, mime)
+        shareCopy(context, file, mime, file.name)
+    }
+
+    /**
+     * A tool result may be removed by Undo or the next cold start. Never grant that scratch
+     * path. Publish only a complete, independent copy, with all disk work on IO.
+     *
+     * Vault-open plaintext is deliberately excluded by FileProvider's configured roots.
+     * Do not bypass that boundary by making a 24-hour plaintext copy.
+     */
+    private fun shareCopy(context: Context, source: File, mime: String, displayName: String) {
+        val vaultOpen = runCatching {
+            source.canonicalFile.startsWith(File(context.cacheDir, "vault_open").canonicalFile)
+        }.getOrElse {
+            Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (vaultOpen) {
+            Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val scope = (context as? LifecycleOwner)?.lifecycleScope
+            ?: CoroutineScope(Dispatchers.Main.immediate)
+        scope.launch {
+            var target: File? = null
+            var issued = false
+            try {
+                withContext(Dispatchers.IO) {
+                    val out = newShareTarget(context, displayName)
+                    target = out
+                    val staging = File(out.parentFile, ".copying")
+                    try {
+                        val size = source.length()
+                        check(source.isFile && size > 0) { "No shareable file" }
+                        BoundedCopy.requireOk(
+                            BoundedCopy.copy(staging, size, open = { source.inputStream() }), context
+                        )
+                        check(staging.length() == size && staging.renameTo(out)) { "Incomplete share copy" }
+                    } finally {
+                        BoundedCopy.release(staging)
+                    }
+                }
+                if (context is Activity && (context.isFinishing || context.isDestroyed)) return@launch
+                shareSingle(context, checkNotNull(target), mime)
+                issued = true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // No chooser, URI grant or misleading success after a failed/partial copy.
+                Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+            } finally {
+                if (!issued) withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                    target?.parentFile?.deleteRecursively()
+                }
+            }
+        }
     }
 
     /** Shares a chosen set of page images (Organize selection). */

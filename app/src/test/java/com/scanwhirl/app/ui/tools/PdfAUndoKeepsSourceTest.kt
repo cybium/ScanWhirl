@@ -138,10 +138,9 @@ class PdfAUndoKeepsSourceTest {
         ActivityScenario.launch<ToolResultActivity>(resultIntent(pdfa)).use { scenario ->
             scenario.onActivity { activity ->
                 activity.findViewById<View>(R.id.toolResultShare).performClick()
-                idle()
-                val chooser = shadowOf(activity).nextStartedActivity
+                val chooser = com.scanwhirl.app.util.awaitShareChooser(activity)
                 assertNotNull("Share must open the sharesheet", chooser)
-                assertEquals(Intent.ACTION_CHOOSER, chooser!!.action)
+                assertEquals(Intent.ACTION_CHOOSER, chooser.action)
                 val target = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 assertNotNull("the sharesheet must carry the share intent", target)
                 val uri = target!!.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)

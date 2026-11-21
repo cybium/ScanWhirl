@@ -369,8 +369,7 @@ class ToolsUiTest {
         ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 activity.findViewById<View>(R.id.toolResultShare).performClick()
-                idle()
-                val chooser = shadowOf(activity).nextStartedActivity
+                val chooser = com.scanwhirl.app.util.awaitShareChooser(activity)
                 assertNotNull("Share opens the sharesheet", chooser)
                 assertEquals(Intent.ACTION_CHOOSER, chooser.action)
             }

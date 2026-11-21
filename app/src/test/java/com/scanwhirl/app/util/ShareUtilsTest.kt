@@ -59,7 +59,7 @@ class ShareUtilsTest {
         val controller = Robolectric.buildActivity(Activity::class.java).setup()
         try {
             ShareUtils.shareFile(controller.get(), file, mime)
-            val chooser = shadowOf(controller.get()).nextStartedActivity
+            val chooser = awaitShareChooser(controller.get())
             assertNotNull("share must start the chooser", chooser)
             @Suppress("DEPRECATION")
             val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
@@ -125,7 +125,7 @@ class ShareUtilsTest {
         val controller = Robolectric.buildActivity(Activity::class.java).setup()
         try {
             ShareUtils.share(controller.get(), doc)
-            val chooser = shadowOf(controller.get()).nextStartedActivity
+            val chooser = awaitShareChooser(controller.get())
             @Suppress("DEPRECATION")
             val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
             @Suppress("DEPRECATION")
@@ -157,7 +157,7 @@ class ShareUtilsTest {
         val controller = Robolectric.buildActivity(Activity::class.java).setup()
         try {
             ShareUtils.share(controller.get(), doc)
-            val chooser = shadowOf(controller.get()).nextStartedActivity
+            val chooser = awaitShareChooser(controller.get())
             @Suppress("DEPRECATION")
             val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
             assertEquals(Intent.ACTION_SEND_MULTIPLE, send.action)
@@ -172,7 +172,7 @@ class ShareUtilsTest {
 
     /** The URI the chooser hands to the target app, in share order. */
     private fun sentUri(activity: Activity): Uri {
-        val chooser = shadowOf(activity).nextStartedActivity
+        val chooser = awaitShareChooser(activity)
         assertNotNull("share must start the chooser", chooser)
         @Suppress("DEPRECATION")
         val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
