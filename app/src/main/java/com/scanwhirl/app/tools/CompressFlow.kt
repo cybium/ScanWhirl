@@ -296,7 +296,7 @@ class CompressFlow(
             if (activeSheet === sheet) activeSheet = null
         }
         applyMode()
-        sheet.setPrimaryStayOpen(R.string.compress_action) { submit() }
+        sheet.setPrimaryStayOpen(R.string.compress_action, iconRes = R.drawable.ic_sym_compress) { submit() }
         sheet.show()
         startEstimate(
             session,

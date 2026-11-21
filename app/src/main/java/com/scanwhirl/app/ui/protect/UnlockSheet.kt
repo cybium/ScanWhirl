@@ -324,7 +324,8 @@ object UnlockSheet {
         parent.addView(title)
         parent.addView(message)
         parent.addView(confirm, android.widget.LinearLayout.LayoutParams(-1, dp(54)))
-        parent.addView(cancel, android.widget.LinearLayout.LayoutParams(-1, dp(44)))
+        cancel.minHeight = dp(48)
+        parent.addView(cancel, android.widget.LinearLayout.LayoutParams(-1, -2))
         dialog.show()
     }
 }
