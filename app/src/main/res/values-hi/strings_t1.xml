@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- T1 capture data safety, Hindi: same keys as values/strings_t1.xml, no loanwords. -->
+<resources>
+    <string name="tools_passport_pick">फ़ोटो चुनें</string>
+    <string name="tools_bc_contacts_dropped">संपर्क संपादक में केवल 3 फ़ोन नंबर और 3 ईमेल समाते हैं। %1$d और छोड़े गए।</string>
+    <string name="tools_id_need_front">पहले सामने वाली तरफ़ का चित्र लें।</string>
+    <string name="tools_batch_summary_title_t1">%1$d पूरे, %2$d असफल, %3$d नहीं किए गए</string>
+</resources>

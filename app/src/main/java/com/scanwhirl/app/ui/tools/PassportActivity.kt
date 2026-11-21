@@ -3,7 +3,8 @@ package com.scanwhirl.app.ui.tools
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.graphics.RectF
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -12,7 +13,6 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -28,26 +28,35 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * v2 UI: 03_tools_hub — Passport is the existing crop surface with a fixed 35 × 45 mm preset.
  *
  * Pick a photo, drag the four corners to the passport edges, then the cropped page is saved as
  * a normal ScanWhirl document and handed to [ToolResultActivity] (Open · Share · Save · Undo).
+ *
+ * T1: the picked photo is kept in a small cache copy (written off the main thread) together with
+ * the adjusted crop frame, so rotation keeps real work instead of reopening an empty picker.
  */
 class PassportActivity : BaseActivity() {
 
     private lateinit var repo: ScanRepository
     private lateinit var cropView: CropView
     private lateinit var applyButton: TextView
+    private lateinit var pickPrompt: TextView
     private lateinit var errorView: TextView
     private lateinit var progress: View
     private var bitmap: Bitmap? = null
     private var busy = false
 
+    /** Cache path of the upright picked photo; the Bundle only carries this string. */
+    @Volatile
+    private var imagePath: String? = null
+
     private val pick = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) {
-            finish()
+            showPickPrompt()
         } else {
             load(uri)
         }
@@ -57,7 +66,20 @@ class PassportActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
         setContentView(buildRoot())
-        if (savedInstanceState == null) pick.launch("image/*")
+        if (savedInstanceState == null) {
+            pick.launch("image/*")
+        } else {
+            restoreState(savedInstanceState)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_IMAGE_PATH, imagePath)
+        val rect = cropView.getCropRect()
+        if (rect.width() > 0f && rect.height() > 0f) {
+            outState.putFloatArray(KEY_CROP_RECT, floatArrayOf(rect.left, rect.top, rect.right, rect.bottom))
+        }
     }
 
     private fun buildRoot(): View {
@@ -94,6 +116,18 @@ class PassportActivity : BaseActivity() {
             setPadding(0, SwStyle.dp(this@PassportActivity, 8f), 0, SwStyle.dp(this@PassportActivity, 10f))
         })
 
+        pickPrompt = SwStyle.text(this, 16f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+            text = getString(R.string.tools_passport_pick)
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(this@PassportActivity, 48f)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { pick.launch("image/*") }
+        }
+        column.addView(pickPrompt, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
         cropView = CropView(this).apply {
             id = R.id.toolCropView
             aspectRatio = 35f / 45f
@@ -115,8 +149,9 @@ class PassportActivity : BaseActivity() {
             id = R.id.toolCropApply
             text = getString(R.string.tools_passport_apply)
             gravity = Gravity.CENTER
-            isClickable = true
-            isFocusable = true
+            // T1: Apply must do nothing until there is a real photo to crop.
+            isEnabled = false
+            alpha = 0.5f
             background = SwStyle.rounded(this@PassportActivity, SwStyle.color(this@PassportActivity, R.color.cyan_primary), radiusDp = 16f)
             setOnClickListener { apply() }
         }
@@ -143,32 +178,89 @@ class PassportActivity : BaseActivity() {
         return root
     }
 
-    private fun load(uri: android.net.Uri) {
+    private fun showPickPrompt() {
+        pickPrompt.isVisible = true
+        applyButton.isEnabled = false
+        applyButton.alpha = 0.5f
+    }
+
+    /** Reads, orients and caches the pick entirely off the main thread. */
+    private fun load(uri: Uri) {
         progress.isVisible = true
         lifecycleScope.launch {
-            val bytes = withContext(Dispatchers.IO) {
-                runCatching {
+            val loaded = withContext(Dispatchers.IO) {
+                val raw = runCatching {
                     contentResolver.openInputStream(uri)?.use { ImageTools.readPageBytes(it) }
                 }.getOrNull()
-            }
-            val decoded = bytes?.let {
-                withContext(Dispatchers.IO) {
-                    runCatching { ImageTools.decodeSampled(it, 2400) }.getOrNull()
+                val upright = raw?.let { bytes ->
+                    runCatching { ImageTools.normalizeGalleryPhoto(bytes) }.getOrDefault(bytes)
                 }
+                val path = upright?.let { writeImageCache(it) }
+                val decoded = upright?.let { bytes ->
+                    runCatching { ImageTools.decodeSampled(bytes, 2400) }.getOrNull()
+                }
+                Triple(decoded, path, upright == null)
             }
             progress.isVisible = false
+            val decoded = loaded.first
             if (decoded == null) {
-                Toast.makeText(
-                    this@PassportActivity, R.string.tools_setup_image_failed, Toast.LENGTH_LONG
-                ).show()
-                finish()
+                errorView.text = getString(R.string.tools_setup_image_failed)
+                errorView.isVisible = true
+                showPickPrompt()
                 return@launch
             }
+            imagePath = loaded.second
             bitmap?.takeIf { !it.isRecycled }?.recycle()
             bitmap = decoded
             cropView.setImage(decoded)
+            errorView.isVisible = false
+            pickPrompt.isVisible = false
+            applyButton.isEnabled = true
+            applyButton.alpha = 1f
         }
     }
+
+    /** Rotation/process death: read the cached upright photo off the main thread and restore the frame. */
+    private fun restoreState(state: Bundle) {
+        val path = state.getString(KEY_IMAGE_PATH)
+        val rect = state.getFloatArray(KEY_CROP_RECT)
+        if (path == null) {
+            showPickPrompt()
+            return
+        }
+        progress.isVisible = true
+        lifecycleScope.launch {
+            val decoded = withContext(Dispatchers.IO) {
+                runCatching { File(path).takeIf { it.isFile }?.readBytes() }
+                    .getOrNull()
+                    ?.let { runCatching { ImageTools.decodeSampled(it, 2400) }.getOrNull() }
+            }
+            progress.isVisible = false
+            if (decoded == null) {
+                errorView.text = getString(R.string.tools_setup_image_failed)
+                errorView.isVisible = true
+                showPickPrompt()
+                return@launch
+            }
+            bitmap = decoded
+            cropView.setImage(decoded)
+            if (rect != null && rect.size == 4) {
+                cropView.setCropRect(RectF(rect[0], rect[1], rect[2], rect[3]))
+            }
+            pickPrompt.isVisible = false
+            applyButton.isEnabled = true
+            applyButton.alpha = 1f
+        }
+    }
+
+    /** Tests: the size of the decoded photo currently shown on the crop surface. */
+    internal fun loadedImageSizeForTest(): Pair<Int, Int> =
+        bitmap?.takeIf { !it.isRecycled }?.let { it.width to it.height } ?: (0 to 0)
+
+    private fun writeImageCache(bytes: ByteArray): String? = runCatching {
+        val dir = File(cacheDir, "t1_passport").apply { mkdirs() }
+        File(dir, "photo.jpg").apply { writeBytes(bytes) }.absolutePath
+    }.getOrNull()
 
     private fun apply() {
         if (busy) return
@@ -216,6 +308,9 @@ class PassportActivity : BaseActivity() {
     }
 
     companion object {
+        private const val KEY_IMAGE_PATH = "t1_passport_image_path"
+        private const val KEY_CROP_RECT = "t1_passport_crop_rect"
+
         fun intent(context: Context): Intent = Intent(context, PassportActivity::class.java)
     }
 }

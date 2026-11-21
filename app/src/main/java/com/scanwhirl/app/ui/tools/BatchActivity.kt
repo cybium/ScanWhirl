@@ -69,6 +69,8 @@ class BatchActivity : BaseActivity() {
     private var job: Job? = null
     @Volatile private var cancelRequested = false
     private var progressSheet: SwSheet? = null
+    private var searchView: EditText? = null
+    private var requestedIds: List<String> = emptyList()
 
     /**
      * H2-4: on Android 7-9 "Export as PDF" needs the runtime storage grant for the Documents
@@ -95,6 +97,11 @@ class BatchActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
+        val restored = savedInstanceState != null
+        if (savedInstanceState != null) {
+            savedInstanceState.getStringArrayList(KEY_SELECTED)?.let { selected.addAll(it) }
+            query = savedInstanceState.getString(KEY_QUERY).orEmpty()
+        }
         // Batch tools is a Pro tool. The registry and the launcher gate the normal path; a direct
         // internal intent must land on the same shell offer (with real billing), never a local Pro
         // screen whose Buy/Restore only said "billing is not switched on".
@@ -112,12 +119,22 @@ class BatchActivity : BaseActivity() {
             }
             if (isFinishing || isDestroyed) return@launch
             docs = fresh
-            selected += incoming.filter { id -> docs.any { it.id == id } }
+            // T1: the chooser is built before the library responds, so add the search row now.
+            addSearchIfNeeded()
+            if (!restored) {
+                selected += incoming.filter { id -> docs.any { it.id == id } }
+            }
             renderList()
-            if (incoming.isNotEmpty() && selected.isNotEmpty()) {
+            if (!restored && incoming.isNotEmpty() && selected.isNotEmpty()) {
                 listHost.post { showActionSheet() }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putStringArrayList(KEY_SELECTED, ArrayList(selected))
+        outState.putString(KEY_QUERY, query)
     }
 
     // ---- chooser ----------------------------------------------------------
@@ -175,37 +192,6 @@ class BatchActivity : BaseActivity() {
         toolsRow.addView(selectAll)
         root.addView(toolsRow)
 
-        if (docs.size > 8) {
-            val search = EditText(this).apply {
-                id = R.id.batchSearch
-                hint = getString(R.string.tools_batch_search)
-                setHintTextColor(SwStyle.color(this@BatchActivity, R.color.text_hologram_dim))
-                setTextColor(SwStyle.color(this@BatchActivity, R.color.text_hologram_hi))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                background = SwStyle.rounded(
-                    this@BatchActivity,
-                    SwStyle.color(this@BatchActivity, R.color.glass_surface),
-                    radiusDp = 14f,
-                    stroke = SwStyle.color(this@BatchActivity, R.color.sw_field_border)
-                )
-                val pad = SwStyle.dp(this@BatchActivity, 12f)
-                setPadding(pad, pad, pad, pad)
-                isSingleLine = true
-                inputType = InputType.TYPE_CLASS_TEXT
-                addTextChangedListener(object : TextWatcher {
-                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                    override fun afterTextChanged(s: Editable?) {
-                        query = s?.toString().orEmpty()
-                        renderList()
-                    }
-                })
-            }
-            root.addView(search, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@BatchActivity, 48f)
-            ).apply { topMargin = SwStyle.dp(this@BatchActivity, 8f) })
-        }
-
         listHost = LinearLayout(this).apply {
             id = R.id.batchList
             orientation = LinearLayout.VERTICAL
@@ -216,6 +202,8 @@ class BatchActivity : BaseActivity() {
         root.addView(scroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
+        // T1: docs have not loaded yet at this point; addSearchIfNeeded() is called again after load.
+        addSearchIfNeeded()
 
         errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
             id = R.id.batchError
@@ -250,6 +238,46 @@ class BatchActivity : BaseActivity() {
         ).apply { topMargin = SwStyle.dp(this@BatchActivity, 10f) })
         updateCount()
         return root
+    }
+
+    /**
+     * T1: the search field belongs in the chooser once there are more than 8 documents. The root
+     * is built before the library loads, so this is called again after [docs] is filled.
+     */
+    private fun addSearchIfNeeded() {
+        if (docs.size <= 8 || searchView != null || !::listHost.isInitialized) return
+        val scroll = listHost.parent as? ScrollView ?: return
+        val root = scroll.parent as? LinearLayout ?: return
+        val search = EditText(this).apply {
+            id = R.id.batchSearch
+            hint = getString(R.string.tools_batch_search)
+            setHintTextColor(SwStyle.color(this@BatchActivity, R.color.text_hologram_dim))
+            setTextColor(SwStyle.color(this@BatchActivity, R.color.text_hologram_hi))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            background = SwStyle.rounded(
+                this@BatchActivity,
+                SwStyle.color(this@BatchActivity, R.color.glass_surface),
+                radiusDp = 14f,
+                stroke = SwStyle.color(this@BatchActivity, R.color.sw_field_border)
+            )
+            val pad = SwStyle.dp(this@BatchActivity, 12f)
+            setPadding(pad, pad, pad, pad)
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT
+            setText(query)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: Editable?) {
+                    query = s?.toString().orEmpty()
+                    renderList()
+                }
+            })
+        }
+        searchView = search
+        root.addView(search, root.indexOfChild(scroll), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@BatchActivity, 48f)
+        ).apply { topMargin = SwStyle.dp(this@BatchActivity, 8f) })
     }
 
     private fun renderList() {
@@ -594,6 +622,7 @@ class BatchActivity : BaseActivity() {
             .build()
             .also { it.show() }
         val ids = selected.toList()
+        requestedIds = ids
         job = lifecycleScope.launch {
             try {
                 val results = repo.runBatch(
@@ -627,8 +656,10 @@ class BatchActivity : BaseActivity() {
     private fun showSummary(results: List<ScanRepository.BatchItem>) {
         val done = results.count { it.ok }
         val failed = results.size - done
+        // T1: a cancelled run stops early; the remaining requested documents were not processed.
+        val notProcessed = notProcessedCount(requestedIds, results)
         val sheet = SwSheet.builder(this)
-            .setTitle(getString(R.string.tools_batch_summary_title, done, failed))
+            .setTitle(getString(R.string.tools_batch_summary_title_t1, done, failed, notProcessed))
             .build()
         val list = LinearLayout(this).apply {
             id = R.id.batchSummary
@@ -746,6 +777,17 @@ class BatchActivity : BaseActivity() {
 
     companion object {
         const val EXTRA_DOC_IDS = "doc_ids"
+        private const val KEY_SELECTED = "t1_batch_selected"
+        private const val KEY_QUERY = "t1_batch_query"
+
+        /** Requested ids that produced no result (the run was cancelled before reaching them). */
+        internal fun notProcessedCount(
+            requested: List<String>,
+            results: List<ScanRepository.BatchItem>
+        ): Int {
+            val processed = results.map { it.docId }.toSet()
+            return requested.count { it !in processed }
+        }
 
         fun intent(context: Context, ids: List<String>): Intent =
             Intent(context, BatchActivity::class.java)

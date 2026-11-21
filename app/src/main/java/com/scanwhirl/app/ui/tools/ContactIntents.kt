@@ -12,8 +12,20 @@ import com.scanwhirl.app.util.ContactParser
  */
 object ContactIntents {
 
+    /** Extra carrying how many values did not fit, so the caller can say so in EN or HI. */
+    const val EXTRA_DROPPED = "com.scanwhirl.app.contacts.dropped"
+
+    private const val MAX_PHONES = 3
+    private const val MAX_EMAILS = 3
+
     /** The contacts-editor intent for [contact], with the standard Insert extras. */
     fun insert(contact: ContactParser.Contact): Intent {
+        // The Insert contract has three slots for each; anything past them is counted here
+        // instead of being silently dropped, so the UI can report the loss.
+        val phones = contact.phones.filter { it.isNotBlank() }
+        val emails = contact.emails.filter { it.isNotBlank() }
+        val dropped = (phones.size - MAX_PHONES).coerceAtLeast(0) +
+            (emails.size - MAX_EMAILS).coerceAtLeast(0)
         val intent = Intent(ContactsContract.Intents.Insert.ACTION).apply {
             type = ContactsContract.Contacts.CONTENT_TYPE
             contact.name.trim().takeIf { it.isNotEmpty() }?.let {
@@ -25,17 +37,23 @@ object ContactIntents {
             contact.jobTitle.trim().takeIf { it.isNotEmpty() }?.let {
                 putExtra(ContactsContract.Intents.Insert.JOB_TITLE, it)
             }
-            contact.phones.getOrNull(0)?.takeIf { it.isNotBlank() }?.let {
+            phones.getOrNull(0)?.let {
                 putExtra(ContactsContract.Intents.Insert.PHONE, it)
             }
-            contact.phones.getOrNull(1)?.takeIf { it.isNotBlank() }?.let {
+            phones.getOrNull(1)?.let {
                 putExtra(ContactsContract.Intents.Insert.SECONDARY_PHONE, it)
             }
-            contact.emails.getOrNull(0)?.takeIf { it.isNotBlank() }?.let {
+            phones.getOrNull(2)?.let {
+                putExtra(ContactsContract.Intents.Insert.TERTIARY_PHONE, it)
+            }
+            emails.getOrNull(0)?.let {
                 putExtra(ContactsContract.Intents.Insert.EMAIL, it)
             }
-            contact.emails.getOrNull(1)?.takeIf { it.isNotBlank() }?.let {
+            emails.getOrNull(1)?.let {
                 putExtra(ContactsContract.Intents.Insert.SECONDARY_EMAIL, it)
+            }
+            emails.getOrNull(2)?.let {
+                putExtra(ContactsContract.Intents.Insert.TERTIARY_EMAIL, it)
             }
             contact.address.trim().takeIf { it.isNotEmpty() }?.let {
                 putExtra(ContactsContract.Intents.Insert.POSTAL, it)
@@ -44,6 +62,7 @@ object ContactIntents {
             contact.website.trim().takeIf { it.isNotEmpty() }?.let {
                 putExtra(ContactsContract.Intents.Insert.NOTES, it)
             }
+            putExtra(EXTRA_DROPPED, dropped)
         }
         return intent
     }

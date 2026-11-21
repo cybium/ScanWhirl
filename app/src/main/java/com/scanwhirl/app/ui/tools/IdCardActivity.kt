@@ -760,7 +760,15 @@ class IdCardActivity : BaseActivity() {
         val region = runCatching {
             val cut = Bitmap.createBitmap(source, left, top, width, height)
             if (cut === source) source.copy(Bitmap.Config.ARGB_8888, false) else cut
-        }.getOrNull() ?: return
+        }.getOrNull()
+        if (region == null) {
+            // T1: a failed crop must leave a visible, localized error and a usable screen, never
+            // a spinner that never ends or a silent tap that does nothing.
+            cropBusy = false
+            progress.isVisible = false
+            fail(getString(R.string.fixidcrop_id_crop_failed))
+            return
+        }
         cropBusy = true
         val token = cropOverlay
         val side = cropSide
@@ -928,6 +936,13 @@ class IdCardActivity : BaseActivity() {
     }
 
     private fun showLayoutSheet() {
+        // T1: a layout needs a front. A back captured first (from the preview slot) must never
+        // reach create() with no front and then be discarded when the sheet dismisses.
+        if (front == null) {
+            movingOn = true
+            showFrontSheet(R.string.tools_id_need_front)
+            return
+        }
         // W6: with no back side there is nothing to put on a second half of the page.
         if (back == null) {
             showFrontOnlyLayoutSheet()
@@ -1036,7 +1051,13 @@ class IdCardActivity : BaseActivity() {
         rememberLayout: Boolean = true
     ) {
         if (creating) return
-        val frontBytes = front ?: return
+        val frontBytes = front
+        if (frontBytes == null) {
+            // T1: the dismissing sheet must not finish the activity and throw away a captured back.
+            movingOn = true
+            showFrontSheet(R.string.tools_id_need_front)
+            return
+        }
         val backBytes = back
         creating = true
         progress.isVisible = true
