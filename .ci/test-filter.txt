@@ -1,0 +1,1 @@
+com.scanwhirl.app.tools.S1GalleryCropReceiverTest,com.scanwhirl.app.ui.shell.S1StartupResumeTest,com.scanwhirl.app.store.S1OomSaveTest,com.scanwhirl.app.util.S1GalleryOrientationTest

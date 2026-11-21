@@ -11,6 +11,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.util.ImportFixtures
+import org.robolectric.Robolectric
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -90,6 +91,19 @@ class S1StartupResumeTest {
             }
             assertFalse("rotation must not offer the same scan a second time", repeated)
         }
+    }
+
+    @Test
+    fun `rotation while recovery is still pending still shows the resume offer`() {
+        val staged = stagePending()
+        val first = Robolectric.buildActivity(ShellActivity::class.java).setup()
+        val state = android.os.Bundle()
+        first.saveInstanceState(state)
+        first.pause().stop().destroy()
+        Robolectric.buildActivity(ShellActivity::class.java).setup(state)
+        idle()
+        await { resumeOfferShown() }
+        assertTrue("the unfinished pages are kept until the owner chooses", staged.isDirectory)
     }
 
     @Test

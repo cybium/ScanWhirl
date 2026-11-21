@@ -1,6 +1,7 @@
 package com.scanwhirl.app.util
 
 import android.graphics.Bitmap
+import android.graphics.Color
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -47,6 +48,34 @@ class S1GalleryOrientationTest {
         assertEquals("a 90 degree tag swaps the sides", 20, decoded.width)
         assertEquals(40, decoded.height)
         decoded.recycle()
+    }
+
+    @Test
+    fun `EXIF tags 3 6 and 8 rotate the fallback page by the matching angle`() {
+        // A 40x20 bitmap: red top-left, blue bottom-right. After rotation the red pixel's
+        // position proves which transform was applied, not just the output size.
+        val cases = listOf(
+            3 to Pair(39, 19),  // 180 degrees: 40x20
+            6 to Pair(19, 0),   // 90 degrees: 20x40
+            8 to Pair(0, 39)    // 270 degrees: 20x40
+        )
+        for ((orientation, spot) in cases) {
+            setOrientationOverride(orientation)
+            ImageTools.galleryDecode = { _, _ ->
+                Bitmap.createBitmap(40, 20, Bitmap.Config.ARGB_8888).apply {
+                    setPixel(0, 0, Color.RED)
+                    setPixel(39, 19, Color.BLUE)
+                }
+            }
+            val out = ImageTools.normalizeGalleryPhoto(ImportFixtures.bmp(40, 20))
+            val decoded = ImportFixtures.assertJpeg(out)
+            val expectedWidth = if (orientation == 3) 40 else 20
+            val expectedHeight = if (orientation == 3) 20 else 40
+            assertEquals("orientation $orientation swaps the sides", expectedWidth, decoded.width)
+            assertEquals("orientation $orientation swaps the sides", expectedHeight, decoded.height)
+            ImportFixtures.assertColor(Color.RED, decoded.getPixel(spot.first, spot.second), 70)
+            decoded.recycle()
+        }
     }
 
     @Test
