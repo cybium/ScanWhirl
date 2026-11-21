@@ -1,14 +1,9 @@
 package com.scanwhirl.app.util
 
 import android.app.Application
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -22,13 +17,12 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
- * I1 import-correctness regressions: rotated PDF pages, annotations, JPEG SOF agreement and the
- * two-copy space budget. Synthetic PDF/JPEG bytes only; no device renderer, no user media.
+ * I1 import-correctness regressions that survive the review: annotation rendering on API 35+,
+ * agreement on supported JPEG SOF markers, and the two-copy space budget. Synthetic PDF/JPEG
+ * bytes only; no device renderer, no user media.
  *
- * The native [android.graphics.pdf.PdfRenderer] cannot run on this host, so the /Rotate fix is
- * proven in two pure halves: the bounded parser reads the effective rotation from PDF bytes, and
- * the render plan applies that rotation to a marker bitmap through the same Android Matrix the
- * real renderer receives.
+ * /Rotate is deliberately NOT re-derived here: Android's PdfRenderer already applies it. The
+ * fictional fixtures in qa/phone-1.3.0-final/fixtures let the owner check that on a real phone.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -42,113 +36,7 @@ class PdfImportFixTest {
         PdfImport.resetForTests()
     }
 
-    // ---- Defect 1: /Rotate ----
-
-    private fun pdf(vararg objects: String): ByteArray =
-        ("%PDF-1.4\n" + objects.joinToString("\n") + "\n%%EOF\n").toByteArray(Charsets.ISO_8859_1)
-
-    @Test
-    fun `a rotation inherited from the Pages tree is applied in page order`() {
-        val bytes = pdf(
-            "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
-            "2 0 obj << /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /Rotate 90 >> endobj",
-            "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 400] >> endobj",
-            "4 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 400] /Rotate 270 >> endobj"
-        )
-        assertEquals(listOf(90, 270), PdfImport.parsePageRotations(bytes))
-    }
-
-    @Test
-    fun `a page rotation overrides its parent and unrotated pages stay zero`() {
-        val bytes = pdf(
-            "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
-            "2 0 obj << /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >> endobj",
-            "3 0 obj << /Type /Page /Parent 2 0 R /Rotate 90 >> endobj",
-            "4 0 obj << /Type /Page /Parent 2 0 R >> endobj",
-            "5 0 obj << /Type /Page /Parent 2 0 R /Rotate 180 >> endobj"
-        )
-        assertEquals(listOf(90, 0, 180), PdfImport.parsePageRotations(bytes))
-    }
-
-    @Test
-    fun `an unreadable or cyclic page tree fails safe with no rotations`() {
-        assertTrue(PdfImport.parsePageRotations("not a pdf at all".toByteArray()).isEmpty())
-        val cyclic = pdf(
-            "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
-            "2 0 obj << /Type /Pages /Kids [2 0 R] /Count 1 >> endobj"
-        )
-        assertTrue(PdfImport.parsePageRotations(cyclic).isEmpty())
-    }
-
-    @Test
-    fun `a 90 degree page is rendered portrait with the marker turned upright`() {
-        val plan = PdfImport.renderPlan(pageWidth = 200, pageHeight = 100, rotation = 90, dpi = 72f, maxDim = 2048)
-        assertEquals(100, plan.width)   // a quarter turn swaps the box
-        assertEquals(200, plan.height)
-
-        val marker = Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888)
-        val paint = Paint()
-        try {
-            val c = Canvas(marker)
-            c.drawColor(Color.WHITE)
-            paint.color = Color.RED
-            c.drawRect(0f, 0f, 100f, 50f, paint) // source top-left quadrant
-            val out = Bitmap.createBitmap(plan.width, plan.height, Bitmap.Config.ARGB_8888)
-            try {
-                Canvas(out).drawBitmap(marker, plan.matrix, paint)
-                assertColor(Color.RED, out.getPixel(plan.width - 10, 10)) // now top-right
-                assertColor(Color.WHITE, out.getPixel(10, 10))            // top-left is clear
-            } finally {
-                out.recycle()
-            }
-        } finally {
-            marker.recycle()
-        }
-    }
-
-    @Test
-    fun `a 270 degree page is rendered portrait with the marker turned upright`() {
-        val plan = PdfImport.renderPlan(pageWidth = 200, pageHeight = 100, rotation = 270, dpi = 72f, maxDim = 2048)
-        assertEquals(100, plan.width)
-        assertEquals(200, plan.height)
-
-        val marker = Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888)
-        val paint = Paint()
-        try {
-            val c = Canvas(marker)
-            c.drawColor(Color.WHITE)
-            paint.color = Color.RED
-            c.drawRect(0f, 0f, 100f, 50f, paint)
-            val out = Bitmap.createBitmap(plan.width, plan.height, Bitmap.Config.ARGB_8888)
-            try {
-                Canvas(out).drawBitmap(marker, plan.matrix, paint)
-                assertColor(Color.RED, out.getPixel(10, plan.height - 10)) // now bottom-left
-            } finally {
-                out.recycle()
-            }
-        } finally {
-            marker.recycle()
-        }
-    }
-
-    @Test
-    fun `an unrotated page keeps its dimensions and identity matrix`() {
-        val plan = PdfImport.renderPlan(pageWidth = 200, pageHeight = 100, rotation = 0, dpi = 72f, maxDim = 2048)
-        assertEquals(200, plan.width)
-        assertEquals(100, plan.height)
-        assertArrayEquals(floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f), FloatArray(9).also { plan.matrix.getValues(it) }, 0f)
-    }
-
-    private fun assertColor(expected: Int, actual: Int) {
-        assertTrue(
-            "expected ${Integer.toHexString(expected)}, got ${Integer.toHexString(actual)}",
-            kotlin.math.abs(Color.red(expected) - Color.red(actual)) <= 24 &&
-                kotlin.math.abs(Color.green(expected) - Color.green(actual)) <= 24 &&
-                kotlin.math.abs(Color.blue(expected) - Color.blue(actual)) <= 24
-        )
-    }
-
-    // ---- Defect 2: annotations ----
+    // ---- Annotations ----
 
     @Test
     fun `annotation-aware rendering is selected only on API 35 and newer`() {
@@ -158,7 +46,7 @@ class PdfImportFixTest {
         assertTrue(PdfImport.useAnnotatedRender(36))
     }
 
-    // ---- Defect 4: JPEG SOF agreement ----
+    // ---- JPEG SOF agreement ----
 
     /** A tiny structurally complete JPEG with the given SOF marker. */
     private fun jpegWithSof(marker: Int, width: Int, height: Int): ByteArray {
@@ -193,16 +81,14 @@ class PdfImportFixTest {
         )
     }
 
-    // ---- Defect 5: two-copy space budget ----
+    // ---- Two-copy space budget ----
 
     @Test
     fun `the render estimate reserves a page and its embedded PDF copy`() {
         assertEquals(2 * PdfImportBudget.TYPICAL_PAGE_BYTES, PdfImport.EST_PAGE_BYTES)
         assertEquals(2, PdfImportBudget.DISK_COPIES)
         val plan = PdfImportBudget.plan(10, freeBytes = 10L * 1024 * 1024 * 1024, bytesPerPage = 600_000L)
-        assertEquals(6_000_000L, plan.estimateBytes)
-        assertEquals(12_000_000L, plan.diskBytes)
-        assertEquals(24_000L, PdfImportBudget.requiredBytes(10, 1_200L))
+        assertEquals(6_000_000L, plan.estimateBytes) // shown to the user: one JPEG per page
     }
 
     @Test

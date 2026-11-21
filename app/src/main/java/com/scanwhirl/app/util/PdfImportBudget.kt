@@ -11,9 +11,9 @@ package com.scanwhirl.app.util
  *  - [Plan.tooLittleSpace] refuses before starting when the import would leave less than
  *    [MIN_FREE_AFTER] free.
  *
- * A rendered page exists twice on disk — the staging JPEG and its copy inside `scan.pdf` — so
- * [Plan.diskBytes] (used by the authoritative pre-render gate in `PdfImport`) reserves [DISK_COPIES]
- * copies per page. `estimateBytes` deliberately stays the single-JPEG figure shown to the user.
+ * A rendered page exists twice on disk — the staging JPEG and its copy inside `scan.pdf` — so the
+ * authoritative pre-render gate in `PdfImport` reserves [DISK_COPIES] copies per page via its
+ * `EST_PAGE_BYTES`. `estimateBytes` deliberately stays the single-JPEG figure shown to the user.
  */
 object PdfImportBudget {
 
@@ -44,17 +44,9 @@ object PdfImportBudget {
         val tooLittleSpace: Boolean
             get() = freeBytes - estimateBytes < MIN_FREE_AFTER
 
-        /** True on-disk need: one staging JPEG plus its embedded copy in scan.pdf per page. */
-        val diskBytes: Long
-            get() = estimateBytes * DISK_COPIES
-
         /** Estimate for a chosen subset, for the range sheet. */
         fun estimateFor(pages: Int): Long = estimateBytes / pageCount.coerceAtLeast(1) * pages
     }
-
-    /** Requirement used by the pre-render gate, counting both copies of every page. */
-    fun requiredBytes(pageCount: Int, bytesPerPage: Long): Long =
-        pageCount.coerceAtLeast(0) * bytesPerPage * DISK_COPIES
 
     /** The typical JPEG size at [maxDim] (imports default to 2048). */
     fun pageBytes(maxDim: Int): Long = when {
