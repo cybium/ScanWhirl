@@ -81,6 +81,14 @@ class ScanRepository(private val context: Context) {
         internal var readProbe: ((thread: String) -> Unit)? = null
 
         /**
+         * L1lib #2 test seam: observes the thread that reads every meta.txt for tags.
+         * Process-wide (several ScanRepository instances exist; the library's instance is
+         * not the one a test holds). Production leaves it null.
+         */
+        @Volatile
+        internal var listTagsProbe: ((thread: String) -> Unit)? = null
+
+        /**
          * Serialises new-scan save transactions and the abandoned-save reaper, so a
          * cleanup can never race an active transaction (several ScanRepository
          * instances exist at once, hence process-wide).
@@ -464,9 +472,20 @@ class ScanRepository(private val context: Context) {
 
     // ------------------------------------------------------------------
     // Library organisation: folders and tags (v2 UI: 03_tools_hub)
+    //
+    // L1lib3: every write to folders.txt has a proven safe order, so a crash can never
+    // leave a document pointing at a name that is absent from the folder list:
+    //  * createFolder        list first, no document can reference the name yet.
+    //  * renameFolder        list with BOTH names, documents, then final list.
+    //  * setFolder (move)    create the target folder first, then rewrite documents.
+    //  * deleteFolder        documents first, then list; a tombstone completes a delete
+    //                        interrupted between the two on the next startup.
+    // Reconciliation is startup-only (recoverOperations), never in listDocuments(): that
+    // getter is called on the main thread and must never write folders.txt.
     // ------------------------------------------------------------------
 
     private val foldersFile: File get() = File(context.filesDir, "library_folders.txt")
+    private val deletingFile: File get() = File(context.filesDir, "library_folders_deleting.txt")
 
     /** Folder names created explicitly (empty folders survive a restart), sorted. */
     fun listFolders(): List<String> = synchronized(META_LOCK) {
@@ -495,7 +514,21 @@ class ScanRepository(private val context: Context) {
         }
     }
 
-    /** Renames a folder and every document in it. Documents are never lost. */
+    /**
+     * Renames a folder and every document in it. Documents are never lost.
+     *
+     * L1lib #6 / L1lib2 P1: folders.txt is written TWICE so it is consistent at every step:
+     *  1. write the list with BOTH old and new names. From this point on a document that
+     *     carries either name still resolves to a real folder, even if the process dies.
+     *  2. rewrite every document from [oldName] to [newName].
+     *  3. write the final list with the old name removed.
+     *
+     * A failure in step 1 changes nothing. A failure in steps 2 or 3 rolls the documents
+     * back and restores the original list. An `Error` (simulated process death) is NOT
+     * caught: the step-1 list keeps both names, so no document is orphaned. Any leftover
+     * folder name found only in documents is re-added by [reconcileFolders] on startup or
+     * the next library load.
+     */
     fun renameFolder(oldName: String, newName: String): Boolean {
         val clean = LibraryMeta.normalizeFolder(newName) ?: return false
         synchronized(META_LOCK) {
@@ -503,23 +536,119 @@ class ScanRepository(private val context: Context) {
             val at = all.indexOfFirst { it.equals(oldName, true) }
             if (at < 0) return false
             if (all.any { it.equals(clean, true) && !it.equals(oldName, true) }) return false
-            writeFolders(all.toMutableList().also { it[at] = clean })
-            forEachDocumentDir { dir ->
-                updateMeta(dir) { lines ->
+
+            val finalList = all.toMutableList().also { it[at] = clean }
+            // Step 1: both names exist before any document points at the new one.
+            writeFolders((all + clean).distinctBy { it.lowercase(Locale.getDefault()) })
+
+            val changed = mutableListOf<File>()
+            try {
+                // Step 2: rewrite the documents.
+                forEachDocumentDir { dir ->
+                    val lines = metaLines(dir) ?: return@forEachDocumentDir
                     val meta = LibraryMeta.read(lines)
                     if (meta.folder != null && meta.folder.equals(oldName, true)) {
-                        LibraryMeta.write(lines, clean, meta.tags)
+                        updateMeta(dir) { current ->
+                            val m = LibraryMeta.read(current)
+                            if (m.folder != null && m.folder.equals(oldName, true)) {
+                                LibraryMeta.write(current, clean, m.tags)
+                            }
+                        }
+                        changed += dir
                     }
                 }
+                // Step 3: drop the old name only after every document was rewritten.
+                writeFolders(finalList)
+            } catch (t: Exception) {
+                // Best effort: undo documents and restore the original folder list so the
+                // two stores agree again. An Error (process death) skips this on purpose.
+                for (dir in changed) {
+                    runCatching {
+                        updateMeta(dir) { current ->
+                            val m = LibraryMeta.read(current)
+                            if (m.folder != null && m.folder.equals(clean, true)) {
+                                LibraryMeta.write(current, oldName, m.tags)
+                            }
+                        }
+                    }
+                }
+                runCatching { writeFolders(all) }
+                throw t
             }
             return true
         }
     }
 
-    /** Deletes a folder; its documents move to "All" and stay in the library. */
-    fun deleteFolder(name: String) {
+    /**
+     * L1lib2 P1 / L1lib3 P2: startup-only. Re-add any VALID folder name still used by a
+     * document but missing from folders.txt (e.g. after a process death between the two
+     * rename writes). Documents are never silently moved into "All only". Never called
+     * from [listDocuments]: that getter can run on the main thread and is read-only.
+     */
+    fun reconcileFolders() {
         synchronized(META_LOCK) {
-            writeFolders(listFolders().filterNot { it.equals(name, true) })
+            val used = mutableSetOf<String>()
+            forEachDocumentDir { dir ->
+                metaLines(dir)?.let { lines ->
+                    LibraryMeta.read(lines).folder?.let { used += it }
+                }
+            }
+            reconcileFrom(used)
+        }
+    }
+
+    /**
+     * Adds [folders] missing from folders.txt, applying the SAME rules as a user-created
+     * folder (normalizeFolder: trimmed, whitespace-collapsed, <=40 chars). A name that is
+     * blank, overlong, or not already in normal form is ignored, never written back.
+     */
+    private fun reconcileFrom(folders: Collection<String>) {
+        val valid = folders.mapNotNull { name ->
+            val clean = LibraryMeta.normalizeFolder(name)
+            if (clean != null && clean == name) clean else null
+        }.toSet()
+        if (valid.isEmpty()) return
+        synchronized(META_LOCK) {
+            val known = listFolders()
+            val missing = valid.filter { name -> known.none { it.equals(name, true) } }
+            if (missing.isNotEmpty()) writeFolders(known + missing)
+        }
+    }
+
+    /**
+     * Deletes a folder; its documents move to "All" and stay in the library.
+     *
+     * L1lib3 P1: rewrite DOCUMENTS first, then remove the name from folders.txt. The old
+     * order removed the name first, so a death before the document rewrites left documents
+     * referencing a folder that startup reconciliation would faithfully re-add, resurrecting
+     * a folder the user had deleted. A tombstone written before the first step lets startup
+     * finish an interrupted delete instead.
+     */
+    fun deleteFolder(name: String) {
+        val clean = LibraryMeta.normalizeFolder(name) ?: return
+        synchronized(META_LOCK) {
+            Durable.atomicWriteText(deletingFile, clean)
+            forEachDocumentDir { dir ->
+                updateMeta(dir) { lines ->
+                    val meta = LibraryMeta.read(lines)
+                    if (meta.folder != null && meta.folder.equals(clean, true)) {
+                        LibraryMeta.write(lines, null, meta.tags)
+                    }
+                }
+            }
+            writeFolders(listFolders().filterNot { it.equals(clean, true) })
+            deletingFile.delete()
+        }
+    }
+
+    /** L1lib3 P1: finish a delete interrupted by process death or a disk failure. */
+    private fun finishPendingDelete() {
+        val raw = runCatching { deletingFile.readText().trim() }.getOrNull() ?: return
+        val name = LibraryMeta.normalizeFolder(raw) ?: run {
+            deletingFile.delete()
+            return
+        }
+        synchronized(META_LOCK) {
             forEachDocumentDir { dir ->
                 updateMeta(dir) { lines ->
                     val meta = LibraryMeta.read(lines)
@@ -528,6 +657,8 @@ class ScanRepository(private val context: Context) {
                     }
                 }
             }
+            writeFolders(listFolders().filterNot { it.equals(name, true) })
+            deletingFile.delete()
         }
     }
 
@@ -568,16 +699,19 @@ class ScanRepository(private val context: Context) {
     }
 
     /** Every tag used in the library, for the tag sheet's quick picks. */
-    fun listTags(): List<String> = synchronized(META_LOCK) {
-        val seen = LinkedHashSet<String>()
-        forEachDocumentDir { dir ->
-            metaLines(dir)?.let { lines ->
-                LibraryMeta.read(lines).tags.forEach { tag ->
-                    if (seen.none { it.equals(tag, true) }) seen += tag
+    fun listTags(): List<String> {
+        listTagsProbe?.invoke(Thread.currentThread().name)
+        return synchronized(META_LOCK) {
+            val seen = LinkedHashSet<String>()
+            forEachDocumentDir { dir ->
+                metaLines(dir)?.let { lines ->
+                    LibraryMeta.read(lines).tags.forEach { tag ->
+                        if (seen.none { it.equals(tag, true) }) seen += tag
+                    }
                 }
             }
+            seen.sortedBy { it.lowercase(Locale.getDefault()) }
         }
-        seen.sortedBy { it.lowercase(Locale.getDefault()) }
     }
 
     private inline fun forEachDocumentDir(action: (File) -> Unit) {
@@ -2745,14 +2879,26 @@ class ScanRepository(private val context: Context) {
         val filesDir = context.filesDir
         var rolledForward = 0
 
+        // L1lib3 P1: finish an interrupted folder delete BEFORE reconciliation, so a
+        // name the user deleted is not re-added from documents that still carry it.
+        finishPendingDelete()
+        // L1lib2 P1: startup reconciliation. A process death between the two rename
+        // writes can leave a document folder name absent from folders.txt; add it back
+        // before any UI reads the folder list. Startup runs off the main thread.
+        reconcileFolders()
+
         // 1. Roll forward.
         val stagingRoot = OpStaging.root(filesDir)
+        // L1lib #7: listTrash() reads every Trash entry's meta.txt. Hoist it out of the
+        // staging loop: with S staging folders and T trash entries the old code did S×T
+        // loads. Trash is not changed by a roll-forward, so one snapshot is enough.
+        val trashSnapshot = listTrash()
         for (dir in stagingRoot.listFiles { f -> f.isDirectory }.orEmpty()) {
             val seal = OpStaging.readSeal(dir) ?: continue
             val replaces = seal.replaces ?: continue
             val base = File(docsDir, replaces)
             if (base.exists()) continue
-            val trash = listTrash().firstOrNull {
+            val trash = trashSnapshot.firstOrNull {
                 it.originalId == replaces && it.previousToken == seal.token
             } ?: continue
             val pages = pageFilesIn(dir)
