@@ -1,6 +1,8 @@
 package com.scanwhirl.app.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -187,13 +189,20 @@ class ExportResultActivity : BaseActivity() {
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = mime
                 putExtra(Intent.EXTRA_STREAM, uri)
+                // Android 12+ reads the read grant from ClipData when the sharesheet
+                // previews the file; EXTRA_STREAM alone logs a Permission Denial.
+                // Keep the same URI and MIME on both so the grant survives the
+                // chooser hop (same contract as ShareUtils, without calling it).
+                clipData = ClipData(
+                    ClipDescription(file.name, arrayOf(mime)),
+                    ClipData.Item(uri)
+                )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(Intent.createChooser(intent, getString(R.string.result_share)))
         } catch (e: Exception) {
-            Toast.makeText(
-                this, getString(R.string.result_save_failed, e.message), Toast.LENGTH_LONG
-            ).show()
+            // A JVM message is diagnostics, not user-facing text.
+            Toast.makeText(this, R.string.p1_share_failed, Toast.LENGTH_LONG).show()
         }
     }
 

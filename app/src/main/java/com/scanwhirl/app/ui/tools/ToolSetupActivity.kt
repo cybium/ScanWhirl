@@ -616,7 +616,11 @@ class ToolSetupActivity : BaseActivity() {
             }
             preview.setTextColor(SwStyle.color(this, R.color.ok_green))
         } catch (e: IllegalArgumentException) {
-            preview.text = e.message
+            // P1: a typed error carries a string resource; English prose is never
+            // printed verbatim into the Hindi screen.
+            preview.text = if (e is PageRanges.InvalidPageRange)
+                getString(e.messageRes, *e.formatArgs.toTypedArray())
+            else getString(R.string.tools_setup_bad_ranges)
             preview.setTextColor(SwStyle.color(this, R.color.laser_danger))
         }
     }
@@ -1144,7 +1148,7 @@ class ToolSetupActivity : BaseActivity() {
             } catch (e: Exception) {
                 progressOverlay.isVisible = false
                 render()
-                fail(getString(R.string.tools_setup_failed, e.message ?: ""))
+                fail(getString(R.string.tools_setup_failed, setupFailureReason(e)))
             }
         }
     }
@@ -1181,7 +1185,11 @@ class ToolSetupActivity : BaseActivity() {
                 val spans = try {
                     PageRanges.parse(rangesText, doc.pageCount)
                 } catch (e: IllegalArgumentException) {
-                    return fail(e.message ?: getString(R.string.tools_setup_bad_ranges))
+                    return fail(
+                        if (e is PageRanges.InvalidPageRange)
+                            getString(e.messageRes, *e.formatArgs.toTypedArray())
+                        else getString(R.string.tools_setup_bad_ranges)
+                    )
                 }
                 execute({ repo.splitByRange(doc.id, spans).map { it.id } }) { openDocs(it) }
             }
@@ -1191,7 +1199,11 @@ class ToolSetupActivity : BaseActivity() {
                 val spans = try {
                     PageRanges.parse(rangesText, doc.pageCount)
                 } catch (e: IllegalArgumentException) {
-                    return fail(e.message ?: getString(R.string.tools_setup_bad_ranges))
+                    return fail(
+                        if (e is PageRanges.InvalidPageRange)
+                            getString(e.messageRes, *e.formatArgs.toTypedArray())
+                        else getString(R.string.tools_setup_bad_ranges)
+                    )
                 }
                 val indices = spans.flatMap { it.indices().toList() }.distinct().sorted()
                 execute({ listOf(repo.extractPages(doc.id, indices).id) }) { openDocs(it) }
@@ -1400,6 +1412,23 @@ class ToolSetupActivity : BaseActivity() {
             .show()
     }
 
+    /**
+     * P1: known failures are named in the user's language. A JVM message is
+     * diagnostics only and is never shown, even as an English fallback.
+     */
+    private fun setupFailureReason(e: Throwable): String = when {
+        ImageTools.isTooLargePhoto(e) -> getString(R.string.p1_setup_failed_too_large)
+        e.message?.contains("no pages", true) == true ||
+            e.message?.contains("empty document", true) == true ->
+            getString(R.string.p1_setup_failed_no_pages)
+        e.message?.contains("space", true) == true ||
+            e.message?.contains("storage", true) == true ->
+            getString(R.string.p1_setup_failed_no_space)
+        e is IllegalArgumentException -> getString(R.string.p1_setup_failed_invalid_input)
+        e is IllegalStateException -> getString(R.string.p1_setup_failed_unavailable)
+        else -> getString(R.string.p1_setup_failed_generic)
+    }
+
     private fun <T> execute(block: suspend () -> T, onDone: (T) -> Unit) {
         progressOverlay.isVisible = true
         runButton.isEnabled = false
@@ -1418,7 +1447,7 @@ class ToolSetupActivity : BaseActivity() {
             } catch (e: Exception) {
                 progressOverlay.isVisible = false
                 runButton.isEnabled = true
-                fail(getString(R.string.tools_setup_failed, e.message ?: ""))
+                fail(getString(R.string.tools_setup_failed, setupFailureReason(e)))
             }
         }
     }
