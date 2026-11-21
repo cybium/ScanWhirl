@@ -21,15 +21,28 @@ internal object PageOrder {
         return name.substring(dash + 1).toLongOrNull()
     }
 
-    /** Numeric index first, non-numeric names last in stable lexicographic order. */
-    val comparator: Comparator<File> = Comparator { a, b ->
-        val na = pageNumber(a.nameWithoutExtension)
-        val nb = pageNumber(b.nameWithoutExtension)
-        when {
+    private fun compareNames(a: String, b: String): Int {
+        val na = pageNumber(a)
+        val nb = pageNumber(b)
+        return when {
             na != null && nb != null -> na.compareTo(nb)   // page_1000 follows page_999
-            na == null && nb == null -> a.nameWithoutExtension.compareTo(b.nameWithoutExtension)
+            na == null && nb == null -> a.compareTo(b)
             na != null -> -1                               // page_* first
             else -> 1
         }
+    }
+
+    /** Numeric index first, non-numeric names last in stable lexicographic order. */
+    val comparator: Comparator<File> = Comparator { a, b ->
+        compareNames(a.nameWithoutExtension, b.nameWithoutExtension)
+    }
+
+    /**
+     * The same rule for page-name keys held as strings instead of files — OCR text maps and
+     * the editor's page tabs copy their keys from page-file names, so they must follow document
+     * order too (the "temp" key is non-numeric and stays last, as before).
+     */
+    val keyComparator: Comparator<String> = Comparator { a, b ->
+        compareNames(a.substringBeforeLast('.'), b.substringBeforeLast('.'))
     }
 }
