@@ -11,6 +11,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.util.ImportFixtures
+import org.robolectric.Robolectric
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -90,6 +91,24 @@ class S1StartupResumeTest {
             }
             assertFalse("rotation must not offer the same scan a second time", repeated)
         }
+    }
+
+    @Test
+    fun `rotation while recovery is still pending still shows the resume offer`() {
+        val staged = stagePending()
+        // Create only (no setup/resume): the first instance's offer coroutine has not been
+        // dispatched yet, so rotation cancels it before the sheet is shown — the P1 case.
+        val first = Robolectric.buildActivity(ShellActivity::class.java).create()
+        val state = android.os.Bundle()
+        first.saveInstanceState(state)
+        first.destroy()
+        ShadowDialog.reset()
+        val guardAfterA = ScanLauncher.coldStartOfferConsumedForTest()
+        Robolectric.buildActivity(ShellActivity::class.java).setup(state)
+        idle()
+        assertTrue("no offer was shown by the first instance before rotation", !guardAfterA)
+        await { resumeOfferShown() }
+        assertTrue("the unfinished pages are kept until the owner chooses", staged.isDirectory)
     }
 
     @Test

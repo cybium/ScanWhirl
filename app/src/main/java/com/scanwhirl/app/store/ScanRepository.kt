@@ -778,8 +778,12 @@ class ScanRepository(private val context: Context) {
             verifyPrepared(dir, txn)
             SaveFaults.at("verified")
             SaveFaults.at("before_publish")
-        } catch (e: Exception) {
-            discardOwned(dir, token)
+        } catch (e: Throwable) {
+            // S1 review P2: an Error (e.g. OutOfMemoryError) is not an Exception. Its owned
+            // directory must be discarded, then the failure rethrown. The test-only
+            // SimulatedProcessDeath is the one Error that MUST skip cleanup: a real process
+            // kill runs no cleanup and the reaper relies on the leftover (SaveFaults contract).
+            if (e !is SimulatedProcessDeath) discardOwned(dir, token)
             throw e
         }
 

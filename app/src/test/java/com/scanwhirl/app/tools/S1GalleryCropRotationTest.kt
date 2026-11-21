@@ -33,6 +33,7 @@ class S1GalleryCropRotationTest {
     fun setUp() {
         GalleryCrop.startOverride = null
         GalleryCrop.pickOverride = null
+        GalleryCrop.resetForTest()
         ShadowToast.reset()
     }
 
@@ -53,7 +54,7 @@ class S1GalleryCropRotationTest {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                launchGalleryCrop(activity, 30, onResult = { got = it })
+                launchGalleryCrop(activity, 30, onResult = { _, _, uris -> got = uris })
                 assertEquals("a request is waiting", 1, GalleryCrop.pendingCountForTest())
             }
             scenario.recreate()
@@ -78,7 +79,7 @@ class S1GalleryCropRotationTest {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                launchGalleryCrop(activity, 30, onResult = {}, onFallback = { fallback = it })
+                launchGalleryCrop(activity, 30, onResult = { _, _, _ -> }, onFallback = { _, _, uris -> fallback = uris })
             }
             scenario.recreate()
             idle()
