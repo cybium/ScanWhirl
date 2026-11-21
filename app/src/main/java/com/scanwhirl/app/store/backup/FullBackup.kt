@@ -3,6 +3,8 @@ package com.scanwhirl.app.store.backup
 import android.content.Context
 import android.util.Log
 import com.scanwhirl.app.BuildConfig
+import com.scanwhirl.app.store.DraftStore
+import com.scanwhirl.app.store.OcrStore
 import com.scanwhirl.app.store.vault.VaultControlBlobs
 import com.scanwhirl.app.store.vault.VaultPasswords
 import com.scanwhirl.app.R
@@ -103,7 +105,9 @@ class FullBackup(
         /** Vault entries that were already in this phone's Vault and were not touched. */
         val vaultAlreadyHere: Int = 0,
         /** Documents that could not be published (rejected id, failed rename/copy). */
-        val docsFailed: Int = 0
+        val docsFailed: Int = 0,
+        /** Oversized OCR/draft text entries skipped so consumers never read them whole. */
+        val textEntriesSkipped: Int = 0
     ) {
         /**
          * Older callers and tests read this combined number. It now means ONLY documents that
@@ -123,6 +127,7 @@ class FullBackup(
         var vaultAlreadyHere = 0
         var extras = 0
         var vaultLocked = false
+        var textSkipped = 0
         val warnings = mutableListOf<String>()
 
         fun toReport() = Report(
@@ -134,7 +139,8 @@ class FullBackup(
             warnings = warnings.toList(),
             docsAlreadyHere = docsAlreadyHere,
             vaultAlreadyHere = vaultAlreadyHere,
-            docsFailed = docsFailed
+            docsFailed = docsFailed,
+            textEntriesSkipped = textSkipped
         )
     }
 
@@ -175,6 +181,8 @@ class FullBackup(
             // Vault is left out and the report says so; the library still backs up.
             val vaultPending = vault.isConfirmationPending()
             val vaultKey = if (vaultPending) null else vaultKeyFor(secret, wrap)
+            val salt = VaultCrypto.newSalt()
+            val key = secretKey(secret, wrap, salt, VaultCrypto.PBKDF2_ITERATIONS)
             try {
                 DataOutputStream(BufferedOutputStream(FileOutputStream(plain), BUFFER)).use { out ->
                     writeEntry(out, "manifest.json", manifest().toByteArray(Charsets.UTF_8))
@@ -187,8 +195,6 @@ class FullBackup(
                     writeEntry(out, "settings.json", settings().toByteArray(Charsets.UTF_8))
                     out.writeByte(END)
                 }
-                val salt = VaultCrypto.newSalt()
-                val key = secretKey(secret, wrap, salt, VaultCrypto.PBKDF2_ITERATIONS)
                 target.parentFile?.mkdirs()
                 val part = File(target.parentFile, target.name + ".part")
                 try {
@@ -230,6 +236,9 @@ class FullBackup(
                     }
                 )
             } finally {
+                // SEC1 1.3.0: wipe the derived container key at its final use.
+                key.fill(0)
+                exportKeyWipeProbe?.invoke()
                 vaultKey?.fill(0)
             }
         } finally {
@@ -362,13 +371,17 @@ class FullBackup(
                     }
                 }
             }
-            replay(plain, staging)
+            val skippedText = replay(plain, staging)
             val oldVaultKey = staging.resolve(VAULT_KEY_ENTRY).takeIf { it.isFile }?.let {
                 if (it.length() != 32L) throw VaultAuthException("Damaged backup key")
                 ByteArray(32).also { bytes -> DataInputStream(it.inputStream()).use { input -> input.readFully(bytes) } }
             }
             staging.resolve(VAULT_KEY_ENTRY).delete()
             val counters = ApplyCounters()
+            counters.textSkipped = skippedText
+            if (skippedText > 0) {
+                counters.warnings.add(quantity(R.plurals.backup_restore_text_skipped, skippedText))
+            }
             try {
                 restoreLimits.checkCancelled()
                 return applyStaging(staging, oldVaultKey, counters)
@@ -551,8 +564,10 @@ class FullBackup(
         }
     }
 
-    private fun replay(archive: File, staging: File) {
+    /** Returns the number of oversized text entries that were skipped, for an honest report. */
+    private fun replay(archive: File, staging: File): Int {
         val budget = BackupRestoreBudget(context, context.cacheDir, restoreLimits)
+        var skippedText = 0
         DataInputStream(BufferedInputStream(FileInputStream(archive), BUFFER)).use { input ->
             var entries = 0
             while (true) {
@@ -560,7 +575,7 @@ class FullBackup(
                 when (val tag = input.readUnsignedByte()) {
                     END -> {
                         if (input.read() != -1) throw VaultAuthException("Trailing backup archive data")
-                        return
+                        return skippedText
                     }
                     ENTRY -> {
                         if (++entries > restoreLimits.maxEntries) throw BackupResourceException(context)
@@ -573,26 +588,42 @@ class FullBackup(
                             segments.any { it.isEmpty() || it == "." }) {
                             throw BackupResourceException(context)
                         }
-                        // Validate lengths BEFORE making a file or allocating key/JSON/text arrays.
-                        val cap = when {
-                            path == VAULT_KEY_ENTRY -> 32L
-                            segments.size == 2 && segments[0] == "vault2" ->
-                                VaultControlBlobs.rootLimit(segments[1]) ?: MAX_ENTRY_BYTES
-                            path == "settings.json" || path == "manifest.json" -> MAX_SETTINGS_BYTES
-                            path.endsWith("/meta.txt") -> MAX_META_BYTES
-                            else -> MAX_ENTRY_BYTES
+                        // SECURITY_JUDGE 1.3.0 finding 4: format-specific caps for text
+                        // that consumers read into memory. Skip oversized entries rather
+                        // than publishing a file that could exhaust the heap later; the
+                        // payload is still consumed so the next entry stays in sync.
+                        val textCap = when {
+                            path.endsWith("/ocr.txt") -> OcrStore.MAX_TEXT_BYTES
+                            path.endsWith("/ocr_geo.txt") -> OcrStore.MAX_GEO_BYTES
+                            path.endsWith("/draft.txt") -> DraftStore.MAX_MANIFEST_BYTES
+                            else -> null
                         }
-                        if (size > cap || (path == VAULT_KEY_ENTRY && size != 32L)) {
-                            throw BackupResourceException(context)
-                        }
-                        budget.requireFits(size)
-                        val target = safeTarget(staging, path)
-                        // Check the private filesystem rather than retaining all attacker-supplied
-                        // names in a potentially very large in-memory duplicate set.
-                        if (target.exists()) throw VaultAuthException("Duplicate backup entry")
-                        target.parentFile?.mkdirs()
-                        BufferedOutputStream(FileOutputStream(target), BUFFER).use { out ->
-                            copyExact(input, budget.output(out), size)
+                        if (textCap != null && size > textCap) {
+                            budget.requireFits(size)
+                            skipExact(input, size)
+                            skippedText++
+                        } else {
+                            // Validate lengths BEFORE making a file or allocating key/JSON/text arrays.
+                            val cap = when {
+                                path == VAULT_KEY_ENTRY -> 32L
+                                segments.size == 2 && segments[0] == "vault2" ->
+                                    VaultControlBlobs.rootLimit(segments[1]) ?: MAX_ENTRY_BYTES
+                                path == "settings.json" || path == "manifest.json" -> MAX_SETTINGS_BYTES
+                                path.endsWith("/meta.txt") -> MAX_META_BYTES
+                                else -> MAX_ENTRY_BYTES
+                            }
+                            if (size > cap || (path == VAULT_KEY_ENTRY && size != 32L)) {
+                                throw BackupResourceException(context)
+                            }
+                            budget.requireFits(size)
+                            val target = safeTarget(staging, path)
+                            // Check the private filesystem rather than retaining all attacker-supplied
+                            // names in a potentially very large in-memory duplicate set.
+                            if (target.exists()) throw VaultAuthException("Duplicate backup entry")
+                            target.parentFile?.mkdirs()
+                            BufferedOutputStream(FileOutputStream(target), BUFFER).use { out ->
+                                copyExact(input, budget.output(out), size)
+                            }
                         }
                     }
                     else -> throw VaultAuthException("Damaged backup (tag $tag)")
@@ -620,6 +651,18 @@ class FullBackup(
             val read = input.read(buffer, 0, wanted)
             if (read < 0) throw VaultAuthException("The backup file is incomplete")
             out.write(buffer, 0, read)
+            remaining -= read
+        }
+    }
+
+    /** Consumes an entry's bytes without writing them (skipped oversized text). */
+    private fun skipExact(input: DataInputStream, size: Long) {
+        val buffer = ByteArray(BUFFER)
+        var remaining = size
+        while (remaining > 0) {
+            val wanted = minOf(remaining, buffer.size.toLong()).toInt()
+            val read = input.read(buffer, 0, wanted)
+            if (read < 0) throw VaultAuthException("The backup file is incomplete")
             remaining -= read
         }
     }
@@ -939,6 +982,10 @@ class FullBackup(
         private const val END = 0
         private const val BUFFER = 64 * 1024
         private const val MAX_ENTRY_BYTES = 512L * 1024 * 1024
+
+        /** SEC1 1.3.0: test seam for the derived export-key wipe; null in production. */
+        @androidx.annotation.VisibleForTesting
+        internal var exportKeyWipeProbe: (() -> Unit)? = null
     }
 }
 

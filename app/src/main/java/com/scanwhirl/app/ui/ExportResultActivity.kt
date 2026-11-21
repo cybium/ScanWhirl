@@ -62,6 +62,9 @@ class ExportResultActivity : BaseActivity() {
         mime = intent.getStringExtra(EXTRA_MIME) ?: "image/jpeg"
         displayName = intent.getStringExtra(EXTRA_NAME) ?: "ScanWhirl"
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        // SECURITY_JUDGE 1.3.0: a protected copy's preview is plaintext in a new
+        // window; resolve the document's own policy from the id before showing it.
+        com.scanwhirl.app.util.SecureView.applyForDocumentId(this, window, docId)
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L)
         afterBytes = intent.getLongExtra(EXTRA_AFTER, 0L)
         isPdf = mime == "application/pdf"

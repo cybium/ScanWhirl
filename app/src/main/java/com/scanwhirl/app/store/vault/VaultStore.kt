@@ -45,7 +45,7 @@ class VaultStore(
     private val context: Context,
     private val repo: ScanRepository,
     private val keys: VaultKeys = AndroidVaultKeys(),
-    private val gate: VaultPasscodeGate = VaultPasscodeGate(),
+    private val gate: VaultPasscodeGate = VaultPasscodeGate.shared(context),
     private val iterations: Int = VaultCrypto.PBKDF2_ITERATIONS
 ) {
 
@@ -69,6 +69,15 @@ class VaultStore(
         internal const val MAX_RECORD_BYTES = 1024L * 1024 * 1024
         private val STORED_NAME = Regex("[A-Za-z0-9._-]{1,255}")
         private val SHA256 = Regex("[a-f0-9]{64}")
+
+        /** SEC1 1.3.0: test seam for caller-owned key wipes; null in production. */
+        @androidx.annotation.VisibleForTesting
+        internal var keyWipeProbe: ((String) -> Unit)? = null
+
+        private fun wipeKey(key: ByteArray, where: String) {
+            key.fill(0)
+            keyWipeProbe?.invoke(where)
+        }
 
         internal fun isSafeEntryId(id: String): Boolean =
             id.isNotEmpty() && id.length <= 64 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
@@ -231,32 +240,36 @@ class VaultStore(
         clearIncompleteProvisioning()
 
         val key = VaultCrypto.newKey()
-        val recoveryCode = VaultCrypto.generateRecoveryCode()
-        val passBlob = VaultKeyWrap.seal(key, passcode, VaultCrypto.newSalt(), iterations)
-        val recoveryBlob = VaultKeyWrap.seal(key, recoveryCode, VaultCrypto.newSalt(), iterations)
-
-        Durable.atomicWrite(File(vaultDir, PASSCODE_FILE), passBlob)
-        // Non-secret pending marker BEFORE the "set up" blob: a Vault can never exist with an
-        // unconfirmed recovery code and no marker, even if the process dies right here. It is
-        // cleared only by markConfirmationPassed() after the four-character check.
-        if (!Prefs.setVaultSetupConfirmPending(context, true)) {
-            // Fail closed: without the marker the check could be skipped, so nothing is published.
-            File(vaultDir, PASSCODE_FILE).delete()
-            throw IOException("Could not start the Vault setup")
-        }
         try {
-            // Written last: its presence is the "set up" marker.
-            Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
-            Durable.syncDir(vaultDir)
-        } catch (e: Exception) {
-            // The transaction did not complete (a write failed): leave nothing that looks
-            // provisioned. A real process kill cannot run this, so recover() and the backup
-            // restore also clear such leftovers (review MUST-FIX 2).
-            File(vaultDir, PASSCODE_FILE).delete()
-            throw e
+            val recoveryCode = VaultCrypto.generateRecoveryCode()
+            val passBlob = VaultKeyWrap.seal(key, passcode, VaultCrypto.newSalt(), iterations)
+            val recoveryBlob = VaultKeyWrap.seal(key, recoveryCode, VaultCrypto.newSalt(), iterations)
+
+            Durable.atomicWrite(File(vaultDir, PASSCODE_FILE), passBlob)
+            // Non-secret pending marker BEFORE the "set up" blob: a Vault can never exist with an
+            // unconfirmed recovery code and no marker, even if the process dies right here. It is
+            // cleared only by markConfirmationPassed() after the four-character check.
+            if (!Prefs.setVaultSetupConfirmPending(context, true)) {
+                // Fail closed: without the marker the check could be skipped, so nothing is published.
+                File(vaultDir, PASSCODE_FILE).delete()
+                throw IOException("Could not start the Vault setup")
+            }
+            try {
+                // Written last: its presence is the "set up" marker.
+                Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
+                Durable.syncDir(vaultDir)
+            } catch (e: Exception) {
+                // The transaction did not complete (a write failed): leave nothing that looks
+                // provisioned. A real process kill cannot run this, so recover() and the backup
+                // restore also clear such leftovers (review MUST-FIX 2).
+                File(vaultDir, PASSCODE_FILE).delete()
+                throw e
+            }
+            VaultSession.open(key)
+            return@synchronized Setup(VaultCrypto.formatRecoveryCode(recoveryCode))
+        } finally {
+            wipeKey(key, "setup")
         }
-        VaultSession.open(key)
-        Setup(VaultCrypto.formatRecoveryCode(recoveryCode))
     }
 
     fun unlockWithPasscode(passcode: String): UnlockResult = synchronized(LOCK) {
@@ -272,10 +285,14 @@ class VaultStore(
         if (key == null) {
             return UnlockResult(false, gate.onWrong(), gate.triesLeft())
         }
-        gate.onSuccess()
-        VaultSession.open(key)
-        migrateRestoredLegacy()
-        UnlockResult(true, triesLeft = gate.triesLeft())
+        try {
+            gate.onSuccess()
+            VaultSession.open(key)
+            migrateRestoredLegacy()
+            return@synchronized UnlockResult(true, triesLeft = gate.triesLeft())
+        } finally {
+            wipeKey(key, "passcode")
+        }
     }
 
     /** Recovery-code unlock (also after restoring a backup on a new phone). */
@@ -289,7 +306,11 @@ class VaultStore(
         } catch (e: Exception) {
             null
         } ?: return false
-        finishRecoveryUnlock(key)
+        try {
+            return@synchronized finishRecoveryUnlock(key)
+        } finally {
+            wipeKey(key, "recovery")
+        }
     }
 
     /**
@@ -355,11 +376,15 @@ class VaultStore(
             File(vaultDir, KEYSTORE_FILE).delete()
             return false
         }
-        if (key.size != VaultCrypto.KEY_BYTES) return false
-        gate.onSuccess()
-        VaultSession.open(key)
-        migrateRestoredLegacy()
-        true
+        try {
+            if (key.size != VaultCrypto.KEY_BYTES) return@synchronized false
+            gate.onSuccess()
+            VaultSession.open(key)
+            migrateRestoredLegacy()
+            return@synchronized true
+        } finally {
+            wipeKey(key, "biometric")
+        }
     }
 
     /** Drops the key and every decrypted copy. */
@@ -428,10 +453,22 @@ class VaultStore(
     fun hasEntry(id: String): Boolean = File(vaultDir, id).let { it.isDirectory && File(it, MANIFEST_FILE).isFile }
 
     /**
-     * Encrypts every file of the library document [docId], verifies the encrypted copy,
-     * publishes it, then moves the plain original to Trash and purges it.
+     * SECURITY_JUDGE 1.3.0 finding 2: the encrypted entry is published, but the
+     * plaintext original may still be waiting in the private purge area.
+     * [purgeComplete] is false in that case; the durable marker is kept so the
+     * next Vault open retries. The UI must report this honestly.
      */
-    fun addDocument(docId: String): Entry = synchronized(LOCK) {
+    data class AddResult(val entry: Entry, val purgeComplete: Boolean)
+
+    /** Entry-only convenience for callers that do not show an outcome message. */
+    fun addDocument(docId: String): Entry = addDocumentWithResult(docId).entry
+
+    /**
+     * Encrypts every file of the library document [docId], verifies the encrypted copy,
+     * publishes it, then moves the plain original to a PRIVATE purge area (never the
+     * ordinary Trash) and purges it with a checked result.
+     */
+    fun addDocumentWithResult(docId: String): AddResult = synchronized(LOCK) {
         val key = requireKey()
         requireCompleted()
         val doc = repo.getDocument(docId) ?: throw IOException("This document no longer exists")
@@ -444,7 +481,6 @@ class VaultStore(
         val staging = File(vaultDir, "$STAGING_PREFIX$docId-${UUID.randomUUID().toString().take(8)}")
         if (!staging.mkdirs()) throw IOException("Could not open the Vault folder")
         var published = false
-        var trashed = false
 
         try {
             OpFaults.at("vault:add:start")
@@ -498,29 +534,27 @@ class VaultStore(
             Durable.syncDir(vaultDir)
             OpFaults.at("vault:published")
 
-            val trashKey = repo.moveToTrash(docId)
-            trashed = true
-            OpFaults.at("vault:trashed")
-
-            // The encrypted entry is verified, so the plaintext Trash copy can go now.
-            if (trashKey != null) {
-                try {
-                    repo.deleteFromTrash(trashKey)
-                } catch (_: Exception) {
-                }
+            // SEC1 1.3.0: the plaintext original goes straight to a private area,
+            // never into the ordinary (listable, restorable) Trash. If the move
+            // fails the original stays in the Library, the durable marker is kept
+            // for recover(), and the honest result says cleanup is not finished.
+            if (!repo.moveOriginalToVaultPendingPurge(docId)) {
+                return@synchronized AddResult(manifest.toEntry(), false)
             }
-            clearCompletedAdd(docId)
-            manifest.toEntry()
+            // Fault name kept so existing process-death recovery tests still
+            // exercise the window between the move and the purge.
+            OpFaults.at("vault:trashed")
+            val purgeComplete = repo.purgeVaultPendingOriginal(docId)
+            if (purgeComplete) clearCompletedAdd(docId)
+            AddResult(manifest.toEntry(), purgeComplete)
         } catch (e: Exception) {
             if (!published) {
                 staging.deleteRecursively()
-            } else if (!trashed) {
-                // The original is still in the library; drop the half-finished entry.
-                target.deleteRecursively()
+                File(vaultDir, "$ADDING_PREFIX$docId").delete()
             }
-            if (!target.exists()) File(vaultDir, "$ADDING_PREFIX$docId").delete()
-            // When the move to Trash already happened, the complete entry is kept and
-            // recover() finishes the purge.
+            // Published: keep the verified entry and the durable marker. recover()
+            // finishes moving/purging the plaintext original; never drop the only
+            // authority to clean it up.
             throw e
         }
     }
@@ -720,14 +754,17 @@ class VaultStore(
                 return@forEach
             }
             try {
-                if (File(repo.docsDir, id).exists()) {
-                    val key = repo.moveToTrash(id)
-                    if (key != null) repo.deleteFromTrash(key)
-                }
+                // SEC1 1.3.0: an original still in the Library goes straight to the
+                // private purge area, never into the ordinary Trash.
+                if (File(repo.docsDir, id).exists()) repo.moveOriginalToVaultPendingPurge(id)
+                // Legacy copies that an older build left in ordinary Trash must not
+                // stay restorable; deleting one with a checked result is safe here.
                 repo.listTrash().filter { it.originalId == id }.forEach { item ->
                     repo.deleteFromTrash(item.key)
                 }
-                clearCompletedAdd(id)
+                // Only a completed purge clears the durable marker; a partial delete
+                // leaves it for the next open to retry.
+                if (repo.purgeVaultPendingOriginal(id)) clearCompletedAdd(id)
             } catch (_: Exception) {
                 // Keep the local marker so an interrupted purge can be retried.
             }
