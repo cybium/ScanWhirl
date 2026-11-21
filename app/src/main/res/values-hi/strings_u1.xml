@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="u1_import_source_unchanged">मूल PDF नहीं बदलेगी।</string>
+    <string name="u1_import_discard">छोड़ें</string>
+    <string name="u1_import_discarded">प्रति हटा दी</string>
+    <string name="u1_import_discard_failed">प्रति नहीं हटी। फिर कोशिश करें।</string>
+    <string name="u1_import_restore_failed">प्रति वापस नहीं आई। फिर कोशिश करें।</string>
+</resources>

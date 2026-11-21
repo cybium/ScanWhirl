@@ -4453,4 +4453,18 @@ class ScanRepository(private val context: Context) {
         }
         return name
     }
+
+    /**
+     * UX-007's import-only escrow needs the same write locks as Trash, plus draft/metadata
+     * locks, across its whole-directory renames. No policy or mutation lives in this primitive.
+     */
+    internal fun <T> withImportDiscardLock(action: () -> T): T = synchronized(PDF_LOCK) {
+        OcrStore.locked {
+            synchronized(TRASH_LOCK) {
+                synchronized(DRAFT_LOCK) {
+                    synchronized(META_LOCK) { action() }
+                }
+            }
+        }
+    }
 }
