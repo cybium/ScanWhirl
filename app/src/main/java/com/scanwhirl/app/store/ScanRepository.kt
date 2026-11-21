@@ -1567,10 +1567,19 @@ class ScanRepository(private val context: Context) {
 
     internal fun pageFilesIn(dir: File): List<File> =
         dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
-            ?.sortedWith(compareBy<File>({ pageNumber(it.nameWithoutExtension) ?: Long.MAX_VALUE }, { it.name }))
+            ?.sortedWith { a, b ->
+                val na = pageNumber(a.nameWithoutExtension)
+                val nb = pageNumber(b.nameWithoutExtension)
+                when {
+                    na != null && nb != null -> na.compareTo(nb)          // page_1000 follows page_999
+                    na == null && nb == null -> a.nameWithoutExtension.compareTo(b.nameWithoutExtension)
+                    na != null -> -1                                     // page_* first
+                    else -> 1
+                }
+            }
             ?: emptyList()
 
-    /** Numeric part of `page_001`, so page_1000 follows page_999 (not lexicographic order). */
+    /** Numeric part of `page_001`; other names fall back to the old lexicographic order. */
     private fun pageNumber(name: String): Long? {
         val dash = name.lastIndexOf('_')
         if (dash < 0 || dash == name.length - 1) return null

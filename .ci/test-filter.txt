@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.PdfImportFixTest,com.scanwhirl.app.store.ScanRepoPageOrderTest,com.scanwhirl.app.util.PdfImportTest,com.scanwhirl.app.store.DocumentNamesRepositoryTest
