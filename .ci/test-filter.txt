@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.stamp.StampGestureUndoTest,com.scanwhirl.app.ui.PageViewerStagingDeleteTest,com.scanwhirl.app.ui.PageViewerFilterTest,com.scanwhirl.app.ui.stamp.StampSavingBackTest
