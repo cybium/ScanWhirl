@@ -46,6 +46,7 @@ import com.scanwhirl.app.ui.kit.PasswordField
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.bindCredentialSubmit
+import com.scanwhirl.app.util.AppLocale
 import com.scanwhirl.app.util.Prefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -798,7 +799,7 @@ class VaultActivity : BaseActivity() {
         list.removeAllViews()
         entries.forEach { entry ->
             val card = VaultCard(this)
-            val date = SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(entry.addedAt))
+            val date = SimpleDateFormat("d MMM", AppLocale.of(this)).format(Date(entry.addedAt))
             val meta = if (entry.pageCount > 0) {
                 getString(
                     R.string.vault_entry_meta,
