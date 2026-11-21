@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L5: trust, paywall and shared-foundation copy. EN is the decided wording. -->
+<resources>
+    <!-- L5-01 paywall -->
+    <string name="ux130_l5_pro_buy">Get Pro</string>
+    <string name="ux130_l5_pro_continue_free">Continue free</string>
+    <string name="ux130_l5_pro_restore">Restore purchase</string>
+    <string name="ux130_l5_pro_once">Once. No subscription.</string>
+    <string name="ux130_l5_pro_price_unavailable">Price unavailable. Check Google Play and try again.</string>
+
+    <!-- L5-02 Vault recovery and overflow -->
+    <string name="ux130_l5_vault_use_recovery">Use recovery code</string>
+    <string name="ux130_l5_vault_more">More options for %1$s</string>
+    <string name="ux130_l5_vault_recovery_summary">This code is the only way back if you forget your passcode. It is shown once.</string>
+    <string name="ux130_l5_vault_recovery_proof">Next, type the first 4 characters to confirm you saved it.</string>
+
+    <!-- L5-05 backup status, progress and consent detail -->
+    <string name="ux130_l5_backup_summary">Back up scans, signatures and settings.</string>
+    <string name="ux130_l5_backup_vault_ready">Vault: ready to include.</string>
+    <string name="ux130_l5_backup_vault_pending">Vault: not included until setup is finished.</string>
+    <string name="ux130_l5_backup_create">Create backup</string>
+    <string name="ux130_l5_backup_restore">Restore backup</string>
+    <string name="ux130_l5_backup_creating">Creating your backup…</string>
+    <string name="ux130_l5_backup_restoring">Restoring your backup…</string>
+    <string name="ux130_l5_backup_details">Includes scans, signatures and settings. Vault files are included only when ready. Check warnings before relying on the backup.</string>
+</resources>

@@ -58,6 +58,8 @@ class ProScreen(
     private lateinit var priceWrap: FrameLayout
     private lateinit var buyWrap: FrameLayout
     private lateinit var restoreRow: TextView
+    private lateinit var continueFree: TextView
+    private lateinit var priceStatus: TextView
     private var entrancePlayed = false
 
     /** How far the dock sits below the page bottom; the pinned bar stops above it. */
@@ -208,7 +210,8 @@ class ProScreen(
             R.drawable.ic_sym_ink_eraser to R.string.pro_feat_redact,
             R.drawable.ic_sym_qr_code_scanner to R.string.pro_feat_scan,
             R.drawable.ic_sym_check_circle to R.string.pro_feat_batch,
-            R.drawable.ic_sym_create_new_folder to R.string.pro_feat_folders
+            // UX5-12: the feature is Tags; a label/badge glyph, not a folder.
+            R.drawable.ic_sym_badge to R.string.pro_feat_folders
         )
         for (pair in features.chunked(2)) {
             val row = LinearLayout(context).apply { orientation = HORIZONTAL }
@@ -275,14 +278,23 @@ class ProScreen(
             setPadding(SwStyle.dp(context, 6f), 0, 0, SwStyle.dp(context, 3f))
         }
         priceRow.addView(priceSuffix)
-        // Fail closed: no amount until Play answers, never a built-in number.
-        showPrice(null)
         priceText.addView(priceRow)
         priceText.addView(
             SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-                text = context.getString(R.string.pro_price_note)
+                text = context.getString(R.string.ux130_l5_pro_once)
             }
         )
+        // Honest missing-price status. It never invents an amount and never claims payment is off.
+        priceStatus = SwStyle.text(
+            context, 12f, SwStyle.color(context, R.color.laser_danger), bold = true, metadata = true
+        ).apply {
+            id = R.id.swProPriceStatus
+            text = context.getString(R.string.ux130_l5_pro_price_unavailable)
+            visibility = View.GONE
+        }
+        priceText.addView(priceStatus)
+        // Fail closed: no amount until Play answers, never a built-in number.
+        showPrice(null)
         price.addView(priceText, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         price.addView(
             ImageView(context).apply {
@@ -303,7 +315,7 @@ class ProScreen(
         }
         buyButton = SwStyle.text(context, 16f, SwStyle.color(context, R.color.sw_on_gold), bold = true).apply {
             id = R.id.swProBuy
-            text = context.getString(R.string.pro_unlock)
+            text = context.getString(R.string.ux130_l5_pro_buy)
             gravity = Gravity.CENTER
             background = SwStyle.gradient(
                 context,
@@ -324,15 +336,28 @@ class ProScreen(
         }
 
         if (!active) {
-            restoreRow = SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-                text = context.getString(R.string.pro_restore)
-                contentDescription = context.getString(R.string.pro_restore)
+            // UX5-1: Restore is no longer buried below the feature grid. It and Continue free
+            // live in the immediately discoverable action area beside the purchase control.
+            continueFree = SwStyle.quietAction(
+                context,
+                SwStyle.text(context, 14f, SwStyle.color(context, R.color.rv_accent), bold = true)
+            ).apply {
+                id = R.id.swProContinueFree
+                text = context.getString(R.string.ux130_l5_pro_continue_free)
+                contentDescription = text
                 gravity = Gravity.CENTER
-                isClickable = true
-                minimumHeight = SwStyle.dp(context, 48f)
+                setOnClickListener { callbacks.onClose() }
+            }
+            restoreRow = SwStyle.quietAction(
+                context,
+                SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_hi), bold = true)
+            ).apply {
+                id = R.id.swProRestoreAction
+                text = context.getString(R.string.ux130_l5_pro_restore)
+                contentDescription = text
+                gravity = Gravity.CENTER
                 setOnClickListener { onRestorePurchase() }
             }
-            content.addView(restoreRow, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f)))
         }
         content.addView(SwStyle.spacer(context, 20f))
 
@@ -427,6 +452,8 @@ class ProScreen(
             if (known) 30f else 15f
         )
         priceSuffix.visibility = if (known) View.VISIBLE else View.GONE
+        // A missing price is an honest status, not a claim that payment is unavailable.
+        priceStatus.visibility = if (known) View.GONE else View.VISIBLE
     }
 
     private fun playEntrance() {
@@ -559,6 +586,18 @@ class ProScreen(
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 54f))
                 .apply { topMargin = SwStyle.dp(context, 8f) }
         )
+        // Three compact rows, never a pinned four-row footer: the copy above still scrolls.
+        val actions = LinearLayout(context).apply { orientation = HORIZONTAL }
+        actions.addView(
+            continueFree,
+            LayoutParams(0, SwStyle.dp(context, 48f), 1f).apply { marginEnd = SwStyle.dp(context, 8f) }
+        )
+        actions.addView(restoreRow, LayoutParams(0, SwStyle.dp(context, 48f), 1f))
+        row.addView(
+            actions,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 8f) }
+        )
         bar.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         return bar
     }
@@ -593,12 +632,9 @@ class ProScreen(
                 text = context.getString(label)
                 maxLines = 2
                 setLineSpacing(0f, 1.1f)
-                val density = resources.displayMetrics.density
-                val scaled = resources.displayMetrics.scaledDensity
-                setTextSize(
-                    android.util.TypedValue.COMPLEX_UNIT_PX,
-                    minOf(13.5f * scaled, 16f * density)
-                )
+                // UX5-3: the old COMPLEX_UNIT_PX cap froze these at 16dp@1x at 200% font.
+                // SwStyle.text already applied the 13.5sp token (dimens_ux130.xml); no px cap,
+                // so the label scales with the system and its wrap-height parent grows with it.
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )

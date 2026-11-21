@@ -79,4 +79,23 @@
         <item name="android:letterSpacing">0.01</item>
         <item name="android:textColor">@color/text_hologram_mid</item>
     </style>
+
+    <!-- UX L5-04: explicit role tokens, additive only. Body 16sp; metadata 12sp,
+         Devanagari metadata 14sp with font padding so matras keep their base letters. -->
+    <style name="TextAppearance.ScanWhirl.L5.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textSize">@dimen/ux_l5_text_body</item>
+        <item name="android:textColor">@color/text_hologram_hi</item>
+        <item name="android:includeFontPadding">true</item>
+    </style>
+
+    <style name="TextAppearance.ScanWhirl.L5.Meta" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">@dimen/ux_l5_text_meta</item>
+        <item name="android:textColor">@color/text_hologram_mid</item>
+    </style>
+
+    <style name="TextAppearance.ScanWhirl.L5.MetaHi" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">@dimen/ux_l5_text_meta_hi</item>
+        <item name="android:textColor">@color/text_hologram_mid</item>
+        <item name="android:includeFontPadding">true</item>
+    </style>
 </resources>

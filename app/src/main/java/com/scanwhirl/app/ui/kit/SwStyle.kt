@@ -10,6 +10,9 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.AppLanguage
 
@@ -76,20 +79,31 @@ object SwStyle {
             setStroke(dp(context, 1f).coerceAtLeast(1), stroke)
         }
 
+    /**
+     * Shared text factory. [metadata] is additive: callers that do not pass it keep the exact
+     * old size and `includeFontPadding = false`. Touched metadata callers get a 12sp floor
+     * (14sp for Hindi, where matras need their padding back).
+     */
     fun text(
         context: Context,
         sizeSp: Float,
         textColor: Int,
         bold: Boolean = false,
-        letterSpacing: Float = 0f
+        letterSpacing: Float = 0f,
+        metadata: Boolean = false
     ): TextView = TextView(context).apply {
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+        val size = if (metadata) maxOf(sizeSp, metaSizeSp(context)) else sizeSp
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
         setTextColor(textColor)
         typeface = SwType.of(context, if (bold) SwType.BOLD else SwType.REGULAR)
         // Latin tracking pulls Devanagari matras off their base letters. Hindi keeps 0.
         this.letterSpacing = tracking(context, letterSpacing)
-        includeFontPadding = false
+        includeFontPadding = metadata && AppLanguage.showingHindi(context)
     }
+
+    /** L5 role token: 12sp metadata floor, 14sp where Devanagari is on screen. */
+    fun metaSizeSp(context: Context): Float =
+        if (AppLanguage.showingHindi(context)) 14f else 12f
 
     /**
      * Em tracking for kit labels. English keeps the requested value; Hindi is always 0
@@ -97,6 +111,49 @@ object SwStyle {
      */
     fun tracking(context: Context, em: Float): Float =
         if (em == 0f || AppLanguage.showingHindi(context)) 0f else em
+
+    /**
+     * Decorative TextViews used as actions must speak as Buttons. Additive: it changes only the
+     * accessibility node and focusability, never the label, colour or click listener.
+     */
+    fun asButton(view: TextView): TextView = view.apply {
+        isFocusable = true
+        ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
+            override fun onInitializeAccessibilityNodeInfo(
+                host: View,
+                info: AccessibilityNodeInfoCompat
+            ) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Button::class.java.name
+            }
+        })
+    }
+
+    /**
+     * A new quiet action with a boundary that clears 3:1 against the adjacent ink surface and a
+     * visible focus ring. Only for NEW controls; existing callers keep their own backgrounds.
+     */
+    fun quietAction(
+        context: Context,
+        view: TextView,
+        radiusDp: Float = 16f,
+        strokeDp: Float = 1f
+    ): TextView = asButton(view).apply {
+        isClickable = true
+        minimumHeight = dp(context, 48f)
+        val padH = dp(context, 12f)
+        setPadding(padH, dp(context, 8f), padH, dp(context, 8f))
+        val rest = rounded(
+            context, Color.TRANSPARENT, radiusDp,
+            stroke = color(context, R.color.sw_boundary_functional), strokeDp = strokeDp
+        )
+        val focused = rounded(
+            context, color(context, R.color.rv_surface_2), radiusDp,
+            stroke = color(context, R.color.sw_boundary_functional), strokeDp = 2f
+        )
+        background = rest
+        setOnFocusChangeListener { _, hasFocus -> background = if (hasFocus) focused else rest }
+    }
 
     /** 48dp round icon tap target with the same 24dp tinted glyph. */
     fun iconButton(context: Context, iconRes: Int, tint: Int): android.widget.ImageButton =

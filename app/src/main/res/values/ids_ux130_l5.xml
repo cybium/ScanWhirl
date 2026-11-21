@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L5: new view ids only; existing shared ids are untouched. -->
+<resources>
+    <item name="swProContinueFree" type="id" />
+    <item name="swProRestoreAction" type="id" />
+    <item name="swProPriceStatus" type="id" />
+
+    <item name="uxL5VaultRecoveryProof" type="id" />
+
+    <item name="uxL5BackupSummary" type="id" />
+    <item name="uxL5BackupVaultStatus" type="id" />
+</resources>
