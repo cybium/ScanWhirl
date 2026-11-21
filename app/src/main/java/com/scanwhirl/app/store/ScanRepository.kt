@@ -170,6 +170,9 @@ class ScanRepository(private val context: Context) {
         /** Lead decision: fault seam at the start of each startup recovery step; may throw. */
         @Volatile internal var recoveryStepFault: ((String) -> Unit)? = null
 
+        /** Sol re-review: page/PDF hashing during recovery; a throw means UNKNOWN, never mismatch. */
+        @Volatile internal var recoveryHash: (File) -> String = { Sha256.of(it) }
+
         /**
          * Test seam (task S4B): called on the thread that runs the PDF-lock PBKDF2, so a test can
          * prove the 1 300 000-iteration derivation never happens on the main thread.
@@ -187,6 +190,7 @@ class ScanRepository(private val context: Context) {
             recoveryIncomplete = false
             recoveryFileDelete = { it.deleteRecursively() }
             recoveryStepFault = null
+            recoveryHash = { Sha256.of(it) }
             lockDerivationProbe = null
         }
 
@@ -2874,6 +2878,34 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
+     * Sol re-review: "could not hash" is NOT proof of a mismatch. A failure (including an
+     * OutOfMemoryError) means UNKNOWN: the marker is the only record of the new verifier, so it
+     * must be kept and retried, never deleted as if the operation had been rolled back.
+     */
+    private enum class DigestState { VERIFIED_MATCH, VERIFIED_MISMATCH, UNKNOWN }
+
+    private class DigestResult(val state: DigestState, val matchedNew: Boolean = false) {
+        companion object {
+            val MATCH_OLD = DigestResult(DigestState.VERIFIED_MATCH, false)
+            val MATCH_NEW = DigestResult(DigestState.VERIFIED_MATCH, true)
+            val MISMATCH = DigestResult(DigestState.VERIFIED_MISMATCH)
+            val UNKNOWN = DigestResult(DigestState.UNKNOWN)
+        }
+    }
+
+    private fun checkPdfDigest(pdf: File, oldHex: String, newHex: String): DigestResult = try {
+        when (val digest = recoveryHash(pdf)) {
+            newHex -> DigestResult.MATCH_NEW
+            oldHex -> DigestResult.MATCH_OLD
+            else -> DigestResult.MISMATCH
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (t: Throwable) {
+        DigestResult.UNKNOWN
+    }
+
+    /**
      * Finishes a password change that died after the PDF swap (see [swapPasswordVerified]).
      * Only the destructive step needs repair: once `scan.pdf` is the new file, the marker alone
      * names the verifier that must replace the old one. A death before the swap changed nothing
@@ -2882,20 +2914,38 @@ class ScanRepository(private val context: Context) {
     private fun recoverPasswordSwap(work: File) {
         val swap = PasswordSwap.read(work) ?: return
         val dir = File(docsDir, swap.id)
-        if (!dir.isDirectory) return
+        if (!dir.isDirectory) { // the document is truly gone: stale, nothing to repair
+            File(work, PasswordSwap.MARKER).delete()
+            return
+        }
         val pdf = File(dir, PdfProtection.PDF_FILE)
         val lock = File(dir, LOCK_FILE)
         synchronized(PDF_LOCK) {
-            val digest = runCatching { Sha256.of(pdf) }.getOrNull()
-            if (digest == swap.newPdfSha256) {
-                if (readPdfLock(lock) != swap.newRecord) {
-                    Durable.atomicWriteText(lock, swap.newRecord)
-                    Durable.syncDir(dir)
+            when (val check = checkPdfDigest(pdf, swap.previousPdfSha256, swap.newPdfSha256)) {
+                DigestResult.UNKNOWN -> {
+                    // Never lose the only copy of the new verifier because a hash could not be read.
+                    recoveryIncomplete = true
+                    android.util.Log.w("ScanWhirl", "startup password-swap: PDF digest unknown")
+                    return@synchronized
                 }
-                recordLockIndex(pdf, swap.id)
+                DigestResult.MATCH_NEW -> {
+                    if (readPdfLock(lock) != swap.newRecord) {
+                        try {
+                            Durable.atomicWriteText(lock, swap.newRecord)
+                            Durable.syncDir(dir)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (t: Throwable) {
+                            recoveryIncomplete = true
+                            android.util.Log.w("ScanWhirl",
+                                "startup password-swap: verifier write failed (${t.javaClass.simpleName})")
+                            return@synchronized // keep the marker, retry next start
+                        }
+                    }
+                    recordLockIndex(pdf, swap.id)
+                }
+                // MATCH_OLD or a verified MISMATCH: nothing was swapped in, resolution is complete.
             }
-            // Resolved (rolled forward, rolled back or stale): the marker must not survive the
-            // sweep, which now keeps only UNRESOLVED recovery markers.
             File(work, PasswordSwap.MARKER).delete()
         }
     }
@@ -2909,13 +2959,20 @@ class ScanRepository(private val context: Context) {
     private fun recoverUnlock(work: File) {
         val pending = Unlock.read(work) ?: return
         val dir = File(docsDir, pending.id)
-        if (!dir.isDirectory) return
+        if (!dir.isDirectory) {
+            File(work, Unlock.MARKER).delete()
+            return
+        }
         val pdf = File(dir, PdfProtection.PDF_FILE)
         val lock = File(dir, LOCK_FILE)
         synchronized(PDF_LOCK) {
-            val digest = runCatching { Sha256.of(pdf) }.getOrNull() ?: return
-            when (digest) {
-                pending.newPdfSha256 -> {
+            when (checkPdfDigest(pdf, pending.oldPdfSha256, pending.newPdfSha256)) {
+                DigestResult.UNKNOWN -> {
+                    recoveryIncomplete = true
+                    android.util.Log.w("ScanWhirl", "startup unlock recovery: PDF digest unknown")
+                    return@synchronized // keep the marker and its metadata for a later start
+                }
+                DigestResult.MATCH_NEW -> {
                     // Rolled forward: never leave a plain PDF labelled locked. If the label cannot
                     // be removed, KEEP the marker and let the sweep skip this folder for a retry.
                     if (lock.exists() && !removeLockFile(lock)) {
@@ -2929,14 +2986,14 @@ class ScanRepository(private val context: Context) {
                     if (lock.exists()) Durable.syncDir(dir)
                     pruneLockIndex()
                 }
-                pending.oldPdfSha256 -> {
+                DigestResult.MATCH_OLD -> {
                     // Rolled back: the encrypted PDF is still in place, so its label must stay.
                     if (!lock.exists()) {
                         Durable.atomicWriteText(lock, pending.oldRecord)
                         Durable.syncDir(dir)
                     }
                 }
-                // A stale marker (digest of some other PDF) is ignored safely below.
+                // A verified MISMATCH is a stale marker: resolved by ignoring it.
             }
             File(work, Unlock.MARKER).delete()
         }
@@ -3044,7 +3101,7 @@ class ScanRepository(private val context: Context) {
      * Therefore an unresolved folder must keep ONLY its marker, never plaintext scratch. A marker
      * naming a missing document or an unrelated PDF is stale and its whole folder is deleted.
      */
-    private enum class MarkerState { NONE, KEEP, STALE }
+    private enum class MarkerState { NONE, KEEP, STALE, UNKNOWN }
 
     private fun recoveryMarkerState(work: File): MarkerState {
         val (id, oldPdf, newPdf) = PasswordSwap.read(work)?.let {
@@ -3053,10 +3110,12 @@ class ScanRepository(private val context: Context) {
             Triple(it.id, it.oldPdfSha256, it.newPdfSha256)
         } ?: return MarkerState.NONE
         val dir = File(docsDir, id)
-        if (!dir.isDirectory) return MarkerState.STALE
-        val digest = runCatching { Sha256.of(File(dir, PdfProtection.PDF_FILE)) }.getOrNull()
-            ?: return MarkerState.STALE
-        return if (digest == oldPdf || digest == newPdf) MarkerState.KEEP else MarkerState.STALE
+        if (!dir.isDirectory) return MarkerState.STALE // truly missing document
+        return when (checkPdfDigest(File(dir, PdfProtection.PDF_FILE), oldPdf, newPdf)) {
+            DigestResult.MATCH_OLD, DigestResult.MATCH_NEW -> MarkerState.KEEP
+            DigestResult.MISMATCH -> MarkerState.STALE // both digests computed, neither matches
+            else -> MarkerState.UNKNOWN // keep marker + metadata, retry next start
+        }
     }
 
     private fun pruneRecoveryStaging(work: File) {
@@ -3065,9 +3124,17 @@ class ScanRepository(private val context: Context) {
             Unlock.read(work) != null -> Unlock.MARKER
             else -> return
         }
-        if (recoveryMarkerState(work) == MarkerState.STALE) {
-            work.deleteRecursively()
-            return
+        when (recoveryMarkerState(work)) {
+            MarkerState.STALE -> {
+                work.deleteRecursively()
+                return
+            }
+            MarkerState.UNKNOWN -> {
+                // The PDF could not be hashed: keep the marker AND all its metadata untouched.
+                recoveryIncomplete = true
+                return
+            }
+            else -> Unit
         }
         work.listFiles()?.forEach { file ->
             if (file.name != markerName && !recoveryFileDelete(file)) {
@@ -3201,7 +3268,10 @@ class ScanRepository(private val context: Context) {
         // Stale markers (missing document / unrelated digest) delete their whole folder here.
         recoveryStep("prune-recovery-staging") { deadStagingDirs().forEach { pruneRecoveryStaging(it) } }
         recoveryStep("staging-sweep") {
-            swept = OpStaging.sweep(filesDir) { dir -> recoveryMarkerState(dir) == MarkerState.KEEP }
+            swept = OpStaging.sweep(filesDir) { dir ->
+                val state = recoveryMarkerState(dir)
+                state == MarkerState.KEEP || state == MarkerState.UNKNOWN
+            }
         }
 
         // 7. Folder repair LAST. A failure here leaves the tombstone/folder work for the next start.
