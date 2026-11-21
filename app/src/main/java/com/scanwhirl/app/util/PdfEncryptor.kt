@@ -16,6 +16,10 @@ object PdfEncryptor {
 
     private val latin = Charsets.ISO_8859_1
 
+    /** SEC1 1.3.0: test seam for the verification-key wipe; null in production. */
+    @androidx.annotation.VisibleForTesting
+    internal var verificationKeyWipeProbe: (() -> Unit)? = null
+
     /**
      * Shared structural limits of ScanWhirl's PDF reader/writer pair. [PdfDecryptor] (lane S4A)
      * enforces the same two values, and its round-trip test references them here, so a file this
@@ -68,9 +72,15 @@ object PdfEncryptor {
         validateOnly(text, layout)
         val encryption = PdfAes.create(userPassword)
         val derived = PdfAes.userKey(userPassword, encryption.u, encryption.ue)
-        if (derived == null || !derived.contentEquals(encryption.fileKey)) {
-            throw IOException("The password could not be verified before writing")
+        // SEC1 1.3.0: the verification copy of the key is no longer needed after
+        // this comparison; wipe it in finally even when verification throws.
+        val verified = try {
+            derived != null && derived.contentEquals(encryption.fileKey)
+        } finally {
+            derived?.fill(0)
+            verificationKeyWipeProbe?.invoke()
         }
+        if (!verified) throw IOException("The password could not be verified before writing")
 
         val parent = dst.absoluteFile.parentFile ?: throw IOException("No folder for ${dst.name}")
         parent.mkdirs()

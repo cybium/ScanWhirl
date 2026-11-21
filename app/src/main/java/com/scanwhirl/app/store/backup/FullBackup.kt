@@ -181,6 +181,8 @@ class FullBackup(
             // Vault is left out and the report says so; the library still backs up.
             val vaultPending = vault.isConfirmationPending()
             val vaultKey = if (vaultPending) null else vaultKeyFor(secret, wrap)
+            val salt = VaultCrypto.newSalt()
+            val key = secretKey(secret, wrap, salt, VaultCrypto.PBKDF2_ITERATIONS)
             try {
                 DataOutputStream(BufferedOutputStream(FileOutputStream(plain), BUFFER)).use { out ->
                     writeEntry(out, "manifest.json", manifest().toByteArray(Charsets.UTF_8))
@@ -193,8 +195,6 @@ class FullBackup(
                     writeEntry(out, "settings.json", settings().toByteArray(Charsets.UTF_8))
                     out.writeByte(END)
                 }
-                val salt = VaultCrypto.newSalt()
-                val key = secretKey(secret, wrap, salt, VaultCrypto.PBKDF2_ITERATIONS)
                 target.parentFile?.mkdirs()
                 val part = File(target.parentFile, target.name + ".part")
                 try {
@@ -236,6 +236,9 @@ class FullBackup(
                     }
                 )
             } finally {
+                // SEC1 1.3.0: wipe the derived container key at its final use.
+                key.fill(0)
+                exportKeyWipeProbe?.invoke()
                 vaultKey?.fill(0)
             }
         } finally {
@@ -979,6 +982,10 @@ class FullBackup(
         private const val END = 0
         private const val BUFFER = 64 * 1024
         private const val MAX_ENTRY_BYTES = 512L * 1024 * 1024
+
+        /** SEC1 1.3.0: test seam for the derived export-key wipe; null in production. */
+        @androidx.annotation.VisibleForTesting
+        internal var exportKeyWipeProbe: (() -> Unit)? = null
     }
 }
 

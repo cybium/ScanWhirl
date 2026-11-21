@@ -70,6 +70,15 @@ class VaultStore(
         private val STORED_NAME = Regex("[A-Za-z0-9._-]{1,255}")
         private val SHA256 = Regex("[a-f0-9]{64}")
 
+        /** SEC1 1.3.0: test seam for caller-owned key wipes; null in production. */
+        @androidx.annotation.VisibleForTesting
+        internal var keyWipeProbe: ((String) -> Unit)? = null
+
+        private fun wipeKey(key: ByteArray, where: String) {
+            key.fill(0)
+            keyWipeProbe?.invoke(where)
+        }
+
         internal fun isSafeEntryId(id: String): Boolean =
             id.isNotEmpty() && id.length <= 64 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
 
@@ -231,32 +240,36 @@ class VaultStore(
         clearIncompleteProvisioning()
 
         val key = VaultCrypto.newKey()
-        val recoveryCode = VaultCrypto.generateRecoveryCode()
-        val passBlob = VaultKeyWrap.seal(key, passcode, VaultCrypto.newSalt(), iterations)
-        val recoveryBlob = VaultKeyWrap.seal(key, recoveryCode, VaultCrypto.newSalt(), iterations)
-
-        Durable.atomicWrite(File(vaultDir, PASSCODE_FILE), passBlob)
-        // Non-secret pending marker BEFORE the "set up" blob: a Vault can never exist with an
-        // unconfirmed recovery code and no marker, even if the process dies right here. It is
-        // cleared only by markConfirmationPassed() after the four-character check.
-        if (!Prefs.setVaultSetupConfirmPending(context, true)) {
-            // Fail closed: without the marker the check could be skipped, so nothing is published.
-            File(vaultDir, PASSCODE_FILE).delete()
-            throw IOException("Could not start the Vault setup")
-        }
         try {
-            // Written last: its presence is the "set up" marker.
-            Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
-            Durable.syncDir(vaultDir)
-        } catch (e: Exception) {
-            // The transaction did not complete (a write failed): leave nothing that looks
-            // provisioned. A real process kill cannot run this, so recover() and the backup
-            // restore also clear such leftovers (review MUST-FIX 2).
-            File(vaultDir, PASSCODE_FILE).delete()
-            throw e
+            val recoveryCode = VaultCrypto.generateRecoveryCode()
+            val passBlob = VaultKeyWrap.seal(key, passcode, VaultCrypto.newSalt(), iterations)
+            val recoveryBlob = VaultKeyWrap.seal(key, recoveryCode, VaultCrypto.newSalt(), iterations)
+
+            Durable.atomicWrite(File(vaultDir, PASSCODE_FILE), passBlob)
+            // Non-secret pending marker BEFORE the "set up" blob: a Vault can never exist with an
+            // unconfirmed recovery code and no marker, even if the process dies right here. It is
+            // cleared only by markConfirmationPassed() after the four-character check.
+            if (!Prefs.setVaultSetupConfirmPending(context, true)) {
+                // Fail closed: without the marker the check could be skipped, so nothing is published.
+                File(vaultDir, PASSCODE_FILE).delete()
+                throw IOException("Could not start the Vault setup")
+            }
+            try {
+                // Written last: its presence is the "set up" marker.
+                Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), recoveryBlob)
+                Durable.syncDir(vaultDir)
+            } catch (e: Exception) {
+                // The transaction did not complete (a write failed): leave nothing that looks
+                // provisioned. A real process kill cannot run this, so recover() and the backup
+                // restore also clear such leftovers (review MUST-FIX 2).
+                File(vaultDir, PASSCODE_FILE).delete()
+                throw e
+            }
+            VaultSession.open(key)
+            return@synchronized Setup(VaultCrypto.formatRecoveryCode(recoveryCode))
+        } finally {
+            wipeKey(key, "setup")
         }
-        VaultSession.open(key)
-        Setup(VaultCrypto.formatRecoveryCode(recoveryCode))
     }
 
     fun unlockWithPasscode(passcode: String): UnlockResult = synchronized(LOCK) {
@@ -272,10 +285,14 @@ class VaultStore(
         if (key == null) {
             return UnlockResult(false, gate.onWrong(), gate.triesLeft())
         }
-        gate.onSuccess()
-        VaultSession.open(key)
-        migrateRestoredLegacy()
-        UnlockResult(true, triesLeft = gate.triesLeft())
+        try {
+            gate.onSuccess()
+            VaultSession.open(key)
+            migrateRestoredLegacy()
+            return@synchronized UnlockResult(true, triesLeft = gate.triesLeft())
+        } finally {
+            wipeKey(key, "passcode")
+        }
     }
 
     /** Recovery-code unlock (also after restoring a backup on a new phone). */
@@ -289,7 +306,11 @@ class VaultStore(
         } catch (e: Exception) {
             null
         } ?: return false
-        finishRecoveryUnlock(key)
+        try {
+            return@synchronized finishRecoveryUnlock(key)
+        } finally {
+            wipeKey(key, "recovery")
+        }
     }
 
     /**
@@ -355,11 +376,15 @@ class VaultStore(
             File(vaultDir, KEYSTORE_FILE).delete()
             return false
         }
-        if (key.size != VaultCrypto.KEY_BYTES) return false
-        gate.onSuccess()
-        VaultSession.open(key)
-        migrateRestoredLegacy()
-        true
+        try {
+            if (key.size != VaultCrypto.KEY_BYTES) return@synchronized false
+            gate.onSuccess()
+            VaultSession.open(key)
+            migrateRestoredLegacy()
+            return@synchronized true
+        } finally {
+            wipeKey(key, "biometric")
+        }
     }
 
     /** Drops the key and every decrypted copy. */
