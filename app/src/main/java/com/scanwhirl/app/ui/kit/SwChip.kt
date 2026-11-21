@@ -52,6 +52,8 @@ class SwChip(context: Context) : LinearLayout(context) {
                 .apply { marginEnd = SwStyle.dp(context, 6f) }
         )
 
+        // L1-04 target is 12sp; 11.5f is retained because OcrLabelFitTest fails at 12sp
+        // ("Save .txt" breaks inside ".txt" at 320dp/2.0x in the shared OCR chip row).
         labelView = SwStyle.text(
             context, 11.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
         ).apply {
@@ -59,6 +61,10 @@ class SwChip(context: Context) : LinearLayout(context) {
             maxLines = 1
             isSingleLine = true
             includeFontPadding = false
+            // L1-04: when a host relaxes this to two lines, wrap only at whole words.
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
         }
         addView(labelView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
     }

@@ -321,22 +321,46 @@ class LibraryListCraftTest {
         }
     }
 
+    /**
+     * LEAD DECISION (L1-04): OLD required the strip to be <=32dp so it could not cover rows.
+     * NEW requires a >=48dp interactive strip, a <=8dp DRAWN thumb, and no overlap with any
+     * card Share/More hit rect (the list reserves a 48dp end gutter for the strip).
+     */
     @Test
-    fun `the fast-scroll bar is the only pinned layer and never covers a row`() {
+    fun `the fast-scroll strip is 48dp non-overlapping with a 4dp drawn thumb`() {
         repeat(16) { i -> DocFixtures.saved(repo, app, pages = 1, name = "Scan $i") }
         launch { activity ->
             val bar = activity.findViewById<View>(R.id.swLibraryFastScroll)
             assertNotNull(bar)
             assertTrue(bar.isShown)
-            // The bar is a 24dp strip at the end edge; the rest of the width is free.
             val host = activity.findViewById<ViewGroup>(R.id.swTabContent)
             val chrome = host.findViewById<ViewGroup>(R.id.swLibraryChrome)
             assertNotNull("the pinned layer still exists for the scroll bar", chrome)
             val density = activity.resources.displayMetrics.density
             assertTrue(
-                "the pinned layer keeps the list width free (bar ${bar.width}px of ${chrome?.width}px)",
-                bar.layoutParams.width <= Math.round(32 * density)
+                "the interactive strip is at least 48dp wide",
+                bar!!.layoutParams.width >= Math.round(48 * density) - 1
             )
+            val src = java.io.File("src/main/java/com/scanwhirl/app/ui/shell/LibraryChrome.kt").readText()
+            assertTrue("the visual thumb stays 4dp", src.contains("private val thumbWidth = 4f * density"))
+            val list = activity.findViewById<ViewGroup>(R.id.swDocList)
+            assertTrue(
+                "the list reserves a gutter so no card action is covered",
+                list.paddingRight >= Math.round(48 * density) - 1
+            )
+            // No card Share/More hit rect may reach into the strip's horizontal band.
+            val stripLeft = bar.x
+            for (i in 0 until list.childCount) {
+                val card = list.getChildAt(i)
+                for (id in intArrayOf(R.id.swDocShare, R.id.swDocMore)) {
+                    val action = card.findViewById<View>(id) ?: continue
+                    val actionRight = action.x + action.width + (card.x) + (list.x)
+                    assertTrue(
+                        "card $i action $id must not overlap the fast-scroll strip",
+                        actionRight <= stripLeft + 0.5f
+                    )
+                }
+            }
         }
     }
 

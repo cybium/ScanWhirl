@@ -329,6 +329,6 @@ class ToolTile(context: Context) : FrameLayout(context) {
         const val LABEL_SP = 12f
 
         /** The Home quick row's floor: never smaller, two lines instead. */
-        const val QUICK_LABEL_SP = 11f
+        const val QUICK_LABEL_SP = 12f
     }
 }

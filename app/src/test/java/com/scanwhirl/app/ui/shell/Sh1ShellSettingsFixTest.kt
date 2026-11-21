@@ -1,7 +1,6 @@
 package com.scanwhirl.app.ui.shell
 
 import android.os.Looper
-import android.text.TextUtils
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -139,31 +138,88 @@ class Sh1ShellSettingsFixTest {
         )
     }
 
+    /**
+     * LEAD DECISION (G6): replaced the old one-line + END-ellipsis assertions. The intent —
+     * every destination stays readable and named at 200 % in EN and HI, with no clipping —
+     * is preserved by asserting two-line wrapping, no ellipsis, >=12sp, and measured dock
+     * clearance. OLD: maxLines == 1, ellipsize == END. NEW: maxLines <= 2, ellipsize == null,
+     * >=12sp, no drawn ellipsis, full label in contentDescription, dock grows with content.
+     */
     @Test(timeout = 30_000)
     @Config(sdk = [35], qualifiers = "hi-w360dp-h640dp-xhdpi")
-    fun `Hindi tab labels fit at 200 percent font and keep their content description`() {
+    fun `nav labels wrap uncapped at 200 percent Hindi and the dock keeps clearance`() {
         RuntimeEnvironment.setFontScale(2.0f)
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 layout(activity)
+                idle() // let the dock's posted padding update settle
                 val density = activity.resources.displayMetrics.density
+                val scaled = activity.resources.displayMetrics.scaledDensity
                 for (id in intArrayOf(R.id.swNavLibrary, R.id.swNavTools, R.id.swNavVault, R.id.swNavMe)) {
                     val cell = activity.findViewById<View>(id) as ViewGroup
                     val label = (0 until cell.childCount).map { cell.getChildAt(it) }
                         .filterIsInstance<TextView>().first { it.tag == "label" }
                     assertTrue("cell $id keeps a 48dp touch target", cell.width >= (48 * density).toInt() - 1)
-                    assertEquals("label $id stays on one line", 1, label.maxLines)
+                    assertTrue("label $id is at least 12sp", label.textSize / scaled >= 11.99f)
+                    assertTrue("label $id may wrap to at most two lines", label.maxLines <= 2)
+                    assertTrue("label $id must not ellipsize", label.ellipsize == null)
+                    val drawn = label.layout
+                    assertTrue("label $id was laid out", drawn != null)
+                    assertTrue("label $id fits inside its cell", label.width <= cell.width + 1)
+                    assertTrue("label $id does not overlap the cell", label.bottom <= cell.bottom + 1)
+                    for (line in 0 until drawn!!.lineCount) {
+                        assertEquals("label $id line $line has no ellipsis", 0, drawn.getEllipsisCount(line))
+                    }
                     assertTrue(
-                        "label $id must ellipsize instead of clipping or overlapping",
-                        label.ellipsize == TextUtils.TruncateAt.END
-                    )
-                    assertTrue("label $id must fit inside its cell", label.width <= cell.width)
-                    assertTrue(
-                        "label $id must still be named for TalkBack when it ellipsizes",
-                        cell.contentDescription?.toString().orEmpty().isNotBlank()
+                        "label $id keeps its full spoken name",
+                        cell.contentDescription?.toString().orEmpty() == label.text.toString()
                     )
                 }
+                val bar = activity.findViewById<View>(R.id.swShellNav)
+                val dock = bar.parent as View
+                assertTrue("the dock grew for wrapped labels", dock.height >= (64 * density).toInt())
+                val scroll = activity.findViewById<ViewGroup>(R.id.swTabContent).getChildAt(0) as View
+                assertTrue(
+                    "content clears the grown dock (pad ${scroll.paddingBottom}, dock ${dock.height})",
+                    scroll.paddingBottom >= dock.height
+                )
+                assertTrue("the grown dock holds the wrapped bar", dock.height >= bar.height)
+            }
+        }
+    }
+
+    @Test(timeout = 30_000)
+    fun `nav labels wrap uncapped at 200 percent English and clear the dock`() {
+        RuntimeEnvironment.setFontScale(2.0f)
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                layout(activity)
+                idle()
+                val scaled = activity.resources.displayMetrics.scaledDensity
+                for (id in intArrayOf(R.id.swNavLibrary, R.id.swNavTools, R.id.swNavVault, R.id.swNavMe)) {
+                    val cell = activity.findViewById<View>(id) as ViewGroup
+                    val label = cell.findViewWithTag<TextView>("label")
+                    assertTrue("English label $id >= 12sp", label.textSize / scaled >= 11.99f)
+                    assertTrue("English label $id uncapped", label.ellipsize == null && label.maxLines <= 2)
+                    val drawn = label.layout
+                    for (line in 0 until (drawn?.lineCount ?: 0)) {
+                        assertEquals(0, drawn!!.getEllipsisCount(line))
+                    }
+                }
+                val bar = activity.findViewById<View>(R.id.swShellNav)
+                val dock = bar.parent as View
+                val scroll = activity.findViewById<ViewGroup>(R.id.swTabContent).getChildAt(0) as View
+                assertTrue(
+                    "English content clears the grown dock",
+                    scroll.paddingBottom >= dock.height
+                )
+                assertTrue("the English dock holds the wrapped bar", dock.height >= bar.height)
+                assertTrue(
+                    "the English dock holds the wrapped bar",
+                    (bar.parent.parent as View).height >= bar.height
+                )
             }
         }
     }

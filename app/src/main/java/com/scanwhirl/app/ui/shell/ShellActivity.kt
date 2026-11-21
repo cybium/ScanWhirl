@@ -7,10 +7,10 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -93,6 +93,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private var buying = false
     private var lastProState: Boolean? = null
     private var lastShown: View? = null
+
+    /** L1-06: one searchable-PDF operation per instance; a second tap is a no-op. */
+    private var searchableInFlight = false
+
+    /** L1-06: a bounded restore action; the X/Close on the sheet is always available. */
+    private var restoreInFlight = false
 
     private lateinit var library: LibraryScreen
     private lateinit var toolsHub: ToolsHubScreen
@@ -217,7 +223,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         contentHost = FrameLayout(this).apply { id = R.id.swTabContent }
         root.addView(contentHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         navHost = buildNav()
-        root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 100f)))
+        navHost.minimumHeight = SwStyle.dp(this, 100f)
+        root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         setContentView(root)
         loadWallpaper(root)
         // v2 UI: 01_home_A — with the keyboard up the nav bar and scan disc must not
@@ -261,6 +268,22 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             ?.let { runCatching { Tab.valueOf(it) }.getOrNull() }
             ?: Tab.LIBRARY
         showTab(startTab)
+        // L1-02: the rest of the library's place is restored only after the async data load
+        // in showTab() has produced a real document list (LibraryScreen.applyPendingRestore).
+        if (savedInstanceState != null && startTab == Tab.LIBRARY) {
+            library.restoreLibraryState(
+                com.scanwhirl.app.ui.shell.LibraryUiState(
+                    query = savedInstanceState.getString(KEY_QUERY).orEmpty(),
+                    folder = savedInstanceState.getString(KEY_FOLDER),
+                    category = savedInstanceState.getString(KEY_CATEGORY),
+                    sort = savedInstanceState.getString(KEY_SORT)
+                        ?: com.scanwhirl.app.util.Prefs.LIB_NEWEST,
+                    selection = savedInstanceState.getStringArray(KEY_SELECTION)?.toList().orEmpty(),
+                    selectionMode = savedInstanceState.getBoolean(KEY_SELECTION_MODE, false),
+                    scrollY = savedInstanceState.getInt(KEY_SCROLL, 0)
+                )
+            )
+        }
         // F1 (hunt H1-1): storage recovery once per process, off the main thread; the Library
         // reloads when it finishes so a document an interrupted Replace took away is back.
         val app = ScanWhirlApp.from(this)
@@ -313,10 +336,31 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
     }
 
-    /** SH1 #2: keep the tab through rotation and through the Settings-driven recreate. */
+    /** SH1 #2 + L1-02: keep the tab and the library's place through rotation/recreate. */
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(KEY_TAB, tab.name)
+        if (::library.isInitialized) {
+            val state = library.captureLibraryState()
+            outState.putString(KEY_QUERY, state.query)
+            outState.putString(KEY_FOLDER, state.folder)
+            outState.putString(KEY_CATEGORY, state.category)
+            outState.putString(KEY_SORT, state.sort)
+            outState.putStringArray(KEY_SELECTION, state.selection.toTypedArray())
+            outState.putBoolean(KEY_SELECTION_MODE, state.selectionMode)
+            outState.putInt(KEY_SCROLL, state.scrollY)
+        }
         super.onSaveInstanceState(outState)
+    }
+
+    /** L1-02: the library's pinned scroll anchor, read from the shell's own ScrollView. */
+    internal fun libraryScrollY(): Int =
+        if (::library.isInitialized) scrolls[library]?.scrollY ?: 0 else 0
+
+    /** L1-02: restore the anchor after the recreated list has been laid out. */
+    internal fun restoreLibraryScrollY(y: Int) {
+        if (!::library.isInitialized) return
+        val scroller = scroll(library)
+        scroller.post { scroller.scrollTo(0, y) }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -421,6 +465,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             id = R.id.swShellNav
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            // G6: the dock grows with wrapped labels instead of clipping them.
+            minimumHeight = SwStyle.dp(this@ShellActivity, 64f)
             background = SwStyle.rounded(
                 this@ShellActivity,
                 0xF2161D21.toInt(),
@@ -430,13 +476,34 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
         val items = LinkedHashMap<Tab, LinearLayout>()
         fun item(tab: Tab, icon: Int, label: Int): LinearLayout {
+            val destination = tab
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 isClickable = true
                 isFocusable = true
+                minimumHeight = SwStyle.dp(this@ShellActivity, 48f)
                 contentDescription = getString(label)
                 setOnClickListener { showTab(tab) }
+            }
+            // L1-03: real accessibility state, not a manually appended word. The full
+            // label stays in contentDescription; the selected tab is a selectable node.
+            cell.accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.isSelected = this@ShellActivity.tab == destination
+                    info.addAction(AccessibilityNodeInfo.ACTION_SELECT)
+                }
+
+                override fun performAccessibilityAction(
+                    host: View, action: Int, args: android.os.Bundle?
+                ): Boolean {
+                    if (action == AccessibilityNodeInfo.ACTION_SELECT) {
+                        showTab(destination)
+                        return true
+                    }
+                    return super.performAccessibilityAction(host, action, args)
+                }
             }
             cell.addView(
                 ImageView(this@ShellActivity).apply {
@@ -450,19 +517,17 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     text = getString(label)
                     gravity = Gravity.CENTER
                     tag = "label"
-                    maxLines = 1
-                    // SH1 #6: a long Hindi tab name (कागज़ात) must end in "…" instead of
-                    // running over the neighbouring cell at 200 % font. The cell keeps its
-                    // own contentDescription, so TalkBack still says the whole name.
-                    ellipsize = TextUtils.TruncateAt.END
-                    // The cell is a quarter of the bar minus the scan-disc gap;
-                    // cap the label so a long tab name never clips at 2.0x.
-                    val density = resources.displayMetrics.density
-                    val scaled = resources.displayMetrics.scaledDensity
-                    setTextSize(
-                        android.util.TypedValue.COMPLEX_UNIT_PX,
-                        minOf(11f * scaled, 13f * density)
-                    )
+                    // LEAD DECISION (G6): no dp cap, no ellipsis. >=12sp and up to two
+                    // wrapped lines; the dock grows and clearance is measured from it.
+                    maxLines = 2
+                    ellipsize = null
+                    hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                    //noinspection WrongConstant
+                    breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+                    // Tight but readable two-line leading keeps the grown dock from eating the
+                    // first card at 200 % on a 360x640dp phone.
+                    setLineSpacing(0f, 0.92f)
+                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
                 },
                 LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -484,17 +549,18 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         val meItem = item(Tab.ME, R.drawable.ic_sym_person, R.string.shell_nav_me).apply {
             id = R.id.swNavMe
         }
-        bar.addView(libraryItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-        bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+        // G6: cells wrap their labels; the bar (and dock) grows with them at 200 %.
+        bar.addView(libraryItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(View(this), LinearLayout.LayoutParams(SwStyle.dp(this, 86f), 1))
-        bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-        bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+        bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         navItems = items
 
         container.addView(
             bar,
             FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 64f)
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.BOTTOM
                 val m = SwStyle.dp(this@ShellActivity, 12f)
@@ -547,9 +613,29 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 imageTintList = ColorStateList.valueOf(
                     SwStyle.color(this@ShellActivity, R.color.sw_disc_ink)
                 )
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             FrameLayout.LayoutParams(SwStyle.dp(this, 34f), SwStyle.dp(this, 34f)).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                topMargin = SwStyle.dp(this@ShellActivity, 8f)
+            }
+        )
+        // L1-03: a visible, base-12sp caption. It lives INSIDE the disc's single focus
+        // stop, so TalkBack still hears one named Scan action rather than a second node.
+        disc.addView(
+            SwStyle.text(this, 12f, SwStyle.color(this, R.color.sw_disc_ink), bold = true).apply {
+                id = R.id.uxL1ScanCaption
+                text = getString(R.string.ux130_l1_scan_caption)
                 gravity = Gravity.CENTER
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                isFocusable = false
+                includeFontPadding = false
+            },
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = SwStyle.dp(this@ShellActivity, 7f)
             }
         )
         return disc
@@ -584,13 +670,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             clipToPadding = false
             setPadding(0, 0, 0, dockClearancePx())
             addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                // G6: the dock grows with wrapped labels, so re-measure on every layout pass.
+                // Applied directly (not posted) so a growing dock cannot leave stale clearance.
                 val pad = dockClearancePx()
                 if (v.paddingBottom != pad) {
-                    v.post {
-                        if (v.paddingBottom != dockClearancePx()) {
-                            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, dockClearancePx())
-                        }
-                    }
+                    v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, pad)
                 }
             }
             addView(
@@ -693,6 +777,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         val idle = SwStyle.color(this, R.color.text_hologram_dim)
         for ((key, cell) in navItems) {
             val on = key == tab && !proOpen
+            cell.isSelected = on
             val icon = if (on) navIconOn[key] else navIconOff[key]
             val glyph = cell.getChildAt(0) as ImageView
             icon?.let { glyph.setImageResource(it) }
@@ -769,8 +854,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     }
 
     private fun restoreBilling() {
-        // Outcome reaches the subscriber (R1). None from a restore is "nothing to restore".
-        com.scanwhirl.app.util.ProBilling.restore(this) { }
+        // L1-06: one restore in flight; the outcome still reaches the R1 subscriber.
+        if (restoreInFlight) return
+        restoreInFlight = true
+        com.scanwhirl.app.util.ProBilling.restore(this) { restoreInFlight = false }
     }
 
     /** One short sheet per outcome; a cancel stays silent. */
@@ -778,6 +865,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         when (state) {
             com.scanwhirl.app.util.ProBilling.State.Owned -> {
                 setBuying(false)
+                restoreInFlight = false
                 // p2pro #1: Tools/Library/Me cache Free/Pro; a successful Buy must rebind them
                 // now, not only after the next resume or app restart.
                 syncProState()
@@ -797,6 +885,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             com.scanwhirl.app.util.ProBilling.State.Busy -> setBuying(true)
             com.scanwhirl.app.util.ProBilling.State.None -> {
                 setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+                restoreInFlight = false
                 if (proOpen &&
                     com.scanwhirl.app.util.ProBilling.lastOperation() ==
                     com.scanwhirl.app.util.ProBilling.Op.RESTORE
@@ -810,10 +899,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
             is com.scanwhirl.app.util.ProBilling.State.Failed -> {
                 setBuying(false)
+                restoreInFlight = false
+                // L1-06: no dead end. Retry and Restore call the existing bounded methods;
+                // the sheet's own Close (swSheetClose) dismisses without either action.
                 SwSheet.builder(this)
-                    .setTitle(getString(R.string.pro_purchase_title))
+                    .setTitle(getString(R.string.ux130_l1_purchase_failed))
                     .setMessage(state.message)
-                    .setPrimary(R.string.sheet_got_it)
+                    .setPrimary(R.string.ux130_l1_purchase_retry) { startBilling() }
+                    .setSecondary(R.string.ux130_l1_purchase_restore) { restoreBilling() }
                     .build().show()
             }
         }
@@ -1031,35 +1124,60 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         if (autoCropped) scanLauncher.saveScanned(uris) else scanLauncher.stageAndReview(uris)
     }
 
-    /** v2 UI: 03_tools_hub — Searchable PDF is a real tool, never a jump to Settings. */
+    /**
+     * L1-06: a named, durable outcome instead of a vanishing Toast. The work is bounded
+     * to one run, progress is shown immediately and always dismissed, and Open/Share appear
+     * only after the repository confirms the text layer actually exists. Nothing here routes
+     * into the result Undo, so a failed operation can never delete the source document.
+     */
     private fun searchableSheet(doc: ScanDocument) {
-        val already = doc.isSearchable
+        if (doc.isSearchable) {
+            SwSheet.builder(this)
+                .setTitle(R.string.make_searchable_title)
+                .setMessage(getString(R.string.ux130_l1_text_layer_already))
+                .setPrimary(R.string.sheet_got_it)
+                .build().show()
+            return
+        }
+        if (searchableInFlight) return
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.make_searchable_title)
-            .setMessage(
-                if (already) getString(R.string.make_searchable_already, doc.name)
-                else getString(R.string.make_searchable_note, doc.name)
-            )
+            .setMessage(getString(R.string.make_searchable_note, doc.name))
             .build()
-        if (already) {
-            sheet.setPrimary(R.string.sheet_got_it)
-        } else {
-            sheet.setPrimary(R.string.make_searchable_action) {
-                lifecycleScope.launch {
-                    val ok = withContext(Dispatchers.IO) {
-                        runCatching { repo.makeSearchable(doc.id) }.getOrDefault(false)
-                    }
-                    Toast.makeText(
-                        this@ShellActivity,
-                        if (ok) getString(R.string.make_searchable_done, doc.name)
-                        else getString(R.string.make_searchable_unavailable, doc.name),
-                        Toast.LENGTH_LONG
-                    ).show()
-                    library.reload()
+        sheet.setPrimary(R.string.make_searchable_action) {
+            if (searchableInFlight) return@setPrimary
+            searchableInFlight = true
+            sheet.dismiss()
+            val progress = showProgress(R.string.ux130_l1_adding_text_layer)
+            lifecycleScope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    runCatching { searchableProbe?.invoke(doc.id) ?: repo.makeSearchable(doc.id) }
+                        .getOrDefault(false)
+                }
+                val verified = ok && repo.getDocument(doc.id)?.isSearchable == true
+                progress.dismiss()
+                searchableInFlight = false
+                if (isFinishing || isDestroyed) return@launch
+                library.reload()
+                if (verified) {
+                    val fresh = repo.getDocument(doc.id) ?: doc
+                    SwSheet.builder(this@ShellActivity)
+                        .setTitle(R.string.make_searchable_title)
+                        .setMessage(getString(R.string.ux130_l1_text_layer_added, fresh.name))
+                        .setPrimary(R.string.open) { openDocument(fresh.id) }
+                        .setSecondary(R.string.share_pdf) { shareRow(fresh) }
+                        .build().show()
+                } else {
+                    // No success text, no Open/Share, no Undo: the document is untouched.
+                    SwSheet.builder(this@ShellActivity)
+                        .setTitle(R.string.make_searchable_title)
+                        .setMessage(getString(R.string.ux130_l1_text_layer_failed))
+                        .setPrimary(R.string.ux130_l1_purchase_close)
+                        .build().show()
                 }
             }
-            sheet.setSecondary(R.string.sheet_cancel)
         }
+        sheet.setSecondary(R.string.sheet_cancel)
         sheet.show()
     }
 
@@ -1198,7 +1316,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
             PdfImport.Reason.EMPTY -> getString(R.string.import_failed_empty)
             PdfImport.Reason.TOO_LARGE ->
-                getString(R.string.import_failed_too_large, (PdfImport.MAX_BYTES / (1024 * 1024)).toInt())
+                getString(
+                    R.string.ux130_l1_import_too_large,
+                    com.scanwhirl.app.util.SizeUnits.format(PdfImport.MAX_BYTES)
+                )
             PdfImport.Reason.LOW_MEMORY -> getString(R.string.import_failed_low_memory)
             PdfImport.Reason.TOO_MANY_PAGES ->
                 getString(R.string.import_failed_too_many, failure.pages, PdfImport.MAX_PAGES)
@@ -1328,7 +1449,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         if (docs.size > 8) {
             val search = android.widget.EditText(this).apply {
                 id = R.id.swDocPickerSearch
-                hint = getString(R.string.home_search_hint)
+                hint = getString(R.string.ux130_l1_search_hint)
                 setHintTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_dim))
                 setTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_hi))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -1373,12 +1494,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         val bytes = runCatching {
             if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
         }.getOrDefault(0L)
-        return when {
-            bytes >= 1024 * 1024 -> String.format(java.util.Locale.getDefault(), "%.1f MB", bytes / 1048576f)
-            bytes >= 1024 -> "${bytes / 1024} KB"
-            bytes > 0 -> "$bytes B"
-            else -> "0 B"
-        }
+        // L1: the shell used binary KB/MB here while every other readout uses the shared
+        // decimal formatter. One helper, so a size cannot disagree between two screens.
+        return com.scanwhirl.app.util.SizeUnits.format(bytes)
     }
 
     /** SH1 #4: visible dates follow the app's language, not the device locale. */
@@ -1418,11 +1536,23 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         /** SH1 review P1: test seam invoked on the IO thread just before a wallpaper decode. */
         @JvmField internal var wallpaperProbe: (() -> Unit)? = null
 
+        /** L1-06: test seam for a repository searchable result (success/failure injection). */
+        @JvmField internal var searchableProbe: ((String) -> Boolean)? = null
+
         /** SH1 review P2: ~65% ink over a photo keeps the shell's text readable. */
         internal const val SCRIM_ALPHA = 166
 
         /** SH1 #2: saved selection of the bottom bar across recreation. */
         private const val KEY_TAB = "sh1_selected_tab"
+
+        /** L1-02: the rest of the library's place across recreation. */
+        private const val KEY_QUERY = "uxl1_library_query"
+        private const val KEY_FOLDER = "uxl1_library_folder"
+        private const val KEY_CATEGORY = "uxl1_library_category"
+        private const val KEY_SORT = "uxl1_library_sort"
+        private const val KEY_SELECTION = "uxl1_library_selection"
+        private const val KEY_SELECTION_MODE = "uxl1_library_selection_mode"
+        private const val KEY_SCROLL = "uxl1_library_scroll"
 
         /** Tag of the non-interactive fade painted just above the dock. */
         const val DOCK_FADE = "swDockFade"

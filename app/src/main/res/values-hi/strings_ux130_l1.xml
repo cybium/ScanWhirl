@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L1: Hindi parity. Glossary-safe wording (no rejected transliterations). -->
+<resources>
+    <!-- L1-01 one wrapping Folder / Filter / Sort control band -->
+    <string name="ux130_l1_folder_label">फ़ोल्डर:</string>
+    <string name="ux130_l1_filter_label">छाँट:</string>
+    <string name="ux130_l1_sort_label">क्रम:</string>
+    <string name="ux130_l1_manage_folders">फ़ोल्डर प्रबंधित करें</string>
+
+    <!-- L1-03 centre Scan caption -->
+    <string name="ux130_l1_scan_caption">स्कैन</string>
+
+    <!-- L1-05 honest search and selection language -->
+    <string name="ux130_l1_search_hint">खोजें</string>
+    <string name="ux130_l1_search_help">नाम, टैग और पन्नों के शब्द</string>
+    <string name="ux130_l1_search_scope">%1$s में खोज रहे हैं</string>
+    <string name="ux130_l1_scope_all">सभी दस्तावेज़</string>
+    <string name="ux130_l1_move_to_trash">हटाई गई फ़ाइलों में भेजें</string>
+    <string name="ux130_l1_finish_selection">चयन समाप्त करें</string>
+    <plurals name="ux130_l1_result_count">
+        <item quantity="one">%d परिणाम</item>
+        <item quantity="other">%d परिणाम</item>
+    </plurals>
+
+    <!-- L1-06 searchable PDF outcome and purchase retry -->
+    <string name="ux130_l1_adding_text_layer">खोजने योग्य परत जोड़ी जा रही है…</string>
+    <string name="ux130_l1_text_layer_added">%1$s में खोजने योग्य परत जोड़ दी गई।</string>
+    <string name="ux130_l1_text_layer_already">इस PDF में पहले से खोजने योग्य परत है।</string>
+    <string name="ux130_l1_text_layer_failed">खोजने योग्य परत नहीं जोड़ी जा सकी। आपका दस्तावेज़ नहीं बदला है।</string>
+    <string name="ux130_l1_purchase_failed">खरीद पूरी नहीं हो सकी</string>
+    <string name="ux130_l1_purchase_retry">फिर कोशिश करें</string>
+    <string name="ux130_l1_purchase_restore">खरीद फिर चालू करें</string>
+    <string name="ux130_l1_purchase_close">बंद करें</string>
+
+    <!-- L1-04 accessible quick tools editing and legible badges -->
+    <string name="ux130_l1_move_earlier">पहले ले जाएँ</string>
+    <string name="ux130_l1_move_later">बाद में ले जाएँ</string>
+    <string name="ux130_l1_reset_quick">झटपट काम रीसेट करें?</string>
+    <string name="ux130_l1_reset">रीसेट करें</string>
+    <string name="ux130_l1_scroll_forward">आगे जाएँ</string>
+    <string name="ux130_l1_scroll_backward">पीछे जाएँ</string>
+
+    <!-- ShellActivity binary size labels moved onto the shared decimal formatter -->
+    <string name="ux130_l1_import_too_large">यह PDF %1$s से बड़ा है। इसे छोटे PDF में बाँटकर आयात करें।</string>
+</resources>

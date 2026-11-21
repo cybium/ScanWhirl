@@ -55,6 +55,10 @@ class SettingsActivity : BaseActivity() {
         // the row's only control. Pin the target here instead of leaving it to the
         // switchStyle theme attribute.
         binding.switchSearchablePdf.minimumHeight = com.scanwhirl.app.ui.kit.SwStyle.dp(this, 48f)
+        // L5-03: the status-line switch is the row's only control too; pin it as a full target.
+        binding.switchGreeting.minimumHeight = com.scanwhirl.app.ui.kit.SwStyle.dp(this, 48f)
+        binding.switchGreeting.minimumWidth = com.scanwhirl.app.ui.kit.SwStyle.dp(this, 48f)
+        binding.switchGreeting.isFocusable = true
 
         // test25 Phase 5A / D1: Orbital-only dark theme — the row stays in the
         // XML (locked ID) but is hidden. Its pinned summary is a resource, not a
@@ -260,6 +264,10 @@ class SettingsActivity : BaseActivity() {
         val toggle = androidx.appcompat.widget.SwitchCompat(this).apply {
             id = R.id.switchBlockScreenshots
             contentDescription = getString(R.string.settings_block_screenshots)
+            // L5-03: one coherent focus stop, named with its own state by SwitchCompat.
+            minimumHeight = com.scanwhirl.app.ui.kit.SwStyle.dp(this@SettingsActivity, 48f)
+            minimumWidth = com.scanwhirl.app.ui.kit.SwStyle.dp(this@SettingsActivity, 48f)
+            isFocusable = true
             isChecked = Prefs.blockDocScreenshots(this@SettingsActivity)
             setOnCheckedChangeListener { _, checked ->
                 Prefs.setBlockDocScreenshots(this@SettingsActivity, checked)

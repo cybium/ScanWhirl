@@ -212,10 +212,15 @@
                                 android:textColor="?android:attr/textColorSecondary" />
                         </LinearLayout>
 
+                        <!-- L5-03: the switch is this row's only control and a full touch target. -->
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/switchGreeting"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:minWidth="48dp"
+                            android:minHeight="48dp"
+                            android:contentDescription="@string/settings_greeting"
+                            android:focusable="true"
                             app:thumbTint="@color/sel_switch_thumb"
                             app:trackTint="@color/sel_switch_track" />
                     </LinearLayout>

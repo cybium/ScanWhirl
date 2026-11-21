@@ -72,6 +72,12 @@ abstract class U4CopyIconsBase {
         assertTrue("trash scope stays", actions.contains("R.string.shell_trash_note"))
     }
 
+    /**
+     * LEAD DECISION (L1-01): OLD read the heading from the old standalone sort row and
+     * asserted `swSort` text "Newest ▾". NEW reads the same heading inside the single
+     * Folder/Filter/Sort control band, keeps the sort-dependent heading, and still requires
+     * all five sort choices. Intent unchanged: the list heading follows the chosen sort.
+     */
     @Test fun libraryHeadingFollowsSort() {
         assertEquals(if (hi) "दस्तावेज़" else "Documents", string("u4_library_documents"))
         val library = source("shell/LibraryScreen.kt")
@@ -84,6 +90,10 @@ abstract class U4CopyIconsBase {
             prefs.setLibrarySort(app, sort)
             ActivityScenario.launch(com.scanwhirl.app.ui.shell.ShellActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
+                    assertNotNull(
+                        "sort lives in the one control band",
+                        activity.findViewById<View>(R.id.uxL1ControlBand)
+                    )
                     val sortView = activity.findViewById<TextView>(R.id.swSort)
                     val heading = (sortView.parent as ViewGroup).getChildAt(0) as TextView
                     val expected = if (sort == prefs.LIB_NEWEST || sort == prefs.LIB_OLDEST)
