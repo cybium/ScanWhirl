@@ -18,13 +18,13 @@ import com.scanwhirl.app.ui.home.HomeRow
 import com.scanwhirl.app.ui.home.PageHitViews
 import com.scanwhirl.app.ui.home.PageLink
 import com.scanwhirl.app.ui.home.TextState
+import com.scanwhirl.app.util.AppLocale
 import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.StatusLine
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 /**
  * Home slice 2: the Index list. Rows are [HomeRow]s — the document plus disk facts
@@ -70,7 +70,9 @@ class ScanListAdapter(
             }
         }
 
-    private val dateFmt = SimpleDateFormat("d MMM", Locale.getDefault())
+    /** Formats from this screen's context: no cached phone-locale formatter on a recycled row. */
+    private fun dateLabel(context: android.content.Context, at: Long): String =
+        SimpleDateFormat("d MMM", AppLocale.of(context)).format(Date(at)).replace(' ', '\u00A0')
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val binding = ItemScanBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -117,7 +119,7 @@ class ScanListAdapter(
                 .getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
             binding.scanMeta.text = "$pagesText · " +
                 StatusLine.formatBytes(sizeBytes).replace(' ', ' ') + " · " +
-                dateFmt.format(Date(doc.createdAt)).replace(' ', ' ')
+                dateLabel(context, doc.createdAt)
 
             // Category: swatch + sentence-case label; tapping it moves the document.
             val catLabel = CategoryLabels.display(context, doc.category.orEmpty())

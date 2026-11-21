@@ -48,6 +48,7 @@ import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.util.AppLanguage
+import com.scanwhirl.app.util.AppLocale
 import com.scanwhirl.app.util.BatchRename
 import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
@@ -55,6 +56,7 @@ import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.PageTextMatches
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.SearchMatcher
+import com.scanwhirl.app.util.SizeUnits
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -2359,18 +2361,17 @@ class LibraryScreen(
         val bytes = runCatching {
             if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
         }.getOrDefault(0L)
-        return when {
-            bytes >= 1024 * 1024 -> String.format(Locale.getDefault(), "%.1f\u00A0MB", bytes / 1048576f)
-            bytes >= 1024 -> "${bytes / 1024}\u00A0KB"
-            bytes > 0 -> "$bytes\u00A0B"
-            else -> "—"
-        }
+        // CP1: one decimal unit helper (KB = 1000, MB = 1,000,000). The other screens keep a
+        // number and its unit together by post-processing the shared label with an NBSP; do the
+        // same here. A missing/unreadable size stays "—" instead of pretending to be "0 B".
+        if (bytes <= 0) return "—"
+        return SizeUnits.format(bytes).replace(' ', '\u00A0')
     }
 
     private fun whenDay(doc: ScanDocument): String {
         val docDay = Calendar.getInstance().apply { timeInMillis = doc.createdAt }
         val today = Calendar.getInstance()
-        val fmt = SimpleDateFormat("d MMM", Locale.getDefault())
+        val fmt = SimpleDateFormat("d MMM", AppLocale.of(context))
         val sameDay = docDay.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
             docDay.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
         if (sameDay) return context.getString(R.string.shell_today)
