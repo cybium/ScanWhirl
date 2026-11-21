@@ -29,6 +29,7 @@ import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.util.AppLocale
 import com.scanwhirl.app.util.ClipboardPrivacy
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -459,7 +460,7 @@ class QrActivity : BaseActivity() {
             orientation = LinearLayout.VERTICAL
             id = R.id.qrHistoryList
         }
-        val stamp = SimpleDateFormat("d MMM, HH:mm", Locale.getDefault())
+        val stamp = SimpleDateFormat("d MMM, HH:mm", AppLocale.of(this))
         items.forEach { item ->
             list.addView(
                 historyRow(item, stamp.format(Date(item.at))).apply {
