@@ -336,9 +336,20 @@ def make_and_push_fixtures():
     make_fixtures.main(["make_fixtures.py", str(work)])
     adb("shell", "mkdir", "-p", "/sdcard/Download")
     files = sorted(str(p) for p in work.iterdir() if p.suffix in (".pdf", ".png"))
-    adb("push", *files, "/sdcard/Download/")
-    FIXTURE_NAMES.extend(Path(f).stem for f in files)
-    GRAPH["meta"]["fixtures"] = [Path(f).name for f in files]
+    pushed = []
+    for f in files:
+        name = Path(f).name
+        remote = "/sdcard/Download/" + name
+        adb("push", f, remote, check=False)
+        verify = adb("shell", "test", "-s", remote, "&&", "echo", "ok", check=False)
+        if "ok" in verify or adb("shell", "ls", remote, check=False).strip():
+            pushed.append(name)
+            FIXTURE_NAMES.append(Path(f).stem)
+        else:
+            GRAPH["errors"].append({"where": "push/" + name, "error": "fixture not present on device"})
+    GRAPH["meta"]["fixtures"] = pushed
+    if not pushed:
+        raise RuntimeError("no fixtures could be pushed to /sdcard/Download")
     return work
 
 
@@ -361,8 +372,17 @@ def open_create_sheet():
 
 def saf_pick(filename):
     """Walk the real DocumentsUI download folder by its visible labels."""
-    root = hierarchy()
-    n = find(root, desc="Show roots") or find(root, text="Show roots")
+    deadline = time.monotonic() + 15
+    n = None
+    while time.monotonic() < deadline:
+        root = try_hierarchy()
+        if root is not None:
+            n = find(root, desc="Show roots") or find(root, text="Show roots")
+            if n:
+                break
+        time.sleep(0.4)
+    if n is None:
+        raise AssertionError("SAF picker did not load (Show roots missing)")
     if n:
         tap_node(n)
     time.sleep(0.5)
@@ -1328,28 +1348,33 @@ def main():
     DEVICE_MODEL = adb("shell", "getprop", "ro.product.model") or "Pixel 6"
     GRAPH["meta"]["device"] = {"model": DEVICE_MODEL, "sdk": adb("shell", "getprop", "ro.build.version.sdk")}
 
-    make_and_push_fixtures()
-    seed_library()
+    try:
+        make_and_push_fixtures()
+        seed_library()
 
-    for screen in SCREENS:
-        try:
-            crawl_screen(screen)
-        except Exception as exc:
-            traceback.print_exc()
-            GRAPH["errors"].append({"where": "crawl/" + screen["id"], "error": str(exc)})
+        for screen in SCREENS:
+            try:
+                crawl_screen(screen)
+            except Exception as exc:
+                traceback.print_exc()
+                GRAPH["errors"].append({"where": "crawl/" + screen["id"], "error": str(exc)})
 
-    locale_pass()
-    tool_exercise()
-
-    logs = adb("logcat", "-d")
-    events = safe_adb("logcat", "-d", "-b", "events")
-    (OUT / "logcat.txt").write_text(logs, encoding="utf-8")
-    (OUT / "uimap-events.txt").write_text(events, encoding="utf-8")
-    fatal = any(re.search(r"Process: " + re.escape(PKG) + r"(?:,|\s|$)", b[:1200])
-                for b in logs.split("FATAL EXCEPTION")[1:])
-    anr = bool(re.search(r"am_anr.*" + re.escape(PKG), events))
-    alive = adb("shell", "pidof", PKG, check=False)
-    write_reports(fatal, anr, alive)
+        locale_pass()
+        tool_exercise()
+    except Exception as exc:
+        traceback.print_exc()
+        GRAPH["errors"].append({"where": "main", "error": str(exc)})
+    finally:
+        # Even an early harness failure must leave a readable map for the lead.
+        logs = safe_adb("logcat", "-d")
+        events = safe_adb("logcat", "-d", "-b", "events")
+        (OUT / "logcat.txt").write_text(logs, encoding="utf-8")
+        (OUT / "uimap-events.txt").write_text(events, encoding="utf-8")
+        fatal = any(re.search(r"Process: " + re.escape(PKG) + r"(?:,|\s|$)", b[:1200])
+                    for b in logs.split("FATAL EXCEPTION")[1:])
+        anr = bool(re.search(r"am_anr.*" + re.escape(PKG), events))
+        alive = adb("shell", "pidof", PKG, check=False)
+        write_reports(fatal, anr, alive)
     return 0  # the map is an artifact set, not a gate; failures are reported as bug leads
 
 
