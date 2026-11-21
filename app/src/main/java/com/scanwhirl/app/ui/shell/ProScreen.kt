@@ -58,6 +58,8 @@ class ProScreen(
     private lateinit var priceWrap: FrameLayout
     private lateinit var buyWrap: FrameLayout
     private lateinit var restoreRow: TextView
+    private lateinit var continueFree: TextView
+    private lateinit var priceStatus: TextView
     private var entrancePlayed = false
 
     /** How far the dock sits below the page bottom; the pinned bar stops above it. */
@@ -98,6 +100,19 @@ class ProScreen(
             }
         )
         content.addView(top, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        // UX5-1: a missing price is an honest status, not a claim that payment is off. It and
+        // the two free/restore actions live in the scrollable page, immediately visible at the
+        // top, so the pinned offer stays the compact two-row price + purchase bar (no four-row
+        // footer covering the promise chips at 130/200%).
+        priceStatus = SwStyle.text(
+            context, 12f, SwStyle.color(context, R.color.laser_danger), bold = true, metadata = true
+        ).apply {
+            id = R.id.swProPriceStatus
+            text = context.getString(R.string.ux130_l5_pro_price_unavailable)
+            visibility = View.GONE
+        }
+        // Added just after the promise row below, so the chips keep their measured viewport.
 
         val hero = FrameLayout(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, heroDp))
@@ -195,6 +210,15 @@ class ProScreen(
                 .apply { topMargin = SwStyle.dp(context, if (largeFont) 8f else 14f) }
         )
         this.trustRow = trustRow
+        content.addView(
+            priceStatus,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply {
+                    leftMargin = SwStyle.dp(context, 18f)
+                    rightMargin = SwStyle.dp(context, 18f)
+                    topMargin = SwStyle.dp(context, 4f)
+                }
+        )
 
         val feat = LinearLayout(context).apply {
             orientation = VERTICAL
@@ -208,7 +232,8 @@ class ProScreen(
             R.drawable.ic_sym_ink_eraser to R.string.pro_feat_redact,
             R.drawable.ic_sym_qr_code_scanner to R.string.pro_feat_scan,
             R.drawable.ic_sym_check_circle to R.string.pro_feat_batch,
-            R.drawable.ic_sym_create_new_folder to R.string.pro_feat_folders
+            // UX5-12: the feature is Tags; a label/badge glyph, not a folder.
+            R.drawable.ic_sym_badge to R.string.pro_feat_folders
         )
         for (pair in features.chunked(2)) {
             val row = LinearLayout(context).apply { orientation = HORIZONTAL }
@@ -275,14 +300,14 @@ class ProScreen(
             setPadding(SwStyle.dp(context, 6f), 0, 0, SwStyle.dp(context, 3f))
         }
         priceRow.addView(priceSuffix)
-        // Fail closed: no amount until Play answers, never a built-in number.
-        showPrice(null)
         priceText.addView(priceRow)
         priceText.addView(
             SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-                text = context.getString(R.string.pro_price_note)
+                text = context.getString(R.string.ux130_l5_pro_once)
             }
         )
+        // Fail closed: no amount until Play answers, never a built-in number.
+        showPrice(null)
         price.addView(priceText, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         price.addView(
             ImageView(context).apply {
@@ -303,7 +328,7 @@ class ProScreen(
         }
         buyButton = SwStyle.text(context, 16f, SwStyle.color(context, R.color.sw_on_gold), bold = true).apply {
             id = R.id.swProBuy
-            text = context.getString(R.string.pro_unlock)
+            text = context.getString(R.string.ux130_l5_pro_buy)
             gravity = Gravity.CENTER
             background = SwStyle.gradient(
                 context,
@@ -324,15 +349,43 @@ class ProScreen(
         }
 
         if (!active) {
-            restoreRow = SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-                text = context.getString(R.string.pro_restore)
-                contentDescription = context.getString(R.string.pro_restore)
+            // UX5-1: Restore is no longer buried below the feature grid. It and Continue free
+            // live in the immediately discoverable action area beside the purchase control.
+            continueFree = SwStyle.quietAction(
+                context,
+                SwStyle.text(context, 14f, SwStyle.color(context, R.color.rv_accent), bold = true)
+            ).apply {
+                id = R.id.swProContinueFree
+                text = context.getString(R.string.ux130_l5_pro_continue_free)
+                contentDescription = text
                 gravity = Gravity.CENTER
-                isClickable = true
-                minimumHeight = SwStyle.dp(context, 48f)
+                setOnClickListener { callbacks.onClose() }
+            }
+            restoreRow = SwStyle.quietAction(
+                context,
+                SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_hi), bold = true)
+            ).apply {
+                id = R.id.swProRestoreAction
+                text = context.getString(R.string.ux130_l5_pro_restore)
+                contentDescription = text
+                gravity = Gravity.CENTER
                 setOnClickListener { onRestorePurchase() }
             }
-            content.addView(restoreRow, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f)))
+            val actions = LinearLayout(context).apply { orientation = HORIZONTAL }
+            actions.addView(
+                continueFree,
+                LayoutParams(0, SwStyle.dp(context, 48f), 1f).apply { marginEnd = SwStyle.dp(context, 8f) }
+            )
+            actions.addView(restoreRow, LayoutParams(0, SwStyle.dp(context, 48f), 1f))
+            content.addView(
+                actions, 6,
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                    .apply {
+                        leftMargin = SwStyle.dp(context, 18f)
+                        rightMargin = SwStyle.dp(context, 18f)
+                        topMargin = SwStyle.dp(context, 10f)
+                    }
+            )
         }
         content.addView(SwStyle.spacer(context, 20f))
 
@@ -427,6 +480,8 @@ class ProScreen(
             if (known) 30f else 15f
         )
         priceSuffix.visibility = if (known) View.VISIBLE else View.GONE
+        // A missing price is an honest status, not a claim that payment is unavailable.
+        priceStatus.visibility = if (known) View.GONE else View.VISIBLE
     }
 
     private fun playEntrance() {
@@ -559,6 +614,9 @@ class ProScreen(
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 54f))
                 .apply { topMargin = SwStyle.dp(context, 8f) }
         )
+        // UX5-1: keep the pinned offer two rows (price + purchase). The free exit, Restore and
+        // missing-price status sit at the top of the scrollable copy where they are immediately
+        // visible, but cannot grow a footer over the promise chips at 130/200% font.
         bar.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         return bar
     }
@@ -575,7 +633,8 @@ class ProScreen(
                 radiusDp = 16f,
                 stroke = 0x2EFFB800
             )
-            val pad = SwStyle.dp(context, 12f)
+            // A little more room for the label at 200% keeps a single long word from clipping.
+            val pad = SwStyle.dp(context, if (resources.configuration.fontScale >= 1.6f) 10f else 12f)
             setPadding(pad, SwStyle.dp(context, 6f), pad, SwStyle.dp(context, 6f))
             minimumHeight = SwStyle.dp(context, 48f)
         }
@@ -591,14 +650,10 @@ class ProScreen(
         cell.addView(
             SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(label)
-                maxLines = 2
+                // UX5-3: SwStyle.text applied the 13.5sp token; no px cap. Three wrap lines are
+                // allowed so the measured height always matches the laid-out text at 130/200%.
+                maxLines = 3
                 setLineSpacing(0f, 1.1f)
-                val density = resources.displayMetrics.density
-                val scaled = resources.displayMetrics.scaledDensity
-                setTextSize(
-                    android.util.TypedValue.COMPLEX_UNIT_PX,
-                    minOf(13.5f * scaled, 16f * density)
-                )
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )

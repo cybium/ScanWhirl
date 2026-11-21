@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L5 role tokens. Added, never substituted into capture surfaces. -->
+<resources>
+    <!-- One type scale: body 16sp, metadata 12sp (14sp for Devanagari), Pro labels 13.5sp. -->
+    <dimen name="ux_l5_text_body">16sp</dimen>
+    <dimen name="ux_l5_text_meta">12sp</dimen>
+    <dimen name="ux_l5_text_meta_hi">14sp</dimen>
+    <dimen name="ux_l5_text_pro_label">13.5sp</dimen>
+
+    <!-- Accessible target and visible functional focus boundary. -->
+    <dimen name="ux_l5_target_min">48dp</dimen>
+    <dimen name="ux_l5_focus_stroke">2dp</dimen>
+</resources>

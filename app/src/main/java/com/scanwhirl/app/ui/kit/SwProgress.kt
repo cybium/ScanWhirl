@@ -9,6 +9,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.isVisible
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.scanwhirl.app.R
@@ -41,9 +44,9 @@ class SwProgress private constructor(
             setPadding((24 * d).toInt(), (22 * d).toInt(), (24 * d).toInt(), (22 * d).toInt())
             background = SwStyle.rounded(
                 context,
-                0xFF161D21.toInt(),
+                SwStyle.color(context, R.color.rv_surface),
                 radiusDp = 28f,
-                stroke = SwStyle.color(context, R.color.sw_cyan_hair_strong)
+                stroke = SwStyle.color(context, R.color.sw_boundary_functional)
             )
         }
         whirl = ImageView(context).apply {
@@ -72,14 +75,31 @@ class SwProgress private constructor(
             id = R.id.swProgressBar
             isIndeterminate = true
             indeterminateTintList = android.content.res.ColorStateList.valueOf(
-                SwStyle.color(context, R.color.cyan_primary)
+                SwStyle.color(context, R.color.sw_scan)
             )
             progressTintList = android.content.res.ColorStateList.valueOf(
-                SwStyle.color(context, R.color.cyan_primary)
+                SwStyle.color(context, R.color.sw_scan)
             )
             progressBackgroundTintList = android.content.res.ColorStateList.valueOf(
                 SwStyle.color(context, R.color.glass_surface_raised)
             )
+            // UX L5-04: expose the real determinate state and the same words the label shows,
+            // instead of a bare "40%" with no context for a screen reader.
+            ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
+                override fun onInitializeAccessibilityNodeInfo(
+                    host: View,
+                    info: AccessibilityNodeInfoCompat
+                ) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.stateDescription = label.text
+                    if (!isIndeterminate) {
+                        info.rangeInfo = AccessibilityNodeInfoCompat.RangeInfoCompat.obtain(
+                            AccessibilityNodeInfoCompat.RangeInfoCompat.RANGE_TYPE_INT,
+                            0f, max.toFloat(), progress.toFloat()
+                        )
+                    }
+                }
+            })
         }
         root.addView(
             bar,
@@ -88,12 +108,14 @@ class SwProgress private constructor(
         )
 
         val cancelButton = SwStyle.text(
-            context, 14f, SwStyle.color(context, R.color.cyan_primary), bold = true
+            context, 14f, SwStyle.color(context, R.color.rv_accent), bold = true, metadata = true
         ).apply {
             id = R.id.swProgressCancel
             text = context.getString(R.string.sheet_cancel)
+            contentDescription = text
             gravity = Gravity.CENTER
             minimumHeight = (48 * d).toInt()
+            SwStyle.asButton(this)
             isVisible = false
             setOnClickListener {
                 dismiss()

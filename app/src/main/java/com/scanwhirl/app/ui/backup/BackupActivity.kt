@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.LinearLayout
@@ -24,6 +25,7 @@ import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.PasswordField
+import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.bindCredentialSubmit
@@ -84,6 +86,30 @@ class BackupActivity : BaseActivity() {
 
     /** Set while the system share sheet is up, so the "Backup ready" sheet can return with it. */
     private var awaitingShareReturn = false
+
+    /** UX L5-05: one visible progress sheet for both jobs, with duplicate actions frozen. */
+    private var work: SwProgress? = null
+    private var busy = false
+
+    fun workInFlightForTest(): Boolean = busy
+
+    private fun setBusy(on: Boolean) {
+        busy = on
+        findViewById<View>(R.id.backupNow)?.isEnabled = !on
+        findViewById<View>(R.id.backupRestore)?.isEnabled = !on
+    }
+
+    private fun startWork(title: String) {
+        if (busy) return
+        setBusy(true)
+        work = SwProgress.show(this, title)
+    }
+
+    private fun finishWork() {
+        work?.dismiss()
+        work = null
+        setBusy(false)
+    }
 
     private val saveTo = registerForActivityResult(ActivityResultContracts.CreateDocument(FullBackup.MIME)) { uri ->
         // B1: never discard the ready archive before we know the write succeeded. Cancelling the
@@ -206,14 +232,29 @@ class BackupActivity : BaseActivity() {
             }
         )
         root.addView(
-            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
-                text = getString(R.string.backup_explain)
+            SwStyle.text(
+                this, 16f, SwStyle.color(this, R.color.text_hologram_hi), metadata = true
+            ).apply {
+                id = R.id.uxL5BackupSummary
+                text = getString(R.string.ux130_l5_backup_summary)
                 setLineSpacing(0f, 1.25f)
             },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = dp(6f) }
         )
-        lastLine = SwStyle.text(this, 13f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+        root.addView(
+            SwStyle.text(this, 12f, SwStyle.color(this, R.color.rv_accent), metadata = true).apply {
+                id = R.id.uxL5BackupVaultStatus
+                text = getString(
+                    if (vaultReady()) R.string.ux130_l5_backup_vault_ready
+                    else R.string.ux130_l5_backup_vault_pending
+                )
+                setLineSpacing(0f, 1.25f)
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = dp(6f) }
+        )
+        lastLine = SwStyle.text(this, 13f, SwStyle.color(this, R.color.rv_accent), bold = true).apply {
             id = R.id.backupLastLine
         }
         root.addView(
@@ -222,11 +263,11 @@ class BackupActivity : BaseActivity() {
                 .apply { topMargin = dp(12f) }
         )
         root.addView(
-            primary(getString(R.string.backup_now), R.id.backupNow) { startBackup() },
+            primary(getString(R.string.ux130_l5_backup_create), R.id.backupNow) { startBackup() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52f)).apply { topMargin = dp(16f) }
         )
         root.addView(
-            outline(getString(R.string.backup_restore), R.id.backupRestore) { pickBackup.launch(arrayOf("*/*")) },
+            outline(getString(R.string.ux130_l5_backup_restore), R.id.backupRestore) { pickBackup.launch(arrayOf("*/*")) },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52f)).apply { topMargin = dp(10f) }
         )
         reminder = CheckBox(this).apply {
@@ -277,12 +318,14 @@ class BackupActivity : BaseActivity() {
         SwStyle.text(this, 15f, SwStyle.color(this, R.color.sw_disc_ink), bold = true).apply {
             this.id = id
             this.text = text
+            contentDescription = text
             gravity = Gravity.CENTER
             background = SwStyle.rounded(
-                this@BackupActivity, SwStyle.color(this@BackupActivity, R.color.cyan_primary), radiusDp = 16f
+                this@BackupActivity, SwStyle.color(this@BackupActivity, R.color.sw_scan), radiusDp = 16f
             )
             isClickable = true
-            isFocusable = true
+            minimumHeight = dp(48f)
+            SwStyle.asButton(this)
             setOnClickListener { onClick() }
         }
 
@@ -290,15 +333,17 @@ class BackupActivity : BaseActivity() {
         SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
             this.id = id
             this.text = text
+            contentDescription = text
             gravity = Gravity.CENTER
             background = SwStyle.rounded(
                 this@BackupActivity,
                 SwStyle.color(this@BackupActivity, R.color.sw_cyan_soft),
                 radiusDp = 16f,
-                stroke = SwStyle.color(this@BackupActivity, R.color.sw_cyan_hair_strong)
+                stroke = SwStyle.color(this@BackupActivity, R.color.sw_boundary_functional)
             )
             isClickable = true
-            isFocusable = true
+            minimumHeight = dp(48f)
+            SwStyle.asButton(this)
             setOnClickListener { onClick() }
         }
 
@@ -314,6 +359,11 @@ class BackupActivity : BaseActivity() {
 
     private fun prefs() = getSharedPreferences("scanwhirl_prefs", 0)
 
+    /** Vault files join the archive only after setup and the four-character proof are done. */
+    private fun vaultReady(): Boolean = runCatching {
+        vault.isSetUp() && !vault.isConfirmationPending()
+    }.getOrDefault(false)
+
     // ------------------------------------------------------------------
     // Backup
     // ------------------------------------------------------------------
@@ -322,7 +372,11 @@ class BackupActivity : BaseActivity() {
         val canUseCode = runCatching { vault.isSetUp() }.getOrDefault(false)
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.backup_choose)
-            .setMessage(R.string.backup_choose_note)
+            // The detailed inclusion/exclusion and warning copy stays before consent.
+            .setMessage(
+                getString(R.string.backup_choose_note) + "\n" +
+                    getString(R.string.backup_explain)
+            )
             .build()
         if (canUseCode) {
             sheet.setPrimary(R.string.backup_use_code) { sheet.dismiss(); askRecoveryCode() }
@@ -394,8 +448,9 @@ class BackupActivity : BaseActivity() {
     }
 
     private fun create(secret: String, wrap: FullBackup.Wrap) {
+        if (busy) return
         val file = backup.newArchiveFile()
-        toast(R.string.backup_working)
+        startWork(getString(R.string.ux130_l5_backup_creating))
         lifecycleScope.launch {
             // Keep the whole report: it says when part of the phone is not in the archive
             // (a Vault whose setup is unfinished), and the person must hear that here.
@@ -404,12 +459,14 @@ class BackupActivity : BaseActivity() {
             }
             val written = report.getOrNull()
             if (written == null) {
+                finishWork()
                 file.delete()
                 toast(R.string.backup_failed)
                 return@launch
             }
             pending = file
             pendingWarnings = written.warnings
+            finishWork()
             offerSaving(file)
         }
     }
@@ -559,45 +616,50 @@ class BackupActivity : BaseActivity() {
             )
             return
         }
-        toast(R.string.backup_restoring)
+        if (busy) return
+        startWork(getString(R.string.ux130_l5_backup_restoring))
         lifecycleScope.launch {
-            val report = try {
-                runCatching { kotlinx.coroutines.runInterruptible(Dispatchers.IO) { backup.restore(file, secret) } }
+            try {
+                val report = try {
+                    runCatching { kotlinx.coroutines.runInterruptible(Dispatchers.IO) { backup.restore(file, secret) } }
+                } finally {
+                    com.scanwhirl.app.util.BoundedCopy.release(file)
+                }
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                report.onSuccess { r ->
+                    // A restore is not a backup: only a durable backup WRITE (saveTo above) may move
+                    // the "last backup" freshness line and postpone the reminder (F-04).
+                    refresh()
+                    val message = buildString {
+                        append(buildParts(r))
+                        r.warnings.forEach { append(" ").append(it) }
+                    }
+                    // B1: "Backup restored" is only true when nothing was skipped or warned about.
+                    val hadWarnings = r.warnings.isNotEmpty() || r.docsAlreadyHere > 0 ||
+                        r.vaultAlreadyHere > 0 || r.docsFailed > 0 || r.vaultLocked
+                    SwSheet.builder(this@BackupActivity)
+                        .setTitle(if (hadWarnings) R.string.b1_restore_warning_title else R.string.backup_restored)
+                        .setMessage(message)
+                        .setPrimary(android.R.string.ok) { }
+                        .build().show()
+                    withContext(Dispatchers.IO) {
+                        runCatching { ScanWhirlApp.from(this@BackupActivity).indexer.resumePending() }
+                    }
+                }.onFailure { error ->
+                    val text = when (error) {
+                        is com.scanwhirl.app.store.backup.BackupResourceException ->
+                            getString(if (error.noSpace) R.string.s6c_backup_no_space else R.string.s6c_backup_limits)
+                        is VaultAuthException -> getString(R.string.backup_wrong_secret)
+                        else -> getString(R.string.backup_not_a_backup)
+                    }
+                    SwSheet.builder(this@BackupActivity)
+                        .setTitle(R.string.backup_failed_title)
+                        .setMessage(text)
+                        .setPrimary(android.R.string.ok) { }
+                        .build().show()
+                }
             } finally {
-                com.scanwhirl.app.util.BoundedCopy.release(file)
-            }
-            kotlinx.coroutines.currentCoroutineContext().ensureActive()
-            report.onSuccess { r ->
-                // A restore is not a backup: only a durable backup WRITE (saveTo above) may move
-                // the "last backup" freshness line and postpone the reminder (F-04).
-                refresh()
-                val message = buildString {
-                    append(buildParts(r))
-                    r.warnings.forEach { append(" ").append(it) }
-                }
-                // B1: "Backup restored" is only true when nothing was skipped or warned about.
-                val hadWarnings = r.warnings.isNotEmpty() || r.docsAlreadyHere > 0 ||
-                    r.vaultAlreadyHere > 0 || r.docsFailed > 0 || r.vaultLocked
-                SwSheet.builder(this@BackupActivity)
-                    .setTitle(if (hadWarnings) R.string.b1_restore_warning_title else R.string.backup_restored)
-                    .setMessage(message)
-                    .setPrimary(android.R.string.ok) { }
-                    .build().show()
-                withContext(Dispatchers.IO) {
-                    runCatching { ScanWhirlApp.from(this@BackupActivity).indexer.resumePending() }
-                }
-            }.onFailure { error ->
-                val text = when (error) {
-                    is com.scanwhirl.app.store.backup.BackupResourceException ->
-                        getString(if (error.noSpace) R.string.s6c_backup_no_space else R.string.s6c_backup_limits)
-                    is VaultAuthException -> getString(R.string.backup_wrong_secret)
-                    else -> getString(R.string.backup_not_a_backup)
-                }
-                SwSheet.builder(this@BackupActivity)
-                    .setTitle(R.string.backup_failed_title)
-                    .setMessage(text)
-                    .setPrimary(android.R.string.ok) { }
-                    .build().show()
+                finishWork()
             }
         }
     }
