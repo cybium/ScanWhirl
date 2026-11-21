@@ -135,6 +135,14 @@ class ScanWhirlApp : Application() {
                 startupStep("trash") { repository.recoverTrash() }
                 startupStep("imports") { repository.recoverImports() }
                 startupStep("operations") { repository.recoverOperationsSuspend() }
+                // SEC1 follow-up: a Vault add that could not purge its plaintext
+                // original leaves a durable .adding marker. Finish that purge here,
+                // off the main thread and after PrivacySweep has run in onCreate, so
+                // "removed next start" is true even when Vault is never opened.
+                // recover() needs no key and is safe while the Vault is locked.
+                startupStep("vault-purge") {
+                    com.scanwhirl.app.store.vault.VaultStore(this@ScanWhirlApp, repository).recover()
+                }
             } finally {
                 val incomplete = com.scanwhirl.app.store.ScanRepository.recoveryIncomplete
                 storageRecoveryIncomplete.value = incomplete
