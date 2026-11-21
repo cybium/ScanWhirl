@@ -23,6 +23,7 @@ import java.io.File
  *
  * The capture tools' caches are the other exception: this sweep also runs after a process death,
  * when IdCard/Passport/Business card still need their saved photo to restore the person's work.
+ * The stamp editor's saved marks (signature + redaction) are the same kind of restorable state.
  * Entries in [CAPTURE_CACHE_DIRS] are therefore only reclaimed once they are older than
  * [CAPTURE_CACHE_MAX_AGE_MS] (24 h), long past any restore; a real screen exit deletes them at once.
  *
@@ -38,8 +39,15 @@ object PrivacySweep {
      */
     internal const val CAPTURE_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
 
-    /** Capture caches that need to survive a process-death restore and are swept by age only. */
-    internal val CAPTURE_CACHE_DIRS = setOf("t1_passport", "t1_business_card", "id_card_state")
+    /**
+     * Caches that need to survive a process-death restore and are swept by age only. Besides the
+     * T1 capture photos, `stamp_editor` holds the serialised signature/redaction marks written in
+     * StampEditorActivity.onSaveInstanceState; a quick process death must still be able to restore
+     * that work, so it follows the same 24 h age gate.
+     */
+    internal val CAPTURE_CACHE_DIRS = setOf(
+        "t1_passport", "t1_business_card", "id_card_state", "stamp_editor"
+    )
 
     /** Cache directories (relative to cacheDir) that only ever hold plaintext copies. */
     internal val CACHE_DIRS = listOf(
@@ -52,7 +60,10 @@ object PrivacySweep {
         // restore; swept by age in [CAPTURE_CACHE_DIRS], not on sight.
         "t1_passport",
         "t1_business_card",
-        "id_card_state"
+        "id_card_state",
+        // S2 item 1: serialised stamp-editor marks (signature + redaction), age-gated like the
+        // capture caches so a process-death restore within 24 h still finds them.
+        "stamp_editor"
     )
 
     /** Cache files (relative to cacheDir) whose names start with a marker. */
