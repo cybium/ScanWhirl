@@ -67,4 +67,17 @@
     <string name="backup_wrong_secret">Wrong password or recovery code. Nothing was changed.</string>
     <string name="backup_not_a_backup">That file is not a ScanWhirl backup, or it is damaged.</string>
     <string name="backup_failed_title">Could not restore</string>
+
+    <!-- B1: the restore result must say what actually happened, in plain words. -->
+    <string name="b1_restore_warning_title">Restore finished with warnings</string>
+    <plurals name="b1_restore_vault_already_here">
+        <item quantity="one">%1$d Vault file was kept as it was.</item>
+        <item quantity="other">%1$d Vault files were kept as they were.</item>
+    </plurals>
+    <plurals name="b1_restore_docs_failed">
+        <item quantity="one">%1$d document could not be restored.</item>
+        <item quantity="other">%1$d documents could not be restored.</item>
+    </plurals>
+    <string name="b1_restore_doc_failed">A document could not be restored.</string>
+    <string name="b1_restore_partial">The restore stopped part way. The documents counted above were put back; the rest were not.</string>
 </resources>

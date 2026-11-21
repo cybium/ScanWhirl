@@ -86,10 +86,15 @@ class BackupActivity : BaseActivity() {
     private var awaitingShareReturn = false
 
     private val saveTo = registerForActivityResult(ActivityResultContracts.CreateDocument(FullBackup.MIME)) { uri ->
-        val file = pending
-        pending = null
-        pendingWarnings = emptyList()
-        if (uri == null || file == null) return@registerForActivityResult
+        // B1: never discard the ready archive before we know the write succeeded. Cancelling the
+        // save dialog used to null `pending` and delete the cached file, so the person lost an
+        // 18 MB backup they had already encrypted. It stays until a confirmed success.
+        val file = pending ?: return@registerForActivityResult
+        if (uri == null) {
+            // The person backed out of the save dialog: offer the same choices again.
+            offerSaving(file)
+            return@registerForActivityResult
+        }
         // Read the destination's own name before writing: it is what the person sees in the
         // result, and it is never used as proof of anything.
         val destination = displayName(uri)
@@ -97,15 +102,20 @@ class BackupActivity : BaseActivity() {
             val ok = withContext(Dispatchers.IO) {
                 runCatching { writeDurably(file, uri) }.getOrDefault(false)
             }
-            file.delete()
             if (ok) {
+                pending = null
+                pendingWarnings = emptyList()
+                file.delete()
                 backup.markBackedUp()
                 refresh()
                 // UI-W8: "Saved to <location>" only after the bytes were written, flushed and
-                // synced, and the count matched the archive. "Backup ready" stays the cached file.
+                // synced, and the count matched the archive.
                 toast(getString(R.string.backup_saved_to, destination ?: getString(R.string.backup_saved_name_unknown)))
             } else {
                 toast(R.string.backup_failed)
+                // A failed write is not a finished save. Keep the cached file and let the person
+                // retry "Save to device" or share it, without rebuilding the whole archive.
+                offerSaving(file)
             }
         }
     }
@@ -494,8 +504,14 @@ class BackupActivity : BaseActivity() {
                 .setMessage(R.string.u4_backup_restore_code_note)
                 .setInput(hint = getString(R.string.backup_code_hint))
                 .build()
-            sheet.setPrimary(R.string.backup_restore_go) {
+            // B1: stay open on a bad format. A short code or one with the wrong alphabet is not
+            // a wrong password: it cannot open any backup, so say so before any KDF work.
+            sheet.setPrimaryStayOpen(R.string.backup_restore_go) {
                 val code = VaultCrypto.normalizeRecoveryCode(sheet.inputView?.text?.toString().orEmpty())
+                if (!VaultCrypto.isRecoveryCode(code)) {
+                    toast(R.string.backup_code_wrong)
+                    return@setPrimaryStayOpen
+                }
                 restoreRequested = true
                 sheet.dismiss()
                 runRestore(file, code)
@@ -515,10 +531,15 @@ class BackupActivity : BaseActivity() {
                 .setMessage(R.string.u4_backup_restore_password_note)
                 .setContent(field)
                 .build()
-            sheet.setPrimary(R.string.backup_restore_go) {
+            sheet.setPrimaryStayOpen(R.string.backup_restore_go) {
+                val secret = field.text()
+                if (secret.length < FullBackup.MIN_PASSWORD) {
+                    field.setError(getString(R.string.backup_password_short, FullBackup.MIN_PASSWORD))
+                    return@setPrimaryStayOpen
+                }
                 restoreRequested = true
                 sheet.dismiss()
-                runRestore(file, field.text())
+                runRestore(file, secret)
             }
             sheet.setSecondary(R.string.backup_cancel) { com.scanwhirl.app.util.BoundedCopy.release(file) }
             sheet.setOnDismissListener {
@@ -554,8 +575,11 @@ class BackupActivity : BaseActivity() {
                     append(buildParts(r))
                     r.warnings.forEach { append(" ").append(it) }
                 }
+                // B1: "Backup restored" is only true when nothing was skipped or warned about.
+                val hadWarnings = r.warnings.isNotEmpty() || r.docsAlreadyHere > 0 ||
+                    r.vaultAlreadyHere > 0 || r.docsFailed > 0 || r.vaultLocked
                 SwSheet.builder(this@BackupActivity)
-                    .setTitle(R.string.backup_restored)
+                    .setTitle(if (hadWarnings) R.string.b1_restore_warning_title else R.string.backup_restored)
                     .setMessage(message)
                     .setPrimary(android.R.string.ok) { }
                     .build().show()
@@ -585,8 +609,18 @@ class BackupActivity : BaseActivity() {
         // English and Hindi plural rules have no "zero" form, so 0 is worded explicitly.
         parts += if (report.documents == 0) res.getString(R.string.backup_restored_none)
         else res.getQuantityString(R.plurals.backup_restored_docs, report.documents, report.documents)
-        if (report.skipped > 0) {
-            parts += res.getQuantityString(R.plurals.backup_restored_skipped, report.skipped, report.skipped)
+        if (report.docsAlreadyHere > 0) {
+            parts += res.getQuantityString(
+                R.plurals.backup_restored_skipped, report.docsAlreadyHere, report.docsAlreadyHere
+            )
+        }
+        if (report.vaultAlreadyHere > 0) {
+            parts += res.getQuantityString(
+                R.plurals.b1_restore_vault_already_here, report.vaultAlreadyHere, report.vaultAlreadyHere
+            )
+        }
+        if (report.docsFailed > 0) {
+            parts += res.getQuantityString(R.plurals.b1_restore_docs_failed, report.docsFailed, report.docsFailed)
         }
         if (report.vaultEntries > 0) {
             parts += res.getQuantityString(R.plurals.backup_restored_vault, report.vaultEntries, report.vaultEntries)
