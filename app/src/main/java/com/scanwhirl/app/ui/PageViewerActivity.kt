@@ -107,6 +107,10 @@ class PageViewerActivity : BaseActivity() {
         })
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        // SECURITY_JUDGE 1.3.0: FLAG_SECURE is per-window, so a page tap from a
+        // protected document needs the same document policy resolved here before
+        // any preview is drawn. No other page-viewer behaviour changes.
+        com.scanwhirl.app.util.SecureView.applyForDocumentId(this, window, docId)
         intent.getStringExtra(EXTRA_STAGING)?.let { stagingDir = File(it) }
         savedInstanceState?.let(::restoreFilterChoices)
         if (!reload()) return
