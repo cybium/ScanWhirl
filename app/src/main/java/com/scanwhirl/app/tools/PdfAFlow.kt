@@ -9,11 +9,11 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.kit.ProOffer
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.PdfA
 import com.scanwhirl.app.util.PdfGenerator
-import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -33,15 +33,9 @@ import java.util.TimeZone
 object PdfAFlow {
 
     fun start(activity: AppCompatActivity, repo: ScanRepository) {
-        if (!ProGate.isPro(activity)) {
-            SwSheet.builder(activity)
-                .setTitle(R.string.pro_suite_title)
-                .setMessage(R.string.pdfa_pro_message)
-                .setPrimary(R.string.sheet_got_it)
-                .build()
-                .show()
-            return
-        }
+        // p2pro #4: the same Pro offer as every other gate, with Buy and Restore. The old
+        // "Got it" sheet named the tool but gave the user no way to unlock it.
+        if (!ProOffer.require(activity)) return
         val docs = repo.listDocuments()
         FlowUtil.pickScan(activity, R.string.pdfa_pick, docs) { doc -> confirm(activity, repo, doc) }
     }

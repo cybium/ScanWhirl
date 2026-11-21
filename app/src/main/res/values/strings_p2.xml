@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- p2pro: honest purchase outcomes and busy state. Play's answer, not developer wording. -->
+<resources>
+    <string name="pro_no_purchase">Google Play found no Pro purchase on this account.</string>
+    <string name="pro_purchase_in_progress">Purchase in progress</string>
+</resources>
