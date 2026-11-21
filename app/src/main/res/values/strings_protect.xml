@@ -58,6 +58,7 @@
     <string name="vault_password_not_saved">Password not saved in Vault.</string>
     <string name="import_unlock_note">Enter its password to import its pages. The original file is not changed.</string>
     <string name="import_unlock_unsupported">This PDF uses a password format ScanWhirl cannot open. Remove it where it was made.</string>
+    <string name="import_unlock_cannot_rewrite">ScanWhirl cannot open this kind of protected PDF.</string>
     <string name="import_unlock_damaged">This PDF looks damaged. Try another copy of the file.</string>
     <string name="import_unlock_failed">Could not import this PDF. Try again.</string>
     <!-- K1: lock failures never show a raw exception message. -->

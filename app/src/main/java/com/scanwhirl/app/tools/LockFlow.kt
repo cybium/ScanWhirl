@@ -210,6 +210,8 @@ class LockFlow(
                         withContext(Dispatchers.Main) { dismissProgress(); done(ImportUnlockSheet.Result.WRONG) }
                     } catch (e: PdfDecryptor.UnsupportedScheme) {
                         withContext(Dispatchers.Main) { dismissProgress(); done(ImportUnlockSheet.Result.UNSUPPORTED) }
+                    } catch (e: PdfDecryptor.CannotRewrite) {
+                        withContext(Dispatchers.Main) { dismissProgress(); done(ImportUnlockSheet.Result.CANNOT_REWRITE) }
                     } catch (e: PdfDecryptor.Unsupported) {
                         withContext(Dispatchers.Main) { dismissProgress(); done(ImportUnlockSheet.Result.DAMAGED) }
                     } catch (e: Exception) {

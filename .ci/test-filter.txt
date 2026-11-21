@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.PdfDecryptorFailClosedTest,com.scanwhirl.app.ui.protect.ImportLifecycleTest

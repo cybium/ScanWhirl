@@ -35,6 +35,7 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.io.IOException
 
 /** Minimal themed Home host: LockFlow only needs these four calls from its host. */
@@ -239,6 +240,34 @@ class ImportLifecycleTest {
     }
 
     @Test
+    fun `a well formed shape we cannot rewrite gets an honest message`() {
+        val uri = Uri.parse("content://scanwhirl-import/shape.pdf")
+        register(uri)
+        val activity = host()
+        // Reflection keeps this test compiling against the base revision, where the split does not
+        // exist yet: on base the lookup fails inside the seam and the sheet shows a generic failure.
+        val shape: IOException = Class.forName("com.scanwhirl.app.util.PdfDecryptor\$CannotRewrite")
+            .getConstructor(String::class.java)
+            .newInstance("incremental update") as IOException
+
+        LockFlow(
+            activity, repo, activity, { emptyList() }, { _ -> },
+            importProtected = { _, _, _ -> throw shape }
+        ).importProtectedPdf(uri, "Shape import")
+
+        assertTrue("the Unlock sheet opens", pollUntil { sheet() != null })
+        val dialog = sheet()!!
+        submit(dialog, "1234")
+        val error = dialog.findViewById<TextView>(R.id.swPasswordError)
+        assertNotNull(error)
+        assertTrue(
+            "a valid but unrewritable shape is explained honestly",
+            pollUntil { error!!.text.contains("cannot open this kind") }
+        )
+        assertFalse("it is not called damaged", error!!.text.contains("looks damaged"))
+    }
+
+    @Test
     fun `the damaged and scheme messages exist in both languages`() {
         val en = app.resources.getString(R.string.import_unlock_failed) // sanity: resources resolve
         assertEquals("Could not import this PDF. Try again.", en)
@@ -246,6 +275,22 @@ class ImportLifecycleTest {
             val name = app.resources.getIdentifier(id, "string", app.packageName)
             assertTrue("$id must be a string resource", name != 0)
             assertTrue("$id must be English", app.resources.getString(name).isNotBlank())
+        }
+    }
+
+    @Test
+    fun `the cannot rewrite message exists in English and Hindi`() {
+        val en = Regex("<string\\s+name=\"([^\"]+)\"")
+            .findAll(File("src/main/res/values/strings_protect.xml").readText(Charsets.UTF_8))
+            .map { it.groupValues[1] }.toSet()
+        val hi = Regex("<string\\s+name=\"([^\"]+)\"")
+            .findAll(File("src/main/res/values-hi/strings_protect.xml").readText(Charsets.UTF_8))
+            .map { it.groupValues[1] }.toSet()
+        assertTrue("import_unlock_cannot_rewrite missing from English", "import_unlock_cannot_rewrite" in en)
+        assertTrue("import_unlock_cannot_rewrite missing from Hindi", "import_unlock_cannot_rewrite" in hi)
+        val hiText = File("src/main/res/values-hi/strings_protect.xml").readText(Charsets.UTF_8)
+        for (banned in listOf("वॉल्ट", "पेज", "सेव", "शेयर", "साइज़", "टूल")) {
+            assertFalse("glossary term [$banned] is not allowed", hiText.contains(banned))
         }
     }
 }

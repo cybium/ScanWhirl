@@ -58,6 +58,7 @@
     <string name="vault_password_not_saved">पासवर्ड तिजोरी में सहेजा नहीं गया।</string>
     <string name="import_unlock_note">इसके पन्ने फ़ोन में लाने के लिए पासवर्ड डालें। मूल फ़ाइल नहीं बदलेगी।</string>
     <string name="import_unlock_unsupported">यह PDF ऐसे पासवर्ड का इस्तेमाल करती है जिसे ScanWhirl नहीं खोल सकता। इसे बनाने वाले ऐप में हटाएँ।</string>
+    <string name="import_unlock_cannot_rewrite">ScanWhirl इस तरह की सुरक्षित PDF नहीं खोल सकता।</string>
     <string name="import_unlock_damaged">यह PDF खराब लग रही है। इसकी दूसरी प्रति आज़माएँ।</string>
     <string name="import_unlock_failed">यह PDF फ़ोन में नहीं लाई जा सकी। फिर से कोशिश करें।</string>
     <!-- K1: lock failures never show a raw exception message. -->
