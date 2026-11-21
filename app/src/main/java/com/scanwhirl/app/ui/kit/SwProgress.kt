@@ -90,7 +90,7 @@ class SwProgress private constructor(
             id = R.id.swProgressCancel
             text = context.getString(R.string.sheet_cancel)
             gravity = Gravity.CENTER
-            minimumHeight = (44 * d).toInt()
+            minimumHeight = (48 * d).toInt()
             isVisible = false
             setOnClickListener {
                 dismiss()
