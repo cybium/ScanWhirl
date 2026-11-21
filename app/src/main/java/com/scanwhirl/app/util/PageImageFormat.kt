@@ -2,6 +2,23 @@ package com.scanwhirl.app.util
 
 import java.util.zip.CRC32
 
+/** SOF markers the JPEG reader understands, shared with the PDF writer so both agree. */
+internal object JpegSof {
+    /** Baseline, sequential Huffman and progressive Huffman — the dimensions parse identically. */
+    val SUPPORTED = setOf(0xC0, 0xC1, 0xC2, 0xC3)
+
+    /** Every SOF marker (excluding the Huffman/DHT and JPEG extensions C4, C8, CC). */
+    val ALL: Set<Int> = (0xC0..0xCF).toSet() - setOf(0xC4, 0xC8, 0xCC)
+
+    fun isSupported(marker: Int): Boolean = marker in SUPPORTED
+
+    fun description(marker: Int): String = when (marker) {
+        0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF -> "arithmetic-coded"
+        0xC5, 0xC6, 0xC7 -> "differential"
+        else -> "unsupported"
+    }
+}
+
 /** Container checks supplement Android decoders, which can accept truncated images. */
 internal object PageImageFormat {
     enum class Format { JPEG, PNG, WEBP, HEIF }
@@ -75,10 +92,16 @@ internal object PageImageFormat {
             if (marker == 0 || marker == 0xD8 || marker in 0xD0..0xD7 || pos + 2 > bytes.size) invalid()
             val length = (u8(bytes, pos) shl 8) or u8(bytes, pos + 1)
             if (length < 2 || length > bytes.size - pos) invalid()
-            if (marker in 0xC0..0xCF && marker !in listOf(0xC4, 0xC8, 0xCC)) {
+            if (marker in JpegSof.ALL) {
                 if (length < 8) invalid()
                 val components = u8(bytes, pos + 7)
                 if (components == 0 || length != 8 + 3 * components) invalid()
+                if (!JpegSof.isSupported(marker)) {
+                    throw IllegalArgumentException(
+                        "This JPEG uses ${JpegSof.description(marker)} coding, which this device cannot save as a page. " +
+                            "Choose a baseline or progressive JPEG and try again."
+                    )
+                }
                 sawFrame = true
             }
             if (marker == 0xDA) {

@@ -33,7 +33,7 @@ object PdfGenerator {
             when {
                 marker == 0xD8 || marker == 0x01 || marker in 0xD0..0xD7 -> i += 2
                 marker == 0xD9 -> break
-                marker in 0xC0..0xC3 -> {
+                JpegSof.isSupported(marker) -> {
                     val height = ((bytes[i + 5].toInt() and 0xFF) shl 8) or (bytes[i + 6].toInt() and 0xFF)
                     val width = ((bytes[i + 7].toInt() and 0xFF) shl 8) or (bytes[i + 8].toInt() and 0xFF)
                     val components = bytes[i + 9].toInt() and 0xFF

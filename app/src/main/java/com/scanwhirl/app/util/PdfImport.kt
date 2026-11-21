@@ -1,16 +1,21 @@
 package com.scanwhirl.app.util
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
+import android.graphics.pdf.RenderParams
 import android.net.Uri
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
@@ -37,8 +42,11 @@ object PdfImport {
     /** Most pages one import may hold; range selection handles bigger books. */
     const val MAX_PAGES = 10_000
 
-    /** Rough upper estimate of one rendered page on disk (JPEG + its share of the PDF). */
-    internal const val EST_PAGE_BYTES: Long = PdfImportBudget.TYPICAL_PAGE_BYTES
+    /**
+     * Rough upper estimate of one rendered page on disk: the staging JPEG **and** the copy of
+     * that JPEG embedded in `scan.pdf`. Mirrors the save path's `sources * 2`.
+     */
+    internal const val EST_PAGE_BYTES: Long = PdfImportBudget.TYPICAL_PAGE_BYTES * PdfImportBudget.DISK_COPIES
 
     /** Headroom always left free on the device. */
     internal const val SPACE_MARGIN: Long = 16L * 1024 * 1024
@@ -213,13 +221,32 @@ object PdfImport {
         private val maxDim: Int,
         private val quality: Int
     ) : PageSource, java.io.Closeable {
+        // Read before the renderer takes the descriptor: the seekable copy is already cached and
+        // bounded, and an unreadable page tree simply leaves every rotation at zero (old behaviour).
+        private val rotations: List<Int> = PdfImport.readPageRotations(fd)
         private val renderer = openRenderer(fd)
 
         override fun pageCount(): Int = renderer.pageCount
 
-        override fun render(index: Int): ByteArray = renderPage(renderer, index, dpi, maxDim, quality)
+        override fun render(index: Int): ByteArray = renderPage(
+            renderer, index, dpi, maxDim, quality, rotations.getOrElse(index) { 0 }
+        )
 
         override fun close() = renderer.close()
+    }
+
+    /** Reads the seekable copy once and returns each page's effective /Rotate, or empty on doubt. */
+    private fun readPageRotations(fd: ParcelFileDescriptor): List<Int> = try {
+        val dup = fd.dup()
+        val bytes = FileInputStream(dup.fileDescriptor).use { it.readBytes() }
+        // The dup shares the file offset with the caller's fd; rewind before PdfRenderer opens it.
+        try {
+            android.system.Os.lseek(fd.fileDescriptor, 0L, android.system.OsConstants.SEEK_SET)
+        } catch (_: Exception) {
+        }
+        parsePageRotations(bytes)
+    } catch (_: Throwable) {
+        emptyList()
     }
 
     private fun openRenderer(fd: ParcelFileDescriptor): PdfRenderer = try {
@@ -308,25 +335,278 @@ object PdfImport {
         }
     }
 
-    private fun renderPage(r: PdfRenderer, index: Int, dpi: Float, maxDim: Int, quality: Int): ByteArray =
-        r.openPage(index).use { page ->
-            var scale = dpi / 72f
-            val longest = maxOf(page.width, page.height).coerceAtLeast(1)
-            if (longest * scale > maxDim) scale = maxDim.toFloat() / longest
-            val w = (page.width * scale).roundToInt().coerceIn(1, maxDim)
-            val h = (page.height * scale).roundToInt().coerceIn(1, maxDim)
-            val bitmap = androidx.core.graphics.createBitmap(w, h)
-            try {
-                Canvas(bitmap).drawColor(Color.WHITE)
-                val matrix = Matrix().apply {
-                    setScale(w.toFloat() / page.width.coerceAtLeast(1), h.toFloat() / page.height.coerceAtLeast(1))
+    /** API level from which [RenderParams] can ask the renderer to draw annotations/forms. */
+    internal const val ANNOTATION_API_LEVEL = 35
+
+    internal fun useAnnotatedRender(api: Int): Boolean = api >= ANNOTATION_API_LEVEL
+
+    /** Output box and the matrix the renderer receives; a quarter turn swaps width and height. */
+    internal data class RenderPlan(val width: Int, val height: Int, val matrix: Matrix)
+
+    internal fun renderPlan(
+        pageWidth: Int, pageHeight: Int, rotation: Int, dpi: Float, maxDim: Int
+    ): RenderPlan {
+        val quarter = (((rotation % 360) + 360) % 360) / 90
+        val turned = quarter % 2 == 1
+        val pw = pageWidth.coerceAtLeast(1)
+        val ph = pageHeight.coerceAtLeast(1)
+        var scale = dpi / 72f
+        val longest = maxOf(pw, ph).toFloat()
+        if (longest * scale > maxDim) scale = maxDim.toFloat() / longest
+        val w = (pw * scale).roundToInt().coerceIn(1, maxDim)
+        val h = (ph * scale).roundToInt().coerceIn(1, maxDim)
+        val outW = if (turned) h else w
+        val outH = if (turned) w else h
+        val matrix = Matrix().apply {
+            setScale(scale, scale)
+            // Rotate about the page's centre, then slide the turned box into the output bitmap.
+            postRotate(quarter * 90f, pw * scale / 2f, ph * scale / 2f)
+            postTranslate(outW / 2f - pw * scale / 2f, outH / 2f - ph * scale / 2f)
+        }
+        return RenderPlan(outW, outH, matrix)
+    }
+
+    private fun renderPage(
+        r: PdfRenderer, index: Int, dpi: Float, maxDim: Int, quality: Int, rotation: Int
+    ): ByteArray = r.openPage(index).use { page ->
+        val plan = renderPlan(page.width, page.height, rotation, dpi, maxDim)
+        val bitmap = androidx.core.graphics.createBitmap(plan.width, plan.height)
+        try {
+            Canvas(bitmap).drawColor(Color.WHITE)
+            if (Build.VERSION.SDK_INT >= 35 && useAnnotatedRender(Build.VERSION.SDK_INT)) {
+                try {
+                    renderAnnotated(page, bitmap, plan.matrix)
+                } catch (e: Throwable) {
+                    if (e is OutOfMemoryError) throw e
+                    // PDF is a mainline module: some API-35 devices still ship a module without
+                    // RenderParams. Fall back to the honest legacy render rather than lose the page.
+                    page.render(bitmap, null, plan.matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 }
-                page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                ImageTools.encodeJpeg(bitmap, quality)
-            } finally {
-                bitmap.recycle()
+            } else {
+                page.render(bitmap, null, plan.matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            }
+            ImageTools.encodeJpeg(bitmap, quality)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @RequiresApi(ANNOTATION_API_LEVEL)
+    @android.annotation.SuppressLint("NewApi") // guarded above + legacy fallback; PDF module needs ext 13.
+    private fun renderAnnotated(page: PdfRenderer.Page, bitmap: Bitmap, matrix: Matrix) {
+        val params = RenderParams.Builder(RenderParams.RENDER_MODE_FOR_DISPLAY)
+            .setRenderFlags(
+                RenderParams.FLAG_RENDER_HIGHLIGHT_ANNOTATIONS or
+                    RenderParams.FLAG_RENDER_TEXT_ANNOTATIONS
+            )
+            .build()
+        page.render(bitmap, null, matrix, params)
+    }
+
+    // ---- Bounded PDF page-tree walk for /Rotate (no native renderer needed) ----
+
+    private fun isDigit(b: ByteArray, i: Int): Boolean = (b[i].toInt() and 0xFF) in 0x30..0x39
+
+    private fun isWs(b: ByteArray, i: Int): Boolean = (b[i].toInt() and 0xFF).let {
+        it == 0x20 || it == 0x09 || it == 0x0A || it == 0x0D || it == 0x0C || it == 0x00
+    }
+
+    private fun skipWs(b: ByteArray, from: Int, limit: Int): Int {
+        var i = from
+        while (i < limit && isWs(b, i)) i++
+        return i
+    }
+
+    private fun asciiInt(b: ByteArray, from: Int, to: Int): Int? {
+        if (from >= to) return null
+        var value = 0
+        for (i in from until to) {
+            val digit = (b[i].toInt() and 0xFF) - 0x30
+            if (digit !in 0..9) return null
+            value = value * 10 + digit
+            if (value > 1_000_000_000) return null
+        }
+        return value
+    }
+
+    private fun startsWith(b: ByteArray, at: Int, limit: Int, text: String): Boolean {
+        if (at < 0 || at + text.length > limit) return false
+        for (i in text.indices) if (b[at + i] != text[i].code.toByte()) return false
+        return true
+    }
+
+    private fun indexOf(b: ByteArray, needle: String, from: Int, limit: Int): Int {
+        for (i in from..(limit - needle.length)) if (startsWith(b, i, limit, needle)) return i
+        return -1
+    }
+
+    /** Object dictionary text with any `stream … endstream` payload blanked out. */
+    private fun dictText(b: ByteArray, range: IntRange): String {
+        val raw = String(b, range.first, range.last - range.first + 1, Charsets.ISO_8859_1)
+        var out: StringBuilder? = null
+        var pos = 0
+        while (true) {
+            val start = raw.indexOf("stream", pos)
+            if (start < 0) break
+            val end = raw.indexOf("endstream", start)
+            if (end < 0) break
+            if (out == null) out = StringBuilder(raw)
+            for (k in start until minOf(end + 9, raw.length)) out.setCharAt(k, ' ')
+            pos = end + 9
+        }
+        return out?.toString() ?: raw
+    }
+
+    private fun skipWs(s: String, from: Int): Int {
+        var i = from
+        while (i < s.length && s[i].isWhitespace()) i++
+        return i
+    }
+
+    private fun intAfter(text: String, key: String): Int? {
+        var pos = 0
+        while (true) {
+            val k = text.indexOf(key, pos)
+            if (k < 0) return null
+            val after = k + key.length
+            if (after < text.length && !text[after].isWhitespace() && text[after] !in "/[]<>()") {
+                pos = after
+                continue
+            }
+            var i = skipWs(text, after)
+            var negative = false
+            if (i < text.length && (text[i] == '-' || text[i] == '+')) {
+                negative = text[i] == '-'
+                i++
+            }
+            val start = i
+            while (i < text.length && text[i].isDigit()) i++
+            if (i > start) {
+                val value = text.substring(start, i).toIntOrNull() ?: return null
+                return if (negative) -value else value
+            }
+            pos = after
+        }
+    }
+
+    private fun refAfter(text: String, key: String): Int? {
+        var pos = 0
+        while (true) {
+            val k = text.indexOf(key, pos)
+            if (k < 0) return null
+            var i = skipWs(text, k + key.length)
+            val a = i
+            while (i < text.length && text[i].isDigit()) i++
+            val obj = text.substring(a, i).toIntOrNull()
+            i = skipWs(text, i)
+            val g = i
+            while (i < text.length && text[i].isDigit()) i++
+            i = skipWs(text, i)
+            if (obj != null && i > g && i < text.length && text[i] == 'R') return obj
+            pos = k + key.length
+        }
+    }
+
+    private fun refsInArray(text: String, key: String): List<Int> {
+        val k = text.indexOf(key)
+        if (k < 0) return emptyList()
+        var i = text.indexOf('[', k + key.length)
+        if (i < 0) return emptyList()
+        i++
+        val out = ArrayList<Int>()
+        while (i < text.length) {
+            i = skipWs(text, i)
+            if (i >= text.length || text[i] == ']') break
+            val a = i
+            while (i < text.length && text[i].isDigit()) i++
+            if (i == a) {
+                i++
+                continue
+            }
+            val obj = text.substring(a, i).toIntOrNull()
+            val g = skipWs(text, i)
+            var j = g
+            while (j < text.length && text[j].isDigit()) j++
+            val r = skipWs(text, j)
+            if (obj != null && j > g && r < text.length && text[r] == 'R') {
+                out += obj
+                i = r + 1
+            } else {
+                i = a + 1
             }
         }
+        return out
+    }
+
+    /**
+     * Walks the page tree of an already-copied seekable PDF and returns each leaf page's effective
+     * rotation (own `/Rotate` overrides the inherited one), in page order. Bounded by object count,
+     * depth and [MAX_PAGES]; any malformed cycle or missing object fails safe with an empty list so
+     * the caller keeps the previous, unrotated behaviour.
+     */
+    internal fun parsePageRotations(bytes: ByteArray): List<Int> {
+        if (bytes.size < 8) return emptyList()
+        return try {
+            val limit = minOf(bytes.size, MAX_BYTES.toInt())
+            val objects = HashMap<Int, IntRange>()
+            var i = 0
+            var found = 0
+            while (i < limit && found < 200_000) {
+                if (!isDigit(bytes, i)) {
+                    i++
+                    continue
+                }
+                val numStart = i
+                while (i < limit && isDigit(bytes, i)) i++
+                val objNum = asciiInt(bytes, numStart, i) ?: run { i = numStart + 1; continue }
+                var p = skipWs(bytes, i, limit)
+                val genStart = p
+                while (p < limit && isDigit(bytes, p)) p++
+                if (p == genStart) {
+                    i = numStart + 1
+                    continue
+                }
+                p = skipWs(bytes, p, limit)
+                if (!startsWith(bytes, p, limit, "obj")) {
+                    i = numStart + 1
+                    continue
+                }
+                val body = p + 3
+                val end = indexOf(bytes, "endobj", body, limit)
+                if (end < 0) break
+                objects.putIfAbsent(objNum, body until end)
+                i = end + 6
+                found++
+            }
+            if (objects.isEmpty()) return emptyList()
+
+            val catalog = objects.entries.firstOrNull { dictText(bytes, it.value).contains("/Type /Catalog") }
+                ?: return emptyList()
+            val root = refAfter(dictText(bytes, catalog.value), "/Pages") ?: return emptyList()
+
+            val result = ArrayList<Int>()
+            val visited = HashSet<Int>()
+            fun walk(number: Int, inherited: Int, depth: Int) {
+                if (depth > 64 || !visited.add(number)) throw IllegalArgumentException("cyclic page tree")
+                val text = dictText(bytes, objects[number] ?: throw IllegalArgumentException("missing object"))
+                val own = intAfter(text, "/Rotate")
+                val effective = if (own != null && own % 90 == 0) ((own % 360) + 360) % 360 else inherited
+                val isPages = text.contains("/Type /Pages") || text.contains("/Type/Pages")
+                when {
+                    isPages -> refsInArray(text, "/Kids").forEach { walk(it, effective, depth + 1) }
+                    text.contains("/Type /Page") || text.contains("/Type/Page") -> {
+                        if (result.size > MAX_PAGES) throw IllegalArgumentException("too many pages")
+                        result += effective
+                    }
+                    else -> throw IllegalArgumentException("not a page")
+                }
+            }
+            walk(root, 0, 0)
+            result.toList()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
 
     /** A full disk or a failed write. */
     fun classifyWrite(e: Throwable): ImportException {
