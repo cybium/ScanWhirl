@@ -163,8 +163,8 @@ abstract class LibraryFirstScreenBase {
                 "the Home creation row is replaced by the Create sheet",
                 activity.findViewById<View>(R.id.swCreateRow)
             )
-            // UX-008: the owner restored a compact Quick tools row. It must never become the
-            // old wall again: two rows at most, with the pencil and the All tools door.
+            // UX-008: the owner restored a compact Quick tools strip. It is ONE horizontally
+            // scrolling row (the editor still holds twelve); documents own the first screen.
             assertNotNull(
                 "UX-008: the Home quick tools are back",
                 activity.findViewById<View>(R.id.swQuickRow)
@@ -177,9 +177,13 @@ abstract class LibraryFirstScreenBase {
                 "UX-008: the All tools link is in the header",
                 activity.findViewById<View>(R.id.swQuickAll)
             )
-            assertTrue(
-                "UX-008: at most two quick-tool rows",
-                activity.findViewById<View>(R.id.swQuickRow3) == null
+            assertNull(
+                "UX-008: no second quick-tool row on Home",
+                activity.findViewById<View>(R.id.swQuickRow2)
+            )
+            assertNull(
+                "UX-008: no third quick-tool row on Home",
+                activity.findViewById<View>(R.id.swQuickRow3)
             )
         }
     }
