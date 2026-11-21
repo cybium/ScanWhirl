@@ -1277,9 +1277,16 @@ class ToolSetupActivity : BaseActivity() {
                         val (quality, maxDim) = compressLevel()
                         repo.compressScan(doc.id, quality, maxDim).id
                     }
-                    listOf(out)
-                }) { ids ->
-                    openDocs(ids, targetBytes = targetBytes, receiptSourceId = doc.id)
+                    val ids = listOf(out)
+                    // L3-02 P1: this block runs on Dispatchers.IO, so hashing here
+                    // never blocks the main thread.
+                    val identity = ToolResultActivity.captureOutputIdentityBlocking(
+                        this@ToolSetupActivity, ids, emptyList()
+                    )
+                    Pair(ids, identity)
+                }) { (ids, identity) ->
+                    openDocs(ids, targetBytes = targetBytes,
+                        receiptSourceId = doc.id, outputIdentity = identity)
                 }
             }
             "pdf_to_images" -> {
@@ -1413,13 +1420,14 @@ class ToolSetupActivity : BaseActivity() {
     private fun openDocs(
         ids: List<String>,
         targetBytes: Long? = null,
-        receiptSourceId: String? = null
+        receiptSourceId: String? = null,
+        outputIdentity: String? = null
     ) {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
         startActivity(
             ToolResultActivity.intent(
                 this, tool.id, docIds = ids, targetBytes = targetBytes,
-                receiptSourceId = receiptSourceId
+                receiptSourceId = receiptSourceId, outputIdentity = outputIdentity
             )
         )
     }

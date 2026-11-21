@@ -1131,12 +1131,18 @@ class IdCardActivity : BaseActivity() {
                         list
                     }
                 }
-                val doc = withContext(Dispatchers.IO) {
-                    repo.createDocument(getString(R.string.tools_id_card_name), pages)
+                // One IO hop: create then hash in the same block, so the result
+                // screen still opens after the single idle the UI tests use.
+                val (doc, identity) = withContext(Dispatchers.IO) {
+                    val created = repo.createDocument(getString(R.string.tools_id_card_name), pages)
+                    created to ToolResultActivity.captureOutputIdentityBlocking(
+                        this@IdCardActivity, listOf(created.id), emptyList()
+                    )
                 }
                 progress.isVisible = false
                 clearCapturedState()
-                startActivity(ToolResultActivity.intent(this@IdCardActivity, "id_card", docIds = listOf(doc.id)))
+                startActivity(ToolResultActivity.intent(this@IdCardActivity, "id_card",
+                    docIds = listOf(doc.id), outputIdentity = identity))
                 finish()
             } catch (e: CancellationException) {
                 throw e

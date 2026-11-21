@@ -450,7 +450,7 @@ class CompressFlow(
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
                 showCompressResult(out, before, after, sourceKept = true,
-                    receiptSourceId = doc.id)
+                    receiptSourceId = doc.id, outputIdentity = outputIdentity(out))
             } catch (e: CancellationException) {
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
@@ -485,7 +485,7 @@ class CompressFlow(
                 })
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true,
-                    receiptSourceId = doc.id)
+                    receiptSourceId = doc.id, outputIdentity = outputIdentity(out))
             } catch (e: CancellationException) {
                 activity.runOnUiThread {
                     Toast.makeText(
@@ -513,6 +513,13 @@ class CompressFlow(
      * never the document the person compressed. [target] is the exact size asked for, so the
      * result can still say honestly when that size was not reached.
      */
+    /** L3-02 P1: hash the new document on IO, never on the Main thread. */
+    private suspend fun outputIdentity(out: ScanDocument): String? = withContext(Dispatchers.IO) {
+        com.scanwhirl.app.ui.tools.ToolResultActivity.captureOutputIdentityBlocking(
+            activity, listOf(out.id), emptyList()
+        )
+    }
+
     private fun showCompressResult(
         out: ScanDocument,
         before: Long,
@@ -522,7 +529,9 @@ class CompressFlow(
         /** Honest "Before: N pages of M (X MB)" for a picked PDF's selected pages. */
         beforeLine: String? = null,
         /** L3-02 P2: library source used only to derive the "original kept" receipt from state. */
-        receiptSourceId: String? = null
+        receiptSourceId: String? = null,
+        /** L3-02 P1: identity captured by the caller on Dispatchers.IO. */
+        outputIdentity: String? = null
     ) {
         val missed = target != null && after > target
         val grew = before > 0L && after > before
@@ -554,7 +563,8 @@ class CompressFlow(
                 sourceKept = sourceKept,
                 compressTargetMissed = missed,
                 compressGrew = grew,
-                receiptSourceId = receiptSourceId
+                receiptSourceId = receiptSourceId,
+                outputIdentity = outputIdentity
             )
         )
     }
@@ -646,7 +656,8 @@ class CompressFlow(
                 sheet?.dismiss()
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
-                showCompressResult(out, before, after, beforeLine = deviceBeforeLine(before))
+                showCompressResult(out, before, after, beforeLine = deviceBeforeLine(before),
+                    outputIdentity = outputIdentity(out))
             } catch (e: CancellationException) {
                 sheet?.dismiss()
                 activity.runOnUiThread {
@@ -696,7 +707,8 @@ class CompressFlow(
                 host.refreshList()
                 showCompressResult(
                     out, before, out.pdfFile.length(), target,
-                    beforeLine = deviceBeforeLine(before)
+                    beforeLine = deviceBeforeLine(before),
+                    outputIdentity = outputIdentity(out)
                 )
             } catch (e: CancellationException) {
                 sheet?.dismiss()

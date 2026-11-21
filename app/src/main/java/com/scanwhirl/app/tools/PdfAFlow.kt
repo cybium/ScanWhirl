@@ -83,8 +83,13 @@ object PdfAFlow {
         )
         activity.lifecycleScope.launch {
             try {
-                val file = withContext(Dispatchers.IO) { exportForResult(activity, repo, doc.id) }
-                activity.startActivity(resultIntent(activity, file))
+                val (file, identity) = withContext(Dispatchers.IO) {
+                    val exported = exportForResult(activity, repo, doc.id)
+                    exported to ToolResultActivity.captureOutputIdentityBlocking(
+                        activity, emptyList(), listOf(exported)
+                    )
+                }
+                activity.startActivity(resultIntent(activity, file, identity))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -103,12 +108,13 @@ object PdfAFlow {
      * (no Trash): "Save as PDF/A" then "Undo" destroyed the user's original scan. A PDF/A export
      * creates no library document, so it is an export-only result.
      */
-    internal fun resultIntent(context: Context, file: File): Intent =
+    internal fun resultIntent(context: Context, file: File, outputIdentity: String? = null): Intent =
         ToolResultActivity.intent(
             context,
             toolId = "pdfa",
             files = listOf(file),
-            mime = "application/pdf"
+            mime = "application/pdf",
+            outputIdentity = outputIdentity
         )
 
     /** Writes the PDF/A copy and moves it where Open/Share can hand it over (see below). */

@@ -72,6 +72,7 @@ class ToolResultActivity : BaseActivity() {
     private var files: MutableList<File> = mutableListOf()
     private var mime = "application/pdf"
     private var undone = false
+    private var undoChecking = false
     private lateinit var summary: TextView
     private lateinit var nameView: TextView
     private lateinit var errorView: TextView
@@ -1169,18 +1170,33 @@ class ToolResultActivity : BaseActivity() {
     }
 
     private fun undo() {
-        if (undone) return
-        // L3-02 P1: a stale id must never authorize deletion. The identity was
-        // captured when this result was created; if the document currently at
-        // that id has different bytes it is somebody else's file.
-        if ((docIds.isNotEmpty() || files.isNotEmpty()) &&
-            (outputIdentity == null || captureOutputIdentity(this, docIds, files) != outputIdentity)
-        ) {
-            fail(getString(R.string.ux130_l3_copy_changed))
-            return
-        }
-        undone = true
-        val outs = files.toList()
+        if (undone || undoChecking) return
+        undoChecking = true
+        val undoButton: View? = findViewById(R.id.toolResultUndo)
+        undoButton?.isEnabled = false
+        lifecycleScope.launch {
+            // L3-02 P1: the re-check hashes on IO, never on Main, while the
+            // button is disabled so a second tap cannot race the first.
+            val allowed = withContext(Dispatchers.IO) {
+                val current = captureOutputIdentityBlocking(this@ToolResultActivity, docIds, files)
+                val expected = outputIdentity
+                if (expected == null) {
+                    // Direct callers with no producer identity, or outputs with no
+                    // single PDF to hash, keep base behavior (still computed off main).
+                    outputIdentity = current
+                    true
+                } else {
+                    current == expected
+                }
+            }
+            undoChecking = false
+            undoButton?.isEnabled = true
+            if (!allowed) {
+                fail(getString(R.string.ux130_l3_copy_changed))
+                return@launch
+            }
+            undone = true
+            val outs = files.toList()
         // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
         // generated file is an export whose docIds are inputs, not copies. No tool legitimately
         // creates that shape — document copies pass docIds only, exports pass files only — and
@@ -1195,10 +1211,9 @@ class ToolResultActivity : BaseActivity() {
         val copy = savedCopy
         savedCopy = null
         documentsExistingName = null
-        docIds.clear()
-        files.clear()
-        locationLines.clear()
-        lifecycleScope.launch {
+            docIds.clear()
+            files.clear()
+            locationLines.clear()
             val copyUndo = copy?.let { saved ->
                 withContext(Dispatchers.IO) {
                     val result = try {
@@ -1385,7 +1400,9 @@ class ToolResultActivity : BaseActivity() {
             /** CP1: after > before, so the result must admit the copy is larger. */
             compressGrew: Boolean = false,
             /** L3-02 P2: library source, used only to derive the receipt from actual state. */
-            receiptSourceId: String? = null
+            receiptSourceId: String? = null,
+            /** L3-02 P1: identity captured by the producer OFF the main thread. */
+            outputIdentity: String? = null
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
@@ -1399,21 +1416,26 @@ class ToolResultActivity : BaseActivity() {
                 if (compressTargetMissed) putExtra(EXTRA_COMPRESS_MISSED, true)
                 if (compressGrew) putExtra(EXTRA_COMPRESS_GREW, true)
                 if (receiptSourceId != null) putExtra(EXTRA_RECEIPT_SOURCE_ID, receiptSourceId)
-                captureOutputIdentity(context, docIds, files)?.let {
-                    putExtra(EXTRA_OUTPUT_IDENTITY, it)
-                }
+                // No hashing here: intent() runs on Main. Producers capture the
+                // identity in their own IO work and pass it in.
+                if (outputIdentity != null) putExtra(EXTRA_OUTPUT_IDENTITY, outputIdentity)
             }
 
+        /** Test seam: observes the thread that performs identity hashing. */
+        @Volatile
+        internal var identityThreadProbe: ((Thread) -> Unit)? = null
+
         /**
-         * L3-02 P1: hash the exact outputs while this intent is being built. A
-         * later document that merely reuses an id has different bytes and can
-         * never satisfy the same identity, so Undo cannot delete it.
+         * L3-02 P1: hash the exact outputs. BLOCKING — callers must already be on
+         * Dispatchers.IO. A later document that merely reuses an id has different
+         * bytes and can never satisfy the same identity, so Undo cannot delete it.
          */
-        private fun captureOutputIdentity(
+        fun captureOutputIdentityBlocking(
             context: Context,
             docIds: List<String>,
             files: List<File>
         ): String? {
+            identityThreadProbe?.invoke(Thread.currentThread())
             return try {
                 if (files.isNotEmpty()) {
                     val parts = mutableListOf<String>()

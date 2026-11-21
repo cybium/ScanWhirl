@@ -299,11 +299,15 @@ class PassportActivity : BaseActivity() {
         progress.isVisible = true
         lifecycleScope.launch {
             try {
-                val doc = withContext(Dispatchers.IO) {
-                    repo.createDocument(getString(R.string.tools_passport_name), listOf(bytes))
+                val (doc, identity) = withContext(Dispatchers.IO) {
+                    val created = repo.createDocument(getString(R.string.tools_passport_name), listOf(bytes))
+                    created to ToolResultActivity.captureOutputIdentityBlocking(
+                        this@PassportActivity, listOf(created.id), emptyList()
+                    )
                 }
                 progress.isVisible = false
-                startActivity(ToolResultActivity.intent(this@PassportActivity, "passport", docIds = listOf(doc.id)))
+                startActivity(ToolResultActivity.intent(this@PassportActivity, "passport",
+                    docIds = listOf(doc.id), outputIdentity = identity))
                 finish()
             } catch (e: CancellationException) {
                 throw e
