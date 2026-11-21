@@ -1,4 +1,4 @@
-package com.scanwhirl.app.zzform1
+package com.scanwhirl.app.form1
 
 import android.graphics.Bitmap
 import com.scanwhirl.app.util.SignatureCleanup

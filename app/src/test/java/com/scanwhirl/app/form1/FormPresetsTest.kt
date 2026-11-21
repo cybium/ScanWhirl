@@ -1,4 +1,4 @@
-package com.scanwhirl.app.zzform1
+package com.scanwhirl.app.form1
 
 import com.scanwhirl.app.util.FormPresets
 import com.scanwhirl.app.util.FormUnit
@@ -68,6 +68,18 @@ class FormPresetsTest {
                 assertEquals(px.toFloat(), FormPresets.toPixels(value, unit, dpi).toFloat(), 1.5f)
             }
         }
+    }
+
+    @Test
+    fun `form size cap refuses poster sized targets`() {
+        assertTrue(FormPresets.fitsFormLimit(200, 230))
+        // 4000 x 3000 is exactly 12 MP and is the largest honest form-photo target.
+        assertTrue(FormPresets.fitsFormLimit(4000, 3000))
+        assertFalse(FormPresets.fitsFormLimit(12000, 12000))
+        assertFalse(FormPresets.fitsFormLimit(4001, 100))
+        assertFalse(FormPresets.fitsFormLimit(4000, 4000))
+        assertFalse(FormPresets.isSane(FormPresets.CUSTOM.copy(widthPx = 12000, heightPx = 12000)))
+        assertTrue(FormPresets.isSane(FormPresets.DECLARATION))
     }
 
     @Test
