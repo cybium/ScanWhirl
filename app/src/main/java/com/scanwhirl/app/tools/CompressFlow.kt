@@ -24,6 +24,7 @@ import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.StatusLine
+import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -372,10 +373,11 @@ class CompressFlow(
                             ImageTools.recompressJpeg(it, level.quality, level.maxDim)
                                 .size.toLong()
                         }.average()
-                        // CP1: an explicit PDF overhead (~600 B/page plus the wrappers) instead of
-                        // a hidden 2% fudge. The sheet says "about"; the real size follows the run.
-                        val overhead = doc.pageFiles.size * 600L + 1200L
-                        val bytes = (average * doc.pageCount + overhead).toLong()
+                        // CP1: the shared measured-overhead model, the same one the hub uses.
+                        // The sheet says "about"; the real size follows the run.
+                        val bytes = SizeUnits.estimateJpegPages(
+                            average, doc.pageCount, doc.pageFiles.size
+                        )
                         withContext(Dispatchers.Main) { onLevel(index, bytes) }
                     }
                 }
@@ -411,9 +413,8 @@ class CompressFlow(
                                     level.maxDim ?: 3000, level.quality
                                 )
                             }.getOrNull()
-                            val overhead = pages * 600L + 1200L
                             val bytes = rendered?.let {
-                                (it.size.toDouble() * pages + overhead).toLong()
+                                SizeUnits.estimateJpegPages(it.size.toDouble(), pages)
                             }
                             withContext(Dispatchers.Main) { onLevel(index, bytes) }
                             if (bytes == null) {
@@ -774,7 +775,7 @@ internal data class CompressIdentity(
 internal object CompressTarget {
 
     /** Above 2 GB a "compress to this size" is a mistake, not a target worth chasing. */
-    const val MAX_BYTES = 2L * 1024L * 1024L * 1024L
+    const val MAX_BYTES = SizeUnits.MAX_BYTES
 
     sealed class Result {
         object Blank : Result()
@@ -796,10 +797,10 @@ internal object CompressTarget {
         // this target also fits a portal counting a KB as 1024 bytes. MAX_BYTES deliberately stays
         // the shared 2 GiB ceiling used by ImageTools.parseSizeInput (the hub's parser).
         val bytes = when (match.groupValues[2]) {
-            "mb", "m" -> number * 1_000_000.0
-            "kb", "k" -> number * 1_000.0
+            "mb", "m" -> number * SizeUnits.BYTES_PER_MB
+            "kb", "k" -> number * SizeUnits.BYTES_PER_KB
             "b" -> number
-            else -> number * 1_000.0 // bare number = KB (the hint says so)
+            else -> number * SizeUnits.BYTES_PER_KB // bare number = KB (the hint says so)
         }
         if (!bytes.isFinite() || bytes > MAX_BYTES.toDouble()) return Result.TooLarge
         val whole = bytes.toLong()

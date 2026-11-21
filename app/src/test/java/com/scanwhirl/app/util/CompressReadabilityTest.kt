@@ -2,7 +2,6 @@ package com.scanwhirl.app.util
 
 import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,7 +26,6 @@ class CompressReadabilityTest {
         val fit = ImageTools.compressToFit(
             page, maxBytes = 1L, minLongSide = ImageTools.MIN_READABLE_LONG_SIDE
         )
-        assertTrue("the floor was hit", fit.hitFloor)
         assertEquals(
             "the long side never drops below the floor",
             ImageTools.MIN_READABLE_LONG_SIDE,
@@ -43,9 +41,23 @@ class CompressReadabilityTest {
         val fit = ImageTools.compressToFit(
             page, maxBytes = 200_000L, minLongSide = ImageTools.MIN_READABLE_LONG_SIDE
         )
-        assertFalse("no miss when the first rendition fits", fit.hitFloor)
         assertEquals(600, fit.width)
         assertEquals(800, fit.height)
+        page.recycle()
+    }
+
+    @Test
+    fun `a seventy percent shrink step never lands below the readable floor`() {
+        // CP1 review P2: 1400 -> 0.7 -> 980 on the base code, below the 1000 px floor.
+        val page = solidPage(1000, 1400)
+        val fit = ImageTools.compressToFit(
+            page, maxBytes = 1L, minLongSide = ImageTools.MIN_READABLE_LONG_SIDE
+        )
+        assertEquals(
+            "the floor is a floor, not an approximate target",
+            ImageTools.MIN_READABLE_LONG_SIDE,
+            maxOf(fit.width, fit.height)
+        )
         page.recycle()
     }
 

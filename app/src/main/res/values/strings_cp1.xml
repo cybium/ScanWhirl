@@ -6,4 +6,5 @@
     <string name="cp1_compress_floor_miss">Could not reach %1$s without making text unreadable. Smallest readable copy: %2$s.</string>
     <string name="cp1_compress_before_subset">Before: %1$d pages of %2$d (%3$s)</string>
     <string name="cp1_compress_cancelled">Compression cancelled. The original is untouched.</string>
+    <string name="cp1_est_only">about %1$s</string>
 </resources>

@@ -47,12 +47,7 @@ object StatusLine {
      * target field accepts. A file described as "under 500 KB" is therefore <= 500,000 bytes and
      * also fits a portal that counts a KB as 1024 bytes. The UI label stays "KB".
      */
-    fun formatBytes(bytes: Long): String = when {
-        bytes <= 0 -> "0 B"
-        bytes >= 1_000_000 -> String.format(Locale.ROOT, "%.1f MB", bytes / 1_000_000.0)
-        bytes >= 1_000 -> String.format(Locale.ROOT, "%.0f KB", bytes / 1_000.0)
-        else -> "$bytes B"
-    }
+    fun formatBytes(bytes: Long): String = SizeUnits.format(bytes)
 
     /**
      * test26 T3.2 — the same readout as [format] but as a `SpannableString`:

@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.util.zip.CRC32
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -61,18 +62,11 @@ object ImageTools {
             (bytes.contentHashCode() * 31 + width) * 31 + height
     }
 
-    data class FitResult(
-        val bytes: ByteArray,
-        val width: Int,
-        val height: Int,
-        /** True when the readable floor stopped the shrink before [maxBytes] was reached. */
-        val hitFloor: Boolean = false
-    ) {
+    data class FitResult(val bytes: ByteArray, val width: Int, val height: Int) {
         override fun equals(other: Any?): Boolean =
             other is FitResult && bytes.contentEquals(other.bytes) &&
-                width == other.width && height == other.height && hitFloor == other.hitFloor
-        override fun hashCode(): Int =
-            ((bytes.contentHashCode() * 31 + width) * 31 + height) * 31 + hitFloor.hashCode()
+                width == other.width && height == other.height
+        override fun hashCode(): Int = (bytes.contentHashCode() * 31 + width) * 31 + height
     }
 
     /** Decode an image from bytes, downsampling so neither side exceeds [maxDim]. */
@@ -461,22 +455,9 @@ object ImageTools {
      * H3-7: the result used to go through `Double.roundToInt()`, which saturates at
      * `Int.MAX_VALUE` — "5000 MB" silently became 2 GiB. Long arithmetic keeps the value honest
      * and a size over the 2 GB ceiling is refused (the Compress sheet names the same limit).
+     * CP1: the units are decimal and live in [SizeUnits], the helper every screen now shares.
      */
-    fun parseSizeInput(text: String?): Long? {
-        val cleaned = text?.trim()?.lowercase()?.replace(" ", "") ?: return null
-        if (cleaned.isEmpty()) return null
-        val match = Regex("(\\d+(?:\\.\\d+)?)(kb|mb|k|m|b)?").matchEntire(cleaned) ?: return null
-        val value = match.groupValues[1].toDoubleOrNull() ?: return null
-        if (!value.isFinite()) return null
-        val bytes = when (match.groupValues[2]) {
-            "mb", "m" -> value * 1_048_576.0
-            "kb", "k" -> value * 1024.0
-            "b" -> value
-            else -> value * 1024.0 // bare number = KB
-        }
-        if (!bytes.isFinite() || bytes > MAX_SIZE_BYTES) return null
-        return bytes.toLong().coerceAtLeast(1L)
-    }
+    fun parseSizeInput(text: String?): Long? = SizeUnits.parse(text, MAX_SIZE_BYTES)
 
     /** Resolves output size from the options and encodes (JPEG/PNG, optional size cap + DPI tag). */
     fun resize(src: ByteArray, opts: ResizeOptions): ResizeResult {
@@ -580,11 +561,13 @@ object ImageTools {
     /**
      * Encodes as JPEG, lowering quality (then shrinking the image further when needed)
      * until the output fits within [maxBytes]. Best effort: if even the smallest readable rendition
-     * is too big, the smallest produced file is returned with [FitResult.hitFloor] set.
+     * is too big, the smallest produced file is returned. A target miss is reported by the result
+     * screen from the measured bytes, so no second "floor hit" flag is needed here.
      *
      * [minLongSide] applies the readable floor: 0 keeps the historical resize behaviour, while the
-     * Compress path passes [MIN_READABLE_LONG_SIDE]. [isCancelled] is checked on every encode pass,
-     * so a long target fit yields promptly to Cancel.
+     * Compress path passes [MIN_READABLE_LONG_SIDE]. The shrink rounds UP and clamps the long side
+     * to the floor, so a 0.7 step can never land just below it. [isCancelled] is checked on every
+     * encode pass, so a long target fit yields promptly to Cancel.
      */
     fun compressToFit(
         bitmap: Bitmap,
@@ -600,7 +583,6 @@ object ImageTools {
         var current = flatten(bitmap)
         try {
             var best: ByteArray? = null
-            var hitFloor = false
             while (true) {
                 var quality = 90
                 while (quality >= 12) {
@@ -616,24 +598,24 @@ object ImageTools {
                 }
                 // Quality floor reached without fitting. Shrink, but stop at the readable floor.
                 val currentLong = maxOf(current.width, current.height)
-                if (floor > 0 && currentLong <= floor) {
-                    hitFloor = true
-                    break
-                }
+                if (floor > 0 && currentLong <= floor) break
                 val scale = if (floor > 0) max(0.7f, floor.toFloat() / currentLong) else 0.7f
-                val nw = (current.width * scale).toInt().coerceAtLeast(1)
-                val nh = (current.height * scale).toInt().coerceAtLeast(1)
-                if (nw >= current.width || nh >= current.height) {
-                    hitFloor = floor > 0 && currentLong <= floor
-                    break
+                var nw = if (floor > 0) ceil(current.width * scale).toInt()
+                    else (current.width * scale).toInt()
+                var nh = if (floor > 0) ceil(current.height * scale).toInt()
+                    else (current.height * scale).toInt()
+                if (floor > 0) {
+                    // Round up then clamp: never 1001 -> 999 or 1400 -> 980.
+                    if (nw >= nh) nw = maxOf(nw, floor) else nh = maxOf(nh, floor)
                 }
+                if (nw >= current.width && nh >= current.height) break
                 val scaled = Bitmap.createScaledBitmap(current, nw, nh, true)
                 if (current !== bitmap) current.recycle()
                 current = scaled
             }
             val dims = current.width to current.height
             val smallest = best ?: encodeJpeg(current, 12)
-            return FitResult(smallest, dims.first, dims.second, hitFloor)
+            return FitResult(smallest, dims.first, dims.second)
         } finally {
             if (current !== bitmap) current.recycle()
         }

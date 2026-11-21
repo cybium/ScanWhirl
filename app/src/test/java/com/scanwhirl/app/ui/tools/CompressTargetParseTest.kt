@@ -77,8 +77,8 @@ class CompressTargetParseTest {
         // Both now name the same 2 GB ceiling as the sheet instead of accepting "5000 MB".
         assertNull("5000 MB must not become 2 GiB", ImageTools.parseSizeInput("5000 MB"))
         assertEquals(
-            "2 GB exactly is a valid target in both parsers",
-            CompressTarget.MAX_BYTES,
+            "both parsers now read 2048 MB as the same decimal byte count",
+            2_048_000_000L,
             ImageTools.parseSizeInput("2048 MB")
         )
     }

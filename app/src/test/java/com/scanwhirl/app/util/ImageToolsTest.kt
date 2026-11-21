@@ -106,11 +106,12 @@ class ImageToolsTest {
 
     @Test
     fun `parseSizeInput understands kb mb and bare numbers`() {
-        assertEquals(500L * 1024, ImageTools.parseSizeInput("500 KB"))
-        assertEquals(3L * 1_048_576, ImageTools.parseSizeInput("3MB"))
-        assertEquals(500L * 1024, ImageTools.parseSizeInput("500"))
-        assertEquals(2_621_440L, ImageTools.parseSizeInput("2.5 mb"))
-        assertEquals(1L * 1_048_576, ImageTools.parseSizeInput("1M"))
+        // CP1: decimal units everywhere (KB = 1000, MB = 1,000,000).
+        assertEquals(500_000L, ImageTools.parseSizeInput("500 KB"))
+        assertEquals(3_000_000L, ImageTools.parseSizeInput("3MB"))
+        assertEquals(500_000L, ImageTools.parseSizeInput("500"))
+        assertEquals(2_500_000L, ImageTools.parseSizeInput("2.5 mb"))
+        assertEquals(1_000_000L, ImageTools.parseSizeInput("1M"))
         assertNull(ImageTools.parseSizeInput(""))
         assertNull(ImageTools.parseSizeInput("   "))
         assertNull(ImageTools.parseSizeInput("abc"))
@@ -125,8 +126,8 @@ class ImageToolsTest {
         assertNull("5000 MB is over the ceiling", ImageTools.parseSizeInput("5000 MB"))
         assertNull("3000 MB is over the ceiling", ImageTools.parseSizeInput("3000 MB"))
         assertEquals(
-            "exactly 2 GB is still a real target, not an Int overflow",
-            2L * 1024L * 1024L * 1024L,
+            "2048 MB is a decimal size below the shared 2 GiB ceiling",
+            2_048_000_000L,
             ImageTools.parseSizeInput("2048 MB")
         )
     }

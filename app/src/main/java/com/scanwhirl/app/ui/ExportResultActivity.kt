@@ -19,11 +19,11 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.SavedSnackbar
+import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.Locale
 
 /**
  * Shows the real output of Resize/Compress: a preview, actual before → after
@@ -219,12 +219,8 @@ class ExportResultActivity : BaseActivity() {
         }
     }
 
-    private fun formatBytes(bytes: Long): String = when {
-        bytes <= 0 -> "0 B"
-        bytes >= 1_048_576 -> String.format(Locale.ROOT, "%.1f MB", bytes / 1_048_576.0)
-        bytes >= 1024 -> String.format(Locale.ROOT, "%.0f KB", bytes / 1024.0)
-        else -> "$bytes B"
-    }
+    /** CP1: the one decimal formatter; the old local copy counted 1024-byte KB. */
+    private fun formatBytes(bytes: Long): String = SizeUnits.format(bytes)
 
     companion object {
         private const val EXTRA_OUTPUT = "output_path"

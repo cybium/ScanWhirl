@@ -1905,6 +1905,9 @@ class ScanRepository(private val context: Context) {
             }
             onPage(i + 1, total)
         }
+        // CP1 review P1: a Cancel signalled from the LAST onPage callback must still stop the
+        // publish. The per-page check above cannot catch it; this one can.
+        ctx.ensureActive()
         carryOcr(id, staging, pageMap, keepGeometry, scaledGeo)
     }
 
@@ -1936,6 +1939,8 @@ class ScanRepository(private val context: Context) {
             onLivePageBytes?.invoke(0)
             onPage(i + 1, pages.size)
         }
+        // CP1 review P1: cancel from the final page must not return normally to buildAndPublish.
+        ctx.ensureActive()
     }
 
     /** "Merged PDF <timestamp>" when no name is given. */

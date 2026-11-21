@@ -6,4 +6,5 @@
     <!-- review --> <string name="cp1_compress_floor_miss">अक्षरों को अपठनीय किए बिना %1$s तक नहीं पहुँच सके। सबसे छोटी पढ़ने योग्य प्रति: %2$s।</string>
     <!-- review --> <string name="cp1_compress_before_subset">पहले: %2$d में से %1$d पृष्ठ (%3$s)</string>
     <!-- review --> <string name="cp1_compress_cancelled">छोटा करना रोक दिया गया। मूल कागज़ात वैसा ही है।</string>
+    <!-- review --> <string name="cp1_est_only">लगभग %1$s</string>
 </resources>
