@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DV: "Finish editing first" opens the draft's own save choices, then continues the action. -->
+    <string name="dv_finish_editing_msg">Save these page edits first. The action then continues on the saved document.</string>
+    <!-- DV: Sign says plainly that the signed copy never carries unsaved page edits. -->
+    <string name="w1_draft_sign_msg">The signed copy uses the saved version of %1$s. Your unsaved page changes will NOT be included.</string>
+</resources>

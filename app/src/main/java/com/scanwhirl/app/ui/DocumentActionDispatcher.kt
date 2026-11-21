@@ -48,8 +48,9 @@ object DocumentActionDispatcher {
      *
      * @param onUsed the real handler is about to run: the host records that the user acted on the
      *   document (a fresh import must survive Back without a delete question afterwards).
-     * @param onFinishEditing the user chose "Finish editing first": the host returns them to the
-     *   page edits. Nothing is shared, saved or committed here.
+     * @param onFinishEditing the user chose "Finish editing first": the host opens its own draft
+     *   save choices and, once the edits are saved, continues the action on the saved result.
+     *   Nothing is shared, saved or committed here.
      * @param run the host's existing guarded handler, called with the re-read saved document.
      */
     fun dispatch(
@@ -77,7 +78,15 @@ object DocumentActionDispatcher {
             val draft = withContext(Dispatchers.IO) { runCatching { repo.draftOf(docId) } }
             val hasDraft = draft.isFailure || (draft.getOrNull()?.changes ?: 0) > 0
             if (hasDraft) {
-                ask(activity, loaded, onFinishEditing) {
+                // DV: Sign names the consequence explicitly. "Use saved version" runs on the
+                // saved bytes, so the signed copy can never carry the unsaved page edits.
+                // The choice and the behaviour are unchanged; only the words are honest.
+                val message = if (action == Action.SIGN) {
+                    activity.getString(R.string.w1_draft_sign_msg, loaded.name)
+                } else {
+                    activity.getString(R.string.w1_draft_action_msg, loaded.name)
+                }
+                ask(activity, loaded, onFinishEditing, message) {
                     onUsed(loaded)
                     guarded(activity, action, run, loaded)
                 }
@@ -109,7 +118,10 @@ object DocumentActionDispatcher {
                 run()
                 return@launch
             }
-            ask(activity, draftDoc, onFinishEditing) { run() }
+            ask(
+                activity, draftDoc, onFinishEditing,
+                activity.getString(R.string.w1_draft_action_msg, draftDoc.name)
+            ) { run() }
         }
     }
 
@@ -145,6 +157,7 @@ object DocumentActionDispatcher {
         activity: AppCompatActivity,
         doc: ScanDocument,
         onFinishEditing: (ScanDocument) -> Unit,
+        message: String,
         runSaved: () -> Unit
     ) {
         val answers = listOf(
@@ -154,7 +167,7 @@ object DocumentActionDispatcher {
         )
         SwSheet.builder(activity)
             .setTitle(R.string.w1_draft_action_title)
-            .setMessage(activity.getString(R.string.w1_draft_action_msg, doc.name))
+            .setMessage(message)
             .setOptions(answers) { index, _ ->
                 when (index) {
                     0 -> onFinishEditing(doc)
