@@ -152,4 +152,51 @@ class C1RedactionFindTest {
             copy.name.contains("Private info hidden")
         )
     }
+
+    @Test
+    fun `unchecking every found category clears a stale private-info label`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Stale label")
+        val screen = activity(id)
+        screen.findScanner = {
+            StampEditorActivity.FindOutcome(listOf(0 to hit(SensitiveScan.Kind.AADHAAR)))
+        }
+        // First Find hides one category -> "private info hidden" label is set.
+        screen.findViewById<View>(R.id.toolRedact).performClick()
+        idle()
+        screen.findViewById<View>(R.id.findRedactions).performClick()
+        idle()
+        ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
+        assertTrue("results appear", waitFor("results") { resultsSheet() != null })
+        resultsSheet()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
+        idle()
+        assertTrue("a redaction was added", screen.editor.hasRedaction())
+
+        // Remove it and run a second Find with every category unchecked: no new redaction, and
+        // the earlier hide label must not survive onto the next copy.
+        assertTrue(screen.editor.removeSelected())
+        assertFalse("nothing is hidden now", screen.editor.hasRedaction())
+        screen.findScanner = {
+            StampEditorActivity.FindOutcome(listOf(0 to hit(SensitiveScan.Kind.CARD)))
+        }
+        screen.findViewById<View>(R.id.findRedactions).performClick()
+        idle()
+        ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
+        assertTrue("results appear again", waitFor("results") { resultsSheet() != null })
+        val results = resultsSheet()!!
+        results.findViewById<LinearLayout>(R.id.swSheetItems).getChildAt(0).performClick()
+        results.findViewById<View>(R.id.swSheetPrimary).performClick()
+        idle()
+        assertFalse("still nothing hidden", screen.editor.hasRedaction())
+
+        screen.editor.add(PageStamp.Mark.Text("note", PageStamp.Box(0.1f, 0.1f, 0.3f, 0.12f)))
+        screen.refresh()
+        screen.findViewById<View>(R.id.saveCopy).performClick()
+        assertTrue(
+            "the copy is saved without a hide warning",
+            waitFor("the saved copy") { repo.listDocuments(includeVaulted = true).size > 1 }
+        )
+        val saved = repo.listDocuments(includeVaulted = true).first { it.id != id }
+        assertFalse("no stale private-info label", saved.name.contains("Private info hidden"))
+        assertFalse("no stale redacted label", saved.name.contains("Redacted"))
+    }
 }

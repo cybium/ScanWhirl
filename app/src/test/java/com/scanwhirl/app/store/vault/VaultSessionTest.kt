@@ -111,7 +111,11 @@ class VaultSessionTest {
     }
 
     @Test
-    fun `a close already wiping cannot wipe a fresh unlock's copies`() {
+    fun `a fresh unlock waits for an in-flight close wipe before writing new copies`() {
+        // What this proves: close() holds the shared lock across its wipe, so a concurrent open()
+        // cannot slip in and have its new plaintext deleted by the old close's wipe. The latch in
+        // the wipe hook makes the overlap deterministic: release it from another thread while
+        // open() is already blocked on the same lock.
         VaultSession.open(ByteArray(32) { 2 })
         val fresh = File(app.cacheDir, "vault_open/fresh.pdf")
         val entered = CountDownLatch(1)
@@ -124,15 +128,15 @@ class VaultSessionTest {
         val closer = Thread { VaultSession.close() }
         closer.start()
         assertTrue("the old close reached its wipe", entered.await(3, TimeUnit.SECONDS))
-        // Release the wipe shortly after the user unlocks again. The old close must not get to
-        // delete plaintext that belongs to the new session.
-        Thread { Thread.sleep(120); proceed.countDown() }.start()
+        val released = Thread { Thread.sleep(120); proceed.countDown() }
+        released.start()
         VaultSession.open(ByteArray(32) { 3 })
         fresh.parentFile?.mkdirs()
         fresh.writeText("fresh plaintext")
         closer.join(3_000)
-        assertTrue("fresh copies survive the stale close", fresh.exists())
-        assertTrue("fresh key survives", VaultSession.isUnlocked())
+        released.join(3_000)
+        assertTrue("the old wipe finished before the fresh copy was written", fresh.exists())
+        assertTrue("the fresh key survives", VaultSession.isUnlocked())
     }
 
     @Test

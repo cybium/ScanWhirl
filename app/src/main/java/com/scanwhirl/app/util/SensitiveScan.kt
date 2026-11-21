@@ -91,7 +91,9 @@ object SensitiveScan {
     /**
      * Sensitive items in one page of OCR lines, limited to [kinds]. [fullMask] makes every box
      * cover the whole match; the Redact "Suggest" path uses it so no digits stay visible on the
-     * hidden copy. The Find path leaves [fullMask] off and keeps its documented last-4 UX.
+     * hidden copy. The Find path passes [keepLast4Ids] for the "Keep last 4 digits" choice and
+     * turns [fullMask] on when that choice is unchecked, so cards are fully hidden too; checking
+     * it keeps the documented last-4 UX (cards keep their last four either way, per PCI).
      */
     fun find(
         page: OcrPage,

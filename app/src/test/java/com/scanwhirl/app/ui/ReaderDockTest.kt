@@ -159,6 +159,9 @@ class ReaderDockTest {
     fun `the protected badge is deterministic across ten cold opens`() {
         val id = DocFixtures.locked(repo, app, password = "1234", pages = 1)
         repeat(10) { run ->
+            // C1 review: otherwise opens 2..10 reuse the cached preview PDF and never exercise
+            // the asynchronous path that caused the original getLogoDescription() NPE.
+            PdfViewerActivity.clearPreviewCacheForTest(app, id)
             open(id, "Rent agreement") { activity ->
                 assertBadge(activity, "open ${run + 1}/10")
             }
