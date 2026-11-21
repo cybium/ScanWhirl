@@ -9,6 +9,8 @@
     <item name="qrTitle" type="id" />
     <item name="qrFieldLabel" type="id" />
     <item name="qrFieldValue" type="id" />
+    <item name="qrSecretValue" type="id" />
+    <item name="qrFieldToggle" type="id" />
     <item name="qrActions" type="id" />
     <item name="qrPrimaryAction" type="id" />
     <item name="qrScanAgain" type="id" />

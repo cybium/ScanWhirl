@@ -3,6 +3,7 @@ package com.scanwhirl.app.util
 import android.app.Application
 import android.content.ClipDescription
 import android.content.ClipboardManager
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -12,7 +13,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.util.concurrent.TimeUnit
 
 /** Security audit (clipboard): secrets are marked sensitive and cleared after a minute. */
 @RunWith(RobolectricTestRunner::class)
@@ -51,10 +54,28 @@ class ClipboardPrivacyTest {
     }
 
     @Test
-    fun `a non-sensitive copy is not marked`() {
+    fun `a non-sensitive copy is not marked and stays after a minute`() {
         ClipboardPrivacy.copy(app, "Document name", "Annual Report", sensitive = false)
         val extras = clipboard.primaryClip?.description?.extras
         assertFalse(extras?.getBoolean(ClipDescription.EXTRA_IS_SENSITIVE) == true)
+
+        shadowOf(Looper.getMainLooper()).idleFor(
+            ClipboardPrivacy.CLEAR_AFTER_MS + 1_000L, TimeUnit.MILLISECONDS
+        )
+        assertEquals(
+            "a URL, text, name or contact is not a secret: it must survive",
+            "Annual Report",
+            clipboard.primaryClip?.getItemAt(0)?.coerceToText(app)?.toString()
+        )
+    }
+
+    @Test
+    fun `a sensitive copy is cleared after a minute`() {
+        ClipboardPrivacy.copy(app, "Recovery code", "SECRET-CODE")
+        shadowOf(Looper.getMainLooper()).idleFor(
+            ClipboardPrivacy.CLEAR_AFTER_MS + 1_000L, TimeUnit.MILLISECONDS
+        )
+        assertTrue("the secret is gone", clipboard.primaryClip == null)
     }
 
     @Test

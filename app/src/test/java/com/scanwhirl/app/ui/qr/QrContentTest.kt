@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.qr
 
 import com.scanwhirl.app.R
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -154,5 +155,47 @@ class QrContentTest {
         val kinds = QrKind.entries.map { kind -> QrContent.parse("x", kind).kind }
         assertEquals(QrKind.entries.toSet(), kinds.toSet())
         assertEquals(QrAction.entries.size, QrAction.entries.toSet().size)
+    }
+
+    @Test
+    fun `a wifi value kept for history drops the password but keeps network and security`() {
+        val raw = "WIFI:T:WPA;S:Home 5G;P:s3cr\\;et;;"
+        val safe = QrContent.historyValue(raw, QrKind.WIFI)
+        assertFalse("the password is not in the reversible Base64 history", safe.contains("s3cr"))
+        assertTrue("the network stays", safe.contains("Home 5G"))
+        assertTrue("the security stays", safe.contains("WPA"))
+        assertEquals("a non-wifi code is stored unchanged", raw, QrContent.historyValue(raw, QrKind.TEXT))
+    }
+
+    @Test
+    fun `a link shows the real host decoded from punycode without changing the link`() {
+        val raw = "https://xn--bcher-kva.example/offer"
+        val content = QrContent.parse(raw)
+        assertEquals(
+            QrField(R.string.qr_field_website, "bücher.example (xn--bcher-kva.example)"),
+            content.fields.first()
+        )
+        assertEquals("what is opened is untouched", raw, content.actionUri)
+    }
+
+    @Test
+    fun `a link with userinfo shows only the real host`() {
+        val raw = "https://trusted.example@evil.example/path"
+        val content = QrContent.parse(raw)
+        assertEquals(QrField(R.string.qr_field_website, "evil.example"), content.fields.first())
+        assertEquals("what is opened is untouched", raw, content.actionUri)
+    }
+
+    @Test
+    fun `a vcard without a name uses a real field or a contact fallback`() {
+        val withPhone = QrContent.parse("BEGIN:VCARD\nVERSION:3.0\nTEL:98765\nEND:VCARD")
+        assertEquals("98765", withPhone.title)
+        val empty = QrContent.parse("BEGIN:VCARD\nVERSION:3.0\nEND:VCARD")
+        assertEquals("Contact", empty.title)
+        assertEquals(
+            "the fallback is localisable",
+            "संपर्क",
+            QrContent.parse("BEGIN:VCARD\nEND:VCARD", QrKind.CONTACT, "संपर्क").title
+        )
     }
 }

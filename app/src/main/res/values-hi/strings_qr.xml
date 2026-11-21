@@ -18,7 +18,8 @@
     <string name="qr_open_map">नक्शे में दिखाएँ</string>
     <string name="qr_copy">नकल करें</string>
     <string name="qr_share">भेजें</string>
-    <string name="qr_copied">नकल कर ली; अब कहीं भी चिपका सकते हैं</string>
+    <string name="qr_copied">नकल कर ली</string>
+    <string name="qr_copied_sensitive">नकल कर ली। 1 मिनट बाद क्लिपबोर्ड से हटा दी जाएगी।</string>
     <string name="qr_no_app">इस फ़ोन पर कोई ऐप इसे नहीं खोल सकता।</string>
     <string name="qr_no_contacts">कोई संपर्क ऐप नहीं। कोड की नकल कर ली गई।</string>
 
@@ -41,6 +42,10 @@
     <string name="qr_field_role">पद</string>
     <string name="qr_field_address">पता</string>
     <string name="qr_field_message">संदेश</string>
+    <string name="qr_field_website">वेबसाइट</string>
+    <string name="qr_contact_fallback">संपर्क</string>
+    <string name="qr_show">दिखाएँ</string>
+    <string name="qr_hide">छिपाएँ</string>
 
     <string name="qr_recent">हाल के स्कैन</string>
     <string name="qr_clear">साफ़ करें</string>

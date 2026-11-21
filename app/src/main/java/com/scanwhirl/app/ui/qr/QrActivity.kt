@@ -8,15 +8,21 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.ContactsContract
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.BaseActivity
@@ -46,6 +52,7 @@ class QrActivity : BaseActivity() {
 
         private const val STATE_VALUE = "qr_value"
         private const val STATE_KIND = "qr_kind"
+        private const val SCAN_TIMEOUT_MS = 60_000L
     }
 
     private lateinit var history: QrHistory
@@ -54,6 +61,9 @@ class QrActivity : BaseActivity() {
 
     private var current: QrContent? = null
     private var scanning = false
+    private var scanToken = 0
+    private val scanTimeout = Handler(Looper.getMainLooper())
+    private var lastCopiedSecret: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,7 +72,11 @@ class QrActivity : BaseActivity() {
             val value = state.getString(STATE_VALUE)
             val kind = state.getString(STATE_KIND)
             if (value != null) {
-                current = QrContent.parse(value, runCatching { QrKind.valueOf(kind.orEmpty()) }.getOrDefault(QrKind.TEXT))
+                current = QrContent.parse(
+                    value,
+                    runCatching { QrKind.valueOf(kind.orEmpty()) }.getOrDefault(QrKind.TEXT),
+                    getString(R.string.qr_contact_fallback)
+                )
             }
         }
 
@@ -144,22 +158,35 @@ class QrActivity : BaseActivity() {
     private fun scanNow() {
         if (scanning) return
         scanning = true
+        val token = ++scanToken
+        // A scanner UI that never reports back must not leave Scan as a dead tap.
+        val timeout = Runnable {
+            if (scanning && token == scanToken) scanning = false
+        }
+        scanTimeout.postDelayed(timeout, SCAN_TIMEOUT_MS)
         QrScanners.get(this).scan(this) { outcome ->
+            scanTimeout.removeCallbacks(timeout)
+            // A rotation can deliver the old scanner's callback to a finished activity; the
+            // recreated one keeps its own state and is free to scan again.
+            if (isFinishing || isDestroyed || token != scanToken) return@scan
             scanning = false
             onScanOutcome(outcome)
         }
     }
 
     private fun onScanOutcome(outcome: QrScanOutcome) {
+        if (isFinishing || isDestroyed) return
         when (outcome) {
             is QrScanOutcome.Found -> {
-                val content = QrContent.parse(outcome.rawValue, outcome.kind)
+                val content = QrContent.parse(
+                    outcome.rawValue, outcome.kind, getString(R.string.qr_contact_fallback)
+                )
                 if (content.raw.isBlank()) {
                     showError(getString(R.string.qr_empty_code))
                     render()
                     return
                 }
-                history.add(content.raw, content.kind)
+                history.add(QrContent.historyValue(content.raw, content.kind), content.kind)
                 current = content
                 render()
             }
@@ -329,16 +356,35 @@ class QrActivity : BaseActivity() {
                 text = getString(field.labelRes).uppercase(Locale.getDefault())
             }
         )
+        val valueView = SwStyle.text(this@QrActivity, 15f, SwStyle.color(this@QrActivity, R.color.text_hologram_hi)).apply {
+            id = if (field.secret) R.id.qrSecretValue else R.id.qrFieldValue
+            // A password is hidden until the user deliberately reveals it; Copy still works.
+            text = if (field.secret) QrContent.MASK else field.value
+            setTextIsSelectable(true)
+            setLineSpacing(0f, 1.25f)
+        }
         addView(
-            SwStyle.text(this@QrActivity, 15f, SwStyle.color(this@QrActivity, R.color.text_hologram_hi)).apply {
-                id = R.id.qrFieldValue
-                text = field.value
-                setTextIsSelectable(true)
-                setLineSpacing(0f, 1.25f)
-            },
+            valueView,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(this@QrActivity, 3f) }
         )
+        if (field.secret) {
+            addView(
+                SwStyle.text(this@QrActivity, 14f, SwStyle.color(this@QrActivity, R.color.cyan_primary), bold = true).apply {
+                    id = R.id.qrFieldToggle
+                    text = getString(R.string.qr_show)
+                    asButton(this)
+                    setOnClickListener {
+                        val reveal = text == getString(R.string.qr_show)
+                        valueView.text = if (reveal) field.value else QrContent.MASK
+                        text = getString(if (reveal) R.string.qr_hide else R.string.qr_show)
+                    }
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this@QrActivity, 48f)
+                ).apply { topMargin = SwStyle.dp(this@QrActivity, 4f) }
+            )
+        }
     }
 
     // ------------------------------------------------------------------
@@ -368,12 +414,16 @@ class QrActivity : BaseActivity() {
                 text = getString(R.string.qr_clear)
                 isClickable = true
                 isFocusable = true
+                asButton(this)
                 setPadding(
                     SwStyle.dp(this@QrActivity, 8f), SwStyle.dp(this@QrActivity, 6f),
                     SwStyle.dp(this@QrActivity, 2f), SwStyle.dp(this@QrActivity, 6f)
                 )
                 setOnClickListener {
                     history.clear()
+                    // A password copied from a result is a secret too: drop it with the history.
+                    lastCopiedSecret?.let { ClipboardPrivacy.clearIfUnchanged(this@QrActivity, it) }
+                    lastCopiedSecret = null
                     Toast.makeText(this@QrActivity, R.string.qr_cleared, Toast.LENGTH_SHORT).show()
                     render()
                 }
@@ -391,7 +441,9 @@ class QrActivity : BaseActivity() {
                 historyRow(item, stamp.format(Date(item.at))).apply {
                     id = R.id.qrHistoryRow
                     setOnClickListener {
-                        current = QrContent.parse(item.value, item.kind)
+                        current = QrContent.parse(
+                            item.value, item.kind, getString(R.string.qr_contact_fallback)
+                        )
                         render()
                     }
                 },
@@ -415,6 +467,7 @@ class QrActivity : BaseActivity() {
         setPadding(pad, pad, pad, pad)
         isClickable = true
         isFocusable = true
+        asButton(this)
         addView(
             SwStyle.text(this@QrActivity, 11f, SwStyle.color(this@QrActivity, R.color.text_hologram_dim), bold = true).apply {
                 text = getString(R.string.qr_history_meta, getString(labelFor(item.kind)), whenText)
@@ -491,10 +544,15 @@ class QrActivity : BaseActivity() {
     }
 
     private fun copy(text: String) {
-        // Security audit: a Wi-Fi code's copy is a password; mark it sensitive and auto-clear.
+        // Only a Wi-Fi password is a secret: mark it sensitive, auto-clear it and say so.
         val secret = current?.kind == QrKind.WIFI
         ClipboardPrivacy.copy(this, getString(R.string.qr_title), text, sensitive = secret)
-        Toast.makeText(this, R.string.qr_copied, Toast.LENGTH_SHORT).show()
+        lastCopiedSecret = if (secret) text else null
+        Toast.makeText(
+            this,
+            if (secret) R.string.qr_copied_sensitive else R.string.qr_copied,
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun share(text: String) {
@@ -561,6 +619,7 @@ class QrActivity : BaseActivity() {
             background = SwStyle.rounded(this@QrActivity, SwStyle.color(this@QrActivity, R.color.cyan_primary), radiusDp = 16f)
             isClickable = true
             isFocusable = true
+            asButton(this)
         }
 
     private fun outlineButton(textRes: Int, icon: Int): TextView =
@@ -578,7 +637,19 @@ class QrActivity : BaseActivity() {
             compoundDrawableTintList = ColorStateList.valueOf(SwStyle.color(this@QrActivity, R.color.cyan_primary))
             isClickable = true
             isFocusable = true
+            asButton(this)
         }
+
+    /** Clickable rows and TextViews act as buttons: a role for TalkBack and a 48dp touch target. */
+    private fun asButton(view: View) {
+        view.minimumHeight = SwStyle.dp(this, 48f)
+        ViewCompat.setAccessibilityDelegate(view, object : AccessibilityDelegateCompat() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = Button::class.java.name
+            }
+        })
+    }
 
     private fun showError(message: String) {
         SwSheet.builder(this)
