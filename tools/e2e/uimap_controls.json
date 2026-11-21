@@ -1,0 +1,1876 @@
+{
+ "total_slots": 400,
+ "by_id": {
+  "swnavlibrary": [
+   "C001"
+  ],
+  "swnavtools": [
+   "C002"
+  ],
+  "swnavvault": [
+   "C003"
+  ],
+  "swnavme": [
+   "C004"
+  ],
+  "swnavscan": [
+   "C005"
+  ],
+  "swbrandmark": [
+   "C006"
+  ],
+  "swlanguagechip": [
+   "C007"
+  ],
+  "swhomesearch": [
+   "C008"
+  ],
+  "swhomeclear": [
+   "C009"
+  ],
+  "swnewfolder": [
+   "C011"
+  ],
+  "swallfolders": [
+   "C012"
+  ],
+  "swquickall": [
+   "C015"
+  ],
+  "swquickedit": [
+   "C016"
+  ],
+  "swsort": [
+   "C030"
+  ],
+  "swchiprow": [
+   "C031"
+  ],
+  "swdoclist": [
+   "C032"
+  ],
+  "doccard": [
+   "C032"
+  ],
+  "swtoolssearch": [
+   "C044"
+  ],
+  "swtoolsclear": [
+   "C045"
+  ],
+  "swtoolsrecent": [
+   "C047"
+  ],
+  "swtoolsclearempty": [
+   "C078"
+  ],
+  "swtoolsretry": [
+   "C079"
+  ],
+  "badge_pro": [
+   "C080"
+  ],
+  "swvaultaction": [
+   "C081"
+  ],
+  "swmepro": [
+   "C082"
+  ],
+  "swmesettings": [
+   "C083"
+  ],
+  "swmebackup": [
+   "C084"
+  ],
+  "swmetrash": [
+   "C085"
+  ],
+  "swmeabout": [
+   "C086"
+  ],
+  "swproclose": [
+   "C087"
+  ],
+  "swpromore": [
+   "C088"
+  ],
+  "swproprice": [
+   "C089"
+  ],
+  "swprobuy": [
+   "C090"
+  ],
+  "swprocontinuefree": [
+   "C091"
+  ],
+  "swprorestoreaction": [
+   "C092"
+  ],
+  "swprotrust": [
+   "C094"
+  ],
+  "btnedit": [
+   "C096"
+  ],
+  "btntext": [
+   "C097"
+  ],
+  "btnshare": [
+   "C098",
+   "C267"
+  ],
+  "btncompress": [
+   "C099"
+  ],
+  "btnsign": [
+   "C100"
+  ],
+  "btnsavepdf": [
+   "C101",
+   "C300"
+  ],
+  "btnmore": [
+   "C102"
+  ],
+  "doccategorytouch": [
+   "C103"
+  ],
+  "pagelist": [
+   "C104"
+  ],
+  "ux130_l4_select_pages": [
+   "C105"
+  ],
+  "btnselclose": [
+   "C106"
+  ],
+  "btnselall": [
+   "C107"
+  ],
+  "btnselrotate": [
+   "C108",
+   "C297"
+  ],
+  "btnseldelete": [
+   "C109",
+   "C297"
+  ],
+  "btnselextract": [
+   "C110"
+  ],
+  "btnselshare": [
+   "C111"
+  ],
+  "btnselmore": [
+   "C112"
+  ],
+  "btnemptyaddpages": [
+   "C113"
+  ],
+  "btndraftdiscard": [
+   "C114"
+  ],
+  "btndraftreplace": [
+   "C115"
+  ],
+  "btndraftsave": [
+   "C116"
+  ],
+  "undo": [
+   "C117",
+   "C156"
+  ],
+  "insert_pages_title": [
+   "C118"
+  ],
+  "insert_position_title": [
+   "C119"
+  ],
+  "insert_page_hint": [
+   "C120"
+  ],
+  "dv_finish_editing_msg": [
+   "C121"
+  ],
+  "u1_import_discard": [
+   "C122"
+  ],
+  "fixflow_keep": [
+   "C122"
+  ],
+  "draft_save_new": [
+   "C123"
+  ],
+  "draft_back_title": [
+   "C124"
+  ],
+  "draft_move_to": [
+   "C125"
+  ],
+  "action_find": [
+   "C138"
+  ],
+  "readerdockshare": [
+   "C139"
+  ],
+  "readerdockpages": [
+   "C140"
+  ],
+  "readerdocktext": [
+   "C141"
+  ],
+  "readerdocksign": [
+   "C142"
+  ],
+  "readerdockmore": [
+   "C143"
+  ],
+  "pdfpageindicator": [
+   "C144"
+  ],
+  "ux130_l4_go_to_page": [
+   "C145"
+  ],
+  "pageimage": [
+   "C146"
+  ],
+  "item_pdf_page.xml": [
+   "C146"
+  ],
+  "btnzoomclose": [
+   "C147"
+  ],
+  "readerstrippages": [
+   "C148"
+  ],
+  "btnclose": [
+   "C151"
+  ],
+  "btnrotateright": [
+   "C152"
+  ],
+  "btncrop": [
+   "C153"
+  ],
+  "btnfilter": [
+   "C154"
+  ],
+  "btndelete": [
+   "C155"
+  ],
+  "btncancelcrop": [
+   "C158"
+  ],
+  "btnapplycrop": [
+   "C159"
+  ],
+  "cropview": [
+   "C160"
+  ],
+  "pager": [
+   "C162"
+  ],
+  "pageindicator": [
+   "C163"
+  ],
+  "review_discard_title": [
+   "C164"
+  ],
+  "toolbar": [
+   "C165"
+  ],
+  "rowtheme": [
+   "C166"
+  ],
+  "rowfont": [
+   "C167"
+  ],
+  "rowgreeting": [
+   "C168"
+  ],
+  "switchgreeting": [
+   "C168"
+  ],
+  "rowwallpaper": [
+   "C169"
+  ],
+  "switchwallpaper": [
+   "C169"
+  ],
+  "rowlanguage": [
+   "C170"
+  ],
+  "rowocrlanguage": [
+   "C171"
+  ],
+  "rowviewer": [
+   "C172"
+  ],
+  "switchblockscreenshots": [
+   "C173"
+  ],
+  "switchtestfree": [
+   "C174"
+  ],
+  "rowprivacy": [
+   "C175"
+  ],
+  "rowabout": [
+   "C176"
+  ],
+  "rowtrash": [
+   "C177"
+  ],
+  "switchautoenhance": [
+   "C178"
+  ],
+  "switchautocopytodocuments": [
+   "C179"
+  ],
+  "switchsearchablepdf": [
+   "C180"
+  ],
+  "action_empty_trash": [
+   "C188"
+  ],
+  "btntrashrestore": [
+   "C189"
+  ],
+  "btntrashdelete": [
+   "C190"
+  ],
+  "trashrow": [
+   "C191"
+  ],
+  "btntrashretry": [
+   "C192"
+  ],
+  "deletecopiesbox": [
+   "C195"
+  ],
+  "trashactions.showmoved": [
+   "C196"
+  ],
+  "vaultlock": [
+   "C197"
+  ],
+  "vaultmore": [
+   "C198"
+  ],
+  "vaultrecoverybutton": [
+   "C199"
+  ],
+  "vaultbackupbutton": [
+   "C200"
+  ],
+  "vaultsetupbutton": [
+   "C201"
+  ],
+  "vaultunlockbutton": [
+   "C202"
+  ],
+  "vaultaddfiles": [
+   "C203"
+  ],
+  "vaultcard": [
+   "C204"
+  ],
+  "vaultlist": [
+   "C204"
+  ],
+  "vaultpasscodeinput": [
+   "C205"
+  ],
+  "vaultpasscodeconfirm": [
+   "C205"
+  ],
+  "vaultrecoverycopy": [
+   "C207"
+  ],
+  "vaultrecoveryinput": [
+   "C209"
+  ],
+  "passwordfield": [
+   "C211"
+  ],
+  "vaultuserecovery": [
+   "C213"
+  ],
+  "vault_use_recovery": [
+   "C213"
+  ],
+  "vaultrestorecode": [
+   "C214"
+  ],
+  "vault_legacy_pin_hint": [
+   "C215"
+  ],
+  "optionrow": [
+   "C218"
+  ],
+  "vaultnewpasscode": [
+   "C219"
+  ],
+  "vaultnewpasscodeconfirm": [
+   "C219"
+  ],
+  "vault_restore_primary": [
+   "C221"
+  ],
+  "sheet_got_it": [
+   "C222"
+  ],
+  "vaultempty": [
+   "C225"
+  ],
+  "vaultlockedplaceholder": [
+   "C226"
+  ],
+  "backupnow": [
+   "C228"
+  ],
+  "backuprestore": [
+   "C229"
+  ],
+  "qrclose": [
+   "C238"
+  ],
+  "qrscan": [
+   "C239"
+  ],
+  "qrscanagain": [
+   "C240"
+  ],
+  "qrprimaryaction": [
+   "C241"
+  ],
+  "qractions": [
+   "C242"
+  ],
+  "qrfieldtoggle": [
+   "C243"
+  ],
+  "qrhistoryrow": [
+   "C244"
+  ],
+  "qrhistoryclear": [
+   "C245"
+  ],
+  "ocrmodepage": [
+   "C258"
+  ],
+  "ocrmodetext": [
+   "C258"
+  ],
+  "btnocrretry": [
+   "C260"
+  ],
+  "ocr_retry": [
+   "C260"
+  ],
+  "btntidytext": [
+   "C262"
+  ],
+  "btnundo": [
+   "C264"
+  ],
+  "ocr_undo": [
+   "C264"
+  ],
+  "btnredo": [
+   "C265"
+  ],
+  "ocr_redo": [
+   "C265"
+  ],
+  "btncopy": [
+   "C266"
+  ],
+  "btncopyall": [
+   "C266"
+  ],
+  "ocr_w5_copy_page": [
+   "C266"
+  ],
+  "ocr_copy_all": [
+   "C266"
+  ],
+  "btnsave": [
+   "C268"
+  ],
+  "ocr_save_txt": [
+   "C268"
+  ],
+  "btnedittext": [
+   "C270"
+  ],
+  "ocr_w5_edit_text": [
+   "C270"
+  ],
+  "ocr_w5_done_editing": [
+   "C270"
+  ],
+  "btnsaveedits": [
+   "C271"
+  ],
+  "btntxtretry": [
+   "C272"
+  ],
+  "btntoolrotate": [
+   "C285"
+  ],
+  "btntooladd": [
+   "C286"
+  ],
+  "btntoolfilter": [
+   "C287"
+  ],
+  "btntoolcrop": [
+   "C288"
+  ],
+  "btntooldelete": [
+   "C289"
+  ],
+  "btnarrearlier": [
+   "C290"
+  ],
+  "btnarrlater": [
+   "C290"
+  ],
+  "btnarrmove": [
+   "C291"
+  ],
+  "btnarredit": [
+   "C292"
+  ],
+  "btnprevpage": [
+   "C293"
+  ],
+  "btnnextpage": [
+   "C293"
+  ],
+  "focusimage": [
+   "C294"
+  ],
+  "item_review_film": [
+   "C295"
+  ],
+  "btnselclear": [
+   "C296"
+  ],
+  "review_name_hint": [
+   "C298"
+  ],
+  "toolsetupdocrow": [
+   "C302"
+  ],
+  "toolsetupranges": [
+   "C304"
+  ],
+  "toolsetuprangepreview": [
+   "C305"
+  ],
+  "toolsetupformatjpg": [
+   "C306"
+  ],
+  "toolsetupformatpng": [
+   "C306"
+  ],
+  "toolsetupquality": [
+   "C307"
+  ],
+  "toolsetuptarget": [
+   "C309"
+  ],
+  "toolsetupname": [
+   "C310"
+  ],
+  "toolsetupwordpictures": [
+   "C311"
+  ],
+  "toolsetupexceltables": [
+   "C312"
+  ],
+  "toolsetupexcelall": [
+   "C312"
+  ],
+  "toolsetupprogress": [
+   "C314"
+  ],
+  "toolsetuperror": [
+   "C315"
+  ],
+  "toolsetuprun": [
+   "C316"
+  ],
+  "tools_setup_no_docs": [
+   "C317"
+  ],
+  "toolresultopen": [
+   "C322"
+  ],
+  "toolresultshare": [
+   "C323"
+  ],
+  "toolresultalsosave": [
+   "C324"
+  ],
+  "toolresultmore": [
+   "C325"
+  ],
+  "toolresultsave": [
+   "C326"
+  ],
+  "toolresultlibrary": [
+   "C327"
+  ],
+  "toolresultundo": [
+   "C328"
+  ],
+  "tag_keep": [
+   "C329"
+  ],
+  "tag_discard": [
+   "C330"
+  ],
+  "toolresulttypebadge": [
+   "C331"
+  ],
+  "savedsnackbar": [
+   "C332"
+  ]
+ },
+ "by_label": {
+  "bottom tab library": [
+   "C001"
+  ],
+  "bottom tab tools": [
+   "C002"
+  ],
+  "bottom tab vault": [
+   "C003"
+  ],
+  "bottom tab me": [
+   "C004"
+  ],
+  "centre scan disc (contentdescription \"create: scan or import a document\")": [
+   "C005"
+  ],
+  "centre scan disc": [
+   "C005"
+  ],
+  "brand mark + \"scanwhirl\" wordmark": [
+   "C006"
+  ],
+  "brand mark +": [
+   "C006"
+  ],
+  "language chip a/अ": [
+   "C007"
+  ],
+  "search field \"search pages\"": [
+   "C008"
+  ],
+  "search field \"search": [
+   "C008"
+  ],
+  "clear search \"×\"": [
+   "C009"
+  ],
+  "folder chip all": [
+   "C010",
+   "C012"
+  ],
+  "folder chip + new folder": [
+   "C011"
+  ],
+  "folder chip +": [
+   "C011"
+  ],
+  "folder chip all folders": [
+   "C012"
+  ],
+  "folder chip <name> (n)": [
+   "C013"
+  ],
+  "folder chip <name>": [
+   "C013"
+  ],
+  "\"quick tools\" header label": [
+   "C014"
+  ],
+  "\"quick tools\" header": [
+   "C014"
+  ],
+  "all tools": [
+   "C015"
+  ],
+  "quick-tools pencil \"edit quick tools\"": [
+   "C016"
+  ],
+  "quick-tools pencil \"edit": [
+   "C016"
+  ],
+  "\"recent ▾\" sort control": [
+   "C030"
+  ],
+  "\"recent ▾\" sort": [
+   "C030"
+  ],
+  "category chips all n / study n / receipts n / ids n / forms n / other n": [
+   "C031"
+  ],
+  "category chips all": [
+   "C031"
+  ],
+  "document card (name, \"n pages size date\", category, lock/vault badges, share, ⋮)": [
+   "C032"
+  ],
+  "document card (name,": [
+   "C032"
+  ],
+  "tools search \"find a tool, e.g. \\\"sign\\\"\"": [
+   "C044"
+  ],
+  "tools search \"find": [
+   "C044"
+  ],
+  "clear search ×": [
+   "C045"
+  ],
+  "trust pill \"private no ads / no account / offline\"": [
+   "C046"
+  ],
+  "trust pill \"private": [
+   "C046"
+  ],
+  "recent tools row (horizontally scrolling tiles)": [
+   "C047"
+  ],
+  "recent tools row": [
+   "C047"
+  ],
+  "no-match \"clear search\" action": [
+   "C078"
+  ],
+  "no-match \"clear search\"": [
+   "C078"
+  ],
+  "catalogue-error \"try again\"": [
+   "C079"
+  ],
+  "pro chip on markup job header in free": [
+   "C080"
+  ],
+  "pro chip on": [
+   "C080"
+  ],
+  "open vault": [
+   "C081"
+  ],
+  "scanwhirl pro / \"scanwhirl pro is active\"": [
+   "C082"
+  ],
+  "scanwhirl pro /": [
+   "C082"
+  ],
+  "settings — \"look, text, privacy\"": [
+   "C083"
+  ],
+  "settings — \"look,": [
+   "C083"
+  ],
+  "backup & restore — \"encrypted backup and restore.\"": [
+   "C084"
+  ],
+  "backup & restore": [
+   "C084"
+  ],
+  "trash — \"deleted documents, 30 days\"": [
+   "C085"
+  ],
+  "trash — \"deleted": [
+   "C085"
+  ],
+  "about scanwhirl — \"version, privacy, licences\"": [
+   "C086"
+  ],
+  "about scanwhirl —": [
+   "C086"
+  ],
+  "close ×": [
+   "C087",
+   "C238"
+  ],
+  "\"see all n pro tools\"": [
+   "C088"
+  ],
+  "\"see all n": [
+   "C088"
+  ],
+  "price line (play price / \"price shown by google play\")": [
+   "C089"
+  ],
+  "price line (play": [
+   "C089"
+  ],
+  "get pro": [
+   "C090"
+  ],
+  "continue free": [
+   "C091"
+  ],
+  "restore purchase": [
+   "C092"
+  ],
+  "eight feature cells (sign & stamp, word & excel, split by range, watermark, hide private info, qr code scan, batch tools, tags)": [
+   "C093"
+  ],
+  "eight feature cells": [
+   "C093"
+  ],
+  "trust pills (no ads / no account / private)": [
+   "C094"
+  ],
+  "trust pills (no": [
+   "C094"
+  ],
+  "toolbar back": [
+   "C095",
+   "C137",
+   "C165",
+   "C187",
+   "C227",
+   "C321"
+  ],
+  "edit / crop": [
+   "C096"
+  ],
+  "read text": [
+   "C097"
+  ],
+  "share": [
+   "C098",
+   "C323"
+  ],
+  "compress": [
+   "C099",
+   "C059"
+  ],
+  "sign pro": [
+   "C100"
+  ],
+  "save pdf": [
+   "C101"
+  ],
+  "more": [
+   "C102"
+  ],
+  "category chip \"category x. change category\"": [
+   "C103"
+  ],
+  "category chip \"category": [
+   "C103"
+  ],
+  "page thumbnail": [
+   "C104"
+  ],
+  "select pages": [
+   "C105"
+  ],
+  "selection done": [
+   "C106"
+  ],
+  "selection select all": [
+   "C107"
+  ],
+  "selection rotate": [
+   "C108"
+  ],
+  "selection delete": [
+   "C109"
+  ],
+  "selection extract": [
+   "C110"
+  ],
+  "selection share": [
+   "C111"
+  ],
+  "selection more": [
+   "C112"
+  ],
+  "add pages (empty grid)": [
+   "C113"
+  ],
+  "add pages (empty": [
+   "C113"
+  ],
+  "draft discard": [
+   "C114"
+  ],
+  "draft replace": [
+   "C115"
+  ],
+  "draft save copy": [
+   "C116"
+  ],
+  "page-delete undo snackbar": [
+   "C117"
+  ],
+  "add pages from options: scan with camera / photos / another document": [
+   "C118"
+  ],
+  "add pages from": [
+   "C118"
+  ],
+  "position options: at the start / after page… / at the end": [
+   "C119"
+  ],
+  "position options: at": [
+   "C119"
+  ],
+  "after page number field": [
+   "C120"
+  ],
+  "after page number": [
+   "C120"
+  ],
+  "finish-editing choices: save as new copy / replace original / keep editing": [
+   "C121"
+  ],
+  "finish-editing choices: save": [
+   "C121"
+  ],
+  "keep imported document? discard / keep": [
+   "C122"
+  ],
+  "keep imported document?": [
+   "C122"
+  ],
+  "draft-name field + save": [
+   "C123"
+  ],
+  "draft-name field +": [
+   "C123"
+  ],
+  "back with unsaved edits: save as new copy / discard": [
+   "C124"
+  ],
+  "back with unsaved": [
+   "C124"
+  ],
+  "move page number field (move to…)": [
+   "C125"
+  ],
+  "move page number": [
+   "C125"
+  ],
+  "toolbar find in text (menu)": [
+   "C138"
+  ],
+  "toolbar find in": [
+   "C138"
+  ],
+  "share (dock)": [
+   "C139"
+  ],
+  "pages (dock)": [
+   "C140"
+  ],
+  "text (dock)": [
+   "C141"
+  ],
+  "sign (dock)": [
+   "C142"
+  ],
+  "more (dock)": [
+   "C143"
+  ],
+  "page indicator \"1 / n\" (tappable)": [
+   "C144"
+  ],
+  "page indicator \"1": [
+   "C144"
+  ],
+  "go to page input field": [
+   "C145"
+  ],
+  "go to page": [
+   "C145"
+  ],
+  "page image (tap)": [
+   "C146"
+  ],
+  "zoom overlay close": [
+   "C147"
+  ],
+  "page strip thumbnail": [
+   "C148"
+  ],
+  "find field + previous / next / close": [
+   "C149"
+  ],
+  "find field +": [
+   "C149"
+  ],
+  "protection-repair sheet (if lock/pdf mismatch)": [
+   "C150"
+  ],
+  "protection-repair sheet (if": [
+   "C150"
+  ],
+  "close": [
+   "C151"
+  ],
+  "rotate right": [
+   "C152"
+  ],
+  "crop": [
+   "C153"
+  ],
+  "filter": [
+   "C154"
+  ],
+  "delete": [
+   "C155"
+  ],
+  "undo snackbar": [
+   "C156"
+  ],
+  "crop presets free / passport 35×45 / id card / visa 5:7": [
+   "C157"
+  ],
+  "crop presets free": [
+   "C157"
+  ],
+  "crop cancel": [
+   "C158"
+  ],
+  "crop apply crop": [
+   "C159"
+  ],
+  "crop corner/edge handles": [
+   "C160"
+  ],
+  "page image zoom (double-tap / accessibility zoom page)": [
+   "C161"
+  ],
+  "page image zoom": [
+   "C161"
+  ],
+  "swipe / pager between pages": [
+   "C162"
+  ],
+  "swipe / pager": [
+   "C162"
+  ],
+  "page number indicator": [
+   "C163"
+  ],
+  "discard scan (last page of unsaved scan)": [
+   "C164"
+  ],
+  "discard scan (last": [
+   "C164"
+  ],
+  "theme (hidden)": [
+   "C166"
+  ],
+  "text & font style": [
+   "C167"
+  ],
+  "text & font": [
+   "C167"
+  ],
+  "status line (hidden)": [
+   "C168"
+  ],
+  "wallpaper (hidden)": [
+   "C169"
+  ],
+  "app language": [
+   "C170"
+  ],
+  "text reading language": [
+   "C171"
+  ],
+  "default pdf viewer": [
+   "C172"
+  ],
+  "block screenshots of documents switch": [
+   "C173"
+  ],
+  "block screenshots of": [
+   "C173"
+  ],
+  "testing: act as a free user switch": [
+   "C174"
+  ],
+  "testing: act as": [
+   "C174"
+  ],
+  "privacy policy (row hidden but section kept)": [
+   "C175"
+  ],
+  "privacy policy (row": [
+   "C175"
+  ],
+  "about (row hidden)": [
+   "C176"
+  ],
+  "trash (row hidden)": [
+   "C177"
+  ],
+  "auto enhance scans switch": [
+   "C178"
+  ],
+  "auto enhance scans": [
+   "C178"
+  ],
+  "also save a copy to documents switch": [
+   "C179"
+  ],
+  "also save a": [
+   "C179"
+  ],
+  "make pdfs searchable switch": [
+   "C180"
+  ],
+  "make pdfs searchable": [
+   "C180"
+  ],
+  "font choice rows default/serif/monospace": [
+   "C181"
+  ],
+  "font choice rows": [
+   "C181"
+  ],
+  "language choice rows": [
+   "C182"
+  ],
+  "ocr language rows": [
+   "C183"
+  ],
+  "viewer choice rows": [
+   "C184"
+  ],
+  "about ok": [
+   "C185"
+  ],
+  "licences option (me→about sheet)": [
+   "C186"
+  ],
+  "licences option (me→about": [
+   "C186"
+  ],
+  "overflow empty trash": [
+   "C188"
+  ],
+  "row restore": [
+   "C189"
+  ],
+  "row delete permanently": [
+   "C190"
+  ],
+  "trash row": [
+   "C191"
+  ],
+  "empty try again": [
+   "C192"
+  ],
+  "delete-permanently confirm delete permanently": [
+   "C193"
+  ],
+  "delete-permanently confirm delete": [
+   "C193"
+  ],
+  "empty trash confirm empty trash": [
+   "C194"
+  ],
+  "empty trash confirm": [
+   "C194"
+  ],
+  "\"also delete n saved copy/copies in documents/scanwhirl\" checkbox": [
+   "C195"
+  ],
+  "\"also delete n": [
+   "C195"
+  ],
+  "undo \"moved to trash\" snackbar (from library/actions)": [
+   "C196"
+  ],
+  "undo \"moved to": [
+   "C196"
+  ],
+  "lock icon (\"lock vault\")": [
+   "C197"
+  ],
+  "lock icon (\"lock": [
+   "C197"
+  ],
+  "⋮ \"vault options\"": [
+   "C198"
+  ],
+  "recovery code": [
+   "C199"
+  ],
+  "backup file": [
+   "C200"
+  ],
+  "set up vault": [
+   "C201"
+  ],
+  "unlock vault": [
+   "C202"
+  ],
+  "+ add files": [
+   "C203"
+  ],
+  "vault entry card (open / more)": [
+   "C204"
+  ],
+  "vault entry card": [
+   "C204"
+  ],
+  "setup passcode + repeat fields": [
+   "C205"
+  ],
+  "setup passcode +": [
+   "C205"
+  ],
+  "create vault": [
+   "C206"
+  ],
+  "save as file (recovery code)": [
+   "C207"
+  ],
+  "save as file": [
+   "C207"
+  ],
+  "i saved it": [
+   "C208"
+  ],
+  "4-character confirmation field": [
+   "C209"
+  ],
+  "finish setup": [
+   "C210"
+  ],
+  "passcode field + unlock": [
+   "C211"
+  ],
+  "passcode field +": [
+   "C211"
+  ],
+  "use fingerprint": [
+   "C212"
+  ],
+  "use recovery code": [
+   "C213"
+  ],
+  "24-char recovery code field + unlock": [
+   "C214"
+  ],
+  "24-char recovery code": [
+   "C214"
+  ],
+  "legacy 4-digit pin field + continue / skip": [
+   "C215"
+  ],
+  "legacy 4-digit pin": [
+   "C215"
+  ],
+  "entry actions: open / remove from vault": [
+   "C216"
+  ],
+  "entry actions: open": [
+   "C216"
+  ],
+  "remove confirmation remove from vault": [
+   "C217"
+  ],
+  "remove confirmation remove": [
+   "C217"
+  ],
+  "more options rows: change passcode / lock now / move old pin files / recovery code / restore backup / backup file": [
+   "C218"
+  ],
+  "more options rows:": [
+   "C218"
+  ],
+  "new passcode ×2 + save": [
+   "C219"
+  ],
+  "new passcode ×2": [
+   "C219"
+  ],
+  "\"make a new code\" (recovery code info)": [
+   "C220"
+  ],
+  "\"make a new": [
+   "C220"
+  ],
+  "restore backup file picker + code field + restore": [
+   "C221"
+  ],
+  "restore backup file": [
+   "C221"
+  ],
+  "error sheet got it": [
+   "C222"
+  ],
+  "error sheet got": [
+   "C222"
+  ],
+  "fingerprint setup \"use fingerprint for the vault?\"": [
+   "C223"
+  ],
+  "fingerprint setup \"use": [
+   "C223"
+  ],
+  "pending-setup notice \"type 4 characters…\"": [
+   "C224"
+  ],
+  "pending-setup notice \"type": [
+   "C224"
+  ],
+  "\"no private files yet\" empty card": [
+   "C225"
+  ],
+  "\"no private files": [
+   "C225"
+  ],
+  "\"unlock to see your files.\" placeholder": [
+   "C226"
+  ],
+  "\"unlock to see": [
+   "C226"
+  ],
+  "back up now": [
+   "C228"
+  ],
+  "restore from backup": [
+   "C229"
+  ],
+  "reminder switch \"remind me if my last backup is a month old\"": [
+   "C230"
+  ],
+  "reminder switch \"remind": [
+   "C230"
+  ],
+  "protection chooser: use the vault recovery code": [
+   "C231"
+  ],
+  "protection chooser: use": [
+   "C231",
+   "C232"
+  ],
+  "protection chooser: use a backup password": [
+   "C232"
+  ],
+  "recovery code / password field + continue": [
+   "C233"
+  ],
+  "recovery code /": [
+   "C233"
+  ],
+  "ready sheet save to device": [
+   "C234"
+  ],
+  "ready sheet save": [
+   "C234"
+  ],
+  "ready sheet share": [
+   "C235"
+  ],
+  "restore password/code field + restore": [
+   "C236"
+  ],
+  "restore password/code field": [
+   "C236"
+  ],
+  "restore result ok": [
+   "C237"
+  ],
+  "scan code (empty)": [
+   "C239"
+  ],
+  "scan again (result)": [
+   "C240"
+  ],
+  "result primary action (open link / add to contacts / call / compose email / open map)": [
+   "C241"
+  ],
+  "result primary action": [
+   "C241"
+  ],
+  "secondary actions copy / share": [
+   "C242"
+  ],
+  "secondary actions copy": [
+   "C242"
+  ],
+  "secret field show / hide": [
+   "C243"
+  ],
+  "secret field show": [
+   "C243"
+  ],
+  "history row": [
+   "C244"
+  ],
+  "clear history": [
+   "C245"
+  ],
+  "qr error got it": [
+   "C246"
+  ],
+  "qr error got": [
+   "C246"
+  ],
+  "toolbar back (unsaved check)": [
+   "C257"
+  ],
+  "toolbar back (unsaved": [
+   "C257"
+  ],
+  "mode page / text": [
+   "C258"
+  ],
+  "mode page /": [
+   "C258"
+  ],
+  "page rail item \"page n\"": [
+   "C259"
+  ],
+  "page rail item": [
+   "C259"
+  ],
+  "try again (read failure)": [
+   "C260"
+  ],
+  "try again (read": [
+   "C260"
+  ],
+  "language chip \"text reading language\"": [
+   "C261"
+  ],
+  "language chip \"text": [
+   "C261"
+  ],
+  "tidy text": [
+   "C262"
+  ],
+  "tidy options join lines / fix spaces / remove gaps": [
+   "C263"
+  ],
+  "tidy options join": [
+   "C263"
+  ],
+  "undo": [
+   "C264"
+  ],
+  "redo": [
+   "C265"
+  ],
+  "copy page / copy all": [
+   "C266"
+  ],
+  "copy page /": [
+   "C266"
+  ],
+  "share text / share all pages": [
+   "C267"
+  ],
+  "share text /": [
+   "C267"
+  ],
+  "save as .txt": [
+   "C268"
+  ],
+  "to word pro": [
+   "C269"
+  ],
+  "edit text / done (, )": [
+   "C270"
+  ],
+  "edit text /": [
+   "C270"
+  ],
+  "save edits": [
+   "C271"
+  ],
+  "retry .txt save": [
+   "C272"
+  ],
+  "new text sheet use the new text / keep my edit": [
+   "C273"
+  ],
+  "new text sheet": [
+   "C273"
+  ],
+  "re-read sheet read again": [
+   "C274"
+  ],
+  "re-read sheet read": [
+   "C274"
+  ],
+  "unsaved sheet options save .txt / discard edits / keep editing": [
+   "C275"
+  ],
+  "unsaved sheet options": [
+   "C275"
+  ],
+  "discard edits confirm": [
+   "C276"
+  ],
+  "ocr status placeholders (not ready / not read / no text / partial)": [
+   "C277"
+  ],
+  "ocr status placeholders": [
+   "C277"
+  ],
+  "toolbar close": [
+   "C283"
+  ],
+  "mode focus / arrange": [
+   "C284"
+  ],
+  "mode focus /": [
+   "C284"
+  ],
+  "tool rotate": [
+   "C285"
+  ],
+  "tool add page": [
+   "C286"
+  ],
+  "tool filter": [
+   "C287"
+  ],
+  "tool crop": [
+   "C288"
+  ],
+  "tool delete": [
+   "C289"
+  ],
+  "earlier / later": [
+   "C290"
+  ],
+  "move to…": [
+   "C291"
+  ],
+  "edit page": [
+   "C292"
+  ],
+  "previous page / next page": [
+   "C293"
+  ],
+  "previous page /": [
+   "C293"
+  ],
+  "focus image (tap → zoom/crop)": [
+   "C294"
+  ],
+  "focus image (tap": [
+   "C294"
+  ],
+  "filmstrip page": [
+   "C295"
+  ],
+  "selection clear": [
+   "C296"
+  ],
+  "selection rotate / delete": [
+   "C297"
+  ],
+  "selection rotate /": [
+   "C297"
+  ],
+  "name field": [
+   "C298"
+  ],
+  "category rail rows": [
+   "C299"
+  ],
+  "save as pdf": [
+   "C300"
+  ],
+  "header back": [
+   "C301"
+  ],
+  "source document row (name + \"n pages size\", lock badge)": [
+   "C302"
+  ],
+  "source document row": [
+   "C302"
+  ],
+  "merge pdfs from this phone": [
+   "C303"
+  ],
+  "merge pdfs from": [
+   "C303"
+  ],
+  "ranges field \"1-3, 5, 8-\"": [
+   "C304"
+  ],
+  "ranges field \"1-3,": [
+   "C304"
+  ],
+  "range preview text": [
+   "C305"
+  ],
+  "format chips jpg / png": [
+   "C306"
+  ],
+  "format chips jpg": [
+   "C306"
+  ],
+  "quality seekbar": [
+   "C307"
+  ],
+  "compress levels best quality / balanced / smaller / smallest": [
+   "C308"
+  ],
+  "compress levels best": [
+   "C308"
+  ],
+  "custom size field": [
+   "C309"
+  ],
+  "name field (optional)": [
+   "C310"
+  ],
+  "include page pictures toggle": [
+   "C311"
+  ],
+  "include page pictures": [
+   "C311"
+  ],
+  "excel chips tables only / all text": [
+   "C312"
+  ],
+  "excel chips tables": [
+   "C312"
+  ],
+  "\"this pdf is protected\" unlock consent — remove password and continue": [
+   "C313"
+  ],
+  "\"this pdf is": [
+   "C313"
+  ],
+  "progress overlay \"working…\"": [
+   "C314"
+  ],
+  "error line": [
+   "C315"
+  ],
+  "continue (pinned)": [
+   "C316"
+  ],
+  "no-documents note \"no documents yet. scan something first.\"": [
+   "C317"
+  ],
+  "no-documents note \"no": [
+   "C317"
+  ],
+  "open": [
+   "C322"
+  ],
+  "also save in documents": [
+   "C324"
+  ],
+  "also save in": [
+   "C324"
+  ],
+  "more options / fewer options": [
+   "C325"
+  ],
+  "more options /": [
+   "C325"
+  ],
+  "choose another location": [
+   "C326"
+  ],
+  "show in library": [
+   "C327"
+  ],
+  "undo / undo this copy": [
+   "C328"
+  ],
+  "undo / undo": [
+   "C328"
+  ],
+  "keep (id card result)": [
+   "C329"
+  ],
+  "keep (id card": [
+   "C329"
+  ],
+  "discard (id card result)": [
+   "C330"
+  ],
+  "discard (id card": [
+   "C330"
+  ],
+  "type badge docx/xlsx/pptx/zip/pdf": [
+   "C331"
+  ],
+  "saved-copy undo snackbar": [
+   "C332"
+  ],
+  "s18 merge": [
+   "C333",
+   "C334",
+   "C335",
+   "C336"
+  ],
+  "s19 exportresult": [
+   "C337",
+   "C338"
+  ],
+  "s20 bookpages": [
+   "C339",
+   "C340",
+   "C341",
+   "C342"
+  ],
+  "s21 locktools": [
+   "C343",
+   "C344"
+  ],
+  "s22 stamp": [
+   "C345",
+   "C346",
+   "C347",
+   "C348",
+   "C349",
+   "C350",
+   "C351",
+   "C352",
+   "C353",
+   "C354"
+  ],
+  "s23 idcard": [
+   "C355",
+   "C356",
+   "C357",
+   "C358"
+  ],
+  "s24 passport": [
+   "C359",
+   "C360"
+  ],
+  "s25 businesscard": [
+   "C361",
+   "C362",
+   "C363"
+  ],
+  "s26 batch": [
+   "C364",
+   "C365",
+   "C366",
+   "C367",
+   "C368"
+  ],
+  "s27 formready": [
+   "C369",
+   "C370",
+   "C371",
+   "C372"
+  ],
+  "s28 photocrop": [
+   "C373"
+  ],
+  "s29 mainactivity (legacy)": [
+   "C374"
+  ],
+  "scan": [
+   "C048"
+  ],
+  "id card": [
+   "C049"
+  ],
+  "import pdf": [
+   "C050"
+  ],
+  "passport": [
+   "C051"
+  ],
+  "qr code": [
+   "C052"
+  ],
+  "merge": [
+   "C053"
+  ],
+  "split": [
+   "C054"
+  ],
+  "extract pages": [
+   "C055"
+  ],
+  "insert pages": [
+   "C056"
+  ],
+  "folders & tags": [
+   "C057"
+  ],
+  "batch tools": [
+   "C058"
+  ],
+  "resize": [
+   "C060"
+  ],
+  "pdf to images": [
+   "C061"
+  ],
+  "long image": [
+   "C062"
+  ],
+  "to word": [
+   "C063"
+  ],
+  "to powerpoint": [
+   "C064"
+  ],
+  "to excel": [
+   "C065"
+  ],
+  "to text": [
+   "C066"
+  ],
+  "zip export": [
+   "C067"
+  ],
+  "searchable pdf": [
+   "C068"
+  ],
+  "pdf/a": [
+   "C069"
+  ],
+  "sign": [
+   "C070"
+  ],
+  "add text": [
+   "C071"
+  ],
+  "draw": [
+   "C072"
+  ],
+  "highlight": [
+   "C073"
+  ],
+  "watermark": [
+   "C074"
+  ],
+  "page numbers": [
+   "C075"
+  ],
+  "stamp": [
+   "C076"
+  ],
+  "redact": [
+   "C077"
+  ]
+ }
+}

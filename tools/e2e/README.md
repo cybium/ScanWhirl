@@ -13,6 +13,10 @@ shows up here.
 | `tools/e2e/uitool.py` | uiautomator dump / find-by-view-id / tap / screenshot sanity |
 | `tools/e2e/make_pdf.py` | writes the two self-authored PDF fixtures at run time |
 | `tools/e2e/run_e2e.ps1` | push a worktree snapshot to `ci/e2e-<name>` and print the run URL |
+| `tools/e2e/uimap.py` | automated interface map: reach every inventory screen, tap every clickable control, record the navigation graph |
+| `tools/e2e/make_fixtures.py` | generates the fictional PDF/PNG fixtures at run time (no binary committed) |
+| `tools/e2e/uimap_controls.json` | inventory control-id/label → C001…C400 checklist mapping |
+| `.github/workflows/uimap.yml` | builds the demo APK and maps the UI on one API 35 `pixel_6` emulator |
 
 ## How to run it
 
@@ -109,3 +113,28 @@ ANRs are still fatal - they come from logcat, not from the dialog.
   and phone-session territory.
 - Screenshots prove layout, not correctness of content. Read the artifact when
   a run looks doubtful.
+
+## Automated interface map (`uimap`)
+
+`.github/workflows/uimap.yml` runs on pushes to `uimap/**` (the worker pushes
+`HEAD:uimap/run`). It builds `-PtestBuild -PdemoBuild assembleDebug`
+(`com.scanwhirl.app.demo`, Pro unlocked), boots one API 35 `pixel_6` emulator,
+and runs `uimap.py`. That script generates fictional fixtures on the runner,
+imports three PDFs through the app's Create → Import PDF → SAF Download picker,
+then visits every reachable inventory screen (EN/font 1.0), taps **every**
+clickable node one at a time, captures the resulting screen/sheet with a
+screenshot and dump, and returns with Back (re-navigating when a tap changed
+state). Key screens are repeated in Hindi and at font 2.0. Each tool is then
+run end-to-end on a fixture and its output pulled for size/page counts.
+
+`uimap_controls.json` maps control ids/labels to C001…C400 so the run reports
+`coverage % = checklist slots covered / 400`. ML Kit scanner controls, Play
+Billing purchase/restore and whole-library delete are recorded as SKIPPED with
+a reason; the QR scanner and four direct-route-only activities are likewise
+skipped. Crashes, ANRs, failed navigations and unexpected tool results are kept
+in `graph.json` / `index.md` as bug leads — the job uploads the map rather than
+failing on them. Artefacts: `uimap-api35` (`screens/`, `dumps/`, `graph.json`,
+`index.md`, `index.html`, `tool_results.json`, `logcat.txt`), 7 days.
+
+Offline harness checks:
+`python -m unittest discover -s tools/e2e -p "test_*.py" -v`.
