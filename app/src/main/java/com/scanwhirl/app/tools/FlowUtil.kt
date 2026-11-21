@@ -6,7 +6,12 @@ import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.util.BoundedCopy
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.Locale
+import java.util.UUID
 
 /**
  * Shared helpers for the tool flows extracted from `MainActivity` in test26
@@ -14,11 +19,25 @@ import java.util.Locale
  */
 internal object FlowUtil {
 
-    /** Reads a content Uri fully; null when unreadable. */
-    fun readUriBytes(context: Context, uri: Uri): ByteArray? = try {
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-    } catch (e: Exception) {
-        null
+    /**
+     * P1: a picked image is copied into a private cache file with a hard cap and
+     * off the main thread. The old `readUriBytes` read an arbitrary photo fully
+     * into memory on the UI thread, so a large camera image could OOM/ANR before
+     * the resize sheet even opened. The caller reads the bounded copy and releases it.
+     *
+     * @throws BoundedCopy.Refused when the source is unreadable or over the cap;
+     *   its [BoundedCopy.Refused.result] tells the caller which localized reason to show.
+     */
+    internal suspend fun copyPickedImage(context: Context, uri: Uri, label: String): File {
+        val dir = File(context.cacheDir, "documents/resize_input").apply { mkdirs() }
+        val stem = sanitizeFileName(label).substringBeforeLast('.').ifBlank { "image" }
+        val token = "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}"
+        val target = File(dir, "${stem}_$token.img")
+        val result = withContext(Dispatchers.IO) {
+            BoundedCopy.copy(context, uri, target, BoundedCopy.IMAGE_CAP)
+        }
+        BoundedCopy.requireOk(result, context)
+        return target
     }
 
     fun intText(value: Int): String = String.format(Locale.ROOT, "%d", value)

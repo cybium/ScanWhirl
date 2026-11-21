@@ -1,13 +1,25 @@
 package com.scanwhirl.app.util
 
+import androidx.annotation.StringRes
+import com.scanwhirl.app.R
+
 /**
  * Parses the page-range syntax the tools use: `1-3, 5, 8-`.
  *
  * A bare number is one page, `a-b` is an inclusive range, and `a-` runs to the last page.
  * En and em dashes are accepted (phones type them), and so are stray spaces. Every page must
  * exist in the document, which catches a typo before anything is written.
+ *
+ * P1: failures carry a string resource instead of English prose. The caller renders them
+ * with `getString`, so an error typed in Hindi is never shown as an English sentence.
  */
 object PageRanges {
+
+    /** A user-facing range error that can be localized at the display site. */
+    class InvalidPageRange(
+        @StringRes val messageRes: Int,
+        val formatArgs: List<Any> = emptyList()
+    ) : IllegalArgumentException()
 
     /** One 1-based, inclusive page span. */
     data class Span(val from: Int, val to: Int) {
@@ -25,29 +37,32 @@ object PageRanges {
     private val PART = Regex("^(\\d+)\\s*(?:-\\s*(\\d*))?$")
 
     /**
-     * @throws IllegalArgumentException with a sentence a user can act on, for an empty range,
-     *   a page outside `1..pageCount`, a backwards range or a part that is not a number.
+     * @throws InvalidPageRange for an empty range, a page outside `1..pageCount`,
+     *   a backwards range or a part that is not a number.
      */
     fun parse(text: String, pageCount: Int): List<Span> {
-        require(pageCount >= 1) { "This document has no pages." }
+        if (pageCount < 1) throw InvalidPageRange(R.string.p1_page_range_no_pages)
         val normal = text.replace('\u2013', '-').replace('\u2014', '-').replace('\u2212', '-')
         val parts = normal.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-        require(parts.isNotEmpty()) { "Type page numbers, for example 1-3, 5, 8-" }
+        if (parts.isEmpty()) throw InvalidPageRange(R.string.p1_page_range_empty)
         return parts.map { part ->
-            val match = PART.find(part)
-                ?: throw IllegalArgumentException("Can't read \"$part\". Use 1-3, 5, 8-.")
-            val from = match.groupValues[1].toIntOrNull()
-                ?: throw IllegalArgumentException("Can't read \"$part\". Use 1-3, 5, 8-.")
+            fun unreadable(): InvalidPageRange =
+                InvalidPageRange(R.string.p1_page_range_cannot_read, listOf(part))
+            val match = PART.find(part) ?: throw unreadable()
+            val from = match.groupValues[1].toIntOrNull() ?: throw unreadable()
             val hasDash = part.contains('-')
             val to = when {
                 !hasDash -> from
                 match.groupValues[2].isBlank() -> pageCount
-                else -> match.groupValues[2].toIntOrNull()
-                    ?: throw IllegalArgumentException("Can't read \"$part\". Use 1-3, 5, 8-.")
+                else -> match.groupValues[2].toIntOrNull() ?: throw unreadable()
             }
-            require(from in 1..pageCount) { "Page $from is not in this document (1-$pageCount)." }
-            require(to in 1..pageCount) { "Page $to is not in this document (1-$pageCount)." }
-            require(to >= from) { "\"$part\" runs backwards." }
+            if (from !in 1..pageCount) {
+                throw InvalidPageRange(R.string.p1_page_range_outside, listOf(from, pageCount))
+            }
+            if (to !in 1..pageCount) {
+                throw InvalidPageRange(R.string.p1_page_range_outside, listOf(to, pageCount))
+            }
+            if (to < from) throw InvalidPageRange(R.string.p1_page_range_backwards, listOf(part))
             Span(from, to)
         }
     }
