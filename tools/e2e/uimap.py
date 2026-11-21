@@ -326,18 +326,31 @@ def launch():
     out = adb("shell", "am", "start", "-W", "-f", "0x10008000", "-n", ACT)
     if "Status: ok" not in out:
         raise RuntimeError("launch failed: " + out[-300:])
-    deadline = time.monotonic() + 75
+    # A cold emulator with Play services can take well over a minute to draw
+    # the first frame. Be patient, but record samples if it never arrives.
+    samples = []
+    deadline = time.monotonic() + 150
+    tick = 0
     while time.monotonic() < deadline:
-        dismiss_dialogs()
+        if tick % 8 == 0:
+            dismiss_dialogs()
         root = try_hierarchy()
-        if root is not None and find(root, id="swHomeSearch"):
+        if root is not None and (find(root, id="swHomeSearch") or find(root, id="swNavLibrary")):
             return
-        time.sleep(0.7)
+        if tick == 45:  # a cold start can lose the first task to the launcher
+            adb("shell", "am", "start", "-W", "-n", ACT, check=False)
+        if tick % 15 == 0:
+            samples.append({"s": int(time.monotonic() - (deadline - 150)),
+                            "activity": current_activity(),
+                            "texts": [n.get("text") for n in root.iter("node")
+                                      if n.get("text")][:8] if root is not None else []})
+        tick += 1
+        time.sleep(1)
     # Leave concrete evidence of what WAS on screen instead of a bare timeout.
     root = try_hierarchy()
     png, xml = screenshot("launch_failed")
     GRAPH["meta"]["launch_failure"] = {
-        "activity": current_activity(), "screenshot": png, "dump": xml,
+        "activity": current_activity(), "screenshot": png, "dump": xml, "samples": samples,
         "texts": [n.get("text") for n in root.iter("node") if n.get("text")][:40] if root is not None else [],
         "ids": [rid(n) for n in root.iter("node") if rid(n)][:40] if root is not None else [],
     }
